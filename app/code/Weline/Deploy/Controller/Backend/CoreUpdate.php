@@ -9,7 +9,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 
-#[Acl('Weline_Deploy::release_management', '发布管理', 'mdi mdi-rocket-launch-outline', '发布控制、历史与核心更新', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Deploy::release_management', '发布管理', 'circle', '发布控制、历史与核心更新', 'Weline_Backend::system_maintenance')]
 class CoreUpdate extends BackendController
 {
     public function __construct(
@@ -17,7 +17,7 @@ class CoreUpdate extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Deploy::core_update', '核心更新', 'mdi mdi-update', 'Web 执行框架核心更新')]
+    #[Acl('Weline_Deploy::core_update', '核心更新', 'refresh', 'Web 执行框架核心更新')]
     public function getIndex(): string
     {
         $context = $this->coreUpdateService->buildPageContext();
@@ -28,7 +28,7 @@ class CoreUpdate extends BackendController
         return (string)$this->fetch();
     }
 
-    #[Acl('Weline_Deploy::core_update_run', '执行核心更新', 'mdi mdi-update', '执行 update:core 命令')]
+    #[Acl('Weline_Deploy::core_update_run', '执行核心更新', 'refresh', '执行 update:core 命令')]
     public function postRun(): string
     {
         if (!$this->request->isPost()) {

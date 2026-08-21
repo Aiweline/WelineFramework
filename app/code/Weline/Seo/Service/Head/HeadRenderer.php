@@ -487,9 +487,9 @@ class HeadRenderer
 	    }
     updateHeaderContext(null);
     if (searchArea) {
-      searchArea.innerHTML = '\\x3Cdiv class="dev-tool-loading">\\x3Ci class="fa fa-spinner spinning">\\x3C/i>\\x3Cdiv>加载 SEO 面板...\\x3C/div>\\x3C/div>';
+      searchArea.innerHTML = '\\x3Cdiv class="dev-tool-loading">\\x3Ci class="pin spinning">\\x3C/i>\\x3Cdiv>加载 SEO 面板...\\x3C/div>\\x3C/div>';
     }
-	    content.innerHTML = '\\x3Cdiv class="dev-tool-loading">\\x3Ci class="fa fa-spinner spinning">\\x3C/i>\\x3Cdiv>加载 SEO 诊断...\\x3C/div>\\x3C/div>';
+	    content.innerHTML = '\\x3Cdiv class="dev-tool-loading">\\x3Ci class="pin spinning">\\x3C/i>\\x3Cdiv>加载 SEO 诊断...\\x3C/div>\\x3C/div>';
 	    return ensurePanelAuthorized()
 	      .then(function () {
 	        return loadStylesheet().catch(function (error) {

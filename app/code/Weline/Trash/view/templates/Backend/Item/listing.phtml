@@ -19,10 +19,10 @@ $statusLabels = [
     'purged' => __('已清理'),
 ];
 ?>
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Trash::item" order_field="order" name_field="title"></breadcrumb></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Trash::item" order_field="order" name_field="title"></breadcrumb></h4>
         </div>
     </div>
 </div>
@@ -42,10 +42,10 @@ $statusLabels = [
 }
 html[data-theme-mode="dark"] .trash-admin,
 html[data-layout-mode="dark"] .trash-admin,
-html[data-bs-theme="dark"] .trash-admin,
+html[data-theme="dark"] .trash-admin,
 body[data-theme-mode="dark"] .trash-admin,
 body[data-layout-mode="dark"] .trash-admin,
-body[data-bs-theme="dark"] .trash-admin {
+body[data-theme="dark"] .trash-admin {
     --trash-surface: rgba(15, 23, 42, 0.94);
     --trash-soft: rgba(17, 24, 39, 0.96);
     --trash-border: rgba(148, 163, 184, 0.22);
@@ -227,10 +227,10 @@ body[data-bs-theme="dark"] .trash-admin {
 }
 html[data-theme-mode="dark"] .trash-admin .trash-status-pill,
 html[data-layout-mode="dark"] .trash-admin .trash-status-pill,
-html[data-bs-theme="dark"] .trash-admin .trash-status-pill,
+html[data-theme="dark"] .trash-admin .trash-status-pill,
 body[data-theme-mode="dark"] .trash-admin .trash-status-pill,
 body[data-layout-mode="dark"] .trash-admin .trash-status-pill,
-body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
+body[data-theme="dark"] .trash-admin .trash-status-pill {
     color: #86efac;
 }
 .trash-admin .trash-record-error {
@@ -279,10 +279,10 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
 </style>
 
 <div class="trash-admin">
-    <div class="trash-card trash-filter-card mb-3">
+    <div class="trash-card trash-filter-card" style="--w-mb:var(--weline-space-4);">
         <w:form class="trash-filter" method="get" action="@var($this->getBackendUrl('trash/backend/item/listing'))">
-            <input class="form-control trash-search" type="search" name="search" value="<?= $esc($search) ?>" placeholder="<?= $esc(__('搜索标题、实体或 code')) ?>">
-            <select class="form-select trash-type" name="code">
+            <input class="w-input trash-search" type="search" name="search" value="<?= $esc($search) ?>" placeholder="<?= $esc(__('搜索标题、实体或 code')) ?>">
+            <select class="w-select trash-type" name="code">
                 <option value=""><?= __('全部类型') ?></option>
                 <?php foreach ($types as $type): ?>
                     <?php $typeCode = (string)($type['code'] ?? ''); ?>
@@ -291,21 +291,21 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                     </option>
                 <?php endforeach; ?>
             </select>
-            <select class="form-select trash-status" name="status">
+            <select class="w-select trash-status" name="status">
                 <?php foreach ($statusLabels as $value => $label): ?>
                     <option value="<?= $esc($value) ?>" <?= $value === $statusFilter ? 'selected' : '' ?>><?= $esc($label) ?></option>
                 <?php endforeach; ?>
             </select>
-            <button class="btn btn-primary trash-submit d-inline-flex align-items-center gap-1" type="submit">
-                <i class="mdi mdi-magnify"></i>
+            <button class="w-button trash-submit w-cluster" type="submit" data-align="center" data-tone="primary" style="--w-gap:var(--weline-space-1);">
+                <w:icon name="search" size="sm"></w:icon>
                 <?= __('筛选') ?>
             </button>
         </w:form>
     </div>
 
-    <div class="trash-card p-0 trash-desktop-table">
-        <div class="table-responsive">
-            <table class="table trash-table mb-0 align-middle">
+    <div class="trash-card trash-desktop-table" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+        <div class="w-table-wrap">
+            <table class="w-table trash-table" data-w-vertical="middle" style="--w-mb:0;">
                 <thead>
                 <tr>
                     <th><?= __('ID') ?></th>
@@ -321,7 +321,7 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                 <tbody>
                 <?php if (empty($items)): ?>
                     <tr>
-                        <td class="text-center text-muted py-5" colspan="8"><?= __('暂无回收站记录') ?></td>
+                        <td class="w-text" colspan="8" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><?= __('暂无回收站记录') ?></td>
                     </tr>
                 <?php endif; ?>
                 <?php foreach ($items as $item): ?>
@@ -340,23 +340,23 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                         <td>
                             <div><code><?= $esc((string)($item['entity_key'] ?? '')) ?></code></div>
                             <?php if (!empty($item['entity_id'])): ?>
-                                <small class="text-muted"><?= __('实体ID') ?>: <?= $esc((string)$item['entity_id']) ?></small>
+                                <small class="w-text" data-tone="muted"><?= __('实体ID') ?>: <?= $esc((string)$item['entity_id']) ?></small>
                             <?php endif; ?>
                         </td>
                         <td><?= $esc($statusLabels[$status] ?? $status) ?></td>
                         <td><?= $esc((string)($item['deleted_at'] ?? '')) ?></td>
-                        <td class="text-danger"><?= $esc((string)($item['last_error'] ?? '')) ?></td>
+                        <td class="w-text" data-tone="danger"><?= $esc((string)($item['last_error'] ?? '')) ?></td>
                         <td>
                             <div class="trash-actions">
-                                <a class="btn btn-sm btn-outline-secondary" href="<?= $this->getBackendUrl('trash/backend/item/detail', ['trash_id' => $trashId]) ?>">
-                                    <i class="mdi mdi-database-eye-outline"></i>
+                                <a class="w-button" href="<?= $this->getBackendUrl('trash/backend/item/detail', ['trash_id' => $trashId]) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                                    <w:icon name="eye" size="sm"></w:icon>
                                     <?= __('详情') ?>
                                 </a>
                                 <?php if ($open): ?>
                                     <w:form method="post" action="@var($this->getBackendUrl('trash/backend/item/restore'))">
                                         <input type="hidden" name="trash_id" value="<?= $trashId ?>">
-                                        <button class="btn btn-sm btn-outline-success" type="submit">
-                                            <i class="mdi mdi-restore"></i>
+                                        <button class="w-button" type="submit" data-tone="success" data-variant="outline" data-size="sm">
+                                            <w:icon name="store" size="sm"></w:icon>
                                             <?= __('恢复') ?>
                                         </button>
                                     </w:form>
@@ -369,10 +369,10 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
             </table>
         </div>
     </div>
-    <div class="trash-record-list mb-3">
+    <div class="trash-record-list" style="--w-mb:var(--weline-space-4);">
         <?php if (empty($items)): ?>
             <div class="trash-record">
-                <div class="text-muted py-3"><?= __('暂无回收站记录') ?></div>
+                <div class="w-text" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);"><?= __('暂无回收站记录') ?></div>
             </div>
         <?php endif; ?>
         <?php foreach ($items as $item): ?>
@@ -391,7 +391,7 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                         <code><?= $esc((string)($item['trash_code'] ?? '')) ?></code>
                     </div>
                     <div class="trash-record-title"><?= $esc((string)($item['label'] ?? '')) ?></div>
-                    <div class="trash-record-meta mt-2">
+                    <div class="trash-record-meta" style="--w-mt:var(--weline-space-2);">
                         <code><?= $esc((string)($item['entity_key'] ?? '')) ?></code>
                         <?php if ($entityId !== ''): ?>
                             <span><?= __('实体ID') ?>: <?= $esc($entityId) ?></span>
@@ -405,15 +405,15 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                 <div class="trash-record-side">
                     <span class="trash-status-pill"><?= $esc($statusLabels[$status] ?? $status) ?></span>
                     <div class="trash-actions">
-                        <a class="btn btn-sm btn-outline-secondary" href="<?= $this->getBackendUrl('trash/backend/item/detail', ['trash_id' => $trashId]) ?>">
-                            <i class="mdi mdi-database-eye-outline"></i>
+                        <a class="w-button" href="<?= $this->getBackendUrl('trash/backend/item/detail', ['trash_id' => $trashId]) ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <w:icon name="eye" size="sm"></w:icon>
                             <?= __('详情') ?>
                         </a>
                         <?php if ($open): ?>
                             <w:form method="post" action="@var($this->getBackendUrl('trash/backend/item/restore'))">
                                 <input type="hidden" name="trash_id" value="<?= $trashId ?>">
-                                <button class="btn btn-sm btn-outline-success" type="submit">
-                                    <i class="mdi mdi-restore"></i>
+                                <button class="w-button" type="submit" data-tone="success" data-variant="outline" data-size="sm">
+                                    <w:icon name="store" size="sm"></w:icon>
                                     <?= __('恢复') ?>
                                 </button>
                             </w:form>

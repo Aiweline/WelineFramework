@@ -58,8 +58,10 @@
 "安装失败: %{1}","安装失败: %{1}"
 发货操作失败，请稍后重试。,发货操作失败，请稍后重试。
 订单发货控制器,订单发货控制器
+truck,truck
 订单仓维履约管理,订单仓维履约管理
 查看订单发货,查看订单发货
+list,list
 查看可履约单元和进度,查看可履约单元和进度
 提交发货,提交发货
 "按仓维 CAS 提交部分或全部发货","按仓维 CAS 提交部分或全部发货"
@@ -100,17 +102,22 @@
 尝试次数,尝试次数
 订单业务记录,订单业务记录
 订单关联业务记录,订单关联业务记录
+edit,edit
+warning,warning
 查看订单退款补偿异常,查看订单退款补偿异常
 支付处理成功,支付处理成功
 退款成功,退款成功
 处理支付,处理支付
+circle,circle
 退款支付,退款支付
 开票操作失败，请稍后重试。,开票操作失败，请稍后重试。
 订单发票控制器,订单发票控制器
+file,file
 "支付 effect 驱动的订单发票管理","支付 effect 驱动的订单发票管理"
 查看订单发票,查看订单发票
 "查看支付 effect 和最小发票","查看支付 effect 和最小发票"
 "处理开票 effect","处理开票 effect"
+plus,plus
 "在 Payment outbox 事务内幂等生成最小发票","在 Payment outbox 事务内幂等生成最小发票"
 状态不存在,状态不存在
 状态代码和名称不能为空,状态代码和名称不能为空
@@ -164,6 +171,7 @@ SKU,SKU
 数量,数量
 单价,单价
 小计,小计
+收货信息,收货信息
 商品小计,商品小计
 运费,运费
 税费,税费
@@ -247,16 +255,16 @@ SKU,SKU
 删除失败，请重试,删除失败，请重试
 操作失败,操作失败
 操作失败，请重试,操作失败，请重试
-确认删除,确认删除
 确定要删除状态,确定要删除状态
 吗？,吗？
+确认删除,确认删除
 确定删除,确定删除
 编辑状态,编辑状态
 "只能包含小写字母和下划线，如：pending, processing","只能包含小写字母和下划线，如：pending, processing"
 默认语言（中文）的状态名称,默认语言（中文）的状态名称
 状态颜色,状态颜色
 状态图标,状态图标
-"Material Design Icons 类名，如：mdi-check-circle","Material Design Icons 类名，如：mdi-check-circle"
+"Material Design Icons 类名，如：check","Material Design Icons 类名，如：check"
 状态描述,状态描述
 是否系统状态,是否系统状态
 多语言翻译,多语言翻译
@@ -410,8 +418,12 @@ Outbox,Outbox
 部分履约,部分履约
 履约未开始,履约未开始
 履约状态待确认,履约状态待确认
-支付已确认，订单进入处理中,支付已确认，订单进入处理中
-支付已完成,支付已完成
+订单支付状态提交后无法重新读取,订单支付状态提交后无法重新读取
+"Order 持久化快照无效","Order 持久化快照无效"
+"支付通知与 Order 持久化事实不一致","支付通知与 Order 持久化事实不一致"
+当前订单状态不能接受支付成功通知,当前订单状态不能接受支付成功通知
+订单支付状态已被并发修改,订单支付状态已被并发修改
+支付成功，订单进入处理,支付成功，订单进入处理
 "未知 cutover mode：%{1}","未知 cutover mode：%{1}"
 "生产 on 必须显式授权令牌","生产 on 必须显式授权令牌"
 "实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token","实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token"
@@ -448,6 +460,9 @@ Outbox,Outbox
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）"
+"Material Design Icons 类名，如：mdi-check-circle","Material Design Icons 类名，如：mdi-check-circle"
+支付已确认，订单进入处理中,支付已确认，订单进入处理中
+支付已完成,支付已完成
 物流单号更新成功,物流单号更新成功
 发货ID不能为空,发货ID不能为空
 标记成功,标记成功

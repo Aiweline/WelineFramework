@@ -7,21 +7,21 @@
           name="translation_service" 
           title="翻译服务" 
           parent="Weline_Backend::system_service_group" 
-          icon="mdi mdi-translate" 
+          icon="language" 
           order="20430">
         
         <menu source="Weline_TranslationService::translation_config" 
               name="translation_config" 
               title="渠道配置" 
               action="translation/backend/config"
-              icon="mdi mdi-cog" 
+              icon="settings" 
               order="1"/>
         
         <menu source="Weline_TranslationService::translation_record" 
               name="translation_record" 
               title="翻译记录" 
               action="translation/backend/record"
-              icon="mdi mdi-history" 
+              icon="history" 
               order="2"/>
     </menu>
 </menus>

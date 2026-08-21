@@ -135,7 +135,7 @@ class SseTerminal implements TaglibInterface
             if ($showToolbar) {
                 $html[] = '  <div class="weline-sse-terminal-header">';
                 $html[] = '    <div class="weline-sse-terminal-title">';
-                $html[] = '      <span class="weline-sse-terminal-icon"><i class="mdi mdi-console"></i></span>';
+                $html[] = '      <span class="weline-sse-terminal-icon"><w-icon name="terminal" size="sm"></w-icon></span>';
                 $html[] = '      <span class="weline-sse-terminal-title-text">' . htmlspecialchars($title) . '</span>';
                 $html[] = '    </div>';
                 $html[] = '    <div class="weline-sse-terminal-status">';
@@ -146,19 +146,19 @@ class SseTerminal implements TaglibInterface
                 if ($showThinkingToggle) {
                     // 思考输出按钮：高亮表示开启；点击切换；状态写 localStorage 按 key 记忆。
                     $html[] = '      <button type="button" class="weline-sse-terminal-btn weline-sse-terminal-btn-thinking" id="' . htmlspecialchars($id) . '_btn_thinking" title="' . $t_thinking_on . '" aria-pressed="true">';
-                    $html[] = '        <i class="mdi mdi-brain"></i>';
+                    $html[] = '        <w-icon name="circle" size="sm"></w-icon>';
                     $html[] = '      </button>';
                 }
                 if ($showStartToggle) {
                     $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_toggle" title="' . $t_start . '">';
-                    $html[] = '        <i class="mdi mdi-play"></i>';
+                    $html[] = '        <w-icon name="play" size="sm"></w-icon>';
                     $html[] = '      </button>';
                 }
                 $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_copy" title="' . $t_copy . '">';
-                $html[] = '        <i class="mdi mdi-content-copy"></i>';
+                $html[] = '        <w-icon name="copy" size="sm"></w-icon>';
                 $html[] = '      </button>';
                 $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_clear" title="' . $t_clear . '">';
-                $html[] = '        <i class="mdi mdi-delete-sweep"></i>';
+                $html[] = '        <w-icon name="trash" size="sm"></w-icon>';
                 $html[] = '      </button>';
                 $html[] = '    </div>';
                 $html[] = '  </div>';
@@ -680,7 +680,7 @@ function start(url, options) {
     noReconnect = !!(options.noReconnect || options.once || options.oneShot);
     
     if (btnToggle) {
-        btnToggle.innerHTML = '<i class="mdi mdi-stop"></i>';
+        btnToggle.innerHTML = '<w-icon name="stop" size="sm"></w-icon>';
         btnToggle.classList.add('active');
         btnToggle.title = '$t_stop';
     }
@@ -813,7 +813,7 @@ function stop(options) {
     isRunning = false;
     
     if (btnToggle) {
-        btnToggle.innerHTML = '<i class="mdi mdi-play"></i>';
+        btnToggle.innerHTML = '<w-icon name="play" size="sm"></w-icon>';
         btnToggle.classList.remove('active');
         btnToggle.title = '$t_start';
     }
@@ -858,8 +858,8 @@ if (btnCopy) {
         });
         var copyText = text.join('\\n');
         var notifyCopied = function() {
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.success('$t_copied');
+            if (typeof Weline.UI.toast !== 'undefined') {
+                Weline.UI.toast.success('$t_copied');
             }
         };
         var fallbackCopy = function(value) {

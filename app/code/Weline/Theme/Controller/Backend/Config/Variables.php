@@ -13,7 +13,6 @@ namespace Weline\Theme\Controller\Backend\Config;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\CssVariableParser;
-use Weline\Theme\Helper\LayoutAssetsManager;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
@@ -477,21 +476,6 @@ class Variables extends BackendController
     private function clearCssCache(string $area, WelineTheme $theme): void
     {
         try {
-            // 清除布局CSS缓存（通过删除生成的CSS文件）
-            /** @var LayoutAssetsManager $assetsManager */
-            $assetsManager = ObjectManager::getInstance(LayoutAssetsManager::class);
-            
-            // 获取所有布局类型（这里简化处理，实际应该获取所有布局）
-            $layoutTypes = ['homepage', 'account', 'default'];
-            
-            foreach ($layoutTypes as $layoutType) {
-                $cssPath = $assetsManager->getGeneratedCssPath($area, $layoutType, 'default', $theme);
-                if (is_file($cssPath)) {
-                    @unlink($cssPath);
-                }
-            }
-            
-            // 清除主题缓存
             w_cache('theme')->clear();
         } catch (\Exception $e) {
             // 清除缓存失败不影响保存操作
@@ -501,4 +485,3 @@ class Variables extends BackendController
         }
     }
 }
-

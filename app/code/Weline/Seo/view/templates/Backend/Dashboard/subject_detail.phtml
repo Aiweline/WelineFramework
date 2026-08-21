@@ -16,33 +16,33 @@ $suggestion = $this->getData('suggestion');
 $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
 ?>
 <!-- 消息提示 -->
-                <div class='row'>
-                    <div class='col-12'>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
                         <template>Weline_Component::message.phtml</template>
                     </div>
                 </div>
                 
                 <!-- Page Title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-file-chart me-2"></i>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;">
+                                <w:icon name="file" size="sm"></w:icon>
                                 <?= htmlspecialchars($subject['title'] ?? __('主体详情')) ?>
                             </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <a href='<?= $this->getUrl('*/backend/dashboard') ?>'>
                                             <lang>SEO管理</lang>
                                         </a>
                                     </li>
-                                    <li class='breadcrumb-item'>
+                                    <li class="w-breadcrumb__item">
                                         <a href='<?= $this->getUrl('*/backend/dashboard/subject') ?>'>
                                             <lang>主体列表</lang>
                                         </a>
                                     </li>
-                                    <li class='breadcrumb-item active'>
+                                    <li class="w-breadcrumb__item" data-state="active">
                                         <lang>详情</lang>
                                     </li>
                                 </ol>
@@ -51,17 +51,17 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="w-grid">
                     <!-- 主体基本信息 -->
-                    <div class="col-lg-5">
-                        <div class="card detail-card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="mdi mdi-information-outline me-2"></i>
+                    <div style="--w-span-lg:5;">
+                        <div class="w-card detail-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;">
+                                    <w:icon name="info" size="sm"></w:icon>
                                     <lang>基本信息</lang>
                                 </h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <div class="info-item">
                                     <div class="info-label">ID</div>
                                     <div class="info-value"><?= (int)($subject['subject_id'] ?? 0) ?></div>
@@ -74,9 +74,9 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                                     <div class="info-label">URL</div>
                                     <div class="info-value">
                                         <?php if (!empty($subject['url'])): ?>
-                                            <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" class="text-decoration-none">
+                                            <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" data-w-decoration="none">
                                                 <?= htmlspecialchars($subject['url']) ?>
-                                                <i class="mdi mdi-open-in-new ms-1"></i>
+                                                <w:icon name="robot" size="sm"></w:icon>
                                             </a>
                                         <?php else: ?>
                                             -
@@ -87,16 +87,16 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                                     <div class="info-label"><lang>状态</lang></div>
                                     <div class="info-value">
                                         <?php if ((int)($subject['status'] ?? 0) === 1): ?>
-                                            <span class="badge bg-success"><lang>启用</lang></span>
+                                            <span class="w-badge" data-w-background="success"><lang>启用</lang></span>
                                         <?php else: ?>
-                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                            <span class="w-badge" data-w-background="muted"><lang>禁用</lang></span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
                                 <div class="info-item">
                                     <div class="info-label"><lang>关键词数</lang></div>
                                     <div class="info-value">
-                                        <span class="badge bg-info"><?= count($keywords) ?></span>
+                                        <span class="w-badge" data-w-background="info"><?= count($keywords) ?></span>
                                     </div>
                                 </div>
                                 <div class="info-item">
@@ -117,31 +117,30 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                         </div>
 
                         <!-- AI建议 -->
-                        <div class="card detail-card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="card-title mb-0">
-                                    <i class="mdi mdi-robot me-2"></i>
+                        <div class="w-card detail-card">
+                            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                                <h5 class="w-card__title" style="--w-mb:0;">
+                                    <w:icon name="tag" size="sm"></w:icon>
                                     <lang>AI优化建议</lang>
                                 </h5>
-                                <button type="button" class="btn btn-sm btn-refresh-suggestion" id="refreshSuggestion"
-                                        data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>">
-                                    <i class="mdi mdi-refresh me-1"></i>
+                                <button type="button" class="w-button btn-refresh-suggestion" id="refreshSuggestion" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>" data-size="sm">
+                                    <w:icon name="refresh" size="sm"></w:icon>
                                     <lang>刷新建议</lang>
                                 </button>
                             </div>
-                            <div class="card-body" id="suggestionContent">
+                            <div class="w-card__body" id="suggestionContent">
                                 <?php if ($suggestion): ?>
                                     <div class="suggestion-content">
-                                        <h6><i class="mdi mdi-lightbulb-on me-1"></i><lang>优化建议</lang></h6>
+                                        <h6><w:icon name="circle" size="sm"></w:icon><lang>优化建议</lang></h6>
                                         <div class="suggestion-text"><?= nl2br(htmlspecialchars($suggestion['content'] ?? '')) ?></div>
-                                        <div class="mt-3 text-muted small">
+                                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-4);">
                                             <lang>生成时间：</lang><?= htmlspecialchars($suggestion['created_at'] ?? '-') ?>
                                         </div>
                                     </div>
                                 <?php else: ?>
-                                    <div class="text-center text-muted py-4">
-                                        <i class="mdi mdi-robot-confused" style="font-size: 3rem; opacity: 0.3;"></i>
-                                        <p class="mt-2"><lang>暂无AI建议，点击上方按钮生成</lang></p>
+                                    <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                                        <w:icon name="tag" size="sm"></w:icon>
+                                        <p style="--w-mt:var(--weline-space-2);"><lang>暂无AI建议，点击上方按钮生成</lang></p>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -149,44 +148,44 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                     </div>
 
                     <!-- 关键词列表 -->
-                    <div class="col-lg-7">
-                        <div class="card detail-card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="mdi mdi-tag-multiple me-2"></i>
+                    <div style="--w-span-lg:7;">
+                        <div class="w-card detail-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;">
+                                    <w:icon name="circle" size="sm"></w:icon>
                                     <lang>关键词列表</lang>
-                                    <span class="badge bg-secondary ms-2"><?= count($keywords) ?></span>
+                                    <span class="w-badge ms-2" data-w-background="muted"><?= count($keywords) ?></span>
                                 </h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($keywords)): ?>
                                     <div class="empty-keywords">
-                                        <i class="mdi mdi-tag-off" style="font-size: 3rem; opacity: 0.3;"></i>
-                                        <p class="mt-2"><lang>该主体暂无关键词</lang></p>
+                                        <w:icon name="circle" size="sm"></w:icon>
+                                        <p style="--w-mt:var(--weline-space-2);"><lang>该主体暂无关键词</lang></p>
                                     </div>
                                 <?php else: ?>
                                     <?php foreach ($keywords as $index => $keyword): ?>
                                         <div class="keyword-card">
-                                            <div class="d-flex align-items-center">
+                                            <div class="w-cluster" data-align="center">
                                                 <span class="priority-badge"><?= $index + 1 ?></span>
-                                                <div class="flex-grow-1">
+                                                <div data-grow="true">
                                                     <div class="keyword-name">
                                                         <?= htmlspecialchars($keyword['keyword'] ?? '') ?>
                                                     </div>
                                                     <div class="keyword-meta">
                                                         <span class="keyword-meta-item">
-                                                            <i class="mdi mdi-star me-1"></i>
+                                                            <w:icon name="star" size="sm"></w:icon>
                                                             <lang>优先级：</lang><?= (int)($keyword['priority'] ?? 0) ?>
                                                         </span>
                                                         <?php if (!empty($keyword['search_volume'])): ?>
                                                             <span class="keyword-meta-item">
-                                                                <i class="mdi mdi-trending-up me-1"></i>
+                                                                <w:icon name="circle" size="sm"></w:icon>
                                                                 <lang>搜索量：</lang><?= number_format((int)$keyword['search_volume']) ?>
                                                             </span>
                                                         <?php endif; ?>
                                                         <?php if (!empty($keyword['difficulty'])): ?>
                                                             <span class="keyword-meta-item">
-                                                                <i class="mdi mdi-gauge me-1"></i>
+                                                                <w:icon name="circle" size="sm"></w:icon>
                                                                 <lang>难度：</lang><?= (int)$keyword['difficulty'] ?>%
                                                             </span>
                                                         <?php endif; ?>
@@ -202,10 +201,10 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                 </div>
 
                 <!-- 返回按钮 -->
-                <div class="row">
-                    <div class="col-12">
-                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="btn btn-secondary">
-                            <i class="mdi mdi-arrow-left me-1"></i>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="w-button" data-tone="neutral">
+                            <w:icon name="arrow-left" size="sm"></w:icon>
                             <lang>返回列表</lang>
                         </a>
                     </div>

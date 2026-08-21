@@ -314,45 +314,45 @@ $search = $this->getData('search') ?? '';
 }
 </style>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('菜单管理') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><span><?= __('系统') ?></span></li>
-                    <li class="breadcrumb-item active"><?= __('菜单管理') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('菜单管理') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('菜单管理') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <div class="weline-menu-tree-container">
             <div class="weline-menu-tree-header">
                 <h5 class="weline-menu-tree-title">
-                    <i class="mdi mdi-file-tree"></i>
+                    <w:icon name="file" size="sm"></w:icon>
                     <?= __('菜单树') ?>
                 </h5>
                 <div class="weline-menu-tree-actions">
                     <w:form class="weline-menu-tree-search" method="get" action="">
                         <input type="text" name="search" placeholder="<?= __('搜索菜单...') ?>" value="<?= htmlspecialchars($search) ?>">
-                        <button type="submit" class="search-btn"><i class="mdi mdi-magnify"></i></button>
+                        <button type="submit" class="search-btn"><w:icon name="search" size="sm"></w:icon></button>
                     </w:form>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="weline-menu-expand-all">
-                        <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+                    <button type="button" class="w-button" id="weline-menu-expand-all" data-tone="neutral" data-variant="outline" data-size="sm">
+                        <w:icon name="more-horizontal" size="sm"></w:icon> <?= __('展开全部') ?>
                     </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="weline-menu-collapse-all">
-                        <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+                    <button type="button" class="w-button" id="weline-menu-collapse-all" data-tone="neutral" data-variant="outline" data-size="sm">
+                        <w:icon name="circle" size="sm"></w:icon> <?= __('折叠全部') ?>
                     </button>
-                    <button type="button" class="btn btn-primary btn-sm" id="weline-menu-add">
-                        <i class="mdi mdi-plus"></i> <?= __('新增菜单') ?>
+                    <button type="button" class="w-button" id="weline-menu-add" data-tone="primary" data-size="sm">
+                        <w:icon name="plus" size="sm"></w:icon> <?= __('新增菜单') ?>
                     </button>
                 </div>
             </div>
@@ -360,7 +360,7 @@ $search = $this->getData('search') ?? '';
             <div class="weline-menu-tree-body">
                 <?php if (empty($menuTree)): ?>
                     <div class="weline-menu-tree-empty">
-                        <i class="mdi mdi-folder-open-outline"></i>
+                        <w:icon name="folder" size="sm"></w:icon>
                         <p><?= __('暂无菜单数据') ?></p>
                     </div>
                 <?php else: ?>
@@ -374,30 +374,30 @@ $search = $this->getData('search') ?? '';
                             <li class="weline-menu-tree-item" data-id="<?= $item['menu_id'] ?>" data-source="<?= htmlspecialchars($item['source'] ?? '') ?>">
                                 <div class="weline-menu-tree-node">
                                     <span class="weline-menu-tree-toggle <?= $hasChildren ? '' : 'no-children' ?>">
-                                        <i class="mdi mdi-chevron-right"></i>
+                                        <w:icon name="chevron-right" size="sm"></w:icon>
                                     </span>
                                     <span class="weline-menu-tree-icon">
-                                        <i class="<?= htmlspecialchars($item['icon'] ?? 'mdi mdi-menu') ?>"></i>
+                                        <i class="<?= htmlspecialchars($item['icon'] ?? 'menu') ?>"></i>
                                     </span>
                                     <div class="weline-menu-tree-info">
                                         <div class="weline-menu-tree-name">
                                             <span class="weline-menu-tree-name-text"><?= htmlspecialchars(__($item['title'] ?? $item['name'] ?? '')) ?></span>
                                             <span class="weline-menu-tree-code" title="<?= __('菜单代码') ?>"><?= htmlspecialchars($item['source'] ?? '') ?></span>
                                             <?php if ($hasChildren): ?>
-                                                <small class="text-muted">(<?= count($item['children']) ?>)</small>
+                                                <small class="w-text" data-tone="muted">(<?= count($item['children']) ?>)</small>
                                             <?php endif; ?>
                                         </div>
                                         <div class="weline-menu-tree-meta">
                                             <span title="<?= __('资源标识') ?>">
-                                                <i class="mdi mdi-identifier"></i>
+                                                <w:icon name="puzzle" size="sm"></w:icon>
                                                 <?= htmlspecialchars($item['source'] ?? '') ?>
                                             </span>
                                             <span title="<?= __('模块') ?>">
-                                                <i class="mdi mdi-puzzle"></i>
+                                                <w:icon name="puzzle" size="sm"></w:icon>
                                                 <?= htmlspecialchars($item['module'] ?? '') ?>
                                             </span>
                                             <span title="<?= __('排序') ?>">
-                                                <i class="mdi mdi-sort-numeric-ascending"></i>
+                                                <w:icon name="circle" size="sm"></w:icon>
                                                 <?= (int)($item['order'] ?? 0) ?>
                                             </span>
                                         </div>
@@ -413,27 +413,19 @@ $search = $this->getData('search') ?? '';
                                         <?php endif; ?>
                                     </div>
                                     <div class="weline-menu-tree-actions-cell">
-                                        <button type="button" class="btn btn-outline-primary btn-sm weline-menu-edit" 
-                                                data-id="<?= $item['menu_id'] ?>"
-                                                title="<?= __('编辑') ?>">
-                                            <i class="mdi mdi-pencil"></i>
+                                        <button type="button" class="w-button weline-menu-edit" data-id="<?= $item['menu_id'] ?>" title="<?= __('编辑') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                            <w:icon name="edit" size="sm"></w:icon>
                                         </button>
-                                        <button type="button" class="btn btn-outline-success btn-sm weline-menu-add-child" 
-                                                data-parent-source="<?= htmlspecialchars($item['source'] ?? '') ?>"
-                                                title="<?= __('添加子菜单') ?>">
-                                            <i class="mdi mdi-plus"></i>
+                                        <button type="button" class="w-button weline-menu-add-child" data-parent-source="<?= htmlspecialchars($item['source'] ?? '') ?>" title="<?= __('添加子菜单') ?>" data-tone="success" data-variant="outline" data-size="sm">
+                                            <w:icon name="plus" size="sm"></w:icon>
                                         </button>
                                         <?php if (!$isSystem): ?>
-                                            <button type="button" class="btn btn-outline-danger btn-sm weline-menu-delete" 
-                                                    data-id="<?= $item['menu_id'] ?>"
-                                                    data-name="<?= htmlspecialchars($item['title'] ?? $item['name'] ?? '') ?>"
-                                                    title="<?= __('删除') ?>">
-                                                <i class="mdi mdi-delete"></i>
+                                            <button type="button" class="w-button weline-menu-delete" data-id="<?= $item['menu_id'] ?>" data-name="<?= htmlspecialchars($item['title'] ?? $item['name'] ?? '') ?>" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                                                <w:icon name="trash" size="sm"></w:icon>
                                             </button>
                                         <?php else: ?>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled
-                                                    title="<?= __('系统菜单无法删除') ?>">
-                                                <i class="mdi mdi-delete-off"></i>
+                                            <button type="button" class="w-button" disabled title="<?= __('系统菜单无法删除') ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                                                <w:icon name="trash" size="sm"></w:icon>
                                             </button>
                                         <?php endif; ?>
                                     </div>
@@ -465,19 +457,19 @@ $search = $this->getData('search') ?? '';
             ?>
             <div class="weline-menu-tree-stats">
                 <div class="weline-menu-tree-stat">
-                    <i class="mdi mdi-format-list-bulleted"></i>
+                    <w:icon name="list" size="sm"></w:icon>
                     <?= __('总计') ?>: <strong><?= $totalMenus ?></strong>
                 </div>
                 <div class="weline-menu-tree-stat">
-                    <i class="mdi mdi-shield-check"></i>
+                    <w:icon name="check" size="sm"></w:icon>
                     <?= __('系统菜单') ?>: <strong><?= $systemMenus ?></strong>
                 </div>
                 <div class="weline-menu-tree-stat">
-                    <i class="mdi mdi-account-edit"></i>
+                    <w:icon name="user" size="sm"></w:icon>
                     <?= __('自定义菜单') ?>: <strong><?= $customMenus ?></strong>
                 </div>
                 <div class="weline-menu-tree-stat">
-                    <i class="mdi mdi-file-tree"></i>
+                    <w:icon name="file" size="sm"></w:icon>
                     <?= __('顶级菜单') ?>: <strong><?= $rootMenus ?></strong>
                 </div>
             </div>
@@ -485,43 +477,42 @@ $search = $this->getData('search') ?? '';
     </div>
 </div>
 
-<div class="modal fade weline-menu-edit-modal" id="menuEditModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="menuEditModalTitle"><?= __('编辑菜单') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog weline-menu-edit-modal" id="menuEditModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title" id="menuEditModalTitle"><?= __('编辑菜单') ?></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <w:form class="weline-menu-edit-form" id="menuEditForm">
                     <input type="hidden" name="menu_id" id="menu_id">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="menu_name"><?= __('菜单名称') ?> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="menu_name" name="name" required>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div class="w-field">
+                                <label for="menu_name"><?= __('菜单名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" class="w-input" id="menu_name" name="name" required>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="menu_title"><?= __('菜单标题') ?> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="menu_title" name="title" required>
+                        <div style="--w-span-md:6;">
+                            <div class="w-field">
+                                <label for="menu_title"><?= __('菜单标题') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" class="w-input" id="menu_title" name="title" required>
                             </div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="menu_source"><?= __('资源标识') ?> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="menu_source" name="source" required
-                                       placeholder="Vendor_Module::menu_name">
-                                <small class="text-muted"><?= __('格式：Vendor_Module::menu_name') ?></small>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div class="w-field">
+                                <label for="menu_source"><?= __('资源标识') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" class="w-input" id="menu_source" name="source" required placeholder="Vendor_Module::menu_name">
+                                <small class="w-text" data-tone="muted"><?= __('格式：Vendor_Module::menu_name') ?></small>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
+                        <div style="--w-span-md:6;">
+                            <div class="w-field">
                                 <label for="menu_parent_source"><?= __('父级资源') ?></label>
-                                <select class="form-control" id="menu_parent_source" name="parent_source">
+                                <select class="w-input" id="menu_parent_source" name="parent_source">
                                     <option value=""><?= __('无（顶级菜单）') ?></option>
                                     <?php foreach ($allMenus as $m): ?>
                                         <option value="<?= htmlspecialchars($m['source'] ?? '') ?>">
@@ -532,43 +523,40 @@ $search = $this->getData('search') ?? '';
                             </div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div class="w-field">
                                 <label for="menu_action"><?= __('动作URL') ?></label>
-                                <input type="text" class="form-control" id="menu_action" name="action"
-                                       placeholder="module/controller/action">
+                                <input type="text" class="w-input" id="menu_action" name="action" placeholder="module/controller/action">
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="menu_module"><?= __('所属模块') ?> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="menu_module" name="module" required
-                                       placeholder="Vendor_Module">
+                        <div style="--w-span-md:6;">
+                            <div class="w-field">
+                                <label for="menu_module"><?= __('所属模块') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" class="w-input" id="menu_module" name="module" required placeholder="Vendor_Module">
                             </div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="form-group">
+                    <div class="w-grid">
+                        <div style="--w-span-md:4;">
+                            <div class="w-field">
                                 <label for="menu_icon"><?= __('图标类') ?></label>
-                                <div class="input-group">
-                                    <span class="input-group-text" id="menu_icon_preview"><i class="mdi mdi-menu"></i></span>
-                                    <input type="text" class="form-control" id="menu_icon" name="icon"
-                                           placeholder="mdi mdi-menu">
+                                <div class="w-field__control">
+                                    <span class="w-field__addon" id="menu_icon_preview"><w:icon name="menu" size="sm"></w:icon></span>
+                                    <input type="text" class="w-input" id="menu_icon" name="icon" placeholder="menu">
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
+                        <div style="--w-span-md:4;">
+                            <div class="w-field">
                                 <label for="menu_order"><?= __('排序') ?></label>
-                                <input type="number" class="form-control" id="menu_order" name="order" value="0">
+                                <input type="number" class="w-input" id="menu_order" name="order" value="0">
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
+                        <div style="--w-span-md:4;">
+                            <div class="w-field">
                                 <label for="menu_is_enable"><?= __('状态') ?></label>
-                                <select class="form-control" id="menu_is_enable" name="is_enable">
+                                <select class="w-input" id="menu_is_enable" name="is_enable">
                                     <option value="1"><?= __('启用') ?></option>
                                     <option value="0"><?= __('禁用') ?></option>
                                 </select>
@@ -577,9 +565,9 @@ $search = $this->getData('search') ?? '';
                     </div>
                 </w:form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="menuSaveBtn"><?= __('保存') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="menuSaveBtn" data-tone="primary"><?= __('保存') ?></button>
             </div>
         </div>
     </div>
@@ -689,7 +677,7 @@ $search = $this->getData('search') ?? '';
         document.getElementById('menuSaveBtn').addEventListener('click', saveMenu);
 
         document.getElementById('menu_icon').addEventListener('input', function() {
-            var icon = this.value.trim() || 'mdi mdi-menu';
+            var icon = this.value.trim() || 'menu';
             document.querySelector('#menu_icon_preview i').className = icon;
         });
     }
@@ -733,16 +721,16 @@ $search = $this->getData('search') ?? '';
                     document.getElementById('menu_order').value = data.order || 0;
                     document.getElementById('menu_is_enable').value = data.is_enable || 1;
                     
-                    var icon = data.icon || 'mdi mdi-menu';
+                    var icon = data.icon || 'menu';
                     document.querySelector('#menu_icon_preview i').className = icon;
                     
                     menuModal.show();
                 } else {
-                    BackendToast.error(result.msg || '<?= __("获取菜单信息失败") ?>');
+                    Weline.UI.toast.error(result.msg || '<?= __("获取菜单信息失败") ?>');
                 }
             })
             .catch(function(error) {
-                BackendToast.error('<?= __("请求失败") ?>: ' + error.message);
+                Weline.UI.toast.error('<?= __("请求失败") ?>: ' + error.message);
             });
     }
 
@@ -756,7 +744,7 @@ $search = $this->getData('search') ?? '';
         });
 
         if (!data.name || !data.title || !data.source || !data.module) {
-            BackendToast.warning('<?= __("请填写必填项") ?>');
+            Weline.UI.toast.warning('<?= __("请填写必填项") ?>');
             return;
         }
 
@@ -765,26 +753,26 @@ $search = $this->getData('search') ?? '';
         .then(function(res) {
             var result = (res && res.data) !== undefined ? res.data : res;
             if (result.success || result.code === 200) {
-                BackendToast.success('<?= __("保存成功") ?>');
+                Weline.UI.toast.success('<?= __("保存成功") ?>');
                 menuModal.hide();
                 setTimeout(function() {
                     location.reload();
                 }, 1000);
             } else {
-                BackendToast.error(result.message || result.msg || '<?= __("保存失败") ?>');
+                Weline.UI.toast.error(result.message || result.msg || '<?= __("保存失败") ?>');
             }
         })
         .catch(function(error) {
-            BackendToast.error('<?= __("请求失败") ?>: ' + error.message);
+            Weline.UI.toast.error('<?= __("请求失败") ?>: ' + error.message);
         });
     }
 
     function deleteMenu(menuId, menuName) {
-        BackendConfirm.show('<?= __("确定要删除菜单") ?> "' + menuName + '" <?= __("吗？") ?>', {
+        Weline.UI.dialog.confirm('<?= __("确定要删除菜单") ?> "' + menuName + '" <?= __("吗？") ?>', {
             title: '<?= __("确认删除") ?>',
-            type: 'danger',
-            confirmText: '<?= __("删除") ?>',
-            cancelText: '<?= __("取消") ?>'
+            tone: 'danger',
+            confirmLabel: '<?= __("删除") ?>',
+            cancelLabel: '<?= __("取消") ?>'
         }).then(function(confirmed) {
             if (!confirmed) return;
 
@@ -796,16 +784,16 @@ $search = $this->getData('search') ?? '';
             .then(function(res) {
                 var result = (res && res.data) !== undefined ? res.data : res;
                 if (result.code === 200) {
-                    BackendToast.success(result.msg || '<?= __("删除成功") ?>');
+                    Weline.UI.toast.success(result.msg || '<?= __("删除成功") ?>');
                     setTimeout(function() {
                         location.reload();
                     }, 1000);
                 } else {
-                    BackendToast.error(result.msg || '<?= __("删除失败") ?>');
+                    Weline.UI.toast.error(result.msg || '<?= __("删除失败") ?>');
                 }
             })
             .catch(function(error) {
-                BackendToast.error('<?= __("请求失败") ?>: ' + error.message);
+                Weline.UI.toast.error('<?= __("请求失败") ?>: ' + error.message);
             });
         });
     }

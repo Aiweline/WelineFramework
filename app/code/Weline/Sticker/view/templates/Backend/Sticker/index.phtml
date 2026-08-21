@@ -14,17 +14,17 @@ $sourceModule = $this->getData('source_module') ?: '';
 $modules = $this->getData('modules') ?: [];
 ?>
 <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">
-                                <i class="mdi mdi-sticker text-primary"></i> <?= __('Sticker管理') ?>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;">
+                                <w:icon name="star" size="sm"></w:icon> <?= __('Sticker管理') ?>
                             </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
-                                    <li class="breadcrumb-item"><?= __('系统') ?></li>
-                                    <li class="breadcrumb-item active"><?= __('Sticker管理') ?></li>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                                    <li class="w-breadcrumb__item"><?= __('系统') ?></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= __('Sticker管理') ?></li>
                                 </ol>
                             </div>
                         </div>
@@ -32,23 +32,21 @@ $modules = $this->getData('modules') ?: [];
                 </div>
 
                 <!-- 消息提示 -->
-                <div class='row'>
+                <div class="w-grid">
                     <template>Weline_Component::message.phtml</template>
                 </div>
 
                 <!-- 操作栏 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="d-flex justify-content-between align-items-center">
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-cluster" data-justify="between" data-align="center">
                             <div>
-                                <span class="badge bg-primary"><?= __('总数：%{1}', [$total]) ?></span>
+                                <span class="w-badge" data-w-background="primary"><?= __('总数：%{1}', [$total]) ?></span>
                             </div>
                             <div>
-                                <w:form method="get" class="d-inline-flex gap-2">
-                                    <input type="text" name="search" class="form-control form-control-sm" 
-                                           placeholder="<?= __('搜索模块名、文件路径') ?>" 
-                                           value="<?= htmlspecialchars($search) ?>">
-                                    <select name="target_module" class="form-select form-select-sm">
+                                <w:form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                    <input type="text" name="search" class="w-input" placeholder="<?= __('搜索模块名、文件路径') ?>" value="<?= htmlspecialchars($search) ?>" data-size="sm">
+                                    <select name="target_module" class="w-select" data-size="sm">
                                         <option value=""><?= __('所有目标模块') ?></option>
                                         <?php foreach ($modules as $moduleName): ?>
                                             <option value="<?= htmlspecialchars($moduleName) ?>" <?= $targetModule === $moduleName ? 'selected' : '' ?>>
@@ -56,7 +54,7 @@ $modules = $this->getData('modules') ?: [];
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <select name="source_module" class="form-select form-select-sm">
+                                    <select name="source_module" class="w-select" data-size="sm">
                                         <option value=""><?= __('所有来源模块') ?></option>
                                         <?php foreach ($modules as $moduleName): ?>
                                             <option value="<?= htmlspecialchars($moduleName) ?>" <?= $sourceModule === $moduleName ? 'selected' : '' ?>>
@@ -64,11 +62,11 @@ $modules = $this->getData('modules') ?: [];
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <button type="submit" class="btn btn-sm btn-primary">
-                                        <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                                    <button type="submit" class="w-button" data-tone="primary" data-size="sm">
+                                        <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
                                     </button>
-                                    <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="btn btn-sm btn-secondary">
-                                        <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                                    <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="w-button" data-tone="neutral" data-size="sm">
+                                        <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
                                     </a>
                                 </w:form>
                             </div>
@@ -77,18 +75,18 @@ $modules = $this->getData('modules') ?: [];
                 </div>
 
                 <!-- Sticker列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__body">
                                 <?php if (empty($stickers)): ?>
-                                    <div class="text-center py-5">
-                                        <i class="mdi mdi-sticker-outline" style="font-size: 48px; color: #ccc;"></i>
-                                        <p class="text-muted mt-3"><?= __('暂无Sticker') ?></p>
+                                    <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                                        <w:icon name="star" size="sm"></w:icon>
+                                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?= __('暂无Sticker') ?></p>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-striped table-bordered">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table">
                                             <thead>
                                                 <tr>
                                                     <th><?= __('目标模块') ?></th>
@@ -103,28 +101,27 @@ $modules = $this->getData('modules') ?: [];
                                                 <?php foreach ($stickers as $sticker): ?>
                                                     <tr>
                                                         <td>
-                                                            <span class="badge bg-info"><?= htmlspecialchars($sticker['target_module']) ?></span>
+                                                            <span class="w-badge" data-w-background="info"><?= htmlspecialchars($sticker['target_module']) ?></span>
                                                         </td>
                                                         <td>
-                                                            <code class="text-primary"><?= htmlspecialchars($sticker['target_file']) ?></code>
+                                                            <code class="w-text" data-tone="primary"><?= htmlspecialchars($sticker['target_file']) ?></code>
                                                         </td>
                                                         <td>
-                                                            <span class="badge bg-success"><?= htmlspecialchars($sticker['source_module']) ?></span>
+                                                            <span class="w-badge" data-w-background="success"><?= htmlspecialchars($sticker['source_module']) ?></span>
                                                         </td>
                                                         <td>
-                                                            <code class="text-secondary"><?= htmlspecialchars($sticker['sticker_relative_path']) ?></code>
+                                                            <code class="w-text" data-tone="muted"><?= htmlspecialchars($sticker['sticker_relative_path']) ?></code>
                                                         </td>
                                                         <td>
-                                                            <span class="badge bg-warning"><?= $sticker['actions_count'] ?></span>
+                                                            <span class="w-badge" data-w-background="warning"><?= $sticker['actions_count'] ?></span>
                                                         </td>
                                                         <td>
                                                             <a href="<?= $this->getBackendUrl('*/backend/sticker/detail', [
                                                                 'target_module' => $sticker['target_module'],
                                                                 'target_file' => $sticker['target_file'],
                                                                 'source_module' => $sticker['source_module']
-                                                            ]) ?>" 
-                                                               class="btn btn-sm btn-primary">
-                                                                <i class="mdi mdi-eye"></i> <?= __('查看详情') ?>
+                                                            ]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                                                                <w:icon name="eye" size="sm"></w:icon> <?= __('查看详情') ?>
                                                             </a>
                                                         </td>
                                                     </tr>

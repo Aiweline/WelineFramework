@@ -122,10 +122,13 @@ SEO主体列表,SEO主体列表
 无效的主体ID,无效的主体ID
 AI建议生成成功,AI建议生成成功
 生成建议失败：%{1},生成建议失败：%{1}
+grid,grid
 查看SEO总览,查看SEO总览
 查看主体详情,查看主体详情
+file,file
 查看主体SEO详情,查看主体SEO详情
 刷新AI建议,刷新AI建议
+refresh,refresh
 "AI 优化控制台","AI 优化控制台"
 AI优化控制台,AI优化控制台
 查看AI优化控制台,查看AI优化控制台
@@ -162,6 +165,7 @@ SEO主体管理,SEO主体管理
 商品,商品
 站点,站点
 SEO嵌入式管理,SEO嵌入式管理
+circle,circle
 SEO嵌入式管理界面,SEO嵌入式管理界面
 查看嵌入式SEO管理,查看嵌入式SEO管理
 查看嵌入式SEO管理界面,查看嵌入式SEO管理界面
@@ -169,7 +173,9 @@ SEO嵌入式管理界面,SEO嵌入式管理界面
 查看嵌入式SEO主体详情,查看嵌入式SEO主体详情
 刷新嵌入式AI建议,刷新嵌入式AI建议
 保存嵌入式SEO主体,保存嵌入式SEO主体
+save,save
 删除嵌入式SEO主体,删除嵌入式SEO主体
+trash,trash
 加载Sitemap管理失败：%{1},加载Sitemap管理失败：%{1}
 生成Sitemap失败：%{1},生成Sitemap失败：%{1}
 生成失败：%{1},生成失败：%{1}
@@ -682,9 +688,6 @@ Scope,Scope
 "2. 运行 Sitemap 生成或等待定时任务生成平台目录","2. 运行 Sitemap 生成或等待定时任务生成平台目录"
 "3. 将 %{1} 提交到对应站长平台","3. 将 %{1} 提交到对应站长平台"
 "4. 保持 robots.txt 中的 Sitemap 入口可访问","4. 保持 robots.txt 中的 Sitemap 入口可访问"
-成功,成功
-错误,错误
-提示,提示
 确认操作,确认操作
 确定,确定
 "SEO 自动优化分析队列","SEO 自动优化分析队列"
@@ -857,6 +860,9 @@ Canonical,Canonical
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
 SEO账户配置,SEO账户配置
 """SEO subject created""","SEO subject created"
+成功,成功
+错误,错误
+提示,提示
 暂无访客事件,暂无访客事件
 "写入隔离的 SEO Search 验收证据。","写入隔离的 SEO Search 验收证据。"
 "按回执精确清理 SEO Search 验收证据。","按回执精确清理 SEO Search 验收证据。"

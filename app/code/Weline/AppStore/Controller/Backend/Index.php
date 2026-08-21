@@ -12,10 +12,10 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\MarketplaceMeta\MarketplaceTag;
 
-#[Acl('Weline_AppStore::index', '商城首页', 'bi-bag', '应用商城首页', 'Weline_AppStore::appstore')]
+#[Acl('Weline_AppStore::index', '商城首页', 'circle', '应用商城首页', 'Weline_AppStore::appstore')]
 class Index extends BackendController
 {
-    #[Acl('Weline_AppStore::index_view', '查看商城', 'bi-house', '查看应用商城')]
+    #[Acl('Weline_AppStore::index_view', '查看商城', 'circle', '查看应用商城')]
     public function index(): string
     {
         /** @var AccountBindService $accountService */
@@ -67,7 +67,7 @@ class Index extends BackendController
         return $this->fetch('Weline_AppStore::templates/Backend/Index/index.phtml');
     }
 
-    #[Acl('Weline_AppStore::index_download', '下载模块', 'bi-cloud-download', '从官网商城下载模块包')]
+    #[Acl('Weline_AppStore::index_download', '下载模块', 'download', '从官网商城下载模块包')]
     public function download(): string
     {
         if (!$this->request->isPost()) {
@@ -99,7 +99,7 @@ class Index extends BackendController
         return $this->index();
     }
 
-    #[Acl('Weline_AppStore::index_list', '模块列表', 'bi-list', '获取模块列表')]
+    #[Acl('Weline_AppStore::index_list', '模块列表', 'list', '获取模块列表')]
     public function list(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -141,7 +141,7 @@ class Index extends BackendController
         }
     }
 
-    #[Acl('Weline_AppStore::index_authorize_install', '安装授权', 'bi-shield-check', '安装前确认应用权限')]
+    #[Acl('Weline_AppStore::index_authorize_install', '安装授权', 'check', '安装前确认应用权限')]
     public function authorizeInstall(): string
     {
         $moduleId = (int)($this->request->getParam('module_id', 0) ?: $this->request->getPost('module_id', 0));
@@ -189,7 +189,7 @@ class Index extends BackendController
         return $this->fetch('Weline_AppStore::templates/Backend/Index/authorize-install.phtml');
     }
 
-    #[Acl('Weline_AppStore::index_install', '安装模块', 'bi-download', '下载并安装模块')]
+    #[Acl('Weline_AppStore::index_install', '安装模块', 'download', '下载并安装模块')]
     public function install(): string
     {
         if (!$this->request->isPost()) {

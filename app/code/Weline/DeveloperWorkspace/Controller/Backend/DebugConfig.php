@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理开启debug的key配置
  */
-#[Acl('Weline_DeveloperWorkspace::debug_config', 'Debug配置', 'mdi-bug', 'Debug配置', 'Weline_Backend::debug_tools')]
+#[Acl('Weline_DeveloperWorkspace::debug_config', 'Debug配置', 'circle', 'Debug配置', 'Weline_Backend::debug_tools')]
 class DebugConfig extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class DebugConfig extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_DeveloperWorkspace::debug_config_index', '查看Debug配置', 'mdi-bug', '查看Debug配置')]
+    #[Acl('Weline_DeveloperWorkspace::debug_config_index', '查看Debug配置', 'circle', '查看Debug配置')]
     public function index(): string
     {
         try {
@@ -47,7 +47,7 @@ class DebugConfig extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_DeveloperWorkspace::debug_config_save', '保存Debug配置', 'mdi-content-save', '保存Debug配置')]
+    #[Acl('Weline_DeveloperWorkspace::debug_config_save', '保存Debug配置', 'save', '保存Debug配置')]
     public function save(): string
     {
         if (!$this->isPost()) {

@@ -21,13 +21,13 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 会话管理控制器
  */
-#[Acl('Weline_CustomerService::session', '会话管理', 'mdi-message', '会话管理', 'Weline_CustomerService::customer_service')]
+#[Acl('Weline_CustomerService::session', '会话管理', 'message', '会话管理', 'Weline_CustomerService::customer_service')]
 class Session extends BackendController
 {
     /**
      * 会话列表
      */
-    #[Acl('Weline_CustomerService::session_index', '查看会话', 'mdi-message', '查看会话')]
+    #[Acl('Weline_CustomerService::session_index', '查看会话', 'message', '查看会话')]
     public function index(): string
     {
         try {
@@ -85,7 +85,7 @@ class Session extends BackendController
     /**
      * 查看会话详情
      */
-    #[Acl('Weline_CustomerService::session_view', '查看会话详情', 'mdi-eye', '查看会话详情')]
+    #[Acl('Weline_CustomerService::session_view', '查看会话详情', 'eye', '查看会话详情')]
     public function view(): string
     {
         try {
@@ -133,7 +133,7 @@ class Session extends BackendController
      * 关闭会话
      * POST /customerservice/backend/session/close
      */
-    #[Acl('Weline_CustomerService::session_close', '关闭会话', 'mdi-close', '关闭会话')]
+    #[Acl('Weline_CustomerService::session_close', '关闭会话', 'close', '关闭会话')]
     public function postClose(): string
     {
         try {

@@ -44,7 +44,7 @@ class WidgetEditor {
     }
 
     notify(type, message) {
-        const toast = window.BackendToast;
+        const toast = window.Weline.UI.toast;
         if (toast && typeof toast[type] === 'function') {
             toast[type](message);
             return;
@@ -511,8 +511,7 @@ class WidgetEditor {
         const codeEditor = document.getElementById('code-editor');
         if (codeEditor) {
             codeEditor.value = code;
-            const modal = new bootstrap.Modal(document.getElementById('code-editor-modal'));
-            modal.show();
+            Weline.UI.dialog.open('#code-editor-modal');
         }
     }
 
@@ -742,4 +741,3 @@ class WidgetEditor {
 
 // 全局实例
 let widgetEditor;
-

@@ -638,7 +638,7 @@ class ProviderWorkbenchService
                 'type' => $type,
                 'icon' => isset($tool['icon']) && \is_string($tool['icon']) && \trim($tool['icon']) !== ''
                     ? \trim($tool['icon'])
-                    : 'mdi mdi-hammer-wrench',
+                    : 'settings',
                 'button_class' => isset($tool['button_class']) && \is_string($tool['button_class']) && \trim($tool['button_class']) !== ''
                     ? \trim($tool['button_class'])
                     : ($type === 'scope_patch' ? 'btn-outline-primary' : 'btn-outline-secondary'),

@@ -13,37 +13,37 @@ $id = $address[DeliveryAddress::schema_fields_ID] ?? null;
 $backendBase = $this->getBackendUrl('shipping/backend/deliveryaddress');
 $saveUrl = $this->getBackendUrl('shipping/backend/deliveryaddress/save');
 ?>
-<div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= $isEdit ? __('编辑运送地址') : __('新增运送地址') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $backendBase ?>"><?= __('运送地址管理') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
+<div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= $isEdit ? __('编辑运送地址') : __('新增运送地址') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
+                                    <li class="w-breadcrumb__item"><a href="<?= $backendBase ?>"><?= __('运送地址管理') ?></a></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
                                 </ol>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= $isEdit ? __('编辑运送地址') : __('新增运送地址') ?></h5>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= $isEdit ? __('编辑运送地址') : __('新增运送地址') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <w:form method="post" action="@var($saveUrl)" data-testid="shipping-delivery-address-editor-form">
                                     <?php if ($id): ?>
                                         <input type="hidden" name="delivery_address_id" value="<?= $id ?>">
                                     <?php endif; ?>
                                     
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('客户') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <select name="customer_id" class="form-select" required <?= $isEdit ? 'disabled' : '' ?>>
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('客户') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <select name="customer_id" class="w-select" required <?= $isEdit ? 'disabled' : '' ?>>
                                                 <option value=""><?= __('请选择客户') ?></option>
                                                 <?php foreach ($customers as $customer): ?>
                                                     <?php $customerId = $customer['customer_id'] ?? $customer['id'] ?? ''; ?>
@@ -59,113 +59,94 @@ $saveUrl = $this->getBackendUrl('shipping/backend/deliveryaddress/save');
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('地址名称') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="name" class="form-control" required
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_NAME] ?? '') ?>"
-                                                   placeholder="<?= __('请输入地址名称/标签') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('地址名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="name" class="w-input" required value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_NAME] ?? '') ?>" placeholder="<?= __('请输入地址名称/标签') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('收货人姓名') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="contact_name" class="form-control" required
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_CONTACT_NAME] ?? '') ?>"
-                                                   placeholder="<?= __('请输入收货人姓名') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('收货人姓名') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="contact_name" class="w-input" required value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_CONTACT_NAME] ?? '') ?>" placeholder="<?= __('请输入收货人姓名') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('联系电话') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="contact_phone" class="form-control" required
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_CONTACT_PHONE] ?? '') ?>"
-                                                   placeholder="<?= __('请输入联系电话') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('联系电话') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="contact_phone" class="w-input" required value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_CONTACT_PHONE] ?? '') ?>" placeholder="<?= __('请输入联系电话') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('国家') ?></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="country" class="form-control"
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_COUNTRY] ?? '') ?>"
-                                                   placeholder="<?= __('请输入国家') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('国家') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="country" class="w-input" value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_COUNTRY] ?? '') ?>" placeholder="<?= __('请输入国家') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('省份') ?></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="province" class="form-control"
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_PROVINCE] ?? '') ?>"
-                                                   placeholder="<?= __('请输入省份') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('省份') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="province" class="w-input" value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_PROVINCE] ?? '') ?>" placeholder="<?= __('请输入省份') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('城市') ?></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="city" class="form-control"
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_CITY] ?? '') ?>"
-                                                   placeholder="<?= __('请输入城市') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('城市') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="city" class="w-input" value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_CITY] ?? '') ?>" placeholder="<?= __('请输入城市') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('区县') ?></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="district" class="form-control"
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_DISTRICT] ?? '') ?>"
-                                                   placeholder="<?= __('请输入区县') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('区县') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="district" class="w-input" value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_DISTRICT] ?? '') ?>" placeholder="<?= __('请输入区县') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('街道地址') ?></label>
-                                        <div class="col-md-10">
-                                            <textarea name="street" class="form-control" rows="3"
-                                                      placeholder="<?= __('请输入街道地址') ?>"><?= htmlspecialchars($address[DeliveryAddress::schema_fields_STREET] ?? '') ?></textarea>
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('街道地址') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <textarea name="street" class="w-textarea" rows="3" placeholder="<?= __('请输入街道地址') ?>"><?= htmlspecialchars($address[DeliveryAddress::schema_fields_STREET] ?? '') ?></textarea>
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('邮政编码') ?></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="postal_code" class="form-control"
-                                                   value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_POSTAL_CODE] ?? '') ?>"
-                                                   placeholder="<?= __('请输入邮政编码') ?>">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('邮政编码') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <input type="text" name="postal_code" class="w-input" value="<?= htmlspecialchars($address[DeliveryAddress::schema_fields_POSTAL_CODE] ?? '') ?>" placeholder="<?= __('请输入邮政编码') ?>">
                                         </div>
                                     </div>
 
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('选项') ?></label>
-                                        <div class="col-md-10">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="is_default" value="1" id="is_default"
-                                                       <?= !empty($address[DeliveryAddress::schema_fields_IS_DEFAULT]) ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="is_default">
+                                    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label" style="--w-span-md:2;"><?= __('选项') ?></label>
+                                        <div style="--w-span-md:10;">
+                                            <div class="w-check">
+                                                <input type="checkbox" name="is_default" value="1" id="is_default" <?= !empty($address[DeliveryAddress::schema_fields_IS_DEFAULT]) ? 'checked' : '' ?>>
+                                                <label for="is_default">
                                                     <?= __('设为默认地址') ?>
                                                 </label>
                                             </div>
-                                            <div class="form-check mt-2">
-                                                <input class="form-check-input" type="checkbox" name="is_enabled" value="1" id="is_enabled"
-                                                       <?= empty($address) || !empty($address[DeliveryAddress::schema_fields_IS_ENABLED]) ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="is_enabled">
+                                            <div class="w-check" style="--w-mt:var(--weline-space-2);">
+                                                <input type="checkbox" name="is_enabled" value="1" id="is_enabled" <?= empty($address) || !empty($address[DeliveryAddress::schema_fields_IS_ENABLED]) ? 'checked' : '' ?>>
+                                                <label for="is_enabled">
                                                     <?= __('启用') ?>
                                                 </label>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div class="row">
-                                        <div class="col-md-10 offset-md-2">
-                                            <button type="submit" class="btn btn-primary" data-testid="shipping-delivery-address-editor-submit">
-                                                <i class="mdi mdi-content-save" aria-hidden="true"></i> <?= __('保存') ?>
+                                    <div class="w-grid">
+                                        <div class="offset-md-2" style="--w-span-md:10;">
+                                            <button type="submit" class="w-button" data-testid="shipping-delivery-address-editor-submit" data-tone="primary">
+                                                <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                                             </button>
-                                            <a href="<?= $backendBase ?>" class="btn btn-secondary">
-                                                <i class="mdi mdi-arrow-left" aria-hidden="true"></i> <?= __('返回') ?>
+                                            <a href="<?= $backendBase ?>" class="w-button" data-tone="neutral">
+                                                <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回') ?>
                                             </a>
                                         </div>
                                     </div>

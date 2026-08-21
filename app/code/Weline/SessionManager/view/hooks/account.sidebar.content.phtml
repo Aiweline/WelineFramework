@@ -20,10 +20,6 @@ if ($projectionProvider->forSections('devices') === null) {
 }
 $this->assign('device_manager_area', 'frontend');
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section"
-         id="devices-section"
-         data-account-section="devices"
-         hidden
-         weline-code="session_manager.account.device_management">
+<section class="account-hook-section account-index__section motor-account-section" id="devices-section" data-account-section="devices" hidden weline-code="session_manager.account.device_management">
     <?= $this->fetch('Weline_SessionManager::templates/device/manager.phtml') ?>
 </section>

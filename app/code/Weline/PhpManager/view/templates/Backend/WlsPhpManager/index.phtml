@@ -629,13 +629,13 @@ $themeLabels = json_encode(
             <div class="wpm-brand-title"><?= $escapeHtml(__('PHP Manager')) ?></div>
         </div>
         <nav class="wpm-nav" data-wls-plugin-nav aria-label="<?= $escapeHtml(__('WLS PHP Manager navigation')) ?>">
-            <a href="<?= $escapeHtml($phpPageUrl('summary')) ?>" class="<?= $escapeHtml($navClass('summary')) ?>"<?= $pageKey === 'summary' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-view-dashboard-outline"></span><?= $escapeHtml(__('Summary')) ?></a>
-            <a href="<?= $escapeHtml($phpPageUrl('runtime')) ?>" class="<?= $escapeHtml($navClass('runtime')) ?>"<?= $pageKey === 'runtime' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-console"></span><?= $escapeHtml(__('Runtime')) ?></a>
-            <a href="<?= $escapeHtml($phpPageUrl('inheritance')) ?>" class="<?= $escapeHtml($navClass('inheritance')) ?>"<?= $pageKey === 'inheritance' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-source-branch"></span><?= $escapeHtml(__('Inheritance')) ?></a>
-            <a href="<?= $escapeHtml($phpPageUrl('project-profile')) ?>" class="<?= $escapeHtml($navClass('project-profile')) ?>"<?= $pageKey === 'project-profile' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-tune-variant"></span><?= $escapeHtml(__('Project Profile')) ?></a>
-            <a href="<?= $escapeHtml($phpPageUrl('ini')) ?>" class="<?= $escapeHtml($navClass('ini')) ?>"<?= $pageKey === 'ini' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('php.ini')) ?></a>
-            <a href="<?= $escapeHtml($phpPageUrl('extensions')) ?>" class="<?= $escapeHtml($navClass('extensions')) ?>"<?= $pageKey === 'extensions' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-puzzle-outline"></span><?= $escapeHtml(__('Extensions')) ?></a>
-            <a href="<?= $escapeHtml($phpPageUrl('audit')) ?>" class="<?= $escapeHtml($navClass('audit')) ?>"<?= $pageKey === 'audit' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-clipboard-text-clock-outline"></span><?= $escapeHtml(__('Audit')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('summary')) ?>" class="<?= $escapeHtml($navClass('summary')) ?>"<?= $pageKey === 'summary' ? ' aria-current="page"' : '' ?>><w:icon name="grid" size="sm"></w:icon><?= $escapeHtml(__('Summary')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('runtime')) ?>" class="<?= $escapeHtml($navClass('runtime')) ?>"<?= $pageKey === 'runtime' ? ' aria-current="page"' : '' ?>><w:icon name="terminal" size="sm"></w:icon><?= $escapeHtml(__('Runtime')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('inheritance')) ?>" class="<?= $escapeHtml($navClass('inheritance')) ?>"<?= $pageKey === 'inheritance' ? ' aria-current="page"' : '' ?>><w:icon name="branch" size="sm"></w:icon><?= $escapeHtml(__('Inheritance')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('project-profile')) ?>" class="<?= $escapeHtml($navClass('project-profile')) ?>"<?= $pageKey === 'project-profile' ? ' aria-current="page"' : '' ?>><w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Project Profile')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('ini')) ?>" class="<?= $escapeHtml($navClass('ini')) ?>"<?= $pageKey === 'ini' ? ' aria-current="page"' : '' ?>><w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('php.ini')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('extensions')) ?>" class="<?= $escapeHtml($navClass('extensions')) ?>"<?= $pageKey === 'extensions' ? ' aria-current="page"' : '' ?>><w:icon name="puzzle" size="sm"></w:icon><?= $escapeHtml(__('Extensions')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('audit')) ?>" class="<?= $escapeHtml($navClass('audit')) ?>"<?= $pageKey === 'audit' ? ' aria-current="page"' : '' ?>><w:icon name="clock" size="sm"></w:icon><?= $escapeHtml(__('Audit')) ?></a>
         </nav>
         <div class="wpm-sidebar-spacer"></div>
         <button class="wpm-theme-button"
@@ -645,7 +645,7 @@ $themeLabels = json_encode(
                 data-wpm-theme-light-label="<?= $escapeHtml(__('Light')) ?>"
                 aria-label="<?= $escapeHtml(__('切换明暗色')) ?>"
                 aria-pressed="true">
-            <span class="mdi mdi-weather-night"></span>
+            <w:icon name="moon" size="sm"></w:icon>
             <span data-wpm-theme-label><?= $escapeHtml(__('Dark')) ?></span>
         </button>
     </aside>
@@ -662,10 +662,10 @@ $themeLabels = json_encode(
             </div>
             <div class="wpm-actions">
                 <a class="wpm-action is-primary" href="<?= $escapeHtml($panelUrl) ?>">
-                    <span class="mdi mdi-server"></span><?= $escapeHtml(__('WLS Panel')) ?>
+                    <w:icon name="server" size="sm"></w:icon><?= $escapeHtml(__('WLS Panel')) ?>
                 </a>
                 <a class="wpm-action" href="<?= $escapeHtml($projectAdminUrl) ?>">
-                    <span class="mdi mdi-open-in-new"></span><?= $escapeHtml(__('Project Admin')) ?>
+                    <w:icon name="circle" size="sm"></w:icon><?= $escapeHtml(__('Project Admin')) ?>
                 </a>
             </div>
         </header>
@@ -874,7 +874,7 @@ $themeLabels = json_encode(
                             <?= $escapeHtml(__('Current source:')) ?> <?= $escapeHtml($projectProfile['source_label'] ?? '') ?>
                         </p>
                         <button class="wpm-save-button" type="submit">
-                            <span class="mdi mdi-content-save-cog-outline"></span><?= $escapeHtml(__('Save Project Profile')) ?>
+                            <w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Save Project Profile')) ?>
                         </button>
                     </div>
                 </div>
@@ -973,7 +973,7 @@ $themeLabels = json_encode(
                             <span><?= $escapeHtml(__('I understand PHP Manager will write the managed block to the selected php.ini after creating a backup.')) ?></span>
                         </label>
                         <button class="wpm-secondary-button" type="submit" <?= empty($iniPlan['can_apply']) ? 'disabled' : '' ?>>
-                            <span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('Apply php.ini')) ?>
+                            <w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Apply php.ini')) ?>
                         </button>
                     </div>
                 </div>
@@ -1017,7 +1017,7 @@ $themeLabels = json_encode(
                                 <span><?= $escapeHtml(__('I understand PHP Manager will restore the selected php.ini backup.')) ?></span>
                             </label>
                             <button class="wpm-danger-button" type="submit">
-                                <span class="mdi mdi-file-restore-outline"></span><?= $escapeHtml(__('Rollback php.ini')) ?>
+                                <w:icon name="file" size="sm"></w:icon><?= $escapeHtml(__('Rollback php.ini')) ?>
                             </button>
                         </div>
                     </div>
@@ -1067,7 +1067,7 @@ $themeLabels = json_encode(
                         <span class="wpm-state"><?= $escapeHtml($extensionPlan['state_label'] ?? __('Waiting for Input')) ?></span>
                     </div>
                     <button class="wpm-secondary-button" type="submit">
-                        <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Extension Plan')) ?>
+                        <w:icon name="search" size="sm"></w:icon><?= $escapeHtml(__('Preview Extension Plan')) ?>
                     </button>
                 </div>
             </w:form>
@@ -1197,7 +1197,7 @@ $themeLabels = json_encode(
                             <span><?= $escapeHtml(__('I understand PHP Manager will update only the WLS-managed extension block after creating a backup.')) ?></span>
                         </label>
                         <button class="wpm-secondary-button" type="submit" <?= empty($extensionPlan['can_execute']) ? 'disabled' : '' ?>>
-                            <span class="mdi <?= !empty($extensionPlan['can_execute']) ? 'mdi-puzzle-check-outline' : 'mdi-lock-outline' ?>"></span><?= $escapeHtml(__('Run Extension Action')) ?>
+                            <span class="mdi <?= !empty($extensionPlan['can_execute']) ? 'check' : 'lock' ?>"></span><?= $escapeHtml(__('Run Extension Action')) ?>
                         </button>
                         <?php if (empty($extensionPlan['can_execute'])): ?>
                             <p class="wpm-section-note">
@@ -1250,7 +1250,7 @@ $themeLabels = json_encode(
                 <?= $escapeHtml(__('This plugin is installed through typed WLS tags. Additional PHP adapters can use the same module tag path.')) ?>
             </p>
             <a class="wpm-action" href="<?= $escapeHtml($marketplaceUrl . '?tag=module%3Awls&surface=backend&q=wls-php-manager') ?>">
-                <span class="mdi mdi-store-search-outline"></span><?= $escapeHtml(__('Open WLS Marketplace')) ?>
+                <w:icon name="search" size="sm"></w:icon><?= $escapeHtml(__('Open WLS Marketplace')) ?>
             </a>
         </section>
         <?php endif; ?>

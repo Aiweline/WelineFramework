@@ -319,17 +319,17 @@ $search = $this->getData('search') ?? '';
 </style>
 
 <!-- 页面标题 -->
-<div class="row" data-testid="website-management">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
-                <i class="mdi mdi-web me-2"></i>
+<div class="w-grid" data-testid="website-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;">
+                <w:icon name="globe" size="sm"></w:icon>
                 <lang>网站管理</lang>
             </h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><span><lang>后台</lang></span></li>
-                    <li class="breadcrumb-item active"><lang>网站管理</lang></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>后台</lang></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>网站管理</lang></li>
                 </ol>
             </div>
         </div>
@@ -337,23 +337,23 @@ $search = $this->getData('search') ?? '';
 </div>
 
 <!-- 消息 -->
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 使用说明（可折叠） -->
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <div class="weline-websites-admin-guide">
             <button type="button"
                     class="weline-websites-admin-guide-header"
                     id="weline-websites-guide-toggle"
                     aria-expanded="false"
                     aria-controls="weline-websites-guide-body">
-                <h6><i class="mdi mdi-help-circle-outline me-2"></i><lang>使用说明</lang></h6>
-                <i class="mdi mdi-chevron-down" id="weline-websites-guide-icon" style="transition: transform 0.3s ease;" aria-hidden="true"></i>
+                <h6><w:icon name="help" size="sm"></w:icon><lang>使用说明</lang></h6>
+                <w:icon name="chevron-down" size="sm"></w:icon>
             </button>
             <div class="weline-websites-admin-guide-body" id="weline-websites-guide-body">
                 <ul>
@@ -368,23 +368,22 @@ $search = $this->getData('search') ?? '';
 </div>
 
 <!-- 网站列表 -->
-<div class="row weline-websites-admin-card">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-                    <h4 class="card-title mb-0"><lang>网站列表</lang></h4>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <w:form id="search-form" method="get" action="@var($this->getUrl('*/admin/website'))" class="d-flex gap-2">
-                            <label for="search-input" class="visually-hidden"><lang>搜索网站</lang></label>
-                            <input type="text" id="search-input" name="search" class="form-control" placeholder="<?= __('搜索名称、代码或URL') ?>"
-                                   value="<?= htmlspecialchars($search) ?>" style="width: 250px;">
-                            <button type="submit" class="btn btn-outline-primary">
-                                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+<div class="w-grid weline-websites-admin-card">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+                    <h4 class="w-card__title" style="--w-mb:0;"><lang>网站列表</lang></h4>
+                    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                        <w:form id="search-form" method="get" action="@var($this->getUrl('*/admin/website'))" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                            <label for="search-input" class="w-visually-hidden"><lang>搜索网站</lang></label>
+                            <input type="text" id="search-input" name="search" class="w-input" placeholder="<?= __('搜索名称、代码或URL') ?>" value="<?= htmlspecialchars($search) ?>" style="width: 250px;">
+                            <button type="submit" class="w-button" data-tone="primary" data-variant="outline">
+                                <w:icon name="search" size="sm"></w:icon> <lang>搜索</lang>
                             </button>
                             <?php if ($search !== ''): ?>
-                                <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-outline-secondary" id="clear-search">
-                                    <i class="mdi mdi-close"></i> <lang>清除</lang>
+                                <a href="<?= $this->getUrl('*/admin/website') ?>" class="w-button" id="clear-search" data-tone="neutral" data-variant="outline">
+                                    <w:icon name="close" size="sm"></w:icon> <lang>清除</lang>
                                 </a>
                             <?php endif; ?>
                         </w:form>
@@ -394,8 +393,8 @@ $search = $this->getData('search') ?? '';
                                action="*/admin/website/add"
                                title="添加网站"
                                target-button-text="添加网站"
-                               icon="mdi mdi-plus"
-                               target-button-class="btn btn-primary"
+                               icon="plus"
+                               target-tone="primary"
                                save="1"
                         />
                     </div>
@@ -410,11 +409,9 @@ $search = $this->getData('search') ?? '';
 </div>
 
 <!-- Table Editable plugin -->
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
 <!-- Responsive Table js -->
 <script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
 <!-- Sweet Alerts js -->
-<script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
 <js:part name="w-delete"/>
 
 <script>

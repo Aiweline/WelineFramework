@@ -95,8 +95,8 @@ class SortBar extends \Weline\Framework\View\Block implements ComponentInterface
         $sorts = $this->_cache->get($sorter_name) ?: [];
         if (!$sorts) {
             $action_sorts = $this->getData('sorts');#lasted=>create_time:desc
-            $up_icon = $this->getData('up_icon') ? '<i class="' . $this->getData('up_icon') . '"></i>' : '<i class="mdi mdi-arrow-up"></i>';
-            $down_icon = $this->getData('down_icon') ? '<i class="' . $this->getData('down_icon') . '"></i>' : '<i class="mdi mdi-arrow-down"></i>';
+            $up_icon = $this->getData('up_icon') ? '<i class="' . $this->getData('up_icon') . '"></i>' : '<w-icon name="arrow-up" size="sm"></w-icon>';
+            $down_icon = $this->getData('down_icon') ? '<i class="' . $this->getData('down_icon') . '"></i>' : '<w-icon name="arrow-down" size="sm"></w-icon>';
             $sorts['up_icon'] = $up_icon;
             $sorts['down_icon'] = $down_icon;
             $sorts['data'] = self::default_sorts;
@@ -128,8 +128,8 @@ class SortBar extends \Weline\Framework\View\Block implements ComponentInterface
 <h3><lang>排序组件：快速构建排序按钮</lang></h3>
 <w:block class="Weline\Component\Block\Tool\SortBar"
 action="*/demo/listing"
-up_icon="mdi mdi-arrow-up"
-down_icon="mdi mdi-arrow-down"
+up_icon="arrow-up"
+down_icon="arrow-down"
 sorts="hot=>viewed:desc,price=>price:asc"
 sorter="index_sorter"/>
 <div>

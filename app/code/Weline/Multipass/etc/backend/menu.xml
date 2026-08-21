@@ -8,48 +8,48 @@
          name="multipass_management" 
          title="Multipass管理" 
          action=""
-         icon="mdi mdi-key-link" 
+         icon="link" 
          order="25000">
         <!-- 站点管理子菜单 -->
         <menu source="Weline_Multipass::site_management" 
              name="multipass_site_management" 
              title="站点管理" 
              action="multipass/backend/site/index"
-             icon="mdi mdi-server" 
+             icon="server" 
              order="5"/>
         <!-- 互通应用管理子菜单 -->
         <menu source="Weline_Multipass::trusted_app_management"
              name="multipass_trusted_app_management"
              title="互通应用"
              action="multipass/backend/trusted-app/index"
-             icon="mdi mdi-application-cog"
+             icon="settings"
              order="7"/>
         <menu source="Weline_Multipass::identity_provider_management"
              name="multipass_identity_provider_management"
              title="官网登录提供方"
              action="multipass/backend/identity-provider/index"
-             icon="mdi mdi-login-variant"
+             icon="login"
              order="8"/>
         <!-- Multipass账户管理子菜单 -->
         <menu source="Weline_Multipass::account_management" 
              name="multipass_account_management" 
              title="账户管理" 
              action=""
-             icon="mdi mdi-account-key" 
+             icon="user" 
              order="10">
             <!-- 后端账户 -->
             <menu source="Weline_Multipass::account_backend" 
                  name="multipass_account_backend" 
                  title="后端账户" 
                  action="multipass/backend/account/backend"
-                 icon="mdi mdi-account-cog" 
+                 icon="user" 
                  order="10"/>
             <!-- 前端账户 -->
             <menu source="Weline_Multipass::account_frontend" 
                  name="multipass_account_frontend" 
                  title="前端账户" 
                  action="multipass/backend/account/frontend"
-                 icon="mdi mdi-account" 
+                 icon="user" 
                  order="20"/>
         </menu>
     </menu>

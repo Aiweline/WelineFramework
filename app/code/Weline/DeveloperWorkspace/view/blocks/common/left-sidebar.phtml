@@ -3,7 +3,7 @@
 ?>
 <div class="vertical-menu">
 
-    <div data-simplebar class="h-100">
+    <div data-simplebar data-w-height="full">
 
         <!--- Sidemenu -->
         <div id='sidebar-menu'>
@@ -21,9 +21,7 @@
                                     $sub_level = $node['level']??1;
                                     $sub_nodes = $node['nodes']??[];
                                 </php>
-                                <a href="@php{if($sub_nodes):echo '#';else:echo $node['href'];endif;}"
-                                   data-dev-workspace-menu-toggle="@php{if($sub_nodes):echo '1';else:echo '0';endif;}"
-                                   class='@if{$sub_nodes=>"has-arrow"} waves-effect'>
+                                <a href="@php{if($sub_nodes):echo '#';else:echo $node['href'];endif;}" data-dev-workspace-menu-toggle="@php{if($sub_nodes):echo '1';else:echo '0';endif;}" class="@if{$sub_nodes=>"has-arrow"}">
                                     <i class='@var{$node["icon"]}'></i>
                                     <span><var>$node['name']</var></span>
                                 </a>

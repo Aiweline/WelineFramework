@@ -67,47 +67,47 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 }
 </style>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('Multipass站点管理') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="@url('admin')"><?= __('首页') ?></a></li>
-                    <li class="breadcrumb-item"><?= __('Multipass站点管理') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('Multipass站点管理') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href="@url('admin')"><?= __('首页') ?></a></li>
+                    <li class="w-breadcrumb__item"><?= __('Multipass站点管理') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0"><?= __('站点列表') ?></h5>
-                <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#addSiteOffcanvas">
-                    <i class="mdi mdi-plus"></i> <?= __('添加站点') ?>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                <h5 class="w-card__title" style="--w-mb:0;"><?= __('站点列表') ?></h5>
+                <button type="button" class="w-button" data-w-target="#addSiteOffcanvas" data-w-action="drawer.open" data-tone="primary">
+                    <w:icon name="plus" size="sm"></w:icon> <?= __('添加站点') ?>
                 </button>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <?php if (empty($sites)): ?>
-                <div class="text-center py-5">
-                    <i class="mdi mdi-server-off" style="font-size: 48px; color: var(--backend-color-text-muted, #6c757d);"></i>
-                    <p class="mt-3 text-muted"><?= __('暂无站点配置，请点击右上角「添加站点」按钮创建') ?></p>
+                <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="server" size="sm"></w:icon>
+                    <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?= __('暂无站点配置，请点击右上角「添加站点」按钮创建') ?></p>
                 </div>
                 <?php else: ?>
-                <div class="row">
+                <div class="w-grid">
                     <?php foreach ($sites as $site): ?>
-                    <div class="col-md-6 col-lg-4">
+                    <div style="--w-span-md:6;--w-span-lg:4;">
                         <div class="weline-multipass-site-card">
-                            <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div class="w-cluster" data-justify="between" data-align="start" style="--w-mb:var(--weline-space-4);">
                                 <div>
-                                    <h6 class="mb-1"><?= htmlspecialchars($site->getData('site_name') ?? '') ?></h6>
+                                    <h6 style="--w-mb:var(--weline-space-1);"><?= htmlspecialchars($site->getData('site_name') ?? '') ?></h6>
                                     <span class="weline-multipass-site-type <?= $site->getData('user_type') ?? 'frontend' ?>">
                                         <i class="mdi mdi-<?= ($site->getData('user_type') ?? 'frontend') === 'backend' ? 'account-cog' : 'account' ?>"></i>
                                         <?= ($site->getData('user_type') ?? 'frontend') === 'backend' ? __('后端') : __('前端') ?>
@@ -117,39 +117,29 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                     <?= ($site->getData('is_enabled') ?? 0) ? __('已启用') : __('已禁用') ?>
                                 </span>
                             </div>
-                            <div class="mb-2">
-                                <small class="text-muted"><?= __('站点URL') ?></small>
-                                <div class="text-truncate">
+                            <div style="--w-mb:var(--weline-space-2);">
+                                <small class="w-text" data-tone="muted"><?= __('站点URL') ?></small>
+                                <div class="w-text" data-truncate="true">
                                     <a href="<?= htmlspecialchars($site->getData('site_url') ?? '') ?>" target="_blank">
                                         <?= htmlspecialchars($site->getData('site_url') ?? '') ?>
                                     </a>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <small class="text-muted"><?= __('密钥') ?></small>
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <small class="w-text" data-tone="muted"><?= __('密钥') ?></small>
                                 <div class="weline-multipass-secret-key">
                                     <?= htmlspecialchars(substr($site->getData('secret_key') ?? '', 0, 20)) ?>...
-                                    <button type="button"
-                                            class="btn btn-sm btn-link p-0 ms-2"
-                                            data-multipass-site-action="copy-secret"
-                                            data-secret-key="<?= htmlspecialchars((string)($site->getData('secret_key') ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                        <i class="mdi mdi-content-copy"></i>
+                                    <button type="button" class="w-button ms-2" data-multipass-site-action="copy-secret" data-secret-key="<?= htmlspecialchars((string)($site->getData('secret_key') ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                                        <w:icon name="copy" size="sm"></w:icon>
                                     </button>
                                 </div>
                             </div>
-                            <div class="d-flex gap-2">
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-primary"
-                                        data-multipass-site-action="edit"
-                                        data-site="<?= htmlspecialchars(json_encode($site->getData(), $jsonForScriptFlags) ?: '{}', ENT_QUOTES, 'UTF-8') ?>">
-                                    <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                <button type="button" class="w-button" data-multipass-site-action="edit" data-site="<?= htmlspecialchars(json_encode($site->getData(), $jsonForScriptFlags) ?: '{}', ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                    <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                                 </button>
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-danger"
-                                        data-multipass-site-action="delete"
-                                        data-site-id="<?= (int)$site->getData('site_id') ?>"
-                                        data-site-name="<?= htmlspecialchars((string)($site->getData('site_name') ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                    <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                <button type="button" class="w-button" data-multipass-site-action="delete" data-site-id="<?= (int)$site->getData('site_id') ?>" data-site-name="<?= htmlspecialchars((string)($site->getData('site_name') ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                                    <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
                                 </button>
                             </div>
                         </div>
@@ -163,56 +153,56 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </div>
 
 <!-- 添加/编辑站点 Offcanvas -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="addSiteOffcanvas" style="width: 450px;">
-    <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="offcanvasTitle"><?= __('添加站点') ?></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+<div class="w-drawer offcanvas-end" tabindex="-1" id="addSiteOffcanvas" style="width: 450px;" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+    <div class="w-drawer__header" data-w-border="bottom">
+        <h5 class="w-drawer__title" id="offcanvasTitle"><?= __('添加站点') ?></h5>
+        <button type="button" class="w-button" aria-label="Close" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
     </div>
-    <div class="offcanvas-body">
+    <div class="w-drawer__body">
         <w:form id="siteForm">
             <input type="hidden" name="site_id" id="site_id" value="">
             
-            <div class="mb-3">
-                <label class="form-label"><?= __('站点名称') ?> <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="site_name" id="site_name" required placeholder="<?= __('例如：主站、CRM系统') ?>">
+            <div style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label"><?= __('站点名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <input type="text" class="w-input" name="site_name" id="site_name" required placeholder="<?= __('例如：主站、CRM系统') ?>">
             </div>
             
-            <div class="mb-3">
-                <label class="form-label"><?= __('站点URL') ?> <span class="text-danger">*</span></label>
-                <input type="url" class="form-control" name="site_url" id="site_url" required placeholder="<?= __('例如：https://example.com') ?>">
-                <small class="form-text text-muted"><?= __('接收Multipass登录的目标站点地址') ?></small>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label"><?= __('站点URL') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <input type="url" class="w-input" name="site_url" id="site_url" required placeholder="<?= __('例如：https://example.com') ?>">
+                <small class="w-field__hint w-text" data-tone="muted"><?= __('接收Multipass登录的目标站点地址') ?></small>
             </div>
             
-            <div class="mb-3">
-                <label class="form-label"><?= __('密钥') ?></label>
-                <div class="input-group">
-                    <input type="text" class="form-control" name="secret_key" id="secret_key" placeholder="<?= __('留空自动生成') ?>">
-                    <button type="button" class="btn btn-outline-secondary" data-multipass-site-action="generate-key">
-                        <i class="mdi mdi-refresh"></i> <?= __('生成') ?>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label"><?= __('密钥') ?></label>
+                <div class="w-field__control">
+                    <input type="text" class="w-input" name="secret_key" id="secret_key" placeholder="<?= __('留空自动生成') ?>">
+                    <button type="button" class="w-button" data-multipass-site-action="generate-key" data-tone="neutral" data-variant="outline">
+                        <w:icon name="refresh" size="sm"></w:icon> <?= __('生成') ?>
                     </button>
                 </div>
-                <small class="form-text text-muted"><?= __('用于加密Token的密钥，需与目标站点配置一致') ?></small>
+                <small class="w-field__hint w-text" data-tone="muted"><?= __('用于加密Token的密钥，需与目标站点配置一致') ?></small>
             </div>
             
-            <div class="mb-3">
-                <label class="form-label"><?= __('用户类型') ?></label>
-                <select class="form-select" name="user_type" id="user_type">
+            <div style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label"><?= __('用户类型') ?></label>
+                <select class="w-select" name="user_type" id="user_type">
                     <option value="frontend"><?= __('前端用户') ?></option>
                     <option value="backend"><?= __('后端用户') ?></option>
                 </select>
-                <small class="form-text text-muted"><?= __('该站点用于登录哪类用户') ?></small>
+                <small class="w-field__hint w-text" data-tone="muted"><?= __('该站点用于登录哪类用户') ?></small>
             </div>
             
-            <div class="mb-3">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" name="is_enabled" id="is_enabled" value="1" checked>
-                    <label class="form-check-label" for="is_enabled"><?= __('启用站点') ?></label>
+            <div style="--w-mb:var(--weline-space-4);">
+                <div class="w-switch">
+                    <input type="checkbox" name="is_enabled" id="is_enabled" value="1" checked>
+                    <label for="is_enabled"><?= __('启用站点') ?></label>
                 </div>
             </div>
             
-            <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+            <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                <button type="submit" class="w-button" data-tone="primary">
+                    <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                 </button>
             </div>
         </w:form>
@@ -279,7 +269,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
-        BackendToast.success('<?= __('密钥已复制到剪贴板') ?>');
+        Weline.UI.toast.success('<?= __('密钥已复制到剪贴板') ?>');
     };
     
     window.editSite = function(siteData) {
@@ -291,12 +281,11 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         document.getElementById('user_type').value = siteData.user_type || 'frontend';
         document.getElementById('is_enabled').checked = siteData.is_enabled == 1;
         
-        var offcanvas = new bootstrap.Offcanvas(document.getElementById('addSiteOffcanvas'));
-        offcanvas.show();
+        Weline.UI.drawer.open('#addSiteOffcanvas');
     };
     
     window.deleteSite = function(siteId, siteName) {
-        BackendConfirm.show(deleteConfirmTemplate.replace('%{1}', siteName || ''))
+        Weline.UI.dialog.confirm(deleteConfirmTemplate.replace('%{1}', siteName || ''))
             .then(function(confirmed) {
                 if (confirmed) {
                     var formData = new FormData();
@@ -306,14 +295,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         .then(function(res) {
                             var data = (res && res.data) !== undefined ? res.data : res;
                             if (data.success || data.code === 200) {
-                                BackendToast.success('<?= __('站点删除成功') ?>');
+                                Weline.UI.toast.success('<?= __('站点删除成功') ?>');
                                 setTimeout(function() { window.location.reload(); }, 1000);
                             } else {
-                                BackendToast.error(data.message || data.msg || '<?= __('删除失败') ?>');
+                                Weline.UI.toast.error(data.message || data.msg || '<?= __('删除失败') ?>');
                             }
                         })
                         .catch(function() {
-                            BackendToast.error('<?= __('请求失败') ?>');
+                            Weline.UI.toast.error('<?= __('请求失败') ?>');
                         });
                 }
             });
@@ -330,7 +319,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 try {
                     editSite(JSON.parse(button.getAttribute('data-site') || '{}'));
                 } catch (e) {
-                    BackendToast.error('<?= __('站点数据解析失败') ?>');
+                    Weline.UI.toast.error('<?= __('站点数据解析失败') ?>');
                 }
                 return;
             }
@@ -353,18 +342,18 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success || data.code === 200) {
-                    BackendToast.success('<?= __('站点保存成功') ?>');
+                    Weline.UI.toast.success('<?= __('站点保存成功') ?>');
                     setTimeout(function() { window.location.reload(); }, 1000);
                 } else {
-                    BackendToast.error(data.message || data.msg || '<?= __('保存失败') ?>');
+                    Weline.UI.toast.error(data.message || data.msg || '<?= __('保存失败') ?>');
                 }
             })
             .catch(function() {
-                BackendToast.error('<?= __('请求失败') ?>');
+                Weline.UI.toast.error('<?= __('请求失败') ?>');
             });
     });
     
-    document.getElementById('addSiteOffcanvas').addEventListener('hidden.bs.offcanvas', function() {
+    document.getElementById('addSiteOffcanvas').addEventListener('weline:ui:drawer:close', function() {
         document.getElementById('offcanvasTitle').textContent = '<?= __('添加站点') ?>';
         document.getElementById('siteForm').reset();
         document.getElementById('site_id').value = '';

@@ -17,7 +17,7 @@ $jsonEncodeFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
     var url = <?= json_encode($url ?? '', $jsonEncodeFlags) ?>;
     var reload = <?= json_encode(!empty($reload), $jsonEncodeFlags) ?>;
     var parentWin = window.parent;
-    var Toast = parentWin && parentWin.BackendToast;
+    var Toast = parentWin && parentWin.Weline.UI.toast;
     if (Toast) {
         if (type === 'error') {
             Toast.error(msg);

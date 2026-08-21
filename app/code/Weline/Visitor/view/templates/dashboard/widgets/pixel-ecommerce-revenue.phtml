@@ -60,14 +60,14 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
                 <thead>
                 <tr>
                     <th><?= __('渠道') ?></th>
-                    <th class="text-end"><?= __('收入') ?></th>
+                    <th class="w-text" data-align="end"><?= __('收入') ?></th>
                 </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($byChannel as $row): ?>
                     <tr>
                         <th><code><?= $h($row['channel_code'] ?? $row['channel'] ?? '—') ?></code></th>
-                        <td class="text-end"><?= $h($service->formatNumber($row['purchase_revenue'] ?? $row['revenue'] ?? 0, 2)) ?></td>
+                        <td class="w-text" data-align="end"><?= $h($service->formatNumber($row['purchase_revenue'] ?? $row['revenue'] ?? 0, 2)) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

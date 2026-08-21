@@ -19,20 +19,20 @@ $widgetType = (string)($widget['widget_type'] ?? 'content');
 
 // 获取部件图标
 $typeIcons = [
-    'header' => 'ri-layout-top-line',
-    'footer' => 'ri-layout-bottom-line',
-    'sidebar' => 'ri-layout-left-line',
-    'banner' => 'ri-image-line',
-    'carousel' => 'ri-slideshow-line',
-    'product' => 'ri-shopping-bag-line',
-    'category' => 'ri-folder-line',
-    'navigation' => 'ri-menu-line',
-    'search' => 'ri-search-line',
-    'social' => 'ri-share-line',
-    'newsletter' => 'ri-mail-line',
-    'content' => 'ri-file-text-line',
+    'header' => 'circle',
+    'footer' => 'circle',
+    'sidebar' => 'circle',
+    'banner' => 'image',
+    'carousel' => 'circle',
+    'product' => 'pin',
+    'category' => 'folder',
+    'navigation' => 'menu',
+    'search' => 'search',
+    'social' => 'share',
+    'newsletter' => 'mail',
+    'content' => 'file',
 ];
-$icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
+$icon = $typeIcons[$widgetType] ?? 'circle';
 ?>
 
 <div class="config-widget-header">
@@ -47,7 +47,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
 
 <w:form class="config-form" id="widgetConfigForm" data-layout-id="@var($widget['layout_id'] ?? '')">
     <?php if (empty($params)): ?>
-        <p class="text-muted"><?= __('该部件暂无可配置参数') ?></p>
+        <p class="w-text" data-tone="muted"><?= __('该部件暂无可配置参数') ?></p>
     <?php else: ?>
         <?php foreach ($params as $key => $param): 
             $semanticType = (string)($param['type'] ?? 'string');
@@ -68,31 +68,19 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
             $placeholder = (string)($param['placeholder'] ?? '');
             $options = $param['options'] ?? [];
         ?>
-            <div class="form-group">
+            <div class="w-field">
                 <label for="config_<?= $key ?>">
                     <?= htmlspecialchars($label) ?>
                     <?php if ($required): ?>
-                        <span class="text-danger">*</span>
+                        <span class="w-text" data-tone="danger">*</span>
                     <?php endif; ?>
                 </label>
                 
                 <?php if ($type === 'string'): ?>
-                    <input type="text" 
-                           class="form-control" 
-                           id="config_<?= $key ?>" 
-                           name="<?= $key ?>"
-                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
-                           placeholder="<?= htmlspecialchars($placeholder) ?>"
-                           <?= $required ? 'required' : '' ?>>
+                    <input type="text" class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" value="<?= htmlspecialchars((string)($value ?? '')) ?>" placeholder="<?= htmlspecialchars($placeholder) ?>" <?= $required ? 'required' : '' ?>>
                 
                 <?php elseif ($type === 'number'): ?>
-                    <input type="number" 
-                           class="form-control" 
-                           id="config_<?= $key ?>" 
-                           name="<?= $key ?>"
-                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
-                           placeholder="<?= htmlspecialchars($placeholder) ?>"
-                           <?= $required ? 'required' : '' ?>>
+                    <input type="number" class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" value="<?= htmlspecialchars((string)($value ?? '')) ?>" placeholder="<?= htmlspecialchars($placeholder) ?>" <?= $required ? 'required' : '' ?>>
                 
                 <?php elseif (in_array($semanticType, ['bool', 'boolean'], true)): ?>
                     <?php
@@ -102,7 +90,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                         '0' => str_starts_with(strtolower((string)$key), 'show') ? __('隐藏') : __('否'),
                     ];
                     ?>
-                    <select class="form-control" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
+                    <select class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
                         <?php foreach ($boolOptions as $optValue => $optLabel): ?>
                             <option value="<?= htmlspecialchars((string)$optValue) ?>" <?= (string)$boolValue === (string)$optValue ? 'selected' : '' ?>>
                                 <?= htmlspecialchars((string)$optLabel) ?>
@@ -110,7 +98,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                         <?php endforeach; ?>
                     </select>
                 <?php elseif ($type === 'select'): ?>
-                    <select class="form-control" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
+                    <select class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
                         <option value=""><?= __('-- 请选择 --') ?></option>
                         <?php foreach ($options as $optValue => $optLabel): ?>
                             <option value="<?= htmlspecialchars((string)($optValue ?? '')) ?>" <?= $value == $optValue ? 'selected' : '' ?>>
@@ -120,75 +108,40 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                     </select>
                 
                 <?php elseif ($type === 'url'): ?>
-                    <input type="url" 
-                           class="form-control" 
-                           id="config_<?= $key ?>" 
-                           name="<?= $key ?>"
-                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
-                           placeholder="<?= htmlspecialchars($placeholder ?: 'https://') ?>"
-                           <?= $required ? 'required' : '' ?>>
+                    <input type="url" class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" value="<?= htmlspecialchars((string)($value ?? '')) ?>" placeholder="<?= htmlspecialchars($placeholder ?: 'https://') ?>" <?= $required ? 'required' : '' ?>>
                 
                 <?php elseif ($type === 'image'): ?>
-                    <div class="input-group">
-                        <input type="text" 
-                               class="form-control" 
-                               id="config_<?= $key ?>" 
-                               name="<?= $key ?>"
-                               value="<?= htmlspecialchars((string)($value ?? '')) ?>"
-                               placeholder="<?= __('图片URL或点击选择') ?>">
-                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_<?= $key ?>">
-                            <i class="ri-image-line"></i>
+                    <div class="w-field__control">
+                        <input type="text" class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" value="<?= htmlspecialchars((string)($value ?? '')) ?>" placeholder="<?= __('图片URL或点击选择') ?>">
+                        <button type="button" class="w-button btn-select-image" data-target="config_<?= $key ?>" data-tone="neutral" data-variant="outline">
+                            <w:icon name="image" size="sm"></w:icon>
                         </button>
                     </div>
                     <?php if ($value): ?>
-                        <div class="mt-2">
+                        <div style="--w-mt:var(--weline-space-2);">
                             <img src="<?= htmlspecialchars((string)($value ?? '')) ?>" class="img-thumbnail" style="max-height: 80px;">
                         </div>
                     <?php endif; ?>
                 
                 <?php elseif ($type === 'color'): ?>
-                    <div class="input-group">
-                        <input type="color" 
-                               class="form-control form-control-color" 
-                               id="config_<?= $key ?>_picker" 
-                               value="<?= htmlspecialchars((string)($value ?? '#000000')) ?>"
-                               style="width: 50px;">
-                        <input type="text" 
-                               class="form-control" 
-                               id="config_<?= $key ?>" 
-                               name="<?= $key ?>"
-                               value="<?= htmlspecialchars((string)($value ?? '')) ?>"
-                               placeholder="#000000">
+                    <div class="w-field__control">
+                        <input type="color" class="w-input form-control-color" id="config_<?= $key ?>_picker" value="<?= htmlspecialchars((string)($value ?? '#000000')) ?>" style="width: 50px;">
+                        <input type="text" class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" value="<?= htmlspecialchars((string)($value ?? '')) ?>" placeholder="#000000">
                     </div>
                 
                 <?php elseif ($type === 'textarea'): ?>
-                    <textarea class="form-control" 
-                              id="config_<?= $key ?>" 
-                              name="<?= $key ?>"
-                              rows="4"
-                              placeholder="<?= htmlspecialchars($placeholder) ?>"
-                              <?= $required ? 'required' : '' ?>><?= htmlspecialchars((string)($value ?? '')) ?></textarea>
+                    <textarea class="w-textarea" id="config_<?= $key ?>" name="<?= $key ?>" rows="4" placeholder="<?= htmlspecialchars($placeholder) ?>" <?= $required ? 'required' : '' ?>><?= htmlspecialchars((string)($value ?? '')) ?></textarea>
                 
                 <?php elseif ($type === 'array'): ?>
-                    <textarea class="form-control" 
-                              id="config_<?= $key ?>" 
-                              name="<?= $key ?>"
-                              rows="4"
-                              placeholder="<?= __('JSON格式数组') ?>"
-                              <?= $required ? 'required' : '' ?>><?= is_array($value) ? json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : htmlspecialchars((string)($value ?? '')) ?></textarea>
-                    <small class="form-text"><?= __('请使用JSON格式输入') ?></small>
+                    <textarea class="w-textarea" id="config_<?= $key ?>" name="<?= $key ?>" rows="4" placeholder="<?= __('JSON格式数组') ?>" <?= $required ? 'required' : '' ?>><?= is_array($value) ? json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : htmlspecialchars((string)($value ?? '')) ?></textarea>
+                    <small class="w-field__hint"><?= __('请使用JSON格式输入') ?></small>
                 
                 <?php else: ?>
-                    <input type="text" 
-                           class="form-control" 
-                           id="config_<?= $key ?>" 
-                           name="<?= $key ?>"
-                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
-                           <?= $required ? 'required' : '' ?>>
+                    <input type="text" class="w-input" id="config_<?= $key ?>" name="<?= $key ?>" value="<?= htmlspecialchars((string)($value ?? '')) ?>" <?= $required ? 'required' : '' ?>>
                 <?php endif; ?>
                 
                 <?php if ($description): ?>
-                    <small class="form-text"><?= htmlspecialchars($description) ?></small>
+                    <small class="w-field__hint"><?= htmlspecialchars($description) ?></small>
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>

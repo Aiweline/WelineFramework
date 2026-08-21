@@ -8,14 +8,14 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><lang>管理员管理</lang></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><span><lang>系统</lang></span></li>
-                    <li class="breadcrumb-item active"><lang>管理员</lang></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><lang>管理员管理</lang></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>系统</lang></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>管理员</lang></li>
                 </ol>
             </div>
         </div>
@@ -23,12 +23,12 @@
 </div>
 
 <!-- 管理员列表 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <!-- 工具栏 -->
-                <div class="weline-user-toolbar d-flex justify-content-between align-items-center mb-3">
+                <div class="weline-user-toolbar w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
                     <div class="weline-user-search">
                         <block class='Weline\Component\Block\Form\Search' id='user-search'
                                action='*/backend/user/listing'
@@ -38,15 +38,15 @@
                                placeholder='搜索用户名或邮箱'></block>
                     </div>
                     <acl source="Weline_Admin::system_user_add">
-                        <button type="button" class="btn btn-primary" id="weline-user-add-btn">
-                            <i class="mdi mdi-plus me-1"></i><lang>新增管理员</lang>
+                        <button type="button" class="w-button" id="weline-user-add-btn" data-tone="primary">
+                            <w:icon name="plus" size="sm"></w:icon><lang>新增管理员</lang>
                         </button>
                     </acl>
                 </div>
 
                 <!-- 用户列表 -->
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle weline-user-table">
+                <div class="w-table-wrap">
+                    <table class="w-table weline-user-table" data-w-vertical="middle">
                         <thead>
                             <tr>
                                 <th style="width: 60px;">ID</th>
@@ -61,103 +61,87 @@
                             <tr data-user-id="{{user.user_id}}" data-username="{{user.username}}" data-email="{{user.email}}">
                                 <td>{{user.user_id}}</td>
                                 <td>
-                                    <div class="d-flex align-items-center">
+                                    <div class="w-cluster" data-align="center">
                                         <div class="weline-user-avatar me-3">
                                             <if condition="user.avatar">
-                                                <img src="{{user.avatar}}" alt="{{user.username}}" class="rounded-circle" width="40" height="40">
+                                                <img src="{{user.avatar}}" alt="{{user.username}}" width="40" height="40" data-w-radius="round">
                                             <else/>
                                                 <div class="weline-user-avatar-placeholder">
-                                                    <i class="mdi mdi-shield-account"></i>
+                                                    <w:icon name="user" size="sm"></w:icon>
                                                 </div>
                                             </if>
                                         </div>
                                         <div>
-                                            <div class="d-flex align-items-center gap-2">
-                                                <span class="fw-semibold">{{user.username}}</span>
+                                            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                                <span class="w-text" data-weight="strong">{{user.username}}</span>
                                                 <if condition="user.user_id == 1">
                                                     <span class="weline-superadmin-badge-sm">
-                                                        <i class="mdi mdi-shield-crown"></i>
+                                                        <w:icon name="shield" size="sm"></w:icon>
                                                         <lang>超管</lang>
                                                     </span>
                                                 </if>
                                             </div>
-                                            <div class="text-muted small">{{user.email}}</div>
+                                            <div class="w-text" data-tone="muted" data-size="sm">{{user.email}}</div>
                                         </div>
                                     </div>
                                 </td>
                                 <td>
                                     <if condition="user.is_deleted == 1">
-                                        <span class="badge bg-secondary"><lang>已删除</lang></span>
+                                        <span class="w-badge" data-w-background="muted"><lang>已删除</lang></span>
                                     <else/>
                                         <if condition="user.is_enabled == 1">
-                                            <span class="badge bg-success"><lang>已激活</lang></span>
+                                            <span class="w-badge" data-w-background="success"><lang>已激活</lang></span>
                                         <else/>
-                                            <span class="badge bg-warning text-dark"><lang>已禁用</lang></span>
+                                            <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><lang>已禁用</lang></span>
                                         </if>
                                     </if>
                                 </td>
-                                <td class="text-muted small">{{user.create_time}}</td>
+                                <td class="w-text" data-tone="muted" data-size="sm">{{user.create_time}}</td>
                                 <td>
                                     <if condition="user.user_id != 1">
                                         <div class="weline-user-actions">
                                             <acl source="Weline_Admin::system_user_edit_post">
-                                                <button type="button" class="btn btn-outline-primary weline-user-edit-btn"
-                                                        data-user-id="{{user.user_id}}"
-                                                        data-username="{{user.username}}"
-                                                        data-email="{{user.email}}"
-                                                        title="@lang{编辑}">
-                                                    <i class="mdi mdi-pencil"></i>
+                                                <button type="button" class="w-button weline-user-edit-btn" data-user-id="{{user.user_id}}" data-username="{{user.username}}" data-email="{{user.email}}" title="@lang{编辑}" data-tone="primary" data-variant="outline">
+                                                    <w:icon name="edit" size="sm"></w:icon>
                                                 </button>
                                             </acl>
                                             <if condition="user.is_deleted == 1">
                                                 <acl source="Weline_Admin::system_user_active_post">
-                                                    <button type="button" class="btn btn-outline-success weline-user-toggle-btn"
-                                                            data-user-id="{{user.user_id}}"
-                                                            data-action="enable"
-                                                            title="@lang{激活}">
-                                                        <i class="mdi mdi-account-check"></i>
+                                                    <button type="button" class="w-button weline-user-toggle-btn" data-user-id="{{user.user_id}}" data-action="enable" title="@lang{激活}" data-tone="success" data-variant="outline">
+                                                        <w:icon name="user" size="sm"></w:icon>
                                                     </button>
                                                 </acl>
                                             <elseif condition="user.is_enabled == 1"/>
                                                 <acl source="Weline_Admin::system_user_inactive_post">
-                                                    <button type="button" class="btn btn-outline-warning weline-user-toggle-btn"
-                                                            data-user-id="{{user.user_id}}"
-                                                            data-action="disable"
-                                                            title="@lang{禁用}">
-                                                        <i class="mdi mdi-account-off"></i>
+                                                    <button type="button" class="w-button weline-user-toggle-btn" data-user-id="{{user.user_id}}" data-action="disable" title="@lang{禁用}" data-tone="warning" data-variant="outline">
+                                                        <w:icon name="user" size="sm"></w:icon>
                                                     </button>
                                                 </acl>
                                             <else/>
                                                 <acl source="Weline_Admin::system_user_active_post">
-                                                    <button type="button" class="btn btn-outline-success weline-user-toggle-btn"
-                                                            data-user-id="{{user.user_id}}"
-                                                            data-action="enable"
-                                                            title="@lang{激活}">
-                                                        <i class="mdi mdi-account-check"></i>
+                                                    <button type="button" class="w-button weline-user-toggle-btn" data-user-id="{{user.user_id}}" data-action="enable" title="@lang{激活}" data-tone="success" data-variant="outline">
+                                                        <w:icon name="user" size="sm"></w:icon>
                                                     </button>
                                                 </acl>
                                             </if>
                                             <acl source="Weline_Admin::system_user_delete_post">
-                                                <button type="button" class="btn btn-outline-danger weline-user-delete-btn"
-                                                        data-user-id="{{user.user_id}}"
-                                                        data-username="{{user.username}}"
-                                                        title="@lang{删除}">
-                                                    <i class="mdi mdi-delete"></i>
+                                                <button type="button" class="w-button weline-user-delete-btn" data-user-id="{{user.user_id}}" data-username="{{user.username}}" title="@lang{删除}" data-tone="danger" data-variant="outline">
+                                                    <w:icon name="trash" size="sm"></w:icon>
                                                 </button>
                                             </acl>
                                         </div>
                                     <else/>
-                                        <span class="text-muted small"><i class="mdi mdi-lock-outline me-1"></i><lang>受保护</lang></span>
+                                        <span class="w-text" data-tone="muted" data-size="sm"><w:icon name="lock" size="sm"></w:icon><lang>受保护</lang></span>
                                     </if>
                                 </td>
                             </tr>
                         </foreach>
                         <empty name="users">
                             <tr>
-                                <td colspan="5" class="text-center py-4">
-                                    <div class="text-muted">
-                                        <i class="mdi mdi-account-search-outline" style="font-size: 3rem;"></i>
-                                        <p class="mt-2 mb-0"><lang>暂无管理员数据</lang></p>
+                                <td colspan="5" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                                    <div class="w-text" data-tone="muted">
+                                        <w:icon name="user" size="sm"></w:icon>
+                                        <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>暂无管理员数据</lang></p>
                                     </div>
                                 </td>
                             </tr>
@@ -172,49 +156,46 @@
 </div>
 
 <!-- 用户编辑/新增 Offcanvas 抽屉 -->
-<div class="offcanvas offcanvas-end weline-user-offcanvas" tabindex="-1" id="welineUserOffcanvas">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="welineUserOffcanvasTitle"><lang>新增管理员</lang></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+<div class="w-drawer offcanvas-end weline-user-offcanvas" tabindex="-1" id="welineUserOffcanvas" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+    <div class="w-drawer__header">
+        <h5 class="w-drawer__title" id="welineUserOffcanvasTitle"><lang>新增管理员</lang></h5>
+        <button type="button" class="w-button" aria-label="Close" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
     </div>
-    <div class="offcanvas-body">
+    <div class="w-drawer__body">
         <w:form id="welineUserForm" novalidate>
             <input type="hidden" name="user_id" id="weline-user-id">
             
-            <div class="mb-3">
-                <label for="weline-user-username" class="form-label"><lang>用户名</lang> <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="weline-user-username" name="username" 
-                       placeholder="@lang{请输入用户名}" required>
-                <div class="invalid-feedback"><lang>请输入用户名</lang></div>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label for="weline-user-username" class="w-field__label"><lang>用户名</lang> <span class="w-text" data-tone="danger">*</span></label>
+                <input type="text" class="w-input" id="weline-user-username" name="username" placeholder="@lang{请输入用户名}" required>
+                <div class="w-field__error"><lang>请输入用户名</lang></div>
             </div>
             
-            <div class="mb-3">
-                <label for="weline-user-email" class="form-label"><lang>邮箱</lang> <span class="text-danger">*</span></label>
-                <input type="email" class="form-control" id="weline-user-email" name="email" 
-                       placeholder="@lang{请输入邮箱}" required>
-                <div class="invalid-feedback"><lang>请输入有效邮箱</lang></div>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label for="weline-user-email" class="w-field__label"><lang>邮箱</lang> <span class="w-text" data-tone="danger">*</span></label>
+                <input type="email" class="w-input" id="weline-user-email" name="email" placeholder="@lang{请输入邮箱}" required>
+                <div class="w-field__error"><lang>请输入有效邮箱</lang></div>
             </div>
             
-            <div class="mb-3">
-                <label for="weline-user-password" class="form-label">
-                    <lang>密码</lang> <span class="text-danger weline-password-required">*</span>
+            <div style="--w-mb:var(--weline-space-4);">
+                <label for="weline-user-password" class="w-field__label">
+                    <lang>密码</lang> <span class="w-text weline-password-required" data-tone="danger">*</span>
                 </label>
-                <div class="input-group">
-                    <input type="password" class="form-control" id="weline-user-password" name="password" 
-                           placeholder="@lang{请输入密码}">
-                    <button class="btn btn-outline-secondary weline-toggle-password" type="button">
-                        <i class="mdi mdi-eye"></i>
+                <div class="w-field__control">
+                    <input type="password" class="w-input" id="weline-user-password" name="password" placeholder="@lang{请输入密码}">
+                    <button class="w-button weline-toggle-password" type="button" data-tone="neutral" data-variant="outline">
+                        <w:icon name="eye" size="sm"></w:icon>
                     </button>
                 </div>
-                <div class="form-text weline-password-hint" style="display:none;"><lang>留空则不修改密码</lang></div>
-                <div class="invalid-feedback"><lang>请输入密码</lang></div>
+                <div class="w-field__hint weline-password-hint" style="display:none;"><lang>留空则不修改密码</lang></div>
+                <div class="w-field__error"><lang>请输入密码</lang></div>
             </div>
             
-            <div class="d-grid gap-2 mt-4">
-                <button type="submit" class="btn btn-primary" id="weline-user-submit">
+            <div class="w-stack" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-6);">
+                <button type="submit" class="w-button" id="weline-user-submit" data-tone="primary">
                     <span class="weline-submit-text"><lang>保存</lang></span>
-                    <span class="weline-submit-loading d-none">
-                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span class="weline-submit-loading" hidden>
+                        <span class="w-spinner me-1" data-size="sm"></span>
                         <lang>保存中...</lang>
                     </span>
                 </button>
@@ -495,7 +476,7 @@
         
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
-            BackendToast.warning(config.text.validationError);
+            Weline.UI.toast.warning(config.text.validationError);
             return;
         }
         
@@ -514,27 +495,27 @@
             var result = normalizeApiResult(res);
             setLoading(false);
             if (result.success) {
-                BackendToast.success(result.msg || config.text.saveSuccess);
+                Weline.UI.toast.success(result.msg || config.text.saveSuccess);
                 closeOffcanvas();
                 setTimeout(function() { location.reload(); }, 800);
             } else {
-                BackendToast.error(result.msg || config.text.saveFail);
+                Weline.UI.toast.error(result.msg || config.text.saveFail);
             }
         })
         .catch(function(error) {
             setLoading(false);
-            BackendToast.error(apiErrorMessage(error, config.text.saveFail));
+            Weline.UI.toast.error(apiErrorMessage(error, config.text.saveFail));
         });
     }
 
     function handleDelete(userId, username) {
         var message = config.text.deleteConfirm.replace('%{1}', username);
         
-        BackendConfirm.show(message, {
+        Weline.UI.dialog.confirm(message, {
             title: '<?= addslashes(__("确认删除")) ?>',
-            confirmText: '<?= addslashes(__("删除")) ?>',
-            cancelText: '<?= addslashes(__("取消")) ?>',
-            type: 'danger'
+            confirmLabel: '<?= addslashes(__("删除")) ?>',
+            cancelLabel: '<?= addslashes(__("取消")) ?>',
+            tone: 'danger'
         }).then(function(confirmed) {
             if (!confirmed) return;
             
@@ -544,14 +525,14 @@
             .then(function(res) {
                 var result = normalizeApiResult(res);
                 if (result.success) {
-                    BackendToast.success(result.msg || config.text.deleteSuccess);
+                    Weline.UI.toast.success(result.msg || config.text.deleteSuccess);
                     setTimeout(function() { location.reload(); }, 800);
                 } else {
-                    BackendToast.error(result.msg || config.text.deleteFail);
+                    Weline.UI.toast.error(result.msg || config.text.deleteFail);
                 }
             })
             .catch(function(error) {
-                BackendToast.error(apiErrorMessage(error, config.text.deleteFail));
+                Weline.UI.toast.error(apiErrorMessage(error, config.text.deleteFail));
             });
         });
     }
@@ -560,11 +541,11 @@
         var message = action === 'enable' ? config.text.enableConfirm : config.text.disableConfirm;
         var type = action === 'enable' ? 'info' : 'warning';
         
-        BackendConfirm.show(message, {
+        Weline.UI.dialog.confirm(message, {
             title: action === 'enable' ? '<?= addslashes(__("激活用户")) ?>' : '<?= addslashes(__("禁用用户")) ?>',
-            confirmText: '<?= addslashes(__("确定")) ?>',
-            cancelText: '<?= addslashes(__("取消")) ?>',
-            type: type
+            confirmLabel: '<?= addslashes(__("确定")) ?>',
+            cancelLabel: '<?= addslashes(__("取消")) ?>',
+            tone: type
         }).then(function(confirmed) {
             if (!confirmed) return;
             
@@ -574,14 +555,14 @@
             .then(function(res) {
                 var result = normalizeApiResult(res);
                 if (result.success) {
-                    BackendToast.success(result.msg || config.text.toggleSuccess);
+                    Weline.UI.toast.success(result.msg || config.text.toggleSuccess);
                     setTimeout(function() { location.reload(); }, 800);
                 } else {
-                    BackendToast.error(result.msg || config.text.toggleFail);
+                    Weline.UI.toast.error(result.msg || config.text.toggleFail);
                 }
             })
             .catch(function(error) {
-                BackendToast.error(apiErrorMessage(error, config.text.toggleFail));
+                Weline.UI.toast.error(apiErrorMessage(error, config.text.toggleFail));
             });
         });
     }

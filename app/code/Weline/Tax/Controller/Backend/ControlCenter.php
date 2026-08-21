@@ -17,7 +17,7 @@ use Weline\Tax\Service\TaxRolloutGate;
 #[Acl(
     'Weline_Tax::commerce:tax-search:control-center',
     '税务管理',
-    'mdi-receipt-text-check-outline',
+    'check',
     '税务配置管理与迁移诊断',
     'Weline_Backend::commerce:tax-search:group'
 )]
@@ -27,7 +27,7 @@ final class ControlCenter extends BackendController
     {
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:classes', '税类', 'mdi-shape-outline', '管理税类')]
+    #[Acl('Weline_Tax::commerce:tax-search:classes', '税类', 'circle', '管理税类')]
     public function classes(): string
     {
         return $this->renderWorkspace('classes', '税类', [
@@ -35,7 +35,7 @@ final class ControlCenter extends BackendController
         ], [], ['kind' => 'class', 'action' => 'tax/backend/control-center/save-class']);
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:rates', '税率', 'mdi-percent-outline', '管理税率')]
+    #[Acl('Weline_Tax::commerce:tax-search:rates', '税率', 'circle', '管理税率')]
     public function rates(): string
     {
         return $this->renderWorkspace('rates', '税率', [
@@ -43,7 +43,7 @@ final class ControlCenter extends BackendController
         ], [], ['kind' => 'rate', 'action' => 'tax/backend/control-center/save-rate']);
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:rules', '税务规则', 'mdi-format-list-checks', '管理税务规则')]
+    #[Acl('Weline_Tax::commerce:tax-search:rules', '税务规则', 'check', '管理税务规则')]
     public function rules(): string
     {
         return $this->renderWorkspace('rules', '税务规则', [
@@ -51,25 +51,25 @@ final class ControlCenter extends BackendController
         ], [], ['kind' => 'rule', 'action' => 'tax/backend/control-center/save-rule']);
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:classes:save', '创建税类', 'mdi-content-save', '创建税类')]
+    #[Acl('Weline_Tax::commerce:tax-search:classes:save', '创建税类', 'save', '创建税类')]
     public function saveClass()
     {
         return $this->saveConfiguration('class', 'classes');
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:rates:save', '创建税率', 'mdi-content-save', '创建税率')]
+    #[Acl('Weline_Tax::commerce:tax-search:rates:save', '创建税率', 'save', '创建税率')]
     public function saveRate()
     {
         return $this->saveConfiguration('rate', 'rates');
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:rules:save', '创建税务规则', 'mdi-content-save', '创建税务规则')]
+    #[Acl('Weline_Tax::commerce:tax-search:rules:save', '创建税务规则', 'save', '创建税务规则')]
     public function saveRule()
     {
         return $this->saveConfiguration('rule', 'rules');
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:engine', '税引擎状态', 'mdi-engine-outline', '查看税引擎状态')]
+    #[Acl('Weline_Tax::commerce:tax-search:engine', '税引擎状态', 'circle', '查看税引擎状态')]
     public function engine(): string
     {
         return $this->renderWorkspace('engine', '税引擎状态', [], $this->rolloutStatus() + [
@@ -77,13 +77,13 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:shadow', '影子验证', 'mdi-compare-horizontal', '查看税务影子验证状态')]
+    #[Acl('Weline_Tax::commerce:tax-search:shadow', '影子验证', 'circle', '查看税务影子验证状态')]
     public function shadow(): string
     {
         return $this->renderWorkspace('shadow', '影子验证', [], $this->rolloutStatus());
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:lkg', '已验证 LKG', 'mdi-shield-check-outline', '查看已验证税务 LKG')]
+    #[Acl('Weline_Tax::commerce:tax-search:lkg', '已验证 LKG', 'check', '查看已验证税务 LKG')]
     public function lkg(): string
     {
         return $this->renderWorkspace('lkg', '已验证 LKG', [
@@ -91,7 +91,7 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Tax::commerce:tax-search:migration', '迁移状态', 'mdi-database-eye-outline', '只读查看税务迁移状态')]
+    #[Acl('Weline_Tax::commerce:tax-search:migration', '迁移状态', 'eye', '只读查看税务迁移状态')]
     public function migration(): string
     {
         return $this->renderWorkspace('migration', '迁移状态', [], $this->rolloutStatus() + [

@@ -13,7 +13,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::notification_channel', '渠道配置', 'mdi-tune', '配置通知渠道', 'Weline_Backend::notification_settings')]
+#[Acl('Weline_Backend::notification_channel', '渠道配置', 'circle', '配置通知渠道', 'Weline_Backend::notification_settings')]
 class NotificationChannel extends BackendController
 {
     private ChannelModel $channelModel;
@@ -27,7 +27,7 @@ class NotificationChannel extends BackendController
         $this->adapterCollector = ObjectManager::getInstance(ChannelAdapterCollector::class);
     }
 
-    #[Acl('Weline_Backend::notification_channel_index', '渠道列表', 'mdi-format-list-bulleted', '查看通知渠道')]
+    #[Acl('Weline_Backend::notification_channel_index', '渠道列表', 'list', '查看通知渠道')]
     public function index(): string
     {
         $channels = $this->channelModel->clearQuery()
@@ -51,7 +51,7 @@ class NotificationChannel extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Backend::notification_channel_form', '编辑渠道', 'mdi-pencil', '编辑渠道配置')]
+    #[Acl('Weline_Backend::notification_channel_form', '编辑渠道', 'edit', '编辑渠道配置')]
     public function form(): string
     {
         $channelId = (int) $this->request->getParam('id', 0);
@@ -87,7 +87,7 @@ class NotificationChannel extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Backend::notification_channel_save', '保存渠道', 'mdi-content-save', '保存渠道配置')]
+    #[Acl('Weline_Backend::notification_channel_save', '保存渠道', 'save', '保存渠道配置')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -135,7 +135,7 @@ class NotificationChannel extends BackendController
         return $this->jsonSuccess(__('保存成功'), ['channel_id' => $channel->getId()]);
     }
 
-    #[Acl('Weline_Backend::notification_channel_test', '测试渠道', 'mdi-send', '测试渠道连通性')]
+    #[Acl('Weline_Backend::notification_channel_test', '测试渠道', 'arrow-right', '测试渠道连通性')]
     public function test(): string
     {
         if (!$this->request->isPost()) {
@@ -175,7 +175,7 @@ class NotificationChannel extends BackendController
         }
     }
 
-    #[Acl('Weline_Backend::notification_channel_delete', '删除渠道', 'mdi-delete', '删除渠道配置')]
+    #[Acl('Weline_Backend::notification_channel_delete', '删除渠道', 'trash', '删除渠道配置')]
     public function delete(): string
     {
         if (!$this->request->isPost()) {

@@ -1,0 +1,181 @@
+{
+  "schema_version": "weline-ui-assets.v1",
+  "source_root": "view/ui",
+  "output_root": "view/statics/ui",
+  "bundles": {
+    "foundation": {
+      "type": "css",
+      "output": "weline-foundation.css",
+      "sources": ["css/foundation.css"]
+    },
+    "backend": {
+      "type": "css",
+      "output": "weline-backend.css",
+      "sources": ["css/backend.css"]
+    },
+    "frontend": {
+      "type": "css",
+      "output": "weline-frontend.css",
+      "sources": ["css/frontend.css"]
+    },
+    "ui-core": {
+      "type": "js",
+      "output": "weline-ui.js",
+      "sources": ["js/weline-ui.js"]
+    },
+    "ui-advanced": {
+      "type": "js",
+      "output": "weline-ui-advanced.js",
+      "sources": ["js/components/advanced.js"]
+    },
+    "datatable-css": {
+      "type": "css",
+      "output": "components/weline-datatable.css",
+      "source_root": "app/code/Weline/DataTable/view/statics",
+      "sources": ["css/datatable.css"]
+    },
+    "datatable-js": {
+      "type": "js",
+      "output": "components/weline-datatable.js",
+      "source_root": "app/code/Weline/DataTable/view/statics",
+      "sources": ["js/datatable-manager.js"]
+    },
+    "theme-editor-css": {
+      "type": "css",
+      "output": "pages/weline-theme-editor.css",
+      "sources": ["css/pages/theme-editor.css"]
+    },
+    "theme-editor-js": {
+      "type": "js",
+      "output": "pages/weline-theme-editor.js",
+      "sources": ["js/pages/theme-editor.js"]
+    },
+    "theme-preview-css": {
+      "type": "css",
+      "output": "pages/weline-theme-preview.css",
+      "sources": ["css/pages/theme-preview.css"]
+    },
+    "theme-preview-js": {
+      "type": "js",
+      "output": "pages/weline-theme-preview.js",
+      "sources": ["js/pages/theme-preview.js"]
+    },
+    "icons": {
+      "type": "svg",
+      "output": "weline-icons.svg",
+      "generator": "icon_registry"
+    }
+  },
+  "areas": {
+    "backend": ["foundation", "backend", "ui-core"],
+    "frontend": ["foundation", "frontend", "ui-core"]
+  },
+  "lazy_components": {
+    "ui-advanced": ["combobox", "tree", "transfer-list", "icon-picker"],
+    "datatable-js": ["data-table", "data-table-form"]
+  },
+  "component_assets": {
+    "data-table": {
+      "owner": "Weline_DataTable",
+      "components": ["data-table", "data-table-form"],
+      "bundles": ["datatable-css", "datatable-js"]
+    }
+  },
+  "routes": {
+    "admin.dashboard": {
+      "area": "backend",
+      "templates": ["app/code/Weline/Admin/view/templates/Index/index.phtml"],
+      "engines": []
+    },
+    "developer.documents.edit": {
+      "area": "backend",
+      "templates": ["app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/add.phtml"],
+      "engines": ["tinymce"]
+    },
+    "developer.api.reference": {
+      "area": "backend",
+      "templates": ["app/code/Weline/DeveloperWorkspace/view/templates/Docs/api.phtml"],
+      "engines": ["swagger-ui"]
+    },
+    "developer.api.manager": {
+      "area": "backend",
+      "templates": ["app/code/Weline/DeveloperWorkspace/view/templates/Docs/api-manager.phtml"],
+      "engines": ["prism"]
+    },
+    "developer.docs": {
+      "area": "backend",
+      "templates": ["app/code/Weline/DeveloperWorkspace/view/templates/Docs/index.phtml"],
+      "engines": ["marked"]
+    },
+    "editor-manager.ckeditor": {
+      "area": "backend",
+      "templates": ["app/code/Weline/CKEditorEditorManager/view/blocks/ckeditor.html"],
+      "engines": ["ckeditor"]
+    },
+    "theme.editor": {
+      "area": "backend",
+      "templates": ["app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml"],
+      "bundles": ["theme-editor-css", "theme-editor-js"],
+      "engines": []
+    },
+    "theme.editor.preview": {
+      "area": "backend",
+      "templates": [
+        "app/code/Weline/Theme/view/templates/backend/theme-preview/content.phtml",
+        "app/code/Weline/Theme/view/templates/frontend/theme-preview/content.phtml"
+      ],
+      "bundles": ["theme-preview-css", "theme-preview-js"],
+      "engines": []
+    }
+  },
+  "budgets": {
+    "backend_css_gzip": 56320,
+    "frontend_css_gzip": 25600,
+    "initial_js_gzip": 35840,
+    "backend_total_gzip": 92160,
+    "lazy_component_gzip": 8192,
+    "global_requests": 3
+  },
+  "specialized_engines": {
+    "ckeditor": {
+      "owner": "Weline_CKEditorEditorManager",
+      "paths": ["app/code/Weline/CKEditorEditorManager/view/statics/build/"],
+      "consumers": [
+        "app/code/Weline/CKEditorEditorManager/EditorManager/CKEditor.php",
+        "app/code/Weline/CKEditorEditorManager/view/blocks/ckeditor.html"
+      ]
+    },
+    "tinymce": {
+      "owner": "Weline_DeveloperWorkspace",
+      "paths": ["app/code/Weline/DeveloperWorkspace/view/statics/engines/tinymce/"],
+      "consumers": ["app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/add.phtml"]
+    },
+    "swagger-ui": {
+      "owner": "Weline_DeveloperWorkspace",
+      "paths": ["app/code/Weline/DeveloperWorkspace/view/statics/libs/swagger-ui/5.32.6/"],
+      "consumers": ["app/code/Weline/DeveloperWorkspace/view/templates/Docs/api.phtml"]
+    },
+    "prism": {
+      "owner": "Weline_DeveloperWorkspace",
+      "paths": ["app/code/Weline/DeveloperWorkspace/view/statics/libs/prism/1.29.0/"],
+      "consumers": ["app/code/Weline/DeveloperWorkspace/view/templates/Docs/api-manager.phtml"]
+    },
+    "marked": {
+      "owner": "Weline_DeveloperWorkspace",
+      "paths": ["app/code/Weline/DeveloperWorkspace/view/statics/libs/marked/11.1.1/"],
+      "consumers": ["app/code/Weline/DeveloperWorkspace/view/templates/Docs/index.phtml"]
+    }
+  },
+  "audit_excludes": [
+    "/view/tpl/",
+    "/generated/",
+    "/doc/",
+    "/test/",
+    "/Test/",
+    "/tests/",
+    "/Backend/Setup/Ui/LegacyIconNameMap.php",
+    "/Backend/Setup/Ui/IconDataMigrator.php",
+    "/Theme/etc/weline-ui-assets.json",
+    "/Theme/Service/Ui/AuditService.php"
+  ]
+}

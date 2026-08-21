@@ -49,91 +49,78 @@ $userType = $this->getData('user_type') ?? 'backend';
     }
 </style>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('Multipass账户管理') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="@url('admin')"><?= __('首页') ?></a></li>
-                    <li class="breadcrumb-item"><?= __('Multipass账户管理') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('Multipass账户管理') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href="@url('admin')"><?= __('首页') ?></a></li>
+                    <li class="w-breadcrumb__item"><?= __('Multipass账户管理') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <!-- 用户类型切换 -->
-                <div class="row mb-3">
-                    <div class="col-md-12">
-                        <ul class="nav nav-tabs" id="user-type-tabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <a class="nav-link <?= ($userType === 'backend') ? 'active' : '' ?>" 
-                                   id="backend-tab"
-                                   href="@url('multipass/backend/account/backend')"
-                                   data-user-type="backend"
-                                   aria-selected="<?= ($userType === 'backend') ? 'true' : 'false' ?>"
-                                   aria-current="<?= ($userType === 'backend') ? 'page' : 'false' ?>">
-                                    <i class="mdi mdi-account-cog"></i> <?= __('后端账户') ?>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span-md:12;">
+                        <ul class="nav w-tabs__list" id="user-type-tabs" role="tablist" data-w-component="tabs">
+                            <li role="presentation">
+                                <a class="<?= ($userType === 'backend') ? 'active' : '' ?>" id="backend-tab" href="@url('multipass/backend/account/backend')" data-user-type="backend" aria-selected="<?= ($userType === 'backend') ? 'true' : 'false' ?>" aria-current="<?= ($userType === 'backend') ? 'page' : 'false' ?>">
+                                    <w:icon name="user" size="sm"></w:icon> <?= __('后端账户') ?>
                                 </a>
                             </li>
-                            <li class="nav-item" role="presentation">
-                                <a class="nav-link <?= ($userType === 'frontend') ? 'active' : '' ?>" 
-                                   id="frontend-tab"
-                                   href="@url('multipass/backend/account/frontend')"
-                                   data-user-type="frontend"
-                                   aria-selected="<?= ($userType === 'frontend') ? 'true' : 'false' ?>"
-                                   aria-current="<?= ($userType === 'frontend') ? 'page' : 'false' ?>">
-                                    <i class="mdi mdi-account"></i> <?= __('前端账户') ?>
+                            <li role="presentation">
+                                <a class="<?= ($userType === 'frontend') ? 'active' : '' ?>" id="frontend-tab" href="@url('multipass/backend/account/frontend')" data-user-type="frontend" aria-selected="<?= ($userType === 'frontend') ? 'true' : 'false' ?>" aria-current="<?= ($userType === 'frontend') ? 'page' : 'false' ?>">
+                                    <w:icon name="user" size="sm"></w:icon> <?= __('前端账户') ?>
                                 </a>
                             </li>
                         </ul>
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="w-grid">
                     <!-- 左侧：用户列表 -->
-                    <div class="col-md-6">
-                        <h5 class="mb-3"><?= __('选择用户') ?></h5>
+                    <div style="--w-span-md:6;">
+                        <h5 style="--w-mb:var(--weline-space-4);"><?= __('选择用户') ?></h5>
                         
                         <!-- 搜索框 -->
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="user-search" 
-                                       placeholder="<?= __('搜索用户名或邮箱...') ?>">
-                                <button class="btn btn-primary" type="button" id="multipass-search-btn">
-                                    <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <div class="w-field__control">
+                                <input type="text" class="w-input" id="user-search" placeholder="<?= __('搜索用户名或邮箱...') ?>">
+                                <button class="w-button" type="button" id="multipass-search-btn" data-tone="primary">
+                                    <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
                                 </button>
                             </div>
                         </div>
                         
                         <!-- 用户列表 -->
                         <div id="user-list" style="max-height: 600px; overflow-y: auto;">
-                            <div class="text-center text-muted py-5">
-                                <i class="mdi mdi-information-outline"></i>
+                            <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                                <w:icon name="info" size="sm"></w:icon>
                                 <?= __('请输入搜索关键词查找用户') ?>
                             </div>
                         </div>
                     </div>
 
                     <!-- 右侧：站点选择和生成 -->
-                    <div class="col-md-6">
-                        <h5 class="mb-3"><?= __('生成登录令牌') ?></h5>
+                    <div style="--w-span-md:6;">
+                        <h5 style="--w-mb:var(--weline-space-4);"><?= __('生成登录令牌') ?></h5>
                         
                         <!-- 站点选择 -->
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('选择站点') ?> <span class="text-danger">*</span></label>
-                            <select class="form-select" id="site-select">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('选择站点') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <select class="w-select" id="site-select">
                                 <option value=""><?= __('请先选择用户') ?></option>
                                 <?php foreach ($this->getData('sites') as $site): ?>
                                     <option value="<?= $site->getData('site_id') ?>" 
@@ -143,50 +130,47 @@ $userType = $this->getData('user_type') ?? 'backend';
                                 <?php endforeach; ?>
                             </select>
                             <?php if (empty($this->getData('sites'))): ?>
-                                <small class="form-text text-danger">
+                                <small class="w-field__hint w-text" data-tone="danger">
                                     <?= __('当前没有可用的') . ($userType === 'frontend' ? __('前端') : __('后端')) . __('站点，请先到站点管理中配置') ?>
                                 </small>
                             <?php endif; ?>
                         </div>
 
                         <!-- 生成按钮 -->
-                        <div class="mb-3">
-                            <button type="button" 
-                                    class="btn btn-primary btn-lg w-100" 
-                                    id="generate-btn"
-                                    disabled>
-                                <i class="mdi mdi-key"></i> <?= __('生成登录令牌') ?>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <button type="button" class="w-button" id="generate-btn" disabled data-w-width="full" data-tone="primary" data-size="lg">
+                                <w:icon name="key" size="sm"></w:icon> <?= __('生成登录令牌') ?>
                             </button>
                         </div>
 
                         <!-- Token结果 -->
                         <div id="token-result" class="weline-multipass-token-result">
-                            <div class="alert alert-success">
-                                <h6><i class="mdi mdi-check-circle"></i> <?= __('令牌生成成功') ?></h6>
+                            <div class="w-alert" data-tone="success">
+                                <h6><w:icon name="check" size="sm"></w:icon> <?= __('令牌生成成功') ?></h6>
                                 <hr>
-                                <div class="mb-3">
-                                    <label class="form-label"><strong><?= __('站点') ?>：</strong></label>
-                                    <div id="result-site-name" class="text-primary"></div>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><strong><?= __('站点') ?>：</strong></label>
+                                    <div id="result-site-name" class="w-text" data-tone="primary"></div>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label"><strong><?= __('用户') ?>：</strong></label>
-                                    <div id="result-username" class="text-primary"></div>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><strong><?= __('用户') ?>：</strong></label>
+                                    <div id="result-username" class="w-text" data-tone="primary"></div>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label"><strong><?= __('Token') ?>：</strong></label>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><strong><?= __('Token') ?>：</strong></label>
                                     <div class="weline-multipass-token-display" id="result-token"></div>
-                                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="copy-token-btn">
-                                        <i class="mdi mdi-content-copy"></i> <?= __('复制Token') ?>
+                                    <button type="button" class="w-button" id="copy-token-btn" data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                        <w:icon name="copy" size="sm"></w:icon> <?= __('复制Token') ?>
                                     </button>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label"><strong><?= __('登录链接') ?>：</strong></label>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><strong><?= __('登录链接') ?>：</strong></label>
                                     <div class="weline-multipass-login-url" id="result-login-url"></div>
-                                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="copy-login-url-btn">
-                                        <i class="mdi mdi-content-copy"></i> <?= __('复制链接') ?>
+                                    <button type="button" class="w-button" id="copy-login-url-btn" data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                        <w:icon name="copy" size="sm"></w:icon> <?= __('复制链接') ?>
                                     </button>
-                                    <a href="#" id="open-login-url" target="_blank" class="btn btn-sm btn-success mt-2">
-                                        <i class="mdi mdi-open-in-new"></i> <?= __('打开链接') ?>
+                                    <a href="#" id="open-login-url" target="_blank" class="w-button" data-tone="success" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                        <w:icon name="circle" size="sm"></w:icon> <?= __('打开链接') ?>
                                     </a>
                                 </div>
                             </div>
@@ -241,7 +225,7 @@ $userType = $this->getData('user_type') ?? 'backend';
         var userList = document.getElementById('user-list');
         
         if (!search) {
-            userList.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-information-outline"></i> <?= __('请输入搜索关键词查找用户') ?></div>';
+            userList.innerHTML = '<div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="info" size="sm"></w:icon> <?= __('请输入搜索关键词查找用户') ?></div>';
             return;
         }
         
@@ -268,7 +252,7 @@ $userType = $this->getData('user_type') ?? 'backend';
         var userList = document.getElementById('user-list');
         
         if (!users || users.length === 0) {
-            userList.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-account-off"></i> <?= __('未找到用户') ?></div>';
+            userList.innerHTML = '<div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="user" size="sm"></w:icon> <?= __('未找到用户') ?></div>';
             return;
         }
         
@@ -304,14 +288,14 @@ $userType = $this->getData('user_type') ?? 'backend';
             var firstLetter = username ? username.charAt(0).toUpperCase() : '?';
             
             html += '<div class="weline-multipass-user-card" data-user-id="' + escapeAttr(userId) + '" data-username="' + escapeAttr(username) + '" data-email="' + escapeAttr(email) + '">' +
-                '<div class="d-flex align-items-center">' +
-                (avatar ? '<img src="' + escapeAttr(avatar) + '" class="rounded-circle me-2" width="40" height="40" data-avatar-fallback>' : '') +
-                '<div class="rounded-circle bg-primary text-white me-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;' + (avatar ? 'display:none;' : '') + '">' + escapeHtml(firstLetter) + '</div>' +
-                '<div class="flex-grow-1">' +
-                '<div class="fw-bold">' + escapeHtml(username) + '</div>' +
-                (email ? '<div class="text-muted small">' + escapeHtml(email) + '</div>' : '') +
+                '<div class="w-cluster" data-align="center">' +
+                (avatar ? '<img src="' + escapeAttr(avatar) + '" class="me-2" width="40" height="40" data-avatar-fallback data-w-radius="round">' : '') +
+                '<div class="w-text me-2 w-cluster" style="width:40px;height:40px;' + (avatar ? 'display:none;' : '') + '" data-w-radius="round" data-w-background="primary" data-align="center" data-justify="center" data-tone="inverse">' + escapeHtml(firstLetter) + '</div>' +
+                '<div data-grow="true">' +
+                '<div class="w-text" data-weight="strong">' + escapeHtml(username) + '</div>' +
+                (email ? '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(email) + '</div>' : '') +
                 '</div>' +
-                '<i class="mdi mdi-check-circle text-primary" style="display:none;"></i>' +
+                '<w:icon name="check" size="sm"></w:icon>' +
                 '</div>' +
                 '</div>';
         });
@@ -414,8 +398,8 @@ $userType = $this->getData('user_type') ?? 'backend';
     }
     
     function showMessage(type, message) {
-        if (window.BackendToast) {
-            BackendToast[type === 'success' ? 'success' : 'error'](message);
+        if (window.Weline.UI.toast) {
+            Weline.UI.toast[type === 'success' ? 'success' : 'error'](message);
         }
     }
     

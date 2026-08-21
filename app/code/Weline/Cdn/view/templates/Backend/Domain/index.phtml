@@ -31,24 +31,22 @@ $escapeAttr = static function (mixed $value): string {
 ?>
 
 <!-- 消息提示 -->
-<div class='row mb-3'>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 操作栏 -->
-<div class="d-flex justify-content-between align-items-center mb-3" data-testid="cdn-domain-management">
+<div class="w-cluster" data-testid="cdn-domain-management" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
     <div>
-        <a href="<?= $this->getBackendUrl('*/backend/domain/form') ?>" class="btn btn-primary" data-testid="cdn-domain-create">
-            <i class="mdi mdi-plus" aria-hidden="true"></i> <?= __('添加域名') ?>
+        <a href="<?= $this->getBackendUrl('*/backend/domain/form') ?>" class="w-button" data-testid="cdn-domain-create" data-tone="primary">
+            <w:icon name="plus" size="sm"></w:icon> <?= __('添加域名') ?>
         </a>
         <w:hook>Weline_Cdn::backend::partials::domain::toolbar-after</w:hook>
     </div>
     <div>
-        <w:form method="get" class="d-inline-flex gap-2">
-            <input type="text" name="search" class="form-control form-control-sm" 
-                   placeholder="<?= __('搜索域名') ?>" 
-                   value="<?= htmlspecialchars($search) ?>">
-            <select name="adapter" class="form-select form-select-sm">
+        <w:form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <input type="text" name="search" class="w-input" placeholder="<?= __('搜索域名') ?>" value="<?= htmlspecialchars($search) ?>" data-size="sm">
+            <select name="adapter" class="w-select" data-size="sm">
                 <option value=""><?= __('所有适配器') ?></option>
                 <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
                     <option value="<?= $adapterCode ?>" <?= $adapter === $adapterCode ? 'selected' : '' ?>>
@@ -56,26 +54,26 @@ $escapeAttr = static function (mixed $value): string {
                     </option>
                 <?php endforeach; ?>
             </select>
-            <select name="enabled" class="form-select form-select-sm">
+            <select name="enabled" class="w-select" data-size="sm">
                 <option value=""><?= __('全部状态') ?></option>
                 <option value="1" <?= $enabled === '1' ? 'selected' : '' ?>><?= __('启用') ?></option>
                 <option value="0" <?= $enabled === '0' ? 'selected' : '' ?>><?= __('禁用') ?></option>
             </select>
-            <button type="submit" class="btn btn-sm btn-primary">
-                <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+            <button type="submit" class="w-button" data-tone="primary" data-size="sm">
+                <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
             </button>
-            <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="btn btn-sm btn-secondary">
-                <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+            <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="w-button" data-tone="neutral" data-size="sm">
+                <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
             </a>
         </w:form>
     </div>
 </div>
 
 <!-- 域名列表 -->
-<div class="card">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
+<div class="w-card">
+    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+        <div class="w-table-wrap">
+            <table class="w-table" style="--w-mb:0;">
                 <thead>
                     <tr>
                         <th><?= __('ID') ?></th>
@@ -91,7 +89,7 @@ $escapeAttr = static function (mixed $value): string {
                 <tbody>
                     <?php if (empty($domains)): ?>
                         <tr>
-                            <td colspan="8" class="text-center py-4"><?= __('暂无数据') ?></td>
+                            <td colspan="8" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('暂无数据') ?></td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($domains as $domain): ?>
@@ -105,43 +103,31 @@ $escapeAttr = static function (mixed $value): string {
                                 <td><?= htmlspecialchars($domain->getData('domain_name')) ?></td>
                                 <td><?= $websiteName ?></td>
                                 <td>
-                                    <span class="badge bg-info"><?= htmlspecialchars($domain->getData('adapter')) ?></span>
+                                    <span class="w-badge" data-w-background="info"><?= htmlspecialchars($domain->getData('adapter')) ?></span>
                                 </td>
                                 <td><code><?= htmlspecialchars($domain->getData('zone_id')) ?></code></td>
                                 <td>
                                     <?php if ($domain->getData('enabled')): ?>
-                                        <span class="badge bg-success"><?= __('启用') ?></span>
+                                        <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
                                     <?php else: ?>
-                                        <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                        <span class="w-badge" data-w-background="muted"><?= __('禁用') ?></span>
                                     <?php endif; ?>
                                 </td>
                                 <td><?= date('Y-m-d H:i:s', $domain->getData('created_at')) ?></td>
                                 <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="<?= $this->getBackendUrl('*/backend/domain/form', ['id' => $domain->getData('domain_id')]) ?>" 
-                                           class="btn btn-primary">
-                                            <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                                    <div class="w-button-group">
+                                        <a href="<?= $this->getBackendUrl('*/backend/domain/form', ['id' => $domain->getData('domain_id')]) ?>" class="w-button" data-tone="primary">
+                                            <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                                         </a>
-                                        <button type="button" class="btn btn-<?= $domain->getData('enabled') ? 'warning' : 'success' ?>" 
-                                                data-cdn-domain-action="toggle-enable"
-                                                data-domain-id="<?= $escapeAttr($domain->getData('domain_id')) ?>"
-                                                data-enabled="<?= $domain->getData('enabled') ? '0' : '1' ?>">
+                                        <button type="button" class="w-button btn-<?= $domain->getData('enabled') ? 'warning' : 'success' ?>" data-cdn-domain-action="toggle-enable" data-domain-id="<?= $escapeAttr($domain->getData('domain_id')) ?>" data-enabled="<?= $domain->getData('enabled') ? '0' : '1' ?>">
                                             <i class="mdi mdi-<?= $domain->getData('enabled') ? 'close' : 'check' ?>"></i> 
                                             <?= $domain->getData('enabled') ? __('禁用') : __('启用') ?>
                                         </button>
-                                        <button type="button" class="btn btn-info" 
-                                                data-cdn-domain-action="clear-cache"
-                                                data-domain-id="<?= $escapeAttr($domain->getData('domain_id')) ?>">
-                                            <i class="mdi mdi-delete-sweep"></i> <?= __('清理缓存') ?>
+                                        <button type="button" class="w-button" data-cdn-domain-action="clear-cache" data-domain-id="<?= $escapeAttr($domain->getData('domain_id')) ?>" data-tone="info">
+                                            <w:icon name="trash" size="sm"></w:icon> <?= __('清理缓存') ?>
                                         </button>
-                                        <button type="button"
-                                                class="btn btn-danger"
-                                                w-delete="true"
-                                                data-provider="cdn"
-                                                data-operation="deleteDomain"
-                                                w-var-domain_id="<?= $domain->getData('domain_id') ?>"
-                                                w-msg="<?= __('确定要删除域名 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($domain->getData('domain_name'))) ?>">
-                                            <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                        <button type="button" class="w-button" w-delete="true" data-provider="cdn" data-operation="deleteDomain" w-var-domain_id="<?= $domain->getData('domain_id') ?>" w-msg="<?= __('确定要删除域名 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($domain->getData('domain_name'))) ?>" data-tone="danger">
+                                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
                                         </button>
                                     </div>
                                 </td>
@@ -155,33 +141,33 @@ $escapeAttr = static function (mixed $value): string {
     
     <!-- 分页 -->
     <?php if ($totalPages > 1): ?>
-        <div class="card-footer">
+        <div class="w-card__footer">
             <nav>
-                <ul class="pagination justify-content-center mb-0">
+                <ul class="w-pagination" data-justify="center" style="--w-mb:0;">
                     <?php if ($page > 1): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>&enabled=<?= urlencode($enabled) ?>">
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>&enabled=<?= urlencode($enabled) ?>">
                                 <?= __('上一页') ?>
                             </a>
                         </li>
                     <?php endif; ?>
                     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                        <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                            <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>&enabled=<?= urlencode($enabled) ?>">
+                        <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                            <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>&enabled=<?= urlencode($enabled) ?>">
                                 <?= $i ?>
                             </a>
                         </li>
                     <?php endfor; ?>
                     <?php if ($page < $totalPages): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>&enabled=<?= urlencode($enabled) ?>">
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>&enabled=<?= urlencode($enabled) ?>">
                                 <?= __('下一页') ?>
                             </a>
                         </li>
                     <?php endif; ?>
                 </ul>
             </nav>
-            <div class="text-center text-muted mt-2">
+            <div class="w-text" data-align="center" data-tone="muted" style="--w-mt:var(--weline-space-2);">
                 <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
             </div>
         </div>
@@ -198,16 +184,14 @@ $escapeAttr = static function (mixed $value): string {
     var clearCacheUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/domain/clearCache')) ?>;
 
     function confirmAction(message, onConfirm) {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            window.BackendConfirm.show(message).then(function(confirmed) {
-                if (confirmed) {
-                    onConfirm();
-                }
-            });
-            return;
-        }
-        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-            window.BackendToast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
+        Weline.UI.dialog.confirm(message).then(function(confirmed) {
+            if (confirmed) {
+                onConfirm();
+            }
+        });
+        return;
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
+            window.Weline.UI.toast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
         }
     }
 
@@ -235,53 +219,38 @@ $escapeAttr = static function (mixed $value): string {
             .then(function(api){ return api.resource('cdn').toggleDomainEnable({ domain_id: id, enabled: enabled }); })
             .then(function(data) {
                 if (data && data.success !== false) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: data.message,
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(function() { location.reload(); });
-                    } else {
-                        BackendToast.success(data.message);
-                        setTimeout(function() { location.reload(); }, 1500);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: data.message,
+                        duration: 2000,
+                        confirmable: false
+                    }).then(function() { location.reload(); });
                 } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('操作失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        BackendToast.error(data.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('操作失败') ?>',
+                        message: data.message,
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
             });
         },
         
         clearCache: function(id) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: '<?= __('确认清理缓存') ?>',
-                    text: '<?= __('确定要清理该域名的所有缓存吗？') ?>',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: '<?= __("确定清理") ?>',
-                    cancelButtonText: '<?= __("取消") ?>',
-                    confirmButtonColor: '#ff9800'
-                }).then(function(result) {
-                    if (result.isConfirmed) {
-                        window.CdnDomainManager.performClearCache(id);
-                    }
-                });
-            } else {
-                confirmAction('<?= __('确定要清理该域名的所有缓存吗？') ?>', function() {
+            Weline.UI.dialog.request({
+                title: '<?= __('确认清理缓存') ?>',
+                message: '<?= __('确定要清理该域名的所有缓存吗？') ?>',
+                tone: 'info',
+                cancelable: true,
+                confirmLabel: '<?= __("确定清理") ?>',
+                cancelLabel: '<?= __("取消") ?>',
+                confirmTone: '#ff9800'
+            }).then(function(result) {
+                if (result.confirmed) {
                     window.CdnDomainManager.performClearCache(id);
-                });
-            }
+                }
+            });
         },
         
         performClearCache: function(id) {
@@ -289,28 +258,20 @@ $escapeAttr = static function (mixed $value): string {
             .then(function(api){ return api.resource('cdn').clearDomainCache({ domain_id: id, mode: 'everything' }); })
             .then(function(data) {
                 if (data && data.success !== false) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: data.message,
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                    } else {
-                        BackendToast.success(data.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: data.message,
+                        duration: 2000,
+                        confirmable: false
+                    });
                 } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('清理失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        BackendToast.error(data.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('清理失败') ?>',
+                        message: data.message,
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
             });
         }

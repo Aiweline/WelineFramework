@@ -27,13 +27,13 @@
     }
 
     function toast(type, message) {
-        if (typeof window.BackendToast !== 'undefined' && BackendToast[type]) {
-            BackendToast[type](message);
+        if (typeof window.Weline.UI.toast !== 'undefined' && Weline.UI.toast[type]) {
+            Weline.UI.toast[type](message);
             return;
         }
 
-        if (typeof window.BackendToast !== 'undefined' && BackendToast.info) {
-            BackendToast.info(message);
+        if (typeof window.Weline.UI.toast !== 'undefined' && Weline.UI.toast.info) {
+            Weline.UI.toast.info(message);
             return;
         }
 

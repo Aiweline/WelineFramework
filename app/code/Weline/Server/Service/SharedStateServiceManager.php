@@ -1549,6 +1549,7 @@ class SharedStateServiceManager
                 'foreground' => $frontend,
                 'enableLog' => true,
                 'childOwnsPid' => true,
+                'masterOwned' => !\extension_loaded('FFI'),
                 'isolateParentHandles' => \defined('IS_WIN') && IS_WIN,
                 'windowsArgv' => $argv,
                 'cwd' => $workingDir,

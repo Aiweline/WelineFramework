@@ -371,37 +371,37 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </style>
 
 <!-- 消息 -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <div class="d-flex justify-content-between align-items-center mb-4">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-6);">
                     <div>
-                        <h4 class='card-title mb-1'>
-                            <i class="mdi mdi-file-document-outline me-2"></i>
+                        <h4 class="w-card__title" style="--w-mb:var(--weline-space-1);">
+                            <w:icon name="file" size="sm"></w:icon>
                             <?=__('开发文档')?>
                         </h4>
-                        <p class='text-muted mb-0'>
+                        <p class="w-text" data-tone="muted" style="--w-mb:0;">
                             <?=__('编写和管理开发文档')?>
                         </p>
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                         <a href="@admin-url('dev/tool/docs/api')">
-                            <button type='button' class='btn btn-primary waves-effect waves-light'>
-                                <i class="mdi mdi-api me-1"></i>
+                            <button type='button' class="w-button waves-light" data-tone="primary">
+                                <w:icon name="code" size="sm"></w:icon>
                                 <?=__('API文档')?>
                             </button>
                         </a>
                         <a href="@admin-url('dev/tool/admin/document/catalog')">
-                            <button type='button' class='btn btn-info waves-effect waves-light'>
-                                <i class="mdi mdi-folder-cog me-1"></i>
+                            <button type='button' class="w-button waves-light" data-tone="info">
+                                <w:icon name="settings" size="sm"></w:icon>
                                 <?=__('目录管理')?>
                             </button>
                         </a>
                         <a href="@admin-url('dev/tool/admin/document/add')">
-                            <button type='button' class='btn btn-success waves-effect waves-light'>
-                                <i class="mdi mdi-plus-circle me-1"></i>
+                            <button type='button' class="w-button waves-light" data-tone="success">
+                                <w:icon name="plus" size="sm"></w:icon>
                                 <?=__('新增文章')?>
                             </button>
                         </a>
@@ -414,14 +414,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     <div class="catalog-sidebar">
                         <div class="catalog-header">
                             <h5>
-                                <i class="mdi mdi-folder-tree me-2"></i>
+                                <w:icon name="folder" size="sm"></w:icon>
                                 <?=__('文档分类')?>
                             </h5>
                         </div>
                         <div id="catalog-tree-container" class="catalog-tree-container">
-                            <div class="text-center py-5">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden"><?=__('加载中...')?></span>
+                            <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                                <div class="w-spinner w-text" role="status" data-tone="primary">
+                                    <span class="w-visually-hidden"><?=__('加载中...')?></span>
                                 </div>
                             </div>
                         </div>
@@ -431,16 +431,16 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     <div class="document-content-area">
                         <div id="document-list-container">
                             <!-- 文档列表 -->
-                            <div class="row">
+                            <div class="w-grid">
                     <empty name="documents">
-                        <div class="col-12">
+                        <div style="--w-span:12;">
                             <div class="empty-state">
-                                <i class="mdi mdi-file-document-outline"></i>
+                                <w:icon name="file" size="sm"></w:icon>
                                 <h5><?=__('暂无文章')?></h5>
-                                <p class="text-muted"><?=__('点击"新增文章"按钮开始创建您的第一篇文档')?></p>
+                                <p class="w-text" data-tone="muted"><?=__('点击"新增文章"按钮开始创建您的第一篇文档')?></p>
                                 <a href="@admin-url('dev/tool/admin/document/add')">
-                                    <button type='button' class='btn btn-success waves-effect waves-light'>
-                                        <i class="mdi mdi-plus-circle me-1"></i>
+                                    <button type='button' class="w-button waves-light" data-tone="success">
+                                        <w:icon name="plus" size="sm"></w:icon>
                                         <?=__('新增文章')?>
                                     </button>
                                 </a>
@@ -448,28 +448,28 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         </div>
                     </empty>
                     <foreach name="documents" item="vo">
-                        <div class="col-md-4 col-lg-3 mb-3">
-                            <div class="document-card h-100">
+                        <div style="--w-span-md:4;--w-span-lg:3;--w-mb:var(--weline-space-4);">
+                            <div class="document-card" data-w-height="full">
                                 <div class="document-header">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div class="flex-grow-1">
-                                            <h5 class="mb-1" style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">
+                                    <div class="w-cluster" data-justify="between" data-align="start">
+                                        <div data-grow="true">
+                                            <h5 style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">
                                                 <var>vo.title</var>
                                             </h5>
-                                            <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
-                                                <span class="badge bg-light text-dark" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
-                                                    <i class="mdi mdi-folder-outline me-1" style="font-size: 0.7rem;"></i>
+                                            <div class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-1);--w-mt:var(--weline-space-1);">
+                                                <span class="w-badge w-text" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;" data-w-background="muted" data-tone="muted">
+                                                    <w:icon name="folder" size="sm"></w:icon>
                                                     <var>vo.c_name</var>
                                                 </span>
                                                 <if condition="$vo['module_name']">
                                                     <span class="badge-module" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
-                                                        <i class="mdi mdi-package-variant me-1" style="font-size: 0.7rem;"></i>
+                                                        <w:icon name="box" size="sm"></w:icon>
                                                         <var>vo.module_name</var>
                                                     </span>
                                                 </if>
                                                 <if condition="$vo['is_auto_imported']">
                                                     <span class="badge-auto" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
-                                                        <i class="mdi mdi-auto-fix me-1" style="font-size: 0.7rem;"></i>
+                                                        <w:icon name="sparkles" size="sm"></w:icon>
                                                         <?=__('自动导入')?>
                                                     </span>
                                                 </if>
@@ -478,39 +478,35 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                     </div>
                                 </div>
                                 <div class="document-body">
-                                    <p class="summary-text mb-2" style="font-size: 0.8rem; line-height: 1.5;">
+                                    <p class="summary-text" style="font-size: 0.8rem; line-height: 1.5;">
                                         <var>vo.summary</var>
                                     </p>
-                                    <div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem;">
+                                    <div class="w-text w-cluster" style="font-size: 0.75rem;" data-justify="between" data-align="center" data-tone="muted">
                                         <span>
-                                            <i class="mdi mdi-account-outline me-1"></i>
+                                            <w:icon name="user" size="sm"></w:icon>
                                             <?=__('作者:')?> <?php echo (($vo['author'] ?? $vo['author_id'] ?? __('未知'))); ?>
                                         </span>
                                         <span>
-                                            <i class="mdi mdi-clock-outline me-1"></i>
+                                            <w:icon name="clock" size="sm"></w:icon>
                                             <var>vo.update_time</var>
                                         </span>
                                     </div>
                                 </div>
                                 <div class="document-footer">
-                                    <div class="action-buttons d-flex justify-content-end">
-                                        <button type="button" 
-                                                class="btn btn-sm btn-primary view-document-btn" 
-                                                data-id="<var>vo.doc_id</var>">
-                                            <i class="mdi mdi-eye me-1"></i>
+                                    <div class="action-buttons w-cluster" data-justify="end">
+                                        <button type="button" class="w-button view-document-btn" data-id="<var>vo.doc_id</var>" data-tone="primary" data-size="sm">
+                                            <w:icon name="eye" size="sm"></w:icon>
                                             <?=__('查看')?>
                                         </button>
                                         <a href="@admin-url{'dev/tool/admin/document/edit',['id'=>$vo->getData('doc_id')]}">
-                                            <button type="button" class="btn btn-sm btn-info">
-                                                <i class="mdi mdi-pencil me-1"></i>
+                                            <button type="button" class="w-button" data-tone="info" data-size="sm">
+                                                <w:icon name="edit" size="sm"></w:icon>
                                                 <?=__('编辑')?>
                                             </button>
                                         </a>
                                         <if condition="!$vo['is_auto_imported']">
-                                        <button type="button" 
-                                                class="btn btn-sm btn-danger document-delete-btn" 
-                                                data-url="@admin-url{'dev/tool/admin/document/delete',['id'=>$vo->getData('doc_id')]}">
-                                            <i class="mdi mdi-delete me-1"></i>
+                                        <button type="button" class="w-button document-delete-btn" data-url="@admin-url{'dev/tool/admin/document/delete',['id'=>$vo->getData('doc_id')]}" data-tone="danger" data-size="sm">
+                                            <w:icon name="trash" size="sm"></w:icon>
                                             <?=__('删除')?>
                                         </button>
                                         </if>
@@ -525,7 +521,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                             <?php
                             $pagination = $this->getData('pagination');
                             if (!empty($pagination) && !empty($pagination['html'])): ?>
-                                <div class="mt-4" id="pagination-container">
+                                <div id="pagination-container" style="--w-mt:var(--weline-space-6);">
                                     <?php echo $pagination['html']; ?>
                                 </div>
                             <?php endif; ?>
@@ -538,19 +534,19 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </div>
 
 <!-- 文档查看 Offcanvas -->
-<div class="offcanvas offcanvas-end offcanvas-document w-50" tabindex="-1" id="documentViewOffcanvas" aria-labelledby="documentViewOffcanvasLabel">
-    <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="documentViewOffcanvasLabel">
-            <i class="mdi mdi-file-document-outline me-2"></i>
+<div class="w-drawer offcanvas-end offcanvas-document" tabindex="-1" id="documentViewOffcanvas" aria-labelledby="documentViewOffcanvasLabel" data-w-width="50" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+    <div class="w-drawer__header" data-w-border="bottom">
+        <h5 class="w-drawer__title" id="documentViewOffcanvasLabel">
+            <w:icon name="file" size="sm"></w:icon>
             <?=__('文档详情')?>
         </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <button type="button" class="w-button" aria-label="Close" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
     </div>
-    <div class="offcanvas-body">
+    <div class="w-drawer__body">
         <div id="documentViewContent">
-            <div class="text-center py-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden"><?=__('加载中...')?></span>
+            <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <div class="w-spinner w-text" role="status" data-tone="primary">
+                    <span class="w-visually-hidden"><?=__('加载中...')?></span>
                 </div>
             </div>
         </div>
@@ -590,7 +586,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </script>
 <script src="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)"></script>
 <!--tinymce js-->
-<script src='@static(Weline_Admin::assets/libs/tinymce/tinymce.min.js)'></script>
+<script src="@static(Weline_DeveloperWorkspace::engines/tinymce/tinymce.min.js)"></script>
 <!-- init js -->
 <script src='@static(Weline_Admin::assets/js/pages/form-editor.init.js)'></script>
 <!-- Responsive Table js -->
@@ -598,10 +594,6 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <!-- Init js -->
 <script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
 <!-- Sweet Alerts js -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<!-- jquery.vectormap map -->
-<script src="@static(Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js)"></script>
-<script src="@static(Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js)"></script>
 
 <!--国际化字符串-->
 <script>
@@ -700,7 +692,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     function initCatalogTree() {
         try {
             if (typeof $.fn.jstree === 'undefined') {
-                $('#catalog-tree-container').html('<div class="alert alert-danger m-3"><i class="mdi mdi-alert-circle me-2"></i><strong><?=__('错误')?>:</strong> <?=__('jstree库未加载，请刷新页面重试')?></div>');
+                $('#catalog-tree-container').html('<div class="w-alert" data-tone="danger" style="--w-mt:var(--weline-space-4);--w-me:var(--weline-space-4);--w-mb:var(--weline-space-4);--w-ms:var(--weline-space-4);"><w:icon name="warning" size="sm"></w:icon><strong><?=__('错误')?>:</strong> <?=__('jstree库未加载，请刷新页面重试')?></div>');
                 return;
             }
             
@@ -709,7 +701,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             
             treeData.push({
                 id: '',
-                text: '<i class="mdi mdi-view-list me-2"></i><?=__('全部文档')?>',
+                text: '<w:icon name="list" size="sm"></w:icon><?=__('全部文档')?>',
                 state: {
                     selected: !currentCategoryId
                 },
@@ -765,7 +757,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             
             var node = {
                 id: String(item.id),
-                text: '<i class="mdi mdi-folder me-2"></i>' + escapeHtml(itemName),
+                text: '<w:icon name="folder" size="sm"></w:icon>' + escapeHtml(itemName),
                 state: {
                     opened: itemLevel <= 2
                 },
@@ -797,7 +789,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     function loadDocumentsByCategory(categoryId) {
         currentCategoryId = categoryId;
         
-        $('#document-list-container').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">' + i18n.loading + '</span></div><p class="mt-2 text-muted">' + i18n.loadingDocument + '</p></div>');
+        $('#document-list-container').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><div class="w-spinner w-text" role="status" data-tone="primary"><span class="w-visually-hidden">' + i18n.loading + '</span></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);">' + i18n.loadingDocument + '</p></div>');
         
         bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: documentAdminUrls.list,
@@ -808,29 +800,29 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 if (response.code === 200 && response.data) {
                     renderDocumentList(response.data.items, response.data.pagination);
                 } else {
-                    $('#document-list-container').html('<div class="alert alert-danger"><i class="mdi mdi-alert-circle me-2"></i>' + (response.msg || i18n.loadDocumentFailed) + '</div>');
+                    $('#document-list-container').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + (response.msg || i18n.loadDocumentFailed) + '</div>');
                 }
             },
             error: function() {
-                $('#document-list-container').html('<div class="alert alert-danger"><i class="mdi mdi-alert-circle me-2"></i>' + i18n.loadDocumentFailedRefresh + '</div>');
+                $('#document-list-container').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + i18n.loadDocumentFailedRefresh + '</div>');
             }
         });
     }
     
     function renderDocumentList(items, pagination) {
         if (!items || items.length === 0) {
-            $('#document-list-container').html('<div class="empty-state"><i class="mdi mdi-file-document-outline"></i><h5><?=__('暂无文章')?></h5><p class="text-muted"><?=__('该分类下暂无文档')?></p></div>');
+            $('#document-list-container').html('<div class="empty-state"><w:icon name="file" size="sm"></w:icon><h5><?=__('暂无文章')?></h5><p class="w-text" data-tone="muted"><?=__('该分类下暂无文档')?></p></div>');
             return;
         }
         
-        var html = '<div class="row">';
+        var html = '<div class="w-grid">';
         items.forEach(function(doc) {
-            html += '<div class="col-md-4 col-lg-3 mb-3"><div class="document-card h-100"><div class="document-header"><div class="d-flex justify-content-between align-items-start"><div class="flex-grow-1"><h5 class="mb-1" style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">' + (doc.title || '') + '</h5><div class="d-flex align-items-center gap-1 mt-1 flex-wrap"><span class="badge bg-light text-dark" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-folder-outline me-1" style="font-size: 0.7rem;"></i>' + (doc.c_name || '') + '</span>' + (doc.module_name ? '<span class="badge-module" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-package-variant me-1" style="font-size: 0.7rem;"></i>' + doc.module_name + '</span>' : '') + (doc.is_auto_imported ? '<span class="badge-auto" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><i class="mdi mdi-auto-fix me-1" style="font-size: 0.7rem;"></i>' + i18n.autoImported + '</span>' : '') + '</div></div></div></div><div class="document-body"><p class="summary-text mb-2" style="font-size: 0.8rem; line-height: 1.5;">' + (doc.summary || '') + '</p><div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem;"><span><i class="mdi mdi-account-outline me-1"></i>' + i18n.author + ' ' + (doc.author || doc.author_id || i18n.unknown) + '</span><span><i class="mdi mdi-clock-outline me-1"></i>' + (doc.update_time || '') + '</span></div></div><div class="document-footer"><div class="action-buttons d-flex justify-content-end"><button type="button" class="btn btn-sm btn-primary view-document-btn" data-id="' + doc.doc_id + '"><i class="mdi mdi-eye me-1"></i><?=__('查看')?></button><a href="' + documentAdminUrls.edit + '?id=' + doc.doc_id + '"><button type="button" class="btn btn-sm btn-info"><i class="mdi mdi-pencil me-1"></i><?=__('编辑')?></button></a>' + (!doc.is_auto_imported ? '<button type="button" class="btn btn-sm btn-danger document-delete-btn" data-url="' + documentAdminUrls.delete + '?id=' + doc.doc_id + '"><i class="mdi mdi-delete me-1"></i><?=__('删除')?></button>' : '') + '</div></div></div></div>';
+            html += '<div style="--w-span-md:4;--w-span-lg:3;--w-mb:var(--weline-space-4);"><div class="document-card" data-w-height="full"><div class="document-header"><div class="w-cluster" data-justify="between" data-align="start"><div data-grow="true"><h5 style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">' + (doc.title || '') + '</h5><div class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-1);--w-mt:var(--weline-space-1);"><span class="w-badge w-text" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;" data-w-background="muted" data-tone="muted"><w:icon name="folder" size="sm"></w:icon>' + (doc.c_name || '') + '</span>' + (doc.module_name ? '<span class="badge-module" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><w:icon name="box" size="sm"></w:icon>' + doc.module_name + '</span>' : '') + (doc.is_auto_imported ? '<span class="badge-auto" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;"><w:icon name="sparkles" size="sm"></w:icon>' + i18n.autoImported + '</span>' : '') + '</div></div></div></div><div class="document-body"><p class="summary-text" style="font-size: 0.8rem; line-height: 1.5;">' + (doc.summary || '') + '</p><div class="w-text w-cluster" style="font-size: 0.75rem;" data-justify="between" data-align="center" data-tone="muted"><span><w:icon name="user" size="sm"></w:icon>' + i18n.author + ' ' + (doc.author || doc.author_id || i18n.unknown) + '</span><span><w:icon name="clock" size="sm"></w:icon>' + (doc.update_time || '') + '</span></div></div><div class="document-footer"><div class="action-buttons w-cluster" data-justify="end"><button type="button" class="w-button view-document-btn" data-id="' + doc.doc_id + '" data-tone="primary" data-size="sm"><w:icon name="eye" size="sm"></w:icon><?=__('查看')?></button><a href="' + documentAdminUrls.edit + '?id=' + doc.doc_id + '"><button type="button" class="w-button" data-tone="info" data-size="sm"><w:icon name="edit" size="sm"></w:icon><?=__('编辑')?></button></a>' + (!doc.is_auto_imported ? '<button type="button" class="w-button document-delete-btn" data-url="' + documentAdminUrls.delete + '?id=' + doc.doc_id + '" data-tone="danger" data-size="sm"><w:icon name="trash" size="sm"></w:icon><?=__('删除')?></button>' : '') + '</div></div></div></div>';
         });
         html += '</div>';
         
         if (pagination && pagination.html) {
-            html += '<div class="mt-4" id="pagination-container">' + pagination.html + '</div>';
+            html += '<div id="pagination-container" style="--w-mt:var(--weline-space-6);">' + pagination.html + '</div>';
         }
         
         $('#document-list-container').html(html);
@@ -840,44 +832,28 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     function bindDeleteButtons() {
         $('.document-delete-btn').off('click').on('click', function(e) {
             var target = $(e.target).closest('.document-delete-btn');
-            var isDark = document.body.getAttribute('data-topbar') === 'dark';
-            var swalConfig = {
+            Weline.UI.dialog.request({
+                tone: 'warning',
                 title: '<?=__('你确定要操作么？')?>',
-                text: '<?=__('操作后你将无法恢复！')?>',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: '<?=__('是的，我确定要删除！')?>',
-                cancelButtonText: '<?=__('不要，取消吧！')?>',
-                confirmButtonClass: 'btn btn-success mt-2',
-                cancelButtonClass: 'btn btn-danger ms-2 mt-2',
-                buttonsStyling: false,
-                customClass: {
-                    popup: isDark ? 'swal2-dark' : '',
-                    title: isDark ? 'swal2-title-dark' : '',
-                    htmlContainer: isDark ? 'swal2-html-dark' : '',
-                    confirmButton: isDark ? 'swal2-confirm-dark' : '',
-                    cancelButton: isDark ? 'swal2-cancel-dark' : ''
-                }
-            };
-            Swal.fire(swalConfig).then(function (result) {
-                if (result.value) {
+                message: '<?=__('操作后你将无法恢复！')?>',
+                cancelable: true,
+                dangerous: true,
+                confirmTone: 'danger',
+                confirmLabel: '<?=__('是的，我确定要删除！')?>',
+                cancelLabel: '<?=__('不要，取消吧！')?>'
+            }).then(function (result) {
+                if (result.confirmed) {
                     showLoading();
                     bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
                         url: target.attr('data-url')
                     }).done(function(res) {
                         hideLoading();
                         if (200 === res.code) {
-                            Swal.fire({
+                            Weline.UI.dialog.request({
                                 title: '<?=__('已删除！')?>',
-                                text: '<?=__('文章已经被删除了！')?>',
-                                confirmButtonText: '<?=__('好的')?>',
-                                icon: 'success',
-                                customClass: {
-                                    popup: isDark ? 'swal2-dark' : '',
-                                    title: isDark ? 'swal2-title-dark' : '',
-                                    htmlContainer: isDark ? 'swal2-html-dark' : '',
-                                    confirmButton: isDark ? 'swal2-confirm-dark' : ''
-                                }
+                                message: '<?=__('文章已经被删除了！')?>',
+                                confirmLabel: '<?=__('好的')?>',
+                                tone: 'success'
                             }).then(function() {
                                 if (currentCategoryId) {
                                     loadDocumentsByCategory(currentCategoryId);
@@ -886,17 +862,11 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                 }
                             });
                         } else {
-                            Swal.fire({
+                            Weline.UI.dialog.request({
                                 title: '<?=__('删除提示！')?>',
-                                text: '<?=__('文章删除失败，请重试！')?>',
-                                confirmButtonText: '<?=__('好的')?>',
-                                icon: 'error',
-                                customClass: {
-                                    popup: isDark ? 'swal2-dark' : '',
-                                    title: isDark ? 'swal2-title-dark' : '',
-                                    htmlContainer: isDark ? 'swal2-html-dark' : '',
-                                    confirmButton: isDark ? 'swal2-confirm-dark' : ''
-                                }
+                                message: '<?=__('文章删除失败，请重试！')?>',
+                                confirmLabel: '<?=__('好的')?>',
+                                tone: 'danger'
                             });
                         }
                     });
@@ -917,7 +887,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         var offcanvasElement = document.getElementById('documentViewOffcanvas');
         var offcanvas = new bootstrap.Offcanvas(offcanvasElement);
         
-        $('#documentViewContent').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">' + i18n.loading + '</span></div><p class="mt-2 text-muted">' + i18n.loadingDocument + '</p></div>');
+        $('#documentViewContent').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><div class="w-spinner w-text" role="status" data-tone="primary"><span class="w-visually-hidden">' + i18n.loading + '</span></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);">' + i18n.loadingDocument + '</p></div>');
         
         offcanvas.show();
         
@@ -929,14 +899,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             success: function(response) {
                 if (response.code === 200 && response.data) {
                     var doc = response.data;
-                    var html = '<div class="document-meta"><div class="meta-item"><i class="mdi mdi-folder-outline"></i><span><strong>' + i18n.category + '</strong> ' + (doc.category || i18n.uncategorized) + '</span></div><div class="meta-item"><i class="mdi mdi-account-outline"></i><span><strong>' + i18n.author + '</strong> ' + (doc.author || i18n.unknown) + '</span></div><div class="meta-item"><i class="mdi mdi-clock-outline"></i><span><strong>' + i18n.createTime + '</strong> ' + (doc.create_time || '-') + '</span></div><div class="meta-item"><i class="mdi mdi-update"></i><span><strong>' + i18n.updateTime + '</strong> ' + (doc.update_time || '-') + '</span></div>' + (doc.module_name ? '<div class="meta-item"><i class="mdi mdi-package-variant"></i><span><strong>' + i18n.module + '</strong> ' + doc.module_name + '</span></div>' : '') + (doc.is_auto_imported ? '<div class="meta-item"><i class="mdi mdi-auto-fix"></i><span class="badge-auto">' + i18n.autoImported + '</span></div>' : '') + '</div><div class="mb-3"><h4 class="mb-2">' + (doc.title || i18n.noTitle) + '</h4>' + (doc.summary ? '<p class="text-muted">' + doc.summary + '</p>' : '') + '</div><pre class="document-content">' + (doc.content ? escapeHtml(doc.content) : '<span class="text-muted">' + i18n.noContent + '</span>') + '</pre>';
+                    var html = '<div class="document-meta"><div class="meta-item"><w:icon name="folder" size="sm"></w:icon><span><strong>' + i18n.category + '</strong> ' + (doc.category || i18n.uncategorized) + '</span></div><div class="meta-item"><w:icon name="user" size="sm"></w:icon><span><strong>' + i18n.author + '</strong> ' + (doc.author || i18n.unknown) + '</span></div><div class="meta-item"><w:icon name="clock" size="sm"></w:icon><span><strong>' + i18n.createTime + '</strong> ' + (doc.create_time || '-') + '</span></div><div class="meta-item"><w:icon name="refresh" size="sm"></w:icon><span><strong>' + i18n.updateTime + '</strong> ' + (doc.update_time || '-') + '</span></div>' + (doc.module_name ? '<div class="meta-item"><w:icon name="box" size="sm"></w:icon><span><strong>' + i18n.module + '</strong> ' + doc.module_name + '</span></div>' : '') + (doc.is_auto_imported ? '<div class="meta-item"><w:icon name="sparkles" size="sm"></w:icon><span class="badge-auto">' + i18n.autoImported + '</span></div>' : '') + '</div><div style="--w-mb:var(--weline-space-4);"><h4 style="--w-mb:var(--weline-space-2);">' + (doc.title || i18n.noTitle) + '</h4>' + (doc.summary ? '<p class="w-text" data-tone="muted">' + doc.summary + '</p>' : '') + '</div><pre class="document-content">' + (doc.content ? escapeHtml(doc.content) : '<span class="w-text" data-tone="muted">' + i18n.noContent + '</span>') + '</pre>';
                     $('#documentViewContent').html(html);
                 } else {
-                    $('#documentViewContent').html('<div class="alert alert-danger"><i class="mdi mdi-alert-circle me-2"></i>' + (response.msg || i18n.loadDocumentFailed) + '</div>');
+                    $('#documentViewContent').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + (response.msg || i18n.loadDocumentFailed) + '</div>');
                 }
             },
             error: function() {
-                $('#documentViewContent').html('<div class="alert alert-danger"><i class="mdi mdi-alert-circle me-2"></i>' + i18n.loadDocumentFailedRefresh + '</div>');
+                $('#documentViewContent').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + i18n.loadDocumentFailedRefresh + '</div>');
             }
         });
     });

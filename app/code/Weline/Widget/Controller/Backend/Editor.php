@@ -19,7 +19,7 @@ use Weline\Widget\Service\WidgetData;
 /**
  * 可视化编辑器控制器
  */
-#[\Weline\Framework\Acl\Acl('Weline_Widget::editor', '可视化编辑器', 'mdi mdi-pencil-box', '可视化编辑器')]
+#[\Weline\Framework\Acl\Acl('Weline_Widget::editor', '可视化编辑器', 'edit', '可视化编辑器')]
 class Editor extends BackendController
 {
     private Page $pageModel;

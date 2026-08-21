@@ -17,7 +17,7 @@ use Weline\SystemConfig\Service\SystemConfigCenterService;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 use Weline\SystemConfig\Service\SystemConfigTemplateService;
 
-#[Acl('Weline_SystemConfig::config_center', '统一配置中心', 'mdi-tune-variant', '统一配置中心', '')]
+#[Acl('Weline_SystemConfig::config_center', '统一配置中心', 'circle', '统一配置中心', '')]
 class Config extends BackendController
 {
     protected function csrf(): string
@@ -26,7 +26,7 @@ class Config extends BackendController
         return FormKey::key_name;
     }
 
-    #[Acl('Weline_SystemConfig::config_center_index', '查看统一配置中心', 'mdi-tune-variant', '查看统一配置中心')]
+    #[Acl('Weline_SystemConfig::config_center_index', '查看统一配置中心', 'circle', '查看统一配置中心')]
     public function getIndex(): string
     {
         $module = trim((string)$this->request->getGet('module', ''));
@@ -123,7 +123,7 @@ class Config extends BackendController
         return $this->fetch('Weline_SystemConfig::templates/backend/config/index.phtml');
     }
 
-    #[Acl('Weline_SystemConfig::config_center_save', '保存统一配置', 'mdi-content-save-outline', '保存统一配置')]
+    #[Acl('Weline_SystemConfig::config_center_save', '保存统一配置', 'save', '保存统一配置')]
     public function postIndex(): string
     {
         /** @var SystemConfigTargetScopeService $targetScopeService */
@@ -273,7 +273,7 @@ class Config extends BackendController
         return '';
     }
 
-    #[Acl('Weline_SystemConfig::config_center_rollback_precheck', '配置回滚预检', 'mdi-restore-alert', '配置回滚预检')]
+    #[Acl('Weline_SystemConfig::config_center_rollback_precheck', '配置回滚预检', 'warning', '配置回滚预检')]
     public function getRollbackPrecheck(): string
     {
         try {

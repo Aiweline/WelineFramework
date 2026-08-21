@@ -200,15 +200,15 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
      data-label-created-at="<?= $escape(__('创建时间')) ?>"
      data-label-updated-at="<?= $escape(__('更新时间')) ?>"
      data-label-finished-at="<?= $escape(__('结束时间')) ?>">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
                 <div>
-                    <h4 class="mb-1 font-size-18"><lang>异步事件死信运维</lang></h4>
-                    <p class="text-muted mb-0"><lang>按网站范围查看脱敏投递记录，并以新事件安全重放死信。</lang></p>
+                    <h4 class="w-text" style="--w-mb:var(--weline-space-1);--w-font-size:1.125rem;"><lang>异步事件死信运维</lang></h4>
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>按网站范围查看脱敏投递记录，并以新事件安全重放死信。</lang></p>
                 </div>
-                <button type="button" class="btn btn-outline-primary" id="ed-refresh">
-                    <i class="mdi mdi-refresh me-1" aria-hidden="true"></i><lang>刷新</lang>
+                <button type="button" class="w-button" id="ed-refresh" data-tone="primary" data-variant="outline">
+                    <w:icon name="refresh" size="sm"></w:icon><lang>刷新</lang>
                 </button>
             </div>
         </div>
@@ -229,12 +229,12 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
+    <div class="w-card">
+        <div class="w-card__body">
             <div class="ed-filter-grid">
                 <div>
-                    <label class="form-label" for="ed-status"><lang>投递状态</lang></label>
-                    <select class="form-select" id="ed-status">
+                    <label class="w-field__label" for="ed-status"><lang>投递状态</lang></label>
+                    <select class="w-select" id="ed-status">
                         <option value="dead"><lang>死信</lang></option>
                         <option value="pending"><lang>待处理</lang></option>
                         <option value="provisioning"><lang>建件中</lang></option>
@@ -247,27 +247,26 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     </select>
                 </div>
                 <div>
-                    <label class="form-label" for="ed-scope"><lang>查询范围</lang></label>
-                    <select class="form-select" id="ed-scope">
+                    <label class="w-field__label" for="ed-scope"><lang>查询范围</lang></label>
+                    <select class="w-select" id="ed-scope">
                         <option value="current"><lang>当前网站</lang></option>
                         <option value="all" disabled><lang>全部网站（需要单独权限）</lang></option>
                     </select>
                 </div>
                 <div>
-                    <label class="form-label" for="ed-website"><lang>网站 ID</lang></label>
-                    <input class="form-control" id="ed-website" type="number" min="0" step="1"
-                           value="<?= $currentWebsiteId === null ? '' : $escape($currentWebsiteId) ?>">
+                    <label class="w-field__label" for="ed-website"><lang>网站 ID</lang></label>
+                    <input class="w-input" id="ed-website" type="number" min="0" step="1" value="<?= $currentWebsiteId === null ? '' : $escape($currentWebsiteId) ?>">
                 </div>
-                <button type="button" class="btn btn-primary" id="ed-apply">
-                    <i class="mdi mdi-filter-outline me-1" aria-hidden="true"></i><lang>应用筛选</lang>
+                <button type="button" class="w-button" id="ed-apply" data-tone="primary">
+                    <w:icon name="filter" size="sm"></w:icon><lang>应用筛选</lang>
                 </button>
             </div>
 
             <div class="ed-status" id="ed-message" role="status" aria-live="polite" hidden></div>
 
-            <div class="table-responsive" id="ed-table-wrap">
-                <table class="table table-hover align-middle ed-table mb-0">
-                    <thead class="table-light">
+            <div class="w-table-wrap" id="ed-table-wrap">
+                <table class="w-table ed-table" data-w-vertical="middle" style="--w-mb:0;">
+                    <thead>
                     <tr>
                         <th scope="col"><lang>Delivery</lang></th>
                         <th scope="col"><lang>网站</lang></th>
@@ -275,20 +274,20 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                         <th scope="col"><lang>Observer</lang></th>
                         <th scope="col"><lang>状态 / 原因</lang></th>
                         <th scope="col"><lang>更新时间</lang></th>
-                        <th scope="col" class="text-end"><lang>操作</lang></th>
+                        <th scope="col" class="w-text" data-align="end"><lang>操作</lang></th>
                     </tr>
                     </thead>
                     <tbody id="ed-rows"></tbody>
                 </table>
             </div>
             <div class="ed-empty" id="ed-empty" hidden>
-                <i class="mdi mdi-email-check-outline d-block mb-2" style="font-size:2.5rem" aria-hidden="true"></i>
+                <w:icon name="check" size="sm"></w:icon>
                 <span><lang>当前筛选范围内没有 Delivery。</lang></span>
             </div>
             <div class="ed-pagination">
-                <button type="button" class="btn btn-outline-secondary" id="ed-prev"><lang>上一页</lang></button>
+                <button type="button" class="w-button" id="ed-prev" data-tone="neutral" data-variant="outline"><lang>上一页</lang></button>
                 <span id="ed-page-label" aria-live="polite">—</span>
-                <button type="button" class="btn btn-outline-secondary" id="ed-next"><lang>下一页</lang></button>
+                <button type="button" class="w-button" id="ed-next" data-tone="neutral" data-variant="outline"><lang>下一页</lang></button>
             </div>
         </div>
     </div>
@@ -299,32 +298,31 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <div class="ed-modal-panel" tabindex="-1">
         <div class="ed-modal-header">
             <div>
-                <h5 id="ed-detail-title" class="mb-1"><lang>Delivery 详情</lang></h5>
-                <div class="text-muted ed-code" id="ed-detail-subtitle"></div>
+                <h5 id="ed-detail-title" style="--w-mb:var(--weline-space-1);"><lang>Delivery 详情</lang></h5>
+                <div class="w-text ed-code" id="ed-detail-subtitle" data-tone="muted"></div>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-ed-close>
-                <span aria-hidden="true">×</span><span class="visually-hidden"><lang>关闭</lang></span>
+            <button type="button" class="w-button" data-ed-close data-tone="neutral" data-variant="outline" data-size="sm">
+                <span aria-hidden="true">×</span><span class="w-visually-hidden"><lang>关闭</lang></span>
             </button>
         </div>
         <div class="ed-status" id="ed-detail-message" role="status" aria-live="polite" hidden></div>
         <dl class="ed-detail-grid" id="ed-detail-fields"></dl>
-        <h6 class="mt-4"><lang>脱敏 Payload</lang></h6>
+        <h6 style="--w-mt:var(--weline-space-6);"><lang>脱敏 Payload</lang></h6>
         <pre class="ed-payload ed-code" id="ed-payload"></pre>
         <div class="ed-replay-box" id="ed-replay-box" hidden>
             <h6><lang>创建一次安全重放</lang></h6>
-            <p class="mb-2"><lang>系统将创建全新的 event_id 与 Outbox，目标仅为原 Observer；原 dead 记录不会改变。</lang></p>
-            <label class="form-label" for="ed-replay-reason"><lang>重放原因</lang></label>
-            <textarea class="form-control" id="ed-replay-reason" rows="3" maxlength="500"
-                      placeholder="<?= $escape(__('请输入可审计的重放原因（必填）')) ?>"></textarea>
-            <div class="d-flex align-items-center justify-content-between mt-2 gap-2">
-                <small class="text-muted" id="ed-reason-count"><?= $escape(__('已输入 0 / 500 字节')) ?></small>
-                <button type="button" class="btn btn-danger" id="ed-replay" disabled>
-                    <i class="mdi mdi-replay me-1" aria-hidden="true"></i><lang>创建新重放</lang>
+            <p style="--w-mb:var(--weline-space-2);"><lang>系统将创建全新的 event_id 与 Outbox，目标仅为原 Observer；原 dead 记录不会改变。</lang></p>
+            <label class="w-field__label" for="ed-replay-reason"><lang>重放原因</lang></label>
+            <textarea class="w-textarea" id="ed-replay-reason" rows="3" maxlength="500" placeholder="<?= $escape(__('请输入可审计的重放原因（必填）')) ?>"></textarea>
+            <div class="w-cluster" data-align="center" data-justify="between" style="--w-mt:var(--weline-space-2);--w-gap:var(--weline-space-2);">
+                <small class="w-text" id="ed-reason-count" data-tone="muted"><?= $escape(__('已输入 0 / 500 字节')) ?></small>
+                <button type="button" class="w-button" id="ed-replay" disabled data-tone="danger">
+                    <w:icon name="play" size="sm"></w:icon><lang>创建新重放</lang>
                 </button>
             </div>
         </div>
-        <div class="d-flex justify-content-end mt-3">
-            <button type="button" class="btn btn-secondary" data-ed-close><lang>关闭</lang></button>
+        <div class="w-cluster" data-justify="end" style="--w-mt:var(--weline-space-4);">
+            <button type="button" class="w-button" data-ed-close data-tone="neutral"><lang>关闭</lang></button>
         </div>
     </div>
 </div>

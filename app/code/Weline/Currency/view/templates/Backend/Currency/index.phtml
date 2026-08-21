@@ -9,17 +9,17 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class='row' data-testid="currency-list-management" data-record-count="<?= count((array)$this->getData('currencies')) ?>">
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid" data-testid="currency-list-management" data-record-count="<?= count((array)$this->getData('currencies')) ?>">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>货币管理</lang> > <lang>货币列表</lang>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><lang>系统</lang></span></li>
-                    <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
-                    <li class='breadcrumb-item active'><lang>货币列表</lang></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>系统</lang></span></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>货币列表</lang></li>
                 </ol>
             </div>
         </div>
@@ -27,41 +27,39 @@
 </div>
 
 <!-- 消息 -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 货币列表 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <div class='row mb-3'>
-                    <div class='col-md-6'>
-                        <h4 class='card-title'><lang>货币列表</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span-md:6;">
+                        <h4 class="w-card__title"><lang>货币列表</lang></h4>
                     </div>
-                    <div class='col-md-6 text-end'>
-                        <a href="@backend-url('currency/backend/currency/getAdd')" class='btn btn-primary' data-testid="currency-create">
-                            <i class='mdi mdi-plus' aria-hidden="true"></i> <lang>添加货币</lang>
+                    <div class="w-text" data-align="end" style="--w-span-md:6;">
+                        <a href="@backend-url('currency/backend/currency/getAdd')" class="w-button" data-testid="currency-create" data-tone="primary">
+                            <w:icon name="plus" size="sm"></w:icon> <lang>添加货币</lang>
                         </a>
                     </div>
                 </div>
 
-                <w:form method='get' action="@backend-url('currency/backend/currency/index')" class='mb-3'>
-                    <div class='row'>
-                        <div class='col-md-4'>
-                            <input type='text' class='form-control' name='search' 
-                                   value='<?= htmlspecialchars($this->request->getGet('search', '')) ?>' 
-                                   placeholder='<?= __('搜索货币代码、名称或符号') ?>'>
+                <w:form method='get' action="@backend-url('currency/backend/currency/index')" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-grid">
+                        <div style="--w-span-md:4;">
+                            <input type='text' class="w-input" name='search' value='<?= htmlspecialchars($this->request->getGet('search', '')) ?>' placeholder='<?= __('搜索货币代码、名称或符号') ?>'>
                         </div>
-                        <div class='col-md-2'>
-                            <button type='submit' class='btn btn-primary'><lang>搜索</lang></button>
+                        <div style="--w-span-md:2;">
+                            <button type='submit' class="w-button" data-tone="primary"><lang>搜索</lang></button>
                         </div>
                     </div>
                 </w:form>
 
-                <div class='table-responsive'>
-                    <table class='table table-bordered table-striped'>
+                <div class="w-table-wrap">
+                    <table class="w-table">
                         <thead>
                             <tr>
                                 <th><lang>ID</lang></th>
@@ -78,7 +76,7 @@
                         <tbody>
                             <w:empty name="currencies">
                                 <tr>
-                                    <td colspan='9' class='text-center'><lang>暂无数据</lang></td>
+                                    <td colspan='9' class="w-text" data-align="center"><lang>暂无数据</lang></td>
                                 </tr>
                             </w:empty>
                             <foreach items="$currencies" as="$currency" key="$key">
@@ -92,20 +90,14 @@
                                         <td>{{currency.formatted_example}}</td>
                                         <td>
                                             <if condition="currency.status == 1">
-                                                <span class='badge bg-success'><lang>启用</lang></span>
+                                                <span class="w-badge" data-w-background="success"><lang>启用</lang></span>
                                                 <else/>
-                                                <span class='badge bg-danger'><lang>禁用</lang></span>
+                                                <span class="w-badge" data-w-background="danger"><lang>禁用</lang></span>
                                             </if>
                                         </td>
                                         <td>
-                                            <a href="@backend-url('currency/backend/currency/getEdit')?id={{currency.currency_id}}" 
-                                               class='btn btn-sm btn-primary'><lang>编辑</lang></a>
-                                            <button type='button' class='btn btn-sm btn-danger' 
-                                                    w-delete="true"
-                                                    data-provider="currency"
-                                                    data-operation="deleteCurrency"
-                                                    w-var-currency_id="{{currency.currency_id}}"
-                                                    w-msg="<?= __('确定要删除该货币吗？') ?>"><lang>删除</lang></button>
+                                            <a href="@backend-url('currency/backend/currency/getEdit')?id={{currency.currency_id}}" class="w-button" data-tone="primary" data-size="sm"><lang>编辑</lang></a>
+                                            <button type='button' class="w-button" w-delete="true" data-provider="currency" data-operation="deleteCurrency" w-var-currency_id="{{currency.currency_id}}" w-msg="<?= __('确定要删除该货币吗？') ?>" data-tone="danger" data-size="sm"><lang>删除</lang></button>
                                         </td>
                                     </tr>
                             </foreach>
@@ -114,8 +106,8 @@
                 </div>
 
                 <w:notempty name="pagination">
-                    <div class='row mt-3'>
-                        <div class='col-12'>
+                    <div class="w-grid" style="--w-mt:var(--weline-space-4);">
+                        <div style="--w-span:12;">
                             <var>pagination</var>
                         </div>
                     </div>

@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理开启沙盒的key配置
  */
-#[Acl('Weline_DeveloperWorkspace::sandbox_config', '沙盒配置', 'mdi-code-tags-check', '沙盒配置', 'Weline_Backend::debug_tools')]
+#[Acl('Weline_DeveloperWorkspace::sandbox_config', '沙盒配置', 'check', '沙盒配置', 'Weline_Backend::debug_tools')]
 class SandboxConfig extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class SandboxConfig extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_DeveloperWorkspace::sandbox_config_index', '查看沙盒配置', 'mdi-code-tags-check', '查看沙盒配置')]
+    #[Acl('Weline_DeveloperWorkspace::sandbox_config_index', '查看沙盒配置', 'check', '查看沙盒配置')]
     public function index(): string
     {
         try {
@@ -47,7 +47,7 @@ class SandboxConfig extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_DeveloperWorkspace::sandbox_config_save', '保存沙盒配置', 'mdi-content-save', '保存沙盒配置')]
+    #[Acl('Weline_DeveloperWorkspace::sandbox_config_save', '保存沙盒配置', 'save', '保存沙盒配置')]
     public function save(): string
     {
         if (!$this->isPost()) {

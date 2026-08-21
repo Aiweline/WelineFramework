@@ -218,43 +218,43 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
 }
 </style>
 
-<div class="weline-pixel-dashboard container-fluid py-3">
-    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+<div class="weline-pixel-dashboard w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="start" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
         <div>
-            <h1 class="h3 mb-1"><lang>多站点事件监听看板</lang></h1>
-            <div class="text-muted">
+            <h1 class="h3" style="--w-mb:var(--weline-space-1);"><lang>多站点事件监听看板</lang></h1>
+            <div class="w-text" data-tone="muted">
                 <lang>按站点、事件和时间范围查看像素事件、实时趋势、来源与最近触发记录。</lang>
             </div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-            <a href="<?= $h($refreshUrl) ?>" class="btn btn-outline-secondary btn-sm">
-                <i class="mdi mdi-refresh"></i> <lang>刷新</lang>
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+            <a href="<?= $h($refreshUrl) ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+                <w:icon name="refresh" size="sm"></w:icon> <lang>刷新</lang>
             </a>
-            <a href="<?= $h($listUrl) ?>" class="btn btn-outline-secondary btn-sm">
-                <i class="mdi mdi-table"></i> <lang>事件列表</lang>
+            <a href="<?= $h($listUrl) ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+                <w:icon name="table" size="sm"></w:icon> <lang>事件列表</lang>
             </a>
             <?php if ($detailUrl !== ''): ?>
-                <a href="<?= $h($detailUrl) ?>" class="btn btn-outline-primary btn-sm">
-                    <i class="mdi mdi-chart-box-outline"></i> <lang>详情报表</lang>
+                <a href="<?= $h($detailUrl) ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                    <w:icon name="chart" size="sm"></w:icon> <lang>详情报表</lang>
                 </a>
             <?php endif; ?>
-            <a href="<?= $h($exportUrl) ?>" class="btn btn-primary btn-sm">
-                <i class="mdi mdi-download"></i> <lang>导出 CSV</lang>
+            <a href="<?= $h($exportUrl) ?>" class="w-button" data-tone="primary" data-size="sm">
+                <w:icon name="download" size="sm"></w:icon> <lang>导出 CSV</lang>
             </a>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12">
+    <div class="w-grid">
+        <div style="--w-span:12;">
             <template>Weline_Component::message.phtml</template>
         </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-body">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__body">
             <w:form method="get" action="@var($this->getBackendUrlPath('visitor/backend/pixel-dashboard/index'))" class="weline-pixel-toolbar" id="pixel-index-filter-form">
                 <div class="weline-pixel-website-filter">
-                    <label class="form-label" for="index-filter-website_trigger"><lang>站点</lang></label>
+                    <label class="w-field__label" for="index-filter-website_trigger"><lang>站点</lang></label>
                     <w:websites:website:select
                         id="index-filter-website"
                         name="websiteId"
@@ -270,8 +270,8 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                     />
                 </div>
                 <div>
-                    <label class="form-label"><lang>事件</lang></label>
-                    <select name="event" class="form-select">
+                    <label class="w-field__label"><lang>事件</lang></label>
+                    <select name="event" class="w-select">
                         <option value="" <?= $selectedEvent === '' ? 'selected' : '' ?>><lang>全部事件</lang></option>
                         <?php foreach ($eventOptions as $eventOption): ?>
                             <option value="<?= $h($eventOption) ?>" <?= $selectedEvent === (string)$eventOption ? 'selected' : '' ?>>
@@ -281,8 +281,8 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                     </select>
                 </div>
                 <div>
-                    <label class="form-label"><lang>时间范围</lang></label>
-                    <select name="range" class="form-select">
+                    <label class="w-field__label"><lang>时间范围</lang></label>
+                    <select name="range" class="w-select">
                         <?php foreach ($rangeLabels as $rangeValue => $rangeLabel): ?>
                             <option value="<?= $h($rangeValue) ?>" <?= $selectedRange === $rangeValue ? 'selected' : '' ?>>
                                 <?= $h($rangeLabel) ?>
@@ -291,18 +291,18 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                     </select>
                 </div>
                 <div>
-                    <label class="form-label"><lang>开始日期</lang></label>
-                    <input type="date" name="startDate" class="form-control" value="<?= $h($startInput) ?>">
+                    <label class="w-field__label"><lang>开始日期</lang></label>
+                    <input type="date" name="startDate" class="w-input" value="<?= $h($startInput) ?>">
                 </div>
                 <div>
-                    <label class="form-label"><lang>结束日期</lang></label>
-                    <input type="date" name="endDate" class="form-control" value="<?= $h($endInput) ?>">
+                    <label class="w-field__label"><lang>结束日期</lang></label>
+                    <input type="date" name="endDate" class="w-input" value="<?= $h($endInput) ?>">
                 </div>
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="mdi mdi-filter-outline"></i> <lang>应用筛选</lang>
+                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                    <button type="submit" class="w-button" data-tone="primary">
+                        <w:icon name="filter" size="sm"></w:icon> <lang>应用筛选</lang>
                     </button>
-                    <a href="<?= $h($this->getBackendUrlPath('visitor/backend/pixel-dashboard/index')) ?>" class="btn btn-outline-secondary">
+                    <a href="<?= $h($this->getBackendUrlPath('visitor/backend/pixel-dashboard/index')) ?>" class="w-button" data-tone="neutral" data-variant="outline">
                         <lang>重置</lang>
                     </a>
                 </div>
@@ -310,10 +310,10 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-xl-3 col-md-6">
-            <div class="card h-100 weline-pixel-metric">
-                <div class="card-body">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span-lg:3;--w-span-md:6;">
+            <div class="w-card weline-pixel-metric" data-w-height="full">
+                <div class="w-card__body">
                     <div class="weline-pixel-metric-label"><lang>事件总数</lang></div>
                     <div class="weline-pixel-metric-value"><?= $num($summary['total_events'] ?? 0) ?></div>
                     <div class="weline-pixel-metric-sub">
@@ -323,9 +323,9 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card h-100 weline-pixel-metric">
-                <div class="card-body">
+        <div style="--w-span-lg:3;--w-span-md:6;">
+            <div class="w-card weline-pixel-metric" data-w-height="full">
+                <div class="w-card__body">
                     <div class="weline-pixel-metric-label"><lang>活跃用户</lang></div>
                     <div class="weline-pixel-metric-value"><?= $num($summary['active_users'] ?? 0) ?></div>
                     <div class="weline-pixel-metric-sub">
@@ -334,9 +334,9 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card h-100 weline-pixel-metric">
-                <div class="card-body">
+        <div style="--w-span-lg:3;--w-span-md:6;">
+            <div class="w-card weline-pixel-metric" data-w-height="full">
+                <div class="w-card__body">
                     <div class="weline-pixel-metric-label"><lang>事件类型</lang></div>
                     <div class="weline-pixel-metric-value"><?= $num($summary['event_types'] ?? 0) ?></div>
                     <div class="weline-pixel-metric-sub">
@@ -345,9 +345,9 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card h-100 weline-pixel-metric">
-                <div class="card-body">
+        <div style="--w-span-lg:3;--w-span-md:6;">
+            <div class="w-card weline-pixel-metric" data-w-height="full">
+                <div class="w-card__body">
                     <div class="weline-pixel-metric-label"><lang>累计价值</lang></div>
                     <div class="weline-pixel-metric-value"><?= $num($summary['total_value'] ?? 0, 2) ?></div>
                     <div class="weline-pixel-metric-sub">
@@ -358,18 +358,18 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-xl-8">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span-lg:8;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-justify="between" data-align="start" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
                         <div>
-                            <h2 class="h5 mb-1"><lang>事件趋势</lang></h2>
-                            <div class="text-muted small">
+                            <h2 class="h5" style="--w-mb:var(--weline-space-1);"><lang>事件趋势</lang></h2>
+                            <div class="w-text" data-tone="muted" data-size="sm">
                                 <?= $h($filters['start_day'] ?? '') ?> - <?= $h($filters['end_day'] ?? '') ?>
                             </div>
                         </div>
-                        <span class="badge bg-light text-dark border">
+                        <span class="w-badge w-text" data-w-background="muted" data-w-border="border" data-tone="muted">
                             <lang>服务端统计</lang>
                         </span>
                     </div>
@@ -377,42 +377,42 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                         <div class="weline-pixel-trend">
                             <?php foreach ($trend as $row): ?>
                                 <?php $height = max(2, round(((int)($row['count'] ?? 0) / $trendMax) * 100)); ?>
-                                <div class="weline-pixel-trend-item text-center">
+                                <div class="weline-pixel-trend-item w-text" data-align="center">
                                     <div class="weline-pixel-trend-bar" title="<?= $h(($row['date'] ?? '') . ' / ' . ($row['count'] ?? 0)) ?>">
                                         <span style="--bar-height: <?= (int)$height ?>%;"></span>
                                     </div>
-                                    <div class="small mt-2"><?= $h(substr((string)($row['date'] ?? ''), 5)) ?></div>
-                                    <div class="small fw-semibold"><?= $num($row['count'] ?? 0) ?></div>
+                                    <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-2);"><?= $h(substr((string)($row['date'] ?? ''), 5)) ?></div>
+                                    <div class="w-text" data-weight="strong" data-size="sm"><?= $num($row['count'] ?? 0) ?></div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
                     <?php else: ?>
-                        <div class="text-muted"><lang>暂无趋势数据。</lang></div>
+                        <div class="w-text" data-tone="muted"><lang>暂无趋势数据。</lang></div>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
-        <div class="col-xl-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h2 class="h5 mb-3"><lang>最近 60 分钟</lang></h2>
+        <div style="--w-span-lg:4;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <h2 class="h5" style="--w-mb:var(--weline-space-4);"><lang>最近 60 分钟</lang></h2>
                     <?php if (!empty($realtimeRows)): ?>
                         <div class="weline-pixel-realtime">
                             <?php foreach ($realtimeRows as $row): ?>
                                 <?php $height = max(2, round(((int)($row['count'] ?? 0) / $realtimeMax) * 100)); ?>
                                 <div class="weline-pixel-realtime-item">
-                                    <div class="small text-muted"><?= $h(substr((string)($row['timestamp'] ?? ''), 11, 5)) ?></div>
+                                    <div class="w-text" data-tone="muted" data-size="sm"><?= $h(substr((string)($row['timestamp'] ?? ''), 11, 5)) ?></div>
                                     <div class="weline-pixel-realtime-bar">
                                         <span style="--bar-height: <?= (int)$height ?>%;"></span>
                                     </div>
-                                    <div class="fw-semibold"><?= $num($row['count'] ?? 0) ?></div>
+                                    <div class="w-text" data-weight="strong"><?= $num($row['count'] ?? 0) ?></div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
                     <?php else: ?>
-                        <div class="text-muted"><lang>最近 60 分钟暂无事件。</lang></div>
+                        <div class="w-text" data-tone="muted"><lang>最近 60 分钟暂无事件。</lang></div>
                     <?php endif; ?>
-                    <div class="small text-muted mt-3">
+                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-4);">
                         <lang>处理完成率</lang> <?= $num($summary['processed_rate'] ?? 0, 2) ?>%
                     </div>
                 </div>
@@ -420,21 +420,21 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-xl-7">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h2 class="h5 mb-3"><lang>事件排行</lang></h2>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span-lg:7;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <h2 class="h5" style="--w-mb:var(--weline-space-4);"><lang>事件排行</lang></h2>
                     <?php if (!empty($eventRows)): ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><lang>事件名称</lang></th>
-                                    <th class="text-end"><lang>次数</lang></th>
+                                    <th class="w-text" data-align="end"><lang>次数</lang></th>
                                     <th><lang>占比</lang></th>
-                                    <th class="text-end"><lang>用户</lang></th>
-                                    <th class="text-end"><lang>价值</lang></th>
+                                    <th class="w-text" data-align="end"><lang>用户</lang></th>
+                                    <th class="w-text" data-align="end"><lang>价值</lang></th>
                                     <th><lang>最近触发</lang></th>
                                 </tr>
                                 </thead>
@@ -447,45 +447,45 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                     $eventUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/index', array_filter($eventQuery, static fn($v): bool => $v !== null && $v !== ''));
                                     ?>
                                     <tr>
-                                        <td class="fw-semibold">
-                                            <a href="<?= $h($eventUrl) ?>" class="text-decoration-none">
+                                        <td class="w-text" data-weight="strong">
+                                            <a href="<?= $h($eventUrl) ?>" data-w-decoration="none">
                                                 <?= $h($row['event'] ?? '') ?>
                                             </a>
                                         </td>
-                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['count'] ?? 0) ?></td>
                                         <td>
                                             <div class="weline-pixel-progress" title="<?= $num($row['share'] ?? 0, 2) ?>%">
                                                 <span style="--bar-width: <?= (int)$barWidth ?>%;"></span>
                                             </div>
-                                            <div class="small text-muted mt-1"><?= $num($row['share'] ?? 0, 2) ?>%</div>
+                                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= $num($row['share'] ?? 0, 2) ?>%</div>
                                         </td>
-                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
-                                        <td class="small text-muted"><?= $h($row['last_seen'] ?? '') ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
+                                        <td class="w-text" data-tone="muted" data-size="sm"><?= $h($row['last_seen'] ?? '') ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
                     <?php else: ?>
-                        <div class="text-muted"><lang>暂无事件排行数据。</lang></div>
+                        <div class="w-text" data-tone="muted"><lang>暂无事件排行数据。</lang></div>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
-        <div class="col-xl-5">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h2 class="h5 mb-3"><lang>站点对比</lang></h2>
+        <div style="--w-span-lg:5;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <h2 class="h5" style="--w-mb:var(--weline-space-4);"><lang>站点对比</lang></h2>
                     <?php if (!empty($siteRows)): ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><lang>站点</lang></th>
-                                    <th class="text-end"><lang>事件</lang></th>
-                                    <th class="text-end"><lang>用户</lang></th>
-                                    <th class="text-end"><lang>类型</lang></th>
+                                    <th class="w-text" data-align="end"><lang>事件</lang></th>
+                                    <th class="w-text" data-align="end"><lang>用户</lang></th>
+                                    <th class="w-text" data-align="end"><lang>类型</lang></th>
                                     <th></th>
                                 </tr>
                                 </thead>
@@ -497,13 +497,13 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                     $siteUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/index', $siteQuery);
                                     ?>
                                     <tr>
-                                        <td class="fw-semibold"><?= __('站点 %{1}', [(int)($row['website_id'] ?? 0)]) ?></td>
-                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['event_types'] ?? 0) ?></td>
-                                        <td class="text-end">
-                                            <a href="<?= $h($siteUrl) ?>" class="btn btn-sm btn-outline-primary">
-                                                <i class="mdi mdi-chart-line"></i> <lang>查看</lang>
+                                        <td class="w-text" data-weight="strong"><?= __('站点 %{1}', [(int)($row['website_id'] ?? 0)]) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['event_types'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end">
+                                            <a href="<?= $h($siteUrl) ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                                                <w:icon name="chart" size="sm"></w:icon> <lang>查看</lang>
                                             </a>
                                         </td>
                                     </tr>
@@ -512,30 +512,30 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                             </table>
                         </div>
                     <?php else: ?>
-                        <div class="text-muted"><lang>暂无站点对比数据。</lang></div>
+                        <div class="w-text" data-tone="muted"><lang>暂无站点对比数据。</lang></div>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h2 class="h5 mb-3"><lang>流量渠道</lang></h2>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h2 class="h5" style="--w-mb:var(--weline-space-4);"><lang>流量渠道</lang></h2>
                     <?php if (!empty($channelRows)): ?>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><lang>渠道名称</lang></th>
                                     <th><lang>渠道码</lang></th>
                                     <th><lang>流量类型</lang></th>
-                                    <th class="text-end"><lang>事件</lang></th>
-                                    <th class="text-end"><lang>用户</lang></th>
-                                    <th class="text-end"><lang>价值</lang></th>
-                                    <th class="text-end"><lang>下钻</lang></th>
+                                    <th class="w-text" data-align="end"><lang>事件</lang></th>
+                                    <th class="w-text" data-align="end"><lang>用户</lang></th>
+                                    <th class="w-text" data-align="end"><lang>价值</lang></th>
+                                    <th class="w-text" data-align="end"><lang>下钻</lang></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -556,15 +556,15 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                         : '';
                                     ?>
                                     <tr>
-                                        <td class="fw-semibold"><?= $h($name) ?></td>
+                                        <td class="w-text" data-weight="strong"><?= $h($name) ?></td>
                                         <td><code><?= $h($code !== '' ? $code : '—') ?></code></td>
                                         <td><?= $type !== '' ? $h($type) : '—' ?></td>
-                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
-                                        <td class="text-end">
+                                        <td class="w-text" data-align="end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
+                                        <td class="w-text" data-align="end">
                                             <?php if ($drillUrl !== ''): ?>
-                                                <a class="btn btn-sm btn-outline-secondary" href="<?= $h($drillUrl) ?>"><lang>事件列表</lang></a>
+                                                <a class="w-button" href="<?= $h($drillUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><lang>事件列表</lang></a>
                                             <?php else: ?>
                                                 —
                                             <?php endif; ?>
@@ -575,27 +575,27 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                             </table>
                         </div>
                     <?php else: ?>
-                        <div class="text-muted"><lang>暂无流量渠道数据（需扁平列就绪且存在 channel_code）。</lang></div>
+                        <div class="w-text" data-tone="muted"><lang>暂无流量渠道数据（需扁平列就绪且存在 channel_code）。</lang></div>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-3">
-        <div class="col-xl-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h2 class="h5 mb-3"><lang>来源</lang></h2>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+        <div style="--w-span-lg:4;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <h2 class="h5" style="--w-mb:var(--weline-space-4);"><lang>来源</lang></h2>
                     <?php if (!empty($sourceRows)): ?>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><lang>来源</lang></th>
                                     <th><lang>渠道</lang></th>
-                                    <th class="text-end"><lang>事件</lang></th>
-                                    <th class="text-end"><lang>用户</lang></th>
+                                    <th class="w-text" data-align="end"><lang>事件</lang></th>
+                                    <th class="w-text" data-align="end"><lang>用户</lang></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -609,35 +609,35 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                         <td>
                                             <?= ($row['source'] ?? '') === 'direct' ? __('直接访问') : $h($row['source'] ?? '') ?>
                                             <?php if (!empty($row['utm_source'])): ?>
-                                                <div class="small text-muted">utm: <?= $h($row['utm_source']) ?><?= !empty($row['utm_medium']) ? '/' . $h($row['utm_medium']) : '' ?></div>
+                                                <div class="w-text" data-tone="muted" data-size="sm">utm: <?= $h($row['utm_source']) ?><?= !empty($row['utm_medium']) ? '/' . $h($row['utm_medium']) : '' ?></div>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="small">
+                                        <td class="w-text" data-size="sm">
                                             <?= $h($channelLabel) ?>
                                             <?php if ($srcName !== '' && $srcCode !== '' && $srcName !== $srcCode): ?>
-                                                <div class="text-muted"><code><?= $h($srcCode) ?></code></div>
+                                                <div class="w-text" data-tone="muted"><code><?= $h($srcCode) ?></code></div>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['active_users'] ?? 0) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
                     <?php else: ?>
-                        <div class="text-muted"><lang>暂无来源数据。</lang></div>
+                        <div class="w-text" data-tone="muted"><lang>暂无来源数据。</lang></div>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
-        <div class="col-xl-8">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h2 class="h5 mb-3"><lang>最近事件</lang></h2>
+        <div style="--w-span-lg:8;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <h2 class="h5" style="--w-mb:var(--weline-space-4);"><lang>最近事件</lang></h2>
                     <?php if (!empty($recentEvents)): ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0 weline-pixel-table-fixed">
+                        <div class="w-table-wrap">
+                            <table class="w-table weline-pixel-table-fixed" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th style="width: 150px;"><lang>时间</lang></th>
@@ -646,7 +646,7 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                     <th style="width: 140px;"><lang>来源</lang></th>
                                     <th><lang>URL</lang></th>
                                     <th style="width: 128px;"><lang>IP</lang></th>
-                                    <th style="width: 92px;" class="text-end"><lang>价值</lang></th>
+                                    <th style="width: 92px;" class="w-text" data-align="end"><lang>价值</lang></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -667,25 +667,25 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                     }
                                     ?>
                                     <tr>
-                                        <td class="small text-muted"><?= $h($row['created_at'] ?? '') ?></td>
+                                        <td class="w-text" data-tone="muted" data-size="sm"><?= $h($row['created_at'] ?? '') ?></td>
                                         <td><?= $num($row['website_id'] ?? 0) ?></td>
-                                        <td class="fw-semibold text-truncate" title="<?= $h($row['event'] ?? '') ?>"><?= $h($row['event'] ?? '') ?></td>
-                                        <td class="small text-truncate" title="<?= $h($attrLabel) ?>">
+                                        <td class="w-text" title="<?= $h($row['event'] ?? '') ?>" data-weight="strong" data-truncate="true"><?= $h($row['event'] ?? '') ?></td>
+                                        <td class="w-text" title="<?= $h($attrLabel) ?>" data-truncate="true" data-size="sm">
                                             <?= $attrLabel === 'direct' ? __('直接访问') : $h($attrLabel) ?>
                                             <?php if (!empty($row['channel_code']) && $attrLabel !== (string)$row['channel_code']): ?>
-                                                <div class="text-muted"><?= $h($row['channel_code']) ?></div>
+                                                <div class="w-text" data-tone="muted"><?= $h($row['channel_code']) ?></div>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="weline-pixel-url text-truncate" title="<?= $h($row['url'] ?? '') ?>"><?= $h($row['url'] ?? '') ?></td>
-                                        <td class="small"><?= $h($row['ip'] ?? '') ?></td>
-                                        <td class="text-end"><?= $num($row['value'] ?? 0, 2) ?></td>
+                                        <td class="weline-pixel-url w-text" title="<?= $h($row['url'] ?? '') ?>" data-truncate="true"><?= $h($row['url'] ?? '') ?></td>
+                                        <td class="w-text" data-size="sm"><?= $h($row['ip'] ?? '') ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['value'] ?? 0, 2) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
                     <?php else: ?>
-                        <div class="text-muted"><lang>暂无最近事件。</lang></div>
+                        <div class="w-text" data-tone="muted"><lang>暂无最近事件。</lang></div>
                     <?php endif; ?>
                 </div>
             </div>

@@ -108,45 +108,35 @@ class Local implements \Weline\Framework\Taglib\TaglibInterface
             $submitText = __('提交');
             return match ($tag_key) {
                 'tag' => <<<TAG
-                    <a class='d-flex align-items-center link-info gap-1 local-translation-link' style='cursor: pointer'
-                        data-bs-toggle='offcanvas'
-                        data-bs-target='#{$idName}' 
-                        aria-controls='{$idName}'
-                        data-href='{$action}&value={$name}&id={$parserId}'
-                        data-i18n-local-translation-link>
+                    <a class="link-info local-translation-link w-cluster" style='cursor: pointer' aria-controls='{$idName}' data-href='{$action}&value={$name}&id={$parserId}' data-i18n-local-translation-link data-w-target='#{$idName}' data-w-action="drawer.open" data-align="center">
                         <span>{$name}</span>
-                        <i class='ri-translate'></i>
+                        <w-icon name="language" size="sm"></w-icon>
                     </a>
                     <!-- {$idName} -->
-                    <div class='offcanvas  offcanvas-end w-75 h-100' tabindex='-1' id='{$idName}' 
-                         aria-labelledby='{$idName}Label'>
-                        <div class='offcanvas-header'>
+                    <div class="w-drawer offcanvas-end" tabindex='-1' id='{$idName}' aria-labelledby='{$idName}Label' data-w-width="75" data-w-height="full" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+                        <div class="w-drawer__header">
                             <h5 id='{$idName}Label'>
                                 <lang>{$titileText}</lang>
                             </h5>
-                            <div class="d-flex gap-2 ms-auto">
-                                <button id="{$idName}SubmitBtn" type='submit' class='btn btn-primary btn-sm'>
-                                    <i class="ri-save-line me-1"></i>{$submitText}
+                            <div class="ms-auto w-cluster" style="--w-gap:var(--weline-space-2);">
+                                <button id="{$idName}SubmitBtn" type='submit' class="w-button" data-tone="primary" data-size="sm">
+                                    <w-icon name="save" size="sm"></w-icon>{$submitText}
                                 </button>
-                                <a id="{$idName}IframeRefreshBtn" class='btn btn-info btn-sm' 
-                                   aria-label='{$refreshText}'>
-                                    <i class="ri-refresh-line me-1"></i>{$refreshText}
+                                <a id="{$idName}IframeRefreshBtn" class="w-button" aria-label='{$refreshText}' data-tone="info" data-size="sm">
+                                    <w-icon name="refresh" size="sm"></w-icon>{$refreshText}
                                 </a>
-                                <button type='button' class='btn-close btn-sm' data-bs-dismiss='offcanvas'
-                                        aria-label='{$closeText}'></button>
+                                <button type='button' class="w-button" aria-label='{$closeText}' data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
                             </div>
                         </div>
-                        <div class='offcanvas-body'>
-                            <div class='position-relative w-100 h-100 '>
-                                <iframe id='{$idName}Iframe' class='w-100 h-100'
-                                        data-src="{$action}&value={$name}&id={$parserId}"
-                                        frameborder='0'></iframe>
+                        <div class="w-drawer__body">
+                            <div data-w-position="relative" data-w-width="full" data-w-height="full">
+                                <iframe id='{$idName}Iframe' data-src="{$action}&value={$name}&id={$parserId}" frameborder='0' data-w-width="full" data-w-height="full"></iframe>
                             </div>
                         </div>
                     </div>
                     <script>
-                        //show.bs.offcanvas
-                        $('#{$idName}').on('show.bs.offcanvas', function (e) {
+                        //weline:ui:drawer:before-open
+                        $('#{$idName}').on('weline:ui:drawer:before-open', function (e) {
                             let Iframe = $('#{$idName}Iframe')
                             Iframe.attr('src', Iframe.attr('data-src'))
                         })
@@ -173,7 +163,7 @@ class Local implements \Weline\Framework\Taglib\TaglibInterface
                             
                             // 防止重复提交
                             btn.prop('disabled', true);
-                            btn.html(`<span class="spinner-border spinner-border-sm me-1" role="status"></span>\${btn.text()}`);
+                            btn.html(`<span class="w-spinner me-1" role="status" data-size="sm"></span>\${btn.text()}`);
 
                             try {
                                 form.submit();
@@ -181,12 +171,12 @@ class Local implements \Weline\Framework\Taglib\TaglibInterface
                                 // 监听iframe加载完成事件
                                 Iframe.on('load', function() {
                                     btn.prop('disabled', false);
-                                    btn.html(`<i class="ri-save-line me-1"></i>{$submitText}`);
+                                    btn.html(`<w-icon name="save" size="sm"></w-icon>{$submitText}`);
                                 });
                             } catch (error) {
                                 console.error('Form submit error:', error);
                                 btn.prop('disabled', false);
-                                btn.html(`<i class="ri-save-line me-1"></i>{$submitText}`);
+                                btn.html(`<w-icon name="save" size="sm"></w-icon>{$submitText}`);
                             }
                         })
                     </script>

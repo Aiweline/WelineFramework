@@ -14,16 +14,16 @@ $jsonAttribute = static function (mixed $value): string {
 };
 ?>
 <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= $page_title ?? __('可视化编辑器') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= $page_title ?? __('可视化编辑器') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <span><?= $breadcrumb_parent ?? __('内容管理') ?></span>
                                     </li>
-                                    <li class="breadcrumb-item active"><?= $breadcrumb_current ?? __('可视化编辑器') ?></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= $breadcrumb_current ?? __('可视化编辑器') ?></li>
                                 </ol>
                             </div>
                         </div>
@@ -31,28 +31,22 @@ $jsonAttribute = static function (mixed $value): string {
                 </div>
 
                 <!-- 编辑器工具栏 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center">
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__body">
+                                <div class="w-cluster" data-justify="between" data-align="center">
                                     <div>
-                                        <button type="button" class="btn btn-primary" id="save-page-btn">
-                                            <i class="ri-save-line me-1"></i><?= __('保存') ?>
+                                        <button type="button" class="w-button" id="save-page-btn" data-tone="primary">
+                                            <w:icon name="save" size="sm"></w:icon><?= __('保存') ?>
                                         </button>
-                                        <button type="button" class="btn btn-secondary" id="preview-page-btn">
-                                            <i class="ri-eye-line me-1"></i><?= __('预览') ?>
+                                        <button type="button" class="w-button" id="preview-page-btn" data-tone="neutral">
+                                            <w:icon name="eye" size="sm"></w:icon><?= __('预览') ?>
                                         </button>
                                     </div>
                                     <div>
-                                        <input type="text" class="form-control d-inline-block" id="page-title-input" 
-                                               placeholder="<?= __('页面标题') ?>" 
-                                               value="<?= htmlspecialchars($page ? $page->getData('title') : '') ?>"
-                                               style="width: 200px;">
-                                        <input type="text" class="form-control d-inline-block ms-2" id="page-handle-input" 
-                                               placeholder="<?= __('页面标识') ?>" 
-                                               value="<?= htmlspecialchars($page ? $page->getData('handle') : '') ?>"
-                                               style="width: 200px;">
+                                        <input type="text" class="w-input" id="page-title-input" placeholder="<?= __('页面标题') ?>" value="<?= htmlspecialchars($page ? $page->getData('title') : '') ?>" style="width: 200px;" data-w-display="inline-block">
+                                        <input type="text" class="w-input ms-2" id="page-handle-input" placeholder="<?= __('页面标识') ?>" value="<?= htmlspecialchars($page ? $page->getData('handle') : '') ?>" style="width: 200px;" data-w-display="inline-block">
                                         <input type="hidden" id="page-id" value="<?= $pageId ?>">
                                     </div>
                                 </div>
@@ -62,29 +56,27 @@ $jsonAttribute = static function (mixed $value): string {
                 </div>
 
                 <!-- 编辑器主体 -->
-                <div class="row">
+                <div class="w-grid">
                     <!-- 左侧：部件选择面板 -->
-                    <div class="col-md-3">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('部件库') ?></h5>
+                    <div style="--w-span-md:3;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('部件库') ?></h5>
                             </div>
-                            <div class="card-body p-0">
+                            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                                 <div class="widget-panel">
-                                    <div class="input-group p-2">
-                                        <input type="text" class="form-control" id="widget-search" 
-                                               placeholder="<?= __('搜索部件...') ?>">
+                                    <div class="w-field__control" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                                        <input type="text" class="w-input" id="widget-search" placeholder="<?= __('搜索部件...') ?>">
                                     </div>
                                     <div class="widget-list" id="widget-list">
                                         <?php foreach ($widgetsByType as $type => $typeWidgets): ?>
                                             <div class="widget-type-group" data-type="<?= htmlspecialchars($type) ?>">
-                                                <div class="widget-type-header" data-bs-toggle="collapse" 
-                                                     data-bs-target="#widget-type-<?= htmlspecialchars($type) ?>">
-                                                    <i class="ri-arrow-down-s-line"></i>
+                                                <div class="widget-type-header" data-w-target="#widget-type-<?= htmlspecialchars($type) ?>" data-w-action="disclosure.toggle">
+                                                    <w:icon name="arrow-down" size="sm"></w:icon>
                                                     <strong><?= htmlspecialchars(ucfirst($type)) ?></strong>
-                                                    <span class="badge bg-secondary"><?= count($typeWidgets) ?></span>
+                                                    <span class="w-badge" data-w-background="muted"><?= count($typeWidgets) ?></span>
                                                 </div>
-                                                <div class="collapse show" id="widget-type-<?= htmlspecialchars($type) ?>">
+                                                <div class="w-disclosure__panel" id="widget-type-<?= htmlspecialchars($type) ?>" data-w-disclosure-panel>
                                                     <div class="widget-type-items">
                                                         <?php foreach ($typeWidgets as $name => $widget): ?>
                                                             <div class="widget-item" 
@@ -94,7 +86,7 @@ $jsonAttribute = static function (mixed $value): string {
                                                                 <div class="widget-item-name"><?= htmlspecialchars($widget['name'] ?? $name) ?></div>
                                                                 <div class="widget-item-desc"><?= htmlspecialchars($widget['description'] ?? '') ?></div>
                                                                 <div class="widget-item-module">
-                                                                    <small class="text-muted"><?= htmlspecialchars($widget['module'] ?? '') ?></small>
+                                                                    <small class="w-text" data-tone="muted"><?= htmlspecialchars($widget['module'] ?? '') ?></small>
                                                                 </div>
                                                             </div>
                                                         <?php endforeach; ?>
@@ -109,16 +101,16 @@ $jsonAttribute = static function (mixed $value): string {
                     </div>
 
                     <!-- 中间：画布区域 -->
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('画布') ?></h5>
+                    <div style="--w-span-md:6;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('画布') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <div class="editor-canvas" id="editor-canvas">
                                     <div class="canvas-placeholder" id="canvas-placeholder">
-                                        <i class="ri-drag-move-2-line" style="font-size: 48px; color: #ccc;"></i>
-                                        <p class="text-muted"><?= __('从左侧拖放部件到这里') ?></p>
+                                        <w:icon name="circle" size="sm"></w:icon>
+                                        <p class="w-text" data-tone="muted"><?= __('从左侧拖放部件到这里') ?></p>
                                     </div>
                                     <div class="canvas-widgets" id="canvas-widgets">
                                         <!-- 部件将在这里显示 -->
@@ -129,15 +121,15 @@ $jsonAttribute = static function (mixed $value): string {
                     </div>
 
                     <!-- 右侧：属性配置面板 -->
-                    <div class="col-md-3">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('属性配置') ?></h5>
+                    <div style="--w-span-md:3;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('属性配置') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <div class="widget-properties" id="widget-properties">
-                                    <div class="text-muted text-center py-5">
-                                        <i class="ri-settings-3-line" style="font-size: 48px;"></i>
+                                    <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                                        <w:icon name="settings" size="sm"></w:icon>
                                         <p><?= __('选择一个部件进行配置') ?></p>
                                     </div>
                                 </div>

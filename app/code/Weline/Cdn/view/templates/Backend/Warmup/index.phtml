@@ -29,40 +29,40 @@ $escapeAttr = static function (mixed $value): string {
 ?>
 
 <!-- 消息提示 -->
-<div class='row mb-3'>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 统计信息 -->
 <?php if (!empty($statistics)): ?>
-    <div class="row mb-3">
-        <div class="col-md-3">
-            <div class="card bg-primary text-white">
-                <div class="card-body">
+    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+        <div style="--w-span-md:3;">
+            <div class="w-card w-text" data-w-background="primary" data-tone="inverse">
+                <div class="w-card__body">
                     <h5><?= __('总URL数') ?></h5>
                     <h3><?= $statistics['total'] ?? 0 ?></h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-success text-white">
-                <div class="card-body">
+        <div style="--w-span-md:3;">
+            <div class="w-card w-text" data-w-background="success" data-tone="inverse">
+                <div class="w-card__body">
                     <h5><?= __('成功') ?></h5>
                     <h3><?= $statistics['success'] ?? 0 ?></h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-danger text-white">
-                <div class="card-body">
+        <div style="--w-span-md:3;">
+            <div class="w-card w-text" data-w-background="danger" data-tone="inverse">
+                <div class="w-card__body">
                     <h5><?= __('失败') ?></h5>
                     <h3><?= $statistics['fail'] ?? 0 ?></h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-white">
-                <div class="card-body">
+        <div style="--w-span-md:3;">
+            <div class="w-card w-text" data-w-background="warning" data-tone="inverse">
+                <div class="w-card__body">
                     <h5><?= __('待处理') ?></h5>
                     <h3><?= $statistics['pending'] ?? 0 ?></h3>
                 </div>
@@ -72,39 +72,37 @@ $escapeAttr = static function (mixed $value): string {
 <?php endif; ?>
 
 <!-- 操作栏 -->
-<div class="d-flex justify-content-between align-items-center mb-3" data-testid="cdn-warmup-management">
+<div class="w-cluster" data-testid="cdn-warmup-management" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
     <div>
-        <button type="button" class="btn btn-success" data-cdn-warmup-action="execute">
-            <i class="mdi mdi-play"></i> <?= __('执行预热') ?>
+        <button type="button" class="w-button" data-cdn-warmup-action="execute" data-tone="success">
+            <w:icon name="play" size="sm"></w:icon> <?= __('执行预热') ?>
         </button>
     </div>
     <div>
-        <w:form method="get" class="d-inline-flex gap-2">
-            <input type="text" name="search" class="form-control form-control-sm" 
-                   placeholder="<?= __('搜索URL') ?>" 
-                   value="<?= htmlspecialchars($search) ?>">
-            <select name="status" class="form-select form-select-sm">
+        <w:form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <input type="text" name="search" class="w-input" placeholder="<?= __('搜索URL') ?>" value="<?= htmlspecialchars($search) ?>" data-size="sm">
+            <select name="status" class="w-select" data-size="sm">
                 <option value=""><?= __('全部状态') ?></option>
                 <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>><?= __('待处理') ?></option>
                 <option value="processing" <?= $status === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
                 <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>><?= __('已完成') ?></option>
                 <option value="failed" <?= $status === 'failed' ? 'selected' : '' ?>><?= __('失败') ?></option>
             </select>
-            <button type="submit" class="btn btn-sm btn-primary">
-                <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+            <button type="submit" class="w-button" data-tone="primary" data-size="sm">
+                <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
             </button>
-            <a href="<?= $this->getBackendUrl('*/backend/warmup/index') ?>" class="btn btn-sm btn-secondary">
-                <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+            <a href="<?= $this->getBackendUrl('*/backend/warmup/index') ?>" class="w-button" data-tone="neutral" data-size="sm">
+                <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
             </a>
         </w:form>
     </div>
 </div>
 
 <!-- URL列表 -->
-<div class="card">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
+<div class="w-card">
+    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+        <div class="w-table-wrap">
+            <table class="w-table" style="--w-mb:0;">
                 <thead>
                     <tr>
                         <th><?= __('ID') ?></th>
@@ -121,7 +119,7 @@ $escapeAttr = static function (mixed $value): string {
                 <tbody>
                     <?php if (empty($urls)): ?>
                         <tr>
-                            <td colspan="9" class="text-center py-4"><?= __('暂无数据') ?></td>
+                            <td colspan="9" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('暂无数据') ?></td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($urls as $url): ?>
@@ -146,7 +144,7 @@ $escapeAttr = static function (mixed $value): string {
                                     ];
                                     $statusInfo = $statusMap[$urlStatus] ?? ['label' => $urlStatus, 'class' => 'secondary'];
                                     ?>
-                                    <span class="badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
+                                    <span class="w-badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
                                 </td>
                                 <td>
                                     <?php 
@@ -154,9 +152,8 @@ $escapeAttr = static function (mixed $value): string {
                                     $target = (int)$url->getData('target_count');
                                     $percent = $target > 0 ? round(($processed / $target) * 100, 1) : 0;
                                     ?>
-                                    <div class="progress" style="height: 20px;">
-                                        <div class="progress-bar" role="progressbar" 
-                                             style="width: <?= $percent ?>%">
+                                    <div class="w-progress" style="height: 20px;">
+                                        <div class="w-progress__bar" role="progressbar" style="width: <?= $percent ?>%">
                                             <?= $processed ?>/<?= $target ?> (<?= $percent ?>%)
                                         </div>
                                     </div>
@@ -164,20 +161,13 @@ $escapeAttr = static function (mixed $value): string {
                                 <td><?= $url->getData('retries') ?></td>
                                 <td><?= $url->getData('last_warmed_at') ? date('Y-m-d H:i:s', $url->getData('last_warmed_at')) : '-' ?></td>
                                 <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button type="button" class="btn btn-<?= $url->getData('enabled') ? 'warning' : 'success' ?>" 
-                                                data-cdn-warmup-action="toggle-enable"
-                                                data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>"
-                                                data-enabled="<?= $url->getData('enabled') ? '0' : '1' ?>"
-                                                data-state="idle"
-                                                data-message="">
+                                    <div class="w-button-group">
+                                        <button type="button" class="w-button btn-<?= $url->getData('enabled') ? 'warning' : 'success' ?>" data-cdn-warmup-action="toggle-enable" data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>" data-enabled="<?= $url->getData('enabled') ? '0' : '1' ?>" data-state="idle" data-message="">
                                             <i class="mdi mdi-<?= $url->getData('enabled') ? 'close' : 'check' ?>"></i> 
                                             <?= $url->getData('enabled') ? __('禁用') : __('启用') ?>
                                         </button>
-                                        <button type="button" class="btn btn-danger" 
-                                                data-cdn-warmup-action="delete"
-                                                data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>">
-                                            <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                        <button type="button" class="w-button" data-cdn-warmup-action="delete" data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>" data-tone="danger">
+                                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
                                         </button>
                                     </div>
                                 </td>
@@ -191,33 +181,33 @@ $escapeAttr = static function (mixed $value): string {
 
     <!-- 分页 -->
     <?php if ($totalPages > 1): ?>
-        <div class="card-footer">
+        <div class="w-card__footer">
             <nav>
-                <ul class="pagination justify-content-center mb-0">
+                <ul class="w-pagination" data-justify="center" style="--w-mb:0;">
                     <?php if ($page > 1): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
                                 <?= __('上一页') ?>
                             </a>
                         </li>
                     <?php endif; ?>
                     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                        <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                            <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
+                        <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                            <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
                                 <?= $i ?>
                             </a>
                         </li>
                     <?php endfor; ?>
                     <?php if ($page < $totalPages): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
                                 <?= __('下一页') ?>
                             </a>
                         </li>
                     <?php endif; ?>
                 </ul>
             </nav>
-            <div class="text-center text-muted mt-2">
+            <div class="w-text" data-align="center" data-tone="muted" style="--w-mt:var(--weline-space-2);">
                 <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
             </div>
         </div>
@@ -233,16 +223,14 @@ $escapeAttr = static function (mixed $value): string {
     var deleteUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/warmup/delete')) ?>;
 
     function confirmAction(message, onConfirm) {
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            window.BackendConfirm.show(message).then(function(confirmed) {
-                if (confirmed) {
-                    onConfirm();
-                }
-            });
-            return;
-        }
-        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-            window.BackendToast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
+        Weline.UI.dialog.confirm(message).then(function(confirmed) {
+            if (confirmed) {
+                onConfirm();
+            }
+        });
+        return;
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
+            window.Weline.UI.toast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
         }
     }
 
@@ -271,41 +259,41 @@ $escapeAttr = static function (mixed $value): string {
     
     window.CdnWarmupManager = {
         executeWarmup: function() {
-            Swal.fire({
+            Weline.UI.dialog.request({
                 title: '<?= __('确认执行预热') ?>',
-                text: '<?= __('确定要执行预热吗？这将处理所有待处理的URL。') ?>',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: '<?= __("确定执行") ?>',
-                cancelButtonText: '<?= __("取消") ?>',
-                confirmButtonColor: '#28a745'
+                message: '<?= __('确定要执行预热吗？这将处理所有待处理的URL。') ?>',
+                tone: 'info',
+                cancelable: true,
+                confirmLabel: '<?= __("确定执行") ?>',
+                cancelLabel: '<?= __("取消") ?>',
+                confirmTone: 'success'
             }).then(function(result) {
-                if (result.isConfirmed) {
+                if (result.confirmed) {
                     Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api).then(function(api){ return api.resource('cdn').executeWarmup({}); })
                     .then(function(data) {
                         if (data && data.success !== false) {
-                            Swal.fire({
-                                icon: 'success',
+                            Weline.UI.dialog.request({
+                                tone: 'success',
                                 title: '<?= __('成功') ?>',
-                                text: data.message,
-                                timer: 2000,
-                                showConfirmButton: false
+                                message: data.message,
+                                duration: 2000,
+                                confirmable: false
                             }).then(function() { location.reload(); });
                         } else {
-                            Swal.fire({
-                                icon: 'error',
+                            Weline.UI.dialog.request({
+                                tone: 'danger',
                                 title: '<?= __('执行失败') ?>',
-                                text: data.message,
-                                confirmButtonText: '<?= __('确定') ?>'
+                                message: data.message,
+                                confirmLabel: '<?= __('确定') ?>'
                             });
                         }
                     })
                     .catch(function(error) {
-                        Swal.fire({
-                            icon: 'error',
+                        Weline.UI.dialog.request({
+                            tone: 'danger',
                             title: '<?= __('请求失败') ?>',
-                            text: error.message,
-                            confirmButtonText: '<?= __('确定') ?>'
+                            message: error.message,
+                            confirmLabel: '<?= __('确定') ?>'
                         });
                     });
                 }
@@ -326,32 +314,24 @@ $escapeAttr = static function (mixed $value): string {
                         trigger.dataset.state = 'saved';
                         trigger.dataset.message = data.message || '';
                     }
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: data.message,
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(function() { location.reload(); });
-                    } else if (window.BackendToast && typeof window.BackendToast.success === 'function') {
-                        window.BackendToast.success(data.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: data.message,
+                        duration: 2000,
+                        confirmable: false
+                    }).then(function() { location.reload(); });
                 } else {
                     if (trigger) {
                         trigger.dataset.state = 'error';
                         trigger.dataset.message = data && data.message ? data.message : '<?= __('操作失败') ?>';
                     }
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('操作失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-                        window.BackendToast.error(data.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('操作失败') ?>',
+                        message: data.message,
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
             })
             .catch(function(error) {
@@ -368,19 +348,19 @@ $escapeAttr = static function (mixed $value): string {
                 .then(function(api){ return api.resource('cdn').deleteWarmupUrl({ id: id }); })
                 .then(function(data) {
                     if (data && data.success !== false) {
-                        Swal.fire({
-                            icon: 'success',
+                        Weline.UI.dialog.request({
+                            tone: 'success',
                             title: '<?= __('成功') ?>',
-                            text: data.message,
-                            timer: 2000,
-                            showConfirmButton: false
+                            message: data.message,
+                            duration: 2000,
+                            confirmable: false
                         }).then(function() { location.reload(); });
                     } else {
-                        Swal.fire({
-                            icon: 'error',
+                        Weline.UI.dialog.request({
+                            tone: 'danger',
                             title: '<?= __('删除失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
+                            message: data.message,
+                            confirmLabel: '<?= __('确定') ?>'
                         });
                     }
                 });

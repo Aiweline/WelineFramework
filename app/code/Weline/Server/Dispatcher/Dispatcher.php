@@ -3213,7 +3213,7 @@ class Dispatcher
 </head>
 <body>
     <main class="panel">
-        <div class="badge"><span class="dot"></span><span>业务 Worker 启动中</span></div>
+        <div class="w-badge"><span class="dot"></span><span>业务 Worker 启动中</span></div>
         <h1>WLS正在启动中...</h1>
         <p>业务 Worker 正在初始化，系统正在检测维护 Worker 并切换入口。</p>
         <p>如果已有维护 Worker 就绪，请求会自动转接；否则本页会每隔数秒自动刷新，直至服务恢复。</p>

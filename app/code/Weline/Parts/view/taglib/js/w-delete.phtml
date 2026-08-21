@@ -95,9 +95,9 @@
                 confirmBox.className = 'w-delete-confirm';
                 confirmBox.innerHTML = `
                 <div>${message}</div>
-                <div class="mt-2 text-end">
-                    <button class="btn btn-sm btn-danger me-2 confirm-btn">${__('确认')}</button>
-                    <button class="btn btn-sm btn-outline-secondary cancel-btn">${__('取消')}</button>
+                <div class="w-text" data-align="end" style="--w-mt:var(--weline-space-2);">
+                    <button class="w-button me-2 confirm-btn" data-tone="danger" data-size="sm">${__('确认')}</button>
+                    <button class="w-button cancel-btn" data-tone="neutral" data-variant="outline" data-size="sm">${__('取消')}</button>
                 </div>
             `;
 

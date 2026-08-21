@@ -738,7 +738,7 @@ File: Main Js File
                 target.setAttribute('data-theme', normalizedMode);
                 target.setAttribute('data-topbar', normalizedMode);
                 target.setAttribute('data-sidebar', normalizedMode);
-                target.setAttribute('data-bs-theme', normalizedMode);
+                target.setAttribute('data-theme', normalizedMode);
                 target.setAttribute('data-theme-mode', normalizedMode);
                 target.setAttribute('data-layout-mode', normalizedMode);
                 target.style.colorScheme = normalizedMode;
@@ -913,8 +913,8 @@ File: Main Js File
                     window.location.reload();
                 }
             } catch (error) {
-                if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast.error === 'function') {
-                    BackendToast.error(error && error.message ? error.message : __('主题模式切换失败'));
+                if (typeof Weline.UI.toast !== 'undefined' && Weline.UI.toast && typeof Weline.UI.toast.error === 'function') {
+                    Weline.UI.toast.error(error && error.message ? error.message : __('主题模式切换失败'));
                 }
                 if (window.DEV === true || window.WELINE_ENV === 'DEV') {
                     console.error('[Weline.Theme] theme mode switch failed', error);
@@ -960,8 +960,8 @@ File: Main Js File
                     }
                 }
             } catch (error) {
-                if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast.error === 'function') {
-                    BackendToast.error(error && error.message ? error.message : 'Theme config save failed.');
+                if (typeof Weline.UI.toast !== 'undefined' && Weline.UI.toast && typeof Weline.UI.toast.error === 'function') {
+                    Weline.UI.toast.error(error && error.message ? error.message : 'Theme config save failed.');
                 }
             } finally {
                 if (typeof hideLoading === 'function') {

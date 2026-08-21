@@ -9,7 +9,7 @@
           title="SEO总览"
           action="seo/backend/dashboard"
           parent="Weline_Backend::seo_group"
-          icon="mdi mdi-view-dashboard-outline"
+          icon="grid"
           order="10"/>
 
     <menu source="Weline_Seo::seo_embed"
@@ -17,7 +17,7 @@
           title="主体管理"
           action="seo/backend/embed/index"
           parent="Weline_Backend::seo_group"
-          icon="mdi mdi-file-chart-outline"
+          icon="file"
           order="20"/>
 
     <menu source="Weline_Seo::seo_account"
@@ -25,7 +25,7 @@
           title="SEO账户"
           action="seo/backend/account/index"
           parent="Weline_Backend::seo_group"
-          icon="mdi mdi-account-key-outline"
+          icon="user"
           order="30"/>
 
     <menu source="Weline_Seo::website_account"
@@ -33,7 +33,7 @@
           title="站点账户绑定"
           action="seo/backend/website-account"
           parent="Weline_Backend::seo_group"
-          icon="mdi mdi-link-variant"
+          icon="link"
           order="40"/>
 
     <menu source="Weline_Seo::sitemap_management"
@@ -41,6 +41,6 @@
           title="Sitemap管理"
           action="seo/backend/sitemap"
           parent="Weline_Backend::seo_group"
-          icon="mdi mdi-sitemap-outline"
+          icon="tree"
           order="50"/>
 </menus>

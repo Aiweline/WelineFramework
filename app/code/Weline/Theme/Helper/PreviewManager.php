@@ -175,29 +175,6 @@ class PreviewManager
             $cache = w_cache('theme');
             $cache->clear();
             
-            // 清除CSS编译缓存（通过删除生成的CSS文件）
-            if ($themeId) {
-                /** @var \Weline\Theme\Model\WelineTheme $theme */
-                $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-                $theme->load($themeId);
-                
-                if ($theme->getId()) {
-                    /** @var \Weline\Theme\Helper\LayoutAssetsManager $assetsManager */
-                    $assetsManager = ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
-                    
-                    $areas = $area ? [$area] : ['frontend', 'backend'];
-                    $layoutTypes = ['homepage', 'account', 'default'];
-                    
-                    foreach ($areas as $areaItem) {
-                        foreach ($layoutTypes as $layoutType) {
-                            $cssPath = $assetsManager->getGeneratedCssPath($areaItem, $layoutType, 'default', $theme);
-                            if (is_file($cssPath)) {
-                                @unlink($cssPath);
-                            }
-                        }
-                    }
-                }
-            }
         } catch (\Exception $e) {
             // 清除缓存失败不影响其他操作
             if (defined('DEV') && DEV) {
@@ -234,4 +211,3 @@ class PreviewManager
         return $url;
     }
 }
-

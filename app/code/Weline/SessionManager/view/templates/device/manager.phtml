@@ -38,7 +38,7 @@ $labels = [
             <h2><lang>设备管理</lang></h2>
             <p><lang>查看当前身份仍可登录的设备，并让不再使用的设备下线。</lang></p>
         </div>
-        <span class="session-device-manager__privacy"><i class="mdi mdi-shield-lock-outline" aria-hidden="true"></i> <lang>仅显示本账号</lang></span>
+        <span class="session-device-manager__privacy"><w:icon name="lock" size="sm"></w:icon> <lang>仅显示本账号</lang></span>
     </header>
 
     <div class="session-device-manager__notice" data-device-notice role="status" hidden></div>
@@ -51,7 +51,7 @@ $labels = [
         <button type="button" data-device-retry><?= $escape($labels['retry']) ?></button>
     </div>
     <div class="session-device-manager__state" data-device-empty role="status" hidden>
-        <i class="mdi mdi-laptop-off" aria-hidden="true"></i>
+        <w:icon name="laptop" size="sm"></w:icon>
         <span><?= $escape($labels['empty']) ?></span>
     </div>
     <div class="session-device-manager__list" data-device-list role="list"></div>
@@ -61,5 +61,5 @@ $labels = [
         <button type="button" data-device-next><?= $escape($labels['next']) ?></button>
     </nav>
 </section>
-<link href="@static(Weline_SessionManager::css/device-manager.css)" rel="stylesheet" type="text/css"/>
-<script src="@static(Weline_SessionManager::js/device-manager.js)" defer></script>
+<css>Weline_SessionManager::css/device-manager.css</css>
+<js>Weline_SessionManager::js/device-manager.js</js>

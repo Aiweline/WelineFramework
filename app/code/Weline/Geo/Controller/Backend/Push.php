@@ -25,7 +25,7 @@ use Weline\Geo\Service\PushService;
  * 
  * @package Weline_Geo
  */
-#[Acl('Weline_Geo::push_list', '推送管理', 'mdi-send', '推送管理', 'Weline_Geo::geo_manager')]
+#[Acl('Weline_Geo::push_list', '推送管理', 'arrow-right', '推送管理', 'Weline_Geo::geo_manager')]
 class Push extends BackendController
 {
     /**
@@ -33,7 +33,7 @@ class Push extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::push_list_index', '查看推送历史', 'mdi-history', '查看推送历史')]
+    #[Acl('Weline_Geo::push_list_index', '查看推送历史', 'history', '查看推送历史')]
     public function index(): string
     {
         try {
@@ -56,7 +56,7 @@ class Push extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::push_push', '一键推送', 'mdi-send', '一键推送')]
+    #[Acl('Weline_Geo::push_push', '一键推送', 'arrow-right', '一键推送')]
     public function push(): string
     {
         try {
@@ -84,7 +84,7 @@ class Push extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::push_execute', '执行推送', 'mdi-play', '执行推送')]
+    #[Acl('Weline_Geo::push_execute', '执行推送', 'play', '执行推送')]
     public function execute(): string
     {
         if (!$this->request->isPost()) {

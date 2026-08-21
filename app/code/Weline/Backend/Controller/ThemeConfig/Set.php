@@ -47,38 +47,7 @@ class Set extends BackendController
         }
         
         try {
-            // Validate explicit three-state fields before legacy blank-clearing
-            // or old-layout merging can hide a malformed request value.
-            $data = $this->normalizeThemePayload($data);
-            $originThemeConfig = $this->themeConfig->getOriginThemeConfig();
-            if (!\is_array($originThemeConfig)) {
-                $originThemeConfig = [];
-            }
-            $old_layout = $originThemeConfig['layouts'] ?? [];
-            if (isset($data['layouts']) && is_array($data['layouts'])) {
-                // 合并旧配置
-                if (is_array($old_layout)) {
-                    $data['layouts'] = array_merge($old_layout, $data['layouts']);
-                }
-                if (($data['theme-mode-switch'] ?? null) === 'system') {
-                    unset(
-                        $data['layouts']['data-theme-mode'],
-                        $data['layouts']['data-layout-mode'],
-                        $data['layouts']['data-topbar'],
-                        $data['layouts']['data-sidebar']
-                    );
-                }
-                // 移除空字符串值（表示清除该属性）
-                foreach ($data['layouts'] as $key => $value) {
-                    if ($value === '' || $value === null) {
-                        unset($data['layouts'][$key]);
-                    }
-                }
-            }
-            $themeConfig = \array_merge($originThemeConfig, $data);
-            if (isset($data['layouts']) && \is_array($data['layouts'])) {
-                $themeConfig['layouts'] = $data['layouts'];
-            }
+            $themeConfig = $this->normalizeThemePayload($data);
             $this->themeConfig->setThemeConfig($themeConfig);
             $this->persistThemeConfigForCurrentUser($themeConfig);
             // This endpoint persists a per-user preference.  Invalidating the
@@ -92,56 +61,23 @@ class Set extends BackendController
 
     private function normalizeThemePayload(array $data): array
     {
-        if (array_key_exists('layouts', $data) && !is_array($data['layouts'])) {
-            throw new \InvalidArgumentException((string)__('后端主题模式无效。'));
+        foreach (array_keys($data) as $key) {
+            if (!in_array($key, ['theme-mode-switch', 'rtl-mode-switch'], true)) {
+                throw new \InvalidArgumentException((string)__('后端主题配置字段无效：%{1}', [$key]));
+            }
         }
-        $layouts = $data['layouts'] ?? [];
-        $layouts = is_array($layouts) ? $layouts : [];
-
-        // Validate every explicit new-contract value before selecting precedence.
-        // This prevents malformed request data from being hidden by legacy flags.
-        $switchMode = $this->readThemeModeValue($data, 'theme-mode-switch', ['system', 'light', 'dark']);
-        $preferenceMode = $this->readThemeModeValue($layouts, 'data-theme-preference', ['system', 'light', 'dark']);
-        $resolvedThemeMode = $this->readThemeModeValue($layouts, 'data-theme-mode', ['light', 'dark']);
-        $resolvedLayoutMode = $this->readThemeModeValue($layouts, 'data-layout-mode', ['light', 'dark']);
-
-        $mode = null;
-        if ($switchMode !== null) {
-            $mode = $switchMode;
-        } elseif ($preferenceMode !== null) {
-            $mode = $preferenceMode;
-        } elseif (array_key_exists('dark-mode-switch', $data)) {
-            $mode = $this->normalizeLegacyBool($data['dark-mode-switch']) ? 'dark' : 'light';
-        } elseif (array_key_exists('light-mode-switch', $data)) {
-            $mode = $this->normalizeLegacyBool($data['light-mode-switch']) ? 'light' : 'dark';
-        } elseif ($resolvedThemeMode !== null || $resolvedLayoutMode !== null) {
-            $mode = $resolvedThemeMode ?? $resolvedLayoutMode;
-        }
-
+        $mode = $this->readThemeModeValue($data, 'theme-mode-switch', ['system', 'light', 'dark']);
         if ($mode === null) {
-            return $data;
+            throw new \InvalidArgumentException((string)__('后端主题模式不能为空。'));
         }
-
-        $data['theme-mode-switch'] = $mode;
-        $data['dark-mode-switch'] = $mode === 'dark';
-        $data['light-mode-switch'] = $mode === 'light';
-        $layouts['data-theme-preference'] = $mode;
-        if ($mode === 'light' || $mode === 'dark') {
-            $layouts['data-theme-mode'] = $mode;
-            $layouts['data-layout-mode'] = $mode;
-        } else {
-            // `system` persists only a preference.  Resolved presentation
-            // attributes must not survive an Admin fallback request, otherwise
-            // an old fixed topbar/sidebar is restored on the next render.
-            unset(
-                $layouts['data-theme-mode'],
-                $layouts['data-layout-mode'],
-                $layouts['data-topbar'],
-                $layouts['data-sidebar']
-            );
+        $normalized = ['theme-mode-switch' => $mode];
+        if (array_key_exists('rtl-mode-switch', $data)) {
+            if (!is_bool($data['rtl-mode-switch'])) {
+                throw new \InvalidArgumentException((string)__('后端文字方向配置无效。'));
+            }
+            $normalized['rtl-mode-switch'] = $data['rtl-mode-switch'];
         }
-        $data['layouts'] = $layouts;
-        return $data;
+        return $normalized;
     }
 
     /** @param array<string, mixed> $source @param list<string> $allowed */
@@ -163,25 +99,6 @@ class Set extends BackendController
         }
 
         return $mode;
-    }
-
-    /**
-     * Historical configuration stored booleans as JSON values and, in older
-     * installations, as form strings.  PHP considers every non-empty string
-     * truthy, including "false", so normalise before mapping the legacy flags.
-     */
-    private function normalizeLegacyBool(mixed $value): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-        if (is_int($value) || is_float($value)) {
-            return (int)$value === 1;
-        }
-        if (is_string($value)) {
-            return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
-        }
-        return false;
     }
 
     private function persistThemeConfigForCurrentUser(array $themeConfig): void

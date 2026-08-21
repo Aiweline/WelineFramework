@@ -38,7 +38,7 @@ class Menu extends Model
     public const schema_fields_ACTION = 'action';
     #[Col('varchar', 255, nullable: false, comment: '模块')]
     public const schema_fields_MODULE = 'module';
-    #[Col('varchar', 60, nullable: false, comment: 'Icon图标类')]
+    #[Col('varchar', 60, nullable: false, comment: 'Weline 语义图标名')]
     public const schema_fields_ICON = 'icon';
     #[Col('int', 0, nullable: false, comment: '排序')]
     public const schema_fields_ORDER = 'order';
@@ -118,9 +118,9 @@ class Menu extends Model
     {
         return parent::getData(self::schema_fields_ICON) ?? '';
     }
-    public function setIcon(string $css_icon_class): static
+    public function setIcon(string $semanticIconName): static
     {
-        return parent::setData(self::schema_fields_ICON, $css_icon_class);
+        return parent::setData(self::schema_fields_ICON, $semanticIconName);
     }
     public function getTitle(): string
     {
@@ -128,7 +128,7 @@ class Menu extends Model
     }
     public function setTitle(string $title): static
     {
-        return parent::setData(self::schema_fields_ICON, $title);
+        return parent::setData(self::schema_fields_TITLE, $title);
     }
     public function getOrder(): int
     {

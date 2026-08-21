@@ -25,7 +25,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_api_rules_manager', 'API规则管理', 'mdi-code-tags', 'API规则管理', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_api_rules_manager', 'API规则管理', 'code', 'API规则管理', 'Weline_Cdn::cdn_manager')]
 class ApiRules extends BackendController
 {
     /**
@@ -49,7 +49,7 @@ class ApiRules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_api_rules_list', '查看API规则列表', 'mdi-view-list', '查看API规则列表')]
+    #[AclAttribute('Weline_Cdn::cdn_api_rules_list', '查看API规则列表', 'list', '查看API规则列表')]
     public function index(): string
     {
         try {
@@ -102,7 +102,7 @@ class ApiRules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_api_rules_collect', '收集API规则', 'mdi-refresh', '重新收集API规则')]
+    #[AclAttribute('Weline_Cdn::cdn_api_rules_collect', '收集API规则', 'refresh', '重新收集API规则')]
     public function collect(): string
     {
         try {
@@ -129,7 +129,7 @@ class ApiRules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_api_rules_view', '查看规则详情', 'mdi-eye', '查看API规则详情')]
+    #[AclAttribute('Weline_Cdn::cdn_api_rules_view', '查看规则详情', 'eye', '查看API规则详情')]
     public function view(): string
     {
         try {
@@ -160,7 +160,7 @@ class ApiRules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_api_rules_toggle', '启用/禁用规则', 'mdi-toggle-switch', '启用或禁用API规则')]
+    #[AclAttribute('Weline_Cdn::cdn_api_rules_toggle', '启用/禁用规则', 'switch', '启用或禁用API规则')]
     public function toggle(): string
     {
         try {
@@ -203,7 +203,7 @@ class ApiRules extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_api_rules_delete', '删除规则', 'mdi-delete', '删除API规则')]
+    #[AclAttribute('Weline_Cdn::cdn_api_rules_delete', '删除规则', 'trash', '删除API规则')]
     public function delete(): string
     {
         try {

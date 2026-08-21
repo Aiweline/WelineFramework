@@ -13,16 +13,16 @@ $isIframe = $this->request->getGet('isIframe');
 ?>
 
 <div class="model-copy-container">
-    <div class="card">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">
-                <i class="mdi mdi-content-copy me-2"></i>
+    <div class="w-card">
+        <div class="w-card__header w-text" data-w-background="primary" data-tone="inverse">
+            <h5 style="--w-mb:0;">
+                <w:icon name="copy" size="sm"></w:icon>
                 <?= __('复制模型') ?>
             </h5>
         </div>
-        <div class="card-body">
-            <div class="alert alert-info">
-                <i class="mdi mdi-information me-2"></i>
+        <div class="w-card__body">
+            <div class="w-alert" data-tone="info">
+                <w:icon name="info" size="sm"></w:icon>
                 <?= __('您正在复制模型: <strong>%{1}</strong>', $model->getName()) ?>
                 <br>
                 <?= __('复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。') ?>
@@ -32,15 +32,15 @@ $isIframe = $this->request->getGet('isIframe');
                 <input type="hidden" name="id" value="<?= $model->getId() ?>">
                 
                 <!-- 原始模型信息 -->
-                <div class="card mb-3">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0"><i class="mdi mdi-information-outline me-2"></i><?= __('原始模型信息') ?></h6>
+                <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-card__header" data-w-background="muted">
+                        <h6 style="--w-mb:0;"><w:icon name="info" size="sm"></w:icon><?= __('原始模型信息') ?></h6>
                     </div>
-                    <div class="card-body">
-                        <table class="table table-sm table-bordered mb-0">
+                    <div class="w-card__body">
+                        <table class="w-table" style="--w-mb:0;">
                             <tr>
                                 <th width="200"><?= __('供应商') ?></th>
-                                <td><span class="badge bg-info"><?= $model->getVendor() ?></span></td>
+                                <td><span class="w-badge" data-w-background="info"><?= $model->getVendor() ?></span></td>
                             </tr>
                             <tr>
                                 <th><?= __('模型代码') ?></th>
@@ -55,43 +55,30 @@ $isIframe = $this->request->getGet('isIframe');
                 </div>
 
                 <!-- 新模型配置 -->
-                <div class="card mb-3">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0"><i class="mdi mdi-cog-outline me-2"></i><?= __('新模型配置') ?></h6>
+                <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-card__header" data-w-background="muted">
+                        <h6 style="--w-mb:0;"><w:icon name="settings" size="sm"></w:icon><?= __('新模型配置') ?></h6>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="model_name" class="form-label">
-                                        <?= __('模型名称') ?> <span class="text-danger">*</span>
+                    <div class="w-card__body">
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label for="model_name" class="w-field__label">
+                                        <?= __('模型名称') ?> <span class="w-text" data-tone="danger">*</span>
                                     </label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           id="model_name" 
-                                           name="model_name" 
-                                           value="<?= $model->getModelName() ?> (<?= __('副本') ?>)" 
-                                           required
-                                           placeholder="<?= __('请输入新模型的名称') ?>"
-                                           autofocus>
-                                    <small class="form-text text-muted">
+                                    <input type="text" class="w-input" id="model_name" name="model_name" value="<?= $model->getModelName() ?> (<?= __('副本') ?>)" required placeholder="<?= __('请输入新模型的名称') ?>" autofocus>
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <?= __('自定义名称用于区分不同配置') ?>
                                     </small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="model_code" class="form-label">
-                                        <?= __('模型代码') ?> <span class="text-danger">*</span>
+                            <div style="--w-span-md:6;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label for="model_code" class="w-field__label">
+                                        <?= __('模型代码') ?> <span class="w-text" data-tone="danger">*</span>
                                     </label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           id="model_code" 
-                                           name="model_code" 
-                                           value="<?= $model->getModelCode() ?>-copy" 
-                                           required
-                                           placeholder="<?= __('请输入新模型代码') ?>">
-                                    <small class="form-text text-muted">
+                                    <input type="text" class="w-input" id="model_code" name="model_code" value="<?= $model->getModelCode() ?>-copy" required placeholder="<?= __('请输入新模型代码') ?>">
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <?= __('唯一标识符，建议添加后缀') ?>
                                     </small>
                                 </div>
@@ -109,86 +96,54 @@ $isIframe = $this->request->getGet('isIframe');
                         }
                         ?>
                         
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="api_key" class="form-label">
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label for="api_key" class="w-field__label">
                                         <?= __('API密钥') ?>
                                     </label>
-                                    <input type="password" 
-                                           class="form-control" 
-                                           id="api_key" 
-                                           name="config[api_key]" 
-                                           value="<?= $config['api_key'] ?? '' ?>"
-                                           placeholder="<?= __('输入新的API密钥') ?>">
-                                    <small class="form-text text-muted">
+                                    <input type="password" class="w-input" id="api_key" name="config[api_key]" value="<?= $config['api_key'] ?? '' ?>" placeholder="<?= __('输入新的API密钥') ?>">
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <?= __('留空则使用原配置') ?>
                                     </small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="api_url" class="form-label">
+                            <div style="--w-span-md:6;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label for="api_url" class="w-field__label">
                                         <?= __('API地址') ?>
                                     </label>
-                                    <input type="url" 
-                                           class="form-control" 
-                                           id="api_url" 
-                                           name="config[api_url]" 
-                                           value="<?= $config['api_url'] ?? '' ?>"
-                                           placeholder="<?= __('输入新的API地址') ?>">
-                                    <small class="form-text text-muted">
+                                    <input type="url" class="w-input" id="api_url" name="config[api_url]" value="<?= $config['api_url'] ?? '' ?>" placeholder="<?= __('输入新的API地址') ?>">
+                                    <small class="w-field__hint w-text" data-tone="muted">
                                         <?= __('留空则使用原配置') ?>
                                     </small>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label for="temperature" class="form-label">
+                        <div class="w-grid">
+                            <div style="--w-span-md:4;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label for="temperature" class="w-field__label">
                                         <?= __('温度参数') ?>
                                     </label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="temperature" 
-                                           name="config[temperature]" 
-                                           value="<?= $config['temperature'] ?? '' ?>"
-                                           step="0.1"
-                                           min="0"
-                                           max="2"
-                                           placeholder="0.7">
+                                    <input type="number" class="w-input" id="temperature" name="config[temperature]" value="<?= $config['temperature'] ?? '' ?>" step="0.1" min="0" max="2" placeholder="0.7">
                                 </div>
                             </div>
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label for="max_tokens" class="form-label">
+                            <div style="--w-span-md:4;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label for="max_tokens" class="w-field__label">
                                         <?= __('最大令牌数') ?>
                                     </label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="max_tokens" 
-                                           name="config[max_tokens]" 
-                                           value="<?= $config['max_tokens'] ?? '' ?>"
-                                           min="1"
-                                           placeholder="2000">
+                                    <input type="number" class="w-input" id="max_tokens" name="config[max_tokens]" value="<?= $config['max_tokens'] ?? '' ?>" min="1" placeholder="2000">
                                 </div>
                             </div>
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label for="top_p" class="form-label">
+                            <div style="--w-span-md:4;">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label for="top_p" class="w-field__label">
                                         <?= __('Top P') ?>
                                     </label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="top_p" 
-                                           name="config[top_p]" 
-                                           value="<?= $config['top_p'] ?? '' ?>"
-                                           step="0.1"
-                                           min="0"
-                                           max="1"
-                                           placeholder="1">
+                                    <input type="number" class="w-input" id="top_p" name="config[top_p]" value="<?= $config['top_p'] ?? '' ?>" step="0.1" min="0" max="1" placeholder="1">
                                 </div>
                             </div>
                         </div>
@@ -196,10 +151,10 @@ $isIframe = $this->request->getGet('isIframe');
                 </div>
 
                 <!-- 提示信息 -->
-                <div class="alert alert-warning">
-                    <i class="mdi mdi-alert-circle-outline me-2"></i>
+                <div class="w-alert" data-tone="warning">
+                    <w:icon name="warning" size="sm"></w:icon>
                     <strong><?= __('注意：') ?></strong>
-                    <ul class="mb-0 mt-2">
+                    <ul style="--w-mb:0;--w-mt:var(--weline-space-2);">
                         <li><?= __('复制的模型将自动标记为"复制模型"状态') ?></li>
                         <li><?= __('复制的模型不会被设置为默认模型') ?></li>
                         <li><?= __('您可以在复制后修改其API配置、定价和代理设置') ?></li>
@@ -208,12 +163,12 @@ $isIframe = $this->request->getGet('isIframe');
                 </div>
 
                 <!-- 操作按钮 -->
-                <div class="d-flex justify-content-end gap-2">
-                    <button type="button" class="btn btn-secondary" data-ai-model-copy-action="close">
-                        <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                <div class="w-cluster" data-justify="end" style="--w-gap:var(--weline-space-2);">
+                    <button type="button" class="w-button" data-ai-model-copy-action="close" data-tone="neutral">
+                        <w:icon name="close" size="sm"></w:icon> <?= __('取消') ?>
                     </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="mdi mdi-content-copy"></i> <?= __('确认复制') ?>
+                    <button type="submit" class="w-button" data-tone="primary">
+                        <w:icon name="copy" size="sm"></w:icon> <?= __('确认复制') ?>
                     </button>
                 </div>
             </w:form>
@@ -221,22 +176,15 @@ $isIframe = $this->request->getGet('isIframe');
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     'use strict';
 
     function closeCopyOffcanvas() {
         var frame = window.frameElement;
-        var offcanvas = frame ? frame.closest('.offcanvas') : null;
-        var instance = window.parent && window.parent.bootstrap && offcanvas
-            ? window.parent.bootstrap.Offcanvas.getInstance(offcanvas)
-            : null;
-        if (instance) {
-            instance.hide();
+        var drawer = frame ? frame.closest('[data-w-component~="drawer"]') : null;
+        if (window.parent && window.parent.Weline && window.parent.Weline.UI && drawer) {
+            window.parent.Weline.UI.drawer.close(drawer, 'complete');
         }
     }
 
@@ -258,47 +206,35 @@ $isIframe = $this->request->getGet('isIframe');
         var modelCode = document.getElementById('model_code').value.trim();
         
         if (!modelName) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('请输入新模型名称') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('请输入新模型名称') ?>');
-            }
+            Weline.UI.dialog.request({
+                tone: 'warning',
+                title: '<?= __('提示') ?>',
+                message: '<?= __('请输入新模型名称') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
             document.getElementById('model_name').focus();
             return false;
         }
         
         if (!modelCode) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('请输入新模型代码') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('请输入新模型代码') ?>');
-            }
+            Weline.UI.dialog.request({
+                tone: 'warning',
+                title: '<?= __('提示') ?>',
+                message: '<?= __('请输入新模型代码') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
             document.getElementById('model_code').focus();
             return false;
         }
         
         var codePattern = /^[a-zA-Z0-9._-]+$/;
         if (!codePattern.test(modelCode)) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('格式错误') ?>',
-                    text: '<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>');
-            }
+            Weline.UI.dialog.request({
+                tone: 'danger',
+                title: '<?= __('格式错误') ?>',
+                message: '<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
             document.getElementById('model_code').focus();
             return false;
         }
@@ -306,60 +242,44 @@ $isIframe = $this->request->getGet('isIframe');
         var btn = this.querySelector('button[type="submit"]');
         var originalHtml = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('复制中...') ?>';
+        btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon> <?= __('复制中...') ?>';
         
         var formData = new FormData(this);
         window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/model/copy') ?>', { method: 'POST', body: formData })
         .then(function(response) {
             var data = response.data;
             if (response.ok && data && data.success) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('复制成功') ?>',
-                        text: '<?= __('模型已成功复制') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(function() {
-                        window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide();
-                        setTimeout(function() {
-                            window.parent.location.reload();
-                        }, 500);
-                    });
-                } else {
-                    console.log('<?= __('复制成功！') ?>');
-                    window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide();
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('复制成功') ?>',
+                    message: '<?= __('模型已成功复制') ?>',
+                    duration: 2000,
+                    confirmable: false
+                }).then(function() {
+                    closeCopyOffcanvas();
                     setTimeout(function() {
                         window.parent.location.reload();
                     }, 500);
-                }
+                });
             } else {
                 var errMsg = (data && (data.message || data.msg)) || '<?= __('复制失败') ?>';
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('复制失败') ?>',
-                        text: errMsg,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('复制失败：') ?>' + data.message);
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('复制失败') ?>',
+                    message: errMsg,
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
             }
         })
         .catch(function(error) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('请求失败') ?>',
-                    text: error.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('请求失败：') ?>' + error.message);
-            }
+            Weline.UI.dialog.request({
+                tone: 'danger',
+                title: '<?= __('请求失败') ?>',
+                message: error.message,
+                confirmLabel: '<?= __('确定') ?>'
+            });
             btn.disabled = false;
             btn.innerHTML = originalHtml;
         });

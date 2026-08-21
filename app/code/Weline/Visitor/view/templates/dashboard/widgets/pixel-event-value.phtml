@@ -44,10 +44,10 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
             <thead>
             <tr>
                 <th><?= __('事件') ?></th>
-                <th class="text-end"><?= __('次数') ?></th>
-                <th class="text-end"><?= __('价值') ?></th>
+                <th class="w-text" data-align="end"><?= __('次数') ?></th>
+                <th class="w-text" data-align="end"><?= __('价值') ?></th>
                 <?php if ($showAvg): ?>
-                    <th class="text-end"><?= __('均值') ?></th>
+                    <th class="w-text" data-align="end"><?= __('均值') ?></th>
                 <?php endif; ?>
             </tr>
             </thead>
@@ -67,10 +67,10 @@ $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, '
                             <code>—</code>
                         <?php endif; ?>
                     </th>
-                    <td class="text-end"><?= $h($service->formatNumber($row['events'] ?? 0)) ?></td>
-                    <td class="text-end"><?= $h($service->formatNumber($row['value_sum'] ?? 0, 2)) ?></td>
+                    <td class="w-text" data-align="end"><?= $h($service->formatNumber($row['events'] ?? 0)) ?></td>
+                    <td class="w-text" data-align="end"><?= $h($service->formatNumber($row['value_sum'] ?? 0, 2)) ?></td>
                     <?php if ($showAvg): ?>
-                        <td class="text-end"><?= $h($service->formatNumber($row['avg_value'] ?? 0, 2)) ?></td>
+                        <td class="w-text" data-align="end"><?= $h($service->formatNumber($row['avg_value'] ?? 0, 2)) ?></td>
                     <?php endif; ?>
                 </tr>
             <?php endforeach; ?>

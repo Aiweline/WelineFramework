@@ -10,13 +10,13 @@ use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\EditorManager\Api\Editor\EditorManagerInterface;
 
-#[Acl('Weline_EditorManager::main', '编辑器管理器', 'mdi mdi-content-save-edit', '内容管理')]
+#[Acl('Weline_EditorManager::main', '编辑器管理器', 'edit', '内容管理')]
 class Index extends BackendController
 {
     /**
      * 编辑器管理器列表页面
      */
-    #[Acl('Weline_EditorManager::list', '编辑器列表', 'mdi mdi-view-list', '查看编辑器列表')]
+    #[Acl('Weline_EditorManager::list', '编辑器列表', 'list', '查看编辑器列表')]
     public function index(): string
     {
         // 获取所有已注册的编辑器管理器

@@ -368,7 +368,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <div class="header">
             <h1><?= __('Weline Framework') ?></h1>
             <p><?= __('系统安装向导') ?></p>
@@ -385,8 +385,8 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         <!-- 步骤 1: 环境检测 -->
         <div class="step-panel active" id="panel-env">
-            <div class="card">
-                <div class="card-title">
+            <div class="w-card">
+                <div class="w-card__title">
                     <span><?= __('环境检测') ?></span>
                     <span id="env-status"></span>
                 </div>
@@ -400,24 +400,24 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                     <ul class="check-list" id="check-list"></ul>
                 </div>
                 
-                <div class="btn-group">
-                    <button class="btn btn-primary" id="btn-check-env"><?= __('开始检测') ?></button>
-                    <button class="btn btn-primary" id="btn-fix-env" style="display: none;"><?= __('尝试修复') ?></button>
-                    <button class="btn btn-success" id="btn-next-db" style="display: none;"><?= __('下一步') ?></button>
+                <div class="w-button-group">
+                    <button class="w-button" id="btn-check-env" data-tone="primary"><?= __('开始检测') ?></button>
+                    <button class="w-button" id="btn-fix-env" style="display: none;" data-tone="primary"><?= __('尝试修复') ?></button>
+                    <button class="w-button" id="btn-next-db" style="display: none;" data-tone="success"><?= __('下一步') ?></button>
                 </div>
             </div>
         </div>
         
         <!-- 步骤 2: 数据库配置 -->
         <div class="step-panel" id="panel-db">
-            <div class="card">
-                <div class="card-title"><?= __('数据库配置') ?></div>
+            <div class="w-card">
+                <div class="w-card__title"><?= __('数据库配置') ?></div>
                 
                 <w:form id="form-db" csrf="off">
                     <input type="hidden" name="form_key" value="<?= $form_key ?>">
                     
-                    <div class="form-group">
-                        <label class="form-label"><?= __('数据库类型') ?></label>
+                    <div class="w-field">
+                        <label class="w-field__label"><?= __('数据库类型') ?></label>
                         <select class="form-input" name="type" id="db-type">
                             <option value="mysql">MySQL</option>
                             <option value="pgsql">PostgreSQL</option>
@@ -427,87 +427,87 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                     
                     <div id="db-connection-fields">
                         <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label"><?= __('主机地址') ?></label>
+                            <div class="w-field">
+                                <label class="w-field__label"><?= __('主机地址') ?></label>
                                 <input type="text" class="form-input" name="hostname" value="localhost">
                             </div>
-                            <div class="form-group">
-                                <label class="form-label"><?= __('端口') ?></label>
+                            <div class="w-field">
+                                <label class="w-field__label"><?= __('端口') ?></label>
                                 <input type="text" class="form-input" name="hostport" value="3306">
                             </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label class="form-label"><?= __('数据库名') ?></label>
+                        <div class="w-field">
+                            <label class="w-field__label"><?= __('数据库名') ?></label>
                             <input type="text" class="form-input" name="database" value="weline">
                         </div>
                         
                         <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label"><?= __('用户名') ?></label>
+                            <div class="w-field">
+                                <label class="w-field__label"><?= __('用户名') ?></label>
                                 <input type="text" class="form-input" name="username" value="root">
                             </div>
-                            <div class="form-group">
-                                <label class="form-label"><?= __('密码') ?></label>
+                            <div class="w-field">
+                                <label class="w-field__label"><?= __('密码') ?></label>
                                 <input type="password" class="form-input" name="password">
                             </div>
                         </div>
                     </div>
                     
                     <div id="db-sqlite-fields" style="display: none;">
-                        <div class="form-group">
-                            <label class="form-label"><?= __('数据库文件路径') ?></label>
+                        <div class="w-field">
+                            <label class="w-field__label"><?= __('数据库文件路径') ?></label>
                             <input type="text" class="form-input" name="sqlite_path" value="<?= APP_PATH ?>etc/db.sqlite">
                         </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label"><?= __('表前缀') ?></label>
+                    <div class="w-field">
+                        <label class="w-field__label"><?= __('表前缀') ?></label>
                         <input type="text" class="form-input" name="prefix" value="w_">
                     </div>
                 </w:form>
 
                 <div class="inline-message" id="db-message" role="status" aria-live="polite" hidden></div>
                 
-                <div class="btn-group">
-                    <button class="btn btn-primary" id="btn-test-db"><?= __('测试连接') ?></button>
-                    <button class="btn btn-success" id="btn-next-admin" disabled><?= __('下一步') ?></button>
+                <div class="w-button-group">
+                    <button class="w-button" id="btn-test-db" data-tone="primary"><?= __('测试连接') ?></button>
+                    <button class="w-button" id="btn-next-admin" disabled data-tone="success"><?= __('下一步') ?></button>
                 </div>
             </div>
         </div>
         
         <!-- 步骤 3: 管理员设置 -->
         <div class="step-panel" id="panel-admin">
-            <div class="card">
-                <div class="card-title"><?= __('管理员设置') ?></div>
+            <div class="w-card">
+                <div class="w-card__title"><?= __('管理员设置') ?></div>
                 
                 <w:form id="form-admin" csrf="off">
                     <input type="hidden" name="form_key" value="<?= $form_key ?>">
                     
-                    <div class="form-group">
-                        <label class="form-label"><?= __('后台入口密钥（留空自动生成）') ?></label>
+                    <div class="w-field">
+                        <label class="w-field__label"><?= __('后台入口密钥（留空自动生成）') ?></label>
                         <input type="text" class="form-input" name="admin_key" placeholder="<?= __('例如：admin_secret_key') ?>">
                         <small style="color: var(--text-muted);"><?= __('访问后台的 URL 路径，如：/your_key/login') ?></small>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label"><?= __('API 后台入口密钥（留空自动生成）') ?></label>
+                    <div class="w-field">
+                        <label class="w-field__label"><?= __('API 后台入口密钥（留空自动生成）') ?></label>
                         <input type="text" class="form-input" name="api_admin_key" placeholder="<?= __('例如：api_secret_key') ?>">
                     </div>
                 </w:form>
 
                 <div class="inline-message" id="install-message" role="alert" aria-live="assertive" hidden></div>
                 
-                <div class="btn-group">
-                    <button class="btn btn-success" id="btn-complete"><?= __('完成安装') ?></button>
+                <div class="w-button-group">
+                    <button class="w-button" id="btn-complete" data-tone="success"><?= __('完成安装') ?></button>
                 </div>
             </div>
         </div>
         
         <!-- 步骤 4: 安装完成 -->
         <div class="step-panel" id="panel-complete">
-            <div class="card">
-                <div class="card-title" style="color: var(--success-color);">
+            <div class="w-card">
+                <div class="w-card__title" style="color: var(--success-color);">
                     ✓ <?= __('安装完成') ?>
                 </div>
                 
@@ -515,8 +515,8 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                 
                 <div class="complete-info" id="complete-info"></div>
                 
-                <div class="btn-group">
-                    <a class="btn btn-primary" id="btn-goto-admin" href="#"><?= __('进入后台') ?></a>
+                <div class="w-button-group">
+                    <a class="w-button" id="btn-goto-admin" href="#" data-tone="primary"><?= __('进入后台') ?></a>
                 </div>
             </div>
         </div>

@@ -314,40 +314,40 @@ $socialConfigCenterHref = $socialConfigCenterUrl
 }
 </style>
 
-<div class="container-fluid weline-social-admin" data-provider="<?= $h($queryProvider) ?>">
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0"><?= $h($pageTitle) ?></h4>
-                <div class="page-title-right">
-                    <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><?= __('营销管理') ?></li>
-                        <li class="breadcrumb-item active"><?= __('融媒体管理') ?></li>
+<div class="w-container weline-social-admin" data-provider="<?= $h($queryProvider) ?>">
+    <div class="w-grid" style="--w-mb:var(--weline-space-6);">
+        <div style="--w-span:12;">
+            <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                <h4 style="--w-mb-sm:0;"><?= $h($pageTitle) ?></h4>
+                <div class="w-cluster">
+                    <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                        <li class="w-breadcrumb__item"><?= __('营销管理') ?></li>
+                        <li class="w-breadcrumb__item" data-state="active"><?= __('融媒体管理') ?></li>
                     </ol>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('平台 Provider') ?></div><div class="metric-value"><?= count($platforms) ?></div></div></div>
-        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('已连接账户') ?></div><div class="metric-value text-success"><?= count($accounts) ?></div></div></div>
-        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('可发布账户') ?></div><div class="metric-value text-primary"><?= count($publishableAccounts) ?></div></div></div>
-        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('站点') ?></div><div class="metric-value text-info"><?= count($websites) ?></div></div></div>
-        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('发布批次') ?></div><div class="metric-value text-warning"><?= count($batches) ?></div></div></div>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+        <div style="--w-span-md:2;"><div class="workband metric"><div class="w-text" data-tone="muted" data-size="sm"><?= __('平台 Provider') ?></div><div class="metric-value"><?= count($platforms) ?></div></div></div>
+        <div style="--w-span-md:2;"><div class="workband metric"><div class="w-text" data-tone="muted" data-size="sm"><?= __('已连接账户') ?></div><div class="metric-value w-text" data-tone="success"><?= count($accounts) ?></div></div></div>
+        <div style="--w-span-md:2;"><div class="workband metric"><div class="w-text" data-tone="muted" data-size="sm"><?= __('可发布账户') ?></div><div class="metric-value w-text" data-tone="primary"><?= count($publishableAccounts) ?></div></div></div>
+        <div style="--w-span-md:2;"><div class="workband metric"><div class="w-text" data-tone="muted" data-size="sm"><?= __('站点') ?></div><div class="metric-value w-text" data-tone="info"><?= count($websites) ?></div></div></div>
+        <div style="--w-span-md:2;"><div class="workband metric"><div class="w-text" data-tone="muted" data-size="sm"><?= __('发布批次') ?></div><div class="metric-value w-text" data-tone="warning"><?= count($batches) ?></div></div></div>
     </div>
 
-    <section class="workband mb-3">
-        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+    <section class="workband" style="--w-mb:var(--weline-space-4);">
+        <div class="w-cluster" data-justify="between" data-align="start" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
             <div>
-                <h5 class="mb-1"><?= __('当前配置范围') ?></h5>
-                <div class="text-muted small"><?= __('先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。') ?></div>
+                <h5 style="--w-mb:var(--weline-space-1);"><?= __('当前配置范围') ?></h5>
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。') ?></div>
             </div>
-            <span class="badge bg-primary-subtle text-primary"><?= __('Scope 优先') ?></span>
+            <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= __('Scope 优先') ?></span>
         </div>
         <div class="scope-selector-grid">
             <div>
-                <label class="form-label" for="social-scope-type-trigger"><?= __('范围类型') ?></label>
+                <label class="w-field__label" for="social-scope-type-trigger"><?= __('范围类型') ?></label>
                 <input type="hidden" id="social-scope-type_value" name="social_scope_type" value="" data-social-choice-value>
                 <div class="social-choice" id="social-scope-type" data-social-choice-root data-social-choice-key="social-scope-type" <?= $socialScopes === [] ? 'data-disabled="1"' : '' ?>>
                     <button id="social-scope-type-trigger" class="social-choice-trigger" type="button" aria-haspopup="listbox" aria-controls="social-scope-type-panel" aria-expanded="false" data-social-choice-trigger <?= $socialScopes === [] ? 'disabled' : '' ?>>
@@ -365,7 +365,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 </div>
             </div>
             <div>
-                <label class="form-label" for="social-scope-id-trigger"><?= __('站点范围') ?></label>
+                <label class="w-field__label" for="social-scope-id-trigger"><?= __('站点范围') ?></label>
                 <input type="hidden" id="social-scope-id_value" name="social_scope_id" value="" data-social-choice-value>
                 <div class="social-choice" id="social-scope-id" data-social-choice-root data-social-choice-key="social-scope-id" <?= $socialScopes === [] ? 'data-disabled="1"' : '' ?>>
                     <button id="social-scope-id-trigger" class="social-choice-trigger" type="button" aria-haspopup="listbox" aria-controls="social-scope-id-panel" aria-expanded="false" data-social-choice-trigger <?= $socialScopes === [] ? 'disabled' : '' ?>>
@@ -383,7 +383,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 </div>
             </div>
             <div>
-                <label class="form-label" for="social-child-scope-trigger"><?= __('二级范围') ?></label>
+                <label class="w-field__label" for="social-child-scope-trigger"><?= __('二级范围') ?></label>
                 <input type="hidden" id="social-child-scope_value" name="social_child_scope" value="" data-social-choice-value>
                 <div class="social-choice" id="social-child-scope" data-social-choice-root data-social-choice-key="social-child-scope" <?= $socialScopes === [] ? 'data-disabled="1"' : '' ?>>
                     <button id="social-child-scope-trigger" class="social-choice-trigger" type="button" aria-haspopup="listbox" aria-controls="social-child-scope-panel" aria-expanded="false" data-social-choice-trigger <?= $socialScopes === [] ? 'disabled' : '' ?>>
@@ -401,17 +401,17 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 </div>
             </div>
             <div class="scope-summary">
-                <div class="text-muted small"><?= __('正在配置') ?></div>
-                <div class="fw-semibold" id="social-current-scope-label"><?= __('未选择范围') ?></div>
-                <div class="small text-muted" id="social-current-scope-key"></div>
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('正在配置') ?></div>
+                <div class="w-text" id="social-current-scope-label" data-weight="strong"><?= __('未选择范围') ?></div>
+                <div class="w-text" id="social-current-scope-key" data-tone="muted" data-size="sm"></div>
             </div>
         </div>
         <?php if ($socialScopes === []): ?>
-            <div class="form-text text-warning mt-2"><?= __('暂无可配置范围，无法按范围配置社媒账户。') ?></div>
+            <div class="w-field__hint w-text" data-tone="warning" style="--w-mt:var(--weline-space-2);"><?= __('暂无可配置范围，无法按范围配置社媒账户。') ?></div>
         <?php endif; ?>
     </section>
 
-    <div class="admin-tabs mb-3" role="tablist">
+    <div class="admin-tabs w-tabs__list" role="tablist" data-w-component="tabs" style="--w-mb:var(--weline-space-4);">
         <button class="admin-tab active" type="button" data-social-tab="platforms"><?= __('平台库') ?></button>
         <button class="admin-tab" type="button" data-social-tab="accounts"><?= __('账户管理') ?></button>
         <button class="admin-tab" type="button" data-social-tab="scopeAccounts"><?= __('范围社媒') ?></button>
@@ -420,19 +420,19 @@ $socialConfigCenterHref = $socialConfigCenterUrl
         <button class="admin-tab" type="button" data-social-tab="records"><?= __('发布记录') ?></button>
     </div>
 
-    <section class="workband mb-3" data-social-panel="platforms">
-        <div class="d-flex justify-content-between align-items-start gap-3 mb-3 flex-wrap">
+    <section class="workband" data-social-panel="platforms" style="--w-mb:var(--weline-space-4);">
+        <div class="w-cluster" data-justify="between" data-align="start" data-wrap="true" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
             <div>
-                <h5 class="mb-1"><?= __('平台库') ?></h5>
-                <div class="text-muted small"><?= __('内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。') ?></div>
+                <h5 style="--w-mb:var(--weline-space-1);"><?= __('平台库') ?></h5>
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。') ?></div>
             </div>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                 <div class="platform-search-wrap">
-                    <label class="visually-hidden" for="social-platform-search"><?= __('搜索平台') ?></label>
-                    <input id="social-platform-search" class="form-control form-control-sm" type="search" placeholder="<?= $h((string)__('搜索平台名称、编码、状态或授权方式')) ?>" autocomplete="off">
+                    <label class="w-visually-hidden" for="social-platform-search"><?= __('搜索平台') ?></label>
+                    <input id="social-platform-search" class="w-input" type="search" placeholder="<?= $h((string)__('搜索平台名称、编码、状态或授权方式')) ?>" autocomplete="off" data-size="sm">
                 </div>
-                <a class="btn btn-outline-primary btn-sm" href="<?= $h($fakeSmokeUrl) ?>" target="_blank" rel="noopener">
-                    <i class="mdi mdi-play-circle-outline me-1"></i><?= __('运行 fake 浏览器验证') ?>
+                <a class="w-button" href="<?= $h($fakeSmokeUrl) ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline" data-size="sm">
+                    <w:icon name="play" size="sm"></w:icon><?= __('运行 fake 浏览器验证') ?>
                 </a>
             </div>
         </div>
@@ -456,52 +456,52 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 ]))));
                 ?>
                 <article class="platform-item" data-platform-code="<?= $h($code) ?>" data-platform-search="<?= $h($searchBlob) ?>">
-                    <div class="d-flex gap-2 align-items-start">
+                    <div class="w-cluster" data-align="start" style="--w-gap:var(--weline-space-2);">
                         <div class="platform-icon" aria-hidden="true"><?= (string)($platform['icon_svg'] ?? '') ?></div>
-                        <div class="flex-grow-1">
-                            <div class="fw-semibold"><?= $h((string)($platform['title'] ?? $code)) ?></div>
-                            <div class="small text-muted"><?= $h($code) ?> · <?= $h((string)($platform['family'] ?? '')) ?></div>
+                        <div data-grow="true">
+                            <div class="w-text" data-weight="strong"><?= $h((string)($platform['title'] ?? $code)) ?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= $h($code) ?> · <?= $h((string)($platform['family'] ?? '')) ?></div>
                         </div>
-                        <span class="badge <?= $code === 'fake_browser' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                        <span class="w-badge <?= $code === 'fake_browser' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
                             <?= $h((string)($platform['status'] ?? 'documented')) ?>
                         </span>
                     </div>
-                    <div class="d-flex flex-wrap gap-1 mt-3">
+                    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-1);--w-mt:var(--weline-space-4);">
                         <?php foreach ($authModes as $mode): ?>
-                            <span class="badge bg-light text-dark border"><?= $h($mode) ?></span>
+                            <span class="w-badge w-text" data-w-background="muted" data-w-border="border" data-tone="muted"><?= $h($mode) ?></span>
                         <?php endforeach; ?>
                     </div>
                     <?php if ($docs !== []): ?>
-                        <div class="small mt-2 d-flex flex-wrap gap-2">
+                        <div class="w-text w-cluster" data-wrap="true" data-size="sm" style="--w-mt:var(--weline-space-2);--w-gap:var(--weline-space-2);">
                             <?php foreach (array_slice($docs, 0, 2, true) as $label => $url): ?>
                                 <?php if (filter_var((string)$url, FILTER_VALIDATE_URL)): ?>
                                     <a href="<?= $h((string)$url) ?>" target="_blank" rel="noopener"><?= $h(is_string($label) ? $label : (string)$url) ?></a>
                                 <?php else: ?>
-                                    <span class="text-muted"><?= $h((string)$url) ?></span>
+                                    <span class="w-text" data-tone="muted"><?= $h((string)$url) ?></span>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
-                    <button class="btn btn-primary btn-sm mt-3" type="button" data-social-platform-add="<?= $h($code) ?>">
-                        <i class="mdi mdi-plus-circle-outline me-1"></i><?= __('添加到当前范围') ?>
+                    <button class="w-button" type="button" data-social-platform-add="<?= $h($code) ?>" data-tone="primary" data-size="sm" style="--w-mt:var(--weline-space-4);">
+                        <w:icon name="plus" size="sm"></w:icon><?= __('添加到当前范围') ?>
                     </button>
                 </article>
             <?php endforeach; ?>
         </div>
-        <div class="text-muted small mt-3 d-none" id="social-platform-search-empty"><?= __('未找到匹配平台，请调整关键词。') ?></div>
+        <div class="w-text" id="social-platform-search-empty" hidden data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-4);"><?= __('未找到匹配平台，请调整关键词。') ?></div>
     </section>
 
-    <section class="workband mb-3 d-none" data-social-panel="accounts">
-        <div class="row g-4">
-            <div class="col-xl-4">
-                <h5 class="mb-3"><?= __('新增或编辑账户') ?></h5>
-                <div class="alert alert-info py-2 small" id="social-account-scope-note">
+    <section class="workband" data-social-panel="accounts" hidden style="--w-mb:var(--weline-space-4);">
+        <div class="w-grid" style="--w-gap:var(--weline-space-6);">
+            <div style="--w-span-lg:4;">
+                <h5 style="--w-mb:var(--weline-space-4);"><?= __('新增或编辑账户') ?></h5>
+                <div class="w-alert w-text" id="social-account-scope-note" data-tone="info" data-size="sm" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
                     <?= __('从平台库添加时，保存后会自动绑定到当前配置范围。') ?>
                 </div>
-                <w:form id="weline-social-account-form" class="d-grid gap-3">
+                <w:form id="weline-social-account-form" class="w-stack" style="--w-gap:var(--weline-space-4);">
                     <input type="hidden" name="account_id" value="">
                     <div>
-                        <label class="form-label" for="social-platform-code-trigger"><?= __('平台') ?></label>
+                        <label class="w-field__label" for="social-platform-code-trigger"><?= __('平台') ?></label>
                         <input type="hidden" id="social-platform-code_value" name="platform_code" value="<?= $h((string)(($platforms[0]['code'] ?? '') ?: '')) ?>" data-social-choice-value>
                         <div class="social-choice" id="social-platform-code" data-social-choice-root data-social-choice-key="social-platform-code">
                             <button id="social-platform-code-trigger" class="social-choice-trigger" type="button" aria-haspopup="listbox" aria-controls="social-platform-code-panel" aria-expanded="false" data-social-choice-trigger>
@@ -519,16 +519,16 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                         </div>
                     </div>
                     <div>
-                        <label class="form-label" for="social-account-name"><?= __('账户名称') ?></label>
-                        <input id="social-account-name" class="form-control" name="account_name" maxlength="150" required>
+                        <label class="w-field__label" for="social-account-name"><?= __('账户名称') ?></label>
+                        <input id="social-account-name" class="w-input" name="account_name" maxlength="150" required>
                     </div>
                     <div>
-                        <label class="form-label" for="social-profile-url"><?= __('公开主页 URL') ?></label>
-                        <input id="social-profile-url" class="form-control" name="profile_url" placeholder="https://example.com/profile">
+                        <label class="w-field__label" for="social-profile-url"><?= __('公开主页 URL') ?></label>
+                        <input id="social-profile-url" class="w-input" name="profile_url" placeholder="https://example.com/profile">
                     </div>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label" for="social-auth-mode-trigger"><?= __('授权方式') ?></label>
+                    <div class="w-grid" style="--w-gap:var(--weline-space-2);">
+                        <div style="--w-span-md:6;">
+                            <label class="w-field__label" for="social-auth-mode-trigger"><?= __('授权方式') ?></label>
                             <input type="hidden" id="social-auth-mode_value" name="auth_mode" value="profile_only" data-social-choice-value>
                             <div class="social-choice" id="social-auth-mode" data-social-choice-root data-social-choice-key="social-auth-mode">
                                 <button id="social-auth-mode-trigger" class="social-choice-trigger" type="button" aria-haspopup="listbox" aria-controls="social-auth-mode-panel" aria-expanded="false" data-social-choice-trigger>
@@ -545,62 +545,58 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label" for="social-sort-order"><?= __('排序') ?></label>
-                            <input id="social-sort-order" class="form-control" type="number" name="sort_order" value="1000">
+                        <div style="--w-span-md:6;">
+                            <label class="w-field__label" for="social-sort-order"><?= __('排序') ?></label>
+                            <input id="social-sort-order" class="w-input" type="number" name="sort_order" value="1000">
                         </div>
                     </div>
-                    <div class="d-flex flex-wrap gap-3">
-                        <label class="form-check">
-                            <input class="form-check-input" type="checkbox" name="widget_enabled" value="1" checked>
-                            <span class="form-check-label"><?= __('显示在社媒账户部件') ?></span>
+                    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-4);">
+                        <label class="w-check">
+                            <input type="checkbox" name="widget_enabled" value="1" checked>
+                            <span><?= __('显示在社媒账户部件') ?></span>
                         </label>
-                        <label class="form-check">
-                            <input class="form-check-input" type="checkbox" name="publish_enabled" value="1">
-                            <span class="form-check-label"><?= __('启用发布能力') ?></span>
+                        <label class="w-check">
+                            <input type="checkbox" name="publish_enabled" value="1">
+                            <span><?= __('启用发布能力') ?></span>
                         </label>
                     </div>
                     <div>
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <label class="form-label mb-0"><?= __('官方凭据') ?></label>
-                            <span class="text-muted small"><?= __('编辑时留空将保留已加密凭据') ?></span>
+                        <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-2);">
+                            <label class="w-field__label" style="--w-mb:0;"><?= __('官方凭据') ?></label>
+                            <span class="w-text" data-tone="muted" data-size="sm"><?= __('编辑时留空将保留已加密凭据') ?></span>
                         </div>
-                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-                            <a class="btn btn-outline-secondary btn-sm"
-                               id="social-open-system-config"
-                               href="<?= $h($socialConfigCenterHref) ?>"
-                               target="_top"
-                               rel="noopener">
-                                <i class="mdi mdi-cog-outline me-1"></i><?= __('打开系统配置') ?>
+                        <div class="w-cluster" data-wrap="true" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+                            <a class="w-button" id="social-open-system-config" href="<?= $h($socialConfigCenterHref) ?>" target="_top" rel="noopener" data-tone="neutral" data-variant="outline" data-size="sm">
+                                <w:icon name="settings" size="sm"></w:icon><?= __('打开系统配置') ?>
                             </a>
-                            <span id="social-one-click-auth-wrap" class="d-none">
-                                <button class="btn btn-outline-primary btn-sm" type="button" id="social-one-click-auth">
-                                    <i class="mdi mdi-shield-key-outline me-1"></i><?= __('一键授权') ?>
+                            <span id="social-one-click-auth-wrap" hidden>
+                                <button class="w-button" type="button" id="social-one-click-auth" data-tone="primary" data-variant="outline" data-size="sm">
+                                    <w:icon name="shield" size="sm"></w:icon><?= __('一键授权') ?>
                                 </button>
                             </span>
-                            <button class="btn btn-link btn-sm p-0" type="button" data-social-toggle-credential-guide><?= __('查看官方凭据指南') ?></button>
+                            <button class="w-button" type="button" data-social-toggle-credential-guide data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;"><?= __('查看官方凭据指南') ?></button>
                         </div>
-                        <div class="form-text mb-2"><?= __('应用 App/Client 请先点「打开系统配置」定位到「融媒体平台应用」。也可下方人工粘贴 Token。') ?></div>
-                        <div id="social-credential-guide" class="alert alert-light border small mb-2 d-none" role="note">
+                        <div class="w-field__hint" style="--w-mb:var(--weline-space-2);"><?= __('应用 App/Client 请先点「打开系统配置」定位到「融媒体平台应用」。也可下方人工粘贴 Token。') ?></div>
+                        <div id="social-credential-guide" class="w-alert w-text" role="note" data-w-border="border" hidden data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
                             <div id="social-credential-guide-body"></div>
-                            <div class="text-muted mt-2"><?= __('详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md') ?></div>
+                            <div class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);"><?= __('详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md') ?></div>
                         </div>
-                        <div id="social-manual-auth-hint" class="form-text mb-2 d-none"><?= __('该平台不支持一键授权，请人工填写官方凭据。') ?></div>
+                        <div id="social-manual-auth-hint" class="w-field__hint" hidden style="--w-mb:var(--weline-space-2);"><?= __('该平台不支持一键授权，请人工填写官方凭据。') ?></div>
                         <div id="social-credential-fields" class="credential-grid"></div>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-primary" type="submit"><i class="mdi mdi-content-save-outline me-1"></i><?= __('保存账户') ?></button>
-                        <button class="btn btn-outline-secondary" type="button" id="social-account-reset"><?= __('清空表单') ?></button>
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                        <button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= __('保存账户') ?></button>
+                        <button class="w-button" type="button" id="social-account-reset" data-tone="neutral" data-variant="outline"><?= __('清空表单') ?></button>
                     </div>
-                    <div class="small social-status" id="social-account-status"></div>
+                    <div class="w-text social-status" id="social-account-status" data-size="sm"></div>
                 </w:form>
             </div>
-            <div class="col-xl-8">
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h5 class="mb-0"><?= __('账户列表') ?></h5>
+            <div style="--w-span-lg:8;">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+                    <h5 style="--w-mb:0;"><?= __('账户列表') ?></h5>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle account-table">
+                <div class="w-table-wrap">
+                    <table class="w-table account-table" data-w-vertical="middle">
                         <thead>
                         <tr>
                             <th><?= __('账户') ?></th>
@@ -612,28 +608,28 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                         </thead>
                         <tbody>
                         <?php if ($accounts === []): ?>
-                            <tr><td colspan="5" class="text-muted"><?= __('暂无账户。可先新增仅展示账户，或运行 fake 浏览器验证创建本地账户。') ?></td></tr>
+                            <tr><td colspan="5" class="w-text" data-tone="muted"><?= __('暂无账户。可先新增仅展示账户，或运行 fake 浏览器验证创建本地账户。') ?></td></tr>
                         <?php endif; ?>
                         <?php foreach ($accounts as $account): ?>
                             <?php if (!is_array($account)) { continue; } ?>
                             <tr>
                                 <td>
-                                    <div class="d-flex gap-2 align-items-center">
+                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
                                         <span class="account-icon" aria-hidden="true"><?= (string)($account['icon_svg'] ?? '') ?></span>
                                         <span>
-                                            <span class="fw-semibold d-block"><?= $h((string)($account['account_name'] ?? '')) ?></span>
-                                            <span class="small text-muted"><?= $h((string)($account['platform_title'] ?? $account['platform_code'] ?? '')) ?></span>
+                                            <span class="w-text" data-weight="strong" data-w-display="block"><?= $h((string)($account['account_name'] ?? '')) ?></span>
+                                            <span class="w-text" data-tone="muted" data-size="sm"><?= $h((string)($account['platform_title'] ?? $account['platform_code'] ?? '')) ?></span>
                                         </span>
                                     </div>
                                 </td>
-                                <td><?= !empty($account['widget_enabled']) ? '<span class="badge bg-success-subtle text-success">' . __('已启用') . '</span>' : '<span class="badge bg-light text-muted">' . __('未启用') . '</span>' ?></td>
-                                <td><?= !empty($account['publish_enabled']) ? '<span class="badge bg-primary-subtle text-primary">' . __('已启用') . '</span>' : '<span class="badge bg-light text-muted">' . __('未启用') . '</span>' ?></td>
-                                <td><span class="badge bg-light text-dark border"><?= $h((string)($account['test_status'] ?? '')) ?></span></td>
+                                <td><?= !empty($account['widget_enabled']) ? '<span class="w-badge w-text" data-w-background="success" data-tone="success">' . __('已启用') . '</span>' : '<span class="w-badge w-text" data-w-background="muted" data-tone="muted">' . __('未启用') . '</span>' ?></td>
+                                <td><?= !empty($account['publish_enabled']) ? '<span class="w-badge w-text" data-w-background="primary" data-tone="primary">' . __('已启用') . '</span>' : '<span class="w-badge w-text" data-w-background="muted" data-tone="muted">' . __('未启用') . '</span>' ?></td>
+                                <td><span class="w-badge w-text" data-w-background="muted" data-w-border="border" data-tone="muted"><?= $h((string)($account['test_status'] ?? '')) ?></span></td>
                                 <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary" type="button" data-social-edit="<?= (int)($account['account_id'] ?? 0) ?>"><?= __('编辑') ?></button>
-                                        <button class="btn btn-outline-secondary" type="button" data-social-test="<?= (int)($account['account_id'] ?? 0) ?>"><?= __('检测') ?></button>
-                                        <button class="btn btn-outline-danger" type="button" data-social-disable="<?= (int)($account['account_id'] ?? 0) ?>"><?= __('禁用') ?></button>
+                                    <div class="w-button-group">
+                                        <button class="w-button" type="button" data-social-edit="<?= (int)($account['account_id'] ?? 0) ?>" data-tone="primary" data-variant="outline"><?= __('编辑') ?></button>
+                                        <button class="w-button" type="button" data-social-test="<?= (int)($account['account_id'] ?? 0) ?>" data-tone="neutral" data-variant="outline"><?= __('检测') ?></button>
+                                        <button class="w-button" type="button" data-social-disable="<?= (int)($account['account_id'] ?? 0) ?>" data-tone="danger" data-variant="outline"><?= __('禁用') ?></button>
                                     </div>
                                 </td>
                             </tr>
@@ -645,131 +641,131 @@ $socialConfigCenterHref = $socialConfigCenterUrl
         </div>
     </section>
 
-    <section class="workband mb-3 d-none" data-social-panel="scopeAccounts">
-        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+    <section class="workband" data-social-panel="scopeAccounts" hidden style="--w-mb:var(--weline-space-4);">
+        <div class="w-cluster" data-justify="between" data-align="start" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
             <div>
-                <h5 class="mb-1"><?= __('范围社媒') ?></h5>
-                <div class="text-muted small"><?= __('为当前一级/二级范围配置默认社媒账户，发布时按当前范围自动勾选可发布账户。') ?></div>
+                <h5 style="--w-mb:var(--weline-space-1);"><?= __('范围社媒') ?></h5>
+                <div class="w-text" data-tone="muted" data-size="sm"><?= __('为当前一级/二级范围配置默认社媒账户，发布时按当前范围自动勾选可发布账户。') ?></div>
             </div>
-            <span class="badge bg-info-subtle text-info"><?= __('不在这里保存任何凭据') ?></span>
+            <span class="w-badge w-text" data-w-background="info" data-tone="info"><?= __('不在这里保存任何凭据') ?></span>
         </div>
-        <w:form id="weline-social-scope-account-form" class="d-grid gap-3">
-            <div class="row g-3">
-                <div class="col-lg-4">
-                    <label class="form-label"><?= __('当前范围') ?></label>
-                    <div class="border rounded p-3 bg-light">
-                        <div class="fw-semibold" id="social-scope-account-label"><?= __('未选择范围') ?></div>
-                        <div class="small text-muted" id="social-scope-account-key"></div>
+        <w:form id="weline-social-scope-account-form" class="w-stack" style="--w-gap:var(--weline-space-4);">
+            <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                <div style="--w-span-lg:4;">
+                    <label class="w-field__label"><?= __('当前范围') ?></label>
+                    <div data-w-border="border" data-w-radius="md" data-w-background="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                        <div class="w-text" id="social-scope-account-label" data-weight="strong"><?= __('未选择范围') ?></div>
+                        <div class="w-text" id="social-scope-account-key" data-tone="muted" data-size="sm"></div>
                     </div>
                 </div>
-                <div class="col-lg-8">
-                    <label class="form-label"><?= __('默认社媒账户') ?></label>
+                <div style="--w-span-lg:8;">
+                    <label class="w-field__label"><?= __('默认社媒账户') ?></label>
                     <div class="site-account-grid" id="social-scope-account-grid">
                         <?php foreach ($accounts as $account): ?>
                             <?php if (!is_array($account)) { continue; } ?>
-                            <label class="site-account-item form-check">
-                                <input class="form-check-input" type="checkbox" name="scope_account_ids[]" value="<?= (int)($account['account_id'] ?? 0) ?>">
-                                <span class="form-check-label">
-                                    <span class="fw-semibold d-block"><?= $h((string)($account['account_name'] ?? '')) ?></span>
-                                    <span class="small text-muted"><?= $h((string)($account['platform_title'] ?? $account['platform_code'] ?? '')) ?></span>
+                            <label class="site-account-item w-check">
+                                <input type="checkbox" name="scope_account_ids[]" value="<?= (int)($account['account_id'] ?? 0) ?>">
+                                <span>
+                                    <span class="w-text" data-weight="strong" data-w-display="block"><?= $h((string)($account['account_name'] ?? '')) ?></span>
+                                    <span class="w-text" data-tone="muted" data-size="sm"><?= $h((string)($account['platform_title'] ?? $account['platform_code'] ?? '')) ?></span>
                                     <?php if (!empty($account['publish_enabled']) && (string)($account['test_status'] ?? '') === 'passed'): ?>
-                                        <span class="badge bg-primary-subtle text-primary mt-1"><?= __('可发布') ?></span>
+                                        <span class="w-badge w-text" data-w-background="primary" data-tone="primary" style="--w-mt:var(--weline-space-1);"><?= __('可发布') ?></span>
                                     <?php else: ?>
-                                        <span class="badge bg-light text-muted mt-1"><?= __('仅关系配置') ?></span>
+                                        <span class="w-badge w-text" data-w-background="muted" data-tone="muted" style="--w-mt:var(--weline-space-1);"><?= __('仅关系配置') ?></span>
                                     <?php endif; ?>
                                 </span>
                             </label>
                         <?php endforeach; ?>
-                        <?php if ($accounts === []): ?><span class="text-muted"><?= __('暂无账户。') ?></span><?php endif; ?>
+                        <?php if ($accounts === []): ?><span class="w-text" data-tone="muted"><?= __('暂无账户。') ?></span><?php endif; ?>
                     </div>
                 </div>
             </div>
             <div>
-                <button class="btn btn-primary" type="submit" <?= $socialScopes === [] || $accounts === [] ? 'disabled' : '' ?>>
-                    <i class="mdi mdi-content-save-outline me-1"></i><?= __('保存范围默认社媒') ?>
+                <button class="w-button" type="submit" <?= $socialScopes === [] || $accounts === [] ? 'disabled' : '' ?> data-tone="primary">
+                    <w:icon name="save" size="sm"></w:icon><?= __('保存范围默认社媒') ?>
                 </button>
-                <span class="small social-status ms-2" id="social-scope-account-status"></span>
+                <span class="w-text social-status ms-2" id="social-scope-account-status" data-size="sm"></span>
             </div>
         </w:form>
     </section>
 
-    <section class="workband mb-3 d-none" data-social-panel="creative">
-        <div class="row g-4">
-            <div class="col-lg-5">
-                <h5 class="mb-3"><?= __('生成融媒体创意') ?></h5>
-                <w:form id="weline-social-creative-form" class="d-grid gap-3">
-                    <input class="form-control" name="title" placeholder="<?= $h((string)__('创意标题')) ?>">
-                    <textarea class="form-control" name="prompt" rows="5" placeholder="<?= $h((string)__('输入产品、活动、受众和发布目标')) ?>"></textarea>
-                    <label class="form-check">
-                        <input class="form-check-input" type="checkbox" name="use_ai" value="1">
-                        <span class="form-check-label"><?= __('调用 Weline_Ai 生成') ?></span>
+    <section class="workband" data-social-panel="creative" hidden style="--w-mb:var(--weline-space-4);">
+        <div class="w-grid" style="--w-gap:var(--weline-space-6);">
+            <div style="--w-span-lg:5;">
+                <h5 style="--w-mb:var(--weline-space-4);"><?= __('生成融媒体创意') ?></h5>
+                <w:form id="weline-social-creative-form" class="w-stack" style="--w-gap:var(--weline-space-4);">
+                    <input class="w-input" name="title" placeholder="<?= $h((string)__('创意标题')) ?>">
+                    <textarea class="w-textarea" name="prompt" rows="5" placeholder="<?= $h((string)__('输入产品、活动、受众和发布目标')) ?>"></textarea>
+                    <label class="w-check">
+                        <input type="checkbox" name="use_ai" value="1">
+                        <span><?= __('调用 Weline_Ai 生成') ?></span>
                     </label>
-                    <button class="btn btn-primary" type="submit"><?= __('生成创意草稿') ?></button>
-                    <div class="small social-status" id="social-creative-status"></div>
+                    <button class="w-button" type="submit" data-tone="primary"><?= __('生成创意草稿') ?></button>
+                    <div class="w-text social-status" id="social-creative-status" data-size="sm"></div>
                 </w:form>
             </div>
-            <div class="col-lg-7">
-                <h5 class="mb-3"><?= __('最近草稿') ?></h5>
-                <?php if ($drafts === []): ?><div class="text-muted"><?= __('暂无创意草稿。') ?></div><?php endif; ?>
+            <div style="--w-span-lg:7;">
+                <h5 style="--w-mb:var(--weline-space-4);"><?= __('最近草稿') ?></h5>
+                <?php if ($drafts === []): ?><div class="w-text" data-tone="muted"><?= __('暂无创意草稿。') ?></div><?php endif; ?>
                 <?php foreach ($drafts as $draft): ?>
                     <?php if (!is_array($draft)) { continue; } ?>
-                    <div class="border-bottom py-2">
-                        <div class="fw-semibold">#<?= (int)($draft['draft_id'] ?? 0) ?> <?= $h((string)($draft['title'] ?? '')) ?></div>
-                        <div class="small text-muted"><?= $h((string)($draft['status'] ?? '')) ?></div>
+                    <div data-w-border="bottom" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
+                        <div class="w-text" data-weight="strong">#<?= (int)($draft['draft_id'] ?? 0) ?> <?= $h((string)($draft['title'] ?? '')) ?></div>
+                        <div class="w-text" data-tone="muted" data-size="sm"><?= $h((string)($draft['status'] ?? '')) ?></div>
                     </div>
                 <?php endforeach; ?>
             </div>
         </div>
     </section>
 
-    <section class="workband mb-3 d-none" data-social-panel="publish">
-        <h5 class="mb-3"><?= __('一键发布') ?></h5>
-        <w:form id="weline-social-publish-form" class="row g-3">
-            <div class="col-lg-3">
-                <label class="form-label"><?= __('草稿 ID') ?></label>
-                <input class="form-control" type="number" name="draft_id" min="1" value="<?= (int)($drafts[0]['draft_id'] ?? 0) ?>">
+    <section class="workband" data-social-panel="publish" hidden style="--w-mb:var(--weline-space-4);">
+        <h5 style="--w-mb:var(--weline-space-4);"><?= __('一键发布') ?></h5>
+        <w:form id="weline-social-publish-form" class="w-grid" style="--w-gap:var(--weline-space-4);">
+            <div style="--w-span-lg:3;">
+                <label class="w-field__label"><?= __('草稿 ID') ?></label>
+                <input class="w-input" type="number" name="draft_id" min="1" value="<?= (int)($drafts[0]['draft_id'] ?? 0) ?>">
             </div>
-            <div class="col-lg-5">
-                <label class="form-label"><?= __('发布范围') ?></label>
-                <div class="border rounded p-2 bg-light">
-                    <div class="fw-semibold" id="social-publish-scope-label"><?= __('未选择范围') ?></div>
-                    <div class="small text-muted" id="social-publish-scope-key"></div>
+            <div style="--w-span-lg:5;">
+                <label class="w-field__label"><?= __('发布范围') ?></label>
+                <div data-w-border="border" data-w-radius="md" data-w-background="muted" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                    <div class="w-text" id="social-publish-scope-label" data-weight="strong"><?= __('未选择范围') ?></div>
+                    <div class="w-text" id="social-publish-scope-key" data-tone="muted" data-size="sm"></div>
                 </div>
             </div>
-            <div class="col-lg-4 d-flex align-items-end">
-                <label class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" name="all_sites" value="1" id="social-publish-all-sites">
-                    <span class="form-check-label"><?= __('全部站发布') ?></span>
+            <div class="w-cluster" data-align="end" style="--w-span-lg:4;">
+                <label class="w-check" style="--w-mb:var(--weline-space-2);">
+                    <input type="checkbox" name="all_sites" value="1" id="social-publish-all-sites">
+                    <span><?= __('全部站发布') ?></span>
                 </label>
             </div>
-            <div class="col-12">
-                <label class="form-label"><?= __('发布账户') ?></label>
-                <div class="d-flex flex-wrap gap-3">
+            <div style="--w-span:12;">
+                <label class="w-field__label"><?= __('发布账户') ?></label>
+                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-4);">
                     <?php foreach ($publishableAccounts as $account): ?>
-                        <label class="form-check">
-                            <input class="form-check-input" type="checkbox" name="account_ids[]" value="<?= (int)($account['account_id'] ?? 0) ?>">
-                            <span class="form-check-label"><?= $h((string)($account['account_name'] ?? '')) ?></span>
+                        <label class="w-check">
+                            <input type="checkbox" name="account_ids[]" value="<?= (int)($account['account_id'] ?? 0) ?>">
+                            <span><?= $h((string)($account['account_name'] ?? '')) ?></span>
                         </label>
                     <?php endforeach; ?>
-                    <?php if ($publishableAccounts === []): ?><span class="text-muted"><?= __('暂无可发布账户。') ?></span><?php endif; ?>
+                    <?php if ($publishableAccounts === []): ?><span class="w-text" data-tone="muted"><?= __('暂无可发布账户。') ?></span><?php endif; ?>
                 </div>
             </div>
-            <div class="col-12">
-                <button class="btn btn-primary" type="submit" <?= $publishableAccounts === [] ? 'disabled' : '' ?>><?= __('创建发布批次') ?></button>
-                <span class="small text-muted ms-2"><?= __('默认按当前范围配置的社媒账户发布内容。') ?></span>
-                <span class="small social-status ms-2" id="social-publish-status"></span>
+            <div style="--w-span:12;">
+                <button class="w-button" type="submit" <?= $publishableAccounts === [] ? 'disabled' : '' ?> data-tone="primary"><?= __('创建发布批次') ?></button>
+                <span class="w-text ms-2" data-tone="muted" data-size="sm"><?= __('默认按当前范围配置的社媒账户发布内容。') ?></span>
+                <span class="w-text social-status ms-2" id="social-publish-status" data-size="sm"></span>
             </div>
         </w:form>
     </section>
 
-    <section class="workband mb-3 d-none" data-social-panel="records">
-        <h5 class="mb-3"><?= __('发布记录') ?></h5>
-        <?php if ($batches === []): ?><div class="text-muted"><?= __('暂无发布批次。') ?></div><?php endif; ?>
+    <section class="workband" data-social-panel="records" hidden style="--w-mb:var(--weline-space-4);">
+        <h5 style="--w-mb:var(--weline-space-4);"><?= __('发布记录') ?></h5>
+        <?php if ($batches === []): ?><div class="w-text" data-tone="muted"><?= __('暂无发布批次。') ?></div><?php endif; ?>
         <?php foreach ($batches as $batch): ?>
             <?php if (!is_array($batch)) { continue; } ?>
-            <div class="border-bottom py-2">
-                <div class="fw-semibold">#<?= (int)($batch['batch_id'] ?? 0) ?> <?= $h((string)($batch['title'] ?? '')) ?></div>
-                <div class="small text-muted">
+            <div data-w-border="bottom" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
+                <div class="w-text" data-weight="strong">#<?= (int)($batch['batch_id'] ?? 0) ?> <?= $h((string)($batch['title'] ?? '')) ?></div>
+                <div class="w-text" data-tone="muted" data-size="sm">
                     <?= $h((string)($batch['status'] ?? '')) ?> · <?= (int)($batch['success_count'] ?? 0) ?>/<?= (int)($batch['target_count'] ?? 0) ?>
                 </div>
             </div>
@@ -777,14 +773,14 @@ $socialConfigCenterHref = $socialConfigCenterUrl
     </section>
 
     <section class="workband">
-        <h5 class="mb-2"><?= __('扩展与平台族') ?></h5>
-        <div class="d-flex flex-wrap gap-2">
+        <h5 style="--w-mb:var(--weline-space-2);"><?= __('扩展与平台族') ?></h5>
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
             <?php foreach ($families as $family => $count): ?>
-                <span class="badge bg-primary-subtle text-primary"><?= $h((string)$family) ?> <?= (int)$count ?></span>
+                <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= $h((string)$family) ?> <?= (int)$count ?></span>
             <?php endforeach; ?>
         </div>
         <?php if ($warnings !== []): ?>
-            <div class="alert alert-warning mt-3 mb-0">
+            <div class="w-alert" data-tone="warning" style="--w-mt:var(--weline-space-4);--w-mb:0;">
                 <?php foreach ($warnings as $warning): ?>
                     <div><?= $h($warning) ?></div>
                 <?php endforeach; ?>
@@ -1004,7 +1000,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
             return '';
         }
         var tag = ordered ? 'ol' : 'ul';
-        var html = '<div class="mb-2"><div class="fw-semibold mb-1">' + escapeHtml(title) + '</div>';
+        var html = '<div style="--w-mb:var(--weline-space-2);"><div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);">' + escapeHtml(title) + '</div>';
         html += '<' + tag + ' class="mb-0 ps-3">';
         items.forEach(function (item) {
             html += '<li>' + escapeHtml(String(item || '')) + '</li>';
@@ -1023,7 +1019,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
         var guide = platformGuides[code] || null;
         var title = String(platform.title || code || '<?= $h((string)__('平台')) ?>');
         if (!guide) {
-            body.innerHTML = '<div class="fw-semibold mb-1">' + escapeHtml(title) + ' <?= $h((string)__('官方凭据指南')) ?></div>'
+            body.innerHTML = '<div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);">' + escapeHtml(title) + ' <?= $h((string)__('官方凭据指南')) ?></div>'
                 + renderGuideSection('<?= $h((string)__('通用步骤')) ?>', [
                     '<?= $h((string)__('顶部选好范围类型、站点范围、二级范围。')) ?>',
                     '<?= $h((string)__('需要 App/Client 的平台先点「打开系统配置」。')) ?>',
@@ -1032,39 +1028,39 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 ], true);
             return;
         }
-        var html = '<div class="fw-semibold mb-1">' + escapeHtml(title) + ' <?= $h((string)__('官方凭据指南')) ?></div>';
+        var html = '<div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);">' + escapeHtml(title) + ' <?= $h((string)__('官方凭据指南')) ?></div>';
         if (guide.auth_label) {
-            html += '<div class="mb-2"><span class="badge bg-primary-subtle text-primary">' + escapeHtml(guide.auth_label) + '</span></div>';
+            html += '<div style="--w-mb:var(--weline-space-2);"><span class="w-badge w-text" data-w-background="primary" data-tone="primary">' + escapeHtml(guide.auth_label) + '</span></div>';
         }
         if (guide.system_config_title || (Array.isArray(guide.system_config_fields) && guide.system_config_fields.length)) {
-            html += '<div class="mb-2"><div class="fw-semibold mb-1"><?= $h((string)__('系统配置（融媒体平台应用）')) ?></div>';
+            html += '<div style="--w-mb:var(--weline-space-2);"><div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $h((string)__('系统配置（融媒体平台应用）')) ?></div>';
             if (guide.system_config_title) {
-                html += '<div class="mb-1">' + escapeHtml(guide.system_config_title) + '</div>';
+                html += '<div style="--w-mb:var(--weline-space-1);">' + escapeHtml(guide.system_config_title) + '</div>';
             }
             if (Array.isArray(guide.system_config_fields) && guide.system_config_fields.length) {
-                html += '<div class="text-muted mb-1"><?= $h((string)__('字段')) ?>：' + escapeHtml(guide.system_config_fields.join('、')) + '</div>';
+                html += '<div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= $h((string)__('字段')) ?>：' + escapeHtml(guide.system_config_fields.join('、')) + '</div>';
             }
             if (guide.guide_key) {
-                html += '<a class="small" href="' + escapeHtml(buildSystemConfigUrl()) + '" id="social-open-system-config-guide" target="_top" rel="noopener"><?= $h((string)__('立即打开系统配置')) ?></a>';
+                html += '<a class="w-text" href="' + escapeHtml(buildSystemConfigUrl()) + '" id="social-open-system-config-guide" target="_top" rel="noopener" data-size="sm"><?= $h((string)__('立即打开系统配置')) ?></a>';
             } else {
-                html += '<div class="text-muted small"><?= $h((string)__('该平台无需系统配置应用，直接在下方账户表单填写凭据。')) ?></div>';
+                html += '<div class="w-text" data-tone="muted" data-size="sm"><?= $h((string)__('该平台无需系统配置应用，直接在下方账户表单填写凭据。')) ?></div>';
             }
             html += '</div>';
         } else if (!guide.guide_key) {
-            html += '<div class="text-muted small mb-2"><?= $h((string)__('该平台无需系统配置应用，直接在下方账户表单填写凭据。')) ?></div>';
+            html += '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);"><?= $h((string)__('该平台无需系统配置应用，直接在下方账户表单填写凭据。')) ?></div>';
         }
         html += renderGuideSection('<?= $h((string)__('开发者后台准备')) ?>', guide.developer_steps, true);
         html += renderGuideSection('<?= $h((string)__('本页连接步骤')) ?>', guide.account_steps, true);
         if (Array.isArray(guide.account_fields) && guide.account_fields.length) {
-            html += '<div class="mb-2"><div class="fw-semibold mb-1"><?= $h((string)__('账户凭据字段')) ?></div><div>'
+            html += '<div style="--w-mb:var(--weline-space-2);"><div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $h((string)__('账户凭据字段')) ?></div><div>'
                 + escapeHtml(guide.account_fields.join('、')) + '</div></div>';
         }
         if (guide.publish_note) {
-            html += '<div class="mb-2"><div class="fw-semibold mb-1"><?= $h((string)__('发布能力')) ?></div><div>'
+            html += '<div style="--w-mb:var(--weline-space-2);"><div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $h((string)__('发布能力')) ?></div><div>'
                 + escapeHtml(guide.publish_note) + '</div></div>';
         }
         if (Array.isArray(guide.docs) && guide.docs.length) {
-            html += '<div class="mb-0"><div class="fw-semibold mb-1"><?= $h((string)__('官方文档')) ?></div><div class="d-flex flex-wrap gap-2">';
+            html += '<div style="--w-mb:0;"><div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $h((string)__('官方文档')) ?></div><div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">';
             guide.docs.forEach(function (doc) {
                 if (!doc || !doc.url) {
                     return;

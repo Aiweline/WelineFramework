@@ -23,10 +23,10 @@ use Weline\Visitor\Service\PixelStatisticsService;
  * 流量渠道后台：列表（B03）+ 新建（B04）+ 编辑/停用（B05）+ 详情总计（B10）。
  * ACL：Weline_Visitor::traffic_channel*
  */
-#[Acl('Weline_Visitor::traffic_channel', '流量渠道', 'mdi-bullhorn-outline', '像素流量渠道管理', 'Weline_Backend::data_tools_group')]
+#[Acl('Weline_Visitor::traffic_channel', '流量渠道', 'circle', '像素流量渠道管理', 'Weline_Backend::data_tools_group')]
 class TrafficChannel extends BackendController
 {
-    #[Acl('Weline_Visitor::traffic_channel_index', '查看流量渠道列表', 'mdi-format-list-bulleted', '查看流量渠道列表')]
+    #[Acl('Weline_Visitor::traffic_channel_index', '查看流量渠道列表', 'list', '查看流量渠道列表')]
     public function index(): string
     {
         $kindFilter = \trim((string)($this->request->getGet('kind') ?? PixelChannel::KIND_CAMPAIGN));
@@ -80,7 +80,7 @@ class TrafficChannel extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Visitor::traffic_channel_add', '新建流量渠道', 'mdi-plus', '新建投放渠道')]
+    #[Acl('Weline_Visitor::traffic_channel_add', '新建流量渠道', 'plus', '新建投放渠道')]
     public function getAdd(): string
     {
         /** @var PixelChannelCreateService $create */
@@ -92,7 +92,7 @@ class TrafficChannel extends BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Visitor::traffic_channel_add_post', '提交新建流量渠道', 'mdi-plus', '提交新建投放渠道')]
+    #[Acl('Weline_Visitor::traffic_channel_add_post', '提交新建流量渠道', 'plus', '提交新建投放渠道')]
     public function postAdd(): string
     {
         /** @var PixelChannelCreateService $create */
@@ -118,7 +118,7 @@ class TrafficChannel extends BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Visitor::traffic_channel_edit', '编辑流量渠道', 'mdi-pencil', '编辑投放渠道')]
+    #[Acl('Weline_Visitor::traffic_channel_edit', '编辑流量渠道', 'edit', '编辑投放渠道')]
     public function getEdit(): string
     {
         $id = (int)($this->request->getGet('id') ?? $this->request->getParam('id') ?? 0);
@@ -143,7 +143,7 @@ class TrafficChannel extends BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Visitor::traffic_channel_edit_post', '提交编辑流量渠道', 'mdi-pencil', '提交编辑投放渠道')]
+    #[Acl('Weline_Visitor::traffic_channel_edit_post', '提交编辑流量渠道', 'edit', '提交编辑投放渠道')]
     public function postEdit(): string
     {
         $id = (int)($this->request->getPost('id')
@@ -186,7 +186,7 @@ class TrafficChannel extends BackendController
     /**
      * B10–B12：渠道详情总计 + 事件轨迹 + 热表漏斗（F05b 起可切换营销简漏斗 / 电商四步）。
      */
-    #[Acl('Weline_Visitor::traffic_channel_detail', '查看流量渠道详情总计', 'mdi-chart-box-outline', '查看投放渠道热表总计')]
+    #[Acl('Weline_Visitor::traffic_channel_detail', '查看流量渠道详情总计', 'chart', '查看投放渠道热表总计')]
     public function getDetail(): string
     {
         $id = (int)($this->request->getGet('id') ?? $this->request->getParam('id') ?? 0);
@@ -252,7 +252,7 @@ class TrafficChannel extends BackendController
     /**
      * 列表快捷停用/启用。
      */
-    #[Acl('Weline_Visitor::traffic_channel_toggle', '停用或启用流量渠道', 'mdi-toggle-switch', '停用或启用投放渠道')]
+    #[Acl('Weline_Visitor::traffic_channel_toggle', '停用或启用流量渠道', 'switch', '停用或启用投放渠道')]
     public function postToggleEnabled(): string
     {
         $id = (int)($this->request->getPost('id') ?? $this->request->getGet('id') ?? 0);

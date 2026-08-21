@@ -22,13 +22,13 @@ use Weline\Marketing\Service\CampaignService;
 /**
  * 促销活动管理控制器
  */
-#[Acl('Weline_Marketing::campaign', '促销活动', 'mdi-bullhorn', '促销活动管理', 'Weline_Backend::marketing_group')]
+#[Acl('Weline_Marketing::campaign', '促销活动', 'circle', '促销活动管理', 'Weline_Backend::marketing_group')]
 class Campaign extends BackendController
 {
     /**
      * 活动列表
      */
-    #[Acl('Weline_Marketing::campaign_list', '活动列表', 'mdi-format-list-bulleted', '查看促销活动列表')]
+    #[Acl('Weline_Marketing::campaign_list', '活动列表', 'list', '查看促销活动列表')]
     public function index(): string
     {
         try {
@@ -51,7 +51,7 @@ class Campaign extends BackendController
         }
     }
 
-    #[Acl('Weline_Marketing::campaign_add', '添加促销活动', 'mdi-plus', '打开促销活动新建表单')]
+    #[Acl('Weline_Marketing::campaign_add', '添加促销活动', 'plus', '打开促销活动新建表单')]
     public function getAdd(): string
     {
         try {
@@ -67,7 +67,7 @@ class Campaign extends BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Marketing::campaign_save', '保存促销活动', 'mdi-content-save', '保存促销活动')]
+    #[Acl('Weline_Marketing::campaign_save', '保存促销活动', 'save', '保存促销活动')]
     public function postSave(): string
     {
         try {

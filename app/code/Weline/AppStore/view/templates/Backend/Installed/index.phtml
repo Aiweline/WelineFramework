@@ -52,16 +52,16 @@ foreach ($modules as $module) {
 
 $runningLabel = htmlspecialchars((string)__('正在卸载'), ENT_QUOTES, 'UTF-8');
 ?>
-<div class="container-fluid py-3">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+<div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <div class="w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
         <div>
-            <h1 class="h4 mb-1"><?= __('我的模块') ?></h1>
-            <div class="text-muted small"><?= __('这里管理从官方 App 商店安装的模块；卸载直接走系统模块卸载流程，数据和文件备份由系统自动完成。') ?></div>
+            <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('我的模块') ?></h1>
+            <div class="w-text" data-tone="muted" data-size="sm"><?= __('这里管理从官方 App 商店安装的模块；卸载直接走系统模块卸载流程，数据和文件备份由系统自动完成。') ?></div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
             <?php if ($wlsPanelReturn && $wlsPanelUrl !== ''): ?>
-                <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($wlsPanelUrl, ENT_QUOTES, 'UTF-8') ?>">
-                    <i class="bi bi-arrow-left me-1"></i><?= __('Back To WLS Panel') ?>
+                <a class="w-button" href="<?= htmlspecialchars($wlsPanelUrl, ENT_QUOTES, 'UTF-8') ?>" data-tone="neutral" data-variant="outline">
+                    <w:icon name="arrow-left" size="sm"></w:icon><?= __('Back To WLS Panel') ?>
                 </a>
             <?php endif; ?>
             <?php if ($checkUpdateAction !== ''): ?>
@@ -69,102 +69,102 @@ $runningLabel = htmlspecialchars((string)__('正在卸载'), ENT_QUOTES, 'UTF-8'
                     <?php if ($wlsPanelReturn): ?>
                         <input type="hidden" name="wls_panel_return" value="1">
                     <?php endif; ?>
-                    <button class="btn btn-primary" type="submit">
-                        <i class="bi bi-arrow-repeat me-1"></i><?= __('检查更新') ?>
+                    <button class="w-button" type="submit" data-tone="primary">
+                        <w:icon name="circle" size="sm"></w:icon><?= __('检查更新') ?>
                     </button>
                 </w:form>
             <?php endif; ?>
         </div>
     </div>
 
-    <div class="alert alert-info d-none" role="status" aria-live="polite" data-appstore-uninstall-pending>
-        <div class="fw-semibold"><?= __('正在卸载模块，请不要关闭页面。') ?></div>
-        <div class="small mt-1">
+    <div class="w-alert" role="status" aria-live="polite" data-appstore-uninstall-pending hidden data-tone="info">
+        <div class="w-text" data-weight="strong"><?= __('正在卸载模块，请不要关闭页面。') ?></div>
+        <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);">
             <?= __('系统正在执行数据备份、文件备份和模块卸载，完成后页面会刷新。') ?>
             <span class="ms-1" data-appstore-uninstall-pending-name></span>
         </div>
     </div>
 
     <?php if ($checkUpdateResult): ?>
-        <div class="alert <?= !empty($checkUpdateResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
+        <div class="w-alert <?= !empty($checkUpdateResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
             <?= htmlspecialchars((string)($checkUpdateResult['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
         </div>
     <?php endif; ?>
 
     <?php if ($updateResult): ?>
-        <div class="alert <?= !empty($updateResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
-            <div class="fw-semibold"><?= htmlspecialchars((string)($updateResult['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+        <div class="w-alert <?= !empty($updateResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
+            <div class="w-text" data-weight="strong"><?= htmlspecialchars((string)($updateResult['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
             <?php if (!empty($updateResult['previous_version']) || !empty($updateResult['version'])): ?>
-                <div class="small mt-1">
+                <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);">
                     <?= __('版本：') ?><?= htmlspecialchars((string)($updateResult['previous_version'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                     →
                     <?= htmlspecialchars((string)($updateResult['version'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                 </div>
             <?php endif; ?>
             <?php if (!empty($updateResult['backup_dir'])): ?>
-                <div class="small mt-1"><?= __('旧版本备份：') ?><code><?= htmlspecialchars((string)$updateResult['backup_dir'], ENT_QUOTES, 'UTF-8') ?></code></div>
+                <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('旧版本备份：') ?><code><?= htmlspecialchars((string)$updateResult['backup_dir'], ENT_QUOTES, 'UTF-8') ?></code></div>
             <?php endif; ?>
             <?php if (!empty($updateResult['install_record_path'])): ?>
-                <div class="small mt-1"><?= __('更新记录：') ?><code><?= htmlspecialchars((string)$updateResult['install_record_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
+                <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('更新记录：') ?><code><?= htmlspecialchars((string)$updateResult['install_record_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
             <?php endif; ?>
         </div>
     <?php endif; ?>
 
     <?php if ($uninstallResult): ?>
-        <div class="alert <?= !empty($uninstallResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
-            <div class="fw-semibold"><?= htmlspecialchars((string)($uninstallResult['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+        <div class="w-alert <?= !empty($uninstallResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
+            <div class="w-text" data-weight="strong"><?= htmlspecialchars((string)($uninstallResult['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
             <?php if (!empty($uninstallResult['module_name'])): ?>
-                <div class="small mt-1"><?= __('模块：') ?><code><?= htmlspecialchars((string)$uninstallResult['module_name'], ENT_QUOTES, 'UTF-8') ?></code></div>
+                <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('模块：') ?><code><?= htmlspecialchars((string)$uninstallResult['module_name'], ENT_QUOTES, 'UTF-8') ?></code></div>
             <?php endif; ?>
             <?php if (!empty($uninstallResult['install_record_path'])): ?>
-                <div class="small mt-1"><?= __('卸载记录：') ?><code><?= htmlspecialchars((string)$uninstallResult['install_record_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
+                <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('卸载记录：') ?><code><?= htmlspecialchars((string)$uninstallResult['install_record_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
             <?php endif; ?>
             <?php if (!empty($uninstallResult['output'])): ?>
-                <details class="mt-2">
-                    <summary class="small"><?= __('系统卸载输出') ?></summary>
-                    <pre class="small bg-light border rounded p-2 mt-2 mb-0 text-break"><?= htmlspecialchars((string)$uninstallResult['output'], ENT_QUOTES, 'UTF-8') ?></pre>
+                <details style="--w-mt:var(--weline-space-2);">
+                    <summary class="w-text" data-size="sm"><?= __('系统卸载输出') ?></summary>
+                    <pre class="w-text" data-w-background="muted" data-w-border="border" data-w-radius="md" data-w-text-wrap="break" data-size="sm" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);--w-mt:var(--weline-space-2);--w-mb:0;"><?= htmlspecialchars((string)$uninstallResult['output'], ENT_QUOTES, 'UTF-8') ?></pre>
                 </details>
             <?php endif; ?>
         </div>
     <?php elseif ($latestUninstallRecord): ?>
-        <div class="alert alert-success" role="status">
-            <div class="fw-semibold"><?= __('最近一次卸载已完成') ?></div>
-            <div class="small mt-1">
+        <div class="w-alert" role="status" data-tone="success">
+            <div class="w-text" data-weight="strong"><?= __('最近一次卸载已完成') ?></div>
+            <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);">
                 <?= __('模块：') ?><code><?= htmlspecialchars((string)($latestUninstallRecord['module_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code>
                 <?php if (!empty($latestUninstallRecord['version'])): ?>
                     <span class="ms-2"><?= __('版本：') ?><?= htmlspecialchars((string)$latestUninstallRecord['version'], ENT_QUOTES, 'UTF-8') ?></span>
                 <?php endif; ?>
             </div>
             <?php if (!empty($latestUninstallRecord['recorded_at'])): ?>
-                <div class="small mt-1"><?= __('卸载时间：') ?><?= htmlspecialchars((string)$latestUninstallRecord['recorded_at'], ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('卸载时间：') ?><?= htmlspecialchars((string)$latestUninstallRecord['recorded_at'], ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
             <?php if (!empty($latestUninstallRecord['record_path'])): ?>
-                <div class="small mt-1"><?= __('卸载结果记录：') ?><code><?= htmlspecialchars((string)$latestUninstallRecord['record_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
+                <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('卸载结果记录：') ?><code><?= htmlspecialchars((string)$latestUninstallRecord['record_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
             <?php endif; ?>
         </div>
     <?php endif; ?>
 
     <?php if ($reviewResult): ?>
-        <div class="alert <?= !empty($reviewResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
+        <div class="w-alert <?= !empty($reviewResult['success']) ? 'alert-success' : 'alert-danger' ?>" role="alert">
             <?= htmlspecialchars((string)($reviewResult['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
         </div>
     <?php endif; ?>
 
     <?php if ($updateError !== ''): ?>
-        <div class="alert alert-warning" role="alert">
-            <div class="fw-semibold"><?= __('更新检查不可用') ?></div>
-            <div class="small mt-1"><?= htmlspecialchars($updateError, ENT_QUOTES, 'UTF-8') ?></div>
+        <div class="w-alert" role="alert" data-tone="warning">
+            <div class="w-text" data-weight="strong"><?= __('更新检查不可用') ?></div>
+            <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= htmlspecialchars($updateError, ENT_QUOTES, 'UTF-8') ?></div>
         </div>
     <?php endif; ?>
 
     <?php if ($tagFilterOptions || $surfaceFilterOptions || $tagFilter !== '' || $surfaceFilter !== ''): ?>
-        <w:form class="row g-2 align-items-end mb-3" method="get">
+        <w:form class="w-grid" method="get" data-align="end" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
             <?php if ($wlsPanelReturn): ?>
                 <input type="hidden" name="wls_panel_return" value="1">
             <?php endif; ?>
-            <div class="col-12 col-md-4">
-                <label class="form-label small text-muted mb-1" for="appstore-installed-tag"><?= __('标签') ?></label>
-                <select class="form-select" id="appstore-installed-tag" name="tag">
+            <div style="--w-span:12;--w-span-md:4;">
+                <label class="w-field__label w-text" for="appstore-installed-tag" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('标签') ?></label>
+                <select class="w-select" id="appstore-installed-tag" name="tag">
                     <option value=""<?= $tagFilter === '' ? ' selected' : '' ?>><?= __('全部标签') ?></option>
                     <?php foreach ($tagFilterOptions as $code => $label): ?>
                         <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"<?= $tagFilter === (string)$code ? ' selected' : '' ?>>
@@ -173,9 +173,9 @@ $runningLabel = htmlspecialchars((string)__('正在卸载'), ENT_QUOTES, 'UTF-8'
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-12 col-md-4">
-                <label class="form-label small text-muted mb-1" for="appstore-installed-surface"><?= __('Surface') ?></label>
-                <select class="form-select" id="appstore-installed-surface" name="surface">
+            <div style="--w-span:12;--w-span-md:4;">
+                <label class="w-field__label w-text" for="appstore-installed-surface" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('Surface') ?></label>
+                <select class="w-select" id="appstore-installed-surface" name="surface">
                     <option value=""<?= $surfaceFilter === '' ? ' selected' : '' ?>><?= __('全部 Surface') ?></option>
                     <?php foreach ($surfaceFilterOptions as $code => $label): ?>
                         <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"<?= $surfaceFilter === (string)$code ? ' selected' : '' ?>>
@@ -184,18 +184,18 @@ $runningLabel = htmlspecialchars((string)__('正在卸载'), ENT_QUOTES, 'UTF-8'
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
-                <button class="btn btn-primary" type="submit"><?= __('筛选') ?></button>
+            <div class="w-cluster" data-wrap="true" style="--w-span:12;--w-span-md:4;--w-gap:var(--weline-space-2);">
+                <button class="w-button" type="submit" data-tone="primary"><?= __('筛选') ?></button>
                 <?php if (($tagFilter !== '' || $surfaceFilter !== '') && $installedUrl !== ''): ?>
-                    <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($installedUrl, ENT_QUOTES, 'UTF-8') ?>"><?= __('清除筛选') ?></a>
+                    <a class="w-button" href="<?= htmlspecialchars($installedUrl, ENT_QUOTES, 'UTF-8') ?>" data-tone="neutral" data-variant="outline"><?= __('清除筛选') ?></a>
                 <?php endif; ?>
             </div>
         </w:form>
     <?php endif; ?>
 
     <?php if ($rows): ?>
-        <div class="table-responsive">
-            <table class="table align-middle">
+        <div class="w-table-wrap">
+            <table class="w-table" data-w-vertical="middle">
                 <thead>
                 <tr>
                     <th><?= __('模块') ?></th>
@@ -211,13 +211,13 @@ $runningLabel = htmlspecialchars((string)__('正在卸载'), ENT_QUOTES, 'UTF-8'
                 <?php foreach ($rows as $row): ?>
                     <tr>
                         <td>
-                            <div class="fw-semibold"><?= htmlspecialchars($row['display_name'], ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="text-muted small"><?= htmlspecialchars($row['module_name'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="w-text" data-weight="strong"><?= htmlspecialchars($row['display_name'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= htmlspecialchars($row['module_name'], ENT_QUOTES, 'UTF-8') ?></div>
                             <?php if ($row['marketplace_tags']): ?>
-                                <div class="d-flex flex-wrap gap-1 mt-2">
+                                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-1);--w-mt:var(--weline-space-2);">
                                     <?php foreach ($row['marketplace_tags'] as $tag): ?>
                                         <?php if (is_array($tag) && !empty($tag['code'])): ?>
-                                            <span class="badge text-bg-light border" title="<?= htmlspecialchars((string)$tag['code'], ENT_QUOTES, 'UTF-8') ?>">
+                                            <span class="w-badge" title="<?= htmlspecialchars((string)$tag['code'], ENT_QUOTES, 'UTF-8') ?>" data-w-background="muted" data-w-border="border" data-tone="muted">
                                                 <?= htmlspecialchars((string)($tag['label'] ?? $tag['code']), ENT_QUOTES, 'UTF-8') ?>
                                             </span>
                                         <?php endif; ?>
@@ -225,95 +225,95 @@ $runningLabel = htmlspecialchars((string)__('正在卸载'), ENT_QUOTES, 'UTF-8'
                                 </div>
                             <?php endif; ?>
                             <?php if ($row['surface_codes']): ?>
-                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-1);--w-mt:var(--weline-space-1);">
                                     <?php foreach ($row['surface_codes'] as $surface): ?>
-                                        <span class="badge bg-secondary"><?= htmlspecialchars((string)$surface, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <span class="w-badge" data-w-background="muted"><?= htmlspecialchars((string)$surface, ENT_QUOTES, 'UTF-8') ?></span>
                                     <?php endforeach; ?>
                                 </div>
                             <?php endif; ?>
                             <?php if ($row['readme_path'] !== ''): ?>
-                                <div class="text-muted small"><?= __('说明：') ?><code><?= htmlspecialchars($row['readme_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('说明：') ?><code><?= htmlspecialchars($row['readme_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars($row['version'], ENT_QUOTES, 'UTF-8') ?></td>
                         <td><?= $row['latest_version'] !== '' ? htmlspecialchars($row['latest_version'], ENT_QUOTES, 'UTF-8') : __('未获取') ?></td>
                         <td>
                             <?php if ($row['update_available']): ?>
-                                <span class="badge bg-warning text-dark"><?= __('可更新') ?></span>
+                                <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('可更新') ?></span>
                                 <?php if ($row['update_message'] !== ''): ?>
-                                    <div class="text-muted small"><?= htmlspecialchars($row['update_message'], ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="w-text" data-tone="muted" data-size="sm"><?= htmlspecialchars($row['update_message'], ENT_QUOTES, 'UTF-8') ?></div>
                                 <?php endif; ?>
                             <?php elseif ($row['latest_version'] !== ''): ?>
-                                <span class="badge bg-success"><?= __('已是最新') ?></span>
+                                <span class="w-badge" data-w-background="success"><?= __('已是最新') ?></span>
                             <?php else: ?>
-                                <span class="badge bg-secondary"><?= __('待检查') ?></span>
+                                <span class="w-badge" data-w-background="muted"><?= __('待检查') ?></span>
                             <?php endif; ?>
                         </td>
                         <td>
-                            <span class="badge bg-info"><?= __('官方商城') ?></span>
+                            <span class="w-badge" data-w-background="info"><?= __('官方商城') ?></span>
                             <?php if ($row['platform_module_id'] > 0): ?>
-                                <div class="text-muted small">#<?= (int)$row['platform_module_id'] ?></div>
+                                <div class="w-text" data-tone="muted" data-size="sm">#<?= (int)$row['platform_module_id'] ?></div>
                             <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($row['enabled']): ?>
-                                <span class="badge bg-success"><?= __('已启用') ?></span>
+                                <span class="w-badge" data-w-background="success"><?= __('已启用') ?></span>
                             <?php elseif ($row['registered']): ?>
-                                <span class="badge bg-secondary"><?= __('已注册未启用') ?></span>
+                                <span class="w-badge" data-w-background="muted"><?= __('已注册未启用') ?></span>
                             <?php else: ?>
-                                <span class="badge bg-warning text-dark"><?= __('系统中已不存在') ?></span>
+                                <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('系统中已不存在') ?></span>
                             <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($row['installed_at'] !== ''): ?>
-                                <div class="small text-muted"><?= __('安装：') ?><?= htmlspecialchars($row['installed_at'], ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('安装：') ?><?= htmlspecialchars($row['installed_at'], ENT_QUOTES, 'UTF-8') ?></div>
                             <?php endif; ?>
                             <?php if ($row['updated_at'] !== ''): ?>
-                                <div class="small text-muted"><?= __('更新：') ?><?= htmlspecialchars($row['updated_at'], ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('更新：') ?><?= htmlspecialchars($row['updated_at'], ENT_QUOTES, 'UTF-8') ?></div>
                             <?php endif; ?>
-                            <div class="d-flex flex-wrap gap-2 mt-2">
+                            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-2);">
                                 <?php if ($row['update_available'] && $updateAction !== '' && $row['install_id'] > 0): ?>
                                     <w:form method="post" action="@var($updateAction)">
                                         <?php if ($wlsPanelReturn): ?>
                                             <input type="hidden" name="wls_panel_return" value="1">
                                         <?php endif; ?>
                                         <input type="hidden" name="install_id" value="<?= (int)$row['install_id'] ?>">
-                                        <button class="btn btn-sm btn-primary" type="submit">
-                                            <i class="bi bi-cloud-arrow-down me-1"></i><?= __('更新') ?>
+                                        <button class="w-button" type="submit" data-tone="primary" data-size="sm">
+                                            <w:icon name="arrow-down" size="sm"></w:icon><?= __('更新') ?>
                                         </button>
                                     </w:form>
                                 <?php endif; ?>
                                 <?php if ($uninstallAction !== '' && $row['install_id'] > 0 && $row['module_name'] !== 'Weline_AppStore'): ?>
                                     <w:form method="post" action="@var($uninstallAction)" data-appstore-uninstall-form data-module-name="@var($row['module_name'])">
                                         <input type="hidden" name="install_id" value="<?= (int)$row['install_id'] ?>">
-                                        <button class="btn btn-sm btn-outline-danger" type="submit" data-appstore-uninstall-button>
-                                            <span class="spinner-border spinner-border-sm me-1 d-none" aria-hidden="true" data-appstore-uninstall-spinner></span>
-                                            <i class="bi bi-trash me-1" data-appstore-uninstall-icon></i>
+                                        <button class="w-button" type="submit" data-appstore-uninstall-button data-tone="danger" data-variant="outline" data-size="sm">
+                                            <span class="w-spinner me-1" aria-hidden="true" data-appstore-uninstall-spinner hidden data-size="sm"></span>
+                                            <w:icon name="trash" size="sm"></w:icon>
                                             <span data-appstore-uninstall-label><?= __('卸载') ?></span>
                                         </button>
                                     </w:form>
                                 <?php endif; ?>
                             </div>
-                            <div class="small text-muted mt-2"><?= __('卸载前系统会自动执行数据与文件备份。') ?></div>
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);"><?= __('卸载前系统会自动执行数据与文件备份。') ?></div>
                             <?php if ($reviewAction !== '' && $row['platform_module_id'] > 0): ?>
-                                <w:form class="border rounded p-2 mt-2" method="post" action="@var($reviewAction)">
+                                <w:form method="post" action="@var($reviewAction)" data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);--w-mt:var(--weline-space-2);">
                                     <input type="hidden" name="platform_module_id" value="<?= (int)$row['platform_module_id'] ?>">
-                                    <div class="row g-2 align-items-end">
-                                        <div class="col-12 col-md-3">
-                                            <label class="form-label small text-muted mb-1"><?= __('评分') ?></label>
-                                            <select class="form-select form-select-sm" name="rating">
+                                    <div class="w-grid" data-align="end" style="--w-gap:var(--weline-space-2);">
+                                        <div style="--w-span:12;--w-span-md:3;">
+                                            <label class="w-field__label w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('评分') ?></label>
+                                            <select class="w-select" name="rating" data-size="sm">
                                                 <?php for ($score = 5; $score >= 1; $score--): ?>
                                                     <option value="<?= $score ?>"><?= $score ?>/5</option>
                                                 <?php endfor; ?>
                                             </select>
                                         </div>
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label small text-muted mb-1"><?= __('评价') ?></label>
-                                            <input class="form-control form-control-sm" name="content" placeholder="<?= __('安装使用后的反馈') ?>">
+                                        <div style="--w-span:12;--w-span-md:6;">
+                                            <label class="w-field__label w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('评价') ?></label>
+                                            <input class="w-input" name="content" placeholder="<?= __('安装使用后的反馈') ?>" data-size="sm">
                                         </div>
-                                        <div class="col-12 col-md-3">
-                                            <button class="btn btn-sm btn-outline-primary w-100" type="submit">
-                                                <i class="bi bi-star me-1"></i><?= __('提交评价') ?>
+                                        <div style="--w-span:12;--w-span-md:3;">
+                                            <button class="w-button" type="submit" data-w-width="full" data-tone="primary" data-variant="outline" data-size="sm">
+                                                <w:icon name="star" size="sm"></w:icon><?= __('提交评价') ?>
                                             </button>
                                         </div>
                                     </div>
@@ -326,9 +326,9 @@ $runningLabel = htmlspecialchars((string)__('正在卸载'), ENT_QUOTES, 'UTF-8'
             </table>
         </div>
     <?php else: ?>
-        <div class="alert alert-info" role="alert">
-            <div class="fw-semibold"><?= __('暂无 App 商城安装记录。') ?></div>
-            <div class="small mt-1"><?= __('当前列表只展示通过官方 App 商店安装的应用；系统内置模块不会出现在这里。') ?></div>
+        <div class="w-alert" role="alert" data-tone="info">
+            <div class="w-text" data-weight="strong"><?= __('暂无 App 商城安装记录。') ?></div>
+            <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('当前列表只展示通过官方 App 商店安装的应用；系统内置模块不会出现在这里。') ?></div>
         </div>
     <?php endif; ?>
 </div>

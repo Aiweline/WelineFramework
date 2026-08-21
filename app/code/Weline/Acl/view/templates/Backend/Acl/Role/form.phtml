@@ -5,27 +5,27 @@
  */
 ?>
 <!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>Acl权限管理</lang>
             </h4>
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item">
                         <span>
                             <lang>系统配置</lang>
                         </span>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/backend/acl/role')"><lang>Acl角色管理</lang></a>
                     </li>
-                    <li class='breadcrumb-item active'>
+                    <li class="w-breadcrumb__item" data-state="active">
                         <lang>Acl角色添加</lang>
                     </li>
                 </ol>
@@ -35,52 +35,47 @@
     </div>
 </div>
 <!-- end page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>Acl权限管理</lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>支持角色权限管理</lang>
                 </p>
-                <w:form class='needs-validation' action="{{action}}" method="post"
-                      novalidate>
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='role_name'><lang>角色名</lang></label>
+                <w:form class="w-form" action="{{action}}" method="post" novalidate>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='role_name'><lang>角色名</lang></label>
                                 <if condition="edit_role.role_id">
                                     <input type='hidden' name="role_id" value='{{edit_role.role_id}}'>
                                 </if>
-                                <input type='text' class='form-control' name="role_name" id='role_name'
-                                       placeholder='@lang{请输入角色名}' value='{{edit_role.role_name}}'
-                                       required>
-                                <div class='valid-feedback'>
+                                <input type='text' class="w-input" name="role_name" id='role_name' placeholder='@lang{请输入角色名}' value='{{edit_role.role_name}}' required>
+                                <div class="w-field__hint">
                                     <lang>角色名称验证成功</lang>
                                 </div>
-                                <div class='invalid-feedback'>
+                                <div class="w-field__error">
                                     <lang>请输入角色名称</lang>
                                 </div>
                             </div>
                         </div>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='role_description'><lang>角色描述</lang></label>
-                                <textarea type='text' class='form-control' name="role_description" id='role_description'
-                                       placeholder='@lang{请输入角色描述}'
-                                          required>{{edit_role.role_description}}</textarea>
-                                <div class='valid-feedback'>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for='role_description'><lang>角色描述</lang></label>
+                                <textarea type='text' class="w-textarea" name="role_description" id='role_description' placeholder='@lang{请输入角色描述}' required>{{edit_role.role_description}}</textarea>
+                                <div class="w-field__hint">
                                     <lang>角色描述验证成功</lang>
                                 </div>
-                                <div class='invalid-feedback'>
+                                <div class="w-field__error">
                                     <lang>请输入角色描述</lang>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <button type='submit' class='btn btn-primary'><lang>提交</lang></button>
+                    <button type='submit' class="w-button" data-tone="primary"><lang>提交</lang></button>
                 </w:form>
             </div>
         </div>

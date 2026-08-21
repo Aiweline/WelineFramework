@@ -167,7 +167,7 @@ class SitemapSubmit implements CronTaskInterface
                         __('以下站点未绑定 SEO 账户，无法自动提交 sitemap：') . "\n\n" 
                             . implode("\n", $stats['unbound_websites']) . "\n\n" 
                             . __('请前往"SEO管理 > Sitemap管理"或"站点管理"绑定 SEO 账户。'),
-                        ['source_module' => 'Weline_Seo', 'icon' => 'ri-file-list-line']
+                        ['source_module' => 'Weline_Seo', 'icon' => 'list']
                     );
                 } catch (\Exception $e) {
                     w_log_error('[Weline_Seo] SitemapSubmit message error: ' . $e->getMessage());

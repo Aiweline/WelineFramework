@@ -26,7 +26,7 @@ use Weline\Order\Service\OrderStatusService;
 /**
  * 订单状态管理控制器
  */
-#[Acl('Weline_Order::status_controller', '订单状态控制器', 'mdi-flag', '订单状态管理', 'Weline_Backend::order_group')]
+#[Acl('Weline_Order::status_controller', '订单状态控制器', 'circle', '订单状态管理', 'Weline_Backend::order_group')]
 class Status extends BackendController
 {
     private OrderStatusService $statusService;
@@ -41,7 +41,7 @@ class Status extends BackendController
     /**
      * 状态列表页
      */
-    #[Acl('Weline_Order::status_manage', '查看订单状态', 'mdi-format-list-bulleted', '查看订单状态列表', 'Weline_Backend::order_group')]
+    #[Acl('Weline_Order::status_manage', '查看订单状态', 'list', '查看订单状态列表', 'Weline_Backend::order_group')]
     public function index()
     {
         try {
@@ -72,7 +72,7 @@ class Status extends BackendController
     /**
      * 编辑状态
      */
-    #[Acl('Weline_Order::status_edit', '编辑订单状态', 'mdi-pencil', '编辑订单状态', 'Weline_Order::status_manage')]
+    #[Acl('Weline_Order::status_edit', '编辑订单状态', 'edit', '编辑订单状态', 'Weline_Order::status_manage')]
     public function edit()
     {
         try {
@@ -123,7 +123,7 @@ class Status extends BackendController
     /**
      * 保存状态
      */
-    #[Acl('Weline_Order::status_save', '保存订单状态', 'mdi-content-save', '保存订单状态', 'Weline_Order::status_manage')]
+    #[Acl('Weline_Order::status_save', '保存订单状态', 'save', '保存订单状态', 'Weline_Order::status_manage')]
     public function save()
     {
         try {
@@ -247,7 +247,7 @@ class Status extends BackendController
     /**
      * 删除状态
      */
-    #[Acl('Weline_Order::status_delete', '删除订单状态', 'mdi-delete', '删除订单状态', 'Weline_Order::status_manage')]
+    #[Acl('Weline_Order::status_delete', '删除订单状态', 'trash', '删除订单状态', 'Weline_Order::status_manage')]
     public function delete()
     {
         try {
@@ -326,7 +326,7 @@ class Status extends BackendController
     /**
      * 切换启用状态
      */
-    #[Acl('Weline_Order::status_toggle', '切换订单状态', 'mdi-toggle-switch', '切换订单状态启用状态', 'Weline_Order::status_manage')]
+    #[Acl('Weline_Order::status_toggle', '切换订单状态', 'switch', '切换订单状态启用状态', 'Weline_Order::status_manage')]
     public function toggle()
     {
         try {

@@ -45,7 +45,7 @@ $currentLang = reset($currentLang) ?: $languages[0];
                 <?php if ($showName): ?>
                     <span class="lang-name"><?= htmlspecialchars($currentLang['name']) ?></span>
                 <?php endif; ?>
-                <i class="ri-arrow-down-s-line"></i>
+                <w:icon name="arrow-down" size="sm"></w:icon>
             </button>
             
             <ul class="language-list">
@@ -57,7 +57,7 @@ $currentLang = reset($currentLang) ?: $languages[0];
                             <?php endif; ?>
                             <span class="lang-name"><?= htmlspecialchars($lang['name']) ?></span>
                             <?php if ($lang['active']): ?>
-                                <i class="ri-check-line"></i>
+                                <w:icon name="check" size="sm"></w:icon>
                             <?php endif; ?>
                         </a>
                     </li>

@@ -84,7 +84,7 @@
     </style>
 </head>
 <body>
-    <div class="container mt-4">
+    <div class="w-container" style="--w-mt:var(--weline-space-6);">
         <h2>DataTable 结构示例</h2>
         
         <!-- 过滤器区域 -->
@@ -93,55 +93,54 @@
                 <div class="datatable-filter-left">
                     <div class="datatable-filter-form">
                         <div class="filter-field">
-                            <input type="text" class="form-control form-control-sm" 
-                                   placeholder="搜索名称" title="名称">
+                            <input type="text" class="w-input" placeholder="搜索名称" title="名称" data-size="sm">
                         </div>
                         <div class="filter-field">
-                            <select class="form-control form-control-sm" title="状态">
+                            <select class="w-input" title="状态" data-size="sm">
                                 <option value="">请选择</option>
                                 <option value="1">启用</option>
                                 <option value="0">禁用</option>
                             </select>
                         </div>
                         <div class="filter-field">
-                            <input type="date" class="form-control form-control-sm" title="创建时间">
+                            <input type="date" class="w-input" title="创建时间" data-size="sm">
                         </div>
                     </div>
                 </div>
                 <div class="datatable-filter-right">
-                    <button type="button" class="btn btn-primary btn-sm">
-                        <i class="fas fa-search"></i> 搜索
+                    <button type="button" class="w-button" data-tone="primary" data-size="sm">
+                        <w:icon name="search" size="sm"></w:icon> 搜索
                     </button>
-                    <button type="button" class="btn btn-secondary btn-sm">
-                        <i class="fas fa-undo"></i> 重置
+                    <button type="button" class="w-button" data-tone="neutral" data-size="sm">
+                        <w:icon name="circle" size="sm"></w:icon> 重置
                     </button>
                 </div>
             </div>
         </div>
         
         <!-- 表格区域 -->
-        <div class="table-responsive">
-            <table class="table table-striped table-bordered">
+        <div class="w-table-wrap">
+            <table class="w-table">
                 <thead>
                     <tr class="datatable-header-row">
                         <th style="width: 80px;">
                             <a href="#">
-                                ID <i class="fa fa-sort"></i>
+                                ID <w:icon name="sort" size="sm"></w:icon>
                             </a>
                         </th>
                         <th style="width: 200px;">
                             <a href="#">
-                                名称 <i class="fa fa-sort"></i>
+                                名称 <w:icon name="sort" size="sm"></w:icon>
                             </a>
                         </th>
                         <th style="width: 100px;">
                             <a href="#">
-                                状态 <i class="fa fa-sort"></i>
+                                状态 <w:icon name="sort" size="sm"></w:icon>
                             </a>
                         </th>
                         <th style="width: 150px;">
                             <a href="#">
-                                创建时间 <i class="fa fa-sort"></i>
+                                创建时间 <w:icon name="sort" size="sm"></w:icon>
                             </a>
                         </th>
                         <th style="width: 120px;">操作</th>
@@ -151,19 +150,19 @@
                     <tr>
                         <td>1</td>
                         <td>示例数据1</td>
-                        <td><span class="badge bg-success">启用</span></td>
+                        <td><span class="w-badge" data-w-background="success">启用</span></td>
                         <td>2024-01-01</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-primary">编辑</button>
+                            <button class="w-button" data-tone="primary" data-variant="outline" data-size="sm">编辑</button>
                         </td>
                     </tr>
                     <tr>
                         <td>2</td>
                         <td>示例数据2</td>
-                        <td><span class="badge bg-danger">禁用</span></td>
+                        <td><span class="w-badge" data-w-background="danger">禁用</span></td>
                         <td>2024-01-02</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-primary">编辑</button>
+                            <button class="w-button" data-tone="primary" data-variant="outline" data-size="sm">编辑</button>
                         </td>
                     </tr>
                 </tbody>
@@ -172,21 +171,21 @@
         
         <!-- 分页区域 -->
         <nav aria-label="分页导航">
-            <ul class="pagination justify-content-center">
-                <li class="page-item disabled">
-                    <a class="page-link" href="#" tabindex="-1">上一页</a>
+            <ul class="w-pagination" data-justify="center">
+                <li class="w-pagination__item" aria-disabled="true">
+                    <a class="w-pagination__link" href="#" tabindex="-1">上一页</a>
                 </li>
-                <li class="page-item active">
-                    <a class="page-link" href="#">1</a>
+                <li class="w-pagination__item" data-state="active">
+                    <a class="w-pagination__link" href="#">1</a>
                 </li>
-                <li class="page-item">
-                    <a class="page-link" href="#">2</a>
+                <li class="w-pagination__item">
+                    <a class="w-pagination__link" href="#">2</a>
                 </li>
-                <li class="page-item">
-                    <a class="page-link" href="#">3</a>
+                <li class="w-pagination__item">
+                    <a class="w-pagination__link" href="#">3</a>
                 </li>
-                <li class="page-item">
-                    <a class="page-link" href="#">下一页</a>
+                <li class="w-pagination__item">
+                    <a class="w-pagination__link" href="#">下一页</a>
                 </li>
             </ul>
         </nav>

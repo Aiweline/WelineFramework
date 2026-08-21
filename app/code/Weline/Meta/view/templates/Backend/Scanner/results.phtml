@@ -11,82 +11,82 @@ $skippedCount = count($results['skipped'] ?? []);
 $backToScanner = $this->getBackendUrl('meta/backend/scanner');
 $backToList = $this->getBackendUrl('meta/backend/meta');
 ?>
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('扫描结果') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
-                    <li class="breadcrumb-item"><a href="<?= $backToScanner ?>"><?= __('扫描器') ?></a></li>
-                    <li class="breadcrumb-item active"><?= __('结果') ?></li>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('扫描结果') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
+                    <li class="w-breadcrumb__item"><a href="<?= $backToScanner ?>"><?= __('扫描器') ?></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('结果') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card border shadow-sm h-100">
-            <div class="card-body text-center">
-                <div class="avatar-sm bg-soft-success rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2">
-                    <i class="ri-checkbox-circle-line text-success fs-4"></i>
+<div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+    <div style="--w-span-md:4;">
+        <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
+            <div class="w-card__body w-text" data-align="center">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="success" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;--w-ms:auto;--w-me:auto;--w-mb:var(--weline-space-2);">
+                    <w:icon name="check" size="sm"></w:icon>
                 </div>
-                <p class="text-muted mb-1"><?= __('成功解析') ?></p>
-                <h3 class="mb-0 text-success"><?= $successCount ?></h3>
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('成功解析') ?></p>
+                <h3 class="w-text" data-tone="success" style="--w-mb:0;"><?= $successCount ?></h3>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card border shadow-sm h-100">
-            <div class="card-body text-center">
-                <div class="avatar-sm bg-soft-danger rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2">
-                    <i class="ri-error-warning-line text-danger fs-4"></i>
+    <div style="--w-span-md:4;">
+        <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
+            <div class="w-card__body w-text" data-align="center">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="danger" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;--w-ms:auto;--w-me:auto;--w-mb:var(--weline-space-2);">
+                    <w:icon name="warning" size="sm"></w:icon>
                 </div>
-                <p class="text-muted mb-1"><?= __('解析失败') ?></p>
-                <h3 class="mb-0 text-danger"><?= $failedCount ?></h3>
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('解析失败') ?></p>
+                <h3 class="w-text" data-tone="danger" style="--w-mb:0;"><?= $failedCount ?></h3>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card border shadow-sm h-100">
-            <div class="card-body text-center">
-                <div class="avatar-sm bg-soft-warning rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2">
-                    <i class="ri-skip-forward-line text-warning fs-4"></i>
+    <div style="--w-span-md:4;">
+        <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
+            <div class="w-card__body w-text" data-align="center">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="warning" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;--w-ms:auto;--w-me:auto;--w-mb:var(--weline-space-2);">
+                    <w:icon name="circle" size="sm"></w:icon>
                 </div>
-                <p class="text-muted mb-1"><?= __('被跳过') ?></p>
-                <h3 class="mb-0 text-warning"><?= $skippedCount ?></h3>
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('被跳过') ?></p>
+                <h3 class="w-text" data-tone="warning" style="--w-mb:0;"><?= $skippedCount ?></h3>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-4">
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h4 class="card-title mb-0"><?= __('成功文件') ?></h4>
-                    <span class="badge bg-soft-success text-success"><?= $successCount ?></span>
+<div class="w-grid" style="--w-gap:var(--weline-space-6);">
+    <div style="--w-span-lg:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+                    <h4 class="w-card__title" style="--w-mb:0;"><?= __('成功文件') ?></h4>
+                    <span class="w-badge w-text" data-w-background="success" data-tone="success"><?= $successCount ?></span>
                 </div>
                 <?php if ($successCount === 0): ?>
-                    <div class="alert alert-light mb-0"><?= __('暂无数据') ?></div>
+                    <div class="w-alert" data-tone="muted" style="--w-mb:0;"><?= __('暂无数据') ?></div>
                 <?php else: ?>
-                    <div class="list-group list-group-flush">
+                    <div class="w-list-group list-group-flush">
                         <?php foreach ($results['success'] as $path): ?>
-                            <div class="list-group-item d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="ri-checkbox-circle-line text-success"></i>
-                                    <span class="small text-break"><?= htmlspecialchars($path) ?></span>
+                            <div class="w-list-group__item w-cluster" data-align="center" data-justify="between">
+                                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                    <w:icon name="check" size="sm"></w:icon>
+                                    <span class="w-text" data-w-text-wrap="break" data-size="sm"><?= htmlspecialchars($path) ?></span>
                                 </div>
-                                <span class="badge bg-success"><?= __('OK') ?></span>
+                                <span class="w-badge" data-w-background="success"><?= __('OK') ?></span>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -95,25 +95,25 @@ $backToList = $this->getBackendUrl('meta/backend/meta');
         </div>
     </div>
 
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h4 class="card-title mb-0"><?= __('失败文件') ?></h4>
-                    <span class="badge bg-soft-danger text-danger"><?= $failedCount ?></span>
+    <div style="--w-span-lg:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+                    <h4 class="w-card__title" style="--w-mb:0;"><?= __('失败文件') ?></h4>
+                    <span class="w-badge w-text" data-w-background="danger" data-tone="danger"><?= $failedCount ?></span>
                 </div>
                 <?php if ($failedCount === 0): ?>
-                    <div class="alert alert-light mb-0"><?= __('暂无失败记录') ?></div>
+                    <div class="w-alert" data-tone="muted" style="--w-mb:0;"><?= __('暂无失败记录') ?></div>
                 <?php else: ?>
-                    <div class="list-group list-group-flush">
+                    <div class="w-list-group list-group-flush">
                         <?php foreach ($results['failed'] as $failed): ?>
-                            <div class="list-group-item">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="ri-close-circle-line text-danger"></i>
-                                    <span class="small text-break flex-grow-1"><?= htmlspecialchars($failed['file']) ?></span>
-                                    <span class="badge bg-danger"><?= __('失败') ?></span>
+                            <div class="w-list-group__item">
+                                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                    <w:icon name="close" size="sm"></w:icon>
+                                    <span class="w-text" data-w-text-wrap="break" data-grow="true" data-size="sm"><?= htmlspecialchars($failed['file']) ?></span>
+                                    <span class="w-badge" data-w-background="danger"><?= __('失败') ?></span>
                                 </div>
-                                <div class="text-danger small mt-1">
+                                <div class="w-text" data-tone="danger" data-size="sm" style="--w-mt:var(--weline-space-1);">
                                     <?= htmlspecialchars($failed['error']) ?>
                                 </div>
                             </div>
@@ -124,23 +124,23 @@ $backToList = $this->getBackendUrl('meta/backend/meta');
         </div>
     </div>
 
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h4 class="card-title mb-0"><?= __('跳过文件 (无 @meta 标记)') ?></h4>
-                    <span class="badge bg-soft-warning text-warning"><?= $skippedCount ?></span>
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+                    <h4 class="w-card__title" style="--w-mb:0;"><?= __('跳过文件 (无 @meta 标记)') ?></h4>
+                    <span class="w-badge w-text" data-w-background="warning" data-tone="warning"><?= $skippedCount ?></span>
                 </div>
                 <?php if ($skippedCount === 0): ?>
-                    <div class="alert alert-light mb-0"><?= __('全部文件均尝试解析，无跳过项。') ?></div>
+                    <div class="w-alert" data-tone="muted" style="--w-mb:0;"><?= __('全部文件均尝试解析，无跳过项。') ?></div>
                 <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle">
                             <tbody>
                             <?php foreach ($results['skipped'] as $path): ?>
                                 <tr>
-                                    <td width="30"><i class="ri-skip-forward-line text-warning"></i></td>
-                                    <td class="text-break"><?= htmlspecialchars($path) ?></td>
+                                    <td width="30"><w:icon name="circle" size="sm"></w:icon></td>
+                                    <td data-w-text-wrap="break"><?= htmlspecialchars($path) ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -152,11 +152,11 @@ $backToList = $this->getBackendUrl('meta/backend/meta');
     </div>
 </div>
 
-<div class="d-flex justify-content-end gap-2 mt-4">
-    <a href="<?= $backToScanner ?>" class="btn btn-outline-secondary">
-        <i class="ri-arrow-left-line me-1"></i><?= __('返回扫描器') ?>
+<div class="w-cluster" data-justify="end" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-6);">
+    <a href="<?= $backToScanner ?>" class="w-button" data-tone="neutral" data-variant="outline">
+        <w:icon name="arrow-left" size="sm"></w:icon><?= __('返回扫描器') ?>
     </a>
-    <a href="<?= $backToList ?>" class="btn btn-primary">
-        <i class="ri-database-2-line me-1"></i><?= __('查看元数据列表') ?>
+    <a href="<?= $backToList ?>" class="w-button" data-tone="primary">
+        <w:icon name="database" size="sm"></w:icon><?= __('查看元数据列表') ?>
     </a>
 </div>

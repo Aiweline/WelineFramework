@@ -12,58 +12,56 @@ $settings = $settings ?? [];
 $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>基础设置</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>基础设置</lang></h4>
         </div>
     </div>
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 提示信息 -->
-<div class="row">
-    <div class="col-12">
-        <div class="alert alert-info">
-            <i class="mdi mdi-information me-2"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-alert" data-tone="info">
+            <w:icon name="info" size="sm"></w:icon>
             <strong><lang>提示</lang>:</strong> <lang>基础设置功能正在开发中，敬请期待。</lang>
         </div>
     </div>
 </div>
 
 <!-- 设置表单 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>基础设置</lang></h4>
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title" style="--w-mb:var(--weline-space-6);"><lang>基础设置</lang></h4>
                 
                 <w:form id="settingsForm">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>站点名称</lang></label>
-                                <input type="text" class="form-control" name="site_name" 
-                                       value="<?= htmlspecialchars($settings['site_name'] ?? '') ?>">
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>站点名称</lang></label>
+                                <input type="text" class="w-input" name="site_name" value="<?= htmlspecialchars($settings['site_name'] ?? '') ?>">
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>站点URL</lang></label>
-                                <input type="url" class="form-control" name="site_url" 
-                                       value="<?= htmlspecialchars($settings['site_url'] ?? '') ?>">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>站点URL</lang></label>
+                                <input type="url" class="w-input" name="site_url" value="<?= htmlspecialchars($settings['site_url'] ?? '') ?>">
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>时区</lang></label>
-                                <select class="form-select" name="timezone">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>时区</lang></label>
+                                <select class="w-select" name="timezone">
                                     <option value="Asia/Shanghai" <?= ($settings['timezone'] ?? '') === 'Asia/Shanghai' ? 'selected' : '' ?>>
                                         Asia/Shanghai
                                     </option>
@@ -73,19 +71,12 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>默认语言</lang></label>
-                                <w:i18n:language:select
-                                    id="backend_basic_default_language_selector"
-                                    name="language"
-                                    input-id="language"
-                                    value="backendDefaultLanguage"
-                                    required="true"
-                                    class="w-100"
-                                />
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>默认语言</lang></label>
+                                <w:i18n:language:select id="backend_basic_default_language_selector" name="language" input-id="language" value="backendDefaultLanguage" required="true" data-w-width="full" />
                                 <?php if (false): ?>
-                                <select class="form-select" name="language">
+                                <select class="w-select" name="language">
                                     <option value="zh_Hans_CN" <?= ($settings['language'] ?? '') === 'zh_Hans_CN' ? 'selected' : '' ?>>
                                         简体中文
                                     </option>
@@ -96,9 +87,9 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <div class="col-md-12">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-content-save me-2"></i><lang>保存设置</lang>
+                        <div style="--w-span-md:12;">
+                            <button type="submit" class="w-button" data-tone="primary">
+                                <w:icon name="save" size="sm"></w:icon><lang>保存设置</lang>
                             </button>
                         </div>
                     </div>
@@ -148,7 +139,7 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
             bqAdmin['backend_admin']('<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', { method: 'POST', body: formData })
             .then(function(response) {
                 var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
-                var Toast = window.BackendToast || window.BackendToast;
+                var Toast = window.Weline.UI.toast || window.Weline.UI.toast;
                 if (response.ok && data && data.success) {
                     Toast.success(data.message || '<?= __('保存成功') ?>');
                 } else {
@@ -156,7 +147,7 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
                 }
             })
             .catch(function(error) {
-                (window.BackendToast || window.BackendToast).error(error && error.message ? error.message : '<?= __('保存失败') ?>');
+                (window.Weline.UI.toast || window.Weline.UI.toast).error(error && error.message ? error.message : '<?= __('保存失败') ?>');
             });
         }
     };

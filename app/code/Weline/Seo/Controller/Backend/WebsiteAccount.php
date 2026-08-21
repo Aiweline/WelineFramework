@@ -13,7 +13,7 @@ use Weline\Seo\Model\SeoWebsiteAccount;
 use Weline\Seo\Service\SeoWebsiteAccountBindingService;
 use Weline\Seo\Service\SeoWebsiteDirectory;
 
-#[AclAttribute('Weline_Seo::website_account', '站点SEO账户关联', 'mdi-link-variant', '管理站点与SEO账户的关联关系', 'Weline_Backend::seo_group')]
+#[AclAttribute('Weline_Seo::website_account', '站点SEO账户关联', 'link', '管理站点与SEO账户的关联关系', 'Weline_Backend::seo_group')]
 class WebsiteAccount extends BackendController
 {
     private ObjectManager $objectManager;
@@ -33,7 +33,7 @@ class WebsiteAccount extends BackendController
         return $this->objectManager->getInstance(SeoWebsiteAccountBindingService::class);
     }
 
-    #[AclAttribute('Weline_Seo::website_account_index', '查看站点账户绑定', 'mdi-view-list', '查看站点与SEO账户的绑定列表')]
+    #[AclAttribute('Weline_Seo::website_account_index', '查看站点账户绑定', 'list', '查看站点与SEO账户的绑定列表')]
     public function index(): string
     {
         try {
@@ -51,7 +51,7 @@ class WebsiteAccount extends BackendController
         }
     }
 
-    #[AclAttribute('Weline_Seo::website_account_manage', '管理站点SEO账户绑定', 'mdi-cog', '配置站点与SEO账户的绑定关系')]
+    #[AclAttribute('Weline_Seo::website_account_manage', '管理站点SEO账户绑定', 'settings', '配置站点与SEO账户的绑定关系')]
     public function manage(): string
     {
         $websiteId = (int)$this->request->getGet('website_id', 0);
@@ -122,7 +122,7 @@ class WebsiteAccount extends BackendController
         return $this->fetch();
     }
 
-    #[AclAttribute('Weline_Seo::website_account_save', '保存站点SEO账户绑定', 'mdi-content-save', '保存站点与SEO账户的绑定配置')]
+    #[AclAttribute('Weline_Seo::website_account_save', '保存站点SEO账户绑定', 'save', '保存站点与SEO账户的绑定配置')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -191,7 +191,7 @@ class WebsiteAccount extends BackendController
         }
     }
 
-    #[AclAttribute('Weline_Seo::website_account_unbind', '解除站点SEO账户绑定', 'mdi-link-off', '解除站点与SEO账户的绑定关系')]
+    #[AclAttribute('Weline_Seo::website_account_unbind', '解除站点SEO账户绑定', 'link', '解除站点与SEO账户的绑定关系')]
     public function unbind(): string
     {
         if (!$this->request->isPost()) {

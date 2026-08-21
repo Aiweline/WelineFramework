@@ -20,32 +20,32 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
 
 <w:backend:card class="weline-release-history">
     <w:slot:header>
-        <h5 class="mb-0"><?= __('发布历史') ?></h5>
+        <h5 style="--w-mb:0;"><?= __('发布历史') ?></h5>
     </w:slot:header>
     <w:slot:body>
         <?php if ($current): ?>
-            <div class="alert wrh-alert mb-3">
+            <div class="w-alert wrh-alert" style="--w-mb:var(--weline-space-4);">
                 <strong><?= __('当前版本') ?>:</strong>
                 <code><?= $attr((string)($current['deploy_version'] ?? '')) ?></code>
-                <span class="badge bg-secondary ms-2"><?= $attr((string)($current['git_ref_type'] ?? '')) ?></span>
+                <span class="w-badge ms-2" data-w-background="muted"><?= $attr((string)($current['git_ref_type'] ?? '')) ?></span>
                 <?php if (!empty($current['git_tag'])): ?>
-                    <span class="badge bg-info ms-1"><?= $attr((string)$current['git_tag']) ?></span>
+                    <span class="w-badge ms-1" data-w-background="info"><?= $attr((string)$current['git_tag']) ?></span>
                 <?php endif; ?>
-                <span class="text-muted ms-2"><?= date('Y-m-d H:i:s', (int)($current['deployed_at'] ?? 0)) ?></span>
+                <span class="w-text ms-2" data-tone="muted"><?= date('Y-m-d H:i:s', (int)($current['deployed_at'] ?? 0)) ?></span>
             </div>
         <?php else: ?>
-            <div class="alert wrh-alert mb-3"><?= __('尚未发布过') ?></div>
+            <div class="w-alert wrh-alert" style="--w-mb:var(--weline-space-4);"><?= __('尚未发布过') ?></div>
         <?php endif; ?>
 
         <if condition="$isProduction">
-            <div class="alert wrh-alert mb-3"><?= __('正式站回滚前将自动整站备份。') ?></div>
+            <div class="w-alert wrh-alert" style="--w-mb:var(--weline-space-4);"><?= __('正式站回滚前将自动整站备份。') ?></div>
         </if>
 
         <?php if (empty($records)): ?>
-            <p class="text-muted"><?= __('暂无发布记录') ?></p>
+            <p class="w-text" data-tone="muted"><?= __('暂无发布记录') ?></p>
         <?php else: ?>
-            <div class="table-responsive">
-                <table class="table table-hover table-sm mb-0">
+            <div class="w-table-wrap">
+                <table class="w-table" style="--w-mb:0;">
                     <thead>
                         <tr>
                             <th><?= __('时间') ?></th>
@@ -84,21 +84,21 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
                             $canRollback = $status === 'success' && !$isCurrent;
                             ?>
                             <tr>
-                                <td class="text-nowrap"><?= $startedAt ? date('Y-m-d H:i:s', $startedAt) : '-' ?></td>
+                                <td data-wrap="false"><?= $startedAt ? date('Y-m-d H:i:s', $startedAt) : '-' ?></td>
                                 <td>
                                     <code><?= $attr((string)$record->getData('deploy_version')) ?></code>
                                     <?php if ($isCurrent): ?>
-                                        <span class="badge bg-primary ms-1"><?= __('当前') ?></span>
+                                        <span class="w-badge ms-1" data-w-background="primary"><?= __('当前') ?></span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
                                     <?php if ((string)$record->getData('git_ref_type') === 'tag'): ?>
-                                        <span class="badge bg-info"><?= __('tag') ?></span>
+                                        <span class="w-badge" data-w-background="info"><?= __('tag') ?></span>
                                         <?php if ($record->getData('git_tag')): ?>
-                                            <small class="text-muted ms-1"><?= $attr((string)$record->getData('git_tag')) ?></small>
+                                            <small class="w-text ms-1" data-tone="muted"><?= $attr((string)$record->getData('git_tag')) ?></small>
                                         <?php endif; ?>
                                     <?php else: ?>
-                                        <span class="badge bg-secondary"><?= $attr((string)$record->getData('git_ref_type')) ?></span>
+                                        <span class="w-badge" data-w-background="muted"><?= $attr((string)$record->getData('git_ref_type')) ?></span>
                                     <?php endif; ?>
                                 </td>
                                 <td><?= $attr((string)$record->getData('trigger_type')) ?></td>
@@ -106,22 +106,18 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
                                     <?php if ($scope !== ''): ?>
                                         <code><?= $attr($scope) ?></code>
                                         <?php if ($projectType !== ''): ?>
-                                            <small class="text-muted ms-1"><?= $attr($projectType) ?></small>
+                                            <small class="w-text ms-1" data-tone="muted"><?= $attr($projectType) ?></small>
                                         <?php endif; ?>
                                     <?php else: ?>
-                                        <span class="text-muted"><?= __('全局') ?></span>
+                                        <span class="w-text" data-tone="muted"><?= __('全局') ?></span>
                                     <?php endif; ?>
                                 </td>
-                                <td><span class="badge <?= $badgeClass ?>"><?= __($status) ?></span></td>
-                                <td class="text-nowrap"><?= $duration ? round($duration / 1000, 1) . 's' : '-' ?></td>
-                                <td><code class="small"><?= $attr(substr((string)$record->getData('git_commit'), 0, 8)) ?></code></td>
-                                <td class="text-end">
+                                <td><span class="w-badge <?= $badgeClass ?>"><?= __($status) ?></span></td>
+                                <td data-wrap="false"><?= $duration ? round($duration / 1000, 1) . 's' : '-' ?></td>
+                                <td><code class="w-text" data-size="sm"><?= $attr(substr((string)$record->getData('git_commit'), 0, 8)) ?></code></td>
+                                <td class="w-text" data-align="end">
                                     <?php if ($canRollback): ?>
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-warning"
-                                                data-action="rollback"
-                                                data-release-id="<?= $attr($releaseId) ?>"
-                                                data-version="<?= $attr((string)$record->getData('deploy_version')) ?>">
+                                        <button type="button" class="w-button" data-action="rollback" data-release-id="<?= $attr($releaseId) ?>" data-version="<?= $attr((string)$record->getData('deploy_version')) ?>" data-tone="warning" data-variant="outline" data-size="sm">
                                             <?= __('回滚到此版本') ?>
                                         </button>
                                     <?php endif; ?>
@@ -129,7 +125,7 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
                             </tr>
                             <?php if ($status === 'failed' && $record->getData('error_message')): ?>
                                 <tr>
-                                    <td colspan="9" class="text-danger small p-1 ps-3">
+                                    <td colspan="9" class="w-text ps-3" data-tone="danger" data-size="sm" style="--w-pt:var(--weline-space-1);--w-pe:var(--weline-space-1);--w-pb:var(--weline-space-1);--w-ps:var(--weline-space-1);">
                                         <?= $attr((string)$record->getData('error_message')) ?>
                                     </td>
                                 </tr>
@@ -142,34 +138,34 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     </w:slot:body>
 </w:backend:card>
 
-<w:form method="post" action="@var($rollbackUrl)" id="wrh-rollback-form" class="d-none">
+<w:form method="post" action="@var($rollbackUrl)" id="wrh-rollback-form" hidden>
     <input type="hidden" name="release_id" id="wrh-release-id" value="">
     <input type="hidden" name="confirm_rollback" id="wrh-confirm-rollback" value="0">
     <input type="hidden" name="confirm_older_version" id="wrh-confirm-older" value="0">
 </w:form>
 
-<div class="modal fade" id="wrh-rollback-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('确认回滚') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog" id="wrh-rollback-modal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('确认回滚') ?></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <p id="wrh-rollback-summary"></p>
-                <div class="alert alert-warning"><?= __('回滚可能导致数据迁移、配置或代码不兼容。') ?></div>
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="wrh-ui-confirm-rollback" value="1">
-                    <label class="form-check-label" for="wrh-ui-confirm-rollback"><?= __('我确认要回滚到此版本') ?></label>
+                <div class="w-alert" data-tone="warning"><?= __('回滚可能导致数据迁移、配置或代码不兼容。') ?></div>
+                <div class="w-check" style="--w-mb:var(--weline-space-2);">
+                    <input type="checkbox" id="wrh-ui-confirm-rollback" value="1">
+                    <label for="wrh-ui-confirm-rollback"><?= __('我确认要回滚到此版本') ?></label>
                 </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="wrh-ui-confirm-older" value="1">
-                    <label class="form-check-label" for="wrh-ui-confirm-older"><?= __('我确认要回滚到更旧版本') ?></label>
+                <div class="w-check">
+                    <input type="checkbox" id="wrh-ui-confirm-older" value="1">
+                    <label for="wrh-ui-confirm-older"><?= __('我确认要回滚到更旧版本') ?></label>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-warning" id="wrh-run-rollback" disabled><?= __('执行回滚') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="wrh-run-rollback" disabled data-tone="warning"><?= __('执行回滚') ?></button>
             </div>
         </div>
     </div>

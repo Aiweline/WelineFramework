@@ -36,62 +36,62 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
 
 <w:backend:card class="weline-release-control">
     <w:slot:header>
-        <h5 class="mb-0"><?= __('发布控制') ?></h5>
+        <h5 style="--w-mb:0;"><?= __('发布控制') ?></h5>
     </w:slot:header>
     <w:slot:body>
         <notempty name="current">
-            <div class="alert wrc-alert mb-3">
+            <div class="w-alert wrc-alert" style="--w-mb:var(--weline-space-4);">
                 <strong><?= __('当前版本') ?>:</strong>
                 <code class="wrc-code"><?= $attr((string)($current['deploy_version'] ?? '')) ?></code>
-                <span class="badge bg-secondary ms-2"><?= $attr((string)($current['git_ref_type'] ?? '')) ?></span>
+                <span class="w-badge ms-2" data-w-background="muted"><?= $attr((string)($current['git_ref_type'] ?? '')) ?></span>
                 <code class="wrc-code ms-2"><?= $attr(substr((string)($current['git_commit'] ?? ''), 0, 8)) ?></code>
-                <span class="text-muted ms-2"><?= !empty($current['deployed_at']) ? date('Y-m-d H:i:s', (int)$current['deployed_at']) : '-' ?></span>
+                <span class="w-text ms-2" data-tone="muted"><?= !empty($current['deployed_at']) ? date('Y-m-d H:i:s', (int)$current['deployed_at']) : '-' ?></span>
             </div>
         </notempty>
         <empty name="current">
-            <div class="alert wrc-alert mb-3"><?= __('尚未发布过') ?></div>
+            <div class="w-alert wrc-alert" style="--w-mb:var(--weline-space-4);"><?= __('尚未发布过') ?></div>
         </empty>
 
         <if condition="!$repoConfigured">
-            <div class="alert wrc-alert mb-3">
+            <div class="w-alert wrc-alert" style="--w-mb:var(--weline-space-4);">
                 <?= __('请先在部署配置中填写项目仓库信息。') ?>
                 <a href="<?= $attr($configUrl) ?>" class="alert-link"><?= __('前往部署配置') ?></a>
             </div>
         </if>
 
         <if condition="$isProduction">
-            <div class="alert wrc-alert mb-3">
+            <div class="w-alert wrc-alert" style="--w-mb:var(--weline-space-4);">
                 <?= __('正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。') ?>
             </div>
         </if>
 
-        <div class="row g-3 mb-3">
-            <div class="col-md-4">
-                <label class="form-label"><?= __('查看分支') ?></label>
-                <select id="wrc-branch" class="form-select" data-default-branch="<?= $attr($defaultBranch) ?>">
+        <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+            <div style="--w-span-md:4;">
+                <label class="w-field__label"><?= __('查看分支') ?></label>
+                <select id="wrc-branch" class="w-select" data-default-branch="<?= $attr($defaultBranch) ?>">
                     <option value="<?= $attr($defaultBranch) ?>"><?= $attr($defaultBranch) ?></option>
                 </select>
             </div>
-            <div class="col-md-8 d-flex align-items-end gap-2">
-                <button type="button" class="btn btn-outline-primary" id="wrc-refresh-commits"><?= __('刷新提交') ?></button>
-                <button type="button" class="btn btn-outline-secondary" id="wrc-refresh-tags"><?= __('刷新 Tags') ?></button>
-                <span class="text-muted small" id="wrc-status"></span>
+            <div class="w-cluster" data-align="end" style="--w-span-md:8;--w-gap:var(--weline-space-2);">
+                <button type="button" class="w-button" id="wrc-refresh-commits" data-tone="primary" data-variant="outline"><?= __('刷新提交') ?></button>
+                <button type="button" class="w-button" id="wrc-refresh-tags" data-tone="neutral" data-variant="outline"><?= __('刷新 Tags') ?></button>
+                <span class="w-text" id="wrc-status" data-tone="muted" data-size="sm"></span>
             </div>
         </div>
 
-        <ul class="nav nav-tabs mb-3" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="wrc-tab-commits" data-bs-toggle="tab" data-bs-target="#wrc-panel-commits" type="button" role="tab"><?= __('分支提交') ?></button>
+        <ul class="nav w-tabs__list" role="tablist" data-w-component="tabs" style="--w-mb:var(--weline-space-4);">
+            <li role="presentation">
+                <button class="w-tabs__tab" id="wrc-tab-commits" type="button" role="tab" data-w-target="#wrc-panel-commits" aria-controls="wrc-panel-commits" data-state="active"><?= __('分支提交') ?></button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="wrc-tab-tags" data-bs-toggle="tab" data-bs-target="#wrc-panel-tags" type="button" role="tab">Tags</button>
+            <li role="presentation">
+                <button class="w-tabs__tab" id="wrc-tab-tags" type="button" role="tab" data-w-target="#wrc-panel-tags" aria-controls="wrc-panel-tags">Tags</button>
             </li>
         </ul>
 
-        <div class="tab-content">
-            <div class="tab-pane fade show active" id="wrc-panel-commits" role="tabpanel">
-                <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0" id="wrc-commits-table">
+        <div class="w-tabs__content">
+            <div class="w-tabs__panel" id="wrc-panel-commits" role="tabpanel" data-state="active">
+                <div class="w-table-wrap">
+                    <table class="w-table" id="wrc-commits-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th><?= __('时间') ?></th>
@@ -105,9 +105,9 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
                     </table>
                 </div>
             </div>
-            <div class="tab-pane fade" id="wrc-panel-tags" role="tabpanel">
-                <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0" id="wrc-tags-table">
+            <div class="w-tabs__panel" id="wrc-panel-tags" role="tabpanel" hidden>
+                <div class="w-table-wrap">
+                    <table class="w-table" id="wrc-tags-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th>Tag</th>
@@ -125,30 +125,30 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     </w:slot:body>
 </w:backend:card>
 
-<div class="modal fade" id="wrc-release-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('确认发布') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog" id="wrc-release-modal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('确认发布') ?></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <p id="wrc-release-summary"></p>
-                <div class="alert alert-warning d-none" id="wrc-older-warning">
+                <div class="w-alert" id="wrc-older-warning" hidden data-tone="warning">
                     <?= __('目标版本早于当前版本，回退可能导致数据迁移、配置或代码不兼容。') ?>
                 </div>
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="wrc-confirm-release" value="1">
-                    <label class="form-check-label" for="wrc-confirm-release"><?= __('我确认要执行发布') ?></label>
+                <div class="w-check" style="--w-mb:var(--weline-space-2);">
+                    <input type="checkbox" id="wrc-confirm-release" value="1">
+                    <label for="wrc-confirm-release"><?= __('我确认要执行发布') ?></label>
                 </div>
-                <div class="form-check d-none" id="wrc-older-confirm-wrap">
-                    <input class="form-check-input" type="checkbox" id="wrc-confirm-older" value="1">
-                    <label class="form-check-label" for="wrc-confirm-older"><?= __('我确认要发布到更旧版本') ?></label>
+                <div class="w-check" id="wrc-older-confirm-wrap" hidden>
+                    <input type="checkbox" id="wrc-confirm-older" value="1">
+                    <label for="wrc-confirm-older"><?= __('我确认要发布到更旧版本') ?></label>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-danger" id="wrc-run-release" disabled><?= __('立即发布') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="wrc-run-release" disabled data-tone="danger"><?= __('立即发布') ?></button>
             </div>
         </div>
     </div>
@@ -261,13 +261,13 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
                     const tr = document.createElement('tr');
                     const time = item.committed_at ? new Date(item.committed_at * 1000).toLocaleString() : '-';
                     const badges = [];
-                    if (item.is_current) badges.push('<span class="badge bg-primary ms-1"><?= $attr((string)__('当前')) ?></span>');
-                    if (item.is_older) badges.push('<span class="badge bg-warning text-dark ms-1"><?= $attr((string)__('更旧')) ?></span>');
-                    tr.innerHTML = '<td class="text-nowrap">' + time + '</td>'
+                    if (item.is_current) badges.push('<span class="w-badge ms-1" data-w-background="primary"><?= $attr((string)__('当前')) ?></span>');
+                    if (item.is_older) badges.push('<span class="w-badge w-text ms-1" data-w-background="warning" data-tone="muted"><?= $attr((string)__('更旧')) ?></span>');
+                    tr.innerHTML = '<td data-wrap="false">' + time + '</td>'
                         + '<td><code>' + (item.short_sha || '') + '</code>' + badges.join('') + '</td>'
                         + '<td>' + (item.author || '') + '</td>'
                         + '<td>' + (item.subject || '') + '</td>'
-                        + '<td class="text-end"><button type="button" class="btn btn-sm btn-primary" data-action="release-commit" data-ref="' + (item.sha || '') + '"><?= $attr((string)__('发布')) ?></button></td>';
+                        + '<td class="w-text" data-align="end"><button type="button" class="w-button" data-action="release-commit" data-ref="' + (item.sha || '') + '" data-tone="primary" data-size="sm"><?= $attr((string)__('发布')) ?></button></td>';
                     commitsBody.appendChild(tr);
                 });
                 setStatus('');
@@ -287,13 +287,13 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
                     const tr = document.createElement('tr');
                     const time = item.committed_at ? new Date(item.committed_at * 1000).toLocaleString() : '-';
                     const badges = [];
-                    if (item.is_current) badges.push('<span class="badge bg-primary ms-1"><?= $attr((string)__('当前')) ?></span>');
-                    if (item.is_older) badges.push('<span class="badge bg-warning text-dark ms-1"><?= $attr((string)__('更旧')) ?></span>');
+                    if (item.is_current) badges.push('<span class="w-badge ms-1" data-w-background="primary"><?= $attr((string)__('当前')) ?></span>');
+                    if (item.is_older) badges.push('<span class="w-badge w-text ms-1" data-w-background="warning" data-tone="muted"><?= $attr((string)__('更旧')) ?></span>');
                     tr.innerHTML = '<td><code>' + (item.name || '') + '</code>' + badges.join('') + '</td>'
                         + '<td><code>' + (item.short_sha || '') + '</code></td>'
-                        + '<td class="text-nowrap">' + time + '</td>'
+                        + '<td data-wrap="false">' + time + '</td>'
                         + '<td>' + (item.subject || '') + '</td>'
-                        + '<td class="text-end"><button type="button" class="btn btn-sm btn-primary" data-action="release-tag" data-ref="' + (item.name || '') + '"><?= $attr((string)__('发布')) ?></button></td>';
+                        + '<td class="w-text" data-align="end"><button type="button" class="w-button" data-action="release-tag" data-ref="' + (item.name || '') + '" data-tone="primary" data-size="sm"><?= $attr((string)__('发布')) ?></button></td>';
                     tagsBody.appendChild(tr);
                 });
                 setStatus('');

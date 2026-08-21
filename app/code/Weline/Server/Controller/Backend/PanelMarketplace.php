@@ -9,7 +9,7 @@ use Weline\Framework\App\Controller\BackendController;
 #[Acl(
     'Weline_Server::wls_panel_marketplace_legacy',
     'Legacy WLS Plugin Marketplace Redirect',
-    'mdi-storefront-outline',
+    'store',
     'Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace.',
     'Weline_Server::wls_panel',
     accessMode: Acl::ACCESS_MODE_READ

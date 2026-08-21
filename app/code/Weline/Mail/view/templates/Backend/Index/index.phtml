@@ -105,36 +105,36 @@ $totalAccounts = count($accounts);
 </style>
 
 <div class="mail-admin-page">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0"><?= __('企业邮箱') ?></h4>
-                <div class="page-title-right">
-                    <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><?= __('系统服务') ?></li>
-                        <li class="breadcrumb-item active"><?= __('企业邮箱') ?></li>
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                <h4 style="--w-mb-sm:0;"><?= __('企业邮箱') ?></h4>
+                <div class="w-cluster">
+                    <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                        <li class="w-breadcrumb__item"><?= __('系统服务') ?></li>
+                        <li class="w-breadcrumb__item" data-state="active"><?= __('企业邮箱') ?></li>
                     </ol>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-md-4">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span-md:4;">
             <div class="mail-stat">
                 <div class="mail-stat-label"><?= __('邮箱域名') ?></div>
                 <div class="mail-stat-value"><?= (int)$totalDomains ?></div>
                 <div class="mail-muted-line"><?= __('已开启 %{1} 个', [(string)$activeDomains]) ?></div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div style="--w-span-md:4;">
             <div class="mail-stat">
                 <div class="mail-stat-label"><?= __('邮箱账号') ?></div>
                 <div class="mail-stat-value"><?= (int)$totalAccounts ?></div>
                 <div class="mail-muted-line"><?= __('按域名统一管理') ?></div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div style="--w-span-md:4;">
             <div class="mail-stat">
                 <div class="mail-stat-label"><?= __('Websites 候选域名') ?></div>
                 <div class="mail-stat-value"><?= (int)count($websiteDomainOptions) ?></div>
@@ -143,14 +143,14 @@ $totalAccounts = count($accounts);
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-xl-8">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('邮件服务环境') ?></h5>
-                    <p class="text-muted mb-3"><?= __('底层引擎：%{1}，平台：%{2}', [$escape($environment['engine'] ?? 'stalwart'), $escape($environment['platform'] ?? PHP_OS_FAMILY)]) ?></p>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
+    <div class="w-grid">
+        <div style="--w-span-lg:8;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('邮件服务环境') ?></h5>
+                    <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);"><?= __('底层引擎：%{1}，平台：%{2}', [$escape($environment['engine'] ?? 'stalwart'), $escape($environment['platform'] ?? PHP_OS_FAMILY)]) ?></p>
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle">
                             <thead>
                             <tr>
                                 <th><?= __('检测项') ?></th>
@@ -164,12 +164,12 @@ $totalAccounts = count($accounts);
                                     <td><?= $escape($check['name'] ?? '') ?></td>
                                     <td>
                                         <?php if (!empty($check['ok'])): ?>
-                                            <span class="badge bg-success"><?= __('通过') ?></span>
+                                            <span class="w-badge" data-w-background="success"><?= __('通过') ?></span>
                                         <?php else: ?>
-                                            <span class="badge bg-warning text-dark"><?= __('待处理') ?></span>
+                                            <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('待处理') ?></span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="text-muted" style="white-space: normal;"><?= $escape($check['detail'] ?? '') ?></td>
+                                    <td class="w-text" style="white-space: normal;" data-tone="muted"><?= $escape($check['detail'] ?? '') ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -178,12 +178,12 @@ $totalAccounts = count($accounts);
                 </div>
             </div>
         </div>
-        <div class="col-xl-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('原生安装计划') ?></h5>
-                    <p class="text-muted mb-2"><?= __('Fake 测试引擎仅用于 .invalid / .test 域名的本地业务冒烟，真实生产域名仍需要 Stalwart 环境。') ?></p>
-                    <ol class="mb-3">
+        <div style="--w-span-lg:4;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('原生安装计划') ?></h5>
+                    <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= __('Fake 测试引擎仅用于 .invalid / .test 域名的本地业务冒烟，真实生产域名仍需要 Stalwart 环境。') ?></p>
+                    <ol style="--w-mb:var(--weline-space-4);">
                         <?php foreach (($installPlan['steps'] ?? []) as $step): ?>
                             <li><?= $escape($step) ?></li>
                         <?php endforeach; ?>
@@ -195,56 +195,56 @@ $totalAccounts = count($accounts);
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-xl-5">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('从 Websites 开通邮箱域名') ?></h5>
+    <div class="w-grid">
+        <div style="--w-span-lg:5;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('从 Websites 开通邮箱域名') ?></h5>
                     <w:form id="mail-domain-create-form" method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/create-domain'))">
-                        <div class="mb-3">
-                            <label class="form-label" for="mail-domain-search"><?= __('搜索 Websites 域名') ?></label>
-                            <input id="mail-domain-search" class="form-control" autocomplete="off" placeholder="example.com">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="mail-domain-search"><?= __('搜索 Websites 域名') ?></label>
+                            <input id="mail-domain-search" class="w-input" autocomplete="off" placeholder="example.com">
                             <input id="mail-domain-hidden" type="hidden" name="domain_name">
-                            <div class="form-text"><?= __('真实引擎需选择 Websites 中已有域名；Fake 可输入 .test / .invalid。') ?></div>
+                            <div class="w-field__hint"><?= __('真实引擎需选择 Websites 中已有域名；Fake 可输入 .test / .invalid。') ?></div>
                         </div>
-                        <div id="mail-domain-results" class="mail-domain-results mb-3"></div>
-                        <div class="mail-selected-domain mb-3">
+                        <div id="mail-domain-results" class="mail-domain-results" style="--w-mb:var(--weline-space-4);"></div>
+                        <div class="mail-selected-domain" style="--w-mb:var(--weline-space-4);">
                             <div class="mail-muted-line"><?= __('当前选择') ?></div>
                             <div id="mail-selected-domain-name" class="mail-domain-name"><?= __('尚未选择域名') ?></div>
                             <div id="mail-selected-domain-meta" class="mail-muted-line"><?= __('请搜索并选择一个域名') ?></div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="mail-domain-hostname"><?= __('邮件主机名') ?></label>
-                            <input id="mail-domain-hostname" class="form-control" name="hostname" placeholder="mail.example.com">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="mail-domain-hostname"><?= __('邮件主机名') ?></label>
+                            <input id="mail-domain-hostname" class="w-input" name="hostname" placeholder="mail.example.com">
                         </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="mail-domain-engine"><?= __('邮件引擎') ?></label>
-                                <select id="mail-domain-engine" class="form-select" name="engine" required>
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="mail-domain-engine"><?= __('邮件引擎') ?></label>
+                                <select id="mail-domain-engine" class="w-select" name="engine" required>
                                     <option value="stalwart">Stalwart</option>
                                     <option value="fake"><?= __('Fake 测试引擎') ?></option>
                                 </select>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="mail-domain-quota"><?= __('默认容量 MB') ?></label>
-                                <input id="mail-domain-quota" class="form-control" name="default_quota_mb" type="number" min="128" value="1024">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="mail-domain-quota"><?= __('默认容量 MB') ?></label>
+                                <input id="mail-domain-quota" class="w-input" name="default_quota_mb" type="number" min="128" value="1024">
                             </div>
                         </div>
-                        <button id="mail-domain-submit" class="btn btn-primary" type="submit"><?= __('开通邮箱域名') ?></button>
+                        <button id="mail-domain-submit" class="w-button" type="submit" data-tone="primary"><?= __('开通邮箱域名') ?></button>
                     </w:form>
                 </div>
             </div>
         </div>
 
-        <div class="col-xl-7">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                        <h5 class="card-title mb-0"><?= __('邮箱域名列表') ?></h5>
-                        <span class="text-muted small"><?= __('支持多个域名') ?></span>
+        <div style="--w-span-lg:7;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                        <h5 class="w-card__title" style="--w-mb:0;"><?= __('邮箱域名列表') ?></h5>
+                        <span class="w-text" data-tone="muted" data-size="sm"><?= __('支持多个域名') ?></span>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle">
                             <thead>
                             <tr>
                                 <th><?= __('域名') ?></th>
@@ -257,7 +257,7 @@ $totalAccounts = count($accounts);
                             </thead>
                             <tbody>
                             <?php if ($domains === []): ?>
-                                <tr><td colspan="6" class="text-muted"><?= __('暂无邮箱域名') ?></td></tr>
+                                <tr><td colspan="6" class="w-text" data-tone="muted"><?= __('暂无邮箱域名') ?></td></tr>
                             <?php else: ?>
                                 <?php foreach ($domains as $domain): ?>
                                     <?php
@@ -272,25 +272,25 @@ $totalAccounts = count($accounts);
                                             <div class="mail-muted-line">#<?= $domainId ?></div>
                                         </td>
                                         <td><?= $escape($domain->getData('hostname')) ?></td>
-                                        <td><span class="badge <?= $engineBadge($engine) ?>"><?= $escape($engine) ?></span></td>
+                                        <td><span class="w-badge <?= $engineBadge($engine) ?>"><?= $escape($engine) ?></span></td>
                                         <td><?= (int)($domainAccountCounts[$domainId] ?? 0) ?></td>
-                                        <td><span class="badge <?= $statusBadge($status) ?>"><?= $escape($status) ?></span></td>
+                                        <td><span class="w-badge <?= $statusBadge($status) ?>"><?= $escape($status) ?></span></td>
                                         <td>
-                                            <div class="d-flex flex-wrap gap-1">
+                                            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-1);">
                                                 <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/set-domain-status'))">
                                                     <input type="hidden" name="domain_id" value="<?= $domainId ?>">
                                                     <input type="hidden" name="status" value="active">
-                                                    <button class="btn btn-sm btn-success" type="submit"><?= __('开启') ?></button>
+                                                    <button class="w-button" type="submit" data-tone="success" data-size="sm"><?= __('开启') ?></button>
                                                 </w:form>
                                                 <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/set-domain-status'))">
                                                     <input type="hidden" name="domain_id" value="<?= $domainId ?>">
                                                     <input type="hidden" name="status" value="suspended">
-                                                    <button class="btn btn-sm btn-outline-warning" type="submit"><?= __('停用') ?></button>
+                                                    <button class="w-button" type="submit" data-tone="warning" data-variant="outline" data-size="sm"><?= __('停用') ?></button>
                                                 </w:form>
                                                 <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/set-domain-status'))">
                                                     <input type="hidden" name="domain_id" value="<?= $domainId ?>">
                                                     <input type="hidden" name="status" value="pending">
-                                                    <button class="btn btn-sm btn-outline-secondary" type="submit"><?= __('待同步') ?></button>
+                                                    <button class="w-button" type="submit" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('待同步') ?></button>
                                                 </w:form>
                                             </div>
                                         </td>
@@ -305,15 +305,15 @@ $totalAccounts = count($accounts);
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-xl-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('创建邮箱账号') ?></h5>
+    <div class="w-grid">
+        <div style="--w-span-lg:4;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('创建邮箱账号') ?></h5>
                     <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/create-account'))">
-                        <div class="mb-3">
-                            <label class="form-label" for="mail-account-domain-select"><?= __('邮箱域名') ?></label>
-                            <select id="mail-account-domain-select" class="form-select" name="domain_id" required>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="mail-account-domain-select"><?= __('邮箱域名') ?></label>
+                            <select id="mail-account-domain-select" class="w-select" name="domain_id" required>
                                 <option value=""><?= __('请选择域名') ?></option>
                                 <?php foreach ($domains as $domain): ?>
                                     <?php
@@ -329,50 +329,50 @@ $totalAccounts = count($accounts);
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="mail-account-local"><?= __('邮箱账号') ?></label>
-                            <div class="input-group">
-                                <input id="mail-account-local" class="form-control" name="local_part" placeholder="admin" required>
-                                <span id="mail-account-domain-suffix" class="input-group-text">@</span>
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="mail-account-local"><?= __('邮箱账号') ?></label>
+                            <div class="w-field__control">
+                                <input id="mail-account-local" class="w-input" name="local_part" placeholder="admin" required>
+                                <span id="mail-account-domain-suffix" class="w-field__addon">@</span>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="mail-account-display"><?= __('显示名称') ?></label>
-                            <input id="mail-account-display" class="form-control" name="display_name" placeholder="<?= $escape(__('管理员')) ?>">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="mail-account-display"><?= __('显示名称') ?></label>
+                            <input id="mail-account-display" class="w-input" name="display_name" placeholder="<?= $escape(__('管理员')) ?>">
                         </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="mail-account-customer"><?= __('客户ID') ?></label>
-                                <input id="mail-account-customer" class="form-control" name="customer_id" type="number" min="0" value="0">
+                        <div class="w-grid">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="mail-account-customer"><?= __('客户ID') ?></label>
+                                <input id="mail-account-customer" class="w-input" name="customer_id" type="number" min="0" value="0">
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="mail-account-quota"><?= __('容量 MB') ?></label>
-                                <input id="mail-account-quota" class="form-control" name="quota_mb" type="number" min="128" value="1024">
+                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="mail-account-quota"><?= __('容量 MB') ?></label>
+                                <input id="mail-account-quota" class="w-input" name="quota_mb" type="number" min="128" value="1024">
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="mail-account-status"><?= __('账号状态') ?></label>
-                            <select id="mail-account-status" class="form-select" name="status">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="mail-account-status"><?= __('账号状态') ?></label>
+                            <select id="mail-account-status" class="w-select" name="status">
                                 <option value="pending"><?= __('待同步') ?></option>
                                 <option value="active"><?= __('开启') ?></option>
                                 <option value="suspended"><?= __('停用') ?></option>
                             </select>
-                            <div class="form-text"><?= __('Fake 域名会自动建议开启，真实域名默认待同步。') ?></div>
+                            <div class="w-field__hint"><?= __('Fake 域名会自动建议开启，真实域名默认待同步。') ?></div>
                         </div>
-                        <button class="btn btn-primary" type="submit"><?= __('创建邮箱账号') ?></button>
+                        <button class="w-button" type="submit" data-tone="primary"><?= __('创建邮箱账号') ?></button>
                     </w:form>
                 </div>
             </div>
         </div>
 
-        <div class="col-xl-8">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
-                        <h5 class="card-title mb-0"><?= __('域名邮箱列表管理') ?></h5>
+        <div style="--w-span-lg:8;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-align="end" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                        <h5 class="w-card__title" style="--w-mb:0;"><?= __('域名邮箱列表管理') ?></h5>
                         <div style="min-width: 240px;">
-                            <label class="form-label mb-1" for="mail-account-domain-filter"><?= __('按域名筛选') ?></label>
-                            <select id="mail-account-domain-filter" class="form-select form-select-sm">
+                            <label class="w-field__label" for="mail-account-domain-filter" style="--w-mb:var(--weline-space-1);"><?= __('按域名筛选') ?></label>
+                            <select id="mail-account-domain-filter" class="w-select" data-size="sm">
                                 <option value=""><?= __('全部域名') ?></option>
                                 <?php foreach ($domains as $domain): ?>
                                     <option value="<?= (int)$domain->getId() ?>"><?= $escape($domain->getData('domain_name')) ?></option>
@@ -380,8 +380,8 @@ $totalAccounts = count($accounts);
                             </select>
                         </div>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle">
                             <thead>
                             <tr>
                                 <th><?= __('邮箱') ?></th>
@@ -394,7 +394,7 @@ $totalAccounts = count($accounts);
                             </thead>
                             <tbody id="mail-account-table-body">
                             <?php if ($accounts === []): ?>
-                                <tr><td colspan="6" class="text-muted"><?= __('暂无邮箱账号') ?></td></tr>
+                                <tr><td colspan="6" class="w-text" data-tone="muted"><?= __('暂无邮箱账号') ?></td></tr>
                             <?php else: ?>
                                 <?php foreach ($accounts as $account): ?>
                                     <?php
@@ -411,7 +411,7 @@ $totalAccounts = count($accounts);
                                         <td><?= (int)$account->getData('customer_id') ?></td>
                                         <td><?= $escape($account->getData('display_name')) ?></td>
                                         <td><?= (int)$account->getData('quota_mb') ?> MB</td>
-                                        <td><span class="badge <?= $statusBadge($status) ?>"><?= $escape($status) ?></span></td>
+                                        <td><span class="w-badge <?= $statusBadge($status) ?>"><?= $escape($status) ?></span></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -423,27 +423,27 @@ $totalAccounts = count($accounts);
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-xl-6">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('DNS 检测') ?></h5>
-                    <w:form class="row gy-2 gx-2 align-items-end" method="get" action="@var($this->getBackendUrl('weline_mail/backend/index'))">
-                        <div class="col-md-5">
-                            <label class="form-label"><?= __('邮箱域名') ?></label>
-                            <input class="form-control" name="domain" value="<?= $escape($dnsResult['domain'] ?? '') ?>" placeholder="example.com">
+    <div class="w-grid">
+        <div style="--w-span-lg:6;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('DNS 检测') ?></h5>
+                    <w:form class="w-grid" method="get" action="@var($this->getBackendUrl('weline_mail/backend/index'))" data-align="end" style="--w-row-gap:var(--weline-space-2);--w-column-gap:var(--weline-space-2);">
+                        <div style="--w-span-md:5;">
+                            <label class="w-field__label"><?= __('邮箱域名') ?></label>
+                            <input class="w-input" name="domain" value="<?= $escape($dnsResult['domain'] ?? '') ?>" placeholder="example.com">
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label"><?= __('邮件主机名') ?></label>
-                            <input class="form-control" name="hostname" value="<?= $escape($dnsResult['hostname'] ?? '') ?>" placeholder="mail.example.com">
+                        <div style="--w-span-md:5;">
+                            <label class="w-field__label"><?= __('邮件主机名') ?></label>
+                            <input class="w-input" name="hostname" value="<?= $escape($dnsResult['hostname'] ?? '') ?>" placeholder="mail.example.com">
                         </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-secondary w-100" type="submit"><?= __('检测') ?></button>
+                        <div style="--w-span-md:2;">
+                            <button class="w-button" type="submit" data-w-width="full" data-tone="neutral"><?= __('检测') ?></button>
                         </div>
                     </w:form>
                     <?php if ($dnsResult): ?>
-                        <div class="table-responsive mt-3">
-                            <table class="table table-sm">
+                        <div class="w-table-wrap" style="--w-mt:var(--weline-space-4);">
+                            <table class="w-table">
                                 <thead>
                                 <tr>
                                     <th><?= __('类型') ?></th>
@@ -468,13 +468,13 @@ $totalAccounts = count($accounts);
                 </div>
             </div>
         </div>
-        <div class="col-xl-6">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('客户端配置') ?></h5>
+        <div style="--w-span-lg:6;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('客户端配置') ?></h5>
                     <?php if ($clientSettings): ?>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
+                        <div class="w-table-wrap">
+                            <table class="w-table">
                                 <tbody>
                                 <tr><th>SMTP</th><td><?= $escape($clientSettings['smtp']['host'] ?? '') ?>:<?= (int)($clientSettings['smtp']['port'] ?? 0) ?> <?= $escape($clientSettings['smtp']['security'] ?? '') ?></td></tr>
                                 <tr><th>IMAP</th><td><?= $escape($clientSettings['imap']['host'] ?? '') ?>:<?= (int)($clientSettings['imap']['port'] ?? 0) ?> <?= $escape($clientSettings['imap']['security'] ?? '') ?></td></tr>
@@ -483,21 +483,21 @@ $totalAccounts = count($accounts);
                             </table>
                         </div>
                     <?php else: ?>
-                        <p class="text-muted"><?= __('输入域名和邮件主机名后显示客户端连接配置。') ?></p>
+                        <p class="w-text" data-tone="muted"><?= __('输入域名和邮件主机名后显示客户端连接配置。') ?></p>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('Fake 邮件审计') ?></h5>
-                    <p class="text-muted"><?= __('显示最近 20 封 fake 模式写入的收件箱和发件箱邮件，用于后台冒烟核对。') ?></p>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('Fake 邮件审计') ?></h5>
+                    <p class="w-text" data-tone="muted"><?= __('显示最近 20 封 fake 模式写入的收件箱和发件箱邮件，用于后台冒烟核对。') ?></p>
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle">
                             <thead>
                             <tr>
                                 <th>ID</th>
@@ -512,7 +512,7 @@ $totalAccounts = count($accounts);
                             </thead>
                             <tbody>
                             <?php if ($messages === []): ?>
-                                <tr><td colspan="8" class="text-muted"><?= __('暂无 fake 邮件记录') ?></td></tr>
+                                <tr><td colspan="8" class="w-text" data-tone="muted"><?= __('暂无 fake 邮件记录') ?></td></tr>
                             <?php else: ?>
                                 <?php foreach ($messages as $message): ?>
                                     <tr>
@@ -579,14 +579,14 @@ $totalAccounts = count($accounts);
         }).slice(0, 14);
 
         if (!filtered.length) {
-            resultBox.innerHTML = '<div class="p-3 text-muted"><?= $escape(__('暂无匹配域名，可输入 .test / .invalid 域名做 Fake 冒烟')) ?></div>';
+            resultBox.innerHTML = '<div class="w-text" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);"><?= $escape(__('暂无匹配域名，可输入 .test / .invalid 域名做 Fake 冒烟')) ?></div>';
             return;
         }
 
         resultBox.innerHTML = filtered.map(function (item) {
-            var created = item.is_created ? '<span class="badge bg-success ms-2"><?= $escape(__('已开通')) ?></span>' : '';
+            var created = item.is_created ? '<span class="w-badge ms-2" data-w-background="success"><?= $escape(__('已开通')) ?></span>' : '';
             var sourceDomain = item.source_domain && item.source_domain !== item.domain
-                ? '<span class="text-muted ms-2">' + escapeHtml(item.source_domain) + '</span>'
+                ? '<span class="w-text ms-2" data-tone="muted">' + escapeHtml(item.source_domain) + '</span>'
                 : '';
             var accountText = item.is_created
                 ? '<?= $escape(__('账号数')) ?> ' + Number(item.account_count || 0)

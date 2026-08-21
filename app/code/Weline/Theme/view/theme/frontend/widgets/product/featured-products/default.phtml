@@ -83,7 +83,7 @@ $widgetId = 'featured-products-' . uniqid();
         
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-prev" type="button">
-                <i class="ri-arrow-left-s-line"></i>
+                <w:icon name="arrow-left" size="sm"></w:icon>
             </button>
         <?php endif; ?>
         
@@ -112,13 +112,13 @@ $widgetId = 'featured-products-' . uniqid();
                             <!-- 快捷操作 -->
                             <div class="product-actions">
                                 <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" title="<?= __('加入收藏') ?>">
-                                    <i class="ri-heart-line weline-pixel::add_to_wishlist"></i>
+                                    <w:icon name="heart" size="sm"></w:icon>
                                 </button>
                                 <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
-                                    <i class="ri-eye-line"></i>
+                                    <w:icon name="eye" size="sm"></w:icon>
                                 </button>
                                 <button class="action-btn btn-compare" title="<?= __('加入对比') ?>">
-                                    <i class="ri-arrow-left-right-line"></i>
+                                    <w:icon name="arrow-left" size="sm"></w:icon>
                                 </button>
                             </div>
                         </div>
@@ -133,11 +133,11 @@ $widgetId = 'featured-products-' . uniqid();
                             <?php if ($showRating): ?>
                                 <div class="product-rating">
                                     <div class="stars" style="--rating: <?= $product['rating'] ?>;">
-                                        <i class="ri-star-fill"></i>
-                                        <i class="ri-star-fill"></i>
-                                        <i class="ri-star-fill"></i>
-                                        <i class="ri-star-fill"></i>
-                                        <i class="ri-star-fill"></i>
+                                        <w:icon name="star" size="sm"></w:icon>
+                                        <w:icon name="star" size="sm"></w:icon>
+                                        <w:icon name="star" size="sm"></w:icon>
+                                        <w:icon name="star" size="sm"></w:icon>
+                                        <w:icon name="star" size="sm"></w:icon>
                                     </div>
                                     <span class="review-count">(<?= $product['review_count'] ?>)</span>
                                 </div>
@@ -160,12 +160,8 @@ $widgetId = 'featured-products-' . uniqid();
                                             <input type="hidden" name="product_id" value="<?= $cartProductId ?>">
                                             <input type="hidden" name="qty" value="1">
                                             <input type="hidden" name="redirect" value="/cart">
-                                            <button type="submit"
-                                                    class="btn-add-to-cart weline-pixel::add_to_cart"
-                                                    data-product-id="<?= $cartProductId ?>"
-                                                    data-is-configurable="0"
-                                                    data-action="add-to-cart">
-                                            <i class="ri-shopping-cart-line weline-pixel::add_to_cart"></i>
+                                            <button type="submit" class="btn-add-to-cart weline-pixel::add_to_cart" data-product-id="<?= $cartProductId ?>" data-is-configurable="0" data-action="add-to-cart">
+                                            <w:icon name="pin" size="sm"></w:icon>
                                             <span class="weline-pixel::add_to_cart"><?= __('加入购物车') ?></span>
                                             </button>
                                         </w:form>
@@ -184,7 +180,7 @@ $widgetId = 'featured-products-' . uniqid();
         
         <?php if ($layout === 'carousel'): ?>
             <button class="carousel-arrow carousel-next" type="button">
-                <i class="ri-arrow-right-s-line"></i>
+                <w:icon name="arrow-right" size="sm"></w:icon>
             </button>
         <?php endif; ?>
     </div>
@@ -594,11 +590,11 @@ $widgetId = 'featured-products-' . uniqid();
             return;
             
             // 显示添加动画
-            this.innerHTML = '<i class="ri-check-line"></i> <span><?= __('已添加') ?></span>';
+            this.innerHTML = '<w:icon name="check" size="sm"></w:icon> <span><?= __('已添加') ?></span>';
             this.style.background = 'var(--success-color, #28a745)';
             
             setTimeout(() => {
-                this.innerHTML = '<i class="ri-shopping-cart-line"></i> <span><?= __('加入购物车') ?></span>';
+                this.innerHTML = '<w:icon name="pin" size="sm"></w:icon> <span><?= __('加入购物车') ?></span>';
                 this.style.background = '';
             }, 2000);
         });

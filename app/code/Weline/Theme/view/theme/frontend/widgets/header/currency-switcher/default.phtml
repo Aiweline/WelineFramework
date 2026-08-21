@@ -42,7 +42,7 @@ $currentCurrency = reset($currentCurrency) ?: $currencies[0];
             <?php if ($showCode): ?>
                 <span class="currency-code"><?= htmlspecialchars($currentCurrency['code']) ?></span>
             <?php endif; ?>
-            <i class="ri-arrow-down-s-line"></i>
+            <w:icon name="arrow-down" size="sm"></w:icon>
         </button>
         
         <ul class="currency-list">
@@ -55,7 +55,7 @@ $currentCurrency = reset($currentCurrency) ?: $currencies[0];
                             <span class="currency-name"><?= htmlspecialchars($currency['name']) ?></span>
                         </span>
                         <?php if ($currency['active']): ?>
-                            <i class="ri-check-line"></i>
+                            <w:icon name="check" size="sm"></w:icon>
                         <?php endif; ?>
                     </a>
                 </li>

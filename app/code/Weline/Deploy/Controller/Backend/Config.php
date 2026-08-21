@@ -10,7 +10,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 
-#[Acl('Weline_Deploy::deploy_config', '部署配置', 'mdi mdi-source-branch', '管理部署仓库、Webhook 与缓存清理配置', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Deploy::deploy_config', '部署配置', 'circle', '管理部署仓库、Webhook 与缓存清理配置', 'Weline_Backend::system_maintenance')]
 class Config extends BackendController
 {
     public function __construct(
@@ -19,7 +19,7 @@ class Config extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Deploy::deploy_config_index', '查看部署配置', 'mdi mdi-source-branch', '查看部署信息配置')]
+    #[Acl('Weline_Deploy::deploy_config_index', '查看部署配置', 'circle', '查看部署信息配置')]
     public function index(): string
     {
         $settings = $this->deployConfigService->getSettings();
@@ -37,7 +37,7 @@ class Config extends BackendController
         return (string)$this->fetch();
     }
 
-    #[Acl('Weline_Deploy::deploy_config_save', '保存部署配置', 'mdi mdi-content-save', '保存部署信息配置')]
+    #[Acl('Weline_Deploy::deploy_config_save', '保存部署配置', 'save', '保存部署信息配置')]
     public function save(): string
     {
         if (!$this->request->isPost()) {

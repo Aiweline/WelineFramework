@@ -18,7 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * CDN攻击日志管理后台控制器
  */
-#[AclAttribute('Weline_Cdn::cdn_attack_log_manager', '攻击日志管理', 'mdi-shield-alert', 'CDN攻击日志管理', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_attack_log_manager', '攻击日志管理', 'warning', 'CDN攻击日志管理', 'Weline_Cdn::cdn_manager')]
 class AttackLog extends BackendController
 {
     /**
@@ -32,7 +32,7 @@ class AttackLog extends BackendController
     /**
      * 攻击日志列表页面
      */
-    #[AclAttribute('Weline_Cdn::cdn_attack_log_list', '查看攻击日志', 'mdi-view-list', '查看CDN攻击日志列表')]
+    #[AclAttribute('Weline_Cdn::cdn_attack_log_list', '查看攻击日志', 'list', '查看CDN攻击日志列表')]
     public function index(): string
     {
         $page = (int)$this->request->getGet('page', 1);
@@ -124,7 +124,7 @@ class AttackLog extends BackendController
     /**
      * 查看攻击日志详情
      */
-    #[AclAttribute('Weline_Cdn::cdn_attack_log_view', '查看攻击详情', 'mdi-eye', '查看攻击日志详情')]
+    #[AclAttribute('Weline_Cdn::cdn_attack_log_view', '查看攻击详情', 'eye', '查看攻击日志详情')]
     public function getDetail(): string
     {
         $logId = (int)$this->request->getGet('id');
@@ -156,7 +156,7 @@ class AttackLog extends BackendController
     /**
      * 删除攻击日志
      */
-    #[AclAttribute('Weline_Cdn::cdn_attack_log_delete', '删除攻击日志', 'mdi-delete', '删除攻击日志')]
+    #[AclAttribute('Weline_Cdn::cdn_attack_log_delete', '删除攻击日志', 'trash', '删除攻击日志')]
     public function postDelete(): string
     {
         $logId = (int)$this->request->getPost('id');
@@ -195,7 +195,7 @@ class AttackLog extends BackendController
     /**
      * 批量删除攻击日志
      */
-    #[AclAttribute('Weline_Cdn::cdn_attack_log_delete', '删除攻击日志', 'mdi-delete', '删除攻击日志')]
+    #[AclAttribute('Weline_Cdn::cdn_attack_log_delete', '删除攻击日志', 'trash', '删除攻击日志')]
     public function postBatchDelete(): string
     {
         $ids = $this->request->getPost('ids');
@@ -232,7 +232,7 @@ class AttackLog extends BackendController
     /**
      * 清理历史日志
      */
-    #[AclAttribute('Weline_Cdn::cdn_attack_log_cleanup', '清理历史日志', 'mdi-broom', '清理历史攻击日志')]
+    #[AclAttribute('Weline_Cdn::cdn_attack_log_cleanup', '清理历史日志', 'circle', '清理历史攻击日志')]
     public function postCleanup(): string
     {
         $days = (int)$this->request->getPost('days', 30);
@@ -264,7 +264,7 @@ class AttackLog extends BackendController
     /**
      * 导出日志
      */
-    #[AclAttribute('Weline_Cdn::cdn_attack_log_export', '导出攻击日志', 'mdi-download', '导出攻击日志')]
+    #[AclAttribute('Weline_Cdn::cdn_attack_log_export', '导出攻击日志', 'download', '导出攻击日志')]
     public function getExport(): void
     {
         $status = \trim($this->request->getGet('status', ''));

@@ -49,13 +49,13 @@ $buildQuery = static function (array $overrides = []) use (
 </div>
 <?php if (empty($hooks)): ?>
     <div class="empty-state">
-        <i class="mdi mdi-hook"></i>
+        <w:icon name="circle" size="sm"></w:icon>
         <h3>暂无 Hook 信息</h3>
         <p>系统中还没有定义任何 Hook。</p>
     </div>
 <?php else: ?>
     <div class="table-container">
-        <table class="table">
+        <table class="w-table">
             <thead>
                 <tr>
                     <th>
@@ -93,19 +93,19 @@ $buildQuery = static function (array $overrides = []) use (
                         </td>
                         <td>
                             <div class="hook-module">
-                                <span class="badge badge-info"><?= htmlspecialchars($hookInfo['module'] ?? '') ?></span>
+                                <span class="w-badge" data-tone="info"><?= htmlspecialchars($hookInfo['module'] ?? '') ?></span>
                             </div>
                         </td>
                         <td>
                             <div class="hook-area-type">
-                                <span class="badge badge-secondary"><?= htmlspecialchars($hookInfo['area'] ?? '') ?></span>
-                                <span class="badge badge-secondary"><?= htmlspecialchars($hookInfo['type'] ?? '') ?></span>
+                                <span class="w-badge" data-tone="muted"><?= htmlspecialchars($hookInfo['area'] ?? '') ?></span>
+                                <span class="w-badge" data-tone="muted"><?= htmlspecialchars($hookInfo['type'] ?? '') ?></span>
                             </div>
                         </td>
                         <td>
                             <div class="hook-component-position">
                                 <small><strong><?= htmlspecialchars($hookInfo['component'] ?? '') ?></strong></small>
-                                <small class="text-muted"><?= htmlspecialchars($hookInfo['position'] ?? '') ?></small>
+                                <small class="w-text" data-tone="muted"><?= htmlspecialchars($hookInfo['position'] ?? '') ?></small>
                             </div>
                         </td>
                         <td>
@@ -115,40 +115,37 @@ $buildQuery = static function (array $overrides = []) use (
                                 $usingModules = $hookInfo['using_modules'] ?? [];
                                 ?>
                                 <?php if ($fileCount > 0): ?>
-                                    <span class="badge badge-primary">
-                                        <i class="mdi mdi-file"></i> <?= $fileCount ?> 个文件
+                                    <span class="w-badge" data-tone="primary">
+                                        <w:icon name="file" size="sm"></w:icon> <?= $fileCount ?> 个文件
                                     </span>
                                     <div class="using-modules">
-                                        <small class="text-muted">
+                                        <small class="w-text" data-tone="muted">
                                             来自 <?= count($usingModules) ?> 个模块
                                         </small>
                                     </div>
                                 <?php else: ?>
-                                    <span class="text-muted">无文件</span>
+                                    <span class="w-text" data-tone="muted">无文件</span>
                                 <?php endif; ?>
                             </div>
                         </td>
                         <td>
                             <div class="hook-status">
                                 <?php if ($hookInfo['is_registered'] ?? false): ?>
-                                    <span class="badge badge-success" title="已进入编译 Hook 注册表">已注册</span>
+                                    <span class="w-badge" title="已进入编译 Hook 注册表" data-tone="success">已注册</span>
                                 <?php else: ?>
-                                    <span class="badge badge-danger" title="未进入编译 Hook 注册表">未注册</span>
+                                    <span class="w-badge" title="未进入编译 Hook 注册表" data-tone="danger">未注册</span>
                                 <?php endif; ?>
                                 <?php if ($hookInfo['has_files'] ?? false): ?>
-                                    <span class="badge badge-info" title="存在 Hook 文件">有文件</span>
+                                    <span class="w-badge" title="存在 Hook 文件" data-tone="info">有文件</span>
                                 <?php else: ?>
-                                    <span class="badge badge-warning" title="不存在 Hook 文件">无文件</span>
+                                    <span class="w-badge" title="不存在 Hook 文件" data-tone="warning">无文件</span>
                                 <?php endif; ?>
                             </div>
                         </td>
                         <td>
                             <div class="actions">
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-primary btn-view-detail"
-                                        data-hook-name="<?= htmlspecialchars($hookName) ?>"
-                                        title="查看详情">
-                                    <i class="mdi mdi-eye"></i> 详情
+                                <button type="button" class="w-button btn-view-detail" data-hook-name="<?= htmlspecialchars($hookName) ?>" title="查看详情" data-tone="primary" data-variant="outline" data-size="sm">
+                                    <w:icon name="eye" size="sm"></w:icon> 详情
                                 </button>
                             </div>
                         </td>
@@ -164,10 +161,7 @@ $buildQuery = static function (array $overrides = []) use (
                 每页 <?= $perPage ?> 条，共 <?= $totalPages ?> 页
             </div>
             <div class="pagination-actions">
-                <a class="btn btn-sm btn-secondary pagination-link<?= $currentPage <= 1 ? ' disabled' : '' ?>"
-                   href="<?= $currentPage <= 1 ? '#' : ('?' . $buildQuery(['page' => $currentPage - 1])) ?>"
-                   aria-disabled="<?= $currentPage <= 1 ? 'true' : 'false' ?>"
-                   data-page="<?= max(1, $currentPage - 1) ?>">
+                <a class="w-button pagination-link<?= $currentPage <= 1 ? ' disabled' : '' ?>" href="<?= $currentPage <= 1 ? '#' : ('?' . $buildQuery(['page' => $currentPage - 1])) ?>" aria-disabled="<?= $currentPage <= 1 ? 'true' : 'false' ?>" data-page="<?= max(1, $currentPage - 1) ?>" data-tone="neutral" data-size="sm">
                     上一页
                 </a>
                 <?php
@@ -175,16 +169,11 @@ $buildQuery = static function (array $overrides = []) use (
                 $endPage = min($totalPages, $currentPage + 2);
                 for ($page = $startPage; $page <= $endPage; $page++):
                 ?>
-                    <a class="btn btn-sm <?= $page === $currentPage ? 'btn-primary' : 'btn-outline-primary' ?> pagination-link"
-                       href="?<?= $buildQuery(['page' => $page]) ?>"
-                       data-page="<?= $page ?>">
+                    <a class="w-button <?= $page === $currentPage ? 'btn-primary' : 'btn-outline-primary' ?> pagination-link" href="?<?= $buildQuery(['page' => $page]) ?>" data-page="<?= $page ?>" data-size="sm">
                         <?= $page ?>
                     </a>
                 <?php endfor; ?>
-                <a class="btn btn-sm btn-secondary pagination-link<?= $currentPage >= $totalPages ? ' disabled' : '' ?>"
-                   href="<?= $currentPage >= $totalPages ? '#' : ('?' . $buildQuery(['page' => $currentPage + 1])) ?>"
-                   aria-disabled="<?= $currentPage >= $totalPages ? 'true' : 'false' ?>"
-                   data-page="<?= min($totalPages, $currentPage + 1) ?>">
+                <a class="w-button pagination-link<?= $currentPage >= $totalPages ? ' disabled' : '' ?>" href="<?= $currentPage >= $totalPages ? '#' : ('?' . $buildQuery(['page' => $currentPage + 1])) ?>" aria-disabled="<?= $currentPage >= $totalPages ? 'true' : 'false' ?>" data-page="<?= min($totalPages, $currentPage + 1) ?>" data-tone="neutral" data-size="sm">
                     下一页
                 </a>
             </div>

@@ -41,55 +41,55 @@ final class Catalog extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Product::commerce:catalog:products', '商品管理', 'mdi-package-variant', '查看商品目录')]
+    #[Acl('Weline_Product::commerce:catalog:products', '商品管理', 'box', '查看商品目录')]
     public function products(): string
     {
         return $this->renderSection('products');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:offers', '销售报价', 'mdi-tag-multiple-outline', '查看销售报价')]
+    #[Acl('Weline_Product::commerce:catalog:offers', '销售报价', 'tag', '查看销售报价')]
     public function offers(): string
     {
         return $this->renderSection('offers');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:sku-registry', 'SKU 注册表', 'mdi-barcode', '查看 SKU 全局身份')]
+    #[Acl('Weline_Product::commerce:catalog:sku-registry', 'SKU 注册表', 'code', '查看 SKU 全局身份')]
     public function skuRegistry(): string
     {
         return $this->renderSection('sku-registry');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:categories', '商品分类', 'mdi-file-tree-outline', '查看商品分类')]
+    #[Acl('Weline_Product::commerce:catalog:categories', '商品分类', 'tree', '查看商品分类')]
     public function categories(): string
     {
         return $this->renderSection('categories');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:media', '商品媒体', 'mdi-image-multiple-outline', '查看商品媒体')]
+    #[Acl('Weline_Product::commerce:catalog:media', '商品媒体', 'image', '查看商品媒体')]
     public function media(): string
     {
         return $this->renderSection('media');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:site-content', '站点文案', 'mdi-translate', '管理商品站点与 Store View 文案')]
+    #[Acl('Weline_Product::commerce:catalog:site-content', '站点文案', 'language', '管理商品站点与 Store View 文案')]
     public function siteContent(): string
     {
         return $this->renderSection('site-content');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:store-copy', '网站迁移与复制', 'mdi-content-copy', '查看网站迁移与复制任务')]
+    #[Acl('Weline_Product::commerce:catalog:store-copy', '网站迁移与复制', 'copy', '查看网站迁移与复制任务')]
     public function storeCopy(): string
     {
         return $this->renderSection('store-copy');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:shards', '商品分片', 'mdi-database-cog-outline', '查看商品分片状态')]
+    #[Acl('Weline_Product::commerce:catalog:shards', '商品分片', 'settings', '查看商品分片状态')]
     public function shards(): string
     {
         return $this->renderSection('shards');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:sku-registry', '注册 SKU', 'mdi-barcode-scan', '注册 SKU 全局身份')]
+    #[Acl('Weline_Product::commerce:catalog:sku-registry', '注册 SKU', 'code', '注册 SKU 全局身份')]
     public function postRegisterSku(): string
     {
         return $this->handleMutation(
@@ -104,7 +104,7 @@ final class Catalog extends BackendController
         );
     }
 
-    #[Acl('Weline_Product::commerce:catalog:products', '创建商品', 'mdi-package-variant-plus', '创建商品')]
+    #[Acl('Weline_Product::commerce:catalog:products', '创建商品', 'plus', '创建商品')]
     public function postCreateProduct(): string
     {
         return $this->handleMutation(
@@ -117,7 +117,7 @@ final class Catalog extends BackendController
         );
     }
 
-    #[Acl('Weline_Product::commerce:catalog:offers', '创建销售报价', 'mdi-tag-plus-outline', '创建销售报价')]
+    #[Acl('Weline_Product::commerce:catalog:offers', '创建销售报价', 'plus', '创建销售报价')]
     public function postCreateOffer(): string
     {
         return $this->handleMutation(
@@ -130,7 +130,7 @@ final class Catalog extends BackendController
         );
     }
 
-    #[Acl('Weline_Product::commerce:catalog:categories', '创建商品分类', 'mdi-file-tree-outline', '创建商品分类')]
+    #[Acl('Weline_Product::commerce:catalog:categories', '创建商品分类', 'tree', '创建商品分类')]
     public function postCreateCategory(): string
     {
         return $this->handleMutation(
@@ -144,7 +144,7 @@ final class Catalog extends BackendController
         );
     }
 
-    #[Acl('Weline_Product::commerce:catalog:media', '创建商品媒体', 'mdi-image-plus-outline', '创建商品媒体')]
+    #[Acl('Weline_Product::commerce:catalog:media', '创建商品媒体', 'plus', '创建商品媒体')]
     public function postCreateMedia(): string
     {
         return $this->handleMutation(
@@ -160,7 +160,7 @@ final class Catalog extends BackendController
         );
     }
 
-    #[Acl('Weline_Product::commerce:catalog:products', '编辑商品', 'mdi-pencil', '编辑商品')]
+    #[Acl('Weline_Product::commerce:catalog:products', '编辑商品', 'edit', '编辑商品')]
     public function editProduct(): string
     {
         $websiteId = max(0, (int)$this->request->getGet('website_id', 0));
@@ -190,7 +190,7 @@ final class Catalog extends BackendController
         return (string)$this->fetch('edit');
     }
 
-    #[Acl('Weline_Product::commerce:catalog:products', '保存商品', 'mdi-content-save-outline', '保存商品设置')]
+    #[Acl('Weline_Product::commerce:catalog:products', '保存商品', 'save', '保存商品设置')]
     public function postSaveProduct(): string
     {
         $websiteId = 0;
@@ -212,7 +212,7 @@ final class Catalog extends BackendController
         }
     }
 
-    #[Acl('Weline_Product::commerce:catalog:site-content', '保存站点文案', 'mdi-content-save-outline', '保存商品站点与 Store View 文案')]
+    #[Acl('Weline_Product::commerce:catalog:site-content', '保存站点文案', 'save', '保存商品站点与 Store View 文案')]
     public function postSaveSiteContent(): string
     {
         $websiteId = 0;

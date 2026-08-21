@@ -9,16 +9,16 @@ $records = $this->getData('records') ?? [];
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row" data-testid="shipping-tracking-management">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('物流跟踪') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
+<div class="w-grid" data-testid="shipping-tracking-management">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= __('物流跟踪') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
                                     </li>
-                                    <li class="breadcrumb-item active"><?= __('物流跟踪') ?></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= __('物流跟踪') ?></li>
                                 </ol>
                             </div>
                         </div>
@@ -26,22 +26,22 @@ $embed = $this->getData('embed') ?? false;
                 </div>
 <?php endif; ?>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('物流跟踪记录列表') ?></h5>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('物流跟踪记录列表') ?></h5>
                             </div>
-                            <div class="card-body">
-                                <div class="alert alert-info" data-testid="shipping-tracking-read-only"><?= __('物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。') ?></div>
+                            <div class="w-card__body">
+                                <div class="w-alert" data-testid="shipping-tracking-read-only" data-tone="info"><?= __('物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。') ?></div>
                                 <?php if (empty($records)): ?>
-                                    <div class="alert alert-info mb-0">
+                                    <div class="w-alert" data-tone="info" style="--w-mb:0;">
                                         <?= __('当前暂无物流跟踪记录。') ?>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-hover align-middle">
-                                            <thead class="table-light">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table" data-w-vertical="middle">
+                                            <thead>
                                             <tr>
                                                 <th><?= __('物流单号') ?></th>
                                                 <th><?= __('快递公司ID') ?></th>

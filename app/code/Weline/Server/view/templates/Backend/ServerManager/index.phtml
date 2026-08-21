@@ -30,45 +30,45 @@ $guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
 
 <div class="server-manager" id="server-manager-container">
     <!-- 加载中状态 -->
-    <div id="loading-state" class="text-center py-5">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden"><?= __('加载中...') ?></span>
+    <div id="loading-state" class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+        <div class="w-spinner w-text" role="status" data-tone="primary">
+            <span class="w-visually-hidden"><?= __('加载中...') ?></span>
         </div>
-        <p class="mt-3 text-muted"><?= __('正在加载服务器状态...') ?></p>
+        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?= __('正在加载服务器状态...') ?></p>
     </div>
     
     <!-- 错误状态 -->
-    <div id="error-state" class="d-none">
-        <div class="alert alert-danger">
-            <h5><i class="bi bi-exclamation-triangle me-2"></i><?= __('加载失败') ?></h5>
+    <div id="error-state" hidden>
+        <div class="w-alert" data-tone="danger">
+            <h5><w:icon name="warning" size="sm"></w:icon><?= __('加载失败') ?></h5>
             <p id="error-message"></p>
-            <button class="btn btn-outline-danger" data-server-manager-action="load-server-data">
-                <i class="bi bi-arrow-clockwise"></i> <?= __('重试') ?>
+            <button class="w-button" data-server-manager-action="load-server-data" data-tone="danger" data-variant="outline">
+                <w:icon name="clock" size="sm"></w:icon> <?= __('重试') ?>
             </button>
         </div>
     </div>
     
     <!-- 内容容器 -->
-    <div id="content-container" class="d-none"></div>
+    <div id="content-container" hidden></div>
 
     <!-- Session 详情 Offcanvas -->
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="sessionDetailOffcanvas" aria-labelledby="sessionDetailOffcanvasLabel" style="max-width: 600px;">
-        <div class="offcanvas-header border-bottom">
-            <h5 class="offcanvas-title" id="sessionDetailOffcanvasLabel"><?= __('Session 全部字段') ?></h5>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="<?= __('关闭') ?>"></button>
+    <div class="w-drawer offcanvas-end" tabindex="-1" id="sessionDetailOffcanvas" aria-labelledby="sessionDetailOffcanvasLabel" style="max-width: 600px;" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+        <div class="w-drawer__header" data-w-border="bottom">
+            <h5 class="w-drawer__title" id="sessionDetailOffcanvasLabel"><?= __('Session 全部字段') ?></h5>
+            <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
         </div>
-        <div class="offcanvas-body p-0">
-            <div id="session-detail-loading" class="text-center py-5 text-muted d-none">
-                <div class="spinner-border spinner-border-sm" role="status"></div>
+        <div class="w-drawer__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+            <div id="session-detail-loading" class="w-text" data-align="center" hidden data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <div class="w-spinner" role="status" data-size="sm"></div>
                 <span class="ms-2"><?= __('加载中...') ?></span>
             </div>
-            <div id="session-detail-content" class="d-none">
-                <div class="p-3 border-bottom bg-body-tertiary">
-                    <code id="session-detail-id" class="small text-break"></code>
+            <div id="session-detail-content" hidden>
+                <div class="bg-body-tertiary" data-w-border="bottom" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                    <code id="session-detail-id" class="w-text" data-w-text-wrap="break" data-size="sm"></code>
                 </div>
-                <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead class="table-light sticky-top">
+                <div class="w-table-wrap" style="max-height: 70vh; overflow-y: auto;">
+                    <table class="w-table" style="--w-mb:0;">
+                        <thead class="sticky-top">
                             <tr>
                                 <th><?= __('字段') ?></th>
                                 <th><?= __('类型') ?></th>
@@ -79,7 +79,7 @@ $guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
                     </table>
                 </div>
             </div>
-            <div id="session-detail-empty" class="text-center py-5 text-muted d-none"><?= __('该 Session 暂无数据或已过期') ?></div>
+            <div id="session-detail-empty" class="w-text" data-align="center" hidden data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><?= __('该 Session 暂无数据或已过期') ?></div>
         </div>
     </div>
 </div>
@@ -370,14 +370,14 @@ function renderContent(data) {
             ? '<?= __('当前页面已聚焦到内存服务管理，仅展示内存缓存相关管理能力。') ?>'
             : '<?= __('当前页面已聚焦到 Session 管理，仅展示会话相关管理能力。') ?>';
         container.innerHTML = `
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-database-gear me-2"></i>${title}</h5>
-                    <a href="<?= $this->getBackendUrl('*/backend/server-manager') ?>" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-arrow-left"></i> <?= __('返回实例管理') ?>
+            <div class="w-card" style="--w-mb:var(--weline-space-6);">
+                <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                    <h5 style="--w-mb:0;"><w:icon name="settings" size="sm"></w:icon>${title}</h5>
+                    <a href="<?= $this->getBackendUrl('*/backend/server-manager') ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+                        <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回实例管理') ?>
                     </a>
                 </div>
-                <div class="card-body text-muted">${desc}</div>
+                <div class="w-card__body w-text" data-tone="muted">${desc}</div>
             </div>
         ` + renderSharedStateManagement(data, DEFAULT_TAB);
         return;
@@ -388,36 +388,36 @@ function renderContent(data) {
     
     let html = `
         <!-- 状态概览 -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-speedometer2 me-2"></i>
+        <div class="w-card" style="--w-mb:var(--weline-space-6);">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                <h5 style="--w-mb:0;">
+                    <w:icon name="circle" size="sm"></w:icon>
                     <?= __('服务器状态') ?>
                 </h5>
                 <div>
-                    <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-server-data">
-                        <i class="bi bi-arrow-clockwise"></i> <?= __('刷新') ?>
+                    <button class="w-button" data-server-manager-action="load-server-data" data-tone="primary" data-variant="outline" data-size="sm">
+                        <w:icon name="clock" size="sm"></w:icon> <?= __('刷新') ?>
                     </button>
-                    <a href="${GUIDE_URL}" class="btn btn-sm btn-outline-info ms-2">
-                        <i class="bi bi-book"></i> <?= __('优化指南') ?>
+                    <a href="${GUIDE_URL}" class="w-button ms-2" data-tone="info" data-variant="outline" data-size="sm">
+                        <w:icon name="circle" size="sm"></w:icon> <?= __('优化指南') ?>
                     </a>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:4;">
                         <div class="stat-card">
-                            <div class="stat-value text-success">${runningCount}</div>
+                            <div class="stat-value w-text" data-tone="success">${runningCount}</div>
                             <div class="stat-label"><?= __('运行中') ?></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div style="--w-span-md:4;">
                         <div class="stat-card">
-                            <div class="stat-value text-primary">${totalCount}</div>
+                            <div class="stat-value w-text" data-tone="primary">${totalCount}</div>
                             <div class="stat-label"><?= __('实例总数') ?></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div style="--w-span-md:4;">
                         <div class="stat-card">
                             <div class="stat-value ${summary.missing > 0 ? 'text-warning' : 'text-success'}">
                                 ${summary.installed}/${summary.total}
@@ -430,36 +430,36 @@ function renderContent(data) {
         </div>
         
         <!-- PHP 环境信息 -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-info-circle me-2"></i>
+        <div class="w-card" style="--w-mb:var(--weline-space-6);">
+            <div class="w-card__header">
+                <h5 style="--w-mb:0;">
+                    <w:icon name="info" size="sm"></w:icon>
                     <?= __('PHP 环境') ?>
                 </h5>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <table class="table table-sm">
+            <div class="w-card__body">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;">
+                        <table class="w-table">
                             <tr>
                                 <th width="40%"><?= __('PHP 版本') ?></th>
                                 <td><code>${escapeHtml(php_info.version)}</code></td>
                             </tr>
                             <tr>
                                 <th><?= __('PHP 路径') ?></th>
-                                <td><code class="text-truncate d-inline-block" style="max-width: 300px;" title="${escapeHtml(php_info.binary)}">${escapeHtml(php_info.binary)}</code></td>
+                                <td><code class="w-text" style="max-width: 300px;" title="${escapeHtml(php_info.binary)}" data-truncate="true" data-w-display="inline-block">${escapeHtml(php_info.binary)}</code></td>
                             </tr>
                             <tr>
                                 <th><?= __('配置文件') ?></th>
-                                <td><code class="text-truncate d-inline-block" style="max-width: 300px;" title="${escapeHtml(php_info.ini_path)}">${escapeHtml(php_info.ini_path)}</code></td>
+                                <td><code class="w-text" style="max-width: 300px;" title="${escapeHtml(php_info.ini_path)}" data-truncate="true" data-w-display="inline-block">${escapeHtml(php_info.ini_path)}</code></td>
                             </tr>
                         </table>
                     </div>
-                    <div class="col-md-6">
-                        <table class="table table-sm">
+                    <div style="--w-span-md:6;">
+                        <table class="w-table">
                             <tr>
                                 <th width="40%"><?= __('扩展目录') ?></th>
-                                <td><code class="text-truncate d-inline-block" style="max-width: 300px;" title="${escapeHtml(php_info.ext_dir)}">${escapeHtml(php_info.ext_dir)}</code></td>
+                                <td><code class="w-text" style="max-width: 300px;" title="${escapeHtml(php_info.ext_dir)}" data-truncate="true" data-w-display="inline-block">${escapeHtml(php_info.ext_dir)}</code></td>
                             </tr>
                             <tr>
                                 <th><?= __('操作系统') ?></th>
@@ -467,7 +467,7 @@ function renderContent(data) {
                             </tr>
                             <tr>
                                 <th><?= __('线程安全') ?></th>
-                                <td>${php_info.thread_safe ? '<span class="badge bg-success">TS</span>' : '<span class="badge bg-info">NTS</span>'}</td>
+                                <td>${php_info.thread_safe ? '<span class="w-badge" data-w-background="success">TS</span>' : '<span class="w-badge" data-w-background="info">NTS</span>'}</td>
                             </tr>
                         </table>
                     </div>
@@ -476,31 +476,31 @@ function renderContent(data) {
         </div>
         
         <!-- 服务器实例列表 -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-hdd-rack me-2"></i>
+        <div class="w-card" style="--w-mb:var(--weline-space-6);">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                <h5 style="--w-mb:0;">
+                    <w:icon name="circle" size="sm"></w:icon>
                     <?= __('服务器实例') ?>
                 </h5>
-                <button class="btn btn-sm btn-success" data-server-manager-action="start-new-server">
-                    <i class="bi bi-plus-lg"></i> <?= __('启动新实例') ?>
+                <button class="w-button" data-server-manager-action="start-new-server" data-tone="success" data-size="sm">
+                    <w:icon name="plus" size="sm"></w:icon> <?= __('启动新实例') ?>
                 </button>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
     `;
     
     if (totalCount === 0) {
         html += `
-            <div class="text-center text-muted py-5">
-                <i class="bi bi-inbox display-1"></i>
-                <p class="mt-3"><?= __('暂无服务器实例') ?></p>
-                <p class="small"><?= __('运行') ?> <code>php bin/w server:start</code> <?= __('启动服务器') ?></p>
+            <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <w:icon name="box" size="sm"></w:icon>
+                <p style="--w-mt:var(--weline-space-4);"><?= __('暂无服务器实例') ?></p>
+                <p class="w-text" data-size="sm"><?= __('运行') ?> <code>php bin/w server:start</code> <?= __('启动服务器') ?></p>
             </div>
         `;
     } else {
         html += `
-            <div class="table-responsive">
-                <table class="table table-hover">
+            <div class="w-table-wrap">
+                <table class="w-table">
                     <thead>
                         <tr>
                             <th><?= __('实例名称') ?></th>
@@ -528,33 +528,33 @@ function renderContent(data) {
                     <td>${count}</td>
                     <td>
                         ${isRunning 
-                            ? '<span class="badge bg-success"><i class="bi bi-circle-fill me-1"></i><?= __('运行中') ?></span>'
-                            : '<span class="badge bg-secondary"><i class="bi bi-circle me-1"></i><?= __('已停止') ?></span>'
+                            ? '<span class="w-badge" data-w-background="success"><w:icon name="circle" size="sm"></w:icon><?= __('运行中') ?></span>'
+                            : '<span class="w-badge" data-w-background="muted"><w:icon name="circle" size="sm"></w:icon><?= __('已停止') ?></span>'
                         }
                     </td>
                     <td>
                         ${isRunning ? `
                             <div class="server-action-group" aria-label="<?= __('服务器操作') ?>">
-                                <button class="btn btn-sm btn-warning server-action-btn" data-server-manager-action="restart-server" data-instance="${escapeHtml(name)}" title="<?= __('重启') ?>" aria-label="<?= __('重启') ?>">
-                                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i><span class="server-action-label"><?= __('重启') ?></span>
+                                <button class="w-button server-action-btn" data-server-manager-action="restart-server" data-instance="${escapeHtml(name)}" title="<?= __('重启') ?>" aria-label="<?= __('重启') ?>" data-tone="warning" data-size="sm">
+                                    <w:icon name="circle" size="sm"></w:icon><span class="server-action-label"><?= __('重启') ?></span>
                                 </button>
-                                <button class="btn btn-sm btn-info server-action-btn" data-server-manager-action="reload-server" data-instance="${escapeHtml(name)}" title="<?= __('热重载') ?>" aria-label="<?= __('热重载') ?>">
-                                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i><span class="server-action-label"><?= __('热重载') ?></span>
+                                <button class="w-button server-action-btn" data-server-manager-action="reload-server" data-instance="${escapeHtml(name)}" title="<?= __('热重载') ?>" aria-label="<?= __('热重载') ?>" data-tone="info" data-size="sm">
+                                    <w:icon name="clock" size="sm"></w:icon><span class="server-action-label"><?= __('热重载') ?></span>
                                 </button>
-                                <button class="btn btn-sm btn-danger server-action-btn" data-server-manager-action="stop-server" data-instance="${escapeHtml(name)}" title="<?= __('停止') ?>" aria-label="<?= __('停止') ?>">
-                                    <i class="bi bi-stop-fill" aria-hidden="true"></i><span class="server-action-label"><?= __('停止') ?></span>
+                                <button class="w-button server-action-btn" data-server-manager-action="stop-server" data-instance="${escapeHtml(name)}" title="<?= __('停止') ?>" aria-label="<?= __('停止') ?>" data-tone="danger" data-size="sm">
+                                    <w:icon name="stop" size="sm"></w:icon><span class="server-action-label"><?= __('停止') ?></span>
                                 </button>
-                                <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="1" title="<?= __('启用维护模式') ?>" aria-label="<?= __('启用维护模式') ?>">
-                                    <i class="bi bi-shield-fill-check" aria-hidden="true"></i><span class="server-action-label"><?= __('维护') ?></span>
+                                <button class="w-button server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="1" title="<?= __('启用维护模式') ?>" aria-label="<?= __('启用维护模式') ?>" data-tone="neutral" data-size="sm">
+                                    <w:icon name="check" size="sm"></w:icon><span class="server-action-label"><?= __('维护') ?></span>
                                 </button>
-                                <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="0" title="<?= __('禁用维护模式') ?>" aria-label="<?= __('禁用维护模式') ?>">
-                                    <i class="bi bi-shield-x" aria-hidden="true"></i><span class="server-action-label"><?= __('退出维护') ?></span>
+                                <button class="w-button server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="0" title="<?= __('禁用维护模式') ?>" aria-label="<?= __('禁用维护模式') ?>" data-tone="neutral" data-size="sm">
+                                    <w:icon name="shield" size="sm"></w:icon><span class="server-action-label"><?= __('退出维护') ?></span>
                                 </button>
                             </div>
                         ` : `
                             <div class="server-action-group" aria-label="<?= __('服务器操作') ?>">
-                                <button class="btn btn-sm btn-success server-action-btn" data-server-manager-action="start-server" data-instance="${escapeHtml(name)}" title="<?= __('启动') ?>" aria-label="<?= __('启动') ?>">
-                                    <i class="bi bi-play-fill" aria-hidden="true"></i><span class="server-action-label"><?= __('启动') ?></span>
+                                <button class="w-button server-action-btn" data-server-manager-action="start-server" data-instance="${escapeHtml(name)}" title="<?= __('启动') ?>" aria-label="<?= __('启动') ?>" data-tone="success" data-size="sm">
+                                    <w:icon name="play" size="sm"></w:icon><span class="server-action-label"><?= __('启动') ?></span>
                                 </button>
                             </div>
                         `}
@@ -575,18 +575,18 @@ function renderContent(data) {
         </div>
         
         <!-- 性能优化项 -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-lightning-charge me-2"></i>
+        <div class="w-card">
+            <div class="w-card__header">
+                <h5 style="--w-mb:0;">
+                    <w:icon name="circle" size="sm"></w:icon>
                     <?= __('性能优化') ?>
-                    <span class="badge bg-${summary.missing > 0 ? 'warning' : 'success'} ms-2">
+                    <span class="w-badge bg-${summary.missing > ? 'warning' : 'success'} ms-2">
                         ${summary.missing > 0 ? '<?= __('可优化') ?> +' + summary.potential_boost : '<?= __('已最优') ?>'}
                     </span>
                 </h5>
             </div>
-            <div class="card-body">
-                <div class="row">
+            <div class="w-card__body">
+                <div class="w-grid">
     `;
     
     for (const [key, opt] of Object.entries(summary.optimizations)) {
@@ -595,20 +595,20 @@ function renderContent(data) {
         const isInstalled = opt.installed || false;
         
         html += `
-            <div class="col-md-4 mb-3">
+            <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                 <div class="optimization-card ${isInstalled ? 'installed' : 'missing'}">
-                    <div class="d-flex justify-content-between align-items-start">
+                    <div class="w-cluster" data-justify="between" data-align="start">
                         <div>
-                            <h6 class="mb-1">${escapeHtml(opt.name)}</h6>
-                            <p class="small text-muted mb-2">${escapeHtml(opt.description)}</p>
+                            <h6 style="--w-mb:var(--weline-space-1);">${escapeHtml(opt.name)}</h6>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">${escapeHtml(opt.description)}</p>
                         </div>
-                        <span class="badge bg-${isInstalled ? 'success' : 'warning'}">
+                        <span class="w-badge bg-${isInstalled ? 'success' : 'warning'}">
                             ${isInstalled ? '<?= __('已安装') ?>' : escapeHtml(opt.impact)}
                         </span>
                     </div>
                     ${!isInstalled ? `
-                        <a href="${GUIDE_URL}#${key}" class="btn btn-sm btn-outline-primary w-100 mt-2">
-                            <i class="bi bi-book"></i> <?= __('查看安装指南') ?>
+                        <a href="${GUIDE_URL}#${key}" class="w-button" data-w-width="full" data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                            <w:icon name="circle" size="sm"></w:icon> <?= __('查看安装指南') ?>
                         </a>
                     ` : ''}
                 </div>
@@ -639,35 +639,35 @@ function renderSharedStateManagement(data, mode = 'all') {
     const showSession = mode === 'all' || mode === 'session';
     const showMemory = mode === 'all' || mode === 'memory';
     return `
-        <div class="card mt-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-database-gear me-2"></i><?= __('共享状态管理') ?></h5>
-                <span class="text-muted small"><?= __('覆盖 Session 与 Memory Service 的状态、检索、清理能力') ?></span>
+        <div class="w-card" style="--w-mt:var(--weline-space-6);">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                <h5 style="--w-mb:0;"><w:icon name="settings" size="sm"></w:icon><?= __('共享状态管理') ?></h5>
+                <span class="w-text" data-tone="muted" data-size="sm"><?= __('覆盖 Session 与 Memory Service 的状态、检索、清理能力') ?></span>
             </div>
-            <div class="card-body">
-                <div class="row g-3">
+            <div class="w-card__body">
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
                     ${showSession ? `
                     <div class="${showMemory ? 'col-lg-6' : 'col-12'}">
-                        <div class="border rounded p-3 h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h6 class="mb-0"><i class="bi bi-person-lines-fill me-1"></i><?= __('Session 管理') ?></h6>
-                                <span class="badge ${sessionConnectedClass}">${sessionConnectedText}</span>
+                        <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-2);">
+                                <h6 style="--w-mb:0;"><w:icon name="user" size="sm"></w:icon><?= __('Session 管理') ?></h6>
+                                <span class="w-badge ${sessionConnectedClass}">${sessionConnectedText}</span>
                             </div>
-                            <div class="small text-muted mb-2">
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                 ${escapeHtml(session.host || '127.0.0.1')}:${escapeHtml(session.port || 19970)} / ${escapeHtml(session.token_file_name || '')}
                             </div>
-                            <div class="mb-2 small">
+                            <div class="w-text" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                 <?= __('Session 数') ?>: <strong>${sessionStats.session_count || 0}</strong>,
                                 <?= __('客户端') ?>: <strong>${sessionStats.client_count || 0}</strong>,
                                 <?= __('内存') ?>: <strong>${formatBytes(sessionStats.memory_usage || 0)}</strong>
                             </div>
-                            <div class="d-flex gap-2 flex-wrap mb-3">
-                                <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-session-list"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新列表') ?></button>
-                                <button class="btn btn-sm btn-outline-info" data-server-manager-action="persist-session-store"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
-                                <button class="btn btn-sm btn-outline-warning" data-server-manager-action="gc-session-store"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
+                            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                                <button class="w-button" data-server-manager-action="load-session-list" data-tone="primary" data-variant="outline" data-size="sm"><w:icon name="clock" size="sm"></w:icon> <?= __('刷新列表') ?></button>
+                                <button class="w-button" data-server-manager-action="persist-session-store" data-tone="info" data-variant="outline" data-size="sm"><w:icon name="save" size="sm"></w:icon> <?= __('立即持久化') ?></button>
+                                <button class="w-button" data-server-manager-action="gc-session-store" data-tone="warning" data-variant="outline" data-size="sm"><w:icon name="circle" size="sm"></w:icon> <?= __('GC 清理') ?></button>
                             </div>
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle">
+                            <div class="w-table-wrap">
+                                <table class="w-table" data-w-vertical="middle">
                                     <thead>
                                         <tr>
                                             <th><?= __('Session ID') ?></th>
@@ -676,9 +676,9 @@ function renderSharedStateManagement(data, mode = 'all') {
                                             <th><?= __('操作') ?></th>
                                         </tr>
                                     </thead>
-                                    <caption class="text-start small text-muted"><?= __('点击「查看详情」可查看该 Session 的全部字段信息') ?></caption>
+                                    <caption class="w-text" data-align="start" data-tone="muted" data-size="sm"><?= __('点击「查看详情」可查看该 Session 的全部字段信息') ?></caption>
                                     <tbody id="session-list-body">
-                                        <tr><td colspan="4" class="text-muted text-center"><?= __('点击“刷新列表”加载 Session 数据') ?></td></tr>
+                                        <tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('点击“刷新列表”加载 Session 数据') ?></td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -687,26 +687,26 @@ function renderSharedStateManagement(data, mode = 'all') {
                     ` : ''}
                     ${showMemory ? `
                     <div class="${showSession ? 'col-lg-6' : 'col-12'}">
-                        <div class="border rounded p-3 h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h6 class="mb-0"><i class="bi bi-memory me-1"></i><?= __('内存缓存管理') ?></h6>
-                                <span class="badge ${memoryConnectedClass}">${memoryConnectedText}</span>
+                        <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-2);">
+                                <h6 style="--w-mb:0;"><w:icon name="circle" size="sm"></w:icon><?= __('内存缓存管理') ?></h6>
+                                <span class="w-badge ${memoryConnectedClass}">${memoryConnectedText}</span>
                             </div>
-                            <div class="small text-muted mb-2">
+                            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                 ${escapeHtml(memory.host || '127.0.0.1')}:${escapeHtml(memory.port || 19971)} / ${escapeHtml(memory.token_file_name || '')}
                             </div>
-                            <div class="mb-2 small">
+                            <div class="w-text" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                 <?= __('命名空间') ?>: <strong>${memoryStats.session_count || 0}</strong>,
                                 <?= __('客户端') ?>: <strong>${memoryStats.client_count || 0}</strong>,
                                 <?= __('内存') ?>: <strong>${formatBytes(memoryStats.memory_usage || 0)}</strong>
                             </div>
-                            <div class="d-flex gap-2 flex-wrap mb-3">
-                                <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-memory-namespaces"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新命名空间') ?></button>
-                                <button class="btn btn-sm btn-outline-info" data-server-manager-action="persist-memory-store"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
-                                <button class="btn btn-sm btn-outline-warning" data-server-manager-action="gc-memory-store"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
+                            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                                <button class="w-button" data-server-manager-action="load-memory-namespaces" data-tone="primary" data-variant="outline" data-size="sm"><w:icon name="clock" size="sm"></w:icon> <?= __('刷新命名空间') ?></button>
+                                <button class="w-button" data-server-manager-action="persist-memory-store" data-tone="info" data-variant="outline" data-size="sm"><w:icon name="save" size="sm"></w:icon> <?= __('立即持久化') ?></button>
+                                <button class="w-button" data-server-manager-action="gc-memory-store" data-tone="warning" data-variant="outline" data-size="sm"><w:icon name="circle" size="sm"></w:icon> <?= __('GC 清理') ?></button>
                             </div>
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle">
+                            <div class="w-table-wrap">
+                                <table class="w-table" data-w-vertical="middle">
                                     <thead>
                                         <tr>
                                             <th><?= __('命名空间') ?></th>
@@ -716,12 +716,12 @@ function renderSharedStateManagement(data, mode = 'all') {
                                         </tr>
                                     </thead>
                                     <tbody id="memory-namespace-body">
-                                        <tr><td colspan="4" class="text-muted text-center"><?= __('点击“刷新命名空间”加载缓存目录') ?></td></tr>
+                                        <tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('点击“刷新命名空间”加载缓存目录') ?></td></tr>
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="table-responsive mt-3">
-                                <table class="table table-sm align-middle">
+                            <div class="w-table-wrap" style="--w-mt:var(--weline-space-4);">
+                                <table class="w-table" data-w-vertical="middle">
                                     <thead>
                                         <tr>
                                             <th><?= __('键') ?></th>
@@ -731,7 +731,7 @@ function renderSharedStateManagement(data, mode = 'all') {
                                         </tr>
                                     </thead>
                                     <tbody id="memory-key-body">
-                                        <tr><td colspan="4" class="text-muted text-center"><?= __('点击命名空间的“查看键”按钮加载详情') ?></td></tr>
+                                        <tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('点击命名空间的“查看键”按钮加载详情') ?></td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -773,7 +773,7 @@ function scrollToSharedState() {
 async function loadSessionList() {
     const body = document.getElementById('session-list-body');
     if (!body) return;
-    body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('加载中...') ?></td></tr>`;
     try {
         const data = await bqAdmin[\'server\'](SESSION_LIST_API_URL + '?limit=50', {
             method: 'GET',
@@ -785,7 +785,7 @@ async function loadSessionList() {
         }
         const rows = Array.isArray(data.data) ? data.data : [];
         if (!rows.length) {
-            body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('暂无 Session 数据') ?></td></tr>`;
+            body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('暂无 Session 数据') ?></td></tr>`;
             return;
         }
         body.innerHTML = rows.map(row => {
@@ -793,22 +793,22 @@ async function loadSessionList() {
             const previewHtml = renderSessionPreview(row.preview);
             return `
                 <tr>
-                    <td><code class="small text-break" style="max-width: 140px;" title="${escapeHtml(sessionId)}">${escapeHtml(sessionId.length > 16 ? sessionId.substring(0, 16) + '…' : sessionId)}</code></td>
-                    <td><span class="badge bg-secondary">${Number(row.data_count || 0)}</span></td>
+                    <td><code class="w-text" style="max-width: 140px;" title="${escapeHtml(sessionId)}" data-w-text-wrap="break" data-size="sm">${escapeHtml(sessionId.length > 16 ? sessionId.substring(0, 16) + '…' : sessionId)}</code></td>
+                    <td><span class="w-badge" data-w-background="muted">${Number(row.data_count || 0)}</span></td>
                     <td class="weline-session-preview-cell">${previewHtml}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary me-1" data-server-manager-action="show-session-detail" data-session-id="${encodeURIComponent(sessionId)}" title="<?= __('查看全部字段') ?>">
-                            <i class="bi bi-card-list"></i> <?= __('查看详情') ?>
+                        <button class="w-button me-1" data-server-manager-action="show-session-detail" data-session-id="${encodeURIComponent(sessionId)}" title="<?= __('查看全部字段') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                            <w:icon name="list" size="sm"></w:icon> <?= __('查看详情') ?>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger" data-server-manager-action="destroy-session" data-session-id="${encodeURIComponent(sessionId)}">
-                            <i class="bi bi-trash"></i> <?= __('销毁') ?>
+                        <button class="w-button" data-server-manager-action="destroy-session" data-session-id="${encodeURIComponent(sessionId)}" data-tone="danger" data-variant="outline" data-size="sm">
+                            <w:icon name="trash" size="sm"></w:icon> <?= __('销毁') ?>
                         </button>
                     </td>
                 </tr>
             `;
         }).join('');
     } catch (error) {
-        body.innerHTML = `<tr><td colspan="4" class="text-danger text-center">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
     }
 }
 
@@ -850,7 +850,7 @@ async function showSessionDetail(encodedSessionId) {
             const key = escapeHtml(String(row.key || ''));
             const type = escapeHtml(String(row.type || ''));
             const valueHtml = renderSessionDetailValue(row);
-            return `<tr><td><code class="small">${key}</code></td><td><span class="badge bg-secondary">${type}</span></td><td class="small">${valueHtml}</td></tr>`;
+            return `<tr><td><code class="w-text" data-size="sm">${key}</code></td><td><span class="w-badge" data-w-background="muted">${type}</span></td><td class="w-text" data-size="sm">${valueHtml}</td></tr>`;
         }).join('');
         contentEl.classList.remove('d-none');
     } catch (error) {
@@ -863,25 +863,25 @@ async function showSessionDetail(encodedSessionId) {
 function renderSessionDetailValue(row) {
     const detail = row && row.preview_detail && typeof row.preview_detail === 'object' ? row.preview_detail : null;
     const fallback = escapeHtml(row && row.preview ? String(row.preview) : '-');
-    if (!detail) return `<span class="text-muted">${fallback}</span>`;
+    if (!detail) return `<span class="w-text" data-tone="muted">${fallback}</span>`;
     const kind = String(detail.kind || '');
     const display = escapeHtml(detail.display || row.preview || '');
     const size = Number(detail.size || 0);
     const json = typeof detail.json === 'string' ? detail.json.trim() : '';
     if ((kind === 'array' || kind === 'object') && json) {
-        return `<details class="mt-1"><summary><span class="badge bg-info">${display}</span><span class="text-muted ms-1">(${Number.isFinite(size) ? size : 0} <?= __('项') ?>)</span></summary><pre class="small mb-0 mt-2 p-2 border rounded bg-body-tertiary" style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(json)}</pre></details>`;
+        return `<details style="--w-mt:var(--weline-space-1);"><summary><span class="w-badge" data-w-background="info">${display}</span><span class="w-text ms-1" data-tone="muted">(${Number.isFinite(size) ? size : 0} <?= __('项') ?>)</span></summary><pre class="w-text bg-body-tertiary" style="white-space:pre-wrap; word-break:break-word;" data-w-border="border" data-w-radius="md" data-size="sm">${escapeHtml(json)}</pre></details>`;
     }
-    if (kind === 'null') return '<span class="badge bg-secondary">null</span>';
-    return `<span class="text-break">${display}</span>`;
+    if (kind === 'null') return '<span class="w-badge" data-w-background="muted">null</span>';
+    return `<span data-w-text-wrap="break">${display}</span>`;
 }
 
 async function destroySession(encodedSessionId) {
     const sessionId = decodeURIComponent(encodedSessionId);
-    const confirmed = await BackendConfirm.show('<?= __('确认销毁该 Session 吗？此操作会让对应用户立即失效。') ?>', {
+    const confirmed = await Weline.UI.dialog.confirm('<?= __('确认销毁该 Session 吗？此操作会让对应用户立即失效。') ?>', {
         title: '<?= __('销毁 Session') ?>',
-        type: 'warning',
-        confirmText: '<?= __('确认销毁') ?>',
-        cancelText: '<?= __('取消') ?>'
+        tone: 'warning',
+        confirmLabel: '<?= __('确认销毁') ?>',
+        cancelLabel: '<?= __('取消') ?>'
     });
     if (!confirmed) return;
     try {
@@ -892,14 +892,14 @@ async function destroySession(encodedSessionId) {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('Session 已销毁') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('Session 已销毁') ?>');
             loadSessionList();
             loadServerData();
         } else {
-            BackendToast.warning(data.message || '<?= __('操作失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('操作失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('销毁失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('销毁失败') ?>: ' + error.message);
     }
 }
 
@@ -911,24 +911,25 @@ async function persistSessionStore() {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('Session 持久化成功') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('Session 持久化成功') ?>');
             loadServerData();
         } else {
-            BackendToast.warning(data.message || '<?= __('Session 持久化失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('Session 持久化失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('Session 持久化失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('Session 持久化失败') ?>: ' + error.message);
     }
 }
 
 async function gcSessionStore() {
-    const input = await BackendConfirm.showInput({
+    const promptResult = await Weline.UI.dialog.request({
         title: '<?= __('Session 垃圾回收') ?>',
         message: '<?= __('请输入最大存活秒数（默认 3600）') ?>',
-        placeholder: '3600',
-        defaultValue: '3600'
+        cancelable: true,
+        field: {type: 'number', placeholder: '3600', value: '3600', required: true}
     });
-    if (input === null) return;
+    if (!promptResult.confirmed) return;
+    const input = promptResult.value;
     const maxLifetime = Number(input || 3600);
     try {
         const data = await bqAdmin[\'server\'](SESSION_GC_API_URL, {
@@ -938,21 +939,21 @@ async function gcSessionStore() {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('Session GC 执行成功') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('Session GC 执行成功') ?>');
             loadSessionList();
             loadServerData();
         } else {
-            BackendToast.warning(data.message || '<?= __('Session GC 执行失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('Session GC 执行失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('Session GC 执行失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('Session GC 执行失败') ?>: ' + error.message);
     }
 }
 
 async function loadMemoryNamespaces() {
     const body = document.getElementById('memory-namespace-body');
     if (!body) return;
-    body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('加载中...') ?></td></tr>`;
     try {
         const data = await bqAdmin[\'server\'](MEMORY_NAMESPACES_API_URL + '?limit=300', {
             method: 'GET',
@@ -964,8 +965,8 @@ async function loadMemoryNamespaces() {
         }
         const rows = Array.isArray(data.data) ? data.data : [];
         if (!rows.length) {
-            body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('暂无内存命名空间') ?></td></tr>`;
-            document.getElementById('memory-key-body').innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('暂无可展示键数据') ?></td></tr>`;
+            body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('暂无内存命名空间') ?></td></tr>`;
+            document.getElementById('memory-key-body').innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('暂无可展示键数据') ?></td></tr>`;
             return;
         }
         body.innerHTML = rows.map(row => {
@@ -973,22 +974,22 @@ async function loadMemoryNamespaces() {
             const sample = Array.isArray(row.sample_keys) ? row.sample_keys.join(', ') : '';
             return `
                 <tr>
-                    <td><code class="small">${escapeHtml(ns)}</code></td>
+                    <td><code class="w-text" data-size="sm">${escapeHtml(ns)}</code></td>
                     <td>${Number(row.keys || 0)}</td>
-                    <td class="small text-muted">${escapeHtml(sample)}</td>
+                    <td class="w-text" data-tone="muted" data-size="sm">${escapeHtml(sample)}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-memory-namespace-detail" data-namespace="${encodeURIComponent(ns)}">
-                            <i class="bi bi-search"></i> <?= __('查看键') ?>
+                        <button class="w-button" data-server-manager-action="load-memory-namespace-detail" data-namespace="${encodeURIComponent(ns)}" data-tone="primary" data-variant="outline" data-size="sm">
+                            <w:icon name="search" size="sm"></w:icon> <?= __('查看键') ?>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger" data-server-manager-action="clear-memory-namespace" data-namespace="${encodeURIComponent(ns)}">
-                            <i class="bi bi-trash"></i> <?= __('清空') ?>
+                        <button class="w-button" data-server-manager-action="clear-memory-namespace" data-namespace="${encodeURIComponent(ns)}" data-tone="danger" data-variant="outline" data-size="sm">
+                            <w:icon name="trash" size="sm"></w:icon> <?= __('清空') ?>
                         </button>
                     </td>
                 </tr>
             `;
         }).join('');
     } catch (error) {
-        body.innerHTML = `<tr><td colspan="4" class="text-danger text-center">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
     }
 }
 
@@ -996,7 +997,7 @@ async function loadMemoryNamespaceDetail(encodedNamespace) {
     const namespace = decodeURIComponent(encodedNamespace);
     const body = document.getElementById('memory-key-body');
     if (!body) return;
-    body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('加载中...') ?></td></tr>`;
     try {
         const data = await bqAdmin[\'server\'](MEMORY_NAMESPACE_DETAIL_API_URL + '?namespace=' + encodeURIComponent(namespace) + '&limit=100', {
             method: 'GET',
@@ -1008,36 +1009,36 @@ async function loadMemoryNamespaceDetail(encodedNamespace) {
         }
         const rows = Array.isArray(data.data) ? data.data : [];
         if (!rows.length) {
-            body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('该命名空间暂无键') ?></td></tr>`;
+            body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('该命名空间暂无键') ?></td></tr>`;
             return;
         }
         body.innerHTML = rows.map(row => {
             const key = String(row.key || '');
             return `
                 <tr>
-                    <td><code class="small">${escapeHtml(key)}</code></td>
+                    <td><code class="w-text" data-size="sm">${escapeHtml(key)}</code></td>
                     <td>${escapeHtml(row.type || '')}</td>
-                    <td class="small">${renderMemoryPreview(row)}</td>
+                    <td class="w-text" data-size="sm">${renderMemoryPreview(row)}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-danger" data-server-manager-action="delete-memory-key" data-namespace="${encodeURIComponent(namespace)}" data-key="${encodeURIComponent(key)}">
-                            <i class="bi bi-trash"></i> <?= __('删除键') ?>
+                        <button class="w-button" data-server-manager-action="delete-memory-key" data-namespace="${encodeURIComponent(namespace)}" data-key="${encodeURIComponent(key)}" data-tone="danger" data-variant="outline" data-size="sm">
+                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除键') ?>
                         </button>
                     </td>
                 </tr>
             `;
         }).join('');
     } catch (error) {
-        body.innerHTML = `<tr><td colspan="4" class="text-danger text-center">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
     }
 }
 
 function renderSessionPreview(preview) {
     if (!preview || typeof preview !== 'object') {
-        return '<span class="text-muted small">-</span>';
+        return '<span class="w-text" data-tone="muted" data-size="sm">-</span>';
     }
     const entries = Object.entries(preview);
     if (!entries.length) {
-        return '<span class="text-muted small">-</span>';
+        return '<span class="w-text" data-tone="muted" data-size="sm">-</span>';
     }
     const authKeys = ['WF_BACKEND_USER', 'WF_FRONTEND_USER', 'WF_BACKEND_USER_ID', 'WF_FRONTEND_USER_ID'];
     const items = entries.map(([k, v]) => {
@@ -1046,18 +1047,18 @@ function renderSessionPreview(preview) {
         const val = escapeHtml(String(v));
         const keyCls = isAuth ? 'bg-primary text-white' : 'bg-secondary';
         const valCls = isSensitive ? 'text-muted' : 'text-dark';
-        const valIcon = isSensitive ? '<i class="bi bi-shield-lock-fill small me-1" title="<?= __('敏感') ?>"></i>' : '';
-        return `<span class="d-inline-flex align-items-center gap-1 me-2 mb-1">
-            <span class="badge ${keyCls}">${escapeHtml(k)}</span>
-            <span class="small ${valCls}">${valIcon}${val.length > 40 ? val.substring(0, 40) + '…' : val}</span>
+        const valIcon = isSensitive ? '<i class="bi bi-shield-lock-fill w-text me-1" title="<?= __('敏感') ?>" data-size="sm"></i>' : '';
+        return `<span class="me-2 w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);--w-mb:var(--weline-space-1);">
+            <span class="w-badge ${keyCls}">${escapeHtml(k)}</span>
+            <span class="w-text ${valCls}" data-size="sm">${valIcon}${val.length > 40 ? val.substring(0, 40) + '…' : val}</span>
         </span>`;
     });
     const shortHtml = items.join('');
-    const fullHtml = entries.map(([k, v]) => `<div class="mb-1"><span class="badge bg-body-secondary me-1">${escapeHtml(k)}</span><span class="small">${escapeHtml(String(v))}</span></div>`).join('');
+    const fullHtml = entries.map(([k, v]) => `<div style="--w-mb:var(--weline-space-1);"><span class="w-badge bg-body-secondary me-1">${escapeHtml(k)}</span><span class="w-text" data-size="sm">${escapeHtml(String(v))}</span></div>`).join('');
     return `
         <details class="weline-session-preview">
-            <summary class="small cursor-pointer list-unstyled mb-0">${shortHtml}</summary>
-            <div class="mt-2 p-2 rounded border bg-body-tertiary small" style="max-width: 420px; max-height: 200px; overflow-y: auto;">${fullHtml}</div>
+            <summary class="w-text cursor-pointer list-unstyled" data-size="sm" style="--w-mb:0;">${shortHtml}</summary>
+            <div class="bg-body-tertiary w-text" style="max-width: 420px; max-height: 200px; overflow-y: auto;" data-w-radius="md" data-w-border="border" data-size="sm">${fullHtml}</div>
         </details>
     `;
 }
@@ -1066,7 +1067,7 @@ function renderMemoryPreview(row) {
     const detail = row && row.preview_detail && typeof row.preview_detail === 'object' ? row.preview_detail : null;
     const fallback = escapeHtml(row && row.preview ? row.preview : '');
     if (!detail) {
-        return `<span class="text-muted">${fallback}</span>`;
+        return `<span class="w-text" data-tone="muted">${fallback}</span>`;
     }
 
     const kind = String(detail.kind || '');
@@ -1075,28 +1076,28 @@ function renderMemoryPreview(row) {
     const json = typeof detail.json === 'string' ? detail.json.trim() : '';
     if ((kind === 'array' || kind === 'object') && json) {
         return `
-            <details class="mt-1">
+            <details style="--w-mt:var(--weline-space-1);">
                 <summary>
-                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">${display}</span>
-                    <span class="text-muted ms-1">(<?= __('元素') ?>: ${Number.isFinite(size) ? size : 0})</span>
+                    <span class="w-badge w-text border-info-subtle" data-w-background="info" data-w-border="border" data-tone="info">${display}</span>
+                    <span class="w-text ms-1" data-tone="muted">(<?= __('元素') ?>: ${Number.isFinite(size) ? size : 0})</span>
                 </summary>
-                <pre class="small mb-0 mt-2 p-2 border rounded bg-body-tertiary" style="max-width:560px; white-space:pre-wrap; word-break:break-word;">${escapeHtml(json)}</pre>
+                <pre class="w-text bg-body-tertiary" style="max-width:560px; white-space:pre-wrap; word-break:break-word;" data-w-border="border" data-w-radius="md" data-size="sm">${escapeHtml(json)}</pre>
             </details>
         `;
     }
     if (kind === 'null') {
-        return `<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">null</span>`;
+        return `<span class="w-badge w-text border-secondary-subtle" data-w-background="muted" data-w-border="border" data-tone="muted">null</span>`;
     }
-    return `<span class="text-muted">${display}</span>`;
+    return `<span class="w-text" data-tone="muted">${display}</span>`;
 }
 
 async function clearMemoryNamespace(encodedNamespace) {
     const namespace = decodeURIComponent(encodedNamespace);
-    const confirmed = await BackendConfirm.show('<?= __('确认清空该命名空间的所有缓存键吗？') ?>', {
+    const confirmed = await Weline.UI.dialog.confirm('<?= __('确认清空该命名空间的所有缓存键吗？') ?>', {
         title: '<?= __('清空命名空间') ?>',
-        type: 'warning',
-        confirmText: '<?= __('确认清空') ?>',
-        cancelText: '<?= __('取消') ?>'
+        tone: 'warning',
+        confirmLabel: '<?= __('确认清空') ?>',
+        cancelLabel: '<?= __('取消') ?>'
     });
     if (!confirmed) return;
     try {
@@ -1107,14 +1108,14 @@ async function clearMemoryNamespace(encodedNamespace) {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('命名空间已清空') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('命名空间已清空') ?>');
             loadMemoryNamespaces();
             loadServerData();
         } else {
-            BackendToast.warning(data.message || '<?= __('清空失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('清空失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('清空失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('清空失败') ?>: ' + error.message);
     }
 }
 
@@ -1129,14 +1130,14 @@ async function deleteMemoryKey(encodedNamespace, encodedKey) {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('缓存键已删除') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('缓存键已删除') ?>');
             loadMemoryNamespaceDetail(encodedNamespace);
             loadServerData();
         } else {
-            BackendToast.warning(data.message || '<?= __('删除失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('删除失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('删除失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('删除失败') ?>: ' + error.message);
     }
 }
 
@@ -1148,24 +1149,25 @@ async function persistMemoryStore() {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('内存服务持久化成功') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('内存服务持久化成功') ?>');
             loadServerData();
         } else {
-            BackendToast.warning(data.message || '<?= __('内存服务持久化失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('内存服务持久化失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('内存服务持久化失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('内存服务持久化失败') ?>: ' + error.message);
     }
 }
 
 async function gcMemoryStore() {
-    const input = await BackendConfirm.showInput({
+    const promptResult = await Weline.UI.dialog.request({
         title: '<?= __('内存服务垃圾回收') ?>',
         message: '<?= __('请输入最大存活秒数（默认 3600）') ?>',
-        placeholder: '3600',
-        defaultValue: '3600'
+        cancelable: true,
+        field: {type: 'number', placeholder: '3600', value: '3600', required: true}
     });
-    if (input === null) return;
+    if (!promptResult.confirmed) return;
+    const input = promptResult.value;
     const maxLifetime = Number(input || 3600);
     try {
         const data = await bqAdmin[\'server\'](MEMORY_GC_API_URL, {
@@ -1175,19 +1177,19 @@ async function gcMemoryStore() {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('内存服务 GC 执行成功') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('内存服务 GC 执行成功') ?>');
             loadMemoryNamespaces();
             loadServerData();
         } else {
-            BackendToast.warning(data.message || '<?= __('内存服务 GC 执行失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('内存服务 GC 执行失败') ?>');
         }
     } catch (error) {
-        BackendToast.error('<?= __('内存服务 GC 执行失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('内存服务 GC 执行失败') ?>: ' + error.message);
     }
 }
 
 async function startServer(instance) {
-    BackendToast.info('<?= __('正在启动...') ?>');
+    Weline.UI.toast.info('<?= __('正在启动...') ?>');
     
     try {
         const data = await bqAdmin[\'server\'](START_API_URL, {
@@ -1199,16 +1201,16 @@ async function startServer(instance) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-        BackendToast.success(data.message || '<?= __('启动成功') ?>');
+        Weline.UI.toast.success(data.message || '<?= __('启动成功') ?>');
         setTimeout(loadServerData, 1000);
         
     } catch (error) {
-        BackendToast.error('<?= __('启动失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('启动失败') ?>: ' + error.message);
     }
 }
 
 async function stopServer(instance) {
-    BackendToast.info('<?= __('正在停止...') ?>');
+    Weline.UI.toast.info('<?= __('正在停止...') ?>');
     
     try {
         const data = await bqAdmin[\'server\'](STOP_API_URL, {
@@ -1220,16 +1222,16 @@ async function stopServer(instance) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-        BackendToast.success(data.message || '<?= __('停止成功') ?>');
+        Weline.UI.toast.success(data.message || '<?= __('停止成功') ?>');
         setTimeout(loadServerData, 500);
         
     } catch (error) {
-        BackendToast.error('<?= __('停止失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('停止失败') ?>: ' + error.message);
     }
 }
 
 async function restartServer(instance) {
-    BackendToast.info('<?= __('正在重启...') ?>');
+    Weline.UI.toast.info('<?= __('正在重启...') ?>');
     
     try {
         const data = await bqAdmin[\'server\'](RESTART_API_URL, {
@@ -1241,16 +1243,16 @@ async function restartServer(instance) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-        BackendToast.success(data.message || '<?= __('重启成功') ?>');
+        Weline.UI.toast.success(data.message || '<?= __('重启成功') ?>');
         setTimeout(loadServerData, 1500);
         
     } catch (error) {
-        BackendToast.error('<?= __('重启失败') ?>: ' + error.message);
+        Weline.UI.toast.error('<?= __('重启失败') ?>: ' + error.message);
     }
 }
 
 async function reloadServer(instance) {
-    BackendToast.info('<?= __('正在热重载...') ?>');
+    Weline.UI.toast.info('<?= __('正在热重载...') ?>');
 
     try {
         const data = await bqAdmin[\'server\'](RELOAD_API_URL, {
@@ -1263,30 +1265,30 @@ async function reloadServer(instance) {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || '<?= __('热重载命令已发送') ?>');
+            Weline.UI.toast.success(data.message || '<?= __('热重载命令已发送') ?>');
         } else {
-            BackendToast.warning(data.message || '<?= __('热重载命令发送失败') ?>');
+            Weline.UI.toast.warning(data.message || '<?= __('热重载命令发送失败') ?>');
         }
         setTimeout(loadServerData, 1000);
     } catch (error) {
-        BackendToast.error('<?= __('热重载失败：请检查网络连接后重试。') ?> ' + error.message);
+        Weline.UI.toast.error('<?= __('热重载失败：请检查网络连接后重试。') ?> ' + error.message);
     }
 }
 
 async function toggleMaintenance(instance, enabled) {
     const apiUrl = enabled ? MAINTENANCE_ENABLE_API_URL : MAINTENANCE_DISABLE_API_URL;
     const actionText = enabled ? '<?= __('启用维护模式') ?>' : '<?= __('禁用维护模式') ?>';
-    const confirmed = await BackendConfirm.show('<?= __('确认执行该操作吗？此操作会影响流量接入状态。') ?>', {
+    const confirmed = await Weline.UI.dialog.confirm('<?= __('确认执行该操作吗？此操作会影响流量接入状态。') ?>', {
         title: actionText,
-        type: enabled ? 'warning' : 'info',
-        confirmText: '<?= __('确认') ?>',
-        cancelText: '<?= __('取消') ?>'
+        tone: enabled ? 'warning' : 'info',
+        confirmLabel: '<?= __('确认') ?>',
+        cancelLabel: '<?= __('取消') ?>'
     });
     if (!confirmed) {
         return;
     }
 
-    BackendToast.info(actionText + '...');
+    Weline.UI.toast.info(actionText + '...');
     try {
         const data = await bqAdmin[\'server\'](apiUrl, {
             method: 'POST',
@@ -1298,27 +1300,28 @@ async function toggleMaintenance(instance, enabled) {
             credentials: 'same-origin'
         });
         if (data.success) {
-            BackendToast.success(data.message || actionText + '<?= __('成功') ?>');
+            Weline.UI.toast.success(data.message || actionText + '<?= __('成功') ?>');
         } else {
-            BackendToast.warning(data.message || actionText + '<?= __('失败') ?>');
+            Weline.UI.toast.warning(data.message || actionText + '<?= __('失败') ?>');
         }
         setTimeout(loadServerData, 1000);
     } catch (error) {
-        BackendToast.error(actionText + '<?= __('失败：请检查网络连接后重试。') ?> ' + error.message);
+        Weline.UI.toast.error(actionText + '<?= __('失败：请检查网络连接后重试。') ?> ' + error.message);
     }
 }
 
 function startNewServer() {
-    BackendConfirm.showInput({
+    Weline.UI.dialog.request({
         title: '<?= __('启动新实例') ?>',
         message: '<?= __('请输入 Worker 数量（留空将使用默认值）') ?>',
-        placeholder: '<?= __('例如：4') ?>',
-        defaultValue: ''
-    }).then(workers => {
-        if (workers === null) {
+        cancelable: true,
+        field: {type: 'number', placeholder: '<?= __('例如：4') ?>', value: ''}
+    }).then(result => {
+        if (!result.confirmed) {
             return;
         }
-        BackendToast.info('<?= __('正在启动新实例...') ?>');
+        const workers = result.value;
+        Weline.UI.toast.info('<?= __('正在启动新实例...') ?>');
 
         const body = 'instance=default' + (workers ? '&workers=' + encodeURIComponent(workers) : '');
 
@@ -1334,14 +1337,14 @@ function startNewServer() {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    BackendToast.success(data.message || '<?= __('启动成功') ?>');
+                    Weline.UI.toast.success(data.message || '<?= __('启动成功') ?>');
                 } else {
-                    BackendToast.warning(data.message || '<?= __('启动命令已发送，请稍后刷新状态。') ?>');
+                    Weline.UI.toast.warning(data.message || '<?= __('启动命令已发送，请稍后刷新状态。') ?>');
                 }
                 setTimeout(loadServerData, 1000);
             })
             .catch(error => {
-                BackendToast.error('<?= __('启动失败：请检查网络连接后重试。') ?> ' + error.message);
+                Weline.UI.toast.error('<?= __('启动失败：请检查网络连接后重试。') ?> ' + error.message);
             });
     });
 }

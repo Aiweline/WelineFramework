@@ -27,7 +27,7 @@ use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Service\RuntimeCacheBroadcaster;
 
-#[\Weline\Framework\Acl\Acl('Weline_I18n::i18n', '国际化I18n管理', 'ri-translate', '国际化I18n管理', 'Weline_Backend::i18n_group')]
+#[\Weline\Framework\Acl\Acl('Weline_I18n::i18n_dictionaries', '词典管理', 'language', '词典管理')]
 class Words extends BaseController
 {
     /**
@@ -94,7 +94,7 @@ class Words extends BaseController
      * @throws \ReflectionException
      * @throws \Weline\Framework\App\Exception
      */
-    #[\Weline\Framework\Acl\Acl('Weline_I18n::i18n_words', '1i8n词典管理', 'mdi mdi-bookshelf', '1i8n词典管理')]
+    #[\Weline\Framework\Acl\Acl('Weline_I18n::i18n_words', '词典词条管理', 'circle', '词典词条管理', 'Weline_I18n::i18n_dictionaries')]
     public function index(): mixed
     {
         $locale_code = $this->request->getGet('code');

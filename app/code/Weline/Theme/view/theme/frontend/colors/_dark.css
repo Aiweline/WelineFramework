@@ -64,7 +64,7 @@
 
 /* Complete semantic dark palette; every global component consumes these tokens. */
 [data-theme="dark"],
-[data-bs-theme="dark"] {
+[data-theme="dark"] {
     --color-text: #e5e7eb; --color-text-primary: var(--color-text); --color-text-secondary: #cbd5e1; --color-text-tertiary: #94a3b8; --color-text-muted: #94a3b8; --color-text-disabled: #64748b; --color-text-placeholder: #94a3b8; --color-text-inverse: #0f172a;
     --color-bg-canvas: #020617; --color-bg-primary: #0f172a; --color-bg-secondary: #172033; --color-bg-tertiary: #1e293b; --color-surface: var(--color-bg-primary); --color-surface-subtle: var(--color-bg-secondary); --color-surface-muted: var(--color-bg-tertiary);
     --color-border-default: #64748b; --color-border-subtle: #475569; --color-border-strong: #94a3b8; --color-border-focus: #93c5fd;

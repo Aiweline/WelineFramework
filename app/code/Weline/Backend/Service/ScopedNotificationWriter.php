@@ -82,7 +82,7 @@ final class ScopedNotificationWriter
             ->setMetadata($metadata)
             ->setIsIcon((bool)($data['is_icon'] ?? true))
             ->setIsImg((bool)($data['is_img'] ?? false))
-            ->setAvatar((string)($data['avatar'] ?? 'ri-notification-line'))
+            ->setAvatar((string)($data['avatar'] ?? 'bell'))
             ->setExternalNotified(false)
             ->setExternalChannels([])
             ->setScope($scopeString)

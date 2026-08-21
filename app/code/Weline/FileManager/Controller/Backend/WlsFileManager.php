@@ -12,7 +12,7 @@ use Weline\FileManager\Queue\WlsFileManagerLargeOperationQueue;
 use Weline\FileManager\Service\WlsFileManagerLargeOperationService;
 use Weline\FileManager\Service\WlsFileManagerPathPolicyService;
 
-#[Acl('Weline_FileManager::wls_file_manager', 'WLS 文件管理器', 'mdi-folder-cog-outline', 'WLS 面板文件管理器入口', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_FileManager::wls_file_manager', 'WLS 文件管理器', 'settings', 'WLS 面板文件管理器入口', 'Weline_Backend::system_maintenance')]
 class WlsFileManager extends BackendController
 {
     private const MAX_PREVIEW_BYTES = 65536;
@@ -82,7 +82,7 @@ class WlsFileManager extends BackendController
 
     private ?WlsFileManagerPathPolicyService $pathPolicyService = null;
 
-    #[Acl('Weline_FileManager::wls_file_manager_index', '查看 WLS 文件管理器', 'mdi-folder-open-outline', '查看 WLS 面板文件管理器')]
+    #[Acl('Weline_FileManager::wls_file_manager_index', '查看 WLS 文件管理器', 'folder', '查看 WLS 面板文件管理器')]
     public function getIndex(): string
     {
         $this->useStandaloneLayout();
@@ -116,43 +116,43 @@ class WlsFileManager extends BackendController
         return $this->fetch('index');
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_roots', 'View WLS File Roots', 'mdi mdi-folder-outline', 'View WLS Panel file roots')]
+    #[Acl('Weline_FileManager::wls_file_manager_roots', 'View WLS File Roots', 'folder', 'View WLS Panel file roots')]
     public function getRoots(): string
     {
         return $this->openPage('roots', 'roots');
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_browser', 'View WLS File Browser', 'mdi mdi-file-tree-outline', 'View WLS Panel file browser')]
+    #[Acl('Weline_FileManager::wls_file_manager_browser', 'View WLS File Browser', 'tree', 'View WLS Panel file browser')]
     public function getBrowser(): string
     {
         return $this->openPage('browser', 'file-manager');
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_policy_page', 'View WLS File Policy', 'mdi mdi-shield-edit-outline', 'View WLS Panel file path policy')]
+    #[Acl('Weline_FileManager::wls_file_manager_policy_page', 'View WLS File Policy', 'edit', 'View WLS Panel file path policy')]
     public function getPolicyPage(): string
     {
         return $this->openPage('policy', 'path-policy');
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write_page', 'View WLS File Write Operations', 'mdi mdi-file-edit-outline', 'View WLS Panel file write operations')]
+    #[Acl('Weline_FileManager::wls_file_manager_write_page', 'View WLS File Write Operations', 'edit', 'View WLS Panel file write operations')]
     public function getWritePage(): string
     {
         return $this->openPage('write', 'write-operations');
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_queue_page', 'View WLS File Queue', 'mdi mdi-progress-clock', 'View WLS Panel file queue operations')]
+    #[Acl('Weline_FileManager::wls_file_manager_queue_page', 'View WLS File Queue', 'clock', 'View WLS Panel file queue operations')]
     public function getQueuePage(): string
     {
         return $this->openPage('queue', 'file-queue');
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_log_page', 'View WLS File Operation Log', 'mdi mdi-clipboard-text-clock-outline', 'View WLS Panel file operation log')]
+    #[Acl('Weline_FileManager::wls_file_manager_log_page', 'View WLS File Operation Log', 'clock', 'View WLS Panel file operation log')]
     public function getLogPage(): string
     {
         return $this->openPage('audit', 'operation-log');
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_capabilities_page', 'View WLS File Capabilities', 'mdi mdi-puzzle-outline', 'View WLS Panel file capabilities')]
+    #[Acl('Weline_FileManager::wls_file_manager_capabilities_page', 'View WLS File Capabilities', 'puzzle', 'View WLS Panel file capabilities')]
     public function getCapabilitiesPage(): string
     {
         return $this->openPage('capabilities', 'capabilities');
@@ -183,7 +183,7 @@ class WlsFileManager extends BackendController
         };
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'mdi-file-edit-outline', '创建目录和保存小文本文件')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'edit', '创建目录和保存小文本文件')]
     public function postCreateDirectory(): string
     {
         if (!$this->request->isPost()) {
@@ -240,7 +240,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'mdi-file-edit-outline', '创建目录和保存小文本文件')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'edit', '创建目录和保存小文本文件')]
     public function postSaveText(): string
     {
         if (!$this->request->isPost()) {
@@ -324,7 +324,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'mdi-file-plus-outline', '创建受控源码文件')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'plus', '创建受控源码文件')]
     public function postSourceCreate(): string
     {
         if (!$this->request->isPost()) {
@@ -391,7 +391,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'mdi-file-edit-outline', '重命名受控源码文件')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'edit', '重命名受控源码文件')]
     public function postSourceRename(): string
     {
         if (!$this->request->isPost()) {
@@ -451,7 +451,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '受控回收 WLS 源码文件', 'mdi-delete-clock-outline', '将受控源码文件移动到可恢复回收站')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '受控回收 WLS 源码文件', 'trash', '将受控源码文件移动到可恢复回收站')]
     public function postSourceTrash(): string
     {
         if (!$this->request->isPost()) {
@@ -513,7 +513,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '队列回收 WLS 源码文件', 'mdi-progress-clock', '将受控源码文件通过队列移动到可恢复回收站')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '队列回收 WLS 源码文件', 'clock', '将受控源码文件通过队列移动到可恢复回收站')]
     public function postSourceTrashQueue(): string
     {
         if (!$this->request->isPost()) {
@@ -619,7 +619,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source file archive', 'mdi-archive-arrow-down-outline', 'Archive one controlled source file through queue')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source file archive', 'arrow-down', 'Archive one controlled source file through queue')]
     public function postSourceArchiveQueue(): string
     {
         if (!$this->request->isPost()) {
@@ -726,7 +726,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source directory archive', 'mdi-archive-arrow-down-outline', 'Archive one controlled source directory through queue')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source directory archive', 'arrow-down', 'Archive one controlled source directory through queue')]
     public function postSourceArchiveTreeQueue(): string
     {
         if (!$this->request->isPost()) {
@@ -844,7 +844,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source selection archive', 'mdi-archive-check-outline', 'Archive selected controlled source entries through queue')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source selection archive', 'check', 'Archive selected controlled source entries through queue')]
     public function postSourceArchiveSelectionQueue(): string
     {
         if (!$this->request->isPost()) {
@@ -978,7 +978,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_download', '下载 WLS 文件', 'mdi-download-outline', '下载 WLS 面板文件管理器文件')]
+    #[Acl('Weline_FileManager::wls_file_manager_download', '下载 WLS 文件', 'download', '下载 WLS 面板文件管理器文件')]
     public function getDownload(): Response
     {
         $resolved = $this->resolveRequestedFile($this->rootCards(), 'file');
@@ -1014,7 +1014,7 @@ class WlsFileManager extends BackendController
         return $response;
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'mdi-upload-outline', 'Upload controlled WLS files')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'upload', 'Upload controlled WLS files')]
     public function postUpload(): string
     {
         if (!$this->request->isPost()) {
@@ -1102,7 +1102,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'mdi-form-textbox', 'Rename controlled WLS files')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'box', 'Rename controlled WLS files')]
     public function postRename(): string
     {
         if (!$this->request->isPost()) {
@@ -1161,7 +1161,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'mdi-delete-outline', 'Delete controlled WLS files')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'trash', 'Delete controlled WLS files')]
     public function postDelete(): string
     {
         if (!$this->request->isPost()) {
@@ -1274,7 +1274,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'mdi-archive-arrow-down-outline', 'Create guarded WLS ZIP archives')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Controlled WLS file write', 'arrow-down', 'Create guarded WLS ZIP archives')]
     public function postCompress(): string
     {
         if (!$this->request->isPost()) {
@@ -1359,7 +1359,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS large ZIP archive', 'mdi-progress-clock', 'Create queued WLS file archives')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS large ZIP archive', 'clock', 'Create queued WLS file archives')]
     public function postCompressQueue(): string
     {
         if (!$this->request->isPost()) {
@@ -1491,7 +1491,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue recoverable WLS trash move', 'mdi-delete-clock-outline', 'Move controlled WLS files to recoverable trash through queue')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue recoverable WLS trash move', 'trash', 'Move controlled WLS files to recoverable trash through queue')]
     public function postTrashQueue(): string
     {
         if (!$this->request->isPost()) {
@@ -1599,7 +1599,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Restore WLS trash queue entry', 'mdi-restore', 'Restore a recoverable WLS file queue entry')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Restore WLS trash queue entry', 'history', 'Restore a recoverable WLS file queue entry')]
     public function postTrashRestore(): string
     {
         if (!$this->request->isPost()) {
@@ -1678,7 +1678,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', 'Purge WLS trash queue entry', 'mdi-delete-forever-outline', 'Permanently purge a queue-created WLS trash entry')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Purge WLS trash queue entry', 'trash', 'Permanently purge a queue-created WLS trash entry')]
     public function postTrashPurge(): string
     {
         if (!$this->request->isPost()) {
@@ -1775,7 +1775,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '保存 WLS 文件路径策略', 'mdi-shield-edit-outline', '保存 WLS 面板文件管理器的项目级路径策略')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '保存 WLS 文件路径策略', 'edit', '保存 WLS 面板文件管理器的项目级路径策略')]
     public function postPathPolicySave(): string
     {
         if (!$this->request->isPost()) {
@@ -1810,7 +1810,7 @@ class WlsFileManager extends BackendController
         return '';
     }
 
-    #[Acl('Weline_FileManager::wls_file_manager_write', '恢复 WLS 文件路径默认策略', 'mdi-shield-refresh-outline', '恢复 WLS 面板文件管理器的项目级路径默认继承策略')]
+    #[Acl('Weline_FileManager::wls_file_manager_write', '恢复 WLS 文件路径默认策略', 'refresh', '恢复 WLS 面板文件管理器的项目级路径默认继承策略')]
     public function postPathPolicyReset(): string
     {
         if (!$this->request->isPost()) {

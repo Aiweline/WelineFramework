@@ -13,7 +13,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 
-#[Acl('Weline_Deploy::deploy_release', '发布历史', 'mdi mdi-history', '查看发布历史与版本回滚', 'Weline_Deploy::release_management')]
+#[Acl('Weline_Deploy::deploy_release', '发布历史', 'history', '查看发布历史与版本回滚', 'Weline_Deploy::release_management')]
 class Release extends BackendController
 {
     public function __construct(
@@ -24,13 +24,13 @@ class Release extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Deploy::deploy_release_index', '查看发布历史', 'mdi mdi-history', '查看发布历史列表')]
+    #[Acl('Weline_Deploy::deploy_release_index', '查看发布历史', 'history', '查看发布历史列表')]
     public function index(): string
     {
         return $this->getIndex();
     }
 
-    #[Acl('Weline_Deploy::deploy_release_index', '查看发布历史', 'mdi mdi-history', '查看发布历史列表')]
+    #[Acl('Weline_Deploy::deploy_release_index', '查看发布历史', 'history', '查看发布历史列表')]
     public function getIndex(): string
     {
         $records = $this->historyService->getRecent(50);
@@ -44,7 +44,7 @@ class Release extends BackendController
         return (string)$this->fetch();
     }
 
-    #[Acl('Weline_Deploy::release_history_rollback', '回滚发布版本', 'mdi mdi-restore', '从历史记录回滚版本')]
+    #[Acl('Weline_Deploy::release_history_rollback', '回滚发布版本', 'store', '从历史记录回滚版本')]
     public function postRollback(): string
     {
         if (!$this->request->isPost()) {

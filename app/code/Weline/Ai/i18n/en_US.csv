@@ -343,9 +343,12 @@ AI供应商账户管理,"AI Supplier Account Management"
 账户ID不能为空,"Account ID cannot be empty."
 "获取账户数据失败: %{msg}","Failed to get account data: %{msg}"
 AI供应商账户,AI供应商账户
+user,user
 查看供应商账户,查看供应商账户
+list,list
 查看供应商账户列表,查看供应商账户列表
 编辑供应商账户（侧边栏）,编辑供应商账户（侧边栏）
+edit,edit
 请先登录后台管理员账号。,"Please sign in with a backend administrator account first."
 风格保存失败：%{1},"Style save failed: %{1}"
 风格代码不能为空。,"Style code is required."
@@ -359,22 +362,29 @@ AI供应商账户,AI供应商账户
 适配器风格解绑失败：%{1},"Adapter style unbinding failed: %{1}"
 风格目录加载失败：%{1},"Style catalog load failed: %{1}"
 "AI style governance","AI style governance"
+palette,palette
 "AI style list and governance","AI style list and governance"
 "AI style list","AI style list"
 "View AI styles","View AI styles"
 "AI style catalog","AI style catalog"
 "View AI style catalog","View AI style catalog"
 "Save AI style","Save AI style"
+save,save
 "Save AI custom style","Save AI custom style"
 "Disable AI style","Disable AI style"
+close,close
 "Disable AI custom style","Disable AI custom style"
 "Delete AI style","Delete AI style"
+trash,trash
 "Delete AI custom style","Delete AI custom style"
 "Clone AI style","Clone AI style"
+copy,copy
 "Clone builtin/module style","Clone builtin/module style"
 "Match AI style","Match AI style"
+circle,circle
 "Match AI style by brief","Match AI style by brief"
 "Manage adapter styles","Manage adapter styles"
+link,link
 "Manage manual adapter style bindings","Manage manual adapter style bindings"
 文本生成,"Text generation"
 图像生成,"Image generation"
@@ -387,15 +397,21 @@ AI供应商账户,AI供应商账户
 "清除缓存失败: %{error}","Failed to clear cache: %{error}"
 "获取受保护模型列表失败: %{error}","Failed to retrieve protected model list: %{error}"
 默认模型管理,"Default Model Management"
+settings,settings
 查看默认模型配置,查看默认模型配置
 设置默认模型,设置默认模型
+star,star
 移除默认模型配置,移除默认模型配置
 获取模型保护状态,获取模型保护状态
+check,check
 初始化默认配置,"Initialize default configuration"
+play,play
 验证默认模型配置,验证默认模型配置
 获取默认模型,获取默认模型
+info,info
 清除缓存,"Clear cache"
 获取受保护的模型列表,获取受保护的模型列表
+lock,lock
 批量设置默认模型,批量设置默认模型
 首页,Home
 聊天,Chat
@@ -756,9 +772,7 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 确定切换,"Confirm switch"
 状态已切换,"Status Toggled"
 未知错误,"Unknown error"
-操作失败：,"Operation failed:"
 请稍后重试,"Please try again later"
-网络错误，请稍后重试,"Network error, please try again later."
 默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。,"The default model is used for automatic selection when the user does not specify a model. Only one default model can be set for each service type."
 服务类型,"Service Type"
 默认模型,"Default model"
@@ -852,7 +866,6 @@ ID,ID
 删除失败，请重试,"Deletion failed, please try again."
 请先选择要测试的模型,"Please select the model to test first."
 测试失败,"Test failed"
-测试失败：,"Test failed:"
 受保护模型不能删除，只能删除复制模型或自定义模型,"Protected models cannot be deleted; only copied or custom models can be deleted"
 确定要删除模型,"Are you sure you want to delete the model?"
 吗？,?
@@ -863,7 +876,6 @@ ID,ID
 重试,Retry
 条件不足,"Insufficient conditions"
 无法激活,"Unable to activate"
-无法激活:,"Unable to activate:"
 复制模型,"Copy model"
 "您正在复制模型: <strong>%{1}</strong>","You are copying the model: <strong>%{1}</strong>"
 复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。,"The copied model will inherit all configurations of the original model, and you can modify its configurations after copying."
@@ -893,9 +905,7 @@ API地址,"API address"
 复制中...,Copying...
 复制成功,"Copied successfully"
 模型已成功复制,"Model copied successfully"
-复制成功！,"Copy successful!"
 复制失败,"Copy failed"
-复制失败：,"Copy failed:"
 新建模型,"New model"
 模型新增方式,模型新增方式
 快速新增,快速新增
@@ -1053,8 +1063,7 @@ API基础URL,"API Base URL"
 "此模型是从原始模型 ID: %{1} 复制而来","This model was copied from the original model ID: %{1}"
 模型配置,"Model configuration"
 确定要测试此模型的连接吗？,"Are you sure you want to test the connection of this model?"
-连接测试成功！,"Connection test successful!"
-连接测试失败：,"Connection test failed:"
+测试返回图片,测试返回图片
 "模型不存在: %{code}","Model does not exist: %{code}"
 "模型 %{code} 缺少API密钥配置","Model %{code} is missing API key configuration"
 "模型 %{code} 缺少API基础URL配置","Model %{code} is missing API base URL configuration"
@@ -1188,6 +1197,14 @@ AI用量审计恢复,"AI usage audit recovery"
 "%{1} 同步失败：%{2}","%{1} Synchronization failed: %{2}"
 "模型收集完成，共 %{1} 个模型","Model collection completed, total %{1} models"
 已跳过模型收集,"Model collection skipped"
+操作失败：,"Operation failed:"
+网络错误，请稍后重试,"Network error, please try again later."
+测试失败：,"Test failed:"
+无法激活:,"Unable to activate:"
+复制成功！,"Copy successful!"
+复制失败：,"Copy failed:"
+连接测试成功！,"Connection test successful!"
+连接测试失败：,"Connection test failed:"
 提示：点击选择AI模型，输入关键词搜索,提示：点击选择AI模型，输入关键词搜索
 为适配器分别绑定文本推理、文生图、文生视频模型；留空表示该能力不启用。,"Bind the text reasoning, Vincentian graph, and Vincentian video models to the adapter respectively; leaving them blank means that this capability is not enabled."
 未找到动作：%{1},未找到动作：%{1}

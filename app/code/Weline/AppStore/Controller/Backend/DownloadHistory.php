@@ -11,13 +11,13 @@ use Weline\AppStore\Model\AppStoreDownloadLog;
 /**
  * 下载历史控制器
  */
-#[Acl('Weline_AppStore::download_history', '下载历史', 'bi-clock-history', '下载历史记录', 'Weline_AppStore::appstore')]
+#[Acl('Weline_AppStore::download_history', '下载历史', 'clock', '下载历史记录', 'Weline_AppStore::appstore')]
 class DownloadHistory extends BackendController
 {
     /**
      * 下载历史列表
      */
-    #[Acl('Weline_AppStore::download_history_view', '查看历史', 'bi-list', '查看下载历史')]
+    #[Acl('Weline_AppStore::download_history_view', '查看历史', 'list', '查看下载历史')]
     public function index(): string
     {
         /** @var AppStoreDownloadLog $logModel */
@@ -38,7 +38,7 @@ class DownloadHistory extends BackendController
     /**
      * 删除记录
      */
-    #[Acl('Weline_AppStore::download_history_delete', '删除记录', 'bi-trash', '删除下载记录')]
+    #[Acl('Weline_AppStore::download_history_delete', '删除记录', 'trash', '删除下载记录')]
     public function delete(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -69,7 +69,7 @@ class DownloadHistory extends BackendController
     /**
      * 清空历史
      */
-    #[Acl('Weline_AppStore::download_history_clear', '清空历史', 'bi-trash', '清空下载历史')]
+    #[Acl('Weline_AppStore::download_history_clear', '清空历史', 'trash', '清空下载历史')]
     public function clear(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');

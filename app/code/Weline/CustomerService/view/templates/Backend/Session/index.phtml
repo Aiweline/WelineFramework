@@ -17,7 +17,7 @@ $sessionText = [
     </div>
     
     <div class="session-filters">
-        <select id="status-filter" class="form-control">
+        <select id="status-filter" class="w-input">
             <option value=""><?= __('全部状态') ?></option>
             <option value="waiting"><?= __('等待中') ?></option>
             <option value="active"><?= __('进行中') ?></option>
@@ -26,7 +26,7 @@ $sessionText = [
     </div>
     
     <div class="session-list">
-        <table class="table">
+        <table class="w-table">
             <thead>
                 <tr>
                     <th><?= __('会话ID') ?></th>
@@ -43,7 +43,7 @@ $sessionText = [
             <tbody>
                 <?php if (empty($sessions)): ?>
                     <tr>
-                        <td colspan="9" class="text-center"><?= __('暂无会话') ?></td>
+                        <td colspan="9" class="w-text" data-align="center"><?= __('暂无会话') ?></td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($sessions as $session): ?>
@@ -66,18 +66,18 @@ $sessionText = [
                                     'closed' => 'badge-secondary'
                                 ];
                                 ?>
-                                <span class="badge <?= $statusClass[$session['status']] ?? 'badge-secondary' ?>">
+                                <span class="w-badge <?= $statusClass[$session['status']] ?? 'badge-secondary' ?>">
                                     <?= $statusText[$session['status']] ?? $session['status'] ?>
                                 </span>
                             </td>
                             <td><?= $session['message_count'] ?? 0 ?></td>
                             <td><?= $session['created_at'] ?></td>
                             <td>
-                                <a href="<?= $htmlAttr($this->getBackendUrl('customerservice/backend/session/view', ['session_id' => $session['session_id']])) ?>" class="btn btn-sm btn-primary">
+                                <a href="<?= $htmlAttr($this->getBackendUrl('customerservice/backend/session/view', ['session_id' => $session['session_id']])) ?>" class="w-button" data-tone="primary" data-size="sm">
                                     <?= __('查看') ?>
                                 </a>
                                 <?php if ($session['status'] !== 'closed'): ?>
-                                    <button class="btn btn-sm btn-danger" data-session-action="close" data-session-id="<?= $htmlAttr($session['session_id'] ?? '') ?>">
+                                    <button class="w-button" data-session-action="close" data-session-id="<?= $htmlAttr($session['session_id'] ?? '') ?>" data-tone="danger" data-size="sm">
                                         <?= __('关闭') ?>
                                     </button>
                                 <?php endif; ?>
@@ -108,8 +108,8 @@ const customerServiceSessionCloseUrl = <?= json_encode($this->getBackendUrl('cus
 
 function showSessionToast(type, message) {
     const text = String(message || customerServiceSessionText.closeFailed);
-    if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-        window.BackendToast[type](text);
+    if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') {
+        window.Weline.UI.toast[type](text);
         return;
     }
     const logger = type === 'error' ? 'error' : 'log';
@@ -119,9 +119,7 @@ function showSessionToast(type, message) {
 }
 
 function confirmSessionAction(message) {
-    if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-        return window.BackendConfirm.show(message);
-    }
+    return Weline.UI.dialog.confirm(message);
     showSessionToast('error', customerServiceSessionText.closeFailed);
     return Promise.resolve(false);
 }

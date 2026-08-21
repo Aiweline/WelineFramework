@@ -78,7 +78,7 @@ class ParamRender extends BackendController
         $html = $eventData['data']['result'] ?? '';
         $err = $eventData['data']['error'] ?? null;
         if ($err !== null && $err !== '') {
-            return '<div class="alert alert-danger">' . htmlspecialchars((string)$err) . '</div>';
+            return '<div class="w-alert" data-tone="danger">' . htmlspecialchars((string)$err) . '</div>';
         }
         return is_string($html) ? $html : '';
     }
@@ -97,7 +97,7 @@ class ParamRender extends BackendController
             $param = json_decode($param, true) ?? [];
         }
         if (empty($key) || empty($param)) {
-            return '<div class="alert alert-warning">' . __('缺少必要参数') . '</div>';
+            return '<div class="w-alert" data-tone="warning">' . __('缺少必要参数') . '</div>';
         }
         $eventData = [
             'data' => [
@@ -109,7 +109,7 @@ class ParamRender extends BackendController
         $html = $eventData['data']['result'] ?? '';
         $err = $eventData['data']['error'] ?? null;
         if ($err !== null && $err !== '') {
-            return '<div class="alert alert-danger">' . htmlspecialchars((string)$err) . '</div>';
+            return '<div class="w-alert" data-tone="danger">' . htmlspecialchars((string)$err) . '</div>';
         }
         return is_string($html) ? $html : '';
     }

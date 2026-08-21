@@ -36,7 +36,7 @@
 
 ### 全局颜色模式（`REQ-THEME-0001`）
 
-Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”三层。`data-theme-preference` 保存 `system|light|dark`，而 `data-theme`、`data-bs-theme` 与 `color-scheme` 始终是已解析的 `light|dark`。设计主题只能覆盖 palette Token；不能用同路径 `assets/css/theme.css` 或 `assets/js/theme.js` 重新实现组件和主题运行时，否则会遮蔽 Weline_Theme 的全局 adapter。
+Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”三层。`data-theme-preference` 保存 `system|light|dark`，而 `data-theme`、`data-theme` 与 `color-scheme` 始终是已解析的 `light|dark`。设计主题只能覆盖 palette Token；不能用同路径 `assets/css/theme.css` 或 `assets/js/theme.js` 重新实现组件和主题运行时，否则会遮蔽 Weline_Theme 的全局 adapter。
 
 通知能力的正式入口是 `Weline.Toast` 与 `Weline.BackendToast`。为兼容历史主题，运行时只会在全局名称尚未提供可用 `success()` 方法时，分别补充 `window.Toast` 与 `window.AdminToast` 别名；业务新代码不得依赖这两个旧名称。
 
@@ -171,11 +171,23 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 - Hook：[`Hook使用指南.md`](./Hook使用指南.md)
 - 元数据：[`主题元数据工作流程.md`](./主题元数据工作流程.md)
 - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
+- 字体加载（语言子集）：[`theme-font.md`](./theme-font.md)
 - Worker 视图预热贡献：[`worker-view-warmup-contributions.md`](./worker-view-warmup-contributions.md)
 - 运行时缓存失效与 IPC deadline：[`runtime-cache-invalidation.md`](./runtime-cache-invalidation.md)
 - 默认主题目录规范：[`../view/theme/README.md`](../view/theme/README.md)
 
 ## 对外能力
+
+### Theme 资源标签族（`theme:css` / `theme:js` / `theme:font`）
+
+| 标签 | 作用 | 算法归属 |
+|------|------|----------|
+| `w:theme:css` | 主题样式 URL | 生产 minify：`Theme/Minify` |
+| `w:theme:js` | 主题脚本 URL | 生产 minify：`Theme/Minify` |
+| `w:theme:font` | 语言子集 `@font-face` | `Theme/Font` |
+
+- 字体约定与升级预热：[`theme-font.md`](./theme-font.md)
+- 生产静态压缩：[`theme-static-minify.md`](./theme-static-minify.md)
 
 ### `w:theme:template`
 

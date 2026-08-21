@@ -6,5 +6,5 @@
     <!-- 事件管理 - 归入开发者 > 事件与扩展 -->
     <menu source="Weline_Event::event_index" name="event_index" title="事件列表" 
           action="*/backend/event" parent="Weline_Backend::event_extend_group" 
-          icon="mdi mdi-lightning-bolt-outline" order="10"/>
+          icon="bolt" order="10"/>
 </menus>

@@ -483,28 +483,28 @@ foreach ($routers as $module => $routes) {
 }
 </style>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('路由管理') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><span><?= __('系统') ?></span></li>
-                    <li class="breadcrumb-item active"><?= __('路由管理') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('路由管理') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('路由管理') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <div class="weline-router-page">
     <!-- 顶部信息卡片 -->
     <div class="weline-router-header">
-        <h2><i class="mdi mdi-routes"></i> <?= __('路由管理') ?></h2>
+        <h2><w:icon name="circle" size="sm"></w:icon> <?= __('路由管理') ?></h2>
         <p class="weline-router-header-subtitle"><?= __('查看和管理系统中所有已注册的路由，支持按模块分组浏览') ?></p>
     </div>
 
@@ -512,7 +512,7 @@ foreach ($routers as $module => $routes) {
     <div class="weline-router-stats-row">
         <div class="weline-router-stat-card">
             <div class="weline-router-stat-icon primary">
-                <i class="mdi mdi-routes"></i>
+                <w:icon name="circle" size="sm"></w:icon>
             </div>
             <div class="weline-router-stat-content">
                 <div class="weline-router-stat-value"><?= $totalRoutes ?></div>
@@ -521,7 +521,7 @@ foreach ($routers as $module => $routes) {
         </div>
         <div class="weline-router-stat-card">
             <div class="weline-router-stat-icon success">
-                <i class="mdi mdi-package-variant"></i>
+                <w:icon name="box" size="sm"></w:icon>
             </div>
             <div class="weline-router-stat-content">
                 <div class="weline-router-stat-value"><?= $moduleCount ?></div>
@@ -530,7 +530,7 @@ foreach ($routers as $module => $routes) {
         </div>
         <div class="weline-router-stat-card">
             <div class="weline-router-stat-icon info">
-                <i class="mdi mdi-eye-outline"></i>
+                <w:icon name="eye" size="sm"></w:icon>
             </div>
             <div class="weline-router-stat-content">
                 <div class="weline-router-stat-value"><?= $getRoutes ?></div>
@@ -539,7 +539,7 @@ foreach ($routers as $module => $routes) {
         </div>
         <div class="weline-router-stat-card">
             <div class="weline-router-stat-icon warning">
-                <i class="mdi mdi-content-save-outline"></i>
+                <w:icon name="save" size="sm"></w:icon>
             </div>
             <div class="weline-router-stat-content">
                 <div class="weline-router-stat-value"><?= $postRoutes ?></div>
@@ -554,10 +554,10 @@ foreach ($routers as $module => $routes) {
             <!-- 搜索框 -->
             <div class="weline-router-search-box">
                 <div class="weline-router-search-input">
-                    <i class="mdi mdi-magnify"></i>
+                    <w:icon name="search" size="sm"></w:icon>
                     <input type="text" id="router-search" placeholder="<?= __('搜索路由路径、控制器...') ?>">
                     <button type="button" class="weline-router-search-clear" id="router-search-clear">
-                        <i class="mdi mdi-close"></i>
+                        <w:icon name="close" size="sm"></w:icon>
                     </button>
                 </div>
             </div>
@@ -582,10 +582,10 @@ foreach ($routers as $module => $routes) {
             <!-- 操作按钮 -->
             <div class="weline-router-actions">
                 <button type="button" class="weline-router-action-btn" id="expand-all">
-                    <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+                    <w:icon name="more-horizontal" size="sm"></w:icon> <?= __('展开全部') ?>
                 </button>
                 <button type="button" class="weline-router-action-btn" id="collapse-all">
-                    <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+                    <w:icon name="circle" size="sm"></w:icon> <?= __('折叠全部') ?>
                 </button>
             </div>
         </div>
@@ -593,7 +593,7 @@ foreach ($routers as $module => $routes) {
 
     <!-- 搜索结果提示 -->
     <div id="router-result-info" class="weline-router-result-info">
-        <i class="mdi mdi-information-outline"></i>
+        <w:icon name="info" size="sm"></w:icon>
         <span id="router-result-text"></span>
     </div>
 
@@ -601,7 +601,7 @@ foreach ($routers as $module => $routes) {
     <?php if (empty($routers)): ?>
     <div class="weline-router-module-card">
         <div class="weline-router-empty">
-            <i class="mdi mdi-database-off-outline"></i>
+            <w:icon name="database" size="sm"></w:icon>
             <p><?= __('暂无路由数据') ?></p>
         </div>
     </div>
@@ -610,12 +610,12 @@ foreach ($routers as $module => $routes) {
     <div class="weline-router-module-card" data-module="<?= htmlspecialchars($module) ?>">
         <div class="weline-router-module-header" data-router-module-toggle="1">
             <span class="weline-router-module-title">
-                <i class="mdi mdi-package-variant-closed"></i>
+                <w:icon name="close" size="sm"></w:icon>
                 <?= htmlspecialchars($module) ?>
                 <span class="weline-router-module-badge"><?= count($routes) ?> <?= __('条路由') ?></span>
             </span>
             <span class="weline-router-module-toggle">
-                <i class="mdi mdi-chevron-down"></i>
+                <w:icon name="chevron-down" size="sm"></w:icon>
             </span>
         </div>
         <div class="weline-router-module-body collapsed">
@@ -674,7 +674,7 @@ foreach ($routers as $module => $routes) {
                         <td>
                             <?php if (!empty($info['start_page_path'])): ?>
                             <a class="weline-router-start-btn" href="<?= $this->getBackendUrl('backend/system/config/set?key=' . \Weline\Backend\Api\Config\KeysInterface::key_start_page_path . '&value=' . urlencode($info['start_page_path'])) ?>" title="<?= __('设为首页') ?>">
-                                <i class="mdi mdi-home-outline"></i> <?= __('设为首页') ?>
+                                <w:icon name="home" size="sm"></w:icon> <?= __('设为首页') ?>
                             </a>
                             <?php endif; ?>
                         </td>

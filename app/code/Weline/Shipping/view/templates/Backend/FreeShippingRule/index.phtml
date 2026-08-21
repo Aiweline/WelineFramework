@@ -9,16 +9,16 @@ $rules = $this->getData('rules') ?? [];
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row" data-testid="shipping-free-rule-management">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('免邮规则') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
+<div class="w-grid" data-testid="shipping-free-rule-management">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= __('免邮规则') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
                                     </li>
-                                    <li class="breadcrumb-item active"><?= __('免邮规则') ?></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= __('免邮规则') ?></li>
                                 </ol>
                             </div>
                         </div>
@@ -26,33 +26,33 @@ $embed = $this->getData('embed') ?? false;
                 </div>
 <?php endif; ?>
 
-                <div class="row mb-3"><div class="col-12"><div class="card" data-testid="shipping-free-rule-create-form">
-                    <div class="card-header"><h5 class="card-title mb-0"><?= __('新增免邮规则') ?></h5></div>
-                    <div class="card-body"><w:form method="post" action="@backend-url('shipping/backend/freeshippingrule/save')"><div class="row g-3">
-                        <div class="col-md-3"><label class="form-label"><?= __('规则名称') ?></label><input class="form-control" name="rule_name" maxlength="255" required></div>
-                        <div class="col-md-2"><label class="form-label"><?= __('规则代码') ?></label><input class="form-control" name="rule_code" maxlength="50" required></div>
-                        <div class="col-md-2"><label class="form-label"><?= __('条件类型') ?></label><select class="form-select" name="condition_type"><option value="order_amount"><?= __('订单金额') ?></option></select></div>
-                        <div class="col-md-2"><label class="form-label"><?= __('最低金额') ?></label><input class="form-control" type="number" min="0" step="0.01" name="min_order_amount" value="99.00" required></div>
-                        <div class="col-md-1"><label class="form-label"><?= __('优先级') ?></label><input class="form-control" type="number" min="0" name="priority" value="10"></div>
-                        <div class="col-md-2 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-free-rule-submit"><?= __('创建') ?></button></div>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);"><div style="--w-span:12;"><div class="w-card" data-testid="shipping-free-rule-create-form">
+                    <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('新增免邮规则') ?></h5></div>
+                    <div class="w-card__body"><w:form method="post" action="@backend-url('shipping/backend/freeshippingrule/save')"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('规则名称') ?></label><input class="w-input" name="rule_name" maxlength="255" required></div>
+                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('规则代码') ?></label><input class="w-input" name="rule_code" maxlength="50" required></div>
+                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('条件类型') ?></label><select class="w-select" name="condition_type"><option value="order_amount"><?= __('订单金额') ?></option></select></div>
+                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('最低金额') ?></label><input class="w-input" type="number" min="0" step="0.01" name="min_order_amount" value="99.00" required></div>
+                        <div style="--w-span-md:1;"><label class="w-field__label"><?= __('优先级') ?></label><input class="w-input" type="number" min="0" name="priority" value="10"></div>
+                        <div class="w-cluster" data-align="end" style="--w-span-md:2;"><input type="hidden" name="is_active" value="1"><button class="w-button" type="submit" data-testid="shipping-free-rule-submit" data-w-width="full" data-tone="primary"><?= __('创建') ?></button></div>
                     </div></w:form></div>
                 </div></div></div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('免邮规则列表') ?></h5>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('免邮规则列表') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($rules)): ?>
-                                    <div class="alert alert-info mb-0">
+                                    <div class="w-alert" data-tone="info" style="--w-mb:0;">
                                         <?= __('当前暂无免邮规则配置，请后续在此页面完善配置。') ?>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-hover align-middle">
-                                            <thead class="table-light">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table" data-w-vertical="middle">
+                                            <thead>
                                             <tr>
                                                 <th><?= __('规则名称') ?></th>
                                                 <th><?= __('规则代码') ?></th>
@@ -71,9 +71,9 @@ $embed = $this->getData('embed') ?? false;
                                                     <td><?= htmlspecialchars($rule->getData(FreeShippingRule::schema_fields_PRIORITY)) ?></td>
                                                     <td>
                                                         <?php if ($rule->getData(FreeShippingRule::schema_fields_IS_ACTIVE)): ?>
-                                                            <span class="badge bg-success"><?= __('启用') ?></span>
+                                                            <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                                            <span class="w-badge" data-w-background="muted"><?= __('禁用') ?></span>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>

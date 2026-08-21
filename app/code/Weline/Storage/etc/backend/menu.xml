@@ -7,6 +7,6 @@
           title="存储配置" 
           action="storage/backend/config"
           parent="Weline_Backend::system_service_group" 
-          icon="mdi mdi-database" 
+          icon="database" 
           order="60"/>
 </menus>

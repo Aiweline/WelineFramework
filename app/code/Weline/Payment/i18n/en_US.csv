@@ -29,11 +29,14 @@ Payment,Payment
 操作授权条件不满足,操作授权条件不满足
 支付诊断,支付诊断
 支付统计驾驶舱,"Payment Dashboard"
+grid,grid
 查看支付统计驾驶舱,查看支付统计驾驶舱
 缺少支付方式代码,"Payment method code is required"
 支付方式不存在,"Payment method does not exist"
 支付方式管理,"Payment Method Management"
+edit,edit
 查看支付方式,查看支付方式
+list,list
 查看支付方式列表,查看支付方式列表
 编辑支付方式,"Edit Payment Method"
 编辑支付方式配置,编辑支付方式配置
@@ -212,7 +215,7 @@ More,More
 "支付方式 %{code} 不存在","Payment method %{code} does not exist"
 "成功的支付尝试缺少后续 effect outbox","Succeeded payment attempt is missing downstream effect outbox rows"
 "已支付订单缺少发票 effect","Paid order is missing the invoice effect"
-"成功支付交易对应的业务单据不存在或未进入已支付状态","The payable document for a successful payment transaction is missing or not marked paid"
+成功支付交易对应的业务单据不存在或未进入已支付状态,"The payable document for a successful payment transaction is missing or not marked paid"
 "支付回调 inbox 已接收但超时未应用","Payment callback inbox was received but not applied before timeout"
 "退款通道 pending 或 unknown 超过 24 小时","Refund channel remained pending or unknown for more than 24 hours"
 非终态支付尝试的库存预占租约已过期,"Inventory reservation lease expired for a non-terminal payment attempt"

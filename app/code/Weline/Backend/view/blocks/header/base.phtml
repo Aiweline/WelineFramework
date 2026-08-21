@@ -1,449 +1,132 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 
+use Weline\Backend\Block\ThemeConfig;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-?>
-<?php
-$host = $this->request->getBaseHost() . '/';
-$base_host = $this->request->getPrePath();
-//$http_host                          = explode('.', $this->request->getServer('HTTP_HOST'));
-//$domain                             = array_pop($http_host);
-//$domain                             = array_pop($http_host) . '.' . $domain;
-// dd($domain);
-$base_router = $this->request->getRouterData('router');
-$current_module = $this->request->getModuleName();
-$area = (string)(Env::getAreaRoutePrefix('backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('admin'));
-$api_area = (string)(Env::getAreaRoutePrefix('rest_frontend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api'));
-$api_admin_area = (string)(Env::getAreaRoutePrefix('rest_backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api_admin'));
-/**@var \Weline\Framework\Session\Auth\AuthenticatedSessionInterface $session */
+/** @var ThemeConfig $themeConfig */
+$themeConfig = ObjectManager::getInstance(ThemeConfig::class);
+$host = rtrim((string)$this->request->getBaseHost(), '/');
+$baseRouter = (string)$this->request->getRouterData('router');
+$currentModule = (string)$this->request->getModuleName();
+$backendArea = (string)(Env::getAreaRoutePrefix('backend') ?: Env::getInstance()->getConfig('admin'));
+$frontendApiArea = (string)(Env::getAreaRoutePrefix('rest_frontend') ?: Env::getInstance()->getConfig('api'));
+$backendApiArea = (string)(Env::getAreaRoutePrefix('rest_backend') ?: Env::getInstance()->getConfig('api_admin'));
 $session = SessionFactory::backend();
-$user_id = $session->getLoginUserID();
-$url_host = $this->request->getUrlBuilder()->getBackendUrl('/', [], false);
-$api_host = $this->request->getUrlBuilder()->getApiUrl('/', [], false);
-$frontend_api_host = $this->request->getUrlBuilder()->getFrontendApiUrl('/', [], false);
-$env_model = \Weline\Framework\App\Env::system('deploy');
-$theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
-$env_model_media_base_path_template = $host . (DEV ? '{module}/view/statics/{path}' : 'static/' . $theme_path . '/{module}/view/statics/{path}');
-$token = \Weline\Framework\Security\Token::create('csrf', 16, 600);
-$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
-    | JSON_UNESCAPED_SLASHES
-    | JSON_HEX_TAG
-    | JSON_HEX_AMP
-    | JSON_HEX_APOS
-    | JSON_HEX_QUOT
-    | JSON_INVALID_UTF8_SUBSTITUTE;
+$userId = (int)$session->getLoginUserID();
+$backendHost = rtrim((string)$this->request->getUrlBuilder()->getBackendUrl('/', [], false), '/');
+$apiHost = rtrim((string)$this->request->getUrlBuilder()->getApiUrl('/', [], false), '/');
+$frontendApiHost = rtrim((string)$this->request->getUrlBuilder()->getFrontendApiUrl('/', [], false), '/');
+$themePath = str_replace('\\', '/', (string)(Env::getInstance()->getTheme()['path'] ?? ''));
+$mediaTemplate = $host . '/' . (DEV
+    ? '{module}/view/statics/{path}'
+    : 'static/' . trim($themePath, '/') . '/{module}/view/statics/{path}');
+$csrfToken = \Weline\Framework\Security\Token::create('csrf', 16, 600);
 
-// 仅输出当前请求周期及 Theme 声明 JS 模块中实际用到的翻译
 $i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
 if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
     try {
-        $jsWords = \Weline\I18n\Helper\JsWordsRegistry::getWordsWithTranslations();
-        if (is_array($jsWords) && !empty($jsWords)) {
-            // JS 声明的词覆盖同 key 的默认翻译
-            $i18nWords = array_merge($i18nWords, $jsWords);
+        $registeredWords = \Weline\I18n\Helper\JsWordsRegistry::getWordsWithTranslations();
+        if (is_array($registeredWords)) {
+            $i18nWords = array_merge($i18nWords, $registeredWords);
         }
-    } catch (\Throwable $e) {
-        // 忽略异常，避免影响页面渲染
+    } catch (\Throwable) {
     }
 }
-?>
-<!--加载requirejs-->
-<?php if (DEV) : ?>
-    <!--            <script src="@static(Weline_Backend::backend/lib/requirejs/2.3.6/requirejs.js)"></script>-->
-<?php
-else:
-    ?>
-    <!--            <script src="@static(Weline_Backend::backend/lib/requirejs/2.3.6/requirejs.min.js)"></script>-->
-<?php
-endif;
-?>
-<!--加载require常用js模块-->
-<!--<script src='@static(Weline_Frontend::base/require.configs.js)'></script>-->
-<w:js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</w:js>
-<script>
-    $.ajaxSetup({
-        headers: {
-            'X-CSRF-TOKEN': '{{token}}'
-        }
-    });
-    $.ajaxPrefilter(function (options) {
-        // 检测url是否有参数，并给所有url加上isAjax参数
-        if (options.url.indexOf('?') < 0) {
-            options.url += '?isAjax=1';
-        } else {
-            options.url += '&isAjax=1';
-        }
-    });
-</script>
-<w:js>Weline_Backend::/js/cookie.js</w:js>
-<!-- Backend配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
-<script data-no-extract="true">
-    window.site = {
-        user_id: '{{user_id}}',
-        csrf_token: '{{token}}',
-        module: '{{current_module}}',
-        area: '{{area}}',
-        host: '{{host}}',
-        base_host: '{{base_host}}',
-        env_model: '{{env_model}}',
-        env_model_media_base_path_template: '{{env_model_media_base_path_template}}',
-        api_host: '{{api_host}}',
-        currency: '<?= \w_env_currency() ?>',
-        lang: '<?= \w_env_lang() ?>',
-        frontend_api_host: '{{frontend_api_host}}',
-        api_area: '{{api_area}}',
-        api_admin_area: '{{api_admin_area}}',
-        url_host: '{{ url_host }}',
-        base_router: '{{base_router}}',
-        i18n: <?= json_encode($i18nWords, $jsonForScriptFlags) ?>,
-        themeConfig: <?php
-        ob_start();
-        try {
-            $tc = $themeConfig->getThemeConfig();
-        } catch (\Throwable $e) {
-            $tc = [];
-        }
-        ob_end_clean();
-        echo json_encode(is_array($tc) ? $tc : [], $jsonForScriptFlags) ?: '{}';
-        ?>,
-    }
-    window.path = (path) => {
-        path = path.replace('*', '{{base_router}}')
-        if (path.indexOf('//') === 0) {
-            path = path.slice(2)
-        }
-        if (path.indexOf('/') === 0) {
-            path = path.slice(1)
-        }
-        return path;
-    }
-    window.media = (path, module = '{{current_module}}') => {
-        return '{{env_model_media_base_path_template}}'.replace('{path}', window.path(path)).replace('{module}', module.replace('_', '/'))
-    }
-    window.url = (path) => {
-        return window.backend_url(window.path(path));
-    }
-    window.frontend_url = (path) => {
-        return '{{host}}' + window.path(path);
-    }
-    window.backend_url = (path) => {
-        return '{{url_host}}' + window.path(path);
-    }
-    window.api = (path) => {
-        return '{{api_host}}' + window.path(path);
-    }
-    window.frontend_api = (path) => {
-        return '{{frontend_api_host}}' + window.path(path);
-    }
-    window.backend_api = (path) => {
-        return '{{api_host}}' + window.path(path);
-    }
 
-    window.WelineString = {
-        startsWith: (str, prefix, ignoreCase = true) => {
-            str = String(str ?? '');
-            prefix = String(prefix ?? '');
-            if (ignoreCase) {
-                str = str.toLowerCase();
-                prefix = prefix.toLowerCase();
-            }
-            return str.lastIndexOf(prefix, 0) === 0;
-        },
-        replaceStartsWith: (str, prefix, value, ignoreCase = true) => {
-            str = String(str ?? '');
-            prefix = String(prefix ?? '');
-            value = String(value ?? '');
-            if (ignoreCase) {
-                str = str.toLowerCase();
-                prefix = prefix.toLowerCase();
-            }
-            return str.replace(new RegExp('^' + prefix), value);
-        }
-    }
+ob_start();
+try {
+    $backendThemeConfig = $themeConfig->getThemeConfig();
+} catch (\Throwable) {
+    $backendThemeConfig = [];
+}
+ob_end_clean();
+if (!is_array($backendThemeConfig)) {
+    $backendThemeConfig = [];
+}
 
-    function app_path(path) {
-        let origin_path = path
-        window.site.computePath = [];
-        if (window.site.computePath[origin_path]) {
-            return window.site.computePath[origin_path]
-        }
-        // 提取类似http://localhost:8080/的host
-        if (path.indexOf('://') > 0) {
-            let hosts = path.split('://')
-            let host_0 = hosts[0] + '://'
-            let host_1 = hosts[1]
-            if (host_1.indexOf('/') > 0) {
-                let host_1s = host_1.split('/')
-                host_0 += host_1s.shift()
-                let host_1s_1 = host_1s[0]
-                if (host_1s_1) {
-                    if (getCookie('WELINE_WEBSITE_CODE') && host_1s_1.startsWith(getCookie('WELINE_WEBSITE_CODE'))) {
-                        host_1s.shift()
-                        host_1s_1 = host_1s[0]
-                    }
-                    if ('{{area}}' === host_1s_1) {
-                        host_1s.shift()
-                        host_1s_1 = host_1s[0]
-                    } else if ('{{api_area}}' === host_1s_1) {
-                        host_1s.shift()
-                        host_1s_1 = host_1s[0]
-                    } else if ('{{api_admin_area}}' === host_1s_1) {
-                        host_1s.shift()
-                        host_1s_1 = host_1s[0]
-                    }
-                    if (getCookie('WELINE_USER_CURRENCY') === host_1s_1) {
-                        host_1s.shift()
-                        host_1s_1 = host_1s[0]
-                    }
-                    if (getCookie('WELINE_USER_LANG') === host_1s_1) {
-                        host_1s.shift()
-                    }
-                }
-                path = host_0 + '/' + host_1s.join('/')
-            } else {
-                path = host_1
-            }
-        }
-        window.site.computePath[origin_path] = path;
-        return window.site.computePath[origin_path]
-    }
-
-    // path: 路径 url
-    // code: 代码 如区域代码
-    // type: 类型 website|area|currency|lang
-    function inject_path(path, code = '', type = '') {
-        if (!path) {
-            throw new Error('@lang{JS: inject_path函数path路径不允许为空！}')
-        }
-        if(!path.startsWith('/')) {
-            path = '/' + path;
-        }
-        let pre_path = getCookie('WELINE_WEBSITE_URL');
-
-        // 网站
-        if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL'))) {
-            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL'), '');
-        } else {
-            path = WelineString.replaceStartsWith(path, window.site.base_router, '');
-        }
-
-        if (WelineString.startsWith(path, '/' + getCookie('WELINE_WEBSITE_CODE'))) {
-            path = WelineString.replaceStartsWith(path, '/' + getCookie('WELINE_WEBSITE_CODE'), '/');
-        }
-        if ('website' === type && code) {
-            pre_path = code;
-        }
-        pre_path = decodeURIComponent(String(pre_path || ''));
-        if (pre_path.endsWith('/')) {
-            pre_path = pre_path.slice(0, -1);
-        }
-
-        // 区域
-        if ('{{area}}'!=='' && WelineString.startsWith(path, '/{{area}}')) {
-            if ('area' === type && code) {
-                if ('{{area}}' !== '') {
-                    path = WelineString.replaceStartsWith(path, '/{{area}}', '');
-                    pre_path += '/' + code;
-                }
-            } else {
-                path = WelineString.replaceStartsWith(path, '/{{area}}', '');
-                if ('{{area}}' !== '') {
-                    pre_path += '/{{area}}';
-                }
-            }
-        } else {
-            if ('area' === type && code) {
-                pre_path += '/' + code;
-            } else {
-                if ('{{area}}' !== '') {
-                    pre_path += '/{{area}}';
-                }
-            }
-        }
-
-        // 币种
-        if (window.site.currency && WelineString.startsWith(path, '/' + window.site.currency)) {
-            if ('currency' === type && code) {
-                path = WelineString.replaceStartsWith(path, '/' + window.site.currency, '');
-                pre_path += '/' + code;
-            } else {
-                path = WelineString.replaceStartsWith(path, '/' + window.site.currency, '');
-                pre_path += '/' + window.site.currency;
-            }
-        } else {
-            if ('currency' === type && code) {
-                pre_path += '/' + code;
-            } else if(window.site.currency){
-                pre_path += '/' + window.site.currency;
-            }
-        }
-        
-        // 语言
-        if (('{{local.code}}'!=='') && WelineString.startsWith(path, '/{{local.code}}')) {
-            if ('lang' === type && code) {
-                path = WelineString.replaceStartsWith(path, '/{{local.code}}', '');
-                pre_path += '/' + code;
-            } else {
-                path = WelineString.replaceStartsWith(path, '/{{local.code}}', '');
-                pre_path += '/{{local.code}}';
-            }
-        } else {
-            if ('lang' === type && code) {
-                pre_path += '/' + code;
-            } else if('{{local.code}}' !== '') {
-                pre_path += '/{{local.code}}';
-            }
-        }
-
-        return pre_path + path;
-    }
-
-    function select_language(lang) {
-        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_LANG', lang, 7, {path: '/{{area}}', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, lang, 'lang') + window.location.search
-    }
-
-    function select_currency(currency_code) {
-        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_CURRENCY', currency_code, 7, {path: '/', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, currency_code, 'currency') + window.location.search
-    }
-
-    function select_site(url) {
-        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_WEBSITE_URL', url, 7, {path: '/', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, url, 'website') + window.location.search
-    }
-
-    /**
-     * 通用打印函数
-     * @param data
-     */
-    function p(data) {
-        console.log(data)
-    }
-
-    /**
-     * 通用打印函数
-     * @param data
-     */
-    function d(data) {
-        console.log(data)
-    }
-
-    /**
-     * 翻译函数
-     * @param phrase
-     * @param arguments {*}
-     * @returns {*}
-     * @private
-     */
-    function phrase(phrase, arguments = null) {
-        if (window.site.i18n[phrase] !== undefined) {
-            phrase = window.site.i18n[phrase]
-        } else {
-            window.site.i18n[phrase] = phrase
-        }
-        if (arguments !== null && arguments !== undefined) {
-            switch (arguments.constructor) {
-                case String:
-                case Number:
-                    // 支持 %{} 通用占位符（与PHP一致）
-                    // 如果存在 %{1}，先转换为 %{}
-                    if (phrase.includes('%{1}')) {
-                        phrase = phrase.replace(/%\{1\}/g, '%{}');
-                    }
-                    // 替换 %{} 占位符
-                    phrase = phrase.replace(/%\{\}/g, arguments);
-                    break;
-                case Object:
-                    // 支持命名参数，如 %{name}, %{count}
-                    for (let argument_key in arguments) {
-                        let arg = arguments[argument_key];
-                        let regExp = new RegExp('%\\{' + argument_key + '\\}', 'g');
-                        phrase = phrase.replace(regExp, arg ?? '');
-                    }
-                    break;
-                case Array:
-                    // 支持数组参数，如 %{1}, %{2}
-                    for (let argument_key in arguments) {
-                        let arg = arguments[argument_key];
-                        // 数组索引从0开始，占位符从1开始
-                        let placeholderKey = 1 + parseInt(argument_key);
-                        let regExp = new RegExp('%\\{' + placeholderKey + '\\}', 'g');
-                        phrase = phrase.replace(regExp, arg ?? '');
-                    }
-                    break;
-            }
-        }
-        return phrase
-    }
-
-    /**
-     * 翻译短语函数
-     * @param word
-     * @param arguments {*}
-     * @returns {*}
-     * @private
-     */
-    function __(word, arguments = null) {
-        return phrase(word, arguments)
-    }
-
-    /**
-     * 翻译函数
-     * @param word
-     * @param arguments {*}
-     * @returns {*}
-     * @private
-     */
-    function lang(word, arguments = null) {
-        return phrase(word, arguments)
-    }
-</script>
-<?php
-$backendQueryBinUrl = Env::getFrontendQueryBinPath();
-$backendQueryWorkerUrl = (defined('DEV') && DEV)
+$deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
+$deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? 'dev') : 'dev';
+$workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? 'dev') : 'dev';
+$queryBinUrl = Env::getFrontendQueryBinPath();
+$queryWorkerUrl = DEV
     ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
     : '/static/Weline/Frontend/js/weline-api-worker.js';
-$backendDeployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
-$backendWorkerAssetVersion = ($backendDeployMeta && is_array($backendDeployMeta))
-    ? (string)(($backendDeployMeta['deploy_version'] ?? 'dev') . '-' . ($backendDeployMeta['worker_build_id'] ?? 'dev'))
-    : 'dev-dev';
-$backendQueryWorkerUrl .= '?v=' . rawurlencode($backendWorkerAssetVersion);
-$backendApiConfig = [
-    'workerUrl' => $backendQueryWorkerUrl,
-    'queryWorkerUrl' => $backendQueryWorkerUrl,
-    'endpoint' => $backendQueryBinUrl,
-    'queryBinUrl' => $backendQueryBinUrl,
-    'deployVersion' => ($backendDeployMeta && is_array($backendDeployMeta)) ? ($backendDeployMeta['deploy_version'] ?? 'dev') : 'dev',
-    'workerBuildId' => ($backendDeployMeta && is_array($backendDeployMeta)) ? ($backendDeployMeta['worker_build_id'] ?? 'dev') : 'dev',
+$queryWorkerUrl .= '?v=' . rawurlencode($deployVersion . '-' . $workerBuildId);
+$apiConfig = [
+    'workerUrl' => $queryWorkerUrl,
+    'queryWorkerUrl' => $queryWorkerUrl,
+    'endpoint' => $queryBinUrl,
+    'queryBinUrl' => $queryBinUrl,
+    'deployVersion' => $deployVersion,
+    'workerBuildId' => $workerBuildId,
     'requestTimeoutMs' => 60000,
 ];
-$backendApiConfigJson = json_encode($backendApiConfig, $jsonForScriptFlags);
-$backendApiUrl = (defined('DEV') && DEV)
-    ? '/Weline/Backend/view/statics/js/weline-api.js'
-    : '/static/Weline/Backend/js/weline-api.js';
-$backendApiUrl .= '?v=20260805-backend-sse-silent-rotate-v3';
-$backendApiBusinessUrl = (defined('DEV') && DEV)
-    ? '/Weline/Backend/view/statics/js/weline-api-business.js'
-    : '/static/Weline/Backend/js/weline-api-business.js';
-$backendApiBusinessUrl .= '?v=20260725-wrap-admin-bridge-v2';
+$runtime = [
+    'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
+    'area' => 'backend',
+    'baseUrl' => (string)$this->request->getBaseUrl(),
+    'modulesConfigUrl' => DEV
+        ? '/Weline/Backend/view/statics/base/weline.modules.js'
+        : '/static/Weline/Backend/base/weline.modules.js',
+    'modulesBaseUrl' => DEV
+        ? '/Weline/Backend/view/statics/js'
+        : '/static/Weline/Backend/js',
+    'assetVersion' => $deployVersion,
+    'deployVersion' => $deployVersion,
+    'workerBuildId' => $workerBuildId,
+    'debug' => DEV,
+    'api' => $apiConfig,
+    'url' => [
+        'origin' => $host,
+        'backendHost' => $backendHost,
+        'frontendHost' => $host,
+        'apiHost' => $apiHost,
+        'frontendApiHost' => $frontendApiHost,
+        'baseRouter' => $baseRouter,
+        'apiArea' => $frontendApiArea,
+        'apiAdminArea' => $backendApiArea,
+    ],
+    'i18n' => [
+        'dictionary' => $i18nWords,
+        'close' => (string)__('关闭'),
+        'confirm' => (string)__('确定'),
+        'cancel' => (string)__('取消'),
+        'retry' => (string)__('请重试'),
+        'formNotFound' => (string)__('未找到可提交的表单。'),
+    ],
+    'theme' => $backendThemeConfig,
+    'site' => [
+        'user_id' => $userId,
+        'csrf_token' => $csrfToken,
+        'module' => $currentModule,
+        'area' => $backendArea,
+        'host' => $host . '/',
+        'base_host' => (string)$this->request->getPrePath(),
+        'base_router' => $baseRouter,
+        'env_model' => (string)Env::system('deploy'),
+        'env_model_media_base_path_template' => $mediaTemplate,
+        'api_host' => $apiHost,
+        'frontend_api_host' => $frontendApiHost,
+        'api_area' => $frontendApiArea,
+        'api_admin_area' => $backendApiArea,
+        'url_host' => $backendHost,
+        'currency' => (string)\w_env_currency(),
+        'lang' => (string)\w_env_lang(),
+        'i18n' => $i18nWords,
+        'themeConfig' => $backendThemeConfig,
+    ],
+];
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP
+    | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
+<script type="application/json" id="weline-backend-runtime-config" data-weline-runtime-config><?= json_encode($runtime, $jsonFlags) ?: '{}' ?></script>
 <meta name="weline-worker-backend-bootstrap-slot" content="">
-<script data-no-extract="true">
-    (function() {
-        var backendApiConfig = <?= $backendApiConfigJson ?>;
-        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, backendApiConfig);
-        window.__WelineThemeConfig = window.__WelineThemeConfig || {};
-        window.__WelineThemeConfig.api = Object.assign(window.__WelineThemeConfig.api || {}, backendApiConfig);
-    })();
-</script>
-<script src="<?= htmlspecialchars($backendApiUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
-<script src="<?= htmlspecialchars($backendApiBusinessUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
+<w:js>Weline_Backend::js/runtime.js</w:js>
+<w:js>Weline_Backend::js/cookie.js</w:js>
+<w:js>Weline_Backend::js/weline-api.js</w:js>
+<w:js>Weline_Backend::js/weline-api-business.js</w:js>
+<w:js>Weline_Backend::js/weline.js</w:js>
 <hook>Weline_Backend::backend::partials::head::before</hook>

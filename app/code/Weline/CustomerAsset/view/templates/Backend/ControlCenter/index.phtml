@@ -14,33 +14,33 @@ $display = static function (mixed $value) use ($escape): string {
 };
 ?>
 <section class="commerce-control-center" data-testid="customer-asset-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
-    <div class="page-title-box d-sm-flex align-items-center justify-content-between"><h4 class="mb-sm-0"><?= $escape($title) ?></h4><span class="badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
-    <div class="alert alert-info" role="status"><?= $form === [] ? __('此页面复用真实资产账本事实和迁移一致性算法；生产迁移不在后台触发。') : __('写操作复用 CustomerAsset 的事务、幂等和追加账本服务；测试验收使用 sandbox 命名空间。') ?></div>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between"><h4 style="--w-mb-sm:0;"><?= $escape($title) ?></h4><span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
+    <div class="w-alert" role="status" data-tone="info"><?= $form === [] ? __('此页面复用真实资产账本事实和迁移一致性算法；生产迁移不在后台触发。') : __('写操作复用 CustomerAsset 的事务、幂等和追加账本服务；测试验收使用 sandbox 命名空间。') ?></div>
     <?php if ($form !== []): ?>
-        <div class="card mb-3" data-testid="customer-asset-<?= $escape($code) ?>-write-form"><div class="card-header"><h5 class="mb-0"><?= __('资产操作') ?></h5></div><div class="card-body">
-            <w:form method="post" action="@var($formActionUrl)"><div class="row g-3">
+        <div class="w-card" data-testid="customer-asset-<?= $escape($code) ?>-write-form" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= __('资产操作') ?></h5></div><div class="w-card__body">
+            <w:form method="post" action="@var($formActionUrl)"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
                 <?php if ($kind === 'credit' || $kind === 'reserve'): ?>
-                    <div class="col-md-3"><label class="form-label"><?= __('客户 ID') ?></label><input class="form-control" name="customer_id" maxlength="64" required></div>
-                    <div class="col-md-2"><label class="form-label"><?= __('网站 ID') ?></label><input class="form-control" type="number" min="0" name="website_id" value="0" required></div>
-                    <div class="col-md-2"><label class="form-label"><?= __('资产代码') ?></label><input class="form-control" name="asset_code" value="credit" maxlength="64" required></div>
-                    <div class="col-md-2"><label class="form-label"><?= __('命名空间') ?></label><select class="form-select" name="namespace"><option value="sandbox">sandbox</option><option value="live">live</option></select></div>
-                    <div class="col-md-2"><label class="form-label"><?= __('金额（分）') ?></label><input class="form-control" type="number" min="1" name="amount_minor" required></div>
-                    <div class="col-md-4"><label class="form-label"><?= __('事件 ID') ?></label><input class="form-control" name="event_id" maxlength="128" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户 ID') ?></label><input class="w-input" name="customer_id" maxlength="64" required></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('网站 ID') ?></label><input class="w-input" type="number" min="0" name="website_id" value="0" required></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('资产代码') ?></label><input class="w-input" name="asset_code" value="credit" maxlength="64" required></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('命名空间') ?></label><select class="w-select" name="namespace"><option value="sandbox">sandbox</option><option value="live">live</option></select></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('金额（分）') ?></label><input class="w-input" type="number" min="1" name="amount_minor" required></div>
+                    <div style="--w-span-md:4;"><label class="w-field__label"><?= __('事件 ID') ?></label><input class="w-input" name="event_id" maxlength="128" required></div>
                 <?php elseif ($kind === 'commit'): ?>
-                    <div class="col-md-5"><label class="form-label"><?= __('预留 ID') ?></label><input class="form-control" name="reservation_id" maxlength="64" required></div>
-                    <div class="col-md-5"><label class="form-label"><?= __('结算事件 ID') ?></label><input class="form-control" name="event_id" maxlength="128" required></div>
+                    <div style="--w-span-md:5;"><label class="w-field__label"><?= __('预留 ID') ?></label><input class="w-input" name="reservation_id" maxlength="64" required></div>
+                    <div style="--w-span-md:5;"><label class="w-field__label"><?= __('结算事件 ID') ?></label><input class="w-input" name="event_id" maxlength="128" required></div>
                 <?php else: ?>
-                    <div class="col-md-4"><label class="form-label"><?= __('已结算预留 ID') ?></label><input class="form-control" name="reservation_id" maxlength="64" required></div>
-                    <div class="col-md-2"><label class="form-label"><?= __('退回金额（分）') ?></label><input class="form-control" type="number" min="1" name="amount_minor" required></div>
-                    <div class="col-md-4"><label class="form-label"><?= __('退回事件 ID') ?></label><input class="form-control" name="event_id" maxlength="128" required></div>
+                    <div style="--w-span-md:4;"><label class="w-field__label"><?= __('已结算预留 ID') ?></label><input class="w-input" name="reservation_id" maxlength="64" required></div>
+                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('退回金额（分）') ?></label><input class="w-input" type="number" min="1" name="amount_minor" required></div>
+                    <div style="--w-span-md:4;"><label class="w-field__label"><?= __('退回事件 ID') ?></label><input class="w-input" name="event_id" maxlength="128" required></div>
                 <?php endif; ?>
-                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit" data-testid="customer-asset-<?= $escape($code) ?>-submit"><?= match ($kind) { 'credit' => __('入账'), 'reserve' => __('预留'), 'commit' => __('结算'), default => __('退回') } ?></button></div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-testid="customer-asset-<?= $escape($code) ?>-submit" data-w-width="full" data-tone="primary"><?= match ($kind) { 'credit' => __('入账'), 'reserve' => __('预留'), 'commit' => __('结算'), default => __('退回') } ?></button></div>
             </div></w:form>
         </div></div>
     <?php endif; ?>
-    <?php if ($status !== []): ?><div class="card mb-3"><div class="card-body"><div class="row g-3"><?php foreach ($status as $key => $value): ?><div class="col-md-4"><div class="text-muted small"><?= $escape($key) ?></div><div class="fw-semibold"><?= $display($value) ?></div></div><?php endforeach; ?></div></div></div><?php endif; ?>
-    <?php foreach ($datasets as $dataset): ?><div class="card mb-3"><div class="card-header"><h5 class="mb-0"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="card-body">
-        <?php if (!empty($dataset['error'])): ?><div class="alert alert-warning mb-0"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows'])): ?><div class="text-muted"><?= __('当前没有记录。') ?></div><?php else: ?>
-        <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><?php foreach (array_keys($dataset['rows'][0]) as $field): ?><th><?= $escape($field) ?></th><?php endforeach; ?></tr></thead><tbody><?php foreach ($dataset['rows'] as $row): ?><tr><?php foreach ($row as $value): ?><td><?= $display($value) ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+    <?php if ($status !== []): ?><div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body"><div class="w-grid" style="--w-gap:var(--weline-space-4);"><?php foreach ($status as $key => $value): ?><div style="--w-span-md:4;"><div class="w-text" data-tone="muted" data-size="sm"><?= $escape($key) ?></div><div class="w-text" data-weight="strong"><?= $display($value) ?></div></div><?php endforeach; ?></div></div></div><?php endif; ?>
+    <?php foreach ($datasets as $dataset): ?><div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="w-card__body">
+        <?php if (!empty($dataset['error'])): ?><div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows'])): ?><div class="w-text" data-tone="muted"><?= __('当前没有记录。') ?></div><?php else: ?>
+        <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" style="--w-mb:0;"><thead><tr><?php foreach (array_keys($dataset['rows'][0]) as $field): ?><th><?= $escape($field) ?></th><?php endforeach; ?></tr></thead><tbody><?php foreach ($dataset['rows'] as $row): ?><tr><?php foreach ($row as $value): ?><td><?= $display($value) ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
     </div></div><?php endforeach; ?>
 </section>

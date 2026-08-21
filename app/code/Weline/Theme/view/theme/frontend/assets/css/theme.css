@@ -128,7 +128,7 @@ html[data-dir="ltr"] {
     --weline-theme-loader-border-width: var(--loader-border-width, 3px);
     --weline-theme-transition-fast: var(--transition-fast, 0.16s ease);
     --weline-theme-transition-base: var(--transition-base, 0.2s ease);
-    --weline-layout-font-family: var(--font-family-base, var(--weshop-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif));
+    --weline-layout-font-family: var(--font-family-base, var(--weshop-font-family, "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif));
     --weline-layout-font-family-display: var(--font-family-display, var(--weshop-font-display, var(--weline-layout-font-family)));
     --weline-layout-font-size-xs: var(--font-size-xs, var(--weshop-font-size-xs, 0.75rem));
     --weline-layout-font-size-sm: var(--font-size-sm, var(--weshop-font-size-sm, 0.875rem));

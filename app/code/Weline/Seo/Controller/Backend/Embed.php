@@ -27,7 +27,7 @@ use Weline\Seo\Service\SuggestionService;
  * 
  * @package Weline_Seo
  */
-#[Acl('Weline_Seo::seo_embed', 'SEO嵌入式管理', 'mdi-view-compact-outline', 'SEO嵌入式管理界面', 'Weline_Backend::seo_group')]
+#[Acl('Weline_Seo::seo_embed', 'SEO嵌入式管理', 'circle', 'SEO嵌入式管理界面', 'Weline_Backend::seo_group')]
 class Embed extends BackendPageController
 {
     private ObjectManager $objectManager;
@@ -42,7 +42,7 @@ class Embed extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_embed_index', '查看嵌入式SEO管理', 'mdi-view-compact-outline', '查看嵌入式SEO管理界面')]
+    #[Acl('Weline_Seo::seo_embed_index', '查看嵌入式SEO管理', 'circle', '查看嵌入式SEO管理界面')]
     public function index(): string
     {
         // 获取过滤参数
@@ -105,7 +105,7 @@ class Embed extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_embed_detail', '查看嵌入式SEO详情', 'mdi-file-chart-outline', '查看嵌入式SEO主体详情')]
+    #[Acl('Weline_Seo::seo_embed_detail', '查看嵌入式SEO详情', 'file', '查看嵌入式SEO主体详情')]
     public function detail(): string
     {
         $subjectId = (int)$this->request->getParam('id', 0);
@@ -164,7 +164,7 @@ class Embed extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_embed_refresh', '刷新嵌入式AI建议', 'mdi-refresh', '刷新嵌入式AI建议')]
+    #[Acl('Weline_Seo::seo_embed_refresh', '刷新嵌入式AI建议', 'refresh', '刷新嵌入式AI建议')]
     public function refreshSuggestion(): string
     {
         $subjectId = (int)$this->request->getPost('subject_id', 0);
@@ -201,7 +201,7 @@ class Embed extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_embed_save', '保存嵌入式SEO主体', 'mdi-content-save', '保存嵌入式SEO主体')]
+    #[Acl('Weline_Seo::seo_embed_save', '保存嵌入式SEO主体', 'save', '保存嵌入式SEO主体')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -272,7 +272,7 @@ class Embed extends BackendPageController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::seo_embed_delete', '删除嵌入式SEO主体', 'mdi-delete', '删除嵌入式SEO主体')]
+    #[Acl('Weline_Seo::seo_embed_delete', '删除嵌入式SEO主体', 'trash', '删除嵌入式SEO主体')]
     public function delete(): string
     {
         $subjectId = (int)$this->request->getPost('subject_id', 0);

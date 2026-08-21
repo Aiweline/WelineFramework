@@ -93,18 +93,16 @@ $previewHeight = $previewHeight === false ? 50 : $previewHeight;
     </foreach>
 </div>
 <!-- 图片放大modal -->
-<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog"
-     aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-zoom-modal">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+<div class="w-dialog bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-zoom-modal" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame modal-fullscreen-md-down" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
                     <lang>预览</lang>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-zoom-close-modal"
-                        aria-label="Close"></button>
+                <button type="button" class="w-button" id="{{target}}-zoom-close-modal" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body file-target-preview-zoom-body" id="{{target}}-zoom-preview-image-body">
+            <div class="w-dialog__body file-target-preview-zoom-body" id="{{target}}-zoom-preview-image-body">
             </div>
         </div><!-- /.modal-content -->
     </div><!-- /.modal-dialog -->
@@ -169,12 +167,12 @@ $previewHeight = $previewHeight === false ? 50 : $previewHeight;
     var fileManagerPreviewEmptyMessage = <?= json_encode(__('暂无缩略图'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
     function notifyFileManagerPreviewEmpty() {
-        if (window.BackendToast && typeof window.BackendToast.warning === 'function') {
-            window.BackendToast.warning(fileManagerPreviewEmptyMessage);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.warning === 'function') {
+            window.Weline.UI.toast.warning(fileManagerPreviewEmptyMessage);
             return;
         }
-        if (window.BackendToast && typeof window.BackendToast.info === 'function') {
-            window.BackendToast.info(fileManagerPreviewEmptyMessage);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.info === 'function') {
+            window.Weline.UI.toast.info(fileManagerPreviewEmptyMessage);
             return;
         }
         console.warn(fileManagerPreviewEmptyMessage);

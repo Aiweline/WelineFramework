@@ -1,0 +1,31 @@
+@layer tokens {
+    :root {
+        --weline-theme-visitor-chart-primary: #315ee7;
+        --weline-theme-visitor-chart-primary-soft: rgba(49, 94, 231, 0.12);
+        --weline-theme-visitor-chart-success: #167a4d;
+        --weline-theme-visitor-chart-success-soft: rgba(22, 122, 77, 0.12);
+        --weline-theme-visitor-chart-neutral: #637083;
+        --weline-theme-visitor-chart-neutral-soft: rgba(99, 112, 131, 0.12);
+        --weline-theme-visitor-chart-warning: #d58a00;
+        --weline-theme-visitor-chart-danger: #d83a52;
+        --weline-theme-visitor-chart-info: #168aae;
+        --weline-theme-visitor-chart-purple: #7b54c6;
+        --weline-theme-visitor-chart-pink: #c84b8f;
+        --weline-theme-visitor-chart-orange: #d96f28;
+        --weline-theme-visitor-chart-teal: #179c82;
+        --weline-theme-visitor-dashboard-canvas: #0a0e27;
+        --weline-theme-visitor-dashboard-panel: #1a1e37;
+        --weline-theme-visitor-dashboard-text: #ffffff;
+        --weline-theme-visitor-dashboard-brand-start: #667eea;
+        --weline-theme-visitor-dashboard-brand-start-soft: rgba(102, 126, 234, 0.12);
+        --weline-theme-visitor-dashboard-brand-end: #764ba2;
+        --weline-theme-visitor-dashboard-brand-end-soft: rgba(118, 75, 162, 0.12);
+        --weline-theme-visitor-dashboard-surface: rgba(255, 255, 255, 0.1);
+        --weline-theme-visitor-dashboard-surface-subtle: rgba(255, 255, 255, 0.05);
+        --weline-theme-visitor-dashboard-border: rgba(255, 255, 255, 0.2);
+        --weline-theme-visitor-dashboard-shadow: rgba(0, 0, 0, 0.2);
+        --weline-theme-visitor-dashboard-shadow-strong: rgba(0, 0, 0, 0.3);
+        --weline-theme-visitor-dashboard-positive: #4ade80;
+        --weline-theme-visitor-dashboard-negative: #f87171;
+    }
+}

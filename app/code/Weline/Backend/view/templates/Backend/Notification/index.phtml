@@ -23,19 +23,19 @@ $queryParams = function ($overrides = []) use ($filter) {
 };
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
-                <i class="ri-notification-3-line me-2"></i><lang>通知中心</lang>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;">
+                <w:icon name="bell" size="sm"></w:icon><lang>通知中心</lang>
             </h4>
-            <div class="d-flex gap-2">
-                <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="btn btn-outline-secondary btn-sm">
-                    <i class="mdi mdi-cog me-1"></i><lang>管理订阅</lang>
+            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+                    <w:icon name="settings" size="sm"></w:icon><lang>管理订阅</lang>
                 </a>
                 <?php if (!empty($notifications)): ?>
-                <button type="button" class="btn btn-outline-primary btn-sm" data-notification-center-action="mark-all-read">
-                    <i class="mdi mdi-check-all me-1"></i><lang>全部已读</lang>
+                <button type="button" class="w-button" data-notification-center-action="mark-all-read" data-tone="primary" data-variant="outline" data-size="sm">
+                    <w:icon name="check" size="sm"></w:icon><lang>全部已读</lang>
                 </button>
                 <?php endif; ?>
             </div>
@@ -43,45 +43,44 @@ $queryParams = function ($overrides = []) use ($filter) {
     </div>
 </div>
 
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card weline-nc-filter-card">
-            <div class="card-body py-3">
-                <w:form method="get" action="@var($baseUrl)" class="weline-nc-filter-form row g-2 align-items-end">
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
+    <div style="--w-span:12;">
+        <div class="w-card weline-nc-filter-card">
+            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+                <w:form method="get" action="@var($baseUrl)" class="weline-nc-filter-form w-grid" data-align="end" style="--w-gap:var(--weline-space-2);">
                     <input type="hidden" name="page" value="1">
-                    <div class="col-12 col-md-4">
-                        <label class="form-label small mb-1"><lang>关键词</lang></label>
-                        <input type="text" name="keyword" class="form-control form-control-sm" placeholder="<?= __('搜索标题或内容') ?>"
-                               value="<?= htmlspecialchars($filter['keyword'] ?? '') ?>">
+                    <div style="--w-span:12;--w-span-md:4;">
+                        <label class="w-field__label w-text" data-size="sm" style="--w-mb:var(--weline-space-1);"><lang>关键词</lang></label>
+                        <input type="text" name="keyword" class="w-input" placeholder="<?= __('搜索标题或内容') ?>" value="<?= htmlspecialchars($filter['keyword'] ?? '') ?>" data-size="sm">
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1"><lang>类型</lang></label>
-                        <select name="type" class="form-select form-select-sm">
+                    <div style="--w-span:6;--w-span-md:2;">
+                        <label class="w-field__label w-text" data-size="sm" style="--w-mb:var(--weline-space-1);"><lang>类型</lang></label>
+                        <select name="type" class="w-select" data-size="sm">
                             <option value=""><lang>全部类型</lang></option>
                             <?php foreach ($typeOptions as $val => $label): ?>
                             <option value="<?= htmlspecialchars($val) ?>" <?= ($filter['type'] ?? '') === $val ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1"><lang>状态</lang></label>
-                        <select name="read" class="form-select form-select-sm">
+                    <div style="--w-span:6;--w-span-md:2;">
+                        <label class="w-field__label w-text" data-size="sm" style="--w-mb:var(--weline-space-1);"><lang>状态</lang></label>
+                        <select name="read" class="w-select" data-size="sm">
                             <option value="all" <?= ($filter['read'] ?? 'all') === 'all' ? 'selected' : '' ?>><?= __('全部') ?></option>
                             <option value="unread" <?= ($filter['read'] ?? '') === 'unread' ? 'selected' : '' ?>><?= __('未读') ?></option>
                             <option value="read" <?= ($filter['read'] ?? '') === 'read' ? 'selected' : '' ?>><?= __('已读') ?></option>
                         </select>
                     </div>
-                    <div class="col-12 col-md-auto d-flex gap-2">
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="ri-search-line me-1"></i><lang>搜索</lang>
+                    <div class="col-md-auto w-cluster" style="--w-span:12;--w-gap:var(--weline-space-2);">
+                        <button type="submit" class="w-button" data-tone="primary" data-size="sm">
+                            <w:icon name="search" size="sm"></w:icon><lang>搜索</lang>
                         </button>
-                        <a href="<?= $baseUrl ?>" class="btn btn-outline-secondary btn-sm"><lang>重置</lang></a>
+                        <a href="<?= $baseUrl ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"><lang>重置</lang></a>
                     </div>
                 </w:form>
             </div>
@@ -89,14 +88,14 @@ $queryParams = function ($overrides = []) use ($filter) {
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <?php if (empty($notifications)): ?>
-        <div class="card">
-            <div class="card-body">
-                <div class="weline-nc-empty text-center py-5">
-                    <i class="ri-notification-off-line weline-nc-empty-icon"></i>
-                    <p class="mt-3 mb-0"><lang>暂无通知消息</lang></p>
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="weline-nc-empty w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="bell" size="sm"></w:icon>
+                    <p style="--w-mt:var(--weline-space-4);--w-mb:0;"><lang>暂无通知消息</lang></p>
                 </div>
             </div>
         </div>
@@ -107,7 +106,7 @@ $queryParams = function ($overrides = []) use ($filter) {
             $isRead = (bool) ($notification['is_read'] ?? false);
             $typeColor = $notification['type_color'] ?? 'var(--backend-color-info)';
             $typeLabel = $notification['type_label'] ?? __('信息');
-            $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
+            $typeIcon = $notification['avatar'] ?? 'bell';
             ?>
             <a href="<?= $this->getBackendUrl('system/backend/notification/detail', ['id' => $notification['notification_id'] ?? 0]) ?>" 
                class="weline-nc-item <?= $isRead ? 'weline-nc-item-read' : '' ?>">
@@ -127,15 +126,15 @@ $queryParams = function ($overrides = []) use ($filter) {
                     <p class="weline-nc-item-text"><?= htmlspecialchars(mb_substr(strip_tags($notification['content'] ?? ''), 0, 120)) ?><?= mb_strlen(strip_tags($notification['content'] ?? '')) > 120 ? '...' : '' ?></p>
                     <div class="weline-nc-item-footer">
                         <span class="weline-nc-item-time">
-                            <i class="mdi mdi-clock-outline me-1"></i><?= $notification['notification_time'] ?? '' ?>
+                            <w:icon name="clock" size="sm"></w:icon><?= $notification['notification_time'] ?? '' ?>
                         </span>
                         <?php if (!empty($notification['topic_code'])): ?>
                         <span class="weline-nc-item-topic">
-                            <i class="mdi mdi-tag-outline me-1"></i><?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>
+                            <w:icon name="tag" size="sm"></w:icon><?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>
                         </span>
                         <?php endif; ?>
                         <span class="weline-nc-view-link">
-                            <lang>查看详情</lang> <i class="ri-arrow-right-s-line"></i>
+                            <lang>查看详情</lang> <w:icon name="arrow-right" size="sm"></w:icon>
                         </span>
                     </div>
                 </div>
@@ -150,34 +149,34 @@ $queryParams = function ($overrides = []) use ($filter) {
             return $params ? $baseUrl . '?' . http_build_query($params) : $baseUrl;
         };
         ?>
-        <div class="card mt-3">
-            <div class="card-body">
+        <div class="w-card" style="--w-mt:var(--weline-space-4);">
+            <div class="w-card__body">
                 <nav aria-label="Page navigation">
-                    <ul class="pagination justify-content-center mb-0">
+                    <ul class="w-pagination" data-justify="center" style="--w-mb:0;">
                         <?php if ($pagination['page'] > 1): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="<?= $pageLink($pagination['page'] - 1) ?>">
-                                <i class="mdi mdi-chevron-left"></i>
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="<?= $pageLink($pagination['page'] - 1) ?>">
+                                <w:icon name="chevron-left" size="sm"></w:icon>
                             </a>
                         </li>
                         <?php endif; ?>
                         
                         <?php for ($i = max(1, $pagination['page'] - 2); $i <= min($pagination['pages'], $pagination['page'] + 2); $i++): ?>
-                        <li class="page-item <?= $i === $pagination['page'] ? 'active' : '' ?>">
-                            <a class="page-link" href="<?= $pageLink($i) ?>"><?= $i ?></a>
+                        <li class="w-pagination__item <?= $i === $pagination['page'] ? 'active' : '' ?>">
+                            <a class="w-pagination__link" href="<?= $pageLink($i) ?>"><?= $i ?></a>
                         </li>
                         <?php endfor; ?>
                         
                         <?php if ($pagination['page'] < $pagination['pages']): ?>
-                        <li class="page-item">
-                            <a class="page-link" href="<?= $pageLink($pagination['page'] + 1) ?>">
-                                <i class="mdi mdi-chevron-right"></i>
+                        <li class="w-pagination__item">
+                            <a class="w-pagination__link" href="<?= $pageLink($pagination['page'] + 1) ?>">
+                                <w:icon name="chevron-right" size="sm"></w:icon>
                             </a>
                         </li>
                         <?php endif; ?>
                     </ul>
                 </nav>
-                <p class="text-center text-muted mb-0 mt-2 small">
+                <p class="w-text" data-align="center" data-tone="muted" data-size="sm" style="--w-mb:0;--w-mt:var(--weline-space-2);">
                     <lang>共</lang> <?= $pagination['total'] ?> <lang>条通知，第</lang> <?= $pagination['page'] ?> / <?= $pagination['pages'] ?> <lang>页</lang>
                 </p>
             </div>
@@ -379,7 +378,7 @@ $queryParams = function ($overrides = []) use ($filter) {
 
     var WelineNotificationCenter = {
         markAllRead: function() {
-            BackendConfirm.show('<?= __('确定要将所有通知标记为已读吗？') ?>').then(function(confirmed) {
+            Weline.UI.dialog.confirm('<?= __('确定要将所有通知标记为已读吗？') ?>').then(function(confirmed) {
                 if (!confirmed) return;
 
                 var url = '<?= $this->getBackendUrl('system/backend/notification/markAllRead') ?>';
@@ -388,15 +387,15 @@ $queryParams = function ($overrides = []) use ($filter) {
                 .then(function(res) {
                     var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
-                        BackendToast.success(data.message || '<?= __('已标记全部已读') ?>');
+                        Weline.UI.toast.success(data.message || '<?= __('已标记全部已读') ?>');
                         setTimeout(function() { window.location.reload(); }, 800);
                     } else {
-                        BackendToast.error(data.message || '<?= __('操作失败') ?>');
+                        Weline.UI.toast.error(data.message || '<?= __('操作失败') ?>');
                     }
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
-                    BackendToast.error('<?= __('网络错误，请重试') ?>');
+                    Weline.UI.toast.error('<?= __('网络错误，请重试') ?>');
                 });
             });
         }

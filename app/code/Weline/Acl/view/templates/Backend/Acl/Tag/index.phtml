@@ -345,15 +345,15 @@ foreach ($tags as $row) {
 }
 </style>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><lang>权限标签</lang></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><span><lang>系统配置</lang></span></li>
-                    <li class="breadcrumb-item"><span><lang>权限管理</lang></span></li>
-                    <li class="breadcrumb-item active"><lang>权限标签</lang></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><lang>权限标签</lang></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>系统配置</lang></span></li>
+                    <li class="w-breadcrumb__item"><span><lang>权限管理</lang></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>权限标签</lang></li>
                 </ol>
             </div>
         </div>
@@ -362,40 +362,40 @@ foreach ($tags as $row) {
 
 <div class="weline-acl-tag-page" data-testid="acl-tag-management">
     <div class="weline-acl-tag-header">
-        <h2><i class="mdi mdi-tag-multiple-outline"></i> <lang>ACL 标签管理</lang></h2>
+        <h2><w:icon name="tag" size="sm"></w:icon> <lang>ACL 标签管理</lang></h2>
         <p class="weline-acl-tag-header-subtitle">
             <lang>标签从 source_id 自动发现；可编辑元数据名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。</lang>
         </p>
         <div class="weline-acl-tag-header-actions">
             <a href="@backend-url('*/backend/acl/by-tag')" class="weline-acl-tag-header-btn">
-                <i class="mdi mdi-tag-search-outline"></i> <lang>标签资源</lang>
+                <w:icon name="search" size="sm"></w:icon> <lang>标签资源</lang>
             </a>
             <a href="@backend-url('*/backend/acl')" class="weline-acl-tag-header-btn">
-                <i class="mdi mdi-puzzle-outline"></i> <lang>模块资源</lang>
+                <w:icon name="puzzle" size="sm"></w:icon> <lang>模块资源</lang>
             </a>
             <a href="@backend-url('*/backend/acl/role')" class="weline-acl-tag-header-btn">
-                <i class="mdi mdi-account-group-outline"></i> <lang>角色管理</lang>
+                <w:icon name="users" size="sm"></w:icon> <lang>角色管理</lang>
             </a>
         </div>
     </div>
 
     <div class="weline-acl-tag-stats">
         <div class="weline-acl-tag-stat">
-            <div class="weline-acl-tag-stat-icon amber"><i class="mdi mdi-tag-multiple"></i></div>
+            <div class="weline-acl-tag-stat-icon amber"><w:icon name="tag" size="sm"></w:icon></div>
             <div>
                 <div class="weline-acl-tag-stat-value"><?php echo $tagCount; ?></div>
                 <div class="weline-acl-tag-stat-label"><lang>发现标签</lang></div>
             </div>
         </div>
         <div class="weline-acl-tag-stat">
-            <div class="weline-acl-tag-stat-icon green"><i class="mdi mdi-database-edit-outline"></i></div>
+            <div class="weline-acl-tag-stat-icon green"><w:icon name="edit" size="sm"></w:icon></div>
             <div>
                 <div class="weline-acl-tag-stat-value"><?php echo $withMeta; ?></div>
                 <div class="weline-acl-tag-stat-label"><lang>已配置元数据</lang></div>
             </div>
         </div>
         <div class="weline-acl-tag-stat">
-            <div class="weline-acl-tag-stat-icon blue"><i class="mdi mdi-key-variant"></i></div>
+            <div class="weline-acl-tag-stat-icon blue"><w:icon name="key" size="sm"></w:icon></div>
             <div>
                 <div class="weline-acl-tag-stat-value"><?php echo $totalResources; ?></div>
                 <div class="weline-acl-tag-stat-label"><lang>关联资源数</lang></div>
@@ -406,7 +406,7 @@ foreach ($tags as $row) {
     <div class="weline-acl-tag-card">
         <div class="weline-acl-tag-card-header">
             <h5 class="weline-acl-tag-card-title">
-                <i class="mdi mdi-table"></i>
+                <w:icon name="table" size="sm"></w:icon>
                 <lang>标签元数据列表</lang>
             </h5>
             <span style="font-size: 0.85rem; color: #6c757d;">
@@ -416,7 +416,7 @@ foreach ($tags as $row) {
 
         <?php if (!$tags): ?>
             <div class="weline-acl-tag-empty">
-                <i class="mdi mdi-tag-off-outline"></i>
+                <w:icon name="circle" size="sm"></w:icon>
                 <p><lang>暂无发现的标签</lang></p>
             </div>
         <?php else: ?>
@@ -479,7 +479,7 @@ foreach ($tags as $row) {
                             <td>
                                 <div class="weline-acl-tag-actions">
                                     <button class="weline-acl-tag-btn weline-acl-tag-btn-save" type="submit" form="<?php echo htmlspecialchars($formId); ?>">
-                                        <i class="mdi mdi-content-save-outline"></i> <lang>保存</lang>
+                                        <w:icon name="save" size="sm"></w:icon> <lang>保存</lang>
                                     </button>
                                     <button
                                         class="weline-acl-tag-btn weline-acl-tag-btn-delete"
@@ -490,7 +490,7 @@ foreach ($tags as $row) {
                                         <?php echo $resourceCount > 0 ? 'disabled' : ''; ?>
                                         title="<?php echo $resourceCount > 0 ? htmlspecialchars(__('仍有资源引用，无法删除')) : htmlspecialchars(__('删除元数据')); ?>"
                                     >
-                                        <i class="mdi mdi-delete-outline"></i> <lang>删除</lang>
+                                        <w:icon name="trash" size="sm"></w:icon> <lang>删除</lang>
                                     </button>
                                 </div>
                             </td>

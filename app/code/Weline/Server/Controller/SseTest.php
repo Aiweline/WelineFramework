@@ -75,7 +75,7 @@ class SseTest extends FrontendController
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <h1>🌊 WLS SSE 流式响应测试</h1>
         <div class="info">
             <p><strong>测试说明：</strong></p>

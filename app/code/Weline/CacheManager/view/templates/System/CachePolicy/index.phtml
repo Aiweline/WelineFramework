@@ -62,12 +62,12 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
 </style>
 
 <div class="cache-policy-page">
-    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-        <h4 class="mb-sm-0"><?= __('缓存策略') ?></h4>
-        <div class="page-title-right">
-            <ol class="breadcrumb m-0">
-                <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin/system/cache') ?>"><?= __('缓存管理') ?></a></li>
-                <li class="breadcrumb-item active"><?= __('缓存策略') ?></li>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <h4 style="--w-mb-sm:0;"><?= __('缓存策略') ?></h4>
+        <div class="w-cluster">
+            <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('admin/system/cache') ?>"><?= __('缓存管理') ?></a></li>
+                <li class="w-breadcrumb__item" data-state="active"><?= __('缓存策略') ?></li>
             </ol>
         </div>
     </div>

@@ -36,7 +36,7 @@ class AsyncUpdate extends BaseController
         return FormKey::key_name;
     }
     
-    #[AclAttribute('Weline_I18n::i18n_countries_async_start', '启动国家数据异步更新', 'mdi mdi-refresh', '启动国家地区异步更新', 'Weline_I18n::i18n_countries', accessMode: AccessMode::EDIT)]
+    #[AclAttribute('Weline_I18n::i18n_countries_async_start', '启动国家数据异步更新', 'refresh', '启动国家地区异步更新', 'Weline_I18n::i18n_countries', accessMode: AccessMode::EDIT)]
     public function index()
     {
         try {
@@ -94,7 +94,7 @@ class AsyncUpdate extends BaseController
     /**
      * 执行异步更新任务
      */
-    #[AclAttribute('Weline_I18n::i18n_countries_async_execute', '执行国家数据异步更新', 'mdi mdi-refresh', '执行国家地区异步更新', 'Weline_I18n::i18n_countries', accessMode: AccessMode::EDIT)]
+    #[AclAttribute('Weline_I18n::i18n_countries_async_execute', '执行国家数据异步更新', 'refresh', '执行国家地区异步更新', 'Weline_I18n::i18n_countries', accessMode: AccessMode::EDIT)]
     public function execute()
     {
         try {
@@ -144,7 +144,7 @@ class AsyncUpdate extends BaseController
     /**
      * 获取更新进度
      */
-    #[AclAttribute('Weline_I18n::i18n_countries_async_progress', '查看国家数据更新进度', 'mdi mdi-progress-clock', '查看国家地区异步更新进度', 'Weline_I18n::i18n_countries', accessMode: AccessMode::READ)]
+    #[AclAttribute('Weline_I18n::i18n_countries_async_progress', '查看国家数据更新进度', 'clock', '查看国家地区异步更新进度', 'Weline_I18n::i18n_countries', accessMode: AccessMode::READ)]
     public function progress()
     {
         try {

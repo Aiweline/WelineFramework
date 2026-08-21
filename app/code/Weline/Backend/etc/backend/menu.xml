@@ -3,123 +3,123 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
     <!-- ==================== 1. 仪表盘 ==================== -->
-    <menu source="Weline_Backend::dashboard" name="dashboard" title="仪表盘" action="weline_dashboard/backend/dashboard" icon="mdi mdi-monitor-dashboard" order="0"/>
+    <menu source="Weline_Backend::dashboard" name="dashboard" title="仪表盘" action="weline_dashboard/backend/dashboard" icon="grid" order="0"/>
     
     <!-- ==================== 2. 内容管理 ==================== -->
-    <menu source="Weline_Backend::content_management" name="content_management" title="内容管理" icon="mdi mdi-file-document-multiple-outline" order="1000">
-        <menu source="Weline_Backend::cms_group" name="cms_group" title="内容系统" icon="mdi mdi-text-box-outline" order="200"/>
-        <menu source="Weline_Backend::blog_group" name="blog_group" title="博客管理" icon="mdi mdi-post-outline" order="300"/>
-        <menu source="Weline_Backend::media_group" name="media_group" title="媒体管理" icon="mdi mdi-folder-image" order="400"/>
+    <menu source="Weline_Backend::content_management" name="content_management" title="内容管理" icon="file" order="1000">
+        <menu source="Weline_Backend::cms_group" name="cms_group" title="内容系统" icon="box" order="200"/>
+        <menu source="Weline_Backend::blog_group" name="blog_group" title="博客管理" icon="circle" order="300"/>
+        <menu source="Weline_Backend::media_group" name="media_group" title="媒体管理" icon="image" order="400"/>
     </menu>
     
     <!-- ==================== 3. 业务运营 ==================== -->
-    <menu source="Weline_Backend::business_operations" name="business_operations" title="业务运营" icon="mdi mdi-store-outline" order="2000">
-        <menu source="Weline_Backend::shop_group" name="shop_group" title="商城管理" icon="mdi mdi-shopping-outline" order="100"/>
-        <menu source="Weline_Backend::order_group" name="order_group" title="订单管理" icon="mdi mdi-clipboard-list-outline" order="200"/>
-        <menu source="Weline_Backend::customer_group" name="customer_group" title="客户管理" icon="mdi mdi-account-group-outline" order="300"/>
-        <menu source="Weline_Backend::marketing_group" name="marketing_group" title="营销管理" icon="mdi mdi-bullhorn-outline" order="400"/>
-        <menu source="Weline_Backend::shipping_group" name="shipping_group" title="配送管理" icon="mdi mdi-truck-delivery-outline" order="500"/>
-        <menu source="Weline_Backend::payment_group" name="payment_group" title="支付管理" icon="mdi mdi-credit-card-outline" order="600"/>
-        <menu source="Weline_Backend::currency_group" name="currency_group" title="货币管理" icon="mdi mdi-currency-usd" order="700"/>
+    <menu source="Weline_Backend::business_operations" name="business_operations" title="业务运营" icon="store" order="2000">
+        <menu source="Weline_Backend::shop_group" name="shop_group" title="商城管理" icon="pin" order="100"/>
+        <menu source="Weline_Backend::order_group" name="order_group" title="订单管理" icon="list" order="200"/>
+        <menu source="Weline_Backend::customer_group" name="customer_group" title="客户管理" icon="users" order="300"/>
+        <menu source="Weline_Backend::marketing_group" name="marketing_group" title="营销管理" icon="circle" order="400"/>
+        <menu source="Weline_Backend::shipping_group" name="shipping_group" title="配送管理" icon="truck" order="500"/>
+        <menu source="Weline_Backend::payment_group" name="payment_group" title="支付管理" icon="edit" order="600"/>
+        <menu source="Weline_Backend::currency_group" name="currency_group" title="货币管理" icon="circle" order="700"/>
         <menu source="Weline_Backend::contact" name="contact" title="联系人"
               action="system/backend/contact/index" parent="Weline_Backend::customer_group"
-              icon="mdi mdi-account-box-outline" order="20"/>
+              icon="user" order="20"/>
         <menu source="Weline_Backend::commerce:catalog:group"
               name="commerce_catalog_group"
               title="商品与目录"
-              icon="mdi mdi-package-variant-closed"
+              icon="close"
               order="800"/>
         <menu source="Weline_Backend::commerce:inventory:group"
               name="commerce_inventory_group"
               title="库存与仓储"
-              icon="mdi mdi-warehouse"
+              icon="circle"
               order="810"/>
         <menu source="Weline_Backend::commerce:tax-search:group"
               name="commerce_tax_search_group"
               title="税务与搜索"
-              icon="mdi mdi-file-search-outline"
+              icon="search"
               order="820"/>
         <menu source="Weline_Backend::commerce:partner:group"
               name="commerce_partner_group"
               title="合作伙伴"
-              icon="mdi mdi-account-switch-outline"
+              icon="user"
               order="830"/>
         <menu source="Weline_Backend::commerce:operations:group"
               name="commerce_operations_group"
               title="运营工具"
-              icon="mdi mdi-monitor-dashboard"
+              icon="grid"
               order="840">
             <menu source="Weline_Backend::commerce:operations:migration-diagnostics"
                   name="commerce_migration_diagnostics"
                   title="迁移诊断"
                   action="system/backend/operations-diagnostics/migration"
-                  icon="mdi mdi-database-search-outline"
+                  icon="search"
                   order="90"/>
             <menu source="Weline_Backend::commerce:operations:release-diagnostics"
                   name="commerce_release_diagnostics"
                   title="发布诊断"
                   action="system/backend/operations-diagnostics/release"
-                  icon="mdi mdi-rocket-launch-outline"
+                  icon="circle"
                   order="100"/>
         </menu>
     </menu>
     
     <!-- ==================== 4. 系统管理 ==================== -->
-    <menu source="Weline_Backend::system_management" name="system_management" title="系统管理" icon="mdi mdi-cog-outline" order="3000">
+    <menu source="Weline_Backend::system_management" name="system_management" title="系统管理" icon="settings" order="3000">
         <!-- 用户与权限 -->
-        <menu source="Weline_Backend::user_permission_group" name="user_permission_group" title="用户与权限" icon="mdi mdi-shield-account-outline" order="100">
-            <menu source="Weline_Backend::user_management" name="user_management" title="用户管理" icon="mdi mdi-account-group-outline" order="10"/>
+        <menu source="Weline_Backend::user_permission_group" name="user_permission_group" title="用户与权限" icon="user" order="100">
+            <menu source="Weline_Backend::user_management" name="user_management" title="用户管理" icon="users" order="10"/>
         </menu>
         
         <!-- 系统配置 -->
-        <menu source="Weline_Backend::system_config_group" name="system_config_group" title="系统配置" icon="mdi mdi-tune" order="200">
-            <menu source="Weline_Backend::basic_settings" name="basic_settings" title="基础设置" action="*/backend/settings/basic" icon="mdi mdi-cog" order="10"/>
-            <menu source="Weline_Backend::backend_config" name="backend_config" title="外观与 Logo" action="*/backend/config" icon="mdi mdi-image-outline" order="20"/>
-            <menu source="Weline_Backend::email_settings" name="email_settings" title="邮件设置" action="*/backend/settings/email" icon="mdi mdi-email-outline" order="30"/>
-            <menu source="Weline_Backend::storage_settings" name="storage_settings" title="存储设置" action="*/backend/settings/storage" icon="mdi mdi-folder-cog-outline" order="40"/>
-            <menu source="Weline_Backend::notification_settings" name="notification_settings" title="消息通知" icon="mdi mdi-bell-outline" order="50">
-                <menu source="Weline_Backend::notification" name="notification" title="通知中心" action="*/backend/notification" icon="mdi mdi-bell-badge-outline" order="5"/>
-                <menu source="Weline_Backend::notification_subscription" name="notification_subscription" title="我的订阅" action="*/backend/notificationsubscription" icon="mdi mdi-bell-cog-outline" order="10"/>
-                <menu source="Weline_Backend::notification_channel" name="notification_channel" title="渠道配置" action="*/backend/notificationchannel" icon="mdi mdi-tune-variant" order="30"/>
+        <menu source="Weline_Backend::system_config_group" name="system_config_group" title="系统配置" icon="circle" order="200">
+            <menu source="Weline_Backend::basic_settings" name="basic_settings" title="基础设置" action="*/backend/settings/basic" icon="settings" order="10"/>
+            <menu source="Weline_Backend::backend_config" name="backend_config" title="外观与 Logo" action="*/backend/config" icon="image" order="20"/>
+            <menu source="Weline_Backend::email_settings" name="email_settings" title="邮件设置" action="*/backend/settings/email" icon="mail" order="30"/>
+            <menu source="Weline_Backend::storage_settings" name="storage_settings" title="存储设置" action="*/backend/settings/storage" icon="settings" order="40"/>
+            <menu source="Weline_Backend::notification_settings" name="notification_settings" title="消息通知" icon="bell" order="50">
+                <menu source="Weline_Backend::notification" name="notification" title="通知中心" action="*/backend/notification" icon="bell" order="5"/>
+                <menu source="Weline_Backend::notification_subscription" name="notification_subscription" title="我的订阅" action="*/backend/notificationsubscription" icon="settings" order="10"/>
+                <menu source="Weline_Backend::notification_channel" name="notification_channel" title="渠道配置" action="*/backend/notificationchannel" icon="circle" order="30"/>
             </menu>
         </menu>
         
         <!-- 系统服务 -->
-        <menu source="Weline_Backend::system_service_group" name="system_service_group" title="系统服务" icon="mdi mdi-server" order="300"/>
-        <menu source="Weline_Framework::system_service_group" name="framework_system_service_group" title="框架服务" parent="Weline_Backend::system_service_group" icon="mdi mdi-cube-outline" order="10"/>
+        <menu source="Weline_Backend::system_service_group" name="system_service_group" title="系统服务" icon="server" order="300"/>
+        <menu source="Weline_Framework::system_service_group" name="framework_system_service_group" title="框架服务" parent="Weline_Backend::system_service_group" icon="box" order="10"/>
         
         <!-- 系统维护 -->
-        <menu source="Weline_Backend::system_maintenance" name="system_maintenance" title="系统维护" icon="mdi mdi-tools" order="400">
-            <menu source="Weline_Backend::system_maintenance_mode" name="system_maintenance_mode" title="维护模式" action="*/backend/maintenance" icon="mdi mdi-wrench-outline" order="10"/>
-            <menu source="Weline_Backend::system_backup" name="system_backup" title="系统备份" action="*/backend/backup" icon="mdi mdi-backup-restore" order="20"/>
-            <menu source="Weline_Backend::system_monitor" name="system_monitor" title="系统监控" action="*/backend/monitor" icon="mdi mdi-monitor-dashboard" order="30"/>
-            <menu source="Weline_Backend::access_log" name="access_log" title="访问日志" action="*/backend/access-log" icon="mdi mdi-file-document-outline" order="40"/>
+        <menu source="Weline_Backend::system_maintenance" name="system_maintenance" title="系统维护" icon="circle" order="400">
+            <menu source="Weline_Backend::system_maintenance_mode" name="system_maintenance_mode" title="维护模式" action="*/backend/maintenance" icon="settings" order="10"/>
+            <menu source="Weline_Backend::system_backup" name="system_backup" title="系统备份" action="*/backend/backup" icon="store" order="20"/>
+            <menu source="Weline_Backend::system_monitor" name="system_monitor" title="系统监控" action="*/backend/monitor" icon="grid" order="30"/>
+            <menu source="Weline_Backend::access_log" name="access_log" title="访问日志" action="*/backend/access-log" icon="file" order="40"/>
         </menu>
         
         <!-- 国际化 -->
-        <menu source="Weline_Backend::i18n_group" name="i18n_group" title="国际化" icon="mdi mdi-translate" order="500"/>
+        <menu source="Weline_Backend::i18n_group" name="i18n_group" title="国际化" icon="language" order="500"/>
         
         <!-- 菜单与路由 -->
-        <menu source="Weline_Backend::menu_route_group" name="menu_route_group" title="菜单与路由" icon="mdi mdi-sitemap-outline" order="600"/>
+        <menu source="Weline_Backend::menu_route_group" name="menu_route_group" title="菜单与路由" icon="tree" order="600"/>
     </menu>
     
     <!-- ==================== 5. 应用工具 ==================== -->
-    <menu source="Weline_Backend::apps_tools" name="apps_tools" title="应用与扩展" icon="mdi mdi-puzzle-outline" order="2900">
-        <menu source="Weline_Backend::ai_group" name="ai_group" title="AI 中心" icon="mdi mdi-robot-outline" order="200"/>
-        <menu source="Weline_Backend::seo_group" name="seo_group" title="SEO 管理" icon="mdi mdi-search-web" order="300"/>
-        <menu source="Weline_Backend::data_tools_group" name="data_tools_group" title="数据工具" icon="mdi mdi-database-cog-outline" order="400"/>
-        <menu source="Weline_Backend::other_tools_group" name="other_tools_group" title="其他工具" icon="mdi mdi-toolbox-outline" order="900"/>
+    <menu source="Weline_Backend::apps_tools" name="apps_tools" title="应用与扩展" icon="circle" order="2900">
+        <menu source="Weline_Backend::ai_group" name="ai_group" title="AI 中心" icon="circle" order="200"/>
+        <menu source="Weline_Backend::seo_group" name="seo_group" title="SEO 管理" icon="search" order="300"/>
+        <menu source="Weline_Backend::data_tools_group" name="data_tools_group" title="数据工具" icon="settings" order="400"/>
+        <menu source="Weline_Backend::other_tools_group" name="other_tools_group" title="其他工具" icon="box" order="900"/>
     </menu>
     
     <!-- ==================== 6. 开发者 ==================== -->
-    <menu source="Weline_Backend::developer" name="developer" title="开发者" icon="mdi mdi-code-tags" order="9000">
-        <menu source="Weline_Backend::dev_workspace" name="dev_workspace" title="开发工作台" icon="mdi mdi-console" order="100"/>
-        <menu source="Weline_Backend::event_extend_group" name="event_extend_group" title="事件与扩展" icon="mdi mdi-lightning-bolt-outline" order="200"/>
-        <menu source="Weline_Backend::template_management" name="template_management" title="主题模板" icon="mdi mdi-palette-swatch-outline" order="300">
-            <menu source="Weline_Backend::origin_template" name="origin_template" title="后端模板库" icon="mdi mdi-view-module-outline" order="50"/>
+    <menu source="Weline_Backend::developer" name="developer" title="开发者" icon="code" order="9000">
+        <menu source="Weline_Backend::dev_workspace" name="dev_workspace" title="开发工作台" icon="terminal" order="100"/>
+        <menu source="Weline_Backend::event_extend_group" name="event_extend_group" title="事件与扩展" icon="circle" order="200"/>
+        <menu source="Weline_Backend::template_management" name="template_management" title="主题模板" icon="palette" order="300">
+            <menu source="Weline_Backend::origin_template" name="origin_template" title="后端模板库" icon="circle" order="50"/>
         </menu>
-        <menu source="Weline_Backend::module_group" name="module_group" title="模组管理" icon="mdi mdi-package-variant-closed" order="400"/>
-        <menu source="Weline_Backend::editor_component_group" name="editor_component_group" title="编辑器与组件" icon="mdi mdi-widgets-outline" order="500"/>
-        <menu source="Weline_Backend::debug_tools" name="debug_tools" title="调试工具" icon="mdi mdi-bug-outline" order="900"/>
+        <menu source="Weline_Backend::module_group" name="module_group" title="模组管理" icon="close" order="400"/>
+        <menu source="Weline_Backend::editor_component_group" name="editor_component_group" title="编辑器与组件" icon="circle" order="500"/>
+        <menu source="Weline_Backend::debug_tools" name="debug_tools" title="调试工具" icon="circle" order="900"/>
     </menu>
 </menus>

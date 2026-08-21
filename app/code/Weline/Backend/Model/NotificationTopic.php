@@ -27,7 +27,7 @@ class NotificationTopic extends Model
     public const schema_fields_description = 'description';
     #[Col(type: 'varchar', length: 100, default: '', comment: '来源模块')]
     public const schema_fields_module = 'module';
-    #[Col(type: 'varchar', length: 100, default: 'ri-notification-line', comment: '图标')]
+    #[Col(type: 'varchar', length: 100, default: 'bell', comment: 'Weline 语义图标名')]
     public const schema_fields_icon = 'icon';
     #[Col(type: 'varchar', length: 20, default: '#50a5f1', comment: '主题色')]
     public const schema_fields_color = 'color';

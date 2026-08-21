@@ -8,7 +8,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Trash\Service\TrashService;
 
-#[Acl('Weline_Trash::item', '回收站', 'mdi mdi-delete-restore', '管理回收站记录', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Trash::item', '回收站', 'trash', '管理回收站记录', 'Weline_Backend::system_maintenance')]
 class Item extends BackendController
 {
     public function __construct(
@@ -16,7 +16,7 @@ class Item extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Trash::item_listing', '回收站列表', 'mdi mdi-format-list-bulleted', '查看回收站记录')]
+    #[Acl('Weline_Trash::item_listing', '回收站列表', 'list', '查看回收站记录')]
     public function getListing(): string
     {
         $params = $this->request->getParams();
@@ -38,7 +38,7 @@ class Item extends BackendController
         return $this->fetch('listing');
     }
 
-    #[Acl('Weline_Trash::item_detail', '回收站详情', 'mdi mdi-database-eye-outline', '查看回收站原始数据')]
+    #[Acl('Weline_Trash::item_detail', '回收站详情', 'eye', '查看回收站原始数据')]
     public function getDetail(): string
     {
         $trashId = (int)$this->request->getGet('trash_id', $this->request->getGet('id', 0));
@@ -52,7 +52,7 @@ class Item extends BackendController
         return $this->fetch('detail');
     }
 
-    #[Acl('Weline_Trash::item_restore', '恢复回收站记录', 'mdi mdi-restore', '恢复回收站记录')]
+    #[Acl('Weline_Trash::item_restore', '恢复回收站记录', 'store', '恢复回收站记录')]
     public function postRestore(): string
     {
         $data = $this->collectRequestData();
@@ -76,7 +76,7 @@ class Item extends BackendController
             : $this->redirect('trash/backend/item/listing');
     }
 
-    #[Acl('Weline_Trash::item_purge', '永久清理回收站记录', 'mdi mdi-delete-forever-outline', '永久清理回收站记录')]
+    #[Acl('Weline_Trash::item_purge', '永久清理回收站记录', 'trash', '永久清理回收站记录')]
     public function postPurge(): string
     {
         $data = $this->collectRequestData();

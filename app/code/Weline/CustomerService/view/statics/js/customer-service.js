@@ -84,8 +84,8 @@ const CustomerServiceWidget = (function() {
             return;
         }
 
-        if (window.Weline && window.Weline.Toast && typeof window.Weline.Toast.show === 'function') {
-            window.Weline.Toast.show(message, type);
+        if (window.Weline && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
+            window.Weline.UI.toast.show(message, {tone: type || 'info'});
             return;
         }
 
@@ -1079,4 +1079,3 @@ const CustomerServiceWidget = (function() {
         sendBindEmail
     };
 })();
-

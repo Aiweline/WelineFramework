@@ -3266,8 +3266,12 @@ class ServerInstanceManager
                 },
                 waitTimeoutSeconds: \min(300.0, $timeout),
             );
-        } catch (\Throwable) {
-            return false;
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                $label . ' atomic update failed: ' . $throwable->getMessage(),
+                0,
+                $throwable,
+            );
         }
     }
 

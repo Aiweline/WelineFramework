@@ -16,7 +16,7 @@ use Weline\Websites\Service\WebsiteBackupService;
  * 功能：
  * - 支持数据库和文件备份
  */
-#[Acl('Weline_Websites::website_backup', '网站备份', 'mdi-backup-restore', '网站备份', 'Weline_Websites::website_service')]
+#[Acl('Weline_Websites::website_backup', '网站备份', 'store', '网站备份', 'Weline_Websites::website_service')]
 class Backup extends BackendController
 {
     private WebsiteBackupService $backupService;
@@ -32,7 +32,7 @@ class Backup extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Websites::website_backup_index', '查看网站备份', 'mdi-backup-restore', '查看网站备份')]
+    #[Acl('Weline_Websites::website_backup_index', '查看网站备份', 'store', '查看网站备份')]
     public function index(): string
     {
         try {
@@ -61,7 +61,7 @@ class Backup extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Websites::website_backup_create', '创建网站备份', 'mdi-content-save', '创建网站备份')]
+    #[Acl('Weline_Websites::website_backup_create', '创建网站备份', 'save', '创建网站备份')]
     public function create(): string
     {
         $backupAction = (string)($this->request->getPost('backup_action', $this->request->getGet('backup_action', 'create')) ?: 'create');

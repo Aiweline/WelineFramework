@@ -46,7 +46,7 @@ class Compiler
      * @param string $icon 图标名称
      * @return void
      */
-    private function sendSystemMessage(string $title, string $content, string $icon = 'ri-error-warning-line'): void
+    private function sendSystemMessage(string $title, string $content, string $icon = 'warning'): void
     {
         try {
             w_msg(
@@ -100,7 +100,7 @@ class Compiler
             $this->sendSystemMessage(
                 __('Sticker 编译失败'),
                 __('未找到 Sticker 规则') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}",
-                'ri-error-warning-line'
+                'warning'
             );
             return null;
         }
@@ -131,7 +131,7 @@ class Compiler
             $this->sendSystemMessage(
                 __('Sticker 编译失败'),
                 __('没有有效的 actions') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}\n" . __('可能原因') . ": " . __('Sticker 文件解析失败或 actions 为空'),
-                'ri-error-warning-line'
+                'warning'
             );
             return null;
         }
@@ -149,7 +149,7 @@ class Compiler
                 $this->sendSystemMessage(
                     __('Sticker 编译警告'),
                     __('actions 为空，跳过该 Sticker') . "\n\n" . __('Sticker 文件') . ": {$stickerFile}\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}",
-                    'ri-alert-line'
+                    'warning'
                 );
                 continue;
             }
@@ -373,7 +373,7 @@ class Compiler
                 __('来源模块') . ": {$sourceModule}\n" . 
                 __('Sticker 文件') . ": {$stickerFile}\n" . 
                 __('目标代码') . ": " . ($targetCode ?: __('（空）')),
-                'ri-search-line'
+                'search'
             );
         } catch (\Exception $e) {
             w_log_error("记录 Sticker 日志失败: " . $e->getMessage());
@@ -414,7 +414,7 @@ class Compiler
                 __('Sticker 文件') . ": {$stickerFile}\n" . 
                 __('位置参数') . ": {$position}\n" . 
                 __('实际匹配数') . ": {$totalMatches}",
-                'ri-alert-line'
+                'warning'
             );
         } catch (\Exception $e) {
             w_log_error("记录 Sticker 日志失败: " . $e->getMessage());
@@ -456,7 +456,7 @@ class Compiler
                     $this->sendSystemMessage(
                         __('Sticker 编译失败'),
                         __('源文件不存在') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}\n" . __('源文件路径') . ": {$sourceFilePath}",
-                        'ri-error-warning-line'
+                        'warning'
                     );
                     continue;
                 }
@@ -487,7 +487,7 @@ class Compiler
                     $this->sendSystemMessage(
                         __('Sticker 编译异常'),
                         __('编译过程中发生异常') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}\n" . __('异常信息') . ": " . $e->getMessage(),
-                        'ri-error-warning-line'
+                        'warning'
                     );
                 }
             }

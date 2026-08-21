@@ -24,7 +24,7 @@ class Detail extends Block
         $hookName = $this->getData('hook_name');
         
         if (!$hook) {
-            return '<div class="alert alert-warning">Hook 不存在</div>';
+            return '<div class="w-alert" data-tone="warning">Hook 不存在</div>';
         }
         
         // Block 的 fetchHtml 方法会使用 'blocks' 类型查找模板，但我们的模板在 'templates' 目录

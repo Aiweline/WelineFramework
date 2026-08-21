@@ -69,7 +69,7 @@ $widgetId = 'faq-accordion-' . uniqid();
     <?php if ($searchEnabled): ?>
         <div class="faq-search">
             <input type="text" class="faq-search-input" placeholder="<?= __('搜索问题...') ?>">
-            <i class="ri-search-line"></i>
+            <w:icon name="search" size="sm"></w:icon>
         </div>
     <?php endif; ?>
     
@@ -79,7 +79,7 @@ $widgetId = 'faq-accordion-' . uniqid();
                 <button class="faq-question" type="button">
                     <span class="question-text"><?= htmlspecialchars($faq['question']) ?></span>
                     <span class="question-icon">
-                        <i class="ri-add-line"></i>
+                        <w:icon name="plus" size="sm"></w:icon>
                     </span>
                 </button>
                 <div class="faq-answer" <?= ($expandFirst && $index === 0) ? '' : 'style="display: none;"' ?>>

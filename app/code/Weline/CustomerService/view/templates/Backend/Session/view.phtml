@@ -8,7 +8,7 @@ $messages = $this->getData('messages') ?? [];
 <div class="customer-service-session-view">
     <div class="page-header">
         <h1><?= __('会话详情') ?></h1>
-        <a href="<?= $this->getBackendUrl('customerservice/backend/session') ?>" class="btn btn-secondary">
+        <a href="<?= $this->getBackendUrl('customerservice/backend/session') ?>" class="w-button" data-tone="neutral">
             <?= __('返回列表') ?>
         </a>
     </div>
@@ -16,7 +16,7 @@ $messages = $this->getData('messages') ?? [];
     <div class="session-info">
         <div class="info-card">
             <h3><?= __('会话信息') ?></h3>
-            <table class="table">
+            <table class="w-table">
                 <tr>
                     <th><?= __('会话ID') ?></th>
                     <td><?= $session['session_id'] ?? '-' ?></td>
@@ -53,7 +53,7 @@ $messages = $this->getData('messages') ?? [];
                         ];
                         $status = $session['status'] ?? 'waiting';
                         ?>
-                        <span class="badge <?= $statusClass[$status] ?? 'badge-secondary' ?>">
+                        <span class="w-badge <?= $statusClass[$status] ?? 'badge-secondary' ?>">
                             <?= $statusText[$status] ?? $status ?>
                         </span>
                     </td>
@@ -70,7 +70,7 @@ $messages = $this->getData('messages') ?? [];
         <h3><?= __('聊天记录') ?></h3>
         <div class="messages-container">
             <?php if (empty($messages)): ?>
-                <p class="text-center"><?= __('暂无消息') ?></p>
+                <p class="w-text" data-align="center"><?= __('暂无消息') ?></p>
             <?php else: ?>
                 <?php foreach ($messages as $message): ?>
                     <div class="message-item message-<?= $message['sender_type'] ?>">

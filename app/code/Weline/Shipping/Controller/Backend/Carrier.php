@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Carrier as CarrierModel;
 
-#[Acl('Weline_Shipping::carrier', '快递公司管理', 'mdi-truck', '快递公司管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::carrier', '快递公司管理', 'truck', '快递公司管理', 'Weline_Backend::shipping_group')]
 class Carrier extends BackendController
 {
     private CarrierModel $carrier;
@@ -29,7 +29,7 @@ class Carrier extends BackendController
     /**
      * 快递公司列表页
      */
-    #[Acl('Weline_Shipping::carrier_index', '查看快递公司', 'mdi-format-list-bulleted', '查看快递公司列表')]
+    #[Acl('Weline_Shipping::carrier_index', '查看快递公司', 'list', '查看快递公司列表')]
     public function index()
     {
         $page = max(1, (int)($this->request->getParam('page') ?? 1));
@@ -79,7 +79,7 @@ class Carrier extends BackendController
     /**
      * 编辑/新增快递公司
      */
-    #[Acl('Weline_Shipping::carrier_edit', '编辑快递公司', 'mdi-pencil', '编辑快递公司')]
+    #[Acl('Weline_Shipping::carrier_edit', '编辑快递公司', 'edit', '编辑快递公司')]
     public function edit()
     {
         $id = $this->request->getParam('id');
@@ -100,7 +100,7 @@ class Carrier extends BackendController
     /**
      * 保存快递公司
      */
-    #[Acl('Weline_Shipping::carrier_save', '保存快递公司', 'mdi-content-save', '保存快递公司')]
+    #[Acl('Weline_Shipping::carrier_save', '保存快递公司', 'save', '保存快递公司')]
     public function save()
     {
         try {
@@ -179,7 +179,7 @@ class Carrier extends BackendController
     /**
      * 删除快递公司
      */
-    #[Acl('Weline_Shipping::carrier_delete', '删除快递公司', 'mdi-delete', '删除快递公司')]
+    #[Acl('Weline_Shipping::carrier_delete', '删除快递公司', 'trash', '删除快递公司')]
     public function delete()
     {
         try {
@@ -206,7 +206,7 @@ class Carrier extends BackendController
     /**
      * 切换启用/禁用状态
      */
-    #[Acl('Weline_Shipping::carrier_toggle', '切换快递公司状态', 'mdi-toggle-switch', '切换快递公司启用/禁用状态')]
+    #[Acl('Weline_Shipping::carrier_toggle', '切换快递公司状态', 'circle', '切换快递公司启用/禁用状态')]
     public function toggle()
     {
         try {

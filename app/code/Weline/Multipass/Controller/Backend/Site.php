@@ -14,7 +14,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Multipass\Model\MultipassSite;
 
-#[Acl('Weline_Multipass::site_management', 'Multipass站点管理', 'mdi mdi-server', '管理Multipass认证站点配置', 'Weline_Multipass::menu_multipass_management')]
+#[Acl('Weline_Multipass::site_management', 'Multipass站点管理', 'server', '管理Multipass认证站点配置', 'Weline_Multipass::menu_multipass_management')]
 class Site extends BackendController
 {
     private MultipassSite $siteModel;

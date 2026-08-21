@@ -369,68 +369,68 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 </style>
 
 <!-- 操作栏：统一 outline 风格，分组展示 -->
-<div class="weline-domain-list-header mb-3">
+<div class="weline-domain-list-header" style="--w-mb:var(--weline-space-4);">
     <h5 class="weline-domain-list-title"><?= __('域名列表') ?></h5>
     <div class="weline-domain-list-actions">
         <div class="weline-domain-list-actions-group">
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="refreshServerIp">
-                <i class="mdi mdi-ip"></i>
+                <w:icon name="globe" size="sm"></w:icon>
                 <span><?= __('刷新服务器IP') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" data-domain-list-action="showManualCreateDomainOffcanvas">
-                <i class="mdi mdi-plus-circle-outline"></i>
+                <w:icon name="plus" size="sm"></w:icon>
                 <span><?= __('新建域名') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" data-domain-list-action="showImportModal">
-                <i class="mdi mdi-import"></i>
+                <w:icon name="import" size="sm"></w:icon>
                 <span><?= __('导入域名') ?></span>
             </button>
         </div>
         <div class="weline-domain-list-actions-group weline-domain-list-actions-group--batch">
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" data-domain-list-action="batchTransferToPool">
-                <i class="mdi mdi-database-export"></i>
+                <w:icon name="database" size="sm"></w:icon>
                 <span><?= __('批量转存域名池') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" data-domain-list-action="batchTransferToPoolWithIpCheck" title="<?= __('只转存解析到本服务器的域名，跳过IP不匹配的') ?>">
-                <i class="mdi mdi-folder-move"></i>
+                <w:icon name="folder" size="sm"></w:icon>
                 <span><?= __('批量转存（检查IP）') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--warning" data-domain-list-action="batchResolveToLocal" title="<?= __('将选中域名的 @ 和 www 解析到本服务器公网IP') ?>">
-                <i class="mdi mdi-server"></i>
+                <w:icon name="server" size="sm"></w:icon>
                 <span><?= __('批量解析到本地') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showBatchAddDnsRecordModal" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
-                <i class="mdi mdi-plus-network"></i>
+                <w:icon name="plus" size="sm"></w:icon>
                 <span><?= __('批量添加记录') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showBatchChangeNsModal" title="<?= __('将选中域名的DNS服务器切换到其他服务商') ?>">
-                <i class="mdi mdi-swap-horizontal"></i>
+                <w:icon name="swap" size="sm"></w:icon>
                 <span><?= __('批量切换DNS') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="batchCheckResolve">
-                <i class="mdi mdi-dns"></i>
+                <w:icon name="dns" size="sm"></w:icon>
                 <span><?= __('批量检测解析') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="batchDetectDnsProvider" title="<?= __('检测选中域名的 DNS 服务商') ?>">
-                <i class="mdi mdi-magnify-scan"></i>
+                <w:icon name="search" size="sm"></w:icon>
                 <span><?= __('检测DNS') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showBatchSetAccountsModal" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
-                <i class="mdi mdi-account-cog"></i>
+                <w:icon name="user" size="sm"></w:icon>
                 <span><?= __('设置账户') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showSwitchDnsAccountModal" title="<?= __('为根域名切换 DNS 服务账户，NS 切换后定时任务将把记录推送到新账户') ?>">
-                <i class="mdi mdi-dns"></i>
+                <w:icon name="dns" size="sm"></w:icon>
                 <span><?= __('切换DNS账户') ?></span>
             </button>
         </div>
         <div class="weline-domain-list-actions-group">
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" data-domain-list-action="cleanupDnsProviderDomains" title="<?= __('清理误同步的 DNS 服务商域名') ?>">
-                <i class="mdi mdi-broom"></i>
+                <w:icon name="trash" size="sm"></w:icon>
                 <span><?= __('清理DNS域名') ?></span>
             </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" data-domain-list-action="batchDeleteDomains" title="<?= __('删除选中的根域，其子域名与池记录一并删除') ?>">
-                <i class="mdi mdi-delete-outline"></i>
+                <w:icon name="trash" size="sm"></w:icon>
                 <span><?= __('批量删除') ?></span>
             </button>
         </div>
@@ -450,44 +450,43 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         class="weline-domain-filter-account-select"
         on-select="handleDomainFilterAccountChange"
     />
-    <select class="form-select form-select-sm" id="weline-domain-filter-resolve" data-domain-list-change="loadDomains">
+    <select class="w-select" id="weline-domain-filter-resolve" data-domain-list-change="loadDomains" data-size="sm">
         <option value=""><?= __('解析状态') ?></option>
         <option value="resolved"><?= __('已解析') ?></option>
         <option value="unresolved"><?= __('未解析') ?></option>
         <option value="error"><?= __('解析错误') ?></option>
         <option value="local"><?= __('指向本服务器') ?></option>
     </select>
-    <select class="form-select form-select-sm" id="weline-domain-filter-https" data-domain-list-change="loadDomains">
+    <select class="w-select" id="weline-domain-filter-https" data-domain-list-change="loadDomains" data-size="sm">
         <option value=""><?= __('HTTPS状态') ?></option>
         <option value="valid"><?= __('证书有效') ?></option>
         <option value="expiring"><?= __('即将过期') ?></option>
         <option value="expired"><?= __('已过期') ?></option>
         <option value="none"><?= __('无证书') ?></option>
     </select>
-    <input type="text" class="form-control form-control-sm" id="weline-domain-filter-search"
-           placeholder="<?= __('搜索域名...') ?>" data-domain-list-keyup="search">
-    <button type="button" class="btn btn-outline-secondary btn-sm" data-domain-list-action="resetFilters">
-        <i class="mdi mdi-filter-off"></i>
+    <input type="text" class="w-input" id="weline-domain-filter-search" placeholder="<?= __('搜索域名...') ?>" data-domain-list-keyup="search" data-size="sm">
+    <button type="button" class="w-button" data-domain-list-action="resetFilters" data-tone="neutral" data-variant="outline" data-size="sm">
+        <w:icon name="filter" size="sm"></w:icon>
     </button>
 </div>
 
 <!-- 域名表格 -->
-<div class="table-responsive">
-    <table class="table table-hover align-middle weline-domain-table mb-0">
-        <thead class="table-light">
+<div class="w-table-wrap">
+    <table class="w-table weline-domain-table" data-w-vertical="middle" style="--w-mb:0;">
+        <thead>
             <tr>
                 <th><input type="checkbox" id="weline-domain-select-all" data-domain-list-change="toggleSelectAll"></th>
                 <th><?= __('域名') ?></th>
                 <th><?= __('服务商') ?></th>
                 <th><?= __('状态') ?></th>
-                <th class="text-end"><?= __('操作') ?></th>
+                <th class="w-text" data-align="end"><?= __('操作') ?></th>
             </tr>
         </thead>
         <tbody id="weline-domain-list-body">
             <tr>
                 <td colspan="5" class="weline-domain-empty">
-                    <i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i>
-                    <p class="mt-2 mb-0"><?= __('加载中...') ?></p>
+                    <w:icon name="dns" size="sm"></w:icon>
+                    <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('加载中...') ?></p>
                 </td>
             </tr>
         </tbody>
@@ -495,53 +494,43 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 </div>
 
 <!-- 分页 -->
-<nav class="d-flex justify-content-between align-items-center mt-3" id="weline-domain-pagination">
-    <div class="text-muted small" id="weline-domain-pagination-info"></div>
-    <ul class="pagination pagination-sm mb-0" id="weline-domain-pagination-links"></ul>
+<nav class="w-cluster" id="weline-domain-pagination" data-justify="between" data-align="center" style="--w-mt:var(--weline-space-4);">
+    <div class="w-text" id="weline-domain-pagination-info" data-tone="muted" data-size="sm"></div>
+    <ul class="w-pagination pagination-sm" id="weline-domain-pagination-links" style="--w-mb:0;"></ul>
 </nav>
 
 <!-- 导入域名弹窗 -->
-<div class="modal fade" id="welineImportDomainModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="mdi mdi-import me-2"></i><?= __('从域名商导入域名') ?>
+<div class="w-dialog" id="welineImportDomainModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
+                    <w:icon name="import" size="sm"></w:icon><?= __('从域名商导入域名') ?>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label"><?= __('选择域名商账户') ?></label>
-                    <w:websites:registrar:select
-                        id="weline-import-account-select"
-                        name="weline_import_account_select"
-                        value="''"
-                        display="''"
-                        options="registrarAccountOptionsJson"
-                        empty-label="@lang(-- 请选择 --)"
-                        placeholder="@lang(搜索账号/服务商...)"
-                        class="w-100"
-                        on-select="handleImportAccountChange"
-                    />
+            <div class="w-dialog__body">
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('选择域名商账户') ?></label>
+                    <w:websites:registrar:select id="weline-import-account-select" name="weline_import_account_select" value="''" display="''" options="registrarAccountOptionsJson" empty-label="@lang(-- 请选择 --)" placeholder="@lang(搜索账号/服务商...)" on-select="handleImportAccountChange" data-w-width="full" />
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-2);">
                     <div>
                         <input type="checkbox" id="weline-import-select-all" data-domain-list-change="toggleImportSelectAll">
-                        <label for="weline-import-select-all" class="form-label mb-0 ms-1"><?= __('全选') ?></label>
-                        <span class="text-muted ms-2" id="weline-import-count"></span>
+                        <label for="weline-import-select-all" class="w-field__label ms-1" style="--w-mb:0;"><?= __('全选') ?></label>
+                        <span class="w-text ms-2" id="weline-import-count" data-tone="muted"></span>
                     </div>
                     <div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-domain-list-action="toggleShowImported">
-                            <i class="mdi mdi-eye-off me-1"></i><span id="weline-import-toggle-text"><?= __('隐藏已导入') ?></span>
+                        <button type="button" class="w-button" data-domain-list-action="toggleShowImported" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <w:icon name="eye-off" size="sm"></w:icon><span id="weline-import-toggle-text"><?= __('隐藏已导入') ?></span>
                         </button>
                     </div>
                 </div>
 
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead class="table-light sticky-top">
+                <div class="w-table-wrap" style="max-height: 400px; overflow-y: auto;">
+                    <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+                        <thead class="sticky-top">
                             <tr>
                                 <th style="width:40px;"></th>
                                 <th><?= __('域名') ?></th>
@@ -552,7 +541,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                         </thead>
                         <tbody id="weline-import-domain-list">
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">
+                                <td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
                                     <?= __('请选择域名商账户') ?>
                                 </td>
                             </tr>
@@ -560,30 +549,30 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     </table>
                 </div>
 
-                <div class="mt-3 p-2" style="background:var(--backend-color-bg-tertiary,#f1f3f5);border-radius:var(--backend-border-radius,6px);">
-                    <label class="form-label fw-bold small"><?= __('导入解析模式') ?></label>
-                    <div class="d-flex flex-column gap-2">
-                        <label class="form-check-label d-flex align-items-start gap-2" style="cursor:pointer;">
-                            <input type="radio" name="weline-import-resolve-mode" value="batch_to_local" checked class="form-check-input">
+                <div style="background:var(--backend-color-bg-tertiary,#f1f3f5);border-radius:var(--backend-border-radius,6px);">
+                    <label class="w-field__label w-text" data-weight="strong" data-size="sm"><?= __('导入解析模式') ?></label>
+                    <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                        <label class="w-cluster" style="cursor:pointer;" data-align="start">
+                            <input type="radio" name="weline-import-resolve-mode" value="batch_to_local" checked>
                             <div>
                                 <strong><?= __('批量解析到本服务器') ?></strong>
-                                <div class="text-muted small"><?= __('导入后自动将域名的 @ 和 www 记录解析到本服务器公网IP，入池并创建自动解析任务') ?></div>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('导入后自动将域名的 @ 和 www 记录解析到本服务器公网IP，入池并创建自动解析任务') ?></div>
                             </div>
                         </label>
-                        <label class="form-check-label d-flex align-items-start gap-2" style="cursor:pointer;">
-                            <input type="radio" name="weline-import-resolve-mode" value="keep_each_dns" class="form-check-input">
+                        <label class="w-cluster" style="cursor:pointer;" data-align="start">
+                            <input type="radio" name="weline-import-resolve-mode" value="keep_each_dns">
                             <div>
                                 <strong><?= __('保持各域名当前 DNS') ?></strong>
-                                <div class="text-muted small"><?= __('仅导入域名记录，不修改 DNS，不入池自动解析任务') ?></div>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('仅导入域名记录，不修改 DNS，不入池自动解析任务') ?></div>
                             </div>
                         </label>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" data-domain-list-action="importSelectedDomains">
-                    <i class="mdi mdi-import me-1"></i><?= __('导入选中域名') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" data-domain-list-action="importSelectedDomains" data-tone="primary">
+                    <w:icon name="import" size="sm"></w:icon><?= __('导入选中域名') ?>
                 </button>
             </div>
         </div>
@@ -591,45 +580,45 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 </div>
 
 <!-- DNS 记录弹窗 -->
-<div class="modal fade" id="welineDnsRecordModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="mdi mdi-dns me-2"></i>
+<div class="w-dialog" id="welineDnsRecordModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
+                    <w:icon name="dns" size="sm"></w:icon>
                     <span id="weline-dns-modal-title"><?= __('DNS记录管理') ?></span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="d-flex gap-2 align-items-center">
-                        <span class="text-muted"><?= __('DNS服务商') ?>:</span>
+            <div class="w-dialog__body">
+                <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                        <span class="w-text" data-tone="muted"><?= __('DNS服务商') ?>:</span>
                         <span id="weline-dns-provider-badge" class="weline-domain-dns-provider"></span>
-                        <span class="text-muted ms-3"><?= __('本服务器IP') ?>:</span>
+                        <span class="w-text ms-3" data-tone="muted"><?= __('本服务器IP') ?>:</span>
                         <code id="weline-dns-server-ip">-</code>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" data-domain-list-action="syncDnsRecords">
-                            <i class="mdi mdi-sync me-1"></i><?= __('同步记录') ?>
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                        <button type="button" class="w-button" data-domain-list-action="syncDnsRecords" data-tone="primary" data-variant="outline" data-size="sm">
+                            <w:icon name="refresh" size="sm"></w:icon><?= __('同步记录') ?>
                         </button>
-                        <button type="button" class="btn btn-primary btn-sm" data-domain-list-action="showAddDnsRecordForm">
-                            <i class="mdi mdi-plus me-1"></i><?= __('添加记录') ?>
+                        <button type="button" class="w-button" data-domain-list-action="showAddDnsRecordForm" data-tone="primary" data-size="sm">
+                            <w:icon name="plus" size="sm"></w:icon><?= __('添加记录') ?>
                         </button>
                     </div>
                 </div>
 
                 <!-- 添加/编辑记录表单 -->
-                <div id="weline-dns-record-form-container" style="display:none;" class="mb-3">
-                    <div class="card border">
-                        <div class="card-body">
+                <div id="weline-dns-record-form-container" style="display:none;">
+                    <div class="w-card" data-w-border="border">
+                        <div class="w-card__body">
                             <w:form id="weline-dns-record-form">
                                 <input type="hidden" id="weline-dns-form-domain-id">
                                 <input type="hidden" id="weline-dns-form-record-id">
-                                <div class="row g-3">
-                                    <div class="col-md-2">
-                                        <label class="form-label"><?= __('类型') ?></label>
-                                        <select class="form-select form-select-sm" id="weline-dns-form-type">
+                                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                    <div style="--w-span-md:2;">
+                                        <label class="w-field__label"><?= __('类型') ?></label>
+                                        <select class="w-select" id="weline-dns-form-type" data-size="sm">
                                             <option value="A">A</option>
                                             <option value="AAAA">AAAA</option>
                                             <option value="CNAME">CNAME</option>
@@ -639,24 +628,24 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                                             <option value="CAA">CAA</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label"><?= __('主机记录') ?></label>
-                                        <input type="text" class="form-control form-control-sm" id="weline-dns-form-host" placeholder="@">
+                                    <div style="--w-span-md:3;">
+                                        <label class="w-field__label"><?= __('主机记录') ?></label>
+                                        <input type="text" class="w-input" id="weline-dns-form-host" placeholder="@" data-size="sm">
                                     </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label"><?= __('记录值') ?></label>
-                                        <input type="text" class="form-control form-control-sm" id="weline-dns-form-value">
+                                    <div style="--w-span-md:4;">
+                                        <label class="w-field__label"><?= __('记录值') ?></label>
+                                        <input type="text" class="w-input" id="weline-dns-form-value" data-size="sm">
                                     </div>
-                                    <div class="col-md-1">
-                                        <label class="form-label">TTL</label>
-                                        <input type="number" class="form-control form-control-sm" id="weline-dns-form-ttl" value="600">
+                                    <div style="--w-span-md:1;">
+                                        <label class="w-field__label">TTL</label>
+                                        <input type="number" class="w-input" id="weline-dns-form-ttl" value="600" data-size="sm">
                                     </div>
-                                    <div class="col-md-2 d-flex align-items-end gap-2">
-                                        <button type="button" class="btn btn-primary btn-sm" data-domain-list-action="saveDnsRecord">
-                                            <i class="mdi mdi-check"></i>
+                                    <div class="w-cluster" data-align="end" style="--w-span-md:2;--w-gap:var(--weline-space-2);">
+                                        <button type="button" class="w-button" data-domain-list-action="saveDnsRecord" data-tone="primary" data-size="sm">
+                                            <w:icon name="check" size="sm"></w:icon>
                                         </button>
-                                        <button type="button" class="btn btn-secondary btn-sm" data-domain-list-action="hideAddDnsRecordForm">
-                                            <i class="mdi mdi-close"></i>
+                                        <button type="button" class="w-button" data-domain-list-action="hideAddDnsRecordForm" data-tone="neutral" data-size="sm">
+                                            <w:icon name="close" size="sm"></w:icon>
                                         </button>
                                     </div>
                                 </div>
@@ -666,21 +655,21 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 </div>
 
                 <!-- DNS记录列表 -->
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead class="table-light">
+                <div class="w-table-wrap">
+                    <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+                        <thead>
                             <tr>
                                 <th><?= __('类型') ?></th>
                                 <th><?= __('主机记录') ?></th>
                                 <th><?= __('记录值') ?></th>
                                 <th>TTL</th>
                                 <th><?= __('状态') ?></th>
-                                <th class="text-end"><?= __('操作') ?></th>
+                                <th class="w-text" data-align="end"><?= __('操作') ?></th>
                             </tr>
                         </thead>
                         <tbody id="weline-dns-records-body">
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">
+                                <td colspan="6" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
                                     <?= __('请选择域名查看DNS记录') ?>
                                 </td>
                             </tr>
@@ -688,78 +677,68 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     </table>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-success btn-sm" data-domain-list-action="autoResolve">
-                    <i class="mdi mdi-auto-fix me-1"></i><?= __('自动解析到本服务器') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-domain-list-action="autoResolve" data-tone="success" data-variant="outline" data-size="sm">
+                    <w:icon name="sparkles" size="sm"></w:icon><?= __('自动解析到本服务器') ?>
                 </button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('关闭') ?></button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 批量切换DNS服务器弹窗 -->
-<div class="modal fade" id="welineBatchChangeNsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="mdi mdi-swap-horizontal me-2"></i><?= __('批量切换DNS服务器') ?>
+<div class="w-dialog" id="welineBatchChangeNsModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
+                    <w:icon name="swap" size="sm"></w:icon><?= __('批量切换DNS服务器') ?>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-info small">
-                    <i class="mdi mdi-information-outline me-1"></i>
+            <div class="w-dialog__body">
+                <div class="w-alert w-text" data-tone="info" data-size="sm">
+                    <w:icon name="info" size="sm"></w:icon>
                     <?= __('将选中域名的 Nameserver 切换到目标服务商。切换后域名将使用新的 DNS 服务商进行解析。') ?>
                 </div>
-                <p class="text-muted small mb-3" id="weline-batch-ns-selected-info"></p>
+                <p class="w-text" id="weline-batch-ns-selected-info" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"></p>
 
                 <!-- 切换方式选择 -->
-                <div class="mb-3">
-                    <label class="form-label"><?= __('切换方式') ?></label>
-                    <div class="btn-group w-100" role="group">
-                        <input type="radio" class="btn-check" name="weline-ns-switch-mode" id="weline-ns-mode-account" value="account" checked>
-                        <label class="btn btn-outline-primary" for="weline-ns-mode-account">
-                            <i class="mdi mdi-account-key me-1"></i><?= __('选择账户（推荐）') ?>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('切换方式') ?></label>
+                    <div class="w-button-group" role="group" data-w-width="full">
+                        <input type="radio" class="w-visually-hidden" name="weline-ns-switch-mode" id="weline-ns-mode-account" value="account" checked>
+                        <label class="w-button" for="weline-ns-mode-account" data-tone="primary" data-variant="outline">
+                            <w:icon name="user" size="sm"></w:icon><?= __('选择账户（推荐）') ?>
                         </label>
-                        <input type="radio" class="btn-check" name="weline-ns-switch-mode" id="weline-ns-mode-manual" value="manual">
-                        <label class="btn btn-outline-primary" for="weline-ns-mode-manual">
-                            <i class="mdi mdi-pencil me-1"></i><?= __('手动输入') ?>
+                        <input type="radio" class="w-visually-hidden" name="weline-ns-switch-mode" id="weline-ns-mode-manual" value="manual">
+                        <label class="w-button" for="weline-ns-mode-manual" data-tone="primary" data-variant="outline">
+                            <w:icon name="edit" size="sm"></w:icon><?= __('手动输入') ?>
                         </label>
                     </div>
                 </div>
 
                 <!-- 账户选择模式 -->
                 <div id="weline-batch-ns-account-mode">
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('选择目标账户') ?></label>
-                        <w:websites:registrar:select
-                            id="weline-batch-ns-account"
-                            name="weline_batch_ns_account"
-                            value="''"
-                            display="''"
-                            options="'[]'"
-                            empty-label="@lang(-- 加载中... --)"
-                            placeholder="@lang(搜索目标账号/服务商...)"
-                            class="w-100"
-                            on-select="handleBatchNsAccountChange"
-                        />
-                        <div class="form-text"><?= __('选择已配置的域名商账户，系统将自动获取该账户的DNS服务器') ?></div>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('选择目标账户') ?></label>
+                        <w:websites:registrar:select id="weline-batch-ns-account" name="weline_batch_ns_account" value="''" display="''" options="'[]'" empty-label="@lang(-- 加载中... --)" placeholder="@lang(搜索目标账号/服务商...)" on-select="handleBatchNsAccountChange" data-w-width="full" />
+                        <div class="w-field__hint"><?= __('选择已配置的域名商账户，系统将自动获取该账户的DNS服务器') ?></div>
                     </div>
-                    <div class="alert alert-warning small" id="weline-batch-ns-account-no-data" style="display:none;">
-                        <i class="mdi mdi-alert-circle me-1"></i>
+                    <div class="w-alert w-text" id="weline-batch-ns-account-no-data" style="display:none;" data-tone="warning" data-size="sm">
+                        <w:icon name="warning" size="sm"></w:icon>
                         <?= __('暂无可用的域名商账户，请先在「域名注册商账户」中添加并启用账户，或使用下方「手动输入」模式直接填写DNS服务器地址') ?>
                     </div>
-                    <div class="alert alert-success small" id="weline-batch-ns-account-info" style="display:none;">
-                        <i class="mdi mdi-check-circle me-1"></i>
+                    <div class="w-alert w-text" id="weline-batch-ns-account-info" style="display:none;" data-tone="success" data-size="sm">
+                        <w:icon name="check" size="sm"></w:icon>
                         <span id="weline-batch-ns-account-ns"></span>
                     </div>
                 </div>
 
                 <!-- 手动输入模式 -->
                 <div id="weline-batch-ns-manual-mode" style="display:none;">
-                    <div class="mb-3">
+                    <div style="--w-mb:var(--weline-space-4);">
                         <?php
                         $nsProviderOptions = [
                             ['value' => 'dnspod', 'label' => 'DNSPod', 'group' => (string)__('DNS 服务商'), 'meta' => 'ns1.dnspod.net, ns2.dnspod.net'],
@@ -768,32 +747,21 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                         ];
                         $nsProviderOptionsJson = json_encode($nsProviderOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                         ?>
-                        <label class="form-label"><?= __('选择DNS服务商') ?></label>
-                        <w:websites:registrar:select
-                            id="weline-batch-ns-provider"
-                            name="weline_batch_ns_provider"
-                            value="''"
-                            display="''"
-                            options="nsProviderOptionsJson"
-                            empty-label="@lang(-- 请选择 --)"
-                            placeholder="@lang(搜索 DNS 服务商...)"
-                            class="w-100"
-                            on-select="handleBatchNsProviderChange"
-                        />
+                        <label class="w-field__label"><?= __('选择DNS服务商') ?></label>
+                        <w:websites:registrar:select id="weline-batch-ns-provider" name="weline_batch_ns_provider" value="''" display="''" options="nsProviderOptionsJson" empty-label="@lang(-- 请选择 --)" placeholder="@lang(搜索 DNS 服务商...)" on-select="handleBatchNsProviderChange" data-w-width="full" />
                     </div>
 
-                    <div class="mb-3" id="weline-batch-ns-custom-input" style="display:none;">
-                        <label class="form-label"><?= __('Nameserver 列表') ?></label>
-                        <input type="text" class="form-control" id="weline-batch-ns-custom" 
-                               placeholder="<?= __('如：ns1.example.com,ns2.example.com') ?>">
-                        <div class="form-text"><?= __('多个 Nameserver 用英文逗号分隔') ?></div>
+                    <div id="weline-batch-ns-custom-input" style="display:none;">
+                        <label class="w-field__label"><?= __('Nameserver 列表') ?></label>
+                        <input type="text" class="w-input" id="weline-batch-ns-custom" placeholder="<?= __('如：ns1.example.com,ns2.example.com') ?>">
+                        <div class="w-field__hint"><?= __('多个 Nameserver 用英文逗号分隔') ?></div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-batch-ns-submit" data-domain-list-action="doBatchChangeNs">
-                    <i class="mdi mdi-swap-horizontal me-1"></i><?= __('确认切换') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="weline-batch-ns-submit" data-domain-list-action="doBatchChangeNs" data-tone="primary">
+                    <w:icon name="swap" size="sm"></w:icon><?= __('确认切换') ?>
                 </button>
             </div>
         </div>
@@ -801,23 +769,23 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 </div>
 
 <!-- 批量添加DNS记录弹窗 -->
-<div class="modal fade" id="welineBatchAddDnsRecordModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="mdi mdi-plus-network me-2"></i><?= __('批量添加DNS记录') ?>
+<div class="w-dialog" id="welineBatchAddDnsRecordModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
+                    <w:icon name="plus" size="sm"></w:icon><?= __('批量添加DNS记录') ?>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-info small">
-                    <i class="mdi mdi-information-outline me-1"></i>
+            <div class="w-dialog__body">
+                <div class="w-alert w-text" data-tone="info" data-size="sm">
+                    <w:icon name="info" size="sm"></w:icon>
                     <?= __('为选中的域名批量添加相同的DNS解析记录。') ?>
                 </div>
-                <p class="text-muted small mb-3" id="weline-batch-add-dns-selected-info"></p>
+                <p class="w-text" id="weline-batch-add-dns-selected-info" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"></p>
 
-                <div class="weline-server-ip-option mb-3">
+                <div class="weline-server-ip-option" style="--w-mb:var(--weline-space-4);">
                     <label class="weline-checkbox-label">
                         <input type="checkbox" id="weline-batch-add-dns-use-server-ip" data-domain-list-change="onBatchAddDnsUseServerIpChange">
                         <span class="weline-checkbox-custom"></span>
@@ -827,10 +795,10 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 </div>
 
                 <div id="weline-batch-add-dns-form-fields">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label"><?= __('记录类型') ?></label>
-                            <select class="form-select" id="weline-batch-add-dns-type">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:4;">
+                            <label class="w-field__label"><?= __('记录类型') ?></label>
+                            <select class="w-select" id="weline-batch-add-dns-type">
                                 <option value="A">A</option>
                                 <option value="AAAA">AAAA</option>
                                 <option value="CNAME">CNAME</option>
@@ -839,46 +807,46 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                                 <option value="NS">NS</option>
                             </select>
                         </div>
-                        <div class="col-md-8">
-                            <label class="form-label"><?= __('主机记录') ?></label>
-                            <input type="text" class="form-control" id="weline-batch-add-dns-host" value="@" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">
-                            <small class="text-muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>
+                        <div style="--w-span-md:8;">
+                            <label class="w-field__label"><?= __('主机记录') ?></label>
+                            <input type="text" class="w-input" id="weline-batch-add-dns-host" value="@" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">
+                            <small class="w-text" data-tone="muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>
                         </div>
                     </div>
-                    <div class="row g-3 mt-2">
-                        <div class="col-md-8">
-                            <label class="form-label"><?= __('记录值') ?></label>
-                            <input type="text" class="form-control" id="weline-batch-add-dns-value" placeholder="<?= __('如：192.168.1.1 或 example.com') ?>">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mt:var(--weline-space-2);">
+                        <div style="--w-span-md:8;">
+                            <label class="w-field__label"><?= __('记录值') ?></label>
+                            <input type="text" class="w-input" id="weline-batch-add-dns-value" placeholder="<?= __('如：192.168.1.1 或 example.com') ?>">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label"><?= __('TTL (秒)') ?></label>
-                            <input type="number" class="form-control" id="weline-batch-add-dns-ttl" value="600" min="60" max="86400">
+                        <div style="--w-span-md:4;">
+                            <label class="w-field__label"><?= __('TTL (秒)') ?></label>
+                            <input type="number" class="w-input" id="weline-batch-add-dns-ttl" value="600" min="60" max="86400">
                         </div>
                     </div>
                 </div>
 
                 <div id="weline-batch-add-dns-server-ip-fields" style="display:none;">
-                    <div class="row g-3">
-                        <div class="col-md-8">
-                            <label class="form-label"><?= __('主机记录') ?></label>
-                            <input type="text" class="form-control" id="weline-batch-add-dns-host-server" value="@,www" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">
-                            <small class="text-muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:8;">
+                            <label class="w-field__label"><?= __('主机记录') ?></label>
+                            <input type="text" class="w-input" id="weline-batch-add-dns-host-server" value="@,www" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">
+                            <small class="w-text" data-tone="muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label"><?= __('TTL (秒)') ?></label>
-                            <input type="number" class="form-control" id="weline-batch-add-dns-ttl-server" value="600" min="60" max="86400">
+                        <div style="--w-span-md:4;">
+                            <label class="w-field__label"><?= __('TTL (秒)') ?></label>
+                            <input type="number" class="w-input" id="weline-batch-add-dns-ttl-server" value="600" min="60" max="86400">
                         </div>
                     </div>
-                    <div class="mt-2">
-                        <span class="text-muted small"><?= __('记录类型') ?>: <code>A</code></span>
-                        <span class="text-muted small ms-3"><?= __('记录值') ?>: <code id="weline-batch-add-dns-server-ip-display">-</code></span>
+                    <div style="--w-mt:var(--weline-space-2);">
+                        <span class="w-text" data-tone="muted" data-size="sm"><?= __('记录类型') ?>: <code>A</code></span>
+                        <span class="w-text ms-3" data-tone="muted" data-size="sm"><?= __('记录值') ?>: <code id="weline-batch-add-dns-server-ip-display">-</code></span>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-batch-add-dns-submit" data-domain-list-action="doBatchAddDnsRecords">
-                    <i class="mdi mdi-plus me-1"></i><?= __('确认添加') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="weline-batch-add-dns-submit" data-domain-list-action="doBatchAddDnsRecords" data-tone="primary">
+                    <w:icon name="plus" size="sm"></w:icon><?= __('确认添加') ?>
                 </button>
             </div>
         </div>
@@ -886,71 +854,52 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 </div>
 
 <!-- 切换 DNS 服务账户弹窗（选择供应商 + 账户，同步记录→改 NS→定时任务推送记录） -->
-<div class="modal fade" id="welineSwitchDnsAccountModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="mdi mdi-dns me-2"></i><?= __('切换 DNS 服务账户') ?>
+<div class="w-dialog" id="welineSwitchDnsAccountModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
+                    <w:icon name="dns" size="sm"></w:icon><?= __('切换 DNS 服务账户') ?>
                 </h5>
-                <button type="button" class="btn-close" id="weline-switch-dns-close-btn" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="w-button" id="weline-switch-dns-close-btn" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <!-- 表单区域 -->
                 <div id="weline-switch-dns-form-area">
-                    <div class="alert alert-info small">
-                        <i class="mdi mdi-information-outline me-1"></i>
+                    <div class="w-alert w-text" data-tone="info" data-size="sm">
+                        <w:icon name="info" size="sm"></w:icon>
                         <?= __('将把当前 DNS 记录同步到本地，把域名的 NS 切换到目标账户；切换成功后定时任务会把记录推送到新 DNS 账户。若已是该账户则跳过。') ?>
                     </div>
-                    <p class="text-muted small mb-3" id="weline-switch-dns-selected-info"></p>
+                    <p class="w-text" id="weline-switch-dns-selected-info" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"></p>
 
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('选择供应商') ?></label>
-                        <w:websites:registrar:select
-                            id="weline-switch-dns-provider"
-                            name="weline_switch_dns_provider"
-                            value="''"
-                            display="''"
-                            options="'[]'"
-                            empty-label="@lang(-- 请先选择 --)"
-                            placeholder="@lang(搜索 DNS 服务商...)"
-                            class="w-100"
-                            on-select="handleSwitchDnsProviderChange"
-                        />
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('选择供应商') ?></label>
+                        <w:websites:registrar:select id="weline-switch-dns-provider" name="weline_switch_dns_provider" value="''" display="''" options="'[]'" empty-label="@lang(-- 请先选择 --)" placeholder="@lang(搜索 DNS 服务商...)" on-select="handleSwitchDnsProviderChange" data-w-width="full" />
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('选择账户') ?></label>
-                        <w:websites:registrar:select
-                            id="weline-switch-dns-account"
-                            name="weline_switch_dns_account"
-                            value="''"
-                            display="''"
-                            options="'[]'"
-                            empty-label="@lang(-- 请先选择供应商 --)"
-                            placeholder="@lang(搜索 DNS 账号...)"
-                            class="w-100"
-                        />
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><?= __('选择账户') ?></label>
+                        <w:websites:registrar:select id="weline-switch-dns-account" name="weline_switch_dns_account" value="''" display="''" options="'[]'" empty-label="@lang(-- 请先选择供应商 --)" placeholder="@lang(搜索 DNS 账号...)" data-w-width="full" />
                     </div>
                 </div>
                 <!-- SSE 进度面板 -->
                 <div id="weline-switch-dns-progress-area" style="display:none;">
-                    <div class="weline-dns-switch-progress-header mb-3">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <span class="fw-bold" id="weline-dns-switch-progress-title"><?= __('正在切换…') ?></span>
-                            <span class="badge" id="weline-dns-switch-progress-badge" style="background:var(--backend-color-primary,#0d6efd);color:var(--backend-color-text-on-primary,#fff);">0/0</span>
+                    <div class="weline-dns-switch-progress-header" style="--w-mb:var(--weline-space-4);">
+                        <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-2);">
+                            <span class="w-text" id="weline-dns-switch-progress-title" data-weight="strong"><?= __('正在切换…') ?></span>
+                            <span class="w-badge" id="weline-dns-switch-progress-badge" style="background:var(--backend-color-primary,#0d6efd);color:var(--backend-color-text-on-primary,#fff);">0/0</span>
                         </div>
-                        <div class="progress" style="height:6px;background:var(--backend-color-bg-tertiary,#e9ecef);border-radius:3px;">
-                            <div class="progress-bar" id="weline-dns-switch-progress-bar" role="progressbar" style="width:0%;background:var(--backend-color-primary,#0d6efd);transition:width .3s;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        <div class="w-progress" style="height:6px;background:var(--backend-color-bg-tertiary,#e9ecef);border-radius:3px;">
+                            <div class="w-progress__bar" id="weline-dns-switch-progress-bar" role="progressbar" style="width:0%;background:var(--backend-color-primary,#0d6efd);transition:width .3s;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
                     </div>
                     <div id="weline-dns-switch-log" class="weline-dns-switch-log-panel"></div>
-                    <div id="weline-dns-switch-summary" class="mt-3" style="display:none;"></div>
+                    <div id="weline-dns-switch-summary" style="display:none;"></div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="weline-switch-dns-cancel-btn" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-switch-dns-submit" data-domain-list-action="doSwitchDnsAccount">
-                    <i class="mdi mdi-swap-horizontal me-1"></i><?= __('确认切换') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" id="weline-switch-dns-cancel-btn" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="weline-switch-dns-submit" data-domain-list-action="doSwitchDnsAccount" data-tone="primary">
+                    <w:icon name="swap" size="sm"></w:icon><?= __('确认切换') ?>
                 </button>
             </div>
         </div>
@@ -991,188 +940,134 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 </style>
 
 <!-- 批量设置账户弹窗 -->
-<div class="modal fade" id="welineBatchSetAccountsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="mdi mdi-account-cog me-2"></i><?= __('批量设置账户') ?>
+<div class="w-dialog" id="welineBatchSetAccountsModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
+                    <w:icon name="user" size="sm"></w:icon><?= __('批量设置账户') ?>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-info small">
-                    <i class="mdi mdi-information-outline me-1"></i>
+            <div class="w-dialog__body">
+                <div class="w-alert w-text" data-tone="info" data-size="sm">
+                    <w:icon name="info" size="sm"></w:icon>
                     <?= __('为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。') ?>
                 </div>
-                <p class="text-muted small mb-3" id="weline-batch-set-accounts-selected-info"></p>
+                <p class="w-text" id="weline-batch-set-accounts-selected-info" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"></p>
 
-                <div class="mb-3">
-                    <label class="form-label"><?= __('DNS 管理账户') ?></label>
-                    <w:websites:registrar:select
-                        id="weline-batch-set-dns-account"
-                        name="weline_batch_set_dns_account"
-                        value="''"
-                        display="''"
-                        options="'[]'"
-                        empty-label="@lang(-- 不修改 --)"
-                        placeholder="@lang(搜索 DNS 管理账号...)"
-                        class="w-100"
-                    />
-                    <small class="text-muted"><?= __('用于管理 DNS 解析记录的账户') ?></small>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('DNS 管理账户') ?></label>
+                    <w:websites:registrar:select id="weline-batch-set-dns-account" name="weline_batch_set_dns_account" value="''" display="''" options="'[]'" empty-label="@lang(-- 不修改 --)" placeholder="@lang(搜索 DNS 管理账号...)" data-w-width="full" />
+                    <small class="w-text" data-tone="muted"><?= __('用于管理 DNS 解析记录的账户') ?></small>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label"><?= __('CDN 管理账户') ?></label>
-                    <w:websites:registrar:select
-                        id="weline-batch-set-cdn-account"
-                        name="weline_batch_set_cdn_account"
-                        value="''"
-                        display="''"
-                        options="'[]'"
-                        empty-label="@lang(-- 不修改 --)"
-                        placeholder="@lang(搜索 CDN 管理账号...)"
-                        class="w-100"
-                    />
-                    <small class="text-muted"><?= __('CDN 服务商账户（如 Cloudflare）') ?></small>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('CDN 管理账户') ?></label>
+                    <w:websites:registrar:select id="weline-batch-set-cdn-account" name="weline_batch_set_cdn_account" value="''" display="''" options="'[]'" empty-label="@lang(-- 不修改 --)" placeholder="@lang(搜索 CDN 管理账号...)" data-w-width="full" />
+                    <small class="w-text" data-tone="muted"><?= __('CDN 服务商账户（如 Cloudflare）') ?></small>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-batch-set-accounts-submit" data-domain-list-action="doBatchSetAccounts">
-                    <i class="mdi mdi-check me-1"></i><?= __('确认设置') ?>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="weline-batch-set-accounts-submit" data-domain-list-action="doBatchSetAccounts" data-tone="primary">
+                    <w:icon name="check" size="sm"></w:icon><?= __('确认设置') ?>
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="welineManualCreateDomainOffcanvas" aria-labelledby="welineManualCreateDomainLabel">
-    <div class="offcanvas-header">
-        <h5 id="welineManualCreateDomainLabel" class="offcanvas-title">
-            <i class="mdi mdi-plus-circle-outline me-2"></i><?= __('新建域名') ?>
+<div class="w-drawer offcanvas-end" tabindex="-1" id="welineManualCreateDomainOffcanvas" aria-labelledby="welineManualCreateDomainLabel" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+    <div class="w-drawer__header">
+        <h5 id="welineManualCreateDomainLabel" class="w-drawer__title">
+            <w:icon name="plus" size="sm"></w:icon><?= __('新建域名') ?>
         </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <button type="button" class="w-button" aria-label="Close" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
     </div>
-    <div class="offcanvas-body">
-        <div class="mb-3">
-            <label class="form-label"><?= __('域名') ?></label>
-            <input type="text" class="form-control" id="weline-manual-domain" placeholder="<?= __('如：www.example.com') ?>">
+    <div class="w-drawer__body">
+        <div style="--w-mb:var(--weline-space-4);">
+            <label class="w-field__label"><?= __('域名') ?></label>
+            <input type="text" class="w-input" id="weline-manual-domain" placeholder="<?= __('如：www.example.com') ?>">
         </div>
-        <div class="mb-3">
-            <label class="form-label"><?= __('描述') ?></label>
-            <input type="text" class="form-control" id="weline-manual-description" placeholder="<?= __('可选') ?>">
+        <div style="--w-mb:var(--weline-space-4);">
+            <label class="w-field__label"><?= __('描述') ?></label>
+            <input type="text" class="w-input" id="weline-manual-description" placeholder="<?= __('可选') ?>">
         </div>
-        <div class="row">
-            <div class="col-6 mb-3">
-                <label class="form-label"><?= __('DNS 账户') ?></label>
-                <w:websites:registrar:select
-                    id="weline-manual-dns-account"
-                    name="weline_manual_dns_account"
-                    value="''"
-                    display="''"
-                    options="'[]'"
-                    empty-label="@lang(默认不设置)"
-                    placeholder="@lang(搜索 DNS 账号...)"
-                    class="w-100"
-                />
+        <div class="w-grid">
+            <div style="--w-span:6;--w-mb:var(--weline-space-4);">
+                <label class="w-field__label"><?= __('DNS 账户') ?></label>
+                <w:websites:registrar:select id="weline-manual-dns-account" name="weline_manual_dns_account" value="''" display="''" options="'[]'" empty-label="@lang(默认不设置)" placeholder="@lang(搜索 DNS 账号...)" data-w-width="full" />
             </div>
-            <div class="col-6 mb-3">
-                <label class="form-label"><?= __('CDN 账户') ?></label>
-                <w:websites:registrar:select
-                    id="weline-manual-cdn-account"
-                    name="weline_manual_cdn_account"
-                    value="''"
-                    display="''"
-                    options="'[]'"
-                    empty-label="@lang(默认不设置)"
-                    placeholder="@lang(搜索 CDN 账号...)"
-                    class="w-100"
-                />
+            <div style="--w-span:6;--w-mb:var(--weline-space-4);">
+                <label class="w-field__label"><?= __('CDN 账户') ?></label>
+                <w:websites:registrar:select id="weline-manual-cdn-account" name="weline_manual_cdn_account" value="''" display="''" options="'[]'" empty-label="@lang(默认不设置)" placeholder="@lang(搜索 CDN 账号...)" data-w-width="full" />
             </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label"><?= __('HTTPS 处理方式') ?></label>
-            <select class="form-select" id="weline-manual-https-mode" data-domain-list-change="onManualHttpsModeChange">
+        <div style="--w-mb:var(--weline-space-4);">
+            <label class="w-field__label"><?= __('HTTPS 处理方式') ?></label>
+            <select class="w-select" id="weline-manual-https-mode" data-domain-list-change="onManualHttpsModeChange">
                 <option value="none"><?= __('暂不处理') ?></option>
                 <option value="auto"><?= __('自动申请证书') ?></option>
                 <option value="manual"><?= __('手动导入证书') ?></option>
             </select>
         </div>
-        <div class="mb-3" id="weline-manual-https-auto-box" style="display:none;">
-            <label class="form-label"><?= __('联系邮箱') ?></label>
-            <input type="email" class="form-control" id="weline-manual-https-email" placeholder="<?= __('可选，默认 admin@根域') ?>">
+        <div id="weline-manual-https-auto-box" style="display:none;">
+            <label class="w-field__label"><?= __('联系邮箱') ?></label>
+            <input type="email" class="w-input" id="weline-manual-https-email" placeholder="<?= __('可选，默认 admin@根域') ?>">
         </div>
         <div id="weline-manual-https-manual-box" style="display:none;">
-            <div class="mb-2"><small class="text-muted"><?= __('支持 PEM/CRT/KEY/PFX/P12 上传，或直接粘贴文本') ?></small></div>
-            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-cert-file" accept=".pem,.crt"></div>
-            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-key-file" accept=".key,.pem"></div>
-            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-chain-file" accept=".pem,.crt"></div>
-            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-pfx-file" accept=".pfx,.p12"></div>
-            <div class="mb-2"><input type="password" class="form-control" id="weline-manual-pfx-password" placeholder="<?= __('PFX/P12 密码（可选）') ?>"></div>
-            <div class="mb-2"><textarea class="form-control" rows="3" id="weline-manual-cert-text" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
-            <div class="mb-2"><textarea class="form-control" rows="3" id="weline-manual-key-text" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>
-            <div class="mb-2"><textarea class="form-control" rows="2" id="weline-manual-chain-text" placeholder="<?= __('可选：中间证书链') ?>"></textarea></div>
+            <div style="--w-mb:var(--weline-space-2);"><small class="w-text" data-tone="muted"><?= __('支持 PEM/CRT/KEY/PFX/P12 上传，或直接粘贴文本') ?></small></div>
+            <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="weline-manual-cert-file" accept=".pem,.crt"></div>
+            <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="weline-manual-key-file" accept=".key,.pem"></div>
+            <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="weline-manual-chain-file" accept=".pem,.crt"></div>
+            <div style="--w-mb:var(--weline-space-2);"><input type="file" class="w-input" id="weline-manual-pfx-file" accept=".pfx,.p12"></div>
+            <div style="--w-mb:var(--weline-space-2);"><input type="password" class="w-input" id="weline-manual-pfx-password" placeholder="<?= __('PFX/P12 密码（可选）') ?>"></div>
+            <div style="--w-mb:var(--weline-space-2);"><textarea class="w-textarea" rows="3" id="weline-manual-cert-text" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
+            <div style="--w-mb:var(--weline-space-2);"><textarea class="w-textarea" rows="3" id="weline-manual-key-text" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>
+            <div style="--w-mb:var(--weline-space-2);"><textarea class="w-textarea" rows="2" id="weline-manual-chain-text" placeholder="<?= __('可选：中间证书链') ?>"></textarea></div>
         </div>
-        <div class="d-flex justify-content-end mt-3">
-            <button type="button" class="btn btn-primary" id="weline-manual-domain-submit" data-domain-list-action="submitManualDomain">
-                <i class="mdi mdi-check me-1"></i><?= __('创建域名') ?>
+        <div class="w-cluster" data-justify="end" style="--w-mt:var(--weline-space-4);">
+            <button type="button" class="w-button" id="weline-manual-domain-submit" data-domain-list-action="submitManualDomain" data-tone="primary">
+                <w:icon name="check" size="sm"></w:icon><?= __('创建域名') ?>
             </button>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="weline-import-domain-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('拉取域名：确认 DNS / CDN 管理账户') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog" id="weline-import-domain-modal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('拉取域名：确认 DNS / CDN 管理账户') ?></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <p class="text-muted small mb-3"><?= __('请选择本站已配置的、能管理该域名解析的账户。判断是否指向本站时，优先通过服务商 API 读取 A/AAAA 的 content（源站 IP），避免 CDN 边缘 IP 误判。至少选择 DNS 或 CDN 中的一项；Cloudflare 等可同时选同一账户。') ?></p>
-                <div class="mb-3">
-                    <label class="form-label"><?= __('DNS 管理账户') ?></label>
-                    <w:websites:registrar:select
-                        id="weline-import-bind-dns"
-                        name="weline_import_bind_dns"
-                        value="''"
-                        display="''"
-                        options="'[]'"
-                        empty-label="@lang(不指定)"
-                        placeholder="@lang(搜索 DNS 管理账号...)"
-                        class="w-100"
-                    />
+            <div class="w-dialog__body">
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('请选择本站已配置的、能管理该域名解析的账户。判断是否指向本站时，优先通过服务商 API 读取 A/AAAA 的 content（源站 IP），避免 CDN 边缘 IP 误判。至少选择 DNS 或 CDN 中的一项；Cloudflare 等可同时选同一账户。') ?></p>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('DNS 管理账户') ?></label>
+                    <w:websites:registrar:select id="weline-import-bind-dns" name="weline_import_bind_dns" value="''" display="''" options="'[]'" empty-label="@lang(不指定)" placeholder="@lang(搜索 DNS 管理账号...)" data-w-width="full" />
                 </div>
-                <div class="mb-3">
-                    <label class="form-label"><?= __('CDN 管理账户') ?></label>
-                    <w:websites:registrar:select
-                        id="weline-import-bind-cdn"
-                        name="weline_import_bind_cdn"
-                        value="''"
-                        display="''"
-                        options="'[]'"
-                        empty-label="@lang(不指定)"
-                        placeholder="@lang(搜索 CDN 管理账号...)"
-                        class="w-100"
-                    />
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('CDN 管理账户') ?></label>
+                    <w:websites:registrar:select id="weline-import-bind-cdn" name="weline_import_bind_cdn" value="''" display="''" options="'[]'" empty-label="@lang(不指定)" placeholder="@lang(搜索 CDN 管理账号...)" data-w-width="full" />
                 </div>
-                <p class="text-danger small mb-3 d-none" id="weline-import-bind-hint"><?= __('请至少选择 DNS 或 CDN 中的一项') ?></p>
-                <div class="mb-2">
-                    <label class="form-label d-block"><?= __('拉取后的解析策略') ?></label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="weline-import-resolve-mode" id="weline-import-mode-local" value="batch_to_local" checked>
-                        <label class="form-check-label" for="weline-import-mode-local"><?= __('尝试在注册商处自动添加 A 记录指向本服务器') ?></label>
+                <p class="w-text" id="weline-import-bind-hint" hidden data-tone="danger" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('请至少选择 DNS 或 CDN 中的一项') ?></p>
+                <div style="--w-mb:var(--weline-space-2);">
+                    <label class="w-field__label" data-w-display="block"><?= __('拉取后的解析策略') ?></label>
+                    <div class="w-check">
+                        <input type="radio" name="weline-import-resolve-mode" id="weline-import-mode-local" value="batch_to_local" checked>
+                        <label for="weline-import-mode-local"><?= __('尝试在注册商处自动添加 A 记录指向本服务器') ?></label>
                     </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="weline-import-resolve-mode" id="weline-import-mode-keep" value="keep_each_dns">
-                        <label class="form-check-label" for="weline-import-mode-keep"><?= __('保持现有解析，不自动改记录（适合已配好 DNS/CDN）') ?></label>
+                    <div class="w-check">
+                        <input type="radio" name="weline-import-resolve-mode" id="weline-import-mode-keep" value="keep_each_dns">
+                        <label for="weline-import-mode-keep"><?= __('保持现有解析，不自动改记录（适合已配好 DNS/CDN）') ?></label>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-import-confirm-btn"><?= __('确认拉取') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="weline-import-confirm-btn" data-tone="primary"><?= __('确认拉取') ?></button>
             </div>
         </div>
     </div>
@@ -1725,8 +1620,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function toast(msg, type) {
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast[type] ? BackendToast[type](msg) : BackendToast.info(msg);
+        if (typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast[type] ? Weline.UI.toast[type](msg) : Weline.UI.toast.info(msg);
         } else if (typeof showToast !== 'undefined') {
             showToast(msg, type);
         } else {
@@ -1756,7 +1651,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         });
 
         var tbody = document.getElementById('weline-domain-list-body');
-        tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('加载中...') ?></p></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><w:icon name="circle" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('加载中...') ?></p></td></tr>';
 
         bqAdmin['websites'](urls.domainList + '?' + params.toString())
             .then(function(r) { return r.json(); })
@@ -1779,12 +1674,12 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     renderPagination(pagination);
                 } else {
                     toast(data.msg || '<?= __('加载失败') ?>', 'error');
-                    tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + escapeOptLabel(data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><w:icon name="warning" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;">' + escapeOptLabel(data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
                 }
             })
             .catch(function(err) {
                 toast('<?= __('请求失败') ?>', 'error');
-                tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0"><?= __('请求失败') ?></p></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><w:icon name="warning" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('请求失败') ?></p></td></tr>';
             });
     }
 
@@ -1802,8 +1697,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         if (accounts.length === 0) {
             var tbody = document.getElementById('weline-domain-list-body');
             tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
-                '<i class="mdi mdi-account-off-outline" style="font-size:2rem;"></i>' +
-                '<p class="mt-2 mb-0"><?= __('请先添加域名商账户') ?></p></td></tr>';
+                '<w:icon name="user" size="sm"></w:icon>' +
+                '<p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('请先添加域名商账户') ?></p></td></tr>';
             return;
         }
 
@@ -1874,11 +1769,11 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         
         // 显示供应商错误（如果有）
         if (providerErrors && providerErrors.length > 0) {
-            var errorHtml = '<div class="alert alert-danger mb-3">' +
-                '<div class="d-flex align-items-center mb-2">' +
-                '<i class="mdi mdi-alert-circle me-2" style="font-size:1.2rem;"></i>' +
+            var errorHtml = '<div class="w-alert" data-tone="danger" style="--w-mb:var(--weline-space-4);">' +
+                '<div class="w-cluster" data-align="center" style="--w-mb:var(--weline-space-2);">' +
+                '<w:icon name="warning" size="sm"></w:icon>' +
                 '<strong><?= __('部分供应商获取域名失败') ?></strong></div>' +
-                '<ul class="mb-0 ps-4">';
+                '<ul class="ps-4" style="--w-mb:0;">';
             providerErrors.forEach(function(e) {
                 errorHtml += '<li><strong>' + escapeOptLabel(e.account || '<?= __('未知账户') ?>') + '</strong>: ' + escapeOptLabel(e.error || '<?= __('未知错误') ?>') + '</li>';
             });
@@ -1891,17 +1786,17 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 ? '<?= __('无法获取域名，请检查上方的错误信息') ?>'
                 : '<?= __('域名商账户下暂无域名') ?>';
             tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
-                '<i class="mdi mdi-earth-off" style="font-size:2rem;"></i>' +
-                '<p class="mt-2 mb-0">' + emptyMsg + '</p></td></tr>';
+                '<w:icon name="globe" size="sm"></w:icon>' +
+                '<p style="--w-mt:var(--weline-space-2);--w-mb:0;">' + emptyMsg + '</p></td></tr>';
             renderPagination({});
             return;
         }
 
         // 显示提示信息
-        var infoHtml = '<div class="alert alert-info mb-3 d-flex align-items-center justify-content-between">' +
-            '<span><i class="mdi mdi-information-outline me-2"></i><?= __('以下域名尚未拉取到本地，请选择域名后点击「导入选中」按钮') ?></span>' +
-            '<button type="button" class="btn btn-primary btn-sm" data-domain-list-action="importSelectedRemoteDomains">' +
-            '<i class="mdi mdi-import me-1"></i><?= __('导入选中') ?></button></div>';
+        var infoHtml = '<div class="w-alert w-cluster" data-align="center" data-justify="between" data-tone="info" style="--w-mb:var(--weline-space-4);">' +
+            '<span><w:icon name="info" size="sm"></w:icon><?= __('以下域名尚未拉取到本地，请选择域名后点击「导入选中」按钮') ?></span>' +
+            '<button type="button" class="w-button" data-domain-list-action="importSelectedRemoteDomains" data-tone="primary" data-size="sm">' +
+            '<w:icon name="import" size="sm"></w:icon><?= __('导入选中') ?></button></div>';
         
         // 在表格前插入提示
         tableWrapper.insertAdjacentHTML('beforebegin', infoHtml);
@@ -1911,8 +1806,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             var statusClass = d.status === 'active' ? 'weline-domain-status-resolved' : 'weline-domain-status-pending';
             var statusText = d.status === 'active' ? '<?= __('正常') ?>' : (d.status || '-');
             var localBadge = d.is_local
-                ? '<span class="badge bg-success"><?= __('已拉取') ?></span>'
-                : '<span class="badge bg-secondary"><?= __('未拉取') ?></span>';
+                ? '<span class="w-badge" data-w-background="success"><?= __('已拉取') ?></span>'
+                : '<span class="w-badge" data-w-background="muted"><?= __('未拉取') ?></span>';
 
             var remoteDomain = String(d.domain || '');
             var remoteAccountId = parseInt(d._account_id || 0, 10) || 0;
@@ -1920,13 +1815,13 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             html += '<tr data-domain="' + escapeOptLabel(remoteDomain) + '" data-account-id="' + remoteAccountId + '">' +
                 '<td><input type="checkbox" class="weline-remote-domain-checkbox" value="' + escapeOptLabel(remoteDomain) + '" data-account-id="' + remoteAccountId + '"' + (d.is_local ? ' disabled' : '') + '></td>' +
                 '<td><span class="domain-name">' + escapeOptLabel(remoteDomain) + '</span></td>' +
-                '<td><span class="badge bg-primary">' + escapeOptLabel(d._account_name || '-') + '</span></td>' +
+                '<td><span class="w-badge" data-w-background="primary">' + escapeOptLabel(d._account_name || '-') + '</span></td>' +
                 '<td><span class="weline-domain-status-badge ' + statusClass + '">' + escapeOptLabel(statusText) + '</span></td>' +
                 '<td>' + escapeOptLabel(d.expires_at || '-') + '</td>' +
                 '<td>' + localBadge + '</td>' +
                 '<td>-</td>' +
-                '<td class="text-end weline-domain-actions">' +
-                    (d.is_local ? '-' : '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('导入') ?>" data-domain-list-action="importSingleRemoteDomain" data-domain="' + escapeOptLabel(remoteDomain) + '" data-account-id="' + remoteAccountId + '"><i class="mdi mdi-import"></i></button>') +
+                '<td class="w-text weline-domain-actions" data-align="end">' +
+                    (d.is_local ? '-' : '<button type="button" class="w-button" title="<?= __('导入') ?>" data-domain-list-action="importSingleRemoteDomain" data-domain="' + escapeOptLabel(remoteDomain) + '" data-account-id="' + remoteAccountId + '" data-tone="primary" data-variant="outline" data-size="sm"><w:icon name="circle" size="sm"></w:icon></button>') +
                 '</td>' +
                 '</tr>';
         });
@@ -1961,9 +1856,9 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         if (hint) { hint.classList.add('d-none'); }
         loadImportDnsCdnSelects(function() {
             var el = document.getElementById('weline-import-domain-modal');
-            if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                importModal = new bootstrap.Modal(el);
-                importModal.show();
+            if (el) {
+                importModal = el;
+                Weline.UI.dialog.open(importModal);
             }
         });
     }
@@ -1978,9 +1873,9 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         if (hint) { hint.classList.add('d-none'); }
         loadImportDnsCdnSelects(function() {
             var el = document.getElementById('weline-import-domain-modal');
-            if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                importModal = new bootstrap.Modal(el);
-                importModal.show();
+            if (el) {
+                importModal = el;
+                Weline.UI.dialog.open(importModal);
             }
         });
     }
@@ -2000,9 +1895,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             var modeEl = document.querySelector('input[name="weline-import-resolve-mode"]:checked');
             var mode = modeEl ? modeEl.value : 'batch_to_local';
             var elModal = document.getElementById('weline-import-domain-modal');
-            if (elModal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                var inst = bootstrap.Modal.getInstance(elModal);
-                if (inst) inst.hide();
+            if (elModal) {
+                Weline.UI.dialog.close(elModal, 'confirmed');
             }
             runImportWithBinding(pendingImportByAccount, dns, cdn, mode);
             var singleRemote = Object.keys(pendingImportByAccount).length === 1 &&
@@ -2027,23 +1921,23 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             // 如果有筛选条件且没有数据，提示用户切换到全部状态
             if (hasFilters) {
                 tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
-                    '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
-                    '<p class="mt-2 mb-1"><?= __('当前筛选条件下暂无已拉取的域名') ?></p>' +
-                    '<p class="text-muted small mb-2"><?= __('请切换筛选条件为「全部」，从线上选择域名拉取到本地') ?></p>' +
-                    '<button type="button" class="btn btn-primary btn-sm" data-domain-list-action="resetFilters">' +
-                    '<i class="mdi mdi-filter-off me-1"></i><?= __('查看全部状态') ?></button></td></tr>';
+                    '<w:icon name="download" size="sm"></w:icon>' +
+                    '<p style="--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-1);"><?= __('当前筛选条件下暂无已拉取的域名') ?></p>' +
+                    '<p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);"><?= __('请切换筛选条件为「全部」，从线上选择域名拉取到本地') ?></p>' +
+                    '<button type="button" class="w-button" data-domain-list-action="resetFilters" data-tone="primary" data-size="sm">' +
+                    '<w:icon name="filter" size="sm"></w:icon><?= __('查看全部状态') ?></button></td></tr>';
                 return;
             }
             // 如果本地没有域名且允许自动拉取，则自动获取远程域名
             if (autoFetchRemote && !autoFetchTriggered) {
                 autoFetchTriggered = true;
                 tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
-                    '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
-                    '<p class="mt-2 mb-0"><?= __('本地暂无已拉取的域名，正在从域名商获取...') ?></p></td></tr>';
+                    '<w:icon name="download" size="sm"></w:icon>' +
+                    '<p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('本地暂无已拉取的域名，正在从域名商获取...') ?></p></td></tr>';
                 loadRemoteDomainsForDisplay();
                 return;
             }
-            tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-earth-off" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('暂无域名数据') ?></p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><w:icon name="globe" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('暂无域名数据') ?></p></td></tr>';
             return;
         }
         autoFetchTriggered = false;
@@ -2079,14 +1973,14 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
             var localBadge = item.is_local_server ? '<span class="weline-domain-local-badge"><?= __('本机') ?></span>' : '';
             var siteReady = item.site_ready
-                ? '<span class="badge bg-success-subtle text-success"><i class="mdi mdi-check-circle-outline me-1"></i><?= __('可建站') ?></span>'
-                : '<span class="badge bg-secondary-subtle text-secondary"><i class="mdi mdi-clock-outline me-1"></i><?= __('未就绪') ?></span>';
+                ? '<span class="w-badge w-text" data-w-background="success" data-tone="success"><w:icon name="check" size="sm"></w:icon><?= __('可建站') ?></span>'
+                : '<span class="w-badge w-text" data-w-background="muted" data-tone="muted"><w:icon name="clock" size="sm"></w:icon><?= __('未就绪') ?></span>';
             var siteCreated = (item.site_created === 1 || item.site_created === true)
-                ? '<span class="badge bg-info-subtle text-info"><i class="mdi mdi-earth me-1"></i><?= __('已建站') ?></span>'
-                : '<span class="badge bg-secondary-subtle text-secondary"><i class="mdi mdi-earth-off me-1"></i><?= __('未建站') ?></span>';
+                ? '<span class="w-badge w-text" data-w-background="info" data-tone="info"><w:icon name="globe" size="sm"></w:icon><?= __('已建站') ?></span>'
+                : '<span class="w-badge w-text" data-w-background="muted" data-tone="muted"><w:icon name="globe" size="sm"></w:icon><?= __('未建站') ?></span>';
             var connDetail = (item.connectivity_detail || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             var connTitle = connDetail || (item.connectivity_checked_at ? ('<?= __('检测于') ?> ' + (item.connectivity_checked_at || '')) : '<?= __('待检测') ?>');
-            var connCell = '<span class="badge bg-light text-muted" title="' + connTitle + '"><i class="mdi mdi-radar me-1" aria-hidden="true"></i><?= __('连通性') ?></span>';
+            var connCell = '<span class="w-badge w-text" title="' + connTitle + '" data-w-background="muted" data-tone="muted"><w:icon name="search" size="sm"></w:icon><?= __('连通性') ?></span>';
 
             // 构建服务商列（三行：注册商、DNS、CDN）
             var registrarName = item.registrar_name || item.account_name || '-';
@@ -2135,11 +2029,11 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 '<td><span class="domain-name">' + escapeOptLabel(domainName) + '</span></td>' +
                 '<td>' + providerCell + '</td>' +
                 '<td>' + summaryCell + '</td>' +
-                '<td class="text-end weline-domain-actions">' +
-                    '<button type="button" class="btn btn-outline-success btn-sm" title="<?= __('转存域名池') ?>" data-domain-list-action="transferToPool" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '"><i class="mdi mdi-database-export"></i></button> ' +
-                    '<button type="button" class="btn btn-outline-info btn-sm" title="<?= __('DNS管理') ?>" data-domain-list-action="showDnsModal" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '"><i class="mdi mdi-dns"></i></button> ' +
-                    '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('检测解析') ?>" data-domain-list-action="checkResolve" data-domain-id="' + domainId + '"><i class="mdi mdi-refresh"></i></button> ' +
-                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" data-domain-list-action="deleteDomain" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '"><i class="mdi mdi-delete-outline"></i></button>' +
+                '<td class="w-text weline-domain-actions" data-align="end">' +
+                    '<button type="button" class="w-button" title="<?= __('转存域名池') ?>" data-domain-list-action="transferToPool" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '" data-tone="success" data-variant="outline" data-size="sm"><w:icon name="database" size="sm"></w:icon></button> ' +
+                    '<button type="button" class="w-button" title="<?= __('DNS管理') ?>" data-domain-list-action="showDnsModal" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '" data-tone="info" data-variant="outline" data-size="sm"><w:icon name="dns" size="sm"></w:icon></button> ' +
+                    '<button type="button" class="w-button" title="<?= __('检测解析') ?>" data-domain-list-action="checkResolve" data-domain-id="' + domainId + '" data-tone="primary" data-variant="outline" data-size="sm"><w:icon name="refresh" size="sm"></w:icon></button> ' +
+                    '<button type="button" class="w-button" title="<?= __('删除') ?>" data-domain-list-action="deleteDomain" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '" data-tone="danger" data-variant="outline" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>' +
                 '</td>' +
                 '</tr>';
         });
@@ -2168,42 +2062,42 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
         var linksHtml = '';
         if (lastPage > 1) {
-            linksHtml += '<li class="page-item ' + (current <= 1 ? 'disabled' : '') + '"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + (current - 1) + '">&laquo;</a></li>';
+            linksHtml += '<li class="w-pagination__item ' + (current <= 1 ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-domain-list-action="loadDomains" data-page="' + (current - 1) + '">&laquo;</a></li>';
             var start = Math.max(1, current - 2);
             var end = Math.min(lastPage, current + 2);
             if (start > 1) {
-                linksHtml += '<li class="page-item"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="1">1</a></li>';
+                linksHtml += '<li class="w-pagination__item"><a class="w-pagination__link" href="#" data-domain-list-action="loadDomains" data-page="1">1</a></li>';
                 if (start > 2) {
-                    linksHtml += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                    linksHtml += '<li class="w-pagination__item" aria-disabled="true"><span class="w-pagination__link">…</span></li>';
                 }
             }
             for (var i = start; i <= end; i++) {
-                linksHtml += '<li class="page-item ' + (i === current ? 'active' : '') + '"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + i + '">' + i + '</a></li>';
+                linksHtml += '<li class="w-pagination__item ' + (i === current ? 'active' : '')"><a class="w-pagination__link" href="#" data-domain-list-action="loadDomains" data-page="' + i + '">' + i + '</a></li>';
             }
             if (end < lastPage) {
                 if (end < lastPage - 1) {
-                    linksHtml += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                    linksHtml += '<li class="w-pagination__item" aria-disabled="true"><span class="w-pagination__link">…</span></li>';
                 }
-                linksHtml += '<li class="page-item"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + lastPage + '">' + lastPage + '</a></li>';
+                linksHtml += '<li class="w-pagination__item"><a class="w-pagination__link" href="#" data-domain-list-action="loadDomains" data-page="' + lastPage + '">' + lastPage + '</a></li>';
             }
-            linksHtml += '<li class="page-item ' + (current >= lastPage ? 'disabled' : '') + '"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + (current + 1) + '">&raquo;</a></li>';
+            linksHtml += '<li class="w-pagination__item ' + (current >= lastPage ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-domain-list-action="loadDomains" data-page="' + (current + 1) + '">&raquo;</a></li>';
         } else if (total > 0) {
-            linksHtml = '<li class="page-item disabled"><span class="page-link"><?= __('仅 1 页') ?></span></li>';
+            linksHtml = '<li class="w-pagination__item" aria-disabled="true"><span class="w-pagination__link"><?= __('仅 1 页') ?></span></li>';
         }
         links.innerHTML = linksHtml;
     }
 
     function showImportModal() {
         if (!importModal) {
-            importModal = new bootstrap.Modal(document.getElementById('welineImportDomainModal'));
+            importModal = document.getElementById('welineImportDomainModal');
         }
         setRegistrarSelectValue('weline-import-account-select', '', 'handleImportAccountChange');
-        document.getElementById('weline-import-domain-list').innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><?= __('请选择域名商账户') ?></td></tr>';
+        document.getElementById('weline-import-domain-list').innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请选择域名商账户') ?></td></tr>';
         document.getElementById('weline-import-count').textContent = '';
         remoteDomainData = [];
         hideImported = false;
         document.getElementById('weline-import-toggle-text').textContent = '<?= __('隐藏已导入') ?>';
-        importModal.show();
+        Weline.UI.dialog.open(importModal);
     }
 
     function fetchRemoteDomains() {
@@ -2211,13 +2105,13 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         var tbody = document.getElementById('weline-import-domain-list');
 
         if (!accountId) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><?= __('请选择域名商账户') ?></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请选择域名商账户') ?></td></tr>';
             remoteDomainData = [];
             updateImportCount();
             return;
         }
 
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4"><i class="mdi mdi-loading mdi-spin" style="font-size:1.5rem;"></i><p class="mt-2 mb-0"><?= __('正在获取远程域名列表...') ?></p></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><w:icon name="circle" size="sm"></w:icon><p style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在获取远程域名列表...') ?></p></td></tr>';
 
         bqAdmin['websites'](urls.remoteDomains + '?account_id=' + accountId)
             .then(function(r) { return r.json(); })
@@ -2228,14 +2122,14 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     toast(data.msg || '<?= __('获取成功') ?>', 'success');
                 } else {
                     toast(data.msg || '<?= __('获取失败') ?>', 'error');
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">' + escapeOptLabel(data.msg || '<?= __('获取失败') ?>') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">' + escapeOptLabel(data.msg || '<?= __('获取失败') ?>') + '</td></tr>';
                     remoteDomainData = [];
                 }
                 updateImportCount();
             })
             .catch(function() {
                 toast('<?= __('请求失败') ?>', 'error');
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><?= __('请求失败') ?></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请求失败') ?></td></tr>';
                 remoteDomainData = [];
                 updateImportCount();
             });
@@ -2250,7 +2144,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         }
 
         if (domains.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">' + (hideImported ? '<?= __('所有域名已导入') ?>' : '<?= __('没有域名') ?>') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">' + (hideImported ? '<?= __('所有域名已导入') ?>' : '<?= __('没有域名') ?>') + '</td></tr>';
             return;
         }
 
@@ -2259,8 +2153,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             var statusClass = d.status === 'active' ? 'weline-domain-status-resolved' : 'weline-domain-status-pending';
             var statusText = d.status === 'active' ? '<?= __('正常') ?>' : (d.status || '-');
             var localBadge = d.is_local
-                ? '<span class="badge bg-success"><?= __('已导入') ?></span>'
-                : '<span class="badge bg-secondary"><?= __('未导入') ?></span>';
+                ? '<span class="w-badge" data-w-background="success"><?= __('已导入') ?></span>'
+                : '<span class="w-badge" data-w-background="muted"><?= __('未导入') ?></span>';
 
             html += '<tr data-domain="' + (d.domain || '') + '">' +
                 '<td><input type="checkbox" class="weline-import-checkbox" value="' + (d.domain || '') + '"' + (d.is_local ? ' disabled' : '') + '></td>' +
@@ -2391,15 +2285,14 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         document.getElementById('weline-dns-modal-title').textContent = '<?= __('DNS记录管理') ?> - ' + domain;
         document.getElementById('weline-dns-form-domain-id').value = domainId;
 
-        var modal = new bootstrap.Modal(document.getElementById('welineDnsRecordModal'));
-        modal.show();
+        Weline.UI.dialog.open('#welineDnsRecordModal');
 
         loadDnsRecords(domainId);
     }
 
     function loadDnsRecords(domainId) {
         var tbody = document.getElementById('weline-dns-records-body');
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><w:icon name="circle" size="sm"></w:icon></td></tr>';
 
         bqAdmin['websites'](urls.dnsRecords + '?domain_id=' + domainId)
             .then(function(r) { return r.json(); })
@@ -2421,7 +2314,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     renderDnsRecords(data.data.records || []);
                 } else {
                     toast(data.msg || '<?= __('获取DNS记录失败') ?>', 'error');
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><?= __('获取失败') ?></td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('获取失败') ?></td></tr>';
                 }
             })
             .catch(function() {
@@ -2432,7 +2325,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     function renderDnsRecords(records) {
         var tbody = document.getElementById('weline-dns-records-body');
         if (!records.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><?= __('暂无DNS记录') ?></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('暂无DNS记录') ?></td></tr>';
             return;
         }
 
@@ -2455,13 +2348,13 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             var recordValue = String(rec.value || '');
 
             html += '<tr>' +
-                '<td><span class="badge bg-secondary">' + escapeOptLabel(recordType) + '</span></td>' +
+                '<td><span class="w-badge" data-w-background="muted">' + escapeOptLabel(recordType) + '</span></td>' +
                 '<td>' + escapeOptLabel(recordHost) + '</td>' +
                 '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + escapeOptLabel(recordValue) + '">' + escapeOptLabel(recordValue) + localBadge + '</td>' +
                 '<td>' + (rec.ttl || 600) + '</td>' +
                 '<td><span class="weline-domain-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
-                '<td class="text-end">' +
-                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" data-domain-list-action="deleteDnsRecord" data-record-id="' + escapeOptLabel(recordId) + '" data-record-type="' + escapeOptLabel(recordType) + '" data-record-host="' + escapeOptLabel(recordHost) + '"><i class="mdi mdi-delete"></i></button>' +
+                '<td class="w-text" data-align="end">' +
+                    '<button type="button" class="w-button" title="<?= __('删除') ?>" data-domain-list-action="deleteDnsRecord" data-record-id="' + escapeOptLabel(recordId) + '" data-record-type="' + escapeOptLabel(recordType) + '" data-record-host="' + escapeOptLabel(recordHost) + '" data-tone="danger" data-variant="outline" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>' +
                 '</td>' +
                 '</tr>';
         });
@@ -2524,25 +2417,18 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
     function deleteDnsRecord(recordId, type, host) {
         if (!currentDomainId) return;
-        if (typeof BackendConfirm !== 'undefined') {
-            BackendConfirm.show('<?= __('确定删除此DNS记录吗？') ?>').then(function(confirmed) {
-                if (confirmed) doDeleteDnsRecord(recordId, type, host);
-            });
-        } else if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: '<?= __('确认删除') ?>',
-                text: '<?= __('确定删除此DNS记录吗？') ?>',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#f46a6a',
-                cancelButtonText: '<?= __('取消') ?>',
-                confirmButtonText: '<?= __('删除') ?>'
-            }).then(function(result) {
-                if (result.isConfirmed) doDeleteDnsRecord(recordId, type, host);
-            });
-        } else {
-            doDeleteDnsRecord(recordId, type, host);
-        }
+        Weline.UI.dialog.request({
+            title: '<?= __('确认删除') ?>',
+            message: '<?= __('确定删除此DNS记录吗？') ?>',
+            tone: 'warning',
+            cancelable: true,
+            dangerous: true,
+            confirmTone: 'danger',
+            cancelLabel: '<?= __('取消') ?>',
+            confirmLabel: '<?= __('删除') ?>'
+        }).then(function(result) {
+            if (result.confirmed) doDeleteDnsRecord(recordId, type, host);
+        });
     }
 
     function doDeleteDnsRecord(recordId, type, host) {
@@ -2565,26 +2451,19 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function deleteDomain(domainId, domainName) {
-        var msg = '<?= __('确定要删除根域「%{1}」吗？该根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。') ?>'.replace('%{1}', (domainName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
-        if (typeof BackendConfirm !== 'undefined') {
-            BackendConfirm.show(msg).then(function(confirmed) {
-                if (confirmed) doDeleteDomain(domainId);
-            });
-        } else if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: '<?= __('确认删除') ?>',
-                html: msg,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#f46a6a',
-                cancelButtonText: '<?= __('取消') ?>',
-                confirmButtonText: '<?= __('删除') ?>'
-            }).then(function(result) {
-                if (result.isConfirmed) doDeleteDomain(domainId);
-            });
-        } else {
-            toast('<?= __('未找到确认弹窗组件，操作已取消') ?>', 'error');
-        }
+        var msg = '<?= __('确定要删除根域「%{1}」吗？该根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。') ?>'.replace('%{1}', domainName || '');
+        Weline.UI.dialog.request({
+            title: '<?= __('确认删除') ?>',
+            message: msg,
+            tone: 'warning',
+            cancelable: true,
+            dangerous: true,
+            confirmTone: 'danger',
+            cancelLabel: '<?= __('取消') ?>',
+            confirmLabel: '<?= __('删除') ?>'
+        }).then(function(result) {
+            if (result.confirmed) doDeleteDomain(domainId);
+        });
     }
 
     function doDeleteDomain(domainId) {
@@ -2610,25 +2489,18 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             return;
         }
         var msg = '<?= __('确定要删除选中的 %{1} 个根域吗？每个根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。') ?>'.replace('%{1}', ids.length);
-        if (typeof BackendConfirm !== 'undefined') {
-            BackendConfirm.show(msg).then(function(confirmed) {
-                if (confirmed) doBatchDeleteDomains(ids);
-            });
-        } else if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: '<?= __('确认删除') ?>',
-                html: msg,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#f46a6a',
-                cancelButtonText: '<?= __('取消') ?>',
-                confirmButtonText: '<?= __('删除') ?>'
-            }).then(function(result) {
-                if (result.isConfirmed) doBatchDeleteDomains(ids);
-            });
-        } else {
-            toast('<?= __('未找到确认弹窗组件，操作已取消') ?>', 'error');
-        }
+        Weline.UI.dialog.request({
+            title: '<?= __('确认删除') ?>',
+            message: msg,
+            tone: 'warning',
+            cancelable: true,
+            dangerous: true,
+            confirmTone: 'danger',
+            cancelLabel: '<?= __('取消') ?>',
+            confirmLabel: '<?= __('删除') ?>'
+        }).then(function(result) {
+            if (result.confirmed) doBatchDeleteDomains(ids);
+        });
     }
 
     function doBatchDeleteDomains(domainIds) {
@@ -2681,16 +2553,14 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function transferToPool(domainId, domain) {
-        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.showInput) {
-            BackendConfirm.showInput('<?= __('转存到域名池') ?>', '<?= __('输入子域名前缀（多个用逗号分隔，默认 @,www）') ?>', '@,www')
-                .then(function(result) {
-                    if (result.confirmed) {
-                        doTransferToPool(domainId, result.value);
-                    }
-                });
-        } else {
-            doTransferToPool(domainId, '@,www');
-        }
+        Weline.UI.dialog.request({
+            title: '<?= __('转存到域名池') ?>',
+            message: '<?= __('输入子域名前缀（多个用逗号分隔，默认 @,www）') ?>',
+            cancelable: true,
+            field: {type: 'text', value: '@,www', required: true}
+        }).then(function(result) {
+            if (result.confirmed) doTransferToPool(domainId, result.value);
+        });
     }
 
     function doTransferToPool(domainId, prefixesStr) {
@@ -2721,16 +2591,14 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             return;
         }
 
-        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.showInput) {
-            BackendConfirm.showInput('<?= __('批量转存到域名池') ?>', '<?= __('输入子域名前缀（多个用逗号分隔，默认 @,www）') ?>', '@,www')
-                .then(function(result) {
-                    if (result.confirmed) {
-                        doBatchTransferToPool(ids, result.value);
-                    }
-                });
-        } else {
-            doBatchTransferToPool(ids, '@,www');
-        }
+        Weline.UI.dialog.request({
+            title: '<?= __('批量转存到域名池') ?>',
+            message: '<?= __('输入子域名前缀（多个用逗号分隔，默认 @,www）') ?>',
+            cancelable: true,
+            field: {type: 'text', value: '@,www', required: true}
+        }).then(function(result) {
+            if (result.confirmed) doBatchTransferToPool(ids, result.value);
+        });
     }
 
     function doBatchTransferToPool(ids, prefixesStr) {
@@ -2782,19 +2650,15 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             return;
         }
 
-        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
-            BackendConfirm.show('<?= __('确定批量转存') ?> ' + ids.length + ' <?= __('个域名？') ?>\n\n<?= __('注意：只有解析到本服务器IP的域名才会被转存，其他将跳过。') ?>', {
-                title: '<?= __('批量转存（检查IP）') ?>',
-                confirmText: '<?= __('确认转存') ?>',
-                cancelText: '<?= __('取消') ?>'
-            }).then(function(confirmed) {
-                if (confirmed) {
-                    doBatchTransferWithIpCheck(ids);
-                }
-            });
-        } else {
-            doBatchTransferWithIpCheck(ids);
-        }
+        Weline.UI.dialog.confirm('<?= __('确定批量转存') ?> ' + ids.length + ' <?= __('个域名？') ?>\n\n<?= __('注意：只有解析到本服务器IP的域名才会被转存，其他将跳过。') ?>', {
+            title: '<?= __('批量转存（检查IP）') ?>',
+            confirmLabel: '<?= __('确认转存') ?>',
+            cancelLabel: '<?= __('取消') ?>'
+        }).then(function(confirmed) {
+            if (confirmed) {
+                doBatchTransferWithIpCheck(ids);
+            }
+        });
     }
 
     function doBatchTransferWithIpCheck(ids) {
@@ -2829,19 +2693,15 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             return;
         }
 
-        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
-            BackendConfirm.show('<?= __('确定将') ?> ' + ids.length + ' <?= __('个域名解析到本服务器？') ?>\n\n<?= __('将为每个域名添加 @ 和 www 的A记录指向本服务器公网IP。') ?>', {
-                title: '<?= __('批量解析到本地') ?>',
-                confirmText: '<?= __('确认解析') ?>',
-                cancelText: '<?= __('取消') ?>'
-            }).then(function(confirmed) {
-                if (confirmed) {
-                    doBatchResolveToLocal(ids);
-                }
-            });
-        } else {
-            doBatchResolveToLocal(ids);
-        }
+        Weline.UI.dialog.confirm('<?= __('确定将') ?> ' + ids.length + ' <?= __('个域名解析到本服务器？') ?>\n\n<?= __('将为每个域名添加 @ 和 www 的A记录指向本服务器公网IP。') ?>', {
+            title: '<?= __('批量解析到本地') ?>',
+            confirmLabel: '<?= __('确认解析') ?>',
+            cancelLabel: '<?= __('取消') ?>'
+        }).then(function(confirmed) {
+            if (confirmed) {
+                doBatchResolveToLocal(ids);
+            }
+        });
     }
 
     function doBatchResolveToLocal(ids) {
@@ -2901,12 +2761,12 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         loadRegistrarAccounts();
 
         if (!batchChangeNsModal) {
-            batchChangeNsModal = new bootstrap.Modal(document.getElementById('welineBatchChangeNsModal'));
+            batchChangeNsModal = document.getElementById('welineBatchChangeNsModal');
             document.querySelectorAll('input[name="weline-ns-switch-mode"]').forEach(function(radio) {
                 radio.addEventListener('change', onNsSwitchModeChange);
             });
         }
-        batchChangeNsModal.show();
+        Weline.UI.dialog.open(batchChangeNsModal);
     }
 
     function loadRegistrarAccounts() {
@@ -3038,7 +2898,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                             console.log('<?= __('切换错误') ?>:', data.data.errors);
                         }
                         if (batchChangeNsModal) {
-                            batchChangeNsModal.hide();
+                            Weline.UI.dialog.close(batchChangeNsModal, 'complete');
                         }
                         loadDomains(currentPage);
                     } else {
@@ -3085,7 +2945,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                             console.log('<?= __('切换错误') ?>:', data.data.errors);
                         }
                         if (batchChangeNsModal) {
-                            batchChangeNsModal.hide();
+                            Weline.UI.dialog.close(batchChangeNsModal, 'complete');
                         }
                         loadDomains(currentPage);
                     } else {
@@ -3130,9 +2990,9 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             });
 
         if (!batchAddDnsModal) {
-            batchAddDnsModal = new bootstrap.Modal(document.getElementById('welineBatchAddDnsRecordModal'));
+            batchAddDnsModal = document.getElementById('welineBatchAddDnsRecordModal');
         }
-        batchAddDnsModal.show();
+        Weline.UI.dialog.open(batchAddDnsModal);
     }
 
     function onBatchAddDnsUseServerIpChange() {
@@ -3187,7 +3047,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                         console.log('<?= __('添加错误') ?>:', data.data.errors);
                     }
                     if (batchAddDnsModal) {
-                        batchAddDnsModal.hide();
+                        Weline.UI.dialog.close(batchAddDnsModal, 'complete');
                     }
                     loadDomains(currentPage);
                 } else {
@@ -3207,10 +3067,10 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             return manualCreateOffcanvas;
         }
         var el = document.getElementById('welineManualCreateDomainOffcanvas');
-        if (!el || !window.bootstrap || !bootstrap.Offcanvas) {
+        if (!el) {
             return null;
         }
-        manualCreateOffcanvas = new bootstrap.Offcanvas(el);
+        manualCreateOffcanvas = el;
         return manualCreateOffcanvas;
     }
 
@@ -3252,7 +3112,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         loadManualCreateAccounts();
         var canvas = ensureManualCreateOffcanvas();
         if (canvas) {
-            canvas.show();
+            Weline.UI.drawer.open(canvas);
         }
     }
 
@@ -3293,7 +3153,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     toast(data.msg || '<?= __('创建成功') ?>', 'success');
                     var canvas = ensureManualCreateOffcanvas();
                     if (canvas) {
-                        canvas.hide();
+                        Weline.UI.drawer.close(canvas, 'complete');
                     }
                     loadDomains(1);
                 } else {
@@ -3388,9 +3248,9 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
         loadDnsAccountsForSwitch();
         if (!switchDnsAccountModal) {
-            switchDnsAccountModal = new bootstrap.Modal(document.getElementById('welineSwitchDnsAccountModal'));
+            switchDnsAccountModal = document.getElementById('welineSwitchDnsAccountModal');
         }
-        switchDnsAccountModal.show();
+        Weline.UI.dialog.open(switchDnsAccountModal);
     }
 
     function loadDnsAccountsForSwitch() {
@@ -3471,8 +3331,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
         var modalEl = document.getElementById('welineSwitchDnsAccountModal');
         if (switchDnsAccountModal) {
-            switchDnsAccountModal._config.backdrop = 'static';
-            switchDnsAccountModal._config.keyboard = false;
+            switchDnsAccountModal.dataset.wBackdrop = 'static';
+            switchDnsAccountModal.dataset.wClosable = 'false';
         }
 
         var sseUrl = urls.dnsSwitchSse
@@ -3483,25 +3343,25 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         var completedDomains = 0;
 
         var eventIcons = {
-            'init': '<i class="mdi mdi-information-outline" style="color:var(--backend-color-primary,#0d6efd);"></i>',
-            'sync_records': '<i class="mdi mdi-sync" style="color:var(--backend-color-info,#0dcaf0);"></i>',
-            'sync_records_done': '<i class="mdi mdi-check" style="color:var(--backend-color-success,#198754);"></i>',
-            'add_zone': '<i class="mdi mdi-cloud-outline" style="color:var(--backend-color-info,#0dcaf0);"></i>',
-            'add_zone_done': '<i class="mdi mdi-check" style="color:var(--backend-color-success,#198754);"></i>',
-            'switch_ns': '<i class="mdi mdi-swap-horizontal" style="color:var(--backend-color-warning,#ffc107);"></i>',
-            'switch_ns_done': '<i class="mdi mdi-check-circle" style="color:var(--backend-color-success,#198754);"></i>',
-            'push_records': '<i class="mdi mdi-upload" style="color:var(--backend-color-info,#0dcaf0);"></i>',
-            'update_domain': '<i class="mdi mdi-database-edit" style="color:var(--backend-color-info,#0dcaf0);"></i>',
-            'update_pool': '<i class="mdi mdi-database-check" style="color:var(--backend-color-info,#0dcaf0);"></i>',
-            'domain_done': '<i class="mdi mdi-check-all" style="color:var(--backend-color-success,#198754);"></i>',
-            'step_error': '<i class="mdi mdi-alert-circle" style="color:var(--backend-color-danger,#dc3545);"></i>',
-            'step_skip': '<i class="mdi mdi-skip-next" style="color:var(--backend-color-text-tertiary,#999);"></i>',
-            'error': '<i class="mdi mdi-close-circle" style="color:var(--backend-color-danger,#dc3545);"></i>',
-            'done': '<i class="mdi mdi-flag-checkered" style="color:var(--backend-color-success,#198754);"></i>'
+            'init': '<w:icon name="info" size="sm"></w:icon>',
+            'sync_records': '<w:icon name="refresh" size="sm"></w:icon>',
+            'sync_records_done': '<w:icon name="check" size="sm"></w:icon>',
+            'add_zone': '<w:icon name="cloud" size="sm"></w:icon>',
+            'add_zone_done': '<w:icon name="check" size="sm"></w:icon>',
+            'switch_ns': '<w:icon name="swap" size="sm"></w:icon>',
+            'switch_ns_done': '<w:icon name="check" size="sm"></w:icon>',
+            'push_records': '<w:icon name="upload" size="sm"></w:icon>',
+            'update_domain': '<w:icon name="edit" size="sm"></w:icon>',
+            'update_pool': '<w:icon name="check" size="sm"></w:icon>',
+            'domain_done': '<w:icon name="check" size="sm"></w:icon>',
+            'step_error': '<w:icon name="warning" size="sm"></w:icon>',
+            'step_skip': '<w:icon name="circle" size="sm"></w:icon>',
+            'error': '<w:icon name="close" size="sm"></w:icon>',
+            'done': '<w:icon name="check" size="sm"></w:icon>'
         };
 
         var appendLog = function(eventType, data) {
-            var icon = eventIcons[eventType] || '<i class="mdi mdi-circle-small"></i>';
+            var icon = eventIcons[eventType] || '<w:icon name="circle" size="sm"></w:icon>';
             var time = (data && data.time) ? data.time : '';
             var msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : JSON.stringify(data));
             var item = document.createElement('div');
@@ -3567,8 +3427,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     var s = (data.success || 0);
                     var sk = (data.skipped || 0);
                     var f = (data.failed || 0);
-                    summaryEl.innerHTML = '<div class="alert mb-0" style="background:var(--backend-color-bg-tertiary,#e9ecef);color:var(--backend-color-text-primary,#333);border:1px solid var(--backend-color-border-default,#dee2e6);">'
-                        + '<i class="mdi mdi-check-circle me-1" style="color:var(--backend-color-success,#198754);"></i>'
+                    summaryEl.innerHTML = '<div class="w-alert" style="background:var(--backend-color-bg-tertiary,#e9ecef);color:var(--backend-color-text-primary,#333);border:1px solid var(--backend-color-border-default,#dee2e6);">'
+                        + '<w:icon name="check" size="sm"></w:icon>'
                         + '<strong>' + escapeOptLabel(data.message || '') + '</strong>'
                         + '</div>';
                     summaryEl.style.display = 'block';
@@ -3577,8 +3437,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     cancelBtn.textContent = '<?= __('关闭') ?>';
                     closeBtn.style.display = '';
                     if (switchDnsAccountModal) {
-                        switchDnsAccountModal._config.backdrop = true;
-                        switchDnsAccountModal._config.keyboard = true;
+                        switchDnsAccountModal.dataset.wBackdrop = 'dismissible';
+                        switchDnsAccountModal.dataset.wClosable = 'true';
                     }
                     loadDomains(currentPage);
                 }
@@ -3591,8 +3451,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     cancelBtn.textContent = '<?= __('关闭') ?>';
                     closeBtn.style.display = '';
                     if (switchDnsAccountModal) {
-                        switchDnsAccountModal._config.backdrop = true;
-                        switchDnsAccountModal._config.keyboard = true;
+                        switchDnsAccountModal.dataset.wBackdrop = 'dismissible';
+                        switchDnsAccountModal.dataset.wClosable = 'true';
                     }
                 }
             });
@@ -3605,8 +3465,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             cancelBtn.textContent = '<?= __('关闭') ?>';
             closeBtn.style.display = '';
             if (switchDnsAccountModal) {
-                switchDnsAccountModal._config.backdrop = true;
-                switchDnsAccountModal._config.keyboard = true;
+                    switchDnsAccountModal.dataset.wBackdrop = 'dismissible';
+                    switchDnsAccountModal.dataset.wClosable = 'true';
             }
         };
     }
@@ -3634,9 +3494,9 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         loadDnsAccountsForBatchSet();
 
         if (!batchSetAccountsModal) {
-            batchSetAccountsModal = new bootstrap.Modal(document.getElementById('welineBatchSetAccountsModal'));
+            batchSetAccountsModal = document.getElementById('welineBatchSetAccountsModal');
         }
-        batchSetAccountsModal.show();
+        Weline.UI.dialog.open(batchSetAccountsModal);
     }
 
     function loadDnsAccountsForBatchSet() {
@@ -3711,7 +3571,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 if (data.code === 200) {
                     toast(data.msg || '<?= __('设置成功') ?>', 'success');
                     if (batchSetAccountsModal) {
-                        batchSetAccountsModal.hide();
+                        Weline.UI.dialog.close(batchSetAccountsModal, 'complete');
                     }
                     loadDomains(currentPage);
                 } else {
@@ -3749,20 +3609,16 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function cleanupDnsProviderDomains() {
-        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
-            BackendConfirm.show('<?= __('确定清理所有 DNS 服务商（如 Cloudflare）下误同步的域名？') ?>\n\n<?= __('这些域名不属于 DNS 服务商，只是托管在那里。清理后不会影响远程数据。') ?>', {
-                title: '<?= __('清理 DNS 服务商域名') ?>',
-                confirmText: '<?= __('确认清理') ?>',
-                cancelText: '<?= __('取消') ?>',
-                type: 'warning'
-            }).then(function(confirmed) {
-                if (confirmed) {
-                    doCleanupDnsProviderDomains();
-                }
-            });
-        } else {
-            doCleanupDnsProviderDomains();
-        }
+        Weline.UI.dialog.confirm('<?= __('确定清理所有 DNS 服务商（如 Cloudflare）下误同步的域名？') ?>\n\n<?= __('这些域名不属于 DNS 服务商，只是托管在那里。清理后不会影响远程数据。') ?>', {
+            title: '<?= __('清理 DNS 服务商域名') ?>',
+            confirmLabel: '<?= __('确认清理') ?>',
+            cancelLabel: '<?= __('取消') ?>',
+            tone: 'warning'
+        }).then(function(confirmed) {
+            if (confirmed) {
+                doCleanupDnsProviderDomains();
+            }
+        });
     }
 
     function doCleanupDnsProviderDomains() {

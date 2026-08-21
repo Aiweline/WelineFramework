@@ -13,9 +13,9 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
 <div class="marketing-campaign-list" data-testid="marketing-campaign-management">
     <h1><?= __('促销活动列表') ?></h1>
     <div class="toolbar">
-        <a href="<?= $this->getBackendUrl('marketing/backend/campaign/getAdd') ?>" class="btn btn-primary" data-testid="marketing-campaign-create"><?= __('添加活动') ?></a>
+        <a href="<?= $this->getBackendUrl('marketing/backend/campaign/getAdd') ?>" class="w-button" data-testid="marketing-campaign-create" data-tone="primary"><?= __('添加活动') ?></a>
     </div>
-    <table class="table">
+    <table class="w-table">
         <thead>
             <tr>
                 <th><?= __('ID') ?></th>

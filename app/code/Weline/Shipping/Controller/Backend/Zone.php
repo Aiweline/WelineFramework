@@ -17,7 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Zone as ZoneModel;
 use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
-#[Acl('Weline_Shipping::zone', '配送区域管理', 'mdi-map', '配送区域管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::zone', '配送区域管理', 'circle', '配送区域管理', 'Weline_Backend::shipping_group')]
 class Zone extends BackendController
 {
     private ZoneModel $zone;
@@ -32,7 +32,7 @@ class Zone extends BackendController
     /**
      * 配送区域列表页（占位实现，保证页面可用）
      */
-    #[Acl('Weline_Shipping::zone_index', '查看配送区域', 'mdi-format-list-bulleted', '查看配送区域列表')]
+    #[Acl('Weline_Shipping::zone_index', '查看配送区域', 'list', '查看配送区域列表')]
     public function index()
     {
         $zones = $this->zone->reset()
@@ -47,7 +47,7 @@ class Zone extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Shipping::zone_save', '保存配送区域', 'mdi-content-save', '创建配送区域')]
+    #[Acl('Weline_Shipping::zone_save', '保存配送区域', 'save', '创建配送区域')]
     public function save()
     {
         try {

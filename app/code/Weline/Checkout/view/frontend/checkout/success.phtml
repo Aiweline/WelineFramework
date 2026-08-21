@@ -111,14 +111,14 @@ $accountOrderDetailUrl = $requestOrderUuid !== ''
 
     <div class="order-actions">
         <?php if ($requestOrderUuid !== ''): ?>
-        <a href="<?= $escape($accountOrderDetailUrl) ?>" class="btn btn-primary weline-pixel::view_order">
+        <a href="<?= $escape($accountOrderDetailUrl) ?>" class="w-button weline-pixel::view_order" data-tone="primary">
             <?= __('查看订单详情') ?>
         </a>
         <?php endif; ?>
-        <a href="<?= $escape($accountOrdersUrl) ?>" class="btn btn-secondary weline-pixel::view_orders">
+        <a href="<?= $escape($accountOrdersUrl) ?>" class="w-button weline-pixel::view_orders" data-tone="neutral">
             <?= __('返回订单列表') ?>
         </a>
-        <a href="<?= $this->getUrl('products') ?>" class="btn btn-secondary weline-pixel::continue_shopping">
+        <a href="<?= $this->getUrl('products') ?>" class="w-button weline-pixel::continue_shopping" data-tone="neutral">
             <?= __('继续购物') ?>
         </a>
     </div>

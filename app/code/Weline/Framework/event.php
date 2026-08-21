@@ -646,6 +646,14 @@ return [
         'description' => __('渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data["html"] 整页覆盖，或改写 page_title/page_lead/page_hint。'),
         'doc' => 'http/状态回执页渲染.md',
     ],
+    'Weline_Framework_Http::error_page_assets' => [
+        'name' => __('错误页资源贡献'),
+        'description' => __('内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。'),
+    ],
+    'Weline_Framework_Deploy::static_asset_transform' => [
+        'name' => __('静态资源发布变换'),
+        'description' => __('deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。'),
+    ],
     'Framework_Http::response_redirect_before' => [
         'name' => __('响应重定向前'),
         'description' => __('在HTTP响应重定向前触发，允许其他模块修改重定向URL。'),
@@ -653,7 +661,7 @@ return [
     ],
     'Weline_Framework_Manager::result_bridge_url' => [
         'name' => __('结果桥接页地址'),
-        'description' => __('获取 success/error/info/warning 结果桥接页 URL。观察者通过 data["bridge_url"] 返回地址，供 iframe 重定向后显示 BackendToast。'),
+        'description' => __('获取 success/error/info/warning 结果桥接页 URL。观察者通过 data["bridge_url"] 返回地址，供 iframe 重定向后显示 Weline.UI.toast。'),
     ],
     
     // ========== 资源编译事件 ==========

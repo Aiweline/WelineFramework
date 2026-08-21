@@ -495,28 +495,28 @@ $moduleCount = count($moduleSet);
 }
 </style>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'><?= __('插件管理') ?></h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><?= __('系统') ?></span></li>
-                    <li class='breadcrumb-item active'><?= __('插件管理') ?></li>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('插件管理') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('插件管理') ?></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <div class="weline-plugin-page">
     <!-- 顶部信息卡片 -->
     <div class="weline-plugin-header">
-        <h2><i class="mdi mdi-puzzle-outline"></i> <?= __('插件管理') ?></h2>
+        <h2><w:icon name="puzzle" size="sm"></w:icon> <?= __('插件管理') ?></h2>
         <p class="weline-plugin-header-subtitle"><?= __('查看系统中所有已注册的插件（拦截器），了解函数修改情况') ?></p>
     </div>
 
@@ -524,7 +524,7 @@ $moduleCount = count($moduleSet);
     <div class="weline-plugin-stats-row">
         <div class="weline-plugin-stat-card">
             <div class="weline-plugin-stat-icon primary">
-                <i class="mdi mdi-file-document-outline"></i>
+                <w:icon name="file" size="sm"></w:icon>
             </div>
             <div class="weline-plugin-stat-content">
                 <div class="weline-plugin-stat-value"><?= $totalFiles ?></div>
@@ -533,7 +533,7 @@ $moduleCount = count($moduleSet);
         </div>
         <div class="weline-plugin-stat-card">
             <div class="weline-plugin-stat-icon info">
-                <i class="mdi mdi-puzzle-outline"></i>
+                <w:icon name="puzzle" size="sm"></w:icon>
             </div>
             <div class="weline-plugin-stat-content">
                 <div class="weline-plugin-stat-value"><?= $totalPlugins ?></div>
@@ -542,7 +542,7 @@ $moduleCount = count($moduleSet);
         </div>
         <div class="weline-plugin-stat-card">
             <div class="weline-plugin-stat-icon success">
-                <i class="mdi mdi-check-circle-outline"></i>
+                <w:icon name="check" size="sm"></w:icon>
             </div>
             <div class="weline-plugin-stat-content">
                 <div class="weline-plugin-stat-value"><?= $enabledPlugins ?></div>
@@ -551,7 +551,7 @@ $moduleCount = count($moduleSet);
         </div>
         <div class="weline-plugin-stat-card">
             <div class="weline-plugin-stat-icon danger">
-                <i class="mdi mdi-close-circle-outline"></i>
+                <w:icon name="close" size="sm"></w:icon>
             </div>
             <div class="weline-plugin-stat-content">
                 <div class="weline-plugin-stat-value"><?= $disabledPlugins ?></div>
@@ -560,7 +560,7 @@ $moduleCount = count($moduleSet);
         </div>
         <div class="weline-plugin-stat-card">
             <div class="weline-plugin-stat-icon warning">
-                <i class="mdi mdi-package-variant"></i>
+                <w:icon name="box" size="sm"></w:icon>
             </div>
             <div class="weline-plugin-stat-content">
                 <div class="weline-plugin-stat-value"><?= $moduleCount ?></div>
@@ -573,10 +573,10 @@ $moduleCount = count($moduleSet);
     <div class="weline-plugin-toolbar">
         <!-- 搜索框 -->
         <div class="weline-plugin-search-box">
-            <i class="mdi mdi-magnify"></i>
+            <w:icon name="search" size="sm"></w:icon>
             <input type="text" id="plugin-search" placeholder="<?= __('搜索插件类、实例类、名称...') ?>">
             <button type="button" class="weline-plugin-search-clear" id="plugin-search-clear">
-                <i class="mdi mdi-close"></i>
+                <w:icon name="close" size="sm"></w:icon>
             </button>
         </div>
         
@@ -598,17 +598,17 @@ $moduleCount = count($moduleSet);
         <!-- 操作按钮 -->
         <div class="weline-plugin-actions">
             <button type="button" class="weline-plugin-action-btn" id="expand-all">
-                <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+                <w:icon name="more-horizontal" size="sm"></w:icon> <?= __('展开全部') ?>
             </button>
             <button type="button" class="weline-plugin-action-btn" id="collapse-all">
-                <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+                <w:icon name="circle" size="sm"></w:icon> <?= __('折叠全部') ?>
             </button>
         </div>
     </div>
 
     <!-- 搜索结果提示 -->
     <div id="plugin-result-info" class="weline-plugin-result-info">
-        <i class="mdi mdi-information-outline"></i>
+        <w:icon name="info" size="sm"></w:icon>
         <span id="plugin-result-text"></span>
     </div>
 
@@ -616,7 +616,7 @@ $moduleCount = count($moduleSet);
     <?php if (empty($plugins)): ?>
     <div class="weline-plugin-file-card">
         <div class="weline-plugin-empty">
-            <i class="mdi mdi-puzzle-remove-outline"></i>
+            <w:icon name="minus" size="sm"></w:icon>
             <p><?= __('暂无插件配置') ?></p>
         </div>
     </div>
@@ -631,19 +631,19 @@ $moduleCount = count($moduleSet);
     <div class="weline-plugin-file-card" data-file="<?= htmlspecialchars(strtolower($file)) ?>">
         <div class="weline-plugin-file-header" data-plugin-file-toggle="1">
             <span class="weline-plugin-file-title">
-                <i class="mdi mdi-file-code-outline"></i>
+                <w:icon name="file" size="sm"></w:icon>
                 <?= htmlspecialchars($file) ?>
                 <span class="weline-plugin-file-badge"><?= $filePluginCount ?> <?= __('个拦截器') ?></span>
             </span>
             <span class="weline-plugin-file-toggle">
-                <i class="mdi mdi-chevron-down"></i>
+                <w:icon name="chevron-down" size="sm"></w:icon>
             </span>
         </div>
         <div class="weline-plugin-file-body collapsed">
             <?php foreach ($pluginGroups as $name => $instances): ?>
             <div class="weline-plugin-group" data-plugin-name="<?= htmlspecialchars(strtolower($name)) ?>">
                 <div class="weline-plugin-group-header">
-                    <i class="mdi mdi-puzzle-outline"></i>
+                    <w:icon name="puzzle" size="sm"></w:icon>
                     <span><?= __('插件：') ?><?= htmlspecialchars($name) ?></span>
                 </div>
                 <table class="weline-plugin-table">

@@ -14,7 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Service\WebsiteAclGrantService;
 
-#[AclAttr('Weline_Websites::website_acl_grant', '网站功能授权', 'mdi mdi-shield-key-outline', '为子站授权可用菜单与 ACL', 'Weline_Websites::website_service')]
+#[AclAttr('Weline_Websites::website_acl_grant', '网站功能授权', 'shield', '为子站授权可用菜单与 ACL', 'Weline_Websites::website_service')]
 class WebsiteAclGrant extends BackendController
 {
     public function __construct(
@@ -23,7 +23,7 @@ class WebsiteAclGrant extends BackendController
     ) {
     }
 
-    #[AclAttr('Weline_Websites::website_acl_grant_index', '网站功能授权列表', 'mdi mdi-shield-key-outline', '选择网站授权')]
+    #[AclAttr('Weline_Websites::website_acl_grant_index', '网站功能授权列表', 'shield', '选择网站授权')]
     public function getIndex()
     {
         if (!$this->grantService->isDefaultWebsite()) {
@@ -56,7 +56,7 @@ class WebsiteAclGrant extends BackendController
         return $this->fetch('index');
     }
 
-    #[AclAttr('Weline_Websites::website_acl_grant_edit', '编辑网站功能授权', 'mdi mdi-shield-edit-outline', '勾选子站授权包')]
+    #[AclAttr('Weline_Websites::website_acl_grant_edit', '编辑网站功能授权', 'edit', '勾选子站授权包')]
     public function getEdit()
     {
         if (!$this->grantService->isDefaultWebsite()) {
@@ -176,7 +176,7 @@ class WebsiteAclGrant extends BackendController
         return ['total' => $total, 'selected' => $selected];
     }
 
-    #[AclAttr('Weline_Websites::website_acl_grant_save', '保存网站功能授权', 'mdi mdi-content-save', '保存子站授权包')]
+    #[AclAttr('Weline_Websites::website_acl_grant_save', '保存网站功能授权', 'save', '保存子站授权包')]
     public function postSave()
     {
         if (!$this->grantService->isDefaultWebsite()) {

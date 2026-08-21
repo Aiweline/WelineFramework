@@ -13,16 +13,16 @@ $dialogMessages = [
 ];
 ?>
 <div class="delivery-address-list">
-    <div class="page-header mb-4">
+    <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h2><?= __('收货地址管理') ?></h2>
-        <a href="<?= $frontendUrl ?>shipping/delivery/form" class="btn btn-primary">
-            <i class="ri-add-line"></i> <?= __('新增地址') ?>
+        <a href="<?= $frontendUrl ?>shipping/delivery/form" class="w-button" data-tone="primary">
+            <w:icon name="plus" size="sm"></w:icon> <?= __('新增地址') ?>
         </a>
     </div>
 
     <?php if (empty($addresses)): ?>
-        <div class="alert alert-info">
-            <i class="ri-information-line"></i> <?= __('暂无地址，请添加收货地址') ?>
+        <div class="w-alert" data-tone="info">
+            <w:icon name="info" size="sm"></w:icon> <?= __('暂无地址，请添加收货地址') ?>
         </div>
     <?php else: ?>
         <div class="address-grid">
@@ -31,7 +31,7 @@ $dialogMessages = [
                     <div class="address-header">
                         <h4><?= htmlspecialchars($address->getData('name')) ?></h4>
                         <?php if ($address->isDefault()): ?>
-                            <span class="badge bg-primary"><?= __('默认') ?></span>
+                            <span class="w-badge" data-w-background="primary"><?= __('默认') ?></span>
                         <?php endif; ?>
                     </div>
                     <div class="address-content">
@@ -43,16 +43,16 @@ $dialogMessages = [
                         <?php endif; ?>
                     </div>
                     <div class="address-actions">
-                        <a href="<?= $frontendUrl ?>shipping/delivery/form?id=<?= $address->getId() ?>" class="btn btn-sm btn-outline-primary">
-                            <i class="ri-edit-line"></i> <?= __('编辑') ?>
+                        <a href="<?= $frontendUrl ?>shipping/delivery/form?id=<?= $address->getId() ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                            <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                         </a>
                         <?php if (!$address->isDefault()): ?>
-                            <button type="button" class="btn btn-sm btn-outline-success set-default-btn" data-id="<?= $address->getId() ?>">
-                                <i class="ri-star-line"></i> <?= __('设为默认') ?>
+                            <button type="button" class="w-button set-default-btn" data-id="<?= $address->getId() ?>" data-tone="success" data-variant="outline" data-size="sm">
+                                <w:icon name="star" size="sm"></w:icon> <?= __('设为默认') ?>
                             </button>
                         <?php endif; ?>
-                        <button type="button" class="btn btn-sm btn-outline-danger delete-btn" data-id="<?= $address->getId() ?>">
-                            <i class="ri-delete-bin-line"></i> <?= __('删除') ?>
+                        <button type="button" class="w-button delete-btn" data-id="<?= $address->getId() ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
                         </button>
                     </div>
                 </div>
@@ -61,10 +61,6 @@ $dialogMessages = [
     <?php endif; ?>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let deliveryAddressApiPromise = null;
@@ -86,16 +82,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showAddressError(message) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: deliveryAddressMessages.operationFailed,
-                text: message || deliveryAddressMessages.operationFailed,
-                confirmButtonText: deliveryAddressMessages.confirmButton
-            });
-        } else {
-            console.error(message || 'Address operation failed.');
-        }
+        Weline.UI.dialog.request({
+            tone: 'danger',
+            title: deliveryAddressMessages.operationFailed,
+            message: message || deliveryAddressMessages.operationFailed,
+            confirmLabel: deliveryAddressMessages.confirmButton
+        });
     }
 
     function showInlineChoice(message) {
@@ -159,20 +151,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showDeliveryAddressChoice(message) {
-        if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
-            return Swal.fire({
-                icon: 'warning',
-                title: deliveryAddressMessages.confirmTitle,
-                text: message,
-                showCancelButton: true,
-                confirmButtonText: deliveryAddressMessages.confirmButton,
-                cancelButtonText: deliveryAddressMessages.cancelButton
-            }).then(function(result) {
-                return !!(result && result.isConfirmed);
-            });
-        }
-
-        return showInlineChoice(message);
+        return Weline.UI.dialog.request({
+            tone: 'warning',
+            title: deliveryAddressMessages.confirmTitle,
+            message: message,
+            cancelable: true,
+            confirmLabel: deliveryAddressMessages.confirmButton,
+            cancelLabel: deliveryAddressMessages.cancelButton
+        }).then(function(result) {
+            return !!(result && result.confirmed);
+        });
     }
 
     // 设置默认地址
@@ -190,11 +178,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     location.reload();
                 } else {
                     showAddressError(data.message); /*
-                        Swal.fire({
-                            icon: 'error',
+                        Weline.UI.dialog.request({
+                            tone: 'danger',
                             title: '<?= __('操作失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
+                            message: data.message,
+                            confirmLabel: '<?= __('确定') ?>'
                         });
                     } else {
                         console.error(data.message); */
@@ -221,11 +209,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     location.reload();
                 } else {
                     showAddressError(data.message); /*
-                        Swal.fire({
-                            icon: 'error',
+                        Weline.UI.dialog.request({
+                            tone: 'danger',
                             title: '<?= __('操作失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
+                            message: data.message,
+                            confirmLabel: '<?= __('确定') ?>'
                         });
                     } else {
                         console.error(data.message); */
@@ -279,4 +267,3 @@ document.addEventListener('DOMContentLoaded', function() {
     gap: 10px;
 }
 </style>
-

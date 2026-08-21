@@ -71,18 +71,16 @@ $previewHeight = $previewHeight === false ? 50 : $previewHeight;
     </foreach>
 </div>
 <!-- 图片放大modal -->
-<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog"
-     aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-zoom-modal">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+<div class="w-dialog bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-zoom-modal" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame modal-fullscreen-md-down" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
                     <lang>预览</lang>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-zoom-close-modal"
-                        aria-label="Close"></button>
+                <button type="button" class="w-button" id="{{target}}-zoom-close-modal" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body" id="{{target}}-zoom-preview-image-body">
+            <div class="w-dialog__body" id="{{target}}-zoom-preview-image-body">
                 <img data-src="" src="" alt="" title="">
             </div>
         </div><!-- /.modal-content -->

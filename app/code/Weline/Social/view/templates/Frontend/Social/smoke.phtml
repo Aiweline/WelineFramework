@@ -45,22 +45,22 @@ $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUO
         <h1><?= __('Weline_Social Fake 模式') ?></h1>
         <p><?= $noPublish ? __('该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。') : __('该页面只调用 fake_browser Provider，不访问任何外部社媒平台。') ?></p>
         <div class="grid">
-            <div class="card">
+            <div class="w-card">
                 <div class="label"><?= __('账户') ?></div>
                 <strong><?= $h((string)($account['account_name'] ?? '')) ?></strong>
                 <div><code><?= $h((string)($account['test_status'] ?? '')) ?></code></div>
             </div>
-            <div class="card">
+            <div class="w-card">
                 <div class="label"><?= __('站点') ?></div>
                 <strong><?= $h((string)($website['name'] ?? '')) ?></strong>
                 <div><code><?= $h((string)($website['code'] ?? '')) ?></code></div>
             </div>
-            <div class="card" data-social-site-account-smoke="<?= $relationPassed ? 'passed' : 'failed' ?>">
+            <div class="w-card" data-social-site-account-smoke="<?= $relationPassed ? 'passed' : 'failed' ?>">
                 <div class="label"><?= __('站点社媒关系') ?></div>
                 <strong><?= $relationPassed ? __('已打通') : __('未打通') ?></strong>
                 <div><?= $h((string)($relationResult['message'] ?? '')) ?></div>
             </div>
-            <div class="card">
+            <div class="w-card">
                 <div class="label"><?= __('默认发布账户') ?></div>
                 <strong><?= count($resolvedAccounts) ?></strong>
                 <?php foreach ($resolvedAccounts as $resolvedAccount): ?>
@@ -69,17 +69,17 @@ $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUO
                 <?php endforeach; ?>
             </div>
             <?php if (!$noPublish): ?>
-            <div class="card">
+            <div class="w-card">
                 <div class="label"><?= __('创意草稿') ?></div>
                 <strong>#<?= (int)($draft['draft_id'] ?? 0) ?></strong>
                 <div><?= $h((string)($draft['content'] ?? '')) ?></div>
             </div>
-            <div class="card">
+            <div class="w-card">
                 <div class="label"><?= __('发布批次') ?></div>
                 <strong>#<?= (int)($batch['batch_id'] ?? 0) ?></strong>
                 <div><code><?= $h((string)($batch['status'] ?? '')) ?></code></div>
             </div>
-            <div class="card">
+            <div class="w-card">
                 <div class="label"><?= __('目标结果') ?></div>
                 <strong><?= (int)($batch['success_count'] ?? 0) ?>/<?= (int)($batch['target_count'] ?? 0) ?></strong>
                 <?php foreach ((array)($batch['targets'] ?? []) as $target): ?>

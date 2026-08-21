@@ -26,9 +26,9 @@ $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/t
 
 // 图标映射
 $icons = [
-    'cart'   => 'ri-shopping-cart-line',
-    'bag'    => 'ri-shopping-bag-line',
-    'basket' => 'ri-shopping-basket-line',
+    'cart'   => 'pin',
+    'bag'    => 'pin',
+    'basket' => 'pin',
 ];
 $icon = $icons[$iconStyle] ?? $icons['cart'];
 
@@ -69,7 +69,7 @@ $cartSubtotal = '¥299.00';
                     <span class="item-price">¥99.00 × 1</span>
                 </div>
                 <button class="item-remove" title="<?= __('删除') ?>">
-                    <i class="ri-close-line"></i>
+                    <w:icon name="close" size="sm"></w:icon>
                 </button>
             </div>
             <!-- 更多商品... -->

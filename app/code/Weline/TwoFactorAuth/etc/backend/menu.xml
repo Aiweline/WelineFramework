@@ -9,7 +9,7 @@
          title="双因素认证" 
          action="" 
          parent="Weline_Backend::system_management"
-         icon="mdi mdi-shield-lock"
+         icon="lock"
          order="20700"/>
     
     <!-- 2FA账户管理 -->
@@ -18,7 +18,7 @@
          title="2FA账户管理"
          action="*/backend"
          parent="Weline_TwoFactorAuth::2fa_main"
-         icon="mdi mdi-shield-account"
+         icon="user"
          order="10"/>
 
     <!-- 验证器APP（仅展示，跳转到前端） -->
@@ -27,7 +27,7 @@
          title="打开验证器APP"
          action="*/app"
          parent="Weline_TwoFactorAuth::2fa_main"
-         icon="mdi mdi-cellphone-key"
+         icon="phone"
          order="20"/>
          
 </menus>

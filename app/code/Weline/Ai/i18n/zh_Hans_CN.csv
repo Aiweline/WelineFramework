@@ -343,9 +343,12 @@ AI供应商账户管理,AI供应商账户管理
 账户ID不能为空,账户ID不能为空
 "获取账户数据失败: %{msg}","获取账户数据失败: %{msg}"
 AI供应商账户,AI供应商账户
+user,user
 查看供应商账户,查看供应商账户
+list,list
 查看供应商账户列表,查看供应商账户列表
 编辑供应商账户（侧边栏）,编辑供应商账户（侧边栏）
+edit,edit
 请先登录后台管理员账号。,请先登录后台管理员账号。
 风格保存失败：%{1},风格保存失败：%{1}
 风格代码不能为空。,风格代码不能为空。
@@ -359,22 +362,29 @@ AI供应商账户,AI供应商账户
 适配器风格解绑失败：%{1},适配器风格解绑失败：%{1}
 风格目录加载失败：%{1},风格目录加载失败：%{1}
 "AI style governance","AI style governance"
+palette,palette
 "AI style list and governance","AI style list and governance"
 "AI style list","AI style list"
 "View AI styles","View AI styles"
 "AI style catalog","AI style catalog"
 "View AI style catalog","View AI style catalog"
 "Save AI style","Save AI style"
+save,save
 "Save AI custom style","Save AI custom style"
 "Disable AI style","Disable AI style"
+close,close
 "Disable AI custom style","Disable AI custom style"
 "Delete AI style","Delete AI style"
+trash,trash
 "Delete AI custom style","Delete AI custom style"
 "Clone AI style","Clone AI style"
+copy,copy
 "Clone builtin/module style","Clone builtin/module style"
 "Match AI style","Match AI style"
+circle,circle
 "Match AI style by brief","Match AI style by brief"
 "Manage adapter styles","Manage adapter styles"
+link,link
 "Manage manual adapter style bindings","Manage manual adapter style bindings"
 文本生成,文本生成
 图像生成,图像生成
@@ -387,15 +397,21 @@ AI供应商账户,AI供应商账户
 "清除缓存失败: %{error}","清除缓存失败: %{error}"
 "获取受保护模型列表失败: %{error}","获取受保护模型列表失败: %{error}"
 默认模型管理,默认模型管理
+settings,settings
 查看默认模型配置,查看默认模型配置
 设置默认模型,设置默认模型
+star,star
 移除默认模型配置,移除默认模型配置
 获取模型保护状态,获取模型保护状态
+check,check
 初始化默认配置,初始化默认配置
+play,play
 验证默认模型配置,验证默认模型配置
 获取默认模型,获取默认模型
+info,info
 清除缓存,清除缓存
 获取受保护的模型列表,获取受保护的模型列表
+lock,lock
 批量设置默认模型,批量设置默认模型
 首页,首页
 聊天,聊天
@@ -756,9 +772,7 @@ API密钥将被加密存储,API密钥将被加密存储
 确定切换,确定切换
 状态已切换,状态已切换
 未知错误,未知错误
-操作失败：,操作失败：
 请稍后重试,请稍后重试
-网络错误，请稍后重试,网络错误，请稍后重试
 默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。,默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。
 服务类型,服务类型
 默认模型,默认模型
@@ -852,7 +866,6 @@ ID,ID
 删除失败，请重试,删除失败，请重试
 请先选择要测试的模型,请先选择要测试的模型
 测试失败,测试失败
-测试失败：,测试失败：
 受保护模型不能删除，只能删除复制模型或自定义模型,受保护模型不能删除，只能删除复制模型或自定义模型
 确定要删除模型,确定要删除模型
 吗？,吗？
@@ -863,7 +876,6 @@ ID,ID
 重试,重试
 条件不足,条件不足
 无法激活,无法激活
-无法激活:,无法激活:
 复制模型,复制模型
 "您正在复制模型: <strong>%{1}</strong>","您正在复制模型: <strong>%{1}</strong>"
 复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。,复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。
@@ -893,9 +905,7 @@ API地址,API地址
 复制中...,复制中...
 复制成功,复制成功
 模型已成功复制,模型已成功复制
-复制成功！,复制成功！
 复制失败,复制失败
-复制失败：,复制失败：
 新建模型,新建模型
 模型新增方式,模型新增方式
 快速新增,快速新增
@@ -1053,8 +1063,7 @@ API基础URL,API基础URL
 "此模型是从原始模型 ID: %{1} 复制而来","此模型是从原始模型 ID: %{1} 复制而来"
 模型配置,模型配置
 确定要测试此模型的连接吗？,确定要测试此模型的连接吗？
-连接测试成功！,连接测试成功！
-连接测试失败：,连接测试失败：
+测试返回图片,测试返回图片
 "模型不存在: %{code}","模型不存在: %{code}"
 "模型 %{code} 缺少API密钥配置","模型 %{code} 缺少API密钥配置"
 "模型 %{code} 缺少API基础URL配置","模型 %{code} 缺少API基础URL配置"
@@ -1188,6 +1197,14 @@ AI用量审计恢复,AI用量审计恢复
 "%{1} 同步失败：%{2}","%{1} 同步失败：%{2}"
 "模型收集完成，共 %{1} 个模型","模型收集完成，共 %{1} 个模型"
 已跳过模型收集,已跳过模型收集
+操作失败：,操作失败：
+网络错误，请稍后重试,网络错误，请稍后重试
+测试失败：,测试失败：
+无法激活:,无法激活:
+复制成功！,复制成功！
+复制失败：,复制失败：
+连接测试成功！,连接测试成功！
+连接测试失败：,连接测试失败：
 提示：点击选择AI模型，输入关键词搜索,提示：点击选择AI模型，输入关键词搜索
 为适配器分别绑定文本推理、文生图、文生视频模型；留空表示该能力不启用。,为适配器分别绑定文本推理、文生图、文生视频模型；留空表示该能力不启用。
 未找到动作：%{1},未找到动作：%{1}

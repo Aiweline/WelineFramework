@@ -17,17 +17,17 @@ $sourceContent = $this->getData('source_content') ?: '';
 $sourceFilePath = $this->getData('source_file_path') ?: '';
 ?>
 <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">
-                                <i class="mdi mdi-sticker text-primary"></i> <?= __('Sticker详情') ?>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;">
+                                <w:icon name="star" size="sm"></w:icon> <?= __('Sticker详情') ?>
                             </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>"><?= __('Sticker管理') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= __('详情') ?></li>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                                    <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>"><?= __('Sticker管理') ?></a></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= __('详情') ?></li>
                                 </ol>
                             </div>
                         </div>
@@ -35,48 +35,48 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                 </div>
 
                 <!-- 消息提示 -->
-                <div class='row'>
+                <div class="w-grid">
                     <template>Weline_Component::message.phtml</template>
                 </div>
 
                 <!-- 返回按钮 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="btn btn-secondary">
-                            <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="w-button" data-tone="neutral">
+                            <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
                         </a>
                     </div>
                 </div>
 
                 <!-- 基本信息 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('基本信息') ?></h5>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('基本信息') ?></h5>
                             </div>
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6">
+                            <div class="w-card__body">
+                                <div class="w-grid">
+                                    <div style="--w-span-md:6;">
                                         <p><strong><?= __('目标模块') ?>：</strong>
-                                            <span class="badge bg-info"><?= htmlspecialchars($targetModule) ?></span>
+                                            <span class="w-badge" data-w-background="info"><?= htmlspecialchars($targetModule) ?></span>
                                         </p>
                                         <p><strong><?= __('目标文件') ?>：</strong>
                                             <code><?= htmlspecialchars($targetFile) ?></code>
                                         </p>
                                         <p><strong><?= __('来源模块') ?>：</strong>
-                                            <span class="badge bg-success"><?= htmlspecialchars($sourceModule) ?></span>
+                                            <span class="w-badge" data-w-background="success"><?= htmlspecialchars($sourceModule) ?></span>
                                         </p>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div style="--w-span-md:6;">
                                         <p><strong><?= __('Sticker文件') ?>：</strong>
                                             <code><?= htmlspecialchars($stickerRelativePath) ?></code>
                                         </p>
                                         <p><strong><?= __('完整路径') ?>：</strong>
-                                            <code class="text-secondary"><?= htmlspecialchars($stickerFile) ?></code>
+                                            <code class="w-text" data-tone="muted"><?= htmlspecialchars($stickerFile) ?></code>
                                         </p>
                                         <p><strong><?= __('规则数量') ?>：</strong>
-                                            <span class="badge bg-warning"><?= count($actions) ?></span>
+                                            <span class="w-badge" data-w-background="warning"><?= count($actions) ?></span>
                                         </p>
                                     </div>
                                 </div>
@@ -86,24 +86,21 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                 </div>
 
                 <!-- 规则列表 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('修改规则') ?></h5>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('修改规则') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($actions)): ?>
-                                    <p class="text-muted"><?= __('暂无规则') ?></p>
+                                    <p class="w-text" data-tone="muted"><?= __('暂无规则') ?></p>
                                 <?php else: ?>
-                                    <div class="accordion" id="rulesAccordion">
+                                    <div class="w-stack" id="rulesAccordion">
                                         <?php foreach ($actions as $index => $action): ?>
-                                            <div class="accordion-item">
-                                                <h2 class="accordion-header">
-                                                    <button class="accordion-button <?= $index !== 0 ? 'collapsed' : '' ?>" 
-                                                            type="button" 
-                                                            data-bs-toggle="collapse" 
-                                                            data-bs-target="#rule<?= $index ?>">
+                                            <div class="w-disclosure" data-w-component="disclosure">
+                                                <h2>
+                                                    <button class="w-disclosure__trigger <?= $index !== 0 ? 'collapsed' : '' ?>" type="button" data-w-target="#rule<?= $index ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger aria-expanded="false">
                                                         <span class="action-badge action-<?= $action['type'] ?>">
                                                             <?= strtoupper($action['type']) ?>
                                                         </span>
@@ -112,19 +109,17 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                                                         </span>
                                                     </button>
                                                 </h2>
-                                                <div id="rule<?= $index ?>" 
-                                                     class="accordion-collapse collapse <?= $index === 0 ? 'show' : '' ?>" 
-                                                     data-bs-parent="#rulesAccordion">
-                                                    <div class="accordion-body">
-                                                        <div class="mb-3">
+                                                <div id="rule<?= $index ?>" class="w-disclosure__panel <?= $index === 0 ? 'show' : '' ?>" data-w-disclosure-panel hidden>
+                                                    <div class="w-disclosure__body">
+                                                        <div style="--w-mb:var(--weline-space-4);">
                                                             <strong><?= __('目标代码') ?>：</strong>
-                                                            <div class="code-block mt-2">
+                                                            <div class="code-block" style="--w-mt:var(--weline-space-2);">
 <?= htmlspecialchars(substr($action['target_original'] ?? $action['target'] ?? '', 0, 500)) ?>
                                                             </div>
                                                         </div>
                                                         <div>
                                                             <strong><?= __('修改代码') ?>：</strong>
-                                                            <div class="code-block mt-2">
+                                                            <div class="code-block" style="--w-mt:var(--weline-space-2);">
 <?= htmlspecialchars(substr($action['code_original'] ?? $action['code'] ?? '', 0, 500)) ?>
                                                             </div>
                                                         </div>
@@ -140,15 +135,15 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                 </div>
 
                 <!-- Sticker 文件内容 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('Sticker 文件内容') ?></h5>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('Sticker 文件内容') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($stickerContent)): ?>
-                                    <p class="text-muted"><?= __('文件不存在或为空') ?></p>
+                                    <p class="w-text" data-tone="muted"><?= __('文件不存在或为空') ?></p>
                                 <?php else: ?>
                                     <div class="code-block">
 <?= htmlspecialchars($stickerContent) ?>
@@ -160,18 +155,18 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                 </div>
 
                 <!-- 源文件内容 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('源文件内容') ?></h5>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('源文件内容') ?></h5>
                                 <?php if ($sourceFilePath): ?>
-                                    <small class="text-muted"><?= htmlspecialchars($sourceFilePath) ?></small>
+                                    <small class="w-text" data-tone="muted"><?= htmlspecialchars($sourceFilePath) ?></small>
                                 <?php endif; ?>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($sourceContent)): ?>
-                                    <p class="text-muted"><?= __('源文件不存在或为空') ?></p>
+                                    <p class="w-text" data-tone="muted"><?= __('源文件不存在或为空') ?></p>
                                 <?php else: ?>
                                     <div class="code-block">
 <?= htmlspecialchars($sourceContent) ?>

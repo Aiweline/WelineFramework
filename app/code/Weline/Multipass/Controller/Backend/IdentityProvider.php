@@ -10,7 +10,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Multipass\Model\IdentityProvider as IdentityProviderModel;
 use Weline\Multipass\Service\IdentityClientService;
 
-#[Acl('Weline_Multipass::identity_provider_management', '官网登录提供方', 'mdi mdi-login-variant', '配置本站通过官网授权登录', 'Weline_Multipass::menu_multipass_management')]
+#[Acl('Weline_Multipass::identity_provider_management', '官网登录提供方', 'login', '配置本站通过官网授权登录', 'Weline_Multipass::menu_multipass_management')]
 class IdentityProvider extends BackendController
 {
     private ?IdentityClientService $identityClientService = null;
@@ -25,7 +25,7 @@ class IdentityProvider extends BackendController
         return (string) $this->fetch();
     }
 
-    #[Acl('Weline_Multipass::identity_provider_save', '保存官网登录提供方', 'mdi mdi-content-save', '保存本站官网登录提供方配置', 'Weline_Multipass::identity_provider_management')]
+    #[Acl('Weline_Multipass::identity_provider_save', '保存官网登录提供方', 'save', '保存本站官网登录提供方配置', 'Weline_Multipass::identity_provider_management')]
     public function postSave(): string
     {
         try {
@@ -49,7 +49,7 @@ class IdentityProvider extends BackendController
         return (string) $this->redirect('*/multipass/backend/identity-provider/index');
     }
 
-    #[Acl('Weline_Multipass::identity_provider_delete', '删除官网登录提供方', 'mdi mdi-delete', '删除本站官网登录提供方配置', 'Weline_Multipass::identity_provider_management')]
+    #[Acl('Weline_Multipass::identity_provider_delete', '删除官网登录提供方', 'trash', '删除本站官网登录提供方配置', 'Weline_Multipass::identity_provider_management')]
     public function postDelete(): string
     {
         $providerId = (int) ($this->request->getPost('provider_id') ?? 0);

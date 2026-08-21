@@ -27,7 +27,7 @@ class NotificationService
      * @param string $icon 图标名称
      * @return void
      */
-    private function sendSystemMessage(string $title, string $content, string $icon = 'ri-error-warning-line'): void
+    private function sendSystemMessage(string $title, string $content, string $icon = 'warning'): void
     {
         try {
             w_msg(
@@ -66,7 +66,7 @@ class NotificationService
             __('来源模块') . ": {$sourceModule}\n" . 
             __('Sticker 文件') . ": {$stickerFile}\n" . 
             __('原因') . ": {$reason}",
-            'ri-error-warning-line'
+            'warning'
         );
     }
 
@@ -96,7 +96,7 @@ class NotificationService
             __('来源模块') . ": {$sourceModule}\n" . 
             __('Sticker 文件') . ": {$stickerFile}\n" . 
             __('目标代码') . ": " . ($targetCodePreview ?: __('（空）')),
-            'ri-search-line'
+            'search'
         );
     }
 
@@ -129,7 +129,7 @@ class NotificationService
             __('目标模块') . ": {$targetModule}\n" . 
             __('目标文件') . ": {$targetFile}\n\n" . 
             __('冲突详情') . ":\n" . implode("\n", $conflictDetails),
-            'ri-alert-line'
+            'warning'
         );
     }
 }

@@ -4,26 +4,24 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-<link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
 <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
-<link href="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)" rel="stylesheet" type="text/css"/>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>开发>标签管理</lang>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span>
                             <lang>开发</lang>
                         </span></li>
-                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/taglib/listing')">
+                    <li class="w-breadcrumb__item"><a href="@backend-url('*/backend/taglib/listing')">
                             <lang>标签管理</lang>
                         </a>
                     </li>
-                    <li class='breadcrumb-item'>
+                    <li class="w-breadcrumb__item">
                         <a href="@backend-url('*/backend/taglib/listing')">
                             <lang>列表</lang>
                         </a>
@@ -34,32 +32,32 @@
     </div>
 </div>
 
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title">
                     <lang>开发-标签管理</lang>
                 </h4>
-                <p class='card-title-desc'>
+                <p class="w-text" data-tone="muted">
                     <lang>管理标签</lang>
                 </p>
-                <div class='table-rep-plugin'>
+                <div class="table-rep-plugin">
                     <!-- search form -->
-                    <div class='row'>
-                        <div class='col-12'>
+                    <div class="w-grid">
+                        <div style="--w-span:12;">
                             <block class='Weline\Component\Block\Form\Search' id='taglib-search'
                                    action='*/backend/taglib/listing' method='get' keyword='q' value=''
                                    placeholder='请输入标签关键词回车搜索'></block>
                         </div>
                     </div>
                     <!-- end search form -->
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                    <div class="w-table-wrap" data-pattern='priority-columns' style="--w-mb:0;">
+                        <table id='tech-companies-1' class="w-table">
                             <thead>
                             <tr>
                                 <th data-priority='1'>
@@ -84,12 +82,12 @@
                                 <tr style="vertical-align: middle;">
                                     <td class='co-name'>{{item.taglib_id}}</td>
                                     <td class='co-name'>{{item.name}}</td>
-                                    <td><has name="item.is_system == '1'"><span class="active text-success">是</span><else/><span class="disabled text-black-50">否</span></has></td>
+                                    <td><has name="item.is_system == '1'"><span class="w-text" data-state="active" data-tone="success">是</span><else/><span class="w-text" aria-disabled="true" data-tone="muted">否</span></has></td>
                                     <td>{{item.module_name}}</td>
                                     <td class='co-name'>{{item.create_time}}</td>
                                     <td class='co-name'>{{item.update_time}}</td>
                                     <td class='co-name'>
-                                        <div class="d-flex gap-2">
+                                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                                             <block class='Weline\Component\Block\OffCanvas'
                                                    template='Weline_Component::off-canvas.phtml'
                                                    cache='0'
@@ -98,14 +96,14 @@
                                                    target-tag="a"
                                                    vars="item"
                                                    action-params="{id: item.taglib_id}"
-                                                   target-button-class='text-info'
+                                                   target-tone='info' target-variant='quiet'
                                                    title='查看文档'
                                                    close-button-show='1'
                                                    close-button-text='关闭'
                                                    target-button-text='查看文档'
                                                    direction='right'
-                                                   class-names='w-75'
-                                                   off-canvas-body-style=''
+                                                   drawer-size='lg'
+
                                             />
                                         </div>
                                     </td>

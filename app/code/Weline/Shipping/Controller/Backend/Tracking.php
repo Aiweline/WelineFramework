@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Tracking as TrackingModel;
 
-#[Acl('Weline_Shipping::tracking', '物流跟踪管理', 'mdi-map-search', '物流跟踪管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::tracking', '物流跟踪管理', 'search', '物流跟踪管理', 'Weline_Backend::shipping_group')]
 class Tracking extends BackendController
 {
     private TrackingModel $tracking;
@@ -29,7 +29,7 @@ class Tracking extends BackendController
     /**
      * 物流跟踪记录列表页（占位实现，保证页面可用）
      */
-    #[Acl('Weline_Shipping::tracking_index', '查看物流跟踪', 'mdi-format-list-bulleted', '查看物流跟踪记录')]
+    #[Acl('Weline_Shipping::tracking_index', '查看物流跟踪', 'list', '查看物流跟踪记录')]
     public function index()
     {
         $records = $this->tracking->reset()

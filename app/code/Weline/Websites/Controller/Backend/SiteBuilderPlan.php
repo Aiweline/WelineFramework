@@ -20,7 +20,7 @@ use Weline\Websites\Service\AiWorkbench\ProviderRegistry;
 use Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService;
 use Weline\Websites\Service\AiWorkbench\SessionService;
 
-#[Acl('Weline_Websites::site_builder_plan', 'AI Site Plan Flow', 'mdi mdi-sitemap', 'Draft-first AI site planning flow', 'Weline_Websites::website_service')]
+#[Acl('Weline_Websites::site_builder_plan', 'AI Site Plan Flow', 'tree', 'Draft-first AI site planning flow', 'Weline_Websites::website_service')]
 class SiteBuilderPlan extends BackendController
 {
     public function __construct(
@@ -36,7 +36,7 @@ class SiteBuilderPlan extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Generate Draft Site Plan', 'mdi mdi-lightning-bolt-outline', 'Create or update a site planning draft', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Generate Draft Site Plan', 'bolt', 'Create or update a site planning draft', 'Weline_Websites::site_builder_agent')]
     public function postGenerate(): string
     {
         $adminId = $this->getAdminId();
@@ -106,7 +106,7 @@ class SiteBuilderPlan extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Polish Site Brief', 'mdi mdi-auto-fix', 'Polish the one-sentence site requirement', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Polish Site Brief', 'sparkles', 'Polish the one-sentence site requirement', 'Weline_Websites::site_builder_agent')]
     public function postPolishDescription(): string
     {
         $adminId = $this->getAdminId();
@@ -134,7 +134,7 @@ class SiteBuilderPlan extends BackendController
         );
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Revise Draft Site Plan', 'mdi mdi-comment-edit-outline', 'Revise an existing site planning draft', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Revise Draft Site Plan', 'edit', 'Revise an existing site planning draft', 'Weline_Websites::site_builder_agent')]
     public function postRevise(): string
     {
         $adminId = $this->getAdminId();
@@ -185,13 +185,13 @@ class SiteBuilderPlan extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan', 'mdi mdi-access-point', 'Stream site plan generation', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan', 'wifi', 'Stream site plan generation', 'Weline_Websites::site_builder_agent')]
     public function getStream(): mixed
     {
         return $this->handleStreamSse();
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan SSE', 'mdi mdi-access-point-network', 'Stream site plan generation via SSE endpoint', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan SSE', 'circle', 'Stream site plan generation via SSE endpoint', 'Weline_Websites::site_builder_agent')]
     public function getStreamSse(): mixed
     {
         return $this->handleStreamSse();
@@ -323,7 +323,7 @@ class SiteBuilderPlan extends BackendController
         return null;
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_set_stage', 'Confirm Draft Site Plan', 'mdi mdi-check-circle-outline', 'Confirm the latest generated plan draft', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_set_stage', 'Confirm Draft Site Plan', 'check', 'Confirm the latest generated plan draft', 'Weline_Websites::site_builder_agent')]
     public function postConfirm(): string
     {
         $adminId = $this->getAdminId();
@@ -348,7 +348,7 @@ class SiteBuilderPlan extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::domain_pool_api_list', 'List Local Pool Domains For Draft', 'mdi mdi-database-search-outline', 'List local domain pool options for the site plan draft', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::domain_pool_api_list', 'List Local Pool Domains For Draft', 'search', 'List local domain pool options for the site plan draft', 'Weline_Websites::site_builder_agent')]
     public function getLocalPool(): string
     {
         $adminId = $this->getAdminId();
@@ -371,7 +371,7 @@ class SiteBuilderPlan extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::domain_pool_api_list', 'Reserve Local Pool Domain', 'mdi mdi-lock-outline', 'Reserve a local pool domain for the site plan draft', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::domain_pool_api_list', 'Reserve Local Pool Domain', 'lock', 'Reserve a local pool domain for the site plan draft', 'Weline_Websites::site_builder_agent')]
     public function postReserveLocalPool(): string
     {
         $adminId = $this->getAdminId();
@@ -398,7 +398,7 @@ class SiteBuilderPlan extends BackendController
         ]));
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_check_domain', 'Select Draft Domain', 'mdi mdi-domain', 'Persist a domain choice on the current site plan draft', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_check_domain', 'Select Draft Domain', 'globe', 'Persist a domain choice on the current site plan draft', 'Weline_Websites::site_builder_agent')]
     public function postSelectDomain(): string
     {
         $adminId = $this->getAdminId();
@@ -434,7 +434,7 @@ class SiteBuilderPlan extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Create Session From Draft', 'mdi mdi-rocket-launch-outline', 'Create the formal site builder session from a confirmed draft', 'Weline_Websites::site_builder_agent')]
+    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Create Session From Draft', 'circle', 'Create the formal site builder session from a confirmed draft', 'Weline_Websites::site_builder_agent')]
     public function postCreateSession(): string
     {
         $adminId = $this->getAdminId();

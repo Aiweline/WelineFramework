@@ -27,6 +27,13 @@
 警告,Warning
 错误,Error
 紧急,Urgent
+"Weline UI 图标迁移无法读取 %{1}：%{2}","Weline UI 图标迁移无法读取 %{1}：%{2}"
+"无法创建 Weline UI 图标迁移快照目录：%{1}","无法创建 Weline UI 图标迁移快照目录：%{1}"
+"无法写入 Weline UI 图标迁移快照：%{1}","无法写入 Weline UI 图标迁移快照：%{1}"
+"无法读取 Weline UI 图标迁移快照：%{1}","无法读取 Weline UI 图标迁移快照：%{1}"
+"Weline UI 图标迁移快照 JSON 无效：%{1}","Weline UI 图标迁移快照 JSON 无效：%{1}"
+"Weline UI 图标迁移快照校验失败：%{1}","Weline UI 图标迁移快照校验失败：%{1}"
+"图标迁移目标不是 ORM Model：%{1}","图标迁移目标不是 ORM Model：%{1}"
 请先登录,"Please login first"
 用户已被禁用,"User has been disabled"
 后台安全凭证暂不可用，请稍后刷新页面。,后台安全凭证暂不可用，请稍后刷新页面。
@@ -81,19 +88,24 @@ IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
 保存成功,"Saved successfully"
 保存失败：%{1},"Save failed: %{1}"
 邮件设置,"Email settings"
+mail,mail
 查看邮件设置,查看邮件设置
 保存邮件设置,保存邮件设置
+save,save
 加载存储设置失败：%{1},"Failed to load storage settings: %{1}"
 存储设置,"Storage settings"
+folder,folder
 查看存储设置,查看存储设置
 保存存储设置,保存存储设置
 加载基础设置失败：%{1},"Failed to load basic settings: %{1}"
 基础设置,"Basic Settings"
+settings,settings
 查看基础设置,查看基础设置
 保存基础设置,保存基础设置
 保存成功！,"Saved successfully!"
 加载访问日志失败：%{1},"Failed to load access logs: %{1}"
 访问日志,"Access log"
+file,file
 查看访问日志,查看访问日志
 消息订阅,"Message subscription"
 主题和渠道不能为空,"Topic and channel cannot be empty"
@@ -103,13 +115,16 @@ IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
 后台通知,"Backend Notification"
 管理消息订阅,管理消息订阅
 我的订阅,我的订阅
+bell,bell
 查看我的消息订阅,查看我的消息订阅
 保存订阅,保存订阅
 保存订阅设置,保存订阅设置
 切换订阅,切换订阅
+circle,circle
 切换订阅状态,切换订阅状态
 迁移诊断,迁移诊断
 发布诊断,发布诊断
+search,search
 只读查看迁移克隆与检查点状态,只读查看迁移克隆与检查点状态
 只读查看发布环境与当前标记,只读查看发布环境与当前标记
 "外观与 Logo","Appearance & Logo"
@@ -130,15 +145,19 @@ IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
 操作失败,"Operation failed"
 删除成功,"Deletion successful"
 删除失败,"Deletion failed"
+user,user
 管理联系人（多渠道配置）,管理联系人（多渠道配置）
 联系人列表,联系人列表
 查看联系人,查看联系人
 保存联系人,保存联系人
 添加渠道配置,"Add Channel Configuration"
+plus,plus
 为联系人添加渠道配置,为联系人添加渠道配置
 移除渠道配置,移除渠道配置
+minus,minus
 移除联系人的某渠道配置,移除联系人的某渠道配置
 删除联系人,"Delete contact"
+trash,trash
 短信,SMS
 我的联系人,"My Contacts"
 渠道和联系方式不能为空,"Channel and contact information cannot be empty"
@@ -150,7 +169,9 @@ IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
 管理用户联系人,管理用户联系人
 查看我的联系人,查看我的联系人
 更新联系人,更新联系人
+edit,edit
 设为默认,"Set as Default"
+star,star
 设为默认联系人,设为默认联系人
 渠道配置,"Channel configuration"
 编辑渠道,"Edit Channel"
@@ -182,23 +203,26 @@ IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
 已标记全部已读,"Marked all as read"
 请指定主题类型,"Please specify topic type"
 "已将该类 %{count} 条通知标记为已读","Marked %{count} notifications of this type as read"
-ri-notification-3-line,ri-notification-3-line
 查看系统通知,查看系统通知
 通知列表,通知列表
-ri-list-check,ri-list-check
+check,check
 查看通知列表,查看通知列表
-ri-file-text-line,ri-file-text-line
 查看通知详情,查看通知详情
 加载备份管理失败：%{1},"Failed to load backup management: %{1}"
 备份创建成功,"Backup created successfully"
 备份创建失败：%{1},"Backup creation failed: %{1}"
 系统备份,"System Backup"
+store,store
 查看系统备份,查看系统备份
 创建系统备份,创建系统备份
+后端主题配置字段无效：%{1},后端主题配置字段无效：%{1}
+后端主题模式不能为空。,后端主题模式不能为空。
+后端文字方向配置无效。,后端文字方向配置无效。
 后端主题模式无效。,"Invalid backend theme mode."
 后端主题模式无效：%{1},"Invalid backend theme mode: %{1}"
 加载数据统计失败：%{1},"Failed to load data statistics: %{1}"
 数据统计,"Data statistics"
+chart,chart
 查看数据统计,查看数据统计
 保存失败，请重试！%{1},"Save failed. Please try again! %{1}"
 保存失败，请重试!不支持的类型：%{1},"Save failed. Please try again! Unsupported type: %{1}"
@@ -215,6 +239,7 @@ ri-file-text-line,ri-file-text-line
 保存后台系统配置,保存后台系统配置
 加载系统监控失败：%{1},"Failed to load system monitoring: %{1}"
 系统监控,"System Monitoring"
+grid,grid
 查看系统监控,查看系统监控
 用户名和密码不能为空,"Username and password cannot be empty"
 用户不存在,"User does not exist"
@@ -242,13 +267,12 @@ Token无效,"Token is invalid"
 发送通知失败：%{error},"Failed to send notification: %{error}"
 "找不到模组: %{1}","Cannot find module: %{1}"
 通知,Notification
-全部已读,"Mark All as Read"
+未读通知,未读通知
 暂无通知,"No notifications"
-已读,Read
-未读,Unread
 查看全部,"View all"
 管理订阅,"Manage subscriptions"
 "JS: inject_path函数path路径不允许为空！","JS: The inject_path function path is not allowed to be empty!"
+发送通知失败,发送通知失败
 总用户数,"Total Users"
 总订单数,"Total Orders"
 总产品数,"Total Products"
@@ -326,6 +350,7 @@ Logo配置,"Logo configuration"
 "邮箱、手机号或用户 ID","Email, phone number, or user ID"
 可选,Optional
 确定要将此联系人设为默认吗？,"Are you sure you want to set this contact as the default?"
+全部已读,"Mark All as Read"
 关键词,Keywords
 类型,Type
 全部类型,"All types"
@@ -338,6 +363,8 @@ Logo配置,"Logo configuration"
 页,Page
 搜索标题或内容,"Search title or content"
 全部,All
+未读,Unread
+已读,Read
 确定要将所有通知标记为已读吗？,"Are you sure you want to mark all notifications as read?"
 网络错误，请重试,"Network error, please try again"
 返回通知中心,"Return to Notification Center"
@@ -454,6 +481,7 @@ URL,URL
 "框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。","Framework Convention Error: Menu ACL discontinuity. Menu %{1} (Module %{2}) declares a non-existent parent %{3}. Please fix the parent/source chain in menu.xml."
 模块不存在：%{1},"Module does not exist: %{1}"
 其他,Other
+后端主题配置字段无效。,后端主题配置字段无效。
 "请指定 --username=、--user_id= 或 --email= 之一","Please specify one of --username=, --user_id=, or --email="
 "请指定 --role_id= 或 --role= 选择要分配的角色","Specify --role_id= or --role= to select role"
 已为用户分配角色,"Role assigned to user"
@@ -511,3 +539,6 @@ DI编译失败：%{1},"DI compilation failed: %{1}"
 模板缓存清理完成！,"Template cache cleanup complete!"
 模板缓存清理失败：%{1},"Template cache cleanup failed: %{1}"
 菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
+ri-notification-3-line,ri-notification-3-line
+ri-list-check,ri-list-check
+ri-file-text-line,ri-file-text-line
