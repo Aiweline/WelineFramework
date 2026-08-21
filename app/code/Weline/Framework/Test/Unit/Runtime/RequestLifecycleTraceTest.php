@@ -84,6 +84,26 @@ class RequestLifecycleTraceTest extends TestCase
         ], RequestLifecycleTrace::getSpans());
     }
 
+    public function testWlsControlPlaneWithoutRequestContextStaysDisabledEvenWhenDebugIsOn(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        // Simulate Master: WLS persistent, no RequestContext initialized, DEBUG forced on.
+        if (!\defined('DEBUG')) {
+            \define('DEBUG', true);
+        }
+        Context::enter(new Context([]));
+
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+
+        for ($i = 0; $i < 5000; $i++) {
+            RequestLifecycleTrace::recordSpan('master_leak_' . $i, 0.01, 'framework');
+        }
+
+        self::assertSame([], RequestLifecycleTrace::getSpans());
+        // Must remain uncached so a later real request can still enable tracing.
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+    }
+
     public function testRequestIdIsScopedByRequestContextInWlsMode(): void
     {
         Runtime::setMode(RuntimeInterface::MODE_WLS);
