@@ -126,14 +126,15 @@ Weline.Api.resource('i18n_admin').action({
 - 动态语言切换
 - 语言检测
 - **标准切换标签**：`<w:i18n:switcher />`（实现类 `LanguageSwitcher`）。旧名 `<w:i18n:language:switcher />` 为兼容别名，新代码与文档只写新名。
-- 目录边界由 `LocaleCatalogScopeResolver` 解析：`website`（WebsiteLanguage + default_language；空 codes 禁止回退全球目录）、`backend_platform`（ActiveLocaleCodeProvider）、`injected`（显式 locales/allowed-values）。
+- 目录边界由 `LocaleCatalogScopeResolver` 解析：`website`（WebsiteLanguage + default_language；空 codes 禁止回退全球目录）、`backend_platform`（仅当网站无语言行时回退到 ActiveLocaleCodeProvider）、`injected`（显式 locales/allowed-values）。
+- **前后台 `<w:i18n:switcher />` 共用同一网站语言边界**：后台顶栏不再单独吃「已安装+已激活」稀疏集，避免默认站前台十几种、后台只剩中文。网站无语言配置时才回退 `backend_platform`。
 - 列表与配置共用 `LanguageSelect::getLanguageItems()` / `buildDisplayName()`；顶栏触发按钮用 `tag_label`，废除 DisplaySelf 英中硬拼。
-- 前台 Hook `header-language-switcher` 仅委托 `LanguageSwitcher::render()`；申请支持其他语言入口只保留在 switcher 内。
+- 前台 Hook `header-language-switcher` 仅委托 `LanguageSwitcher::render()`；申请支持其他语言入口只保留在 switcher 内（后台同站配置开启时同样显示）。
 - `<w:i18n:switcher />` 会自带加载公共 `i18n.js` 运行时。服务端输出的 option `href` 是唯一权威导航结果；点击统一委托给 `WelineI18n.switchLang(locale, href)`，公共对象不可用时由浏览器直接跟随该 href 渐进降级。公共 JS 和标签内脚本不得重算或覆盖权威 href
 - `WelineI18n.switchLang(locale, href)`：写入语言 Cookie 后原样导航同源服务端 href；目标与当前 `pathname+search+hash` 相同时强制 `location.reload()`。仅无 href 的旧编程调用保留兼容 URL builder。后台路径始终保留 locale（含默认语言），默认货币段省略，非默认货币保留；随机后台 key 与 query 不丢失
 - 普通响应仍会回写语言/货币 Cookie（非 HttpOnly），作为无路径段导航时的偏好回落；不得压过当前 URL 语言段
 - `WelineI18n.buildLanguageUrl()` 统一重建前后台语言路径：已识别后台前缀时直接在前缀后插入语言段，不再把模块路由段误判为第二个后台前缀
-- 后台顶栏 `<w:i18n:switcher />` 的可选语言集合由 `ActiveLocaleCodeProvider` 提供：合并 `Locals`（翻译行）与 `Locale`（安装态）中「已安装 + 已激活」的代码，与表单侧 `<w:i18n:language:select />` 对齐；避免仅读 `Locals` 时漏掉已安装语言
+- 后台顶栏 `<w:i18n:switcher />` 与前台一致，读取当前/默认网站的 `WebsiteLanguage`；`ActiveLocaleCodeProvider`（已安装+已激活）仅作网站无语言行时的回退。表单侧 `<w:i18n:language:select catalog="installed" />` 仍可单独使用安装态目录
 - `<w:i18n:switcher />` **必须运行时渲染**（编译期只输出 `LanguageSwitcher::render()` 调用），禁止把语言列表 HTML 烘焙进 `com_*.phtml`；否则 Worker chrome 预热/非后台编译上下文会把「仅中文」冻进模板
 - `<w:i18n:language:select />` 与 `<w:i18n:switcher />` 共享 `LanguageSelect::getLanguageItems()` 作为唯一语言目录：统一按国家分组，组内展示地区语言、参考名称与 Locale 代码，搜索同时覆盖国家、语言和代码。PageBuilder、网站表单、SystemConfig、字典和后台顶栏只需使用官方 Taglib，不再各自维护语言 option
 - `LanguageSelect catalog="installed|global"`：管理表单默认只显示已安装语言；语言支持申请使用
