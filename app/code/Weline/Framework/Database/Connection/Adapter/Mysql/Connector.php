@@ -149,7 +149,13 @@ final class Connector extends Query implements
             try {
                 $this->getDialect()->validateVersion($serverVersion);
             } catch (\Throwable $e) {
-                w_log_warning(__('MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
+                // Do not call __() here: phrase resolution may open MySQL and
+                // would recurse into this create() path (Master OOM on prod).
+                w_log_warning(
+                    'MySQL 版本校验未通过（连接已建立，升级可继续）：' . $e->getMessage(),
+                    [],
+                    'database_version.log'
+                );
             }
             $this->wrappedConnection = new PdoConnection($this->link, 'mysql');
         } catch (\Throwable $e) {
