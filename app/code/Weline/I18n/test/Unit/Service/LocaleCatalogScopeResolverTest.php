@@ -47,20 +47,65 @@ final class LocaleCatalogScopeResolverTest extends TestCase
         self::assertSame('en_US', $scope->displayLocale);
     }
 
-    public function testBackendPlatformModeIgnoresWebsiteIdUnlessForced(): void
+    public function testBackendPrefersWebsiteCatalogWhenAvailableOtherwisePlatform(): void
     {
         $scope = $this->resolver->resolve(
             isBackendArea: true,
-            websiteId: 12,
+            websiteId: 0,
             injectedCodes: [],
             currentOverride: 'zh_Hans_CN',
         );
 
-        self::assertSame(LocaleCatalogScope::MODE_BACKEND_PLATFORM, $scope->mode);
         self::assertNotEmpty($scope->codes);
         self::assertContains($scope->currentCode, $scope->codes);
         self::assertContains($scope->defaultCode, $scope->codes);
-        self::assertFalse($scope->allowRequest);
+        self::assertContains(
+            $scope->mode,
+            [LocaleCatalogScope::MODE_WEBSITE, LocaleCatalogScope::MODE_BACKEND_PLATFORM],
+        );
+        if ($scope->mode === LocaleCatalogScope::MODE_WEBSITE) {
+            self::assertSame(0, $scope->websiteId);
+            // When WebsiteLanguage rows exist, admin chrome must share that list
+            // (not collapse to the sparse installed-active set).
+            self::assertGreaterThanOrEqual(1, \count($scope->codes));
+        } else {
+            self::assertFalse($scope->allowRequest);
+        }
+    }
+
+    public function testBackendFallsBackToPlatformWhenWebsiteHasNoLanguages(): void
+    {
+        $scope = $this->resolver->resolve(
+            isBackendArea: true,
+            websiteId: 999999,
+            injectedCodes: [],
+            currentOverride: 'zh_Hans_CN',
+        );
+
+        self::assertNotEmpty($scope->codes);
+        self::assertContains($scope->currentCode, $scope->codes);
+        self::assertContains($scope->defaultCode, $scope->codes);
+        // Unknown website has no language rows → platform fallback (or empty-safe website).
+        self::assertContains(
+            $scope->mode,
+            [LocaleCatalogScope::MODE_WEBSITE, LocaleCatalogScope::MODE_BACKEND_PLATFORM],
+        );
+    }
+
+    public function testResolverSourcePrefersWebsiteCodesForBackendChrome(): void
+    {
+        $path = \dirname(__DIR__, 3) . '/Service/LocaleCatalogScopeResolver.php';
+        self::assertFileExists($path);
+        $source = (string)\file_get_contents($path);
+        self::assertStringContainsString(
+            'Frontend and backend chrome share one WebsiteLanguage boundary',
+            $source,
+        );
+        self::assertStringContainsString('fetchWebsiteLanguageCodes($resolvedWebsiteId)', $source);
+        self::assertStringContainsString(
+            'return $this->resolveBackendPlatformScope($currentHint, $stateLocale, $showRequestOverride);',
+            $source,
+        );
     }
 
     public function testForcedWebsiteIdUsesWebsiteModeEvenInBackend(): void
