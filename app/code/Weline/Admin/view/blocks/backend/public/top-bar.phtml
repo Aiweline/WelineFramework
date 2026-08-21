@@ -26,6 +26,26 @@ if ($logoSm === '') {
         line-height: 1 !important;
     }
 
+    /* Language switcher needs room for flag + short label; do not crush like icon buttons. */
+    #page-topbar .weline-i18n-switcher-toggle.header-item,
+    #page-topbar [data-i18n-switcher] .weline-i18n-switcher-toggle {
+        width: auto !important;
+        min-width: 44px !important;
+        max-width: min(180px, 40vw) !important;
+        padding: 0 10px !important;
+        gap: 6px !important;
+        justify-content: flex-start !important;
+        overflow: hidden !important;
+    }
+
+    #page-topbar .weline-i18n-switcher-toggle .align-middle {
+        display: inline-block !important;
+        max-width: 120px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
     #page-topbar #vertical-menu-btn,
     #page-topbar [data-weline-backend-theme-trigger],
     #page-topbar .navbar-header .noti-icon,
@@ -232,9 +252,9 @@ if ($logoSm === '') {
         }
 
         #page-topbar .weline-i18n-switcher-toggle {
-            width: 72px !important;
-            min-width: 72px !important;
-            max-width: 72px !important;
+            width: auto !important;
+            min-width: 56px !important;
+            max-width: min(132px, 42vw) !important;
             padding: 0 8px !important;
             gap: 5px !important;
             justify-content: flex-start !important;
@@ -244,7 +264,7 @@ if ($logoSm === '') {
 
         #page-topbar .weline-i18n-switcher-toggle .align-middle {
             display: inline-block !important;
-            max-width: 28px !important;
+            max-width: 72px !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
             white-space: nowrap !important;
@@ -311,14 +331,21 @@ if ($logoSm === '') {
         }
 
         #page-topbar .weline-i18n-switcher-toggle {
-            width: 58px !important;
-            min-width: 58px !important;
-            max-width: 58px !important;
+            width: auto !important;
+            min-width: 48px !important;
+            max-width: min(110px, 36vw) !important;
             padding: 0 7px !important;
+            gap: 4px !important;
+            justify-content: flex-start !important;
+            overflow: hidden !important;
         }
 
         #page-topbar .weline-i18n-switcher-toggle .align-middle {
-            display: none !important;
+            display: inline-block !important;
+            max-width: 56px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
         }
     }
 </style>
