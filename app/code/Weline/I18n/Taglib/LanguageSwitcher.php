@@ -12,6 +12,8 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
+use Weline\I18n\Service\LocaleCatalogScope;
+use Weline\I18n\Service\LocaleCatalogScopeResolver;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\SystemConfig\Api\ConfigReader;
 
@@ -19,6 +21,8 @@ class LanguageSwitcher implements TaglibInterface
 {
     private const SWITCHER_HTML_CACHE_TTL = 60.0;
     private const SWITCHER_LANGUAGE_CACHE_TTL = 300.0;
+    public const TAG_NAME = 'i18n:switcher';
+    public const LEGACY_TAG_NAME = 'i18n:language:switcher';
 
     /**
      * @var array<string, array{expires: float, html: string}>
@@ -41,7 +45,7 @@ class LanguageSwitcher implements TaglibInterface
 
     public static function name(): string
     {
-        return 'i18n:language:switcher';
+        return self::TAG_NAME;
     }
 
     public static function tag(): bool
@@ -70,6 +74,9 @@ class LanguageSwitcher implements TaglibInterface
             'current' => false,
             'value' => false,
             'navigation' => false,
+            'website-id' => false,
+            'show-request' => false,
+            'label-mode' => false,
         ];
     }
 
@@ -86,6 +93,9 @@ class LanguageSwitcher implements TaglibInterface
                 . '\'allowed_values\' => $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? ($Taglib__locales ?? null))),'
                 . '\'current\' => (string)($Taglib__current ?? ($Taglib__value ?? \'\')),'
                 . '\'navigation\' => (string)($Taglib__navigation ?? \'path\'),'
+                . '\'website_id\' => $Taglib__website_id ?? null,'
+                . '\'show_request\' => $Taglib__show_request ?? null,'
+                . '\'label_mode\' => (string)($Taglib__label_mode ?? \'short\'),'
                 . ']); ?>';
         };
     }
@@ -115,46 +125,50 @@ class LanguageSwitcher implements TaglibInterface
             }
             // Worker chrome 预热时可能尚无 HTTP Request 后台态，但 ThemeData area 已是 backend。
             $isBackendArea = self::resolveIsBackendArea($request);
-            $showLanguageRequest = !$isBackendArea && self::isLanguageRequestEnabled();
-            $stateLocale = \trim((string)State::getLangLocal());
-            if ($stateLocale === '') {
-                $stateLocale = 'zh_Hans_CN';
-            }
             $allowedValues = self::normalizeAllowedValues($attributes['allowed_values'] ?? null);
             $navigation = \strtolower(\trim((string)($attributes['navigation'] ?? 'path')));
             if (!\in_array($navigation, ['path', 'emit'], true)) {
                 $navigation = 'path';
             }
             $currentOverride = \trim((string)($attributes['current'] ?? ''));
-            // Prefer the visitor/current locale for catalog labels + country headers so
-            // an Indian-language page does not render Chinese-first country sorting/labels
-            // when the framework State locale is still the system default (zh_Hans_CN).
-            $currentCode = $currentOverride !== '' ? $currentOverride : $stateLocale;
-            $displayLocale = $currentCode !== '' ? $currentCode : $stateLocale;
-
-            // locales/allowed-values 非空 = 权威注入列表（未建站 / plan 拥有的语言集）。
-            // 标签名与国旗从 i18n 词表解析，不依赖 website 已创建语言表。
-            if ($allowedValues !== []) {
-                $welineLanguages = self::buildInjectedLanguages($allowedValues, $displayLocale);
-                $showLanguageRequest = false;
-            } else {
-                // 后台按已安装+已激活 Locale 集合构建；前台再按站点语言 / 自定义白名单过滤。
-                $welineLanguages = self::getLanguageOptions($displayLocale, $isBackendArea, $websiteId);
+            $websiteIdAttr = self::normalizeOptionalInt($attributes['website_id'] ?? null);
+            $showRequestOverride = self::normalizeOptionalBool($attributes['show_request'] ?? null);
+            $labelMode = \strtolower(\trim((string)($attributes['label_mode'] ?? 'short')));
+            if (!\in_array($labelMode, ['short', 'display'], true)) {
+                $labelMode = 'short';
             }
+
+            /** @var LocaleCatalogScopeResolver $scopeResolver */
+            $scopeResolver = ObjectManager::getInstance(LocaleCatalogScopeResolver::class);
+            $scope = $scopeResolver->resolve(
+                $isBackendArea,
+                $websiteId,
+                $allowedValues,
+                $currentOverride !== '' ? $currentOverride : null,
+                $showRequestOverride,
+                $websiteIdAttr,
+            );
+            $websiteId = $scope->websiteId;
+            $showLanguageRequest = $scope->allowRequest;
+            $currentCode = $scope->currentCode;
+            $displayLocale = $scope->displayLocale;
+            $welineLanguages = self::buildLanguagesFromScope($scope, $displayLocale);
             $languageGroups = self::groupLanguagesByCountry($welineLanguages, $displayLocale, $currentCode);
 
-            $firstCode = (string)(array_key_first($welineLanguages) ?? 'zh_Hans_CN');
+            $firstCode = (string)(array_key_first($welineLanguages) ?? $scope->defaultCode);
             $firstData = (array)($welineLanguages[$firstCode] ?? []);
             $welineCurrentLanguage = [
                 'code' => $firstCode,
                 'name' => (string)($firstData['name'] ?? '中文'),
+                'tag_label' => (string)($firstData['tag_label'] ?? ($firstData['name'] ?? '中文')),
+                'display_name' => (string)($firstData['display_name'] ?? ($firstData['name'] ?? '中文')),
                 'flag' => (string)($firstData['flag'] ?? ''),
             ];
             if (isset($welineLanguages[$currentCode])) {
                 $welineCurrentLanguage = $welineLanguages[$currentCode];
                 $welineCurrentLanguage['code'] = $currentCode;
-            } elseif ($currentOverride !== '') {
-                $injected = self::buildInjectedLanguages([$currentOverride], $displayLocale);
+            } elseif ($currentOverride !== '' && $scope->mode === LocaleCatalogScope::MODE_INJECTED) {
+                $injected = self::buildLanguagesFromCodes([$currentOverride], $displayLocale);
                 if (isset($injected[$currentOverride])) {
                     $welineCurrentLanguage = $injected[$currentOverride];
                     $welineCurrentLanguage['code'] = $currentOverride;
@@ -162,10 +176,13 @@ class LanguageSwitcher implements TaglibInterface
             }
 
             $currentCode = (string)($welineCurrentLanguage['code'] ?? '');
-            $currentName = htmlspecialchars((string)($welineCurrentLanguage['name'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $currentLabelRaw = $labelMode === 'display'
+                ? (string)($welineCurrentLanguage['display_name'] ?? ($welineCurrentLanguage['name'] ?? ''))
+                : (string)($welineCurrentLanguage['tag_label'] ?? ($welineCurrentLanguage['name'] ?? ''));
+            $currentName = htmlspecialchars($currentLabelRaw, ENT_QUOTES, 'UTF-8');
             $currentFlag = self::sanitizeInlineFlagMarkup((string)($welineCurrentLanguage['flag'] ?? ''));
             $renderFor = strtolower(trim((string)($attributes['for'] ?? '')));
-            $switcherScopeId = $isBackendArea ? 'backend' : (string)$websiteId;
+            $switcherScopeId = $scope->mode . ':' . ($isBackendArea ? 'backend' : (string)$websiteId);
             $switcherId = 'weline-i18n-switcher-' . substr(md5($switcherScopeId . '|' . $currentCode . '|' . json_encode(array_keys($welineLanguages))), 0, 12);
             $parts = explode('_', $currentCode);
             $shortCode = strtoupper(substr($currentCode, 0, 2));
@@ -573,84 +590,127 @@ class LanguageSwitcher implements TaglibInterface
         }
     }
 
-    private static function getLanguageOptions(string $displayLocale, bool $isBackendArea, int $websiteId): array
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private static function buildLanguagesFromScope(LocaleCatalogScope $scope, string $displayLocale): array
     {
-        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'zh_Hans_CN';
-        $installedOnly = !$isBackendArea;
-        $scopeKey = $isBackendArea ? 'backend' : 'frontend:' . $websiteId;
-        $cacheKey = $scopeKey . '|' . $displayLocale . '|' . (int)$installedOnly;
+        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : $scope->displayLocale;
+        $cacheKey = $scope->mode . ':' . $scope->websiteId . '|' . $displayLocale . '|' . \implode(',', $scope->codes);
         $now = \microtime(true);
         if (isset(self::$languageCache[$cacheKey]) && self::$languageCache[$cacheKey]['expires'] >= $now) {
             return self::$languageCache[$cacheKey]['languages'];
         }
         unset(self::$languageCache[$cacheKey]);
 
-        /** @var I18n $i18n */
-        $i18n = ObjectManager::getInstance(I18n::class);
-        if ($isBackendArea) {
-            // 后台不以「语言包目录」为准，按 Locale/Locals 已安装+已激活集合构建。
-            $welineLanguages = self::buildBackendLanguages($displayLocale, $i18n);
-        } else {
-            $welineLanguages = $i18n->getLocalesWithFlagsDisplaySelf($displayLocale, 24, 18, $installedOnly, true);
-            // Frontend always scopes to the current website (id=0 is the system default site).
-            $welineLanguages = self::filterFrontendLanguages($welineLanguages, $websiteId);
-        }
-
+        $languages = self::buildLanguagesFromCodes($scope->codes, $displayLocale);
         self::$languageCache[$cacheKey] = [
             'expires' => $now + self::SWITCHER_LANGUAGE_CACHE_TTL,
-            'languages' => $welineLanguages,
+            'languages' => $languages,
         ];
 
-        return $welineLanguages;
+        return $languages;
     }
 
     /**
-     * @return array<string, array{code?: string, name?: string, flag?: string}>
+     * Build switcher language map from canonical LanguageSelect catalog rows.
+     *
+     * @param list<string> $codes
+     * @return array<string, array<string, mixed>>
      */
-    private static function buildBackendLanguages(string $displayLocale, I18n $i18n): array
+    public static function buildLanguagesFromCodes(array $codes, string $displayLocale): array
     {
-        try {
-            /** @var ActiveLocaleCodeProvider $activeLocaleCodeProvider */
-            $activeLocaleCodeProvider = ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
-            $codes = $activeLocaleCodeProvider->getInstalledActiveCodes();
-        } catch (\Throwable) {
-            $codes = [];
-        }
-
-        $catalog = $i18n->getLocalesWithFlagsDisplaySelf($displayLocale, 24, 18, false, true);
-        if ($codes === []) {
-            return \is_array($catalog) ? $catalog : [];
-        }
-
-        $languages = [];
+        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'zh_Hans_CN';
+        $wantedOrder = [];
+        $wantedKeys = [];
         foreach ($codes as $code) {
-            $code = \trim((string)$code);
+            $code = \trim(\str_replace('-', '_', (string)$code));
             if ($code === '') {
                 continue;
             }
-            if (isset($catalog[$code]) && \is_array($catalog[$code])) {
-                $languages[$code] = $catalog[$code];
+            $key = \strtolower($code);
+            if (isset($wantedKeys[$key])) {
                 continue;
             }
+            $wantedKeys[$key] = true;
+            $wantedOrder[] = $code;
+        }
+        if ($wantedOrder === []) {
+            return [];
+        }
 
-            $name = '';
-            $flag = '';
-            try {
-                $name = (string)$i18n->getLocaleName($code, $displayLocale);
-            } catch (\Throwable) {
+        try {
+            $items = LanguageSelect::resolveLanguageItems($displayLocale, 'installed', $wantedOrder);
+        } catch (\Throwable) {
+            $items = [];
+        }
+
+        $languages = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
             }
-            try {
-                $flag = (string)($i18n->getCountryFlagWithLocal($code, 24, 18)['flag'] ?? '');
-            } catch (\Throwable) {
+            $code = \trim((string)($item['code'] ?? ''));
+            if ($code === '') {
+                continue;
             }
+            $displayName = (string)($item['display_name'] ?? ($item['name'] ?? $code));
+            $tagLabel = (string)($item['tag_label'] ?? $displayName);
             $languages[$code] = [
                 'code' => $code,
-                'name' => $name !== '' ? $name : $code,
-                'flag' => $flag,
+                'name' => $displayName,
+                'display_name' => $displayName,
+                'tag_label' => $tagLabel,
+                'self_name' => (string)($item['self_name'] ?? ''),
+                'reference_name' => (string)($item['reference_name'] ?? ''),
+                'flag' => (string)($item['flag'] ?? ''),
+                'country_code' => (string)($item['country_code'] ?? ''),
+                'country_name' => (string)($item['country_name'] ?? ''),
+                'search_terms' => (string)($item['search_terms'] ?? ''),
             ];
         }
 
         return $languages;
+    }
+
+    private static function normalizeOptionalInt(mixed $raw): ?int
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        if (\is_bool($raw)) {
+            return null;
+        }
+        if (\is_int($raw)) {
+            return $raw;
+        }
+        if (\is_float($raw)) {
+            return (int)$raw;
+        }
+        if (\is_string($raw) && \is_numeric(\trim($raw))) {
+            return (int)\trim($raw);
+        }
+
+        return null;
+    }
+
+    private static function normalizeOptionalBool(mixed $raw): ?bool
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        if (\is_bool($raw)) {
+            return $raw;
+        }
+        $value = \strtolower(\trim((string)$raw));
+        if (\in_array($value, ['1', 'true', 'yes', 'on'], true)) {
+            return true;
+        }
+        if (\in_array($value, ['0', 'false', 'no', 'off'], true)) {
+            return false;
+        }
+
+        return null;
     }
 
     /**
@@ -814,11 +874,18 @@ class LanguageSwitcher implements TaglibInterface
         return \sha1(\implode('|', $keys));
     }
 
+    /**
+     * @deprecated Prefer LocaleCatalogScopeResolver + buildLanguagesFromCodes.
+     * Empty website language sets must not fall back to the global catalog.
+     *
+     * @param array<string, mixed> $welineLanguages
+     * @return array<string, mixed>
+     */
     private static function filterFrontendLanguages(array $welineLanguages, int $websiteId): array
     {
         $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
         if (!is_array($websiteLanguageCodes) || $websiteLanguageCodes === []) {
-            return $welineLanguages;
+            return [];
         }
 
         $allowedMap = [];
@@ -829,7 +896,7 @@ class LanguageSwitcher implements TaglibInterface
             }
         }
         if ($allowedMap === []) {
-            return $welineLanguages;
+            return [];
         }
 
         $filteredLanguages = [];
@@ -840,7 +907,7 @@ class LanguageSwitcher implements TaglibInterface
             }
         }
 
-        return $filteredLanguages !== [] ? $filteredLanguages : $welineLanguages;
+        return $filteredLanguages;
     }
 
     /**
@@ -920,53 +987,7 @@ class LanguageSwitcher implements TaglibInterface
      */
     public static function buildInjectedLanguages(array $codes, string $displayLocale): array
     {
-        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'zh_Hans_CN';
-        /** @var I18n $i18n */
-        $i18n = ObjectManager::getInstance(I18n::class);
-        $catalog = $i18n->getLocalesWithFlagsDisplaySelf($displayLocale, 24, 18, false, true);
-        if (!\is_array($catalog)) {
-            $catalog = [];
-        }
-
-        $languages = [];
-        foreach ($codes as $code) {
-            $code = \trim((string)$code);
-            if ($code === '' || isset($languages[$code])) {
-                continue;
-            }
-            if (isset($catalog[$code]) && \is_array($catalog[$code])) {
-                $row = $catalog[$code];
-                $row['code'] = $code;
-                if (\trim((string)($row['name'] ?? '')) === '') {
-                    $row['name'] = $code;
-                }
-                $languages[$code] = $row;
-                continue;
-            }
-
-            $name = '';
-            $flag = '';
-            try {
-                $name = (string)$i18n->getLocaleName($code, $displayLocale);
-            } catch (\Throwable) {
-            }
-            try {
-                $flag = (string)($i18n->getCountryFlagWithLocal($code, 24, 18)['flag'] ?? '');
-            } catch (\Throwable) {
-            }
-            $languages[$code] = [
-                'code' => $code,
-                'name' => $name !== '' ? $name : $code,
-                'flag' => $flag,
-                'display_name' => $name !== '' ? $name : $code,
-                'self_name' => $name,
-                'reference_name' => $code,
-                'english_name' => $code,
-                'search' => \strtolower($code . ' ' . $name),
-            ];
-        }
-
-        return $languages;
+        return self::buildLanguagesFromCodes($codes, $displayLocale);
     }
 
     /**
@@ -1557,6 +1578,6 @@ class LanguageSwitcher implements TaglibInterface
 
     public static function document(): string
     {
-        return '<p><code>&lt;w:i18n:language:switcher /&gt;</code> 按国家分组、支持国家/语言/Locale 搜索的通用语言切换标签</p>';
+        return '<p><code>&lt;w:i18n:switcher /&gt;</code> 按国家分组、支持搜索的标准语言切换标签。旧名 <code>&lt;w:i18n:language:switcher /&gt;</code> 为兼容别名。</p>';
     }
 }
