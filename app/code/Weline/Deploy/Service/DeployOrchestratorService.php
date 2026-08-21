@@ -83,21 +83,35 @@ class DeployOrchestratorService
         $this->historyService->start($releaseId, $trigger, $refType, $ref, $versionHint, $gitTag, $releaseContext);
         $log(__('开始发布：%{1}', [$releaseId]));
 
+        $deployRoot = '';
+        $config = [];
+        $preCommit = '';
+        $preBranch = '';
+        $preCurrent = null;
+        $gitUpdateStarted = false;
+        $versionStampWritten = false;
+
         try {
             $config = $this->loadConfig($runtimeConfig);
             $deployRoot = $this->resolveDeployRoot($config);
             $releaseContext['deploy_root'] = $deployRoot;
+            $preCommit = $this->gitService->getFullCommit($deployRoot);
+            $preBranch = $this->gitService->getCurrentBranch($deployRoot);
+            $preCurrent = $this->runtimeService->getCurrent($deployRoot);
 
             if ($this->shouldRunBackup($noBackup)) {
                 $log(__('备份中...'));
                 $this->runDeployBackup($config, $deployRoot, $backupTrigger, [
-                    'git_commit' => $this->runtimeService->getCurrent($deployRoot)['git_commit'] ?? '',
+                    'git_commit' => is_array($preCurrent)
+                        ? (string)($preCurrent['git_commit'] ?? $preCommit)
+                        : $preCommit,
                     'deploy_version' => $this->runtimeService->getDeployVersion($deployRoot),
                     'ref' => $ref,
                 ]);
             }
 
             $log(__('Git 更新中...'));
+            $gitUpdateStarted = true;
             $this->executeGitUpdate($config, $refType, $gitCheckout, $gitTag, $force, $deployRoot);
 
             $gitCommit = $this->gitService->getFullCommit($deployRoot);
@@ -143,6 +157,7 @@ class DeployOrchestratorService
             }
             $this->runtimeService->saveCurrent($currentPayload, $deployRoot);
             $this->runtimeService->syncEnv($deployVersion, $workerBuildId);
+            $versionStampWritten = true;
             $log(__('版本戳已写入：%{1}', [$deployVersion]));
 
             $log(__('重载服务...'));
@@ -161,6 +176,19 @@ class DeployOrchestratorService
             ];
         } catch (\Throwable $throwable) {
             $error = $throwable->getMessage();
+            $rollbackNote = $this->autoRollbackAfterReleaseFailure(
+                $gitUpdateStarted,
+                $preCommit,
+                $preBranch,
+                is_array($preCurrent) ? $preCurrent : null,
+                $versionStampWritten,
+                $deployRoot,
+                $releaseContext,
+                $log
+            );
+            if ($rollbackNote !== '') {
+                $error .= $rollbackNote;
+            }
             $this->historyService->markFailed($releaseId, $error);
             $log(__('发布失败：%{1}', [$error]));
 
@@ -298,6 +326,125 @@ class DeployOrchestratorService
                 'deploy_version' => '',
                 'message' => $error,
             ];
+        }
+    }
+
+    /**
+     * After a failed release that may have moved Git / version stamps, restore the
+     * pre-release commit locally and record an auto_rollback history row.
+     *
+     * @param array<string, mixed>|null $preCurrent
+     * @param array<string, mixed> $releaseContext
+     * @param callable(string):void $log
+     */
+    private function autoRollbackAfterReleaseFailure(
+        bool $gitUpdateStarted,
+        string $preCommit,
+        string $preBranch,
+        ?array $preCurrent,
+        bool $versionStampWritten,
+        string $deployRoot,
+        array $releaseContext,
+        callable $log
+    ): string {
+        $preCommit = trim($preCommit);
+        if (!$gitUpdateStarted || $preCommit === '' || $deployRoot === '') {
+            return '';
+        }
+
+        try {
+            $currentCommit = $this->gitService->getFullCommit($deployRoot);
+        } catch (\Throwable) {
+            $currentCommit = '';
+        }
+
+        if ($currentCommit !== '' && hash_equals($preCommit, $currentCommit) && !$versionStampWritten) {
+            return '';
+        }
+
+        $short = mb_substr($preCommit, 0, 12);
+        $autoReleaseId = $this->runtimeService->generateReleaseId('auto-rollback-' . $short);
+        $this->historyService->start(
+            $autoReleaseId,
+            'auto_rollback',
+            'commit',
+            $preCommit,
+            $short,
+            null,
+            $releaseContext
+        );
+        $log(__('发布失败，正在自动回滚到 %{1}...', [$short]));
+
+        try {
+            $snapshotId = $this->snapshotProtectedPaths($deployRoot);
+            try {
+                $this->gitService->restoreLocalCommit($preCommit, $preBranch, $deployRoot);
+            } finally {
+                $this->restoreProtectedPaths($deployRoot, $snapshotId);
+            }
+
+            $restoredCommit = $this->gitService->getFullCommit($deployRoot);
+            $restoredBranch = $this->gitService->getCurrentBranch($deployRoot);
+            $deployVersion = '';
+            $workerBuildId = '';
+
+            if (is_array($preCurrent)) {
+                $this->runtimeService->saveCurrent($preCurrent, $deployRoot);
+                $deployVersion = (string)($preCurrent['deploy_version'] ?? '');
+                $workerBuildId = (string)($preCurrent['worker_build_id'] ?? '');
+                if ($deployVersion !== '') {
+                    $this->runtimeService->syncEnv(
+                        $deployVersion,
+                        $workerBuildId !== '' ? $workerBuildId : $this->runtimeService->generateWorkerBuildId()
+                    );
+                }
+            } elseif ($versionStampWritten) {
+                $deployVersion = $this->gitService->getShortCommit($deployRoot) ?: $short;
+                $workerBuildId = $this->runtimeService->generateWorkerBuildId();
+                $this->runtimeService->saveCurrent([
+                    'release_id' => $autoReleaseId,
+                    'deploy_version' => $deployVersion,
+                    'worker_build_id' => $workerBuildId,
+                    'git_commit' => $restoredCommit,
+                    'git_ref_type' => 'commit',
+                    'git_ref' => $preCommit,
+                    'git_branch' => $restoredBranch,
+                    'deployed_at' => time(),
+                    'deploy_root' => $deployRoot,
+                    'auto_rollback' => true,
+                ], $deployRoot);
+                $this->runtimeService->syncEnv($deployVersion, $workerBuildId);
+            }
+
+            if ($deployVersion === '') {
+                $deployVersion = $this->gitService->getShortCommit($deployRoot) ?: $short;
+            }
+            if ($workerBuildId === '') {
+                $workerBuildId = $this->runtimeService->generateWorkerBuildId();
+            }
+
+            try {
+                $this->reloadServer($deployRoot);
+            } catch (\Throwable $reloadError) {
+                $log(__('自动回滚后服务重载失败：%{1}', [$reloadError->getMessage()]));
+            }
+
+            $this->historyService->markSuccess(
+                $autoReleaseId,
+                $deployVersion,
+                $workerBuildId,
+                $restoredCommit,
+                $restoredBranch
+            );
+            $log(__('已自动回滚到发布前版本 %{1}', [$short]));
+
+            return '；' . (string)__('已自动回滚到发布前版本 %{1}', [$short]);
+        } catch (\Throwable $rollbackError) {
+            $message = $rollbackError->getMessage();
+            $this->historyService->markFailed($autoReleaseId, $message);
+            $log(__('自动回滚失败：%{1}', [$message]));
+
+            return '；' . (string)__('自动回滚失败：%{1}', [$message]);
         }
     }
 
