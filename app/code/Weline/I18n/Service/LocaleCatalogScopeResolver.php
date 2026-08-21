@@ -62,9 +62,20 @@ final class LocaleCatalogScopeResolver
         }
 
         $forcedWebsiteId = $websiteIdAttr;
-        $useWebsiteMode = $forcedWebsiteId !== null || !$isBackendArea;
-        if ($useWebsiteMode) {
-            $resolvedWebsiteId = $forcedWebsiteId !== null ? \max(0, $forcedWebsiteId) : \max(0, $websiteId);
+        if ($forcedWebsiteId !== null) {
+            return $this->resolveWebsiteScope(
+                \max(0, $forcedWebsiteId),
+                $currentHint,
+                $stateLocale,
+                $showRequestOverride,
+            );
+        }
+
+        // Frontend and backend chrome share one WebsiteLanguage boundary for the
+        // current/default website. `<w:i18n:switcher />` must not show a different
+        // list in admin just because Locale install-state is sparse.
+        $resolvedWebsiteId = \max(0, $websiteId);
+        if (!$isBackendArea) {
             return $this->resolveWebsiteScope(
                 $resolvedWebsiteId,
                 $currentHint,
@@ -73,6 +84,17 @@ final class LocaleCatalogScopeResolver
             );
         }
 
+        $websiteCodes = $this->normalizeCodeList($this->fetchWebsiteLanguageCodes($resolvedWebsiteId));
+        if ($websiteCodes !== []) {
+            return $this->resolveWebsiteScope(
+                $resolvedWebsiteId,
+                $currentHint,
+                $stateLocale,
+                $showRequestOverride,
+            );
+        }
+
+        // Fallback only when the website has no language rows at all.
         return $this->resolveBackendPlatformScope($currentHint, $stateLocale, $showRequestOverride);
     }
 
