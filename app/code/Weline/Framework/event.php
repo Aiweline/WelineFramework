@@ -641,6 +641,11 @@ return [
         'description' => __('在响应无路由请求前触发，允许其他模块处理无路由请求。'),
         'doc' => 'http/响应无路由前.md',
     ],
+    'Weline_Framework_Http::error_page_render' => [
+        'name' => __('HTTP 状态回执页渲染'),
+        'description' => __('渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data["html"] 整页覆盖，或改写 page_title/page_lead/page_hint。'),
+        'doc' => 'http/状态回执页渲染.md',
+    ],
     'Framework_Http::response_redirect_before' => [
         'name' => __('响应重定向前'),
         'description' => __('在HTTP响应重定向前触发，允许其他模块修改重定向URL。'),

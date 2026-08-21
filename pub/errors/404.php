@@ -1,10 +1,15 @@
 <?php
-
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
+/**
+ * 404 Not Found
+ * @var int $statusCode
+ * @var string $pageTitle
+ * @var string $pageLead
+ * @var string $pageHint
+ * @var string $accent
  */
-
-echo 404;
+$statusCode = $statusCode ?? 404;
+$pageTitle = $pageTitle ?? '页面不存在';
+$pageLead = $pageLead ?? '找不到你请求的页面或资源。';
+$pageHint = $pageHint ?? '链接可能已失效，或地址输入有误。';
+$accent = $accent ?? 'neutral';
+require __DIR__ . '/_shell.php';
