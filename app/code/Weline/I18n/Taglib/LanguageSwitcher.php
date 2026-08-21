@@ -287,7 +287,7 @@ class LanguageSwitcher implements TaglibInterface
                 \array_keys($welineLanguages)
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
-                . '|markup=v2-lang-native-path-nav-9'
+                . '|markup=v2-lang-native-path-nav-10'
                 . '|mount=' . $websiteMount;
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
@@ -428,11 +428,13 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = 'var input=root.querySelector(".weline-language-search");';
             $html[] = 'var requestOpen=root.querySelector("[data-language-request-open]");var requestModal=root.querySelector("[data-language-request-modal]");var requestBody=root.querySelector("[data-language-request-body]");var requestLoaded=false;var requestLoading=false;var requestReturnFocus=null;var requestDraft=null;';
             $html[] = 'if(!toggle||!panel){return;}';
-            $html[] = 'var options=function(){return root.querySelectorAll(".weline-language-option");};';
-            $html[] = 'var groups=function(){return root.querySelectorAll("[data-language-group]");};';
+            // Panel may be portaled to document.body while open — always query from panel,
+            // never from root (empty root lookups falsely show「无匹配语言」and duplicate nodes).
+            $html[] = 'var options=function(){return panel.querySelectorAll(".weline-language-option");};';
+            $html[] = 'var groups=function(){return panel.querySelectorAll("[data-language-group]");};';
             $html[] = 'var emptyId="weline-language-empty-' . $switcherId . '";';
-            $html[] = 'function ensureEmpty(){var empty=root.querySelector("#"+emptyId);if(!empty){empty=document.createElement("div");empty.id=emptyId;empty.className="dropdown-item text-muted small";empty.style.display="none";empty.textContent="' . addslashes(__('无匹配语言')) . '";panel.appendChild(empty);}return empty;}';
-            $html[] = 'function filter(){if(!input){return;}var kw=String(input.value||"").trim().toLowerCase();var visible=0;groups().forEach(function(group){var groupVisible=0;group.querySelectorAll(".weline-language-option").forEach(function(opt){var search=(opt.getAttribute("data-search")||"").toLowerCase();var ok=(kw==="")||search.indexOf(kw)!==-1;opt.style.display=ok?"":"none";opt.setAttribute("aria-hidden",ok?"false":"true");if(ok){groupVisible++;}});group.style.display=groupVisible>0?"":"none";visible+=groupVisible;});var empty=ensureEmpty();empty.style.display=visible===0?"":"none";}';
+            $html[] = 'function ensureEmpty(){var empty=panel.querySelector("#"+emptyId);if(!empty){empty=document.createElement("div");empty.id=emptyId;empty.className="dropdown-item text-muted small weline-i18n-switcher-empty";empty.setAttribute("role","status");empty.style.display="none";empty.hidden=true;empty.textContent="' . addslashes(__('无匹配语言')) . '";var scroll=panel.querySelector("[data-language-scroll]");(scroll||panel).appendChild(empty);}panel.querySelectorAll(".weline-i18n-switcher-empty").forEach(function(node){if(node!==empty){node.remove();}});return empty;}';
+            $html[] = 'function filter(){if(!input){return;}var kw=String(input.value||"").trim().toLowerCase();var visible=0;groups().forEach(function(group){var groupVisible=0;group.querySelectorAll(".weline-language-option").forEach(function(opt){var search=(opt.getAttribute("data-search")||"").toLowerCase();var ok=(kw==="")||search.indexOf(kw)!==-1;opt.style.display=ok?"":"none";opt.setAttribute("aria-hidden",ok?"false":"true");if(ok){groupVisible++;}});group.style.display=groupVisible>0?"":"none";visible+=groupVisible;});var empty=ensureEmpty();var showEmpty=visible===0;empty.style.display=showEmpty?"":"none";empty.hidden=!showEmpty;}';
             $html[] = 'var panelHome=panel.parentNode;var panelNext=panel.nextSibling;';
             $html[] = 'function mountPanelToBody(){if(!document.body){return;}if(panel.parentNode!==document.body){document.body.appendChild(panel);}panel.style.zIndex="10055";}';
             $html[] = 'function restorePanelHome(){if(!panelHome){return;}if(panel.parentNode===panelHome){return;}if(panelNext&&panelNext.parentNode===panelHome){panelHome.insertBefore(panel,panelNext);}else{panelHome.appendChild(panel);}}';
@@ -471,7 +473,7 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = $defaultAwareBuildLangHrefFallbackJs;
             $html[] = 'function buildLangHref(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";if(window.WelineI18n&&typeof window.WelineI18n.buildLanguageUrl==="function"){return window.WelineI18n.buildLanguageUrl(lang,pathname,search);}return buildLangHrefFallback(lang);}';
             $html[] = 'var navigation=String(root.getAttribute("data-i18n-navigation")||"path").toLowerCase();';
-            $html[] = 'root.querySelectorAll("[data-language-option]").forEach(function(opt){';
+            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(opt){';
             $html[] = 'var code=opt.getAttribute("data-lang")||"";if(!code){return;}';
             $html[] = 'if(opt.dataset.welineLangBound==="1"){return;}opt.dataset.welineLangBound="1";';
             $html[] = 'opt.addEventListener("click",function(event){';
@@ -482,7 +484,7 @@ class LanguageSwitcher implements TaglibInterface
             // anchor and broadcast the locale to the parent workbench.
             $html[] = 'event.preventDefault();';
             $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
-            $html[] = 'root.querySelectorAll("[data-language-option]").forEach(function(node){var active=(node.getAttribute("data-lang")||"")===code;if(active){node.classList.add("active");}else{node.classList.remove("active");}node.setAttribute("aria-checked",active?"true":"false");});';
+            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(node){var active=(node.getAttribute("data-lang")||"")===code;if(active){node.classList.add("active");}else{node.classList.remove("active");}node.setAttribute("aria-checked",active?"true":"false");});';
             $html[] = 'var currentEl=root.querySelector(".current-language");if(currentEl){var parts=String(code).split("_");var short=parts.length>=2?(parts[0].toUpperCase()==="ZH"?(String(parts[1]).toUpperCase()==="HANT"?"TW":"ZH"):parts[0].substring(0,2).toUpperCase()):String(code).substring(0,2).toUpperCase();currentEl.textContent=short;}';
             $html[] = 'try{root.dispatchEvent(new CustomEvent("weline:i18n:locale-change",{bubbles:true,detail:{locale:code}}));}catch(err){}';
             $html[] = 'return;}';
@@ -501,6 +503,7 @@ class LanguageSwitcher implements TaglibInterface
             if ($renderFor === 'js') {
                 $html[] = '<script>(function(){';
                 $html[] = 'var root=document.querySelector(\'[data-i18n-switcher-id="' . $switcherId . '"]\');if(!root){return;}';
+                $html[] = 'var panel=root.querySelector(".weline-i18n-switcher-panel")||document.getElementById("' . addslashes($panelId) . '");';
                 $html[] = 'function detectLang(){try{if(typeof window.getCookie==="function"){var c=window.getCookie("WELINE_USER_LANG");if(c){return c;}}}catch(e){}';
                 $html[] = 'try{var u=new URLSearchParams(window.location.search);var q=u.get("lang");if(q){return q;}}catch(e){}';
                 $html[] = 'var p=(window.location.pathname||"").split("/").filter(Boolean);for(var i=0;i<p.length;i++){if(/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(p[i])){return p[i];}}';
@@ -509,8 +512,9 @@ class LanguageSwitcher implements TaglibInterface
                 $html[] = 'function buildLangHrefFallback(lang){return "/"+(String(lang||"").replace(/-/g,"_")||"");}';
                 $html[] = $defaultAwareBuildLangHrefFallbackJs;
                 $html[] = 'function buildLangHref(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";if(window.WelineI18n&&typeof window.WelineI18n.buildLanguageUrl==="function"){return window.WelineI18n.buildLanguageUrl(lang,pathname,search);}return buildLangHrefFallback(lang);}';
-                $html[] = 'function hasDiff(lang){var currentEl=root.querySelector(".current-language");var should=toShort(lang);var active=root.querySelector("[data-language-option].active,.language-option.active,a[data-lang].active");var activeLang=active?(active.getAttribute("data-lang")||active.dataset.lang||""):"";if(currentEl&&String(currentEl.textContent||"").trim()!==should){return true;}if(activeLang!==lang){return true;}return false;}';
-                $html[] = 'function rerender(lang){var currentEl=root.querySelector(".current-language");if(currentEl){currentEl.textContent=toShort(lang);}var opts=root.querySelectorAll("[data-language-option],.language-option,a[data-lang]");opts.forEach(function(opt){var code=opt.getAttribute("data-lang")||opt.dataset.lang||"";if(!code){return;}var active=code===lang;if(active){opt.classList.add("active");}else{opt.classList.remove("active");}opt.setAttribute("aria-checked",active?"true":"false");});}';
+                $html[] = 'function optionNodes(){return (panel||root).querySelectorAll("[data-language-option],.language-option,a[data-lang]");}';
+                $html[] = 'function hasDiff(lang){var currentEl=root.querySelector(".current-language");var should=toShort(lang);var active=(panel||root).querySelector("[data-language-option].active,.language-option.active,a[data-lang].active");var activeLang=active?(active.getAttribute("data-lang")||active.dataset.lang||""):"";if(currentEl&&String(currentEl.textContent||"").trim()!==should){return true;}if(activeLang!==lang){return true;}return false;}';
+                $html[] = 'function rerender(lang){var currentEl=root.querySelector(".current-language");if(currentEl){currentEl.textContent=toShort(lang);}optionNodes().forEach(function(opt){var code=opt.getAttribute("data-lang")||opt.dataset.lang||"";if(!code){return;}var active=code===lang;if(active){opt.classList.add("active");}else{opt.classList.remove("active");}opt.setAttribute("aria-checked",active?"true":"false");});}';
                 $html[] = 'function reconcileOnce(){var lang=detectLang();if(hasDiff(lang)){rerender(lang);}}';
                 $html[] = 'if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",function(){setTimeout(reconcileOnce,120);},{once:true});}else{setTimeout(reconcileOnce,120);}';
                 $html[] = '})();</script>';
