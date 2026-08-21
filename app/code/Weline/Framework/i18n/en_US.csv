@@ -2231,9 +2231,10 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 显示详细编译信息,"Show detailed compilation information"
 基本用法,"Basic Usage"
 详细模式,"Detailed mode"
-认证设备登记失败。,认证设备登记失败。
-认证登录状态保存失败。,认证登录状态保存失败。
-认证设备服务不可用。,认证设备服务不可用。
+认证设备登记失败。,"Authenticated device registration failed."
+认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。,"Authenticated device registration failed: device table is not ready. Run setup:upgrade first."
+认证登录状态保存失败。,"Failed to persist authentication session state."
+认证设备服务不可用。,"Authenticated device service is unavailable."
 "当前 Session 尚未建立。","当前 Session 尚未建立。"
 "FPC 命中响应装饰器返回了无效响应","FPC 命中响应装饰器返回了无效响应"
 "Storefront 缓存上下文尚未完成版本冻结","Storefront 缓存上下文尚未完成版本冻结"

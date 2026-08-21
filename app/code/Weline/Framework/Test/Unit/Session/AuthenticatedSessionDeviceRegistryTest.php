@@ -178,6 +178,31 @@ final class AuthenticatedSessionDeviceRegistryTest extends TestCase
         $auth->login($this->user(11, 'blocked@example.test'));
     }
 
+    public function testMissingDeviceTableRegistrationSurfacesSetupUpgradeHint(): void
+    {
+        DeviceRegistryFake::$registerException = new \PDOException(
+            'SQLSTATE[42P01]: Undefined table: 7 ERROR: relation "public.weline_authenticated_device" does not exist',
+        );
+        $session = $this->newSession();
+        $auth = new AuthenticatedSession(
+            $session,
+            AreaConfig::backend(),
+            $this->resolverWith([
+                AuthenticatedDeviceRegistryInterface::class => DeviceRegistryFake::class,
+            ]),
+        );
+
+        try {
+            $auth->login($this->user(21, 'admin'));
+            self::fail('Expected device registration to fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('setup:upgrade', $exception->getMessage());
+            self::assertInstanceOf(\PDOException::class, $exception->getPrevious());
+            self::assertNull($session->get('WF_BACKEND_USER_ID'));
+            self::assertNull($session->get('WF_BACKEND_USER'));
+        }
+    }
+
     public function testConfiguredButUnavailableRegistryRejectsAnExistingAuthenticationState(): void
     {
         $session = $this->newSession();
@@ -293,6 +318,7 @@ final class DeviceRegistryFake implements AuthenticatedDeviceRegistryInterface
     public static ?AuthenticatedLoginContext $lastLoginContext = null;
     public static string $lastRevokeReason = '';
     public static ?AuthenticatedDeviceValidation $validation = null;
+    public static ?\Throwable $registerException = null;
 
     public static function resetState(): void
     {
@@ -304,6 +330,7 @@ final class DeviceRegistryFake implements AuthenticatedDeviceRegistryInterface
         self::$lastLoginContext = null;
         self::$lastRevokeReason = '';
         self::$validation = AuthenticatedDeviceValidation::valid('device_public_A');
+        self::$registerException = null;
     }
 
     public function supportsArea(string $area): bool
@@ -318,6 +345,9 @@ final class DeviceRegistryFake implements AuthenticatedDeviceRegistryInterface
         self::$registerCalls++;
         self::$lastContext = $context;
         self::$lastLoginContext = $loginContext;
+        if (self::$registerException !== null) {
+            throw self::$registerException;
+        }
         return self::$validation ?? AuthenticatedDeviceValidation::valid('device_public_A');
     }
 
