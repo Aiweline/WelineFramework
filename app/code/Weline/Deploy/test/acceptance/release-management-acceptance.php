@@ -208,6 +208,17 @@ record(
     str_contains($orchSource, "refType === 'commit'") && str_contains($orchSource, 'checkoutCommit'),
     ''
 );
+record(
+    $results,
+    $failed,
+    'RM-10.2-07',
+    '发布失败自动回滚（auto_rollback + restoreLocalCommit）',
+    str_contains($orchSource, 'autoRollbackAfterReleaseFailure')
+        && str_contains($orchSource, "'auto_rollback'")
+        && str_contains($orchSource, 'restoreLocalCommit')
+        && str_contains($orchSource, '$gitUpdateStarted = true'),
+    ''
+);
 
 // §10.2 Git 元数据：分支/commit/tag API 所需方法
 $gitSource = (string) file_get_contents($root . '/app/code/Weline/Deploy/Service/DeployGitMetadataService.php');
@@ -220,6 +231,22 @@ record(
         && str_contains($gitSource, 'listCommits')
         && str_contains($gitSource, 'listTags')
         && str_contains($gitSource, 'isAncestor'),
+    ''
+);
+record(
+    $results,
+    $failed,
+    'RM-10.2-08',
+    'Git 服务支持无网络本地恢复 restoreLocalCommit',
+    str_contains($gitSource, 'function restoreLocalCommit')
+        && !str_contains(
+            substr(
+                $gitSource,
+                (int) strpos($gitSource, 'function restoreLocalCommit'),
+                600
+            ),
+            '->fetch('
+        ),
     ''
 );
 
