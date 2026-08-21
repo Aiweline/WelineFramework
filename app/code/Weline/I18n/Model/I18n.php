@@ -379,6 +379,10 @@ class I18n
         return $locals;
     }
 
+    /**
+     * @deprecated Prefer LanguageSelect::getLanguageItems() / LanguageSwitcher catalog.
+     * Display names use LanguageSelect::buildDisplayName() (no English_zh hard concat).
+     */
     public function getLocalesWithFlagsDisplaySelf(string $display_locale_code = 'zh_Hans_CN', int $width = 24, int $height = 18, bool $installed = true, bool $autoSize = false)
     {
         $default_width = 24;
@@ -388,7 +392,7 @@ class I18n
         if ($width <= 0) $width = $default_width;
         if ($height <= 0) $height = $default_height;
         
-        $cache_key = 'getLocalesWithFlagsDisplaySelf' . $width . $height . (string)$installed . (string)$autoSize . $display_locale_code;
+        $cache_key = 'getLocalesWithFlagsDisplaySelf_v2_' . $width . $height . (string)$installed . (string)$autoSize . $display_locale_code;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }
@@ -441,12 +445,28 @@ class I18n
 
             $svg = $flags[$countryCode] ?? '';
             if ($svg) {
-                if ($display_locale_code === $locale) {
-                    $name = $this->getLocaleName($locale, $locale);
-                } else {
-                    $name = $this->getLocaleName($locale, $display_locale_code) . "({$this->getLocaleName($locale, $locale)})";
-                }
-                $locals[$locale] = ['name' => $name, 'flag' => $svg];
+                $localizedName = (string)$this->getLocaleName($locale, $display_locale_code);
+                $selfName = (string)$this->getLocaleName($locale, $locale);
+                $referenceName = (string)$this->getLocaleName($locale, 'en');
+                $name = \Weline\I18n\Taglib\LanguageSelect::buildDisplayName(
+                    $localizedName,
+                    $referenceName,
+                    $selfName,
+                    $locale,
+                );
+                $tagLabel = \Weline\I18n\Taglib\LanguageSelect::buildTagLabel(
+                    $localizedName,
+                    $selfName,
+                    $referenceName,
+                    $locale,
+                );
+                $locals[$locale] = [
+                    'name' => $name,
+                    'display_name' => $name,
+                    'tag_label' => $tagLabel,
+                    'self_name' => $selfName,
+                    'flag' => $svg,
+                ];
             }
         }
         $this->i18nCache->set($cache_key, $locals, 0);
