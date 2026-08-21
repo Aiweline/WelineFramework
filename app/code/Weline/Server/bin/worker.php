@@ -1793,6 +1793,7 @@ if (!isset($ipcRole)) {
 $connections = [];
 /** @var array<int, string> canonical peer received through optional PROXY v2 */
 $connectionPeerIps = [];
+$connectionTrustedProxy = [];
 /** @var array<int, string> SSE/大块响应非阻塞写队列（与 worker_ssl 语义对齐） */
 $writeBuffers = [];
 /** @var array<int, resource> */
@@ -3051,6 +3052,7 @@ while (true) {
         $requestBuffers,
         $connectionLastActivity,
         $connectionPeerIps,
+        $connectionTrustedProxy,
         $gatewayBackendTokenFile !== '',
         \Weline\Server\Service\WorkerResponseMemoryGuard::listenerAcceptBatchLimit(
             $sharedListenerBound,
@@ -3157,6 +3159,7 @@ while (true) {
             $writableConnections,
             $pendingClose,
             $connectionPeerIps,
+            $connectionTrustedProxy,
             $maxRequestHeaderBytes,
             $maxRequestBodyBytes,
             $maxBufferedRequestBytes,
@@ -3222,6 +3225,7 @@ while (true) {
             $lastRequestGcCount,
             $maxMemoryBytes,
             $connectionPeerIps,
+            $connectionTrustedProxy,
             $isFrontend,
             \is_array($readStep['frame'] ?? null) ? $readStep['frame'] : null,
         );
@@ -3581,6 +3585,7 @@ function wlsAcceptHttpConnections(
     array &$requestBuffers,
     array &$connectionLastActivity,
     array &$connectionPeerIps,
+    array &$connectionTrustedProxy,
     bool $gatewayBackendIngressEnabled = false,
     int $maxAcceptPerLoop = 64,
 ): void {
@@ -3606,7 +3611,7 @@ function wlsAcceptHttpConnections(
         $accepted++;
         \stream_set_blocking($conn, false);
         $connId = \get_resource_id($conn);
-        unset($connectionPeerIps[$connId]);
+        unset($connectionPeerIps[$connId], $connectionTrustedProxy[$connId]);
         $acceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
         if ($acceptGates !== null) {
             $peer = @\stream_socket_get_name($conn, true);
@@ -4154,6 +4159,7 @@ function wlsHttpReadStep(
     array &$writableConnections,
     array &$pendingClose,
     array &$connectionPeerIps,
+    array &$connectionTrustedProxy,
     int $maxRequestHeaderBytes,
     int $maxRequestBodyBytes,
     int $maxBufferedRequestBytes,
@@ -4302,6 +4308,7 @@ function wlsHttpReadStep(
             $proxyIp = (string)($proxy['source_ip'] ?? '');
             if ($proxyIp !== '' && \filter_var($proxyIp, FILTER_VALIDATE_IP)) {
                 $connectionPeerIps[$connId] = $proxyIp;
+                $connectionTrustedProxy[$connId] = true;
             }
         }
         if (!isset($connectionPeerIps[$connId])) {
@@ -4447,6 +4454,7 @@ function wlsDispatchRequestFiberStep(
     int &$lastRequestGcCount,
     int $maxMemoryBytes,
     array &$connectionPeerIps,
+    array &$connectionTrustedProxy,
     bool $isFrontend,
     ?array $parsedFrame = null,
 ): void {
@@ -4455,6 +4463,7 @@ function wlsDispatchRequestFiberStep(
         $rawRequest,
         $transportPeer,
         $parsedFrame,
+        (bool)($connectionTrustedProxy[$connId] ?? false),
     );
     if ($policyDecision->allowed) {
         // Cache execution facts are part of the same immutable decision as the
@@ -4575,7 +4584,7 @@ function wlsDispatchRequestFiberStep(
         }
         foreach (\array_keys($connectionPeerIps) as $peerConnId) {
             if (!isset($connections[$peerConnId])) {
-                unset($connectionPeerIps[$peerConnId]);
+                unset($connectionPeerIps[$peerConnId], $connectionTrustedProxy[$peerConnId]);
             }
         }
     }
