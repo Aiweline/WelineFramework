@@ -130,6 +130,26 @@ final class FrontendWorkerSessionServiceTest extends TestCase
             self::assertSame(401, $exception->getHttpStatus());
         }
     }
+
+    public function testRepairOwnedPrivateRegularFileTightensGroupWritableModes(): void
+    {
+        $path = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-fw-store-' . \bin2hex(\random_bytes(6));
+        \file_put_contents($path, '{}');
+        self::assertTrue(@\chmod($path, 0660));
+        \clearstatcache(true, $path);
+        self::assertSame(0660, \fileperms($path) & 0777);
+
+        try {
+            $service = (new \ReflectionClass(FrontendWorkerSessionService::class))->newInstanceWithoutConstructor();
+            $method = new \ReflectionMethod(FrontendWorkerSessionService::class, 'repairOwnedPrivateRegularFile');
+            $method->invoke($service, $path);
+
+            \clearstatcache(true, $path);
+            self::assertSame(0600, \fileperms($path) & 0777);
+        } finally {
+            @\unlink($path);
+        }
+    }
 }
 
 final class SessionMemoryStateStore implements FrontendWorkerStateStoreInterface
