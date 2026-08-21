@@ -19,14 +19,58 @@
         if (!key) {
             return '';
         }
+        const candidates = resolvePreferenceCookieNames(key);
         if (typeof window.getCookie === 'function') {
-            const value = window.getCookie(key);
-            if (value) {
-                return value;
+            for (const name of candidates) {
+                const value = window.getCookie(name);
+                if (value) {
+                    return value;
+                }
             }
         }
-        const match = document.cookie.match('(?:^|; )' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)');
-        return match ? decodeURIComponent(match[1]) : '';
+        for (const name of candidates) {
+            const match = document.cookie.match('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)');
+            if (match) {
+                return decodeURIComponent(match[1]);
+            }
+        }
+        return '';
+    }
+
+    function resolvePreferenceCookieNames(baseKey) {
+        const names = [];
+        const seen = Object.create(null);
+        const push = (name) => {
+            const trimmed = String(name || '').trim();
+            if (!trimmed || seen[trimmed]) {
+                return;
+            }
+            seen[trimmed] = true;
+            names.push(trimmed);
+        };
+
+        // Prefer already-scoped wire names present on this document.
+        try {
+            const re = new RegExp('(?:^|; )(' + baseKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '_w\\d+)=', 'g');
+            let match;
+            while ((match = re.exec(document.cookie || '')) !== null) {
+                push(match[1]);
+            }
+        } catch (error) {
+            // ignore malformed cookie headers
+        }
+
+        const websiteId = (
+            window.__WelinePixelEnv && window.__WelinePixelEnv.website_id != null
+                ? window.__WelinePixelEnv.website_id
+                : (window.site && (window.site.website_id != null ? window.site.website_id : window.site.websiteId))
+        );
+        if (websiteId !== undefined && websiteId !== null && String(websiteId) !== '') {
+            push(baseKey + '_w' + String(websiteId));
+        }
+
+        push(baseKey);
+        return names;
     }
 
     function writeCookieValue(key, value, expiry = 365, options = {}) {
@@ -34,17 +78,20 @@
             return;
         }
         const normalizedOptions = Object.assign({ path: '/' }, options || {});
-        if (typeof window.setCookie === 'function') {
-            window.setCookie(key, value, expiry, normalizedOptions);
-            return;
-        }
-        const expires = new Date();
-        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
-        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
-        Object.keys(normalizedOptions).forEach((optionKey) => {
-            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        const names = resolvePreferenceCookieNames(key);
+        names.forEach((name) => {
+            if (typeof window.setCookie === 'function') {
+                window.setCookie(name, value, expiry, normalizedOptions);
+                return;
+            }
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
+            let cookieString = name + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
+            Object.keys(normalizedOptions).forEach((optionKey) => {
+                cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+            });
+            document.cookie = cookieString;
         });
-        document.cookie = cookieString;
     }
 
     function writeLanguagePreference(lang) {
