@@ -20,6 +20,8 @@ description: Implement Weline theme inheritance, source-template/layout override
 - Public Controllers select layouts. Do not choose normal storefront layouts through URL/query parameters or `theme/frontend/policy`.
 - Localized public paths may contain currency, language, or both in either order. Reuse the shared parser; do not duplicate prefix stripping or consult allowed-values during early route parsing.
 - Default-theme classes use the established `w-*`/`weline-*` contract and Theme tokens. Do not create a parallel global palette/component system for one site.
+- **Area token split is hard**: storefront/shared frontend surfaces use `--weline-theme-*`; backend admin surfaces use `--backend-theme-*`. A component that renders in both areas must switch by an explicit area attribute (for example `[data-*-manager="backend"]`) and must set local heading/text colors from those tokens so `bootstrap-dark` `h1–h6` rules cannot paint light text onto a light fallback card.
+- Backend module pages should reuse the Admin shell (`page-title-box` + `card` / `card-body`) instead of inventing a second white card chrome that ignores backend dark mode.
 - Storefront `<section>` and `w:slot wrapper="section"` hosts require a non-empty semantic `weline-code`.
 
 ## Workflow
