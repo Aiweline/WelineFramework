@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>网站维护</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --bg-gradient-start: #0f172a;
+            --bg-gradient-end: #1e1b4b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --card-bg: rgba(30, 41, 59, 0.8);
+            --card-border: rgba(148, 163, 184, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: var(--text-primary);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 背景装饰 */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 70%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+            animation: rotate 30s linear infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 700px;
+            position: relative;
+            z-index: 1;
+            margin: 0 auto;
+        }
+        
+        /* 版心容器 - 用于右上角hook定位 */
+        .maintenance-wrapper {
+            max-width: 700px;
+            margin: 0 auto;
+            position: relative;
+            width: 100%;
+        }
+        
+        /* 右上角语言选择器容器 - 固定定位 */
+        .maintenance-header {
+            position: fixed;
+            top: 20px;
+            right: 40px;
+            z-index: 1000;
+        }
+        
+        @media (max-width: 700px) {
+            .maintenance-wrapper {
+                padding: 0 20px;
+            }
+            .maintenance-header {
+                right: 20px;
+            }
+        }
+        
+        .icon-container {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 40px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.3);
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .icon {
+            font-size: 56px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+        
+        /* 进度条 */
+        .progress-container {
+            margin: 40px 0;
+            padding: 0 40px;
+        }
+        
+        .progress {
+            height: 6px;
+            background: rgba(148, 163, 184, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            width: 30%;
+            background: linear-gradient(90deg, var(--primary) 0%, #8b5cf6 100%);
+            border-radius: 3px;
+            animation: progress 2s ease-in-out infinite;
+        }
+
+        .recovery-notice {
+            color: #c7d2fe;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin: -20px auto 36px;
+            max-width: 560px;
+        }
+        
+        @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+        
+        /* 信息卡片 */
+        .info-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 50px;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: left;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card-icon {
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+        
+        .card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        
+        .card p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        
+        .card a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .card a:hover {
+            text-decoration: underline;
+        }
+        
+        /* 返回按钮 */
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 40px;
+            padding: 12px 28px;
+            background: transparent;
+            border: 2px solid rgba(148, 163, 184, 0.3);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        /* 语言选择器样式 */
+        .maintenance-language-switcher {
+            position: relative;
+        }
+        
+        .maintenance-language-switcher .language-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            font-size: 0.875rem;
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-1 {
+            display: none;
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-2 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .maintenance-language-switcher .language-switcher .current-language {
+            font-weight: 500;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        .maintenance-language-switcher .language-options {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            min-width: 150px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover .language-options,
+        .maintenance-language-switcher .language-switcher:focus .language-options {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        .maintenance-language-switcher .language-option {
+            display: block;
+            padding: 10px 16px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: background 0.2s ease;
+            border-bottom: 1px solid var(--card-border);
+        }
+        
+        .maintenance-language-switcher .language-option:last-child {
+            border-bottom: none;
+        }
+        
+        .maintenance-language-switcher .language-option:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+        
+        .maintenance-language-switcher .language-option.active {
+            background: rgba(99, 102, 241, 0.3);
+            color: var(--primary);
+        }
+        
+        .maintenance-language-switcher .language-option .mdi.mdi-check {
+            float: right;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .maintenance-language-switcher .language-option.active .mdi.mdi-check {
+            opacity: 1;
+        }
+        
+        @media (max-width: 600px) {
+            h1 { font-size: 1.75rem; }
+            .subtitle { font-size: 1rem; }
+            .icon-container { width: 80px; height: 80px; border-radius: 20px; }
+            .icon { font-size: 40px; }
+            .info-cards { grid-template-columns: 1fr; }
+            .maintenance-header {
+                top: 10px;
+                right: 20px; /* 往版心内侧一点，避免贴边 */
+            }
+            .maintenance-language-switcher .language-switcher {
+                padding: 6px 12px;
+                font-size: 0.75rem;
+            }
+            /* 手机端下拉列表保持在版心内，居中展开 */
+            .maintenance-language-switcher .language-options {
+                left: 50%;
+                right: auto;
+                transform: translate(-50%, -10px);
+                max-width: calc(100vw - 40px);
+            }
+        }
+    </style>
+    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet" type="text/css">
+    <!-- 加载i18n.js以支持语言切换 -->
+    <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
+</head>
+<body>
+    <div class="maintenance-wrapper">
+        <!-- 右上角语言选择器Hook -->
+        <div class="maintenance-header">
+            <div class="maintenance-language-switcher">
+                <div class="language-switcher weline-choice-switcher" data-i18n-switcher="true" data-weline-choice-switcher="language" data-choice-page-size="50" data-current-short="ZH" role="button" tabindex="0" aria-haspopup="menu" aria-label="切换语言">
+    <span class="action-line-1">语言</span>
+    <span class="action-line-2">
+        <span class="weline-choice-current-flag" aria-hidden="true">
+                            
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="flag-icons-cn" viewBox="0 0 640 480" width="24" height="18">
+  <defs>
+    <path id="cn-a" fill="#ff0" d="M-.6.8 0-1 .6.8-1-.3h2z"/>
+  </defs>
+  <path fill="#ee1c25" d="M0 0h640v480H0z"/>
+  <use xlink:href="#cn-a" transform="matrix(71.9991 0 0 72 120 120)"/>
+  <use xlink:href="#cn-a" transform="matrix(-12.33562 -20.5871 20.58684 -12.33577 240.3 48)"/>
+  <use xlink:href="#cn-a" transform="matrix(-3.38573 -23.75998 23.75968 -3.38578 288 95.8)"/>
+  <use xlink:href="#cn-a" transform="matrix(6.5991 -23.0749 23.0746 6.59919 288 168)"/>
+  <use xlink:href="#cn-a" transform="matrix(14.9991 -18.73557 18.73533 14.99929 240 216)"/>
+</svg>
+                    </span>
+        <span class="current-language" title="中文（简体，中国）">简体中文</span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+    </span>
+    <div class="language-options weline-choice-panel" data-weline-choice-panel role="menu" aria-label="语言选项">
+        <div class="weline-choice-search">
+            <input type="search" data-choice-search placeholder="搜索语言、语言码或翻译" autocomplete="off" aria-label="搜索语言">
+        </div>
+        <div class="weline-choice-items" data-choice-items>
+                                <a href="#"
+               class="language-option weline-choice-option active"
+               data-language-option="true"
+               data-choice-option="true"
+               data-lang="zh_Hans_CN"
+               data-short="ZH"
+               data-native="简体中文"
+               data-search="zh_Hans_CN 中文（简体，中国） 简体中文 Chinese (Simplified, China) chino (simplificado, China) chinois (simplifié, Chine) Chinesisch (Vereinfacht, China) 中国語 (簡体字、中国) 중국어(간체, 중국) chinês (simplificado, China)"
+               role="menuitem"
+               >
+                <span class="weline-choice-flag" aria-hidden="true">
+                                            
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="flag-icons-cn" viewBox="0 0 640 480" width="24" height="18">
+  <defs>
+    <path id="cn-a" fill="#ff0" d="M-.6.8 0-1 .6.8-1-.3h2z"/>
+  </defs>
+  <path fill="#ee1c25" d="M0 0h640v480H0z"/>
+  <use xlink:href="#cn-a" transform="matrix(71.9991 0 0 72 120 120)"/>
+  <use xlink:href="#cn-a" transform="matrix(-12.33562 -20.5871 20.58684 -12.33577 240.3 48)"/>
+  <use xlink:href="#cn-a" transform="matrix(-3.38573 -23.75998 23.75968 -3.38578 288 95.8)"/>
+  <use xlink:href="#cn-a" transform="matrix(6.5991 -23.0749 23.0746 6.59919 288 168)"/>
+  <use xlink:href="#cn-a" transform="matrix(14.9991 -18.73557 18.73533 14.99929 240 216)"/>
+</svg>
+                                    </span>
+                <span class="weline-choice-text">
+                    <span class="weline-choice-name">中文（简体，中国）</span>
+                    <span class="weline-choice-meta">zh_Hans_CN</span>
+                </span>
+                                    <span class="weline-choice-native" aria-hidden="true">简体中文</span>
+                                <i class="fas fa-check" aria-hidden="true"></i>
+            </a>
+                </div>
+        <div class="weline-choice-empty" data-choice-empty hidden>无匹配语言</div>
+        <button type="button" class="weline-choice-more" data-choice-more hidden>加载更多</button>
+    </div>
+</div>
+<style>
+.weline-choice-switcher {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 40px;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: inherit;
+    cursor: pointer;
+}
+.weline-choice-switcher:hover {
+    border-color: currentColor;
+}
+.weline-choice-switcher .action-line-1 {
+    font-size: 0.72rem;
+    line-height: 1;
+    opacity: 0.86;
+}
+.weline-choice-switcher .action-line-2 {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+    max-width: 100%;
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1.25;
+    overflow: hidden;
+}
+.weline-choice-switcher .current-language {
+    max-width: 7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weline-choice-switcher .current-currency {
+    max-width: 4.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weline-choice-switcher .current-currency-symbol {
+    font-weight: 600;
+    opacity: 0.86;
+}
+.weline-choice-switcher .weline-choice-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 1000;
+    min-width: 320px;
+    max-width: min(420px, calc(100vw - 16px));
+    margin-top: 0.25rem;
+    padding: 0.5rem;
+    border: 1px solid #d5d9d9;
+    border-radius: 4px;
+    background: #fff;
+    color: #111;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+    cursor: default;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+}
+.weline-choice-switcher.weline-choice-open .weline-choice-panel,
+.weline-choice-switcher:hover .weline-choice-panel {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+.weline-choice-search {
+    padding: 0.25rem 0.25rem 0.5rem;
+}
+.weline-choice-search input {
+    width: 100%;
+    min-height: 36px;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid #d5d9d9;
+    border-radius: 4px;
+    color: #111;
+    background: #fff;
+    font-size: 0.875rem;
+    outline: none;
+}
+.weline-choice-search input:focus {
+    border-color: #ff9900;
+    box-shadow: 0 0 0 2px rgba(255, 153, 0, 0.2);
+}
+.weline-choice-items {
+    max-height: min(360px, 58vh);
+    overflow-y: auto;
+}
+.language-option.weline-choice-option,
+.currency-option.weline-choice-option {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.65rem;
+    padding: 0.65rem 0.75rem;
+}
+.language-option.weline-choice-option .fa-check,
+.currency-option.weline-choice-option .fa-check {
+    flex: 0 0 auto;
+    display: none;
+    color: #ff9900;
+}
+.language-option.weline-choice-option.active .fa-check,
+.currency-option.weline-choice-option.active .fa-check {
+    display: inline-block;
+}
+.weline-choice-flag,
+.weline-choice-current-flag,
+.weline-choice-symbol {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.weline-choice-current-flag svg,
+.weline-choice-flag svg {
+    display: block;
+    width: 24px;
+    height: 18px;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.weline-choice-current-flag svg {
+    width: 18px;
+    height: 14px;
+}
+.weline-choice-flag-fallback,
+.weline-choice-symbol {
+    min-width: 30px;
+    height: 22px;
+    padding: 0 0.35rem;
+    border-radius: 3px;
+    background: #f3f3f3;
+    color: #111;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.weline-choice-text {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.weline-choice-name {
+    color: #111;
+    font-size: 0.9rem;
+    line-height: 1.2;
+}
+.weline-choice-meta {
+    color: #565959;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+.weline-choice-native {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid #d5d9d9;
+    border-radius: 4px;
+    color: #111;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.weline-choice-empty {
+    padding: 0.7rem 0.75rem;
+    color: #565959;
+    font-size: 0.85rem;
+}
+.weline-choice-more {
+    width: 100%;
+    margin-top: 0.35rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid #d5d9d9;
+    border-radius: 4px;
+    background: #fff;
+    color: #111;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.weline-choice-more:hover {
+    background: #f7fafa;
+}
+.weline-choice-option[hidden],
+.weline-choice-empty[hidden],
+.weline-choice-more[hidden] {
+    display: none !important;
+}
+</style>
+<script>
+(function () {
+    if (!window.WelineHeaderChoiceSelector) {
+        window.WelineHeaderChoiceSelector = (function () {
+            function normalize(value) {
+                return String(value || '').trim().toLocaleLowerCase();
+            }
+
+            function init(root) {
+                if (!root || root.dataset.welineChoiceReady === '1') {
+                    return;
+                }
+                root.dataset.welineChoiceReady = '1';
+
+                var panel = root.querySelector('[data-weline-choice-panel]');
+                var input = root.querySelector('[data-choice-search]');
+                var more = root.querySelector('[data-choice-more]');
+                var empty = root.querySelector('[data-choice-empty]');
+                var pageSize = parseInt(root.getAttribute('data-choice-page-size') || '50', 10);
+                if (!pageSize || pageSize < 1) {
+                    pageSize = 50;
+                }
+
+                var visibleLimit = pageSize;
+
+                function getOptions() {
+                    return Array.prototype.slice.call(root.querySelectorAll('[data-choice-option]'));
+                }
+
+                function render(resetLimit) {
+                    if (resetLimit) {
+                        visibleLimit = pageSize;
+                    }
+
+                    var query = normalize(input ? input.value : '');
+                    var options = getOptions();
+                    var matched = 0;
+                    var shown = 0;
+
+                    options.forEach(function (option) {
+                        var searchText = normalize((option.getAttribute('data-search') || '') + ' ' + option.textContent);
+                        var matches = query === '' || searchText.indexOf(query) !== -1;
+                        if (!matches) {
+                            option.hidden = true;
+                            return;
+                        }
+
+                        matched++;
+                        if (shown < visibleLimit) {
+                            option.hidden = false;
+                            shown++;
+                            return;
+                        }
+
+                        option.hidden = true;
+                    });
+
+                    if (empty) {
+                        empty.hidden = matched !== 0;
+                    }
+                    if (more) {
+                        more.hidden = matched <= shown;
+                    }
+                }
+
+                function openPanel() {
+                    root.classList.add('weline-choice-open');
+                    root.setAttribute('aria-expanded', 'true');
+                }
+
+                function closePanel() {
+                    root.classList.remove('weline-choice-open');
+                    root.setAttribute('aria-expanded', 'false');
+                }
+
+                root.addEventListener('click', function (event) {
+                    if (panel && panel.contains(event.target)) {
+                        return;
+                    }
+                    openPanel();
+                    if (input) {
+                        setTimeout(function () {
+                            input.focus();
+                        }, 0);
+                    }
+                });
+
+                if (panel) {
+                    panel.addEventListener('click', function (event) {
+                        if (!event.target.closest('[data-choice-option]')) {
+                            event.stopPropagation();
+                        }
+                    });
+                }
+                if (input) {
+                    input.addEventListener('input', function () {
+                        render(true);
+                    });
+                    input.addEventListener('keydown', function (event) {
+                        if (event.key === 'Escape') {
+                            closePanel();
+                            root.focus();
+                        }
+                    });
+                }
+                if (more) {
+                    more.addEventListener('click', function (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        visibleLimit += pageSize;
+                        render(false);
+                    });
+                }
+                root.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openPanel();
+                        if (input) {
+                            setTimeout(function () {
+                                input.focus();
+                            }, 0);
+                        }
+                    }
+                    if (event.key === 'Escape') {
+                        closePanel();
+                    }
+                });
+                document.addEventListener('click', function (event) {
+                    if (!root.contains(event.target)) {
+                        closePanel();
+                    }
+                });
+
+                render(true);
+            }
+
+            function initAll() {
+                document.querySelectorAll('[data-weline-choice-switcher]').forEach(init);
+            }
+
+            return {
+                initAll: initAll
+            };
+        })();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', window.WelineHeaderChoiceSelector.initAll, { once: true });
+    } else {
+        window.WelineHeaderChoiceSelector.initAll();
+    }
+})();
+</script>
+            </div>
+        </div>
+        <div class="container">
+            <div class="icon-container">
+                                    <span class="icon">🔧</span>
+                            </div>
+            
+            <h1>系统升级维护中</h1>
+            <p class="subtitle">网站正在维护中...<br>请稍等片刻</p>
+            
+            <div class="progress-container">
+                <div class="progress">
+                    <div class="progress-bar"></div>
+                </div>
+            </div>
+            <p class="recovery-notice" aria-live="polite">系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。</p>
+            
+            <div class="info-cards">
+                <div class="card">
+                    <div class="card-icon">🤔</div>
+                    <h3>为什么网站会处于维护模式？</h3>
+                    <p>网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。</p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">⏱️</div>
+                    <h3>多久能够恢复？</h3>
+                    <p>大部分的网站升级活动都只有几分钟甚至几秒钟的时间。</p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">💬</div>
+                    <h3>需要帮助吗？</h3>
+                    <p>如果你长期看到这个页面，对网站存在疑惑，请联系： <a href="mailto:support@example.com">support@example.com</a></p>
+                </div>
+            </div>
+            
+            <a href="/" class="back-btn">
+                <span>←</span>
+                <span>返回首页</span>
+            </a>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var initialDelay = 5000;
+            var maxDelay = 30000;
+            var jitter = 1500;
+            var timer = 0;
+
+            if (!window.fetch || !window.URL) {
+                return;
+            }
+
+            function getProbeUrl() {
+                var url = new URL(window.location.href);
+                if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
+                    url = new URL('/', window.location.origin);
+                }
+                url.hash = '';
+                url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
+                return url.toString();
+            }
+
+            function schedule(delay) {
+                if (timer) {
+                    window.clearTimeout(timer);
+                }
+                timer = window.setTimeout(function () {
+                    timer = 0;
+                    check();
+                }, delay + Math.floor(Math.random() * jitter));
+            }
+
+            function probe(method) {
+                return window.fetch(getProbeUrl(), {
+                    method: method,
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    redirect: 'follow',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+                        'X-Maintenance-Recovery-Check': '1'
+                    }
+                });
+            }
+
+            function handleResponse(response) {
+                if (response.status === 200) {
+                    window.location.reload();
+                    return;
+                }
+                schedule(response.status === 503 ? initialDelay : maxDelay);
+            }
+
+            function check() {
+                if (document.hidden) {
+                    return;
+                }
+
+                probe('HEAD').then(function (response) {
+                    if (response.status === 405 || response.status === 501) {
+                        return probe('GET').then(handleResponse);
+                    }
+                    handleResponse(response);
+                }).catch(function () {
+                    schedule(maxDelay);
+                });
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                if (document.hidden) {
+                    if (timer) {
+                        window.clearTimeout(timer);
+                        timer = 0;
+                    }
+                    return;
+                }
+                schedule(0);
+            });
+            schedule(initialDelay);
+        })();
+    </script>
+</body>
+</html>
