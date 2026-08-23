@@ -29,21 +29,21 @@
 - `app/code/Weline/Seo/etc/backend/menu.xml`
 - `app/code/Weline/Seo/composer.json`
 
-- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：17
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：18
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：2
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：3
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：9
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：10
 - `Interface`：模块发布的接口契约。跨模块依赖优先使用这里的稳定契约。 文件数：12
-- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：16
-- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：7
+- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：17
+- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：8
 - `Queue`：队列生产/消费入口。读 Queue 技能和模块文档后再改。 文件数：2
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：55
-- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：69
+- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：2
 - `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：3
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：5
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：4
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：4
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：7
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：13
 
 ## 从源码识别到的开发提示
@@ -51,7 +51,7 @@
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
-- 识别到 QueryProvider 相关 PHP 文件：extends/module/Weline_Framework/Query/SeoAdminQueryProvider.php、extends/module/Weline_Framework/Query/SeoOptimizationControlQueryProvider.php、extends/module/Weline_Framework/Query/SeoQueryProvider.php；前端/跨模块读数据先查 query 帮助。
+- 识别到 QueryProvider 相关 PHP 文件：Test/Unit/Extends/Module/Weline_Framework/Query/SeoQueryProviderSiteEventHeatContractTest.php、Test/Unit/Service/SearchPerformanceSnapshotEvidenceAvailabilityContractTest.php、Test/Unit/Service/SeoOptimizationControlCenterAuthorizedSitesContractTest.php、extends/module/Weline_Framework/Query/SeoAdminQueryProvider.php、extends/module/Weline_Framework/Query/SeoOptimizationControlQueryProvider.php、extends/module/Weline_Framework/Query/SeoQueryProvider.php；前端/跨模块读数据先查 query 帮助。
 
 ## doc 目录
 
@@ -82,14 +82,17 @@
 - `app/code/Weline/Seo/doc/url-rewrite-cron-submit.md`
 - `app/code/Weline/Seo/doc/事件系统设计文档.md`
 - `app/code/Weline/Seo/doc/前端使用指南.md`
+- `app/code/Weline/Seo/doc/功能现状.md`
 - `app/code/Weline/Seo/doc/平台绑定功能说明.md`
 - `app/code/Weline/Seo/doc/开发/plan.md`
 - `app/code/Weline/Seo/doc/开发/task.md`
+- `app/code/Weline/Seo/doc/开发日志.md`
 - `app/code/Weline/Seo/doc/扩展规约说明.md`
 - `app/code/Weline/Seo/doc/站点SEO配置说明.md`
 - `app/code/Weline/Seo/doc/设计文档.md`
 - `app/code/Weline/Seo/doc/账户与定时任务简要说明.md`
 - `app/code/Weline/Seo/doc/队列化架构说明.md`
+- `app/code/Weline/Seo/doc/需求.md`
 
 ## 开发前门禁
 

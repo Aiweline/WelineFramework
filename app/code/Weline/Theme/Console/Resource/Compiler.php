@@ -88,6 +88,7 @@ class Compiler implements \Weline\Framework\Console\CommandInterface
         $data = [
             'less' => __('编译less静态资源！'),
             'welineModules' => __('静态文件：weline.modules.js编译文件！'),
+            'welineUi' => __('编译 Weline UI 2.0 静态资源包！'),
         ];
         if ($to_string) {
             $data = implode(',', $data);

@@ -77,7 +77,11 @@ class FontDiscovery
     }
 
     /**
-     * Resolve `Vendor_Module::path/font.ttf` under that module's `view/fonts/`.
+     * Resolve a font under `{Module}/view/fonts/`.
+     *
+     * - `Vendor_Module::path/font.ttf` — explicit module
+     * - `path/font.ttf` — defaults to Weline_Theme (same default as theme:css / theme:js)
+     * - absolute readable filesystem path — used as-is
      */
     public function resolveSource(string $source, ?array $modules = null): ?string
     {
@@ -93,7 +97,8 @@ class FontDiscovery
                 return $real !== false ? $real : $source;
             }
 
-            return null;
+            // Bare relative path → default Theme module (like theme:css / theme:js).
+            $source = 'Weline_Theme::' . ltrim(str_replace('\\', '/', $source), '/');
         }
 
         [$moduleName, $relative] = array_pad(explode('::', $source, 2), 2, '');

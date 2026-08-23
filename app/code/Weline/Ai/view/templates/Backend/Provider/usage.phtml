@@ -33,7 +33,7 @@
                 <button type="button" class="w-button" id="weline-ai-export-data" data-tone="neutral">
                     <w:icon name="download" size="sm"></w:icon><lang>导出</lang>
                 </button>
-                <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button ms-2" data-tone="primary">
+                <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button" data-tone="primary">
                     <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                 </a>
             </div>
@@ -276,7 +276,7 @@
                 button.className = 'btn btn-sm btn-info weline-ai-view-detail';
                 button.setAttribute('data-record-key', recordKey);
                 var icon = document.createElement('i');
-                icon.className = 'mdi mdi-eye';
+                icon.className = 'weline-icon weline-icon--eye';
                 button.appendChild(icon);
                 actionCell.appendChild(button);
                 row.appendChild(actionCell);

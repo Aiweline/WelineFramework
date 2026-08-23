@@ -40,6 +40,8 @@ class FileManagerConnector implements TaglibInterface
             'close' => false,
             'title' => false,
             'path' => true,
+            'lockPath' => false,
+            'preview' => false,
             'ext' => true,
             'value' => false,
             'vars' => false,
@@ -78,6 +80,13 @@ class FileManagerConnector implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            $booleanAttribute = static function (mixed $value, bool $default): bool {
+                if ($value === null || $value === '') {
+                    return $default;
+                }
+                $parsed = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+                return $parsed ?? $default;
+            };
             if (empty($attributes)) {
                 $input = $tag_data[1];
                 $pattern = '/(\w+)\s*=\s*[\'"]?([^\'"]*)[\'"]?/';
@@ -92,13 +101,16 @@ class FileManagerConnector implements TaglibInterface
                 $userConfigFileManager = $attributes['code'];
             } else {
                 # 检查是否有配置默认的文件管理器
-                $userConfigFileManager = ObjectManager::getInstance(BackendUserConfigStore::class)->getConfig('file_manager') ?: 'local';
+                $userConfigFileManager = ObjectManager::getInstance(BackendUserConfigStore::class)->getConfig('file_manager') ?: 'weline_media';
+            }
+            if ($userConfigFileManager === 'local') {
+                $userConfigFileManager = 'weline_media';
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigFileManager;
             /**@var CachePoolInterface $cache */
             $cache = w_cache('file_manager');
             $result = $cache->get($cacheKey);
-            if ($result and ($userConfigFileManager !== 'local')) {
+            if ($result) {
                 return $result;
             }
             /**@var Scan $fileScan $ */
@@ -123,20 +135,25 @@ class FileManagerConnector implements TaglibInterface
                     }
                 }
             }
-            if (count($fileManagers) > 1 and $userConfigFileManager === 'local') {
-                /**@var \Weline\FileManager\FileManager $fileManager */
-                $fileManager = array_pop($fileManagers);
-            } else {
-                if (!isset($fileManagers[$userConfigFileManager])) {
-                    ObjectManager::getInstance(MessageManager::class)->addWarning(__('所指定的文件管理器不存在! 文件管理器名：%{1}', $userConfigFileManager));
-                    # 使用第一个文件管理器作为默认的文件管理器
-                    /**@var \Weline\FileManager\FileManager $fileManager */
-                    $fileManager = array_pop($fileManagers);
-                    ObjectManager::getInstance(MessageManager::class)->addWarning(__('使用：%{1} 文件管理器代替。', $fileManager::name()));
+            if (!isset($fileManagers[$userConfigFileManager])) {
+                # 指定的文件管理器不存在，优先使用已注册的 MediaManager
+                if (isset($fileManagers['weline_media'])) {
+                    $fileManager = $fileManagers['weline_media'];
                 } else {
-                    /**@var \Weline\FileManager\FileManager $fileManager */
-                    $fileManager = $fileManagers[$userConfigFileManager];
+                    if (!CLI) {
+                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('所指定的文件管理器不存在! 文件管理器名：%{1}', $userConfigFileManager));
+                    }
+                    $fileManager = array_pop($fileManagers);
+                    if (!CLI && $fileManager instanceof FileManagerInterface) {
+                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('使用：%{1} 文件管理器代替。', $fileManager::name()));
+                    }
                 }
+            } else {
+                /**@var \Weline\FileManager\FileManager $fileManager */
+                $fileManager = $fileManagers[$userConfigFileManager];
+            }
+            if (!isset($fileManager) || !($fileManager instanceof FileManagerInterface)) {
+                throw new \RuntimeException(__('未找到可用的文件管理器实现。'));
             }
             $attributes['startPath'] = $attributes['path'] ?? '';
             if (isset($attributes['target'])) {
@@ -147,14 +164,15 @@ class FileManagerConnector implements TaglibInterface
             }
             $attributes['close'] = trim($attributes['close'] ?? '', '.#');
             $attributes['ext'] = $attributes['ext'] ?? '';
-            $attributes['preview'] = boolval($attributes['preview'] ?? '');
+            $attributes['lockPath'] = $booleanAttribute($attributes['lockPath'] ?? null, false);
+            $attributes['preview'] = $booleanAttribute($attributes['preview'] ?? null, false);
             $attributes['value'] = $attributes['value'] ?? '';
             $attributes['vars'] = $attributes['vars'] ?? '';
             $attributes['w'] = $attributes['w'] ?? 50;
             $attributes['h'] = $attributes['h'] ?? 50;
             $attributes['size'] = $attributes['size'] ?? '';
             $attributes['title'] = $attributes['title'] ?? '';
-            $attributes['multi'] = $attributes['multi'] ?? '0';
+            $attributes['multi'] = $booleanAttribute($attributes['multi'] ?? null, false);
             $attributes['recommend_width'] = $attributes['recommend_width'] ?? '';
             $attributes['recommend_height'] = $attributes['recommend_height'] ?? '';
             $attributes['min_width'] = $attributes['min_width'] ?? '';

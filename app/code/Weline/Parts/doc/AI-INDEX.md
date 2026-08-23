@@ -26,18 +26,19 @@
 
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：1
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：0
 
 ## 从源码识别到的开发提示
 
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 
 ## doc 目录
 
 - `app/code/Weline/Parts/doc/README.md`
 - `app/code/Weline/Parts/doc/w-delete.md`
+- `app/code/Weline/Parts/doc/功能现状.md`
+- `app/code/Weline/Parts/doc/开发日志.md`
+- `app/code/Weline/Parts/doc/需求.md`
 
 ## 开发前门禁
 

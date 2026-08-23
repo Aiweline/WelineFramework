@@ -6,7 +6,9 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver;
 
 class ThemePreviewContentRenderer
 {
@@ -54,14 +56,17 @@ class ThemePreviewContentRenderer
     ];
 
     private readonly ThemeLayoutVersionService $versionService;
+    private ?ThemeScopedPreviewResolver $scopedPreviewResolver;
 
     public function __construct(
         private readonly ThemeLayoutService $layoutService,
         private readonly SlotRendererService $slotRendererService,
         private readonly ThemePageTypeResolver $pageTypeResolver,
         ?ThemeLayoutVersionService $versionService = null,
+        ?ThemeScopedPreviewResolver $scopedPreviewResolver = null,
     ) {
         $this->versionService = $versionService ?? ObjectManager::getInstance(ThemeLayoutVersionService::class);
+        $this->scopedPreviewResolver = $scopedPreviewResolver;
     }
 
     /**
@@ -73,6 +78,7 @@ class ThemePreviewContentRenderer
         string $status = ThemeLayout::STATUS_DRAFT,
         ?int $versionId = null,
         array $identity = [],
+        ?ThemeEditorContext $editorContext = null,
     ): array {
         $identity = $this->normalizeLayoutIdentity($identity);
         $baseLayoutType = $this->pageTypeResolver->extractBaseLayoutType($layoutType);
@@ -90,6 +96,17 @@ class ThemePreviewContentRenderer
                 'version',
                 false,
             ];
+        } elseif ($editorContext instanceof ThemeEditorContext) {
+            if ($editorContext->themeId !== $themeId
+                || $editorContext->layoutType !== $pageType
+            ) {
+                throw new \InvalidArgumentException('theme_scoped_preview_context_mismatch');
+            }
+            $resolvedStatus = $status === ThemeLayout::STATUS_PUBLISHED
+                ? ThemeLayout::STATUS_PUBLISHED
+                : ThemeLayout::STATUS_DRAFT;
+            $layout = $this->getScopedPreviewResolver()->resolveLayout($editorContext, $resolvedStatus);
+            [$resolvedPageType, $usedSeed] = [$pageType, false];
         } else {
             [$layout, $resolvedPageType, $resolvedStatus, $usedSeed] = $this->resolvePreviewLayout($themeId, $pageType, $status, $identity);
         }
@@ -167,7 +184,7 @@ class ThemePreviewContentRenderer
 
     /**
      * @param array<string,mixed> $identity
-     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string}
      */
     private function normalizeLayoutIdentity(array $identity = []): array
     {
@@ -180,6 +197,7 @@ class ThemePreviewContentRenderer
             'scope' => $scope !== '' ? $scope : 'default',
             'target_type' => $targetType !== '' ? $targetType : 'global',
             'target_id' => max(0, (int)($identity['target_id'] ?? $identity['theme_layout_target_id'] ?? 0)),
+            'locale_code' => trim((string)($identity['locale_code'] ?? $identity['locale'] ?? '')),
         ];
     }
 
@@ -194,15 +212,25 @@ class ThemePreviewContentRenderer
 
         $fallbackStatus = $requestedStatus === ThemeLayout::STATUS_DRAFT
             ? ThemeLayout::STATUS_PUBLISHED
-            : ThemeLayout::STATUS_DRAFT;
-        $candidates[] = [$pageType, $fallbackStatus];
+            : null;
+        if ($fallbackStatus !== null) {
+            $candidates[] = [$pageType, $fallbackStatus];
+        }
 
         if ($pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
             $candidates[] = [ThemeLayout::PAGE_TYPE_DEFAULT, $requestedStatus];
-            $candidates[] = [ThemeLayout::PAGE_TYPE_DEFAULT, $fallbackStatus];
+            if ($fallbackStatus !== null) {
+                $candidates[] = [ThemeLayout::PAGE_TYPE_DEFAULT, $fallbackStatus];
+            }
         }
 
         return $candidates;
+    }
+
+    private function getScopedPreviewResolver(): ThemeScopedPreviewResolver
+    {
+        return $this->scopedPreviewResolver
+            ??= ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
     }
 
     private function hasWidgets(array $layout): bool

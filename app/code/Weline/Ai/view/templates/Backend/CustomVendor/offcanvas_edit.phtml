@@ -1,0 +1,483 @@
+<?php
+/**
+ * 本地供应商 Offcanvas 编辑（含模型快速添加 + 连通性测试）
+ * @var \Weline\Ai\Model\Provider\CustomVendor|null $vendor
+ * @var array $presets
+ * @var array $vendorModels
+ */
+$vendor = $this->getData('vendor');
+$presets = $this->getData('presets') ?? [];
+$vendorModels = $this->getData('vendorModels') ?? [];
+$isEdit = $vendor && $vendor->getId();
+$saveUrl = $this->getBackendUrl('*/backend/customvendor/save');
+$testUrl = $this->getBackendUrl('*/backend/customvendor/testconnection');
+$codeVal = $isEdit ? (string)$vendor->getData('code') : '';
+$nameVal = $isEdit ? (string)$vendor->getData('name') : '';
+$baseVal = $isEdit ? (string)$vendor->getData('base_url') : '';
+$descVal = $isEdit ? (string)$vendor->getData('description') : '';
+$testVal = $isEdit ? (string)$vendor->getData('test_model') : '';
+$activeVal = $isEdit ? (int)$vendor->getData('is_active') : 1;
+$modelsJson = json_encode(array_values($vendorModels), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if ($modelsJson === false) {
+    $modelsJson = '[]';
+}
+?>
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--backend-color-bg-body, #f8f9fa);
+}
+.weline-ai-custom-vendor-edit {
+    background-color: var(--backend-color-bg-body, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    padding: 0.75rem 1rem 1.25rem;
+    box-sizing: border-box;
+    min-height: 100%;
+}
+.weline-ai-custom-vendor-edit .w-field__label.required::after {
+    content: ' *';
+    color: var(--backend-color-danger, red);
+}
+.weline-ai-custom-vendor-edit .cv-model-section {
+    margin-top: var(--weline-space-4);
+    padding-top: var(--weline-space-3);
+    border-top: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-ai-custom-vendor-edit .cv-model-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto auto;
+    gap: var(--weline-space-2);
+    align-items: end;
+    margin-bottom: var(--weline-space-2);
+    padding: var(--weline-space-2);
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: 0.375rem;
+}
+.weline-ai-custom-vendor-edit .cv-model-row .w-field__label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+}
+.weline-ai-custom-vendor-edit .cv-model-empty {
+    color: var(--weline-color-muted, #64748b);
+    font-size: 0.875rem;
+    margin: 0 0 var(--weline-space-2);
+}
+.weline-ai-custom-vendor-edit .cv-model-status {
+    font-size: 0.75rem;
+    color: var(--weline-color-muted, #64748b);
+    white-space: nowrap;
+}
+.weline-ai-custom-vendor-edit .w-button[aria-busy="true"] {
+    cursor: wait;
+    gap: var(--weline-space-2);
+}
+.weline-ai-custom-vendor-edit .w-button[aria-busy="true"] .w-spinner {
+    inline-size: 1rem;
+    block-size: 1rem;
+    border-top-color: currentColor;
+    flex: 0 0 auto;
+}
+@media (max-width: 640px) {
+    .weline-ai-custom-vendor-edit .cv-model-row {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+<div class="weline-ai-custom-vendor-edit">
+    <?php if (!$isEdit && $presets): ?>
+        <div style="--w-mb:var(--weline-space-3);">
+            <div class="w-text" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('快捷预设（可改）') ?></div>
+            <div class="w-cluster" style="--w-gap:var(--weline-space-1);">
+                <?php foreach ($presets as $preset): ?>
+                    <?php
+                    $pCode = (string)($preset['code'] ?? '');
+                    $pName = (string)($preset['name'] ?? '');
+                    $pUrl = (string)($preset['base_url'] ?? '');
+                    $pDesc = (string)($preset['description'] ?? '');
+                    ?>
+                    <button type="button"
+                            class="w-button"
+                            data-size="sm"
+                            data-tone="neutral"
+                            data-variant="outline"
+                            data-cv-preset
+                            data-code="<?= htmlspecialchars($pCode, ENT_QUOTES, 'UTF-8') ?>"
+                            data-name="<?= htmlspecialchars($pName, ENT_QUOTES, 'UTF-8') ?>"
+                            data-base-url="<?= htmlspecialchars($pUrl, ENT_QUOTES, 'UTF-8') ?>"
+                            data-description="<?= htmlspecialchars($pDesc, ENT_QUOTES, 'UTF-8') ?>">
+                        <?= htmlspecialchars($pName, ENT_QUOTES, 'UTF-8') ?>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <w:form id="weline-ai-custom-vendor-form" method="post">
+        <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= (int)$vendor->getId() ?>">
+        <?php endif; ?>
+        <input type="hidden" name="models_json" id="cv-models-json" value="[]">
+        <input type="hidden" name="removed_model_ids_json" id="cv-removed-models-json" value="[]">
+
+        <div style="--w-mb:var(--weline-space-3);">
+            <label class="w-field__label required" for="cv-code"><lang>供应商代码</lang></label>
+            <input class="w-input" id="cv-code" name="code" value="<?= htmlspecialchars($codeVal, ENT_QUOTES, 'UTF-8') ?>"
+                   <?= $isEdit ? 'readonly' : 'required' ?>
+                   placeholder="ollama">
+            <small class="w-field__hint"><?= __('小写字母/数字/下划线，创建后不可改') ?></small>
+        </div>
+
+        <div style="--w-mb:var(--weline-space-3);">
+            <label class="w-field__label required" for="cv-name"><lang>显示名称</lang></label>
+            <input class="w-input" id="cv-name" name="name" value="<?= htmlspecialchars($nameVal, ENT_QUOTES, 'UTF-8') ?>" required>
+        </div>
+
+        <div style="--w-mb:var(--weline-space-3);">
+            <label class="w-field__label required" for="cv-base-url"><lang>默认 Base URL</lang></label>
+            <input class="w-input" id="cv-base-url" name="base_url" value="<?= htmlspecialchars($baseVal, ENT_QUOTES, 'UTF-8') ?>"
+                   required placeholder="http://127.0.0.1:11434/v1">
+        </div>
+
+        <div style="--w-mb:var(--weline-space-3);">
+            <label class="w-field__label" for="cv-test-model"><lang>默认测试模型</lang></label>
+            <input class="w-input" id="cv-test-model" name="test_model" value="<?= htmlspecialchars($testVal, ENT_QUOTES, 'UTF-8') ?>"
+                   placeholder="llama3.2">
+            <small class="w-field__hint"><?= __('可与下方模型列表联动；保存时若为空会取列表第一项') ?></small>
+        </div>
+
+        <div style="--w-mb:var(--weline-space-3);">
+            <label class="w-field__label" for="cv-description"><lang>说明</lang></label>
+            <textarea class="w-input" id="cv-description" name="description" rows="2"><?= htmlspecialchars($descVal, ENT_QUOTES, 'UTF-8') ?></textarea>
+        </div>
+
+        <div style="--w-mb:var(--weline-space-3);">
+            <div class="w-check">
+                <input type="checkbox" id="cv-is-active" name="is_active" value="1" <?= $activeVal === 1 ? 'checked' : '' ?>>
+                <label for="cv-is-active"><lang>启用</lang></label>
+            </div>
+        </div>
+
+        <div class="cv-model-section">
+            <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-2);">
+                <div>
+                    <strong><?= __('本供应商模型') ?></strong>
+                    <div class="w-text" data-size="sm"><?= __('在此快速登记模型代码；保存时一并写入模型库，并自动创建本地账户。') ?></div>
+                </div>
+                <button type="button" class="w-button" data-size="sm" data-tone="neutral" data-variant="outline" id="cv-model-add">
+                    <w:icon name="plus" size="sm"></w:icon><?= __('添加模型') ?>
+                </button>
+            </div>
+            <p class="cv-model-empty" id="cv-model-empty" hidden><?= __('暂无模型，点击「添加模型」填写本机模型名（如 llama3.2）') ?></p>
+            <div id="cv-model-list"></div>
+        </div>
+
+        <input type="hidden" name="driver" value="openai_compat">
+
+        <div class="w-cluster" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-3);">
+            <button type="button" class="w-button" data-tone="info" id="cv-test-btn" data-cv-loading-label="<?= htmlspecialchars(__('测试中...'), ENT_QUOTES, 'UTF-8') ?>">
+                <w:icon name="play" size="sm"></w:icon><lang>测试连通性</lang>
+            </button>
+            <button type="submit" class="w-button" data-tone="primary">
+                <w:icon name="save" size="sm"></w:icon><lang>保存</lang>
+            </button>
+        </div>
+    </w:form>
+</div>
+
+<script>
+(function () {
+    var form = document.getElementById('weline-ai-custom-vendor-form');
+    if (!form) return;
+    var saveUrl = <?= json_encode($saveUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var testUrl = <?= json_encode($testUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var initialModels = <?= $modelsJson ?>;
+    var models = Array.isArray(initialModels) ? initialModels.slice() : [];
+    var removedIds = [];
+    var listEl = document.getElementById('cv-model-list');
+    var emptyEl = document.getElementById('cv-model-empty');
+    var modelsJsonInput = document.getElementById('cv-models-json');
+    var removedJsonInput = document.getElementById('cv-removed-models-json');
+    var testModelInput = document.getElementById('cv-test-model');
+    var uid = 0;
+
+    function hostWindow() {
+        try {
+            if (window.parent && window.parent !== window) {
+                return window.parent;
+            }
+        } catch (e) {}
+        return window;
+    }
+
+    function showToast(type, message) {
+        var host = hostWindow();
+        try {
+            if (host.Weline && host.Weline.UI && host.Weline.UI.toast && typeof host.Weline.UI.toast[type] === 'function') {
+                host.Weline.UI.toast[type](message);
+                return;
+            }
+        } catch (e) {}
+        try {
+            if (window.Weline && Weline.UI && Weline.UI.toast && typeof Weline.UI.toast[type] === 'function') {
+                Weline.UI.toast[type](message);
+            }
+        } catch (e) {}
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[ch];
+        });
+    }
+
+    function syncHidden() {
+        var payload = models.map(function (m) {
+            return {
+                id: Number(m.id) || 0,
+                model_code: String(m.model_code || '').trim(),
+                name: String(m.name || '').trim(),
+                tested: !!m.tested,
+                connection_test_status: m.tested ? 'success' : (m.connection_test_status || 'pending'),
+                is_active: 1
+            };
+        }).filter(function (m) { return m.model_code !== ''; });
+        modelsJsonInput.value = JSON.stringify(payload);
+        removedJsonInput.value = JSON.stringify(removedIds);
+    }
+
+    function statusLabel(m) {
+        if (m.tested || m.connection_test_status === 'success') {
+            return '<?= __('已测通') ?>';
+        }
+        return '<?= __('未测试') ?>';
+    }
+
+    function renderModels() {
+        if (!models.length) {
+            listEl.innerHTML = '';
+            emptyEl.hidden = false;
+            syncHidden();
+            return;
+        }
+        emptyEl.hidden = true;
+        listEl.innerHTML = models.map(function (m, idx) {
+            var key = m._key || ('m' + idx);
+            m._key = key;
+            return '<div class="cv-model-row" data-cv-model-idx="' + idx + '">' +
+                '<div><label class="w-field__label"><?= __('模型代码') ?></label>' +
+                '<input class="w-input" data-cv-field="model_code" value="' + esc(m.model_code || '') + '" placeholder="llama3.2"></div>' +
+                '<div><label class="w-field__label"><?= __('显示名称') ?></label>' +
+                '<input class="w-input" data-cv-field="name" value="' + esc(m.name || '') + '" placeholder="<?= __('可选，默认用模型代码') ?>"></div>' +
+                '<div class="cv-model-status">' + esc(statusLabel(m)) + '</div>' +
+                '<div class="w-cluster" style="--w-gap:var(--weline-space-1);">' +
+                '<button type="button" class="w-button" data-size="sm" data-tone="info" data-variant="outline" data-cv-test-one data-cv-loading-label="<?= htmlspecialchars(__('测试中...'), ENT_QUOTES, 'UTF-8') ?>"><?= __('测试') ?></button>' +
+                '<button type="button" class="w-button" data-size="sm" data-tone="danger" data-variant="outline" data-cv-remove><?= __('移除') ?></button>' +
+                '</div></div>';
+        }).join('');
+        syncHidden();
+    }
+
+    function readRowInputs() {
+        listEl.querySelectorAll('[data-cv-model-idx]').forEach(function (row) {
+            var idx = Number(row.getAttribute('data-cv-model-idx'));
+            if (!models[idx]) return;
+            var codeInput = row.querySelector('[data-cv-field="model_code"]');
+            var nameInput = row.querySelector('[data-cv-field="name"]');
+            models[idx].model_code = codeInput ? codeInput.value.trim() : '';
+            models[idx].name = nameInput ? nameInput.value.trim() : '';
+        });
+        syncHidden();
+    }
+
+    function pickTestModelCode() {
+        readRowInputs();
+        var fromField = (testModelInput.value || '').trim();
+        if (fromField) return fromField;
+        for (var i = 0; i < models.length; i++) {
+            var c = String(models[i].model_code || '').trim();
+            if (c) return c;
+        }
+        return '';
+    }
+
+    function setButtonLoading(btn, loading) {
+        if (!btn) return;
+        if (loading) {
+            if (!btn.dataset.cvOrigHtml) {
+                btn.dataset.cvOrigHtml = btn.innerHTML;
+            }
+            var label = btn.getAttribute('data-cv-loading-label') || '<?= __('测试中...') ?>';
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+            btn.innerHTML = '<span class="w-spinner" aria-hidden="true"></span><span>' + esc(label) + '</span>';
+            return;
+        }
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        if (btn.dataset.cvOrigHtml) {
+            btn.innerHTML = btn.dataset.cvOrigHtml;
+            delete btn.dataset.cvOrigHtml;
+        }
+    }
+
+    function runTest(modelCode, markIndex, triggerBtn) {
+        var baseUrl = (form.querySelector('#cv-base-url').value || '').trim();
+        if (!baseUrl) {
+            showToast('warning', '<?= __('请先填写 Base URL') ?>');
+            return Promise.resolve(null);
+        }
+        if (!modelCode) {
+            showToast('warning', '<?= __('请填写要测试的模型代码') ?>');
+            return Promise.resolve(null);
+        }
+        if (triggerBtn && triggerBtn.getAttribute('aria-busy') === 'true') {
+            return Promise.resolve(null);
+        }
+        setButtonLoading(triggerBtn, true);
+        var body = new URLSearchParams();
+        body.set('base_url', baseUrl);
+        body.set('model_code', modelCode);
+        return fetch(testUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body.toString()
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (!res || !res.success) {
+                showToast('error', (res && res.message) || '<?= __('连通性测试失败') ?>');
+                return res;
+            }
+            showToast('success', res.message || '<?= __('连通性测试成功') ?>');
+            if (typeof markIndex === 'number' && models[markIndex]) {
+                models[markIndex].tested = true;
+                models[markIndex].connection_test_status = 'success';
+                if (!models[markIndex].model_code) {
+                    models[markIndex].model_code = modelCode;
+                }
+                // 重绘会重建按钮，无需再 restore
+                triggerBtn = null;
+                renderModels();
+            }
+            if (!(testModelInput.value || '').trim()) {
+                testModelInput.value = modelCode;
+            }
+            return res;
+        }).catch(function (e) {
+            showToast('error', (e && e.message) || '<?= __('连通性测试失败') ?>');
+            return null;
+        }).finally(function () {
+            setButtonLoading(triggerBtn, false);
+        });
+    }
+
+    document.getElementById('cv-model-add').addEventListener('click', function () {
+        readRowInputs();
+        uid += 1;
+        models.push({
+            id: 0,
+            _key: 'new-' + uid,
+            model_code: '',
+            name: '',
+            tested: false,
+            connection_test_status: 'pending'
+        });
+        renderModels();
+        var last = listEl.querySelector('[data-cv-model-idx]:last-child [data-cv-field="model_code"]');
+        if (last) last.focus();
+    });
+
+    listEl.addEventListener('click', function (ev) {
+        var row = ev.target.closest('[data-cv-model-idx]');
+        if (!row) return;
+        var idx = Number(row.getAttribute('data-cv-model-idx'));
+        if (ev.target.closest('[data-cv-remove]')) {
+            readRowInputs();
+            var removed = models.splice(idx, 1)[0];
+            if (removed && Number(removed.id) > 0) {
+                removedIds.push(Number(removed.id));
+            }
+            renderModels();
+            return;
+        }
+        if (ev.target.closest('[data-cv-test-one]')) {
+            readRowInputs();
+            var code = models[idx] ? String(models[idx].model_code || '').trim() : '';
+            var testBtn = ev.target.closest('[data-cv-test-one]');
+            runTest(code, idx, testBtn);
+        }
+    });
+
+    listEl.addEventListener('change', function () { readRowInputs(); });
+    listEl.addEventListener('input', function () { syncHidden(); });
+
+    document.getElementById('cv-test-btn').addEventListener('click', function (ev) {
+        runTest(pickTestModelCode(), null, ev.currentTarget);
+    });
+
+    document.querySelectorAll('[data-cv-preset]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            form.querySelector('#cv-code').value = btn.getAttribute('data-code') || '';
+            form.querySelector('#cv-name').value = btn.getAttribute('data-name') || '';
+            form.querySelector('#cv-base-url').value = btn.getAttribute('data-base-url') || '';
+            form.querySelector('#cv-description').value = btn.getAttribute('data-description') || '';
+        });
+    });
+
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        readRowInputs();
+        var fd = new FormData(form);
+        if (!fd.get('is_active')) {
+            fd.set('is_active', '0');
+        }
+        var body = new URLSearchParams();
+        fd.forEach(function (v, k) { body.set(k, String(v)); });
+        fetch(saveUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body.toString()
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.success) {
+                try {
+                    document.body.dataset.offcanvasResult = 'error';
+                } catch (e) {}
+                showToast('error', res.message || '<?= __('保存失败') ?>');
+                return;
+            }
+            try {
+                document.body.dataset.offcanvasResult = 'success';
+            } catch (e) {}
+            showToast('success', res.message || '<?= __('本地供应商已保存') ?>');
+            try {
+                if (window.parent && window.parent !== window) {
+                    var host = window.parent;
+                    var drawer = window.frameElement
+                        ? window.frameElement.closest('[data-w-component~="drawer"]')
+                        : null;
+                    host.postMessage({type: 'weline-ai-custom-vendor-saved', id: res.id}, '*');
+                    if (drawer && host.Weline && host.Weline.UI && host.Weline.UI.drawer) {
+                        host.Weline.UI.drawer.close(drawer, 'saved');
+                    }
+                }
+            } catch (e) {}
+        }).catch(function (e) {
+            try {
+                document.body.dataset.offcanvasResult = 'error';
+            } catch (err) {}
+            showToast('error', (e && e.message) || '<?= __('保存失败') ?>');
+        });
+    });
+
+    renderModels();
+})();
+</script>

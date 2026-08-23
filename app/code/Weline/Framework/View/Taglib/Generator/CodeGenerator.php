@@ -312,6 +312,12 @@ final class CodeGenerator
      */
     private function generateTagNode(TagNode $node): string
     {
+        // block 必须编译期吐出 framework_view_process_block(..., $vars=['x'=>&$x])，
+        // 否则动态属性会走 renderRuntimeTag，foreach 局部变量无法传入 vars。
+        if ($node->name === 'block' || $node->name === 'w:block') {
+            return $this->generateCompileTimeTag($node);
+        }
+
         // 编译期标签使用回调生成代码
         if ($node->stage === TagNode::STAGE_COMPILE) {
             return $this->generateCompileTimeTag($node);

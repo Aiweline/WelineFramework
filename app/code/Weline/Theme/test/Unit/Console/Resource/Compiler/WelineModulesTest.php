@@ -20,6 +20,6 @@ class WelineModulesTest extends TestCore
     {
         /**@var WelineModules $compile */
         $compile = ObjectManager::getInstance(WelineModules::class);
-        p($compile->compile());
+        self::assertNull($compile->compile());
     }
 }

@@ -55,7 +55,7 @@ foreach ($locales as $locale) {
             <div class="w-card i18n-admin-card" data-w-shadow="sm" data-w-border="none" data-w-height="full">
                 <div class="w-card__body">
                     <div class="w-text" data-tone="muted" data-size="sm"><?= __('全局状态') ?></div>
-                    <div class="fs-3 w-text <?= $enabled ? 'text-success' : 'text-secondary' ?>" data-weight="strong">
+                    <div class="fs-3 w-text <?= $enabled ? 'w-text' : 'text-secondary' ?>" data-weight="strong">
                         <?= $enabled ? __('已开启') : __('已关闭') ?>
                     </div>
                 </div>

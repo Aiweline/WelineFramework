@@ -30,11 +30,9 @@
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 
 ## doc 目录
@@ -43,6 +41,9 @@
 - `app/code/Weline/Layout/doc/event/布局切换前.md`
 - `app/code/Weline/Layout/doc/event/布局切换后.md`
 - `app/code/Weline/Layout/doc/event/布局计划触发.md`
+- `app/code/Weline/Layout/doc/功能现状.md`
+- `app/code/Weline/Layout/doc/开发日志.md`
+- `app/code/Weline/Layout/doc/需求.md`
 
 ## 开发前门禁
 

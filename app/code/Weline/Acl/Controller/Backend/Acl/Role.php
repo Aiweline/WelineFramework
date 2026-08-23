@@ -50,8 +50,8 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         }
         $roleModel->pagination()->select()->fetch();
         $this->assign('roles', $roleModel->getItems());
-        unset($roleModel->pagination['html']);
-        $this->assign('pagination', $roleModel->getPagination('pagination-rounded', '*/backend/acl/role', true));
+        $this->assign('pagination', $roleModel->getPaginationState());
+        $this->assign('search', (string)($search ?? ''));
         return $this->fetch('index');
     }
 
@@ -274,23 +274,10 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         }
         $this->assign('tag_grants', $tagGrants);
 
-        // 从已构建的树中直接提取统计、模块列表和类型列表，避免重复查询
-        $statistics = [];
-        $moduleSet = [];
-        $typeSet = [];
-        foreach ($trees as $tree) {
-            $sid = $tree->getSourceId();
-            $stats = $this->countNodeStats($tree, $moduleSet, $typeSet);
-            $statistics[$sid] = [
-                'source_id' => $sid,
-                'source_name' => $tree->getSourceName(),
-                'module' => explode('::', $sid)[0] ?? $sid,
-                'type' => $tree->getType(),
-                'total' => $stats['total'],
-                'selected' => $stats['selected'],
-            ];
-        }
-        $this->assign('tree_statistics', $statistics);
+        $treeSummary = \Weline\Acl\Service\Resource\AclResourcePresentation::summarizeTrees($trees);
+        $moduleSet = \array_fill_keys($treeSummary['modules'], true);
+        $typeSet = \array_fill_keys($treeSummary['types'], true);
+        $this->assign('tree_statistics', $treeSummary['statistics']);
         // 标签维度的叶子类型（query/task/operation）也纳入类型筛选，保证两个维度都能按类型过滤
         foreach ($allRows as $row) {
             $rowType = (string)($row['type'] ?? '');
@@ -311,31 +298,6 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         $userRole = $user !== null && \method_exists($user, 'getRole') ? $user->getRole() : null;
         $this->assign('user_role', $userRole);
         return $this->fetch('assign');
-    }
-
-    /**
-     * 递归统计节点总数/已选数，同时收集模块和类型
-     */
-    private function countNodeStats(object $node, array &$moduleSet, array &$typeSet): array
-    {
-        $total = 1;
-        $selected = $node->getData('role_id') ? 1 : 0;
-
-        $module = $node->getModule();
-        $type = $node->getType();
-        if ($module !== '' && $module !== null) {
-            $moduleSet[$module] = true;
-        }
-        if ($type !== '' && $type !== null) {
-            $typeSet[$type] = true;
-        }
-
-        foreach ($node->getSub() ?: [] as $sub) {
-            $sub_stats = $this->countNodeStats($sub, $moduleSet, $typeSet);
-            $total += $sub_stats['total'];
-            $selected += $sub_stats['selected'];
-        }
-        return ['total' => $total, 'selected' => $selected];
     }
 
     #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_assign_post', '角色权限分配', '', '')]

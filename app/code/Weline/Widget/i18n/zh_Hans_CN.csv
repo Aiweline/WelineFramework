@@ -1,21 +1,21 @@
-﻿选择图标,选择图标
-搜索图标...,搜索图标...
-输入自定义图标类名,输入自定义图标类名
+﻿未选择图标,未选择图标
+清除图标,清除图标
+搜索图标…,搜索图标…
+没有匹配图标,没有匹配图标
+"输入 Weline 图标名称","输入 Weline 图标名称"
 应用,应用
-点击选择图片或输入URL,点击选择图片或输入URL
+从媒体库选择图片,从媒体库选择图片
 预览,预览
 从媒体库选择,从媒体库选择
 选择,选择
-上传图片,上传图片
-上传,上传
 清除图片,清除图片
-图片URL,图片URL
-"最大 %s KB","最大 %s KB"
-"建议比例 %s","建议比例 %s"
 "范围: %s - %s","范围: %s - %s"
 "最小值: %s","最小值: %s"
 "最大值: %s","最大值: %s"
 搜索,搜索
+正在加载选项…,正在加载选项…
+没有匹配选项,没有匹配选项
+选项加载失败，请重试,选项加载失败，请重试
 清除,清除
 今天,今天
 明天,明天
@@ -26,16 +26,17 @@
 快捷链接:,快捷链接:
 添加项目,添加项目
 暂无项目，点击下方按钮添加,暂无项目，点击下方按钮添加
+"已移动到第 {position} 项，共 {total} 项","已移动到第 {position} 项，共 {total} 项"
 "%d / %d 项","%d / %d 项"
 从媒体库选择图片并添加为一项，可再编辑标题等,从媒体库选择图片并添加为一项，可再编辑标题等
 选择图片添加,选择图片添加
-拖拽排序,拖拽排序
+拖拽或使用方向键排序,拖拽或使用方向键排序
 删除,删除
 设为透明,设为透明
-从媒体库选择图片,从媒体库选择图片
 编辑多语言,编辑多语言
 多语言,多语言
 多语言配置,多语言配置
+关闭多语言配置,关闭多语言配置
 AI翻译,AI翻译
 保存多语言,保存多语言
 启用,启用
@@ -95,7 +96,7 @@ AI翻译,AI翻译
 页面不存在,页面不存在
 "加载失败: %{1}","加载失败: %{1}"
 "获取部件列表失败: %{1}","获取部件列表失败: %{1}"
-edit,edit
+edit,编辑
 编辑器首页,编辑器首页
 访问编辑器,访问编辑器
 保存页面,保存页面
@@ -103,7 +104,7 @@ edit,edit
 获取部件列表,获取部件列表
 部件管理,部件管理
 "获取部件详情失败: %{1}","获取部件详情失败: %{1}"
-"mdi mdi-puzzle","mdi mdi-puzzle"
+puzzle,谜
 部件列表,部件列表
 查看部件列表,查看部件列表
 部件详情,部件详情
@@ -116,8 +117,8 @@ edit,edit
 取消,取消
 选择一个部件进行配置,选择一个部件进行配置
 请填写页面标题和标识,请填写页面标题和标识
-"Page preview","Page preview"
-"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
+"Page preview",页面预览
+"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","此预览中的 w:widget 标签需要在显示实际小部件内容之前进行服务器端渲染。"
 快速查看、筛选并预览部件详情,快速查看、筛选并预览部件详情
 关闭,关闭
 加载中...,加载中...
@@ -174,7 +175,6 @@ FAQ部件,FAQ部件
 "AI 生成结果缺少 template_content","AI 生成结果缺少 template_content"
 "AI 生成了不支持的参数类型：%{1}","AI 生成了不支持的参数类型：%{1}"
 "AI 生成模板包含不允许的逻辑：%{1}","AI 生成模板包含不允许的逻辑：%{1}"
-鍒犻櫎,鍒犻櫎
 基本信息,基本信息
 样式设置,样式设置
 链接配置,链接配置
@@ -182,18 +182,29 @@ FAQ部件,FAQ部件
 该部件无可配置项,该部件无可配置项
 "字段 ""%s"" 的值无效","字段 ""%s"" 的值无效"
 "部件注册表：%{1} 个类型，共 %{2} 个部件","部件注册表：%{1} 个类型，共 %{2} 个部件"
-文件：generated/widgets.php,文件：generated/widgets.php
+文件：generated/widgets.php,文件：generate/widgets.php
 查看部件注册表状态,查看部件注册表状态
 "查看 generated/widgets.php 中的部件类型数与总个数","查看 generated/widgets.php 中的部件类型数与总个数"
 开始刷新部件注册表...,开始刷新部件注册表...
 "✓ 部件注册表已刷新完成。","✓ 部件注册表已刷新完成。"
-位置：generated/widgets.php,位置：generated/widgets.php
+位置：generated/widgets.php,位置：generate/widgets.php
 首次入库：%{1}，更新：%{2}，默认注入事件：%{3},首次入库：%{1}，更新：%{2}，默认注入事件：%{3}
 已派发,已派发
 未派发,未派发
 "✖ 写入部件注册表失败。","✖ 写入部件注册表失败。"
 "✓ ParamSchema 注册表已刷新完成。","✓ ParamSchema 注册表已刷新完成。"
-位置：generated/param_schemas.php,位置：generated/param_schemas.php
+位置：generated/param_schemas.php,位置：generate/param_schemas.php
 "✖ 写入 ParamSchema 注册表失败。","✖ 写入 ParamSchema 注册表失败。"
 刷新失败：%{1},刷新失败：%{1}
+点击选择图片或输入URL,点击选择图片或输入URL
+上传图片,上传图片
+上传,上传
+图片URL,图片URL
+"最大 %s KB","最大 %s KB"
+"建议比例 %s","建议比例 %s"
+选择图标,选择图标
+搜索图标...,搜索图标...
+输入自定义图标类名,输入自定义图标类名
+拖拽排序,拖拽排序
+"mdi mdi-puzzle","mdi mdi-puzzle"
 "mdi mdi-pencil-box","mdi mdi-pencil-box"

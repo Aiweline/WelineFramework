@@ -1,47 +1,47 @@
 ﻿"仅允许 POST 请求。","仅允许 POST 请求。"
-未知税务配置类型。,未知税务配置类型。
-税务配置创建成功。,税务配置创建成功。
-税务管理,税务管理
+未知税务配置类型。,"Unknown tax configuration type."
+税务配置创建成功。,"The tax configuration is created successfully."
+税务管理,"tax management"
 check,check
-税务配置管理与迁移诊断,税务配置管理与迁移诊断
-税类,税类
+税务配置管理与迁移诊断,"Tax configuration management and migration diagnosis"
+税类,"tax category"
 circle,circle
-管理税类,管理税类
-税率,税率
-管理税率,管理税率
-税务规则,税务规则
-管理税务规则,管理税务规则
-创建税类,创建税类
+管理税类,"Manage tax categories"
+税率,"tax rate"
+管理税率,"Administrative tax rate"
+税务规则,"tax rules"
+管理税务规则,"Manage tax rules"
+创建税类,"Create a tax class"
 save,save
-创建税率,创建税率
-创建税务规则,创建税务规则
-税引擎状态,税引擎状态
-查看税引擎状态,查看税引擎状态
-影子验证,影子验证
-查看税务影子验证状态,查看税务影子验证状态
-"已验证 LKG","已验证 LKG"
-"查看已验证税务 LKG","查看已验证税务 LKG"
-迁移状态,迁移状态
+创建税率,"Create tax rate"
+创建税务规则,"Create tax rules"
+税引擎状态,"tax engine status"
+查看税引擎状态,"View tax engine status"
+影子验证,"Shadow verification"
+查看税务影子验证状态,"View tax shadow verification status"
+"已验证 LKG","Verified LKG"
+"查看已验证税务 LKG","View Verified Tax LKG"
+迁移状态,"Migration status"
 eye,eye
-只读查看税务迁移状态,只读查看税务迁移状态
-是,是
-否,否
-只读诊断,只读诊断
-可配置,可配置
-"此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。","此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。"
-"配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。","配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。"
-新增%{1},新增%{1}
-"网站 ID","网站 ID"
-税类代码,税类代码
-税类名称,税类名称
-管辖区,管辖区
-税率（基点）,税率（基点）
-规则版本,规则版本
+只读查看税务迁移状态,"Read-only view of tax migration status"
+是,yes
+否,no
+只读诊断,"Read-only diagnostics"
+可配置,Configurable
+"此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。","This page only reads the current database facts; migrations and production cutoffs can still only be performed through the controlled CLI."
+"配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。","Configuration is saved to the current database; production migrations and cutoffs are still only performed through the controlled CLI."
+新增%{1},"Added %{1}"
+网站,website
+税类代码,"tax code"
+税类名称,"Tax category name"
+管辖区,Jurisdiction
+税率（基点）,"Tax rate (basis points)"
+规则版本,"Rule version"
 舍入模式,"Rounding Mode"
-启用,启用
-创建,创建
-当前没有记录。,当前没有记录。
-"税务不可用且无同版本同 Scope 的 LKG，新结账已阻断","税务不可用且无同版本同 Scope 的 LKG，新结账已阻断"
+启用,enable
+创建,create
+当前没有记录。,"There are currently no records."
+"税务不可用且无同版本同 Scope 的 LKG，新结账已阻断","Tax is not available and there is no LKG of the same version and scope. New checkouts have been blocked."
 "税务不可用且同版本 LKG 无法安全回放，新结账已阻断","Tax is unavailable and the same-version LKG cannot be replayed safely; new checkout is blocked"
 税务规则版本已变更，请重新报价,"Tax rules changed; request a new quote"
 税务报价缺少有效规则版本，请重新报价,"The Tax quote has no valid rule version; request a new quote"
@@ -71,36 +71,37 @@ eye,eye
 税行字段无效,"The Tax line fields are invalid"
 "税行 ID 重复：%{1}","Duplicate Tax line ID: %{1}"
 税则整数列无效：%{1},"Invalid integer Tax rule column: %{1}"
-税类代码必须以小写字母或数字开头，且仅包含小写字母、数字、下划线或短横线。,税类代码必须以小写字母或数字开头，且仅包含小写字母、数字、下划线或短横线。
-"税类名称不能为空且不能超过 255 字节。","税类名称不能为空且不能超过 255 字节。"
-该网站已存在相同税类代码。,该网站已存在相同税类代码。
-税类代码格式无效。,税类代码格式无效。
-"管辖区必须使用 COUNTRY|REGION 格式。","管辖区必须使用 COUNTRY|REGION 格式。"
-"税率基点必须在 0 到 10000 之间。","税率基点必须在 0 到 10000 之间。"
-规则版本必须为正整数。,规则版本必须为正整数。
-舍入模式无效。,舍入模式无效。
-必须先创建并启用对应税类。,必须先创建并启用对应税类。
-相同网站、税类、管辖区和版本的规则已存在。,相同网站、税类、管辖区和版本的规则已存在。
-"网站 ID 必须为非负整数。","网站 ID 必须为非负整数。"
+税类代码必须以小写字母或数字开头，且仅包含小写字母、数字、下划线或短横线。,"Tax codes must begin with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes."
+"税类名称不能为空且不能超过 255 字节。","Tax class name cannot be empty and cannot exceed 255 bytes."
+该网站已存在相同税类代码。,"The same tax code already exists on the site."
+税类代码格式无效。,"The tax code format is invalid."
+"管辖区必须使用 COUNTRY|REGION 格式。","Jurisdiction must use the format COUNTRY|REGION."
+"税率基点必须在 0 到 10000 之间。","The tax base point must be between 0 and 10000."
+规则版本必须为正整数。,"Rule version must be a positive integer."
+舍入模式无效。,"Invalid rounding mode."
+必须先创建并启用对应税类。,"The taxable class must first be created and enabled."
+相同网站、税类、管辖区和版本的规则已存在。,"Rules already exist for the same website, tax category, jurisdiction and version."
+"网站 ID 必须为非负整数。","Site ID must be a non-negative integer."
 "冻结税务 Scope 与请求不一致","Frozen Tax Scope does not match the request"
 "Tax Scope ID 不能为负数","Tax Scope IDs must not be negative"
 "Tax Scope Website/Store 不存在或不匹配","Tax Scope Website/Store is missing or mismatched"
 "Tax Scope Store 已停用或不在 active 生命周期","Tax Scope Store is disabled or is not active"
 "Tax Scope 配置无效","Tax Scope configuration is invalid"
-"MIG-P3B：Tax shadow 到精确 Scope allowlist（仅登记的 full clone）","MIG-P3B：Tax shadow 到精确 Scope allowlist（仅登记的 full clone）"
-打印帮助,打印帮助
-"在 full clone 只读清点 100 个持久化报价事实、规则快照与 rollout","在 full clone 只读清点 100 个持久化报价事实、规则快照与 rollout"
-"checkpoint 后执行 current-vs-frozen shadow compare 并保存同版本 LKG；保持 shadow","checkpoint 后执行 current-vs-frozen shadow compare 并保存同版本 LKG；保持 shadow"
-"新进程重载 checkpoint，重算同一观察窗并复核 report/LKG","新进程重载 checkpoint，重算同一观察窗并复核 report/LKG"
-"fresh verify 成功后仅放量指定 Website/Store/Channel","fresh verify 成功后仅放量指定 Website/Store/Channel"
-"按 checkpoint 持久化 mode off；保留 LKG、TaxSnapshot 与审计事实","按 checkpoint 持久化 mode off；保留 LKG、TaxSnapshot 与审计事实"
-"migration registry 已登记的 full mig_clone_*","migration registry 已登记的 full mig_clone_*"
-"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）"
-"目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
-"目标 Store ID，必须 >=1","目标 Store ID，必须 >=1"
-"目标 Channel ID，必须 >=1","目标 Channel ID，必须 >=1"
-显示本帮助,显示本帮助
-"""仅允许 POST 请求。""","仅允许 POST 请求。"
+"MIG-P3B：Tax shadow 到精确 Scope allowlist（仅登记的 full clone）","MIG-P3B: Tax shadow to exact Scope allowlist (registered full clone only)"
+打印帮助,"Print help"
+"在 full clone 只读清点 100 个持久化报价事实、规则快照与 rollout","Read-only inventory of 100 persistent quote facts, rule snapshots and rollout in full clone"
+"checkpoint 后执行 current-vs-frozen shadow compare 并保存同版本 LKG；保持 shadow","After checkpoint, execute current-vs-frozen shadow compare and save the same version of LKG; keep shadow"
+"新进程重载 checkpoint，重算同一观察窗并复核 report/LKG","The new process reloads checkpoint, recalculates the same observation window and reviews report/LKG"
+"fresh verify 成功后仅放量指定 Website/Store/Channel","After fresh verify is successful, only the specified Website/Store/Channel will be released."
+"按 checkpoint 持久化 mode off；保留 LKG、TaxSnapshot 与审计事实","Press checkpoint persistence mode off; retain LKG, TaxSnapshot and audit facts"
+"migration registry 已登记的 full mig_clone_*","migration registry registered full mig_clone_*"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID output by apply (required for verify/allowlist/rollback)"
+"目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the legitimate system default site"
+"目标 Store ID，必须 >=1","Target Store ID, must >=1"
+"目标 Channel ID，必须 >=1","Target Channel ID, must be >=1"
+显示本帮助,"Show this help"
+"""仅允许 POST 请求。""","""Only POST requests are allowed."""
+"网站 ID","Website ID"
 """税务不可用且无同版本同 Scope 的 LKG，新结账已阻断""","Tax is unavailable and no verified LKG exists for the same version and Scope; new checkout is blocked"
 "MIG-P3B：Tax shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P3B: Tax shadow to allowlist (apply requires --database=mig_clone_*)"
 """税务不可用且无同版本 LKG，新结账已阻断""","Tax is unavailable and no same-version LKG exists; new checkout is blocked"

@@ -558,6 +558,7 @@ class VirtualTheme extends BackendController
             'layout_type' => $layoutType,
             'layout_option' => $layoutOption,
             'scope' => (string)($payload['scope'] ?? self::DEFAULT_SCOPE),
+            'locale_code' => (string)($payload['locale_code'] ?? $payload['locale'] ?? ''),
             'target_type' => (string)($payload['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
             'target_id' => (int)($payload['target_id'] ?? 0),
             'name' => (string)($payload['name'] ?? ('AI ' . ucfirst($layoutType))),

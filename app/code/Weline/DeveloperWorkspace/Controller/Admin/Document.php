@@ -86,7 +86,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
                            $this->request->getParams()
                        )->order('doc_id', 'desc')->select()->fetch();
         $this->assign('documents', $documents->getItems());
-        $this->assign('pagination', $documentModel->getPagination());
+        $this->assign('pagination', $documentModel->getPaginationState());
         $this->assign('selectedCategoryId', $categoryId);
         $this->assign('documentLocales', $this->getSupportedDocumentLocales());
         $this->assign('currentDocumentLocale', $this->getRequestLocale());
@@ -411,7 +411,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
             
             return $this->fetchJson($this->success(__('获取成功'), [
                 'items' => $items,
-                'pagination' => $documentModel->getPagination(),
+                'pagination' => $documentModel->getPaginationState(),
             ]));
         } catch (\Exception $exception) {
             return $this->fetchJson($this->exception($exception));

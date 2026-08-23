@@ -1,218 +1,155 @@
 <?php
-$queueResultModals = [];
-$queueEsc = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-$queueShort = static function (mixed $value, int $length = 50) use ($queueEsc): string {
-    $text = (string)$value;
-    $short = function_exists('mb_strlen') && function_exists('mb_substr')
-        ? (mb_strlen($text) > $length ? mb_substr($text, 0, $length) . '...' : $text)
-        : (strlen($text) > $length ? substr($text, 0, $length) . '...' : $text);
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\Ui\IconRegistry;
 
-    return $queueEsc($short);
+$queueListingIconRegistry = ObjectManager::getInstance(IconRegistry::class);
+$queueEsc = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$queueShortText = static function (mixed $value, int $length = 50): string {
+    $text = (string)$value;
+    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        return mb_strlen($text, 'UTF-8') > $length ? mb_substr($text, 0, $length, 'UTF-8') . '…' : $text;
+    }
+    return strlen($text) > $length ? substr($text, 0, $length) . '…' : $text;
 };
+$queueItems = is_array($queues ?? null) ? $queues : [];
+$queueResultDialogs = [];
+$queuePagination = is_array($pagination ?? null) ? $pagination : [];
+$queuePage = max(1, (int)($queuePagination['page'] ?? 1));
+$queuePageSize = max(1, (int)($queuePagination['pageSize'] ?? 10));
+$queueLastPage = max(0, (int)($queuePagination['lastPage'] ?? 0));
+$queueTotalSize = max(0, (int)($queuePagination['totalSize'] ?? count($queueItems)));
+$queuePageParams = is_array($queuePagination['params'] ?? null) ? $queuePagination['params'] : [];
+unset($queuePageParams['page'], $queuePageParams['pageSize'], $queuePageParams['known_revision'], $queuePageParams['isAjax']);
+$queuePageUrl = static fn(int $page): string => '?' . http_build_query([
+    ...$queuePageParams,
+    'page' => max(1, $page),
+    'pageSize' => $queuePageSize,
+]);
 ?>
 <div class="w-table-wrap">
-    <table class="w-table weline-queue-table" data-w-vertical="middle">
+    <table class="w-table w-queue-table" data-w-vertical="middle">
         <thead>
             <tr>
-                <th style="width: 40px;">
-                    <input type="checkbox" id="weline-queue-select-all">
-                </th>
-                <th style="width: 80px;"><lang>ID</lang></th>
+                <th><input type="checkbox" data-w-queue-select-all aria-label="<?= $queueEsc(__('选择全部队列')) ?>"></th>
+                <th><lang>ID</lang></th>
                 <th><lang>队列信息</lang></th>
-                <th style="width: 100px;"><lang>状态</lang></th>
+                <th><lang>状态</lang></th>
                 <th><lang>进度/结果</lang></th>
-                <th style="width: 160px;"><lang>时间</lang></th>
-                <th style="width: 180px;"><lang>操作</lang></th>
+                <th><lang>时间</lang></th>
+                <th><lang>操作</lang></th>
             </tr>
         </thead>
         <tbody>
-        <foreach name="queues" item="queue" key="key">
-            <tr data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" data-status="<?= $queueEsc($queue['status'] ?? '') ?>">
+        <?php foreach ($queueItems as $queue): ?>
+            <?php
+            $queueId = (int)($queue['queue_id'] ?? 0);
+            $queueStatus = (string)($queue['status'] ?? 'pending');
+            $statusMeta = match ($queueStatus) {
+                'running' => ['label' => __('运行中'), 'icon' => 'play', 'tone' => 'info'],
+                'done' => ['label' => __('已完成'), 'icon' => 'check', 'tone' => 'success'],
+                'error' => ['label' => __('出错'), 'icon' => 'warning', 'tone' => 'danger'],
+                'stop' => ['label' => __('已暂停'), 'icon' => 'pause', 'tone' => 'warning'],
+                default => ['label' => __('等待中'), 'icon' => 'clock', 'tone' => 'neutral'],
+            };
+            $resultText = (string)($queue['result'] ?? '');
+            $longResult = (function_exists('mb_strlen') ? mb_strlen($resultText, 'UTF-8') : strlen($resultText)) > 50;
+            if ($longResult) {
+                $dialogId = 'w-queue-result-' . max(0, $queueId);
+                $queueResultDialogs[$dialogId] = $resultText;
+            }
+            ?>
+            <tr data-queue-id="<?= $queueId ?>" data-status="<?= $queueEsc($queueStatus) ?>">
+                <td><input type="checkbox" data-w-queue-select value="<?= $queueId ?>" aria-label="<?= $queueEsc(__('选择队列 #%{1}', $queueId)) ?>"></td>
                 <td>
-                    <input type="checkbox" class="weline-queue-checkbox" value="<?= $queueEsc($queue['queue_id'] ?? '') ?>">
-                </td>
-                <td>
-                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);">
-                        <span class="w-text" data-weight="strong"><?= $queueEsc($queue['queue_id'] ?? '') ?></span>
-                        <if condition="queue.auto">
-                            <span class="weline-queue-auto-badge" title="@lang{自动消费}">
-                                <w:icon name="circle" size="sm"></w:icon>
-                            </span>
-                        </if>
+                    <div class="w-queue-table__identity">
+                        <strong>#<?= $queueId ?></strong>
+                        <?php if (!empty($queue['auto'])): ?><span class="w-badge" data-tone="info"><lang>自动</lang></span><?php endif; ?>
                     </div>
                 </td>
                 <td>
-                    <div class="weline-queue-info">
-                        <div class="weline-queue-name" title="<?= $queueEsc($queue['name'] ?? '') ?>">
-                            <?= $queueShort($queue['name'] ?? '', 30) ?>
-                        </div>
-                        <if condition="queue.biz_key">
-                            <div class="w-text" title="@lang{业务键}" data-family="mono" data-tone="muted" data-size="sm"><?= $queueEsc($queue['biz_key'] ?? '') ?></div>
-                        </if>
-                        <if condition="queue.pid">
-                            <div class="weline-queue-pid">
-                                <w:icon name="settings" size="sm"></w:icon>
-                                <span>PID: <?= $queueEsc($queue['pid'] ?? '') ?></span>
-                            </div>
-                        </if>
+                    <div class="w-queue-table__info">
+                        <span class="w-queue-table__name" title="<?= $queueEsc($queue['name'] ?? '') ?>"><?= $queueEsc($queueShortText($queue['name'] ?? '', 36)) ?></span>
+                        <?php if (trim((string)($queue['biz_key'] ?? '')) !== ''): ?>
+                            <code class="w-queue-table__meta" title="<?= $queueEsc(__('业务键')) ?>"><?= $queueEsc($queue['biz_key']) ?></code>
+                        <?php endif; ?>
+                        <?php if (!empty($queue['pid'])): ?>
+                            <span class="w-queue-table__meta"><w:icon name="settings" size="xs" /> PID: <?= (int)$queue['pid'] ?></span>
+                        <?php endif; ?>
                     </div>
                 </td>
                 <td>
-                    <?php
-                    $statusClass = match ($queue['status'] ?? 'error') {
-                        'running' => 'weline-queue-status-running',
-                        'done' => 'weline-queue-status-done',
-                        'error' => 'weline-queue-status-error',
-                        'stop' => 'weline-queue-status-stop',
-                        default => 'weline-queue-status-pending',
-                    };
-                    $statusText = match ($queue['status'] ?? 'pending') {
-                        'running' => __('运行中'),
-                        'done' => __('已完成'),
-                        'error' => __('出错'),
-                        'stop' => __('已暂停'),
-                        default => __('等待中'),
-                    };
-                    $statusIcon = match ($queue['status'] ?? 'pending') {
-                        'running' => 'play',
-                        'done' => 'check',
-                        'error' => 'warning',
-                        'stop' => 'pause',
-                        default => 'clock',
-                    };
-                    ?>
-                    <span class="weline-queue-status <?= $statusClass ?>">
-                        <i class="mdi <?= $statusIcon ?>"></i>
-                        <?= $statusText ?>
+                    <span class="w-badge" data-tone="<?= $statusMeta['tone'] ?>">
+                        <?= $queueListingIconRegistry->render((string)$statusMeta['icon'], 'xs') ?> <?= $queueEsc($statusMeta['label']) ?>
                     </span>
-                    <if condition="queue.finished">
-                        <span class="weline-queue-finished-badge" title="@lang{已结束}">
-                            <w:icon name="check" size="sm"></w:icon>
-                        </span>
-                    </if>
+                    <?php if (!empty($queue['finished'])): ?><span class="w-visually-hidden"><lang>已结束</lang></span><?php endif; ?>
                 </td>
                 <td>
-                    <php>
-                        $resultText = $queue['result'] ?? '';
-                        $hasLongResult = strlen($resultText) > 50;
-                    </php>
-                    <div class="weline-queue-result">
-                        <if condition="queue.status == 'pending'">
-                            <span class="w-text" data-tone="muted"><w:icon name="clock" size="sm"></w:icon><lang>等待执行...</lang></span>
-                        <elseif condition="queue.status == 'running'"/>
-                            <span class="w-text" data-tone="info"><w:icon name="circle" size="sm"></w:icon><lang>正在执行...</lang></span>
-                        <else/>
-                            <if condition="hasLongResult">
-                                <php>
-                                    $queueResultModalId = 'weline_queue_result_modal_' . preg_replace('/[^\w-]+/', '', (string)($queue['queue_id'] ?? md5($resultText)));
-                                    $queueResultModals[$queueResultModalId] = (string)$resultText;
-                                </php>
-                                <?= $queueShort($resultText, 50) ?>
-                                <button type="button" class="weline-queue-view-more" aria-controls="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>" aria-haspopup="dialog" title="<?= htmlspecialchars((string)__('队列结果详情'), ENT_QUOTES, 'UTF-8') ?>" data-w-target="#<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>" data-w-action="dialog.open">
-                                    <w:icon name="circle" size="sm"></w:icon>
-                                    <lang>查看全部</lang>
-                                </button>
-                            <else/>
-                                <?= $queueEsc($queue['result'] ?? '') ?>
-                            </if>
-                        </if>
+                    <div class="w-queue-table__result">
+                        <?php if ($queueStatus === 'pending'): ?>
+                            <span class="w-queue-table__result-state"><w:icon name="clock" size="xs" /><lang>等待执行…</lang></span>
+                        <?php elseif ($queueStatus === 'running'): ?>
+                            <span class="w-queue-table__result-state"><w:icon name="spinner" size="xs" /><lang>正在执行…</lang></span>
+                        <?php else: ?>
+                            <?= $queueEsc($queueShortText($resultText, 50)) ?>
+                            <?php if ($longResult): ?>
+                                <button type="button" class="w-button w-queue-table__view-more" data-size="sm" data-tone="quiet" data-w-action="dialog.open" data-w-target="#<?= $queueEsc($dialogId) ?>" aria-haspopup="dialog"><w:icon name="eye" size="xs" /> <lang>查看全部</lang></button>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     </div>
                 </td>
                 <td>
-                    <div class="weline-queue-time">
-                        <div title="@lang{创建时间}">
-                            <w:icon name="plus" size="sm"></w:icon>
-                            <span><?= $queueEsc($queue['create_time'] ?? '') ?></span>
-                        </div>
-                        <if condition="queue.end_at">
-                            <div title="@lang{结束时间}">
-                                <w:icon name="check" size="sm"></w:icon>
-                                <span><?= $queueEsc($queue['end_at'] ?? '') ?></span>
-                            </div>
-                        </if>
+                    <div class="w-queue-table__time">
+                        <span><w:icon name="plus" size="xs" /><?= $queueEsc($queue['create_time'] ?? '') ?></span>
+                        <?php if (!empty($queue['end_at'])): ?><span><w:icon name="check" size="xs" /><?= $queueEsc($queue['end_at']) ?></span><?php endif; ?>
                     </div>
                 </td>
                 <td>
-                    <div class="weline-queue-actions">
-                        <button type="button" class="w-button weline-queue-action-btn weline-queue-show-btn" data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" title="@lang{查看队列详情}" aria-label="@lang{查看队列详情}" data-tone="info" data-variant="outline">
-                            <w:icon name="eye" size="sm"></w:icon>
-                        </button>
-                        <if condition="queue.status == 'running'">
-                            <button type="button" class="w-button weline-queue-action-btn weline-queue-stop-btn" data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" title="@lang{暂停}" data-tone="warning" data-variant="outline">
-                                <w:icon name="pause" size="sm"></w:icon>
-                            </button>
-                        </if>
-                        <if condition="queue.status == 'error'">
-                            <button type="button" class="w-button weline-queue-action-btn weline-queue-retry-btn" data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" title="@lang{重试}" data-tone="primary" data-variant="outline">
-                                <w:icon name="refresh" size="sm"></w:icon>
-                            </button>
-                        </if>
-                        <if condition="queue.status == 'stop'">
-                            <button type="button" class="w-button weline-queue-action-btn weline-queue-continue-btn" data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" title="@lang{继续}" data-tone="success" data-variant="outline">
-                                <w:icon name="play" size="sm"></w:icon>
-                            </button>
-                        </if>
-                        <if condition="queue.finished == 1">
-                            <button type="button" class="w-button weline-queue-action-btn weline-queue-reset-btn" data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" title="@lang{重新执行}" data-tone="neutral" data-variant="outline">
-                                <w:icon name="star" size="sm"></w:icon>
-                            </button>
-                        </if>
-                        <if condition="queue.status == 'pending'">
-                            <button type="button" class="w-button weline-queue-action-btn weline-queue-edit-btn" data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" title="@lang{编辑队列}" aria-label="@lang{编辑队列}" data-tone="primary" data-variant="outline">
-                                <w:icon name="edit" size="sm"></w:icon>
-                            </button>
-                        </if>
-                        <if condition="queue.status != 'running'">
-                            <button type="button" class="w-button weline-queue-action-btn weline-queue-delete-btn" data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" data-queue-name="<?= $queueEsc($queue['name'] ?? '') ?>" title="@lang{删除}" data-tone="danger" data-variant="outline">
-                                <w:icon name="trash" size="sm"></w:icon>
-                            </button>
-                        </if>
+                    <div class="w-queue-table__actions">
+                        <button type="button" class="w-button" data-w-queue-action="show" data-queue-id="<?= $queueId ?>" data-tone="info" data-variant="outline" data-size="sm" aria-label="<?= $queueEsc(__('查看队列详情')) ?>"><w:icon name="eye" size="sm" /></button>
+                        <?php if ($queueStatus === 'running'): ?><button type="button" class="w-button" data-w-queue-action="stop" data-queue-id="<?= $queueId ?>" data-tone="warning" data-variant="outline" data-size="sm" aria-label="<?= $queueEsc(__('暂停')) ?>"><w:icon name="pause" size="sm" /></button><?php endif; ?>
+                        <?php if ($queueStatus === 'error'): ?><button type="button" class="w-button" data-w-queue-action="retry" data-queue-id="<?= $queueId ?>" data-tone="primary" data-variant="outline" data-size="sm" aria-label="<?= $queueEsc(__('重试')) ?>"><w:icon name="refresh" size="sm" /></button><?php endif; ?>
+                        <?php if ($queueStatus === 'stop'): ?><button type="button" class="w-button" data-w-queue-action="continue" data-queue-id="<?= $queueId ?>" data-tone="success" data-variant="outline" data-size="sm" aria-label="<?= $queueEsc(__('继续')) ?>"><w:icon name="play" size="sm" /></button><?php endif; ?>
+                        <?php if (!empty($queue['finished'])): ?><button type="button" class="w-button" data-w-queue-action="reset" data-queue-id="<?= $queueId ?>" data-tone="neutral" data-variant="outline" data-size="sm" aria-label="<?= $queueEsc(__('重新执行')) ?>"><w:icon name="refresh" size="sm" /></button><?php endif; ?>
+                        <?php if ($queueStatus === 'pending'): ?><button type="button" class="w-button" data-w-queue-action="edit" data-queue-id="<?= $queueId ?>" data-tone="primary" data-variant="outline" data-size="sm" aria-label="<?= $queueEsc(__('编辑队列')) ?>"><w:icon name="edit" size="sm" /></button><?php endif; ?>
+                        <?php if ($queueStatus !== 'running'): ?><button type="button" class="w-button" data-w-queue-action="delete" data-queue-id="<?= $queueId ?>" data-queue-name="<?= $queueEsc($queue['name'] ?? '') ?>" data-tone="danger" data-variant="outline" data-size="sm" aria-label="<?= $queueEsc(__('删除')) ?>"><w:icon name="trash" size="sm" /></button><?php endif; ?>
                     </div>
                 </td>
             </tr>
-        </foreach>
-        <?php if (empty($queues)): ?>
-            <tr>
-                <td colspan="7" class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
-                    <div class="weline-queue-empty">
-                        <w:icon name="box" size="sm"></w:icon>
-                        <p><lang>暂无队列数据</lang></p>
-                    </div>
-                </td>
-            </tr>
+        <?php endforeach; ?>
+        <?php if ($queueItems === []): ?>
+            <tr><td colspan="7"><div class="w-empty w-queue-table__empty"><w:icon name="box" size="lg" /><p><lang>暂无队列数据</lang></p></div></td></tr>
         <?php endif; ?>
         </tbody>
     </table>
 </div>
-<?php if (!empty($queueResultModals)): ?>
-    <div class="weline-queue-result-modal-root">
-        <?php foreach ($queueResultModals as $queueResultModalId => $queueResultText): ?>
-            <div class="w-dialog weline-queue-result-modal" data-live-managed="1" id="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>" tabindex="-1" aria-labelledby="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>Label" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
-                <div class="w-dialog__frame modal-dialog-scrollable" data-size="lg">
-                    <div class="w-dialog__surface">
-                        <div class="w-dialog__header">
-                            <h5 class="w-dialog__title" id="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>Label">
-                                <w:icon name="search" size="sm"></w:icon>
-                                <lang>队列结果详情</lang>
-                            </h5>
-                            <button type="button" class="w-button" aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
-                        </div>
-                        <div class="w-dialog__body">
-                            <pre class="weline-queue-result-modal-body"><?= htmlspecialchars($queueResultText, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></pre>
-                        </div>
-                        <div class="w-dialog__footer">
-                            <button type="button" class="w-button" data-queue-result-copy="1" data-queue-result-modal-id="<?= htmlspecialchars($queueResultModalId, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
-                                <w:icon name="copy" size="sm"></w:icon>
-                                <lang>复制内容</lang>
-                            </button>
-                            <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-size="sm">
-                                <lang>关闭</lang>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+
+<?php foreach ($queueResultDialogs as $dialogId => $resultText): ?>
+    <section class="w-dialog w-queue-result-dialog" id="<?= $queueEsc($dialogId) ?>" data-w-component="dialog" data-state="closed" tabindex="-1" aria-labelledby="<?= $queueEsc($dialogId) ?>-title" aria-hidden="true" hidden>
+        <div class="w-dialog__frame" data-size="lg">
+            <div class="w-dialog__surface">
+                <header class="w-dialog__header">
+                    <h2 class="w-dialog__title" id="<?= $queueEsc($dialogId) ?>-title"><w:icon name="terminal" size="sm" /><lang>队列结果详情</lang></h2>
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-w-target="#<?= $queueEsc($dialogId) ?>" data-w-close data-tone="quiet" data-size="sm" aria-label="<?= $queueEsc(__('关闭')) ?>"><w:icon name="close" size="sm" /></button>
+                </header>
+                <div class="w-dialog__body"><pre class="w-queue-result-dialog__body" data-w-queue-result-body><?= $queueEsc($resultText) ?></pre></div>
+                <footer class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-queue-copy-result data-w-queue-result-id="<?= $queueEsc($dialogId) ?>" data-tone="primary" data-variant="outline" data-size="sm"><w:icon name="copy" size="sm" /><lang>复制内容</lang></button>
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-w-target="#<?= $queueEsc($dialogId) ?>" data-tone="neutral" data-size="sm"><lang>关闭</lang></button>
+                </footer>
             </div>
-        <?php endforeach; ?>
-    </div>
+        </div>
+    </section>
+<?php endforeach; ?>
+
+<?php if ($queueLastPage > 1): ?>
+    <nav class="w-queue-pagination" aria-label="<?= $queueEsc(__('队列分页')) ?>">
+        <ul class="w-pagination">
+            <li class="w-pagination__item"><?php if ($queuePage <= 1): ?><span class="w-pagination__link" aria-disabled="true"><lang>上一页</lang></span><?php else: ?><a class="w-pagination__link" href="<?= $queueEsc($queuePageUrl($queuePage - 1)) ?>"><lang>上一页</lang></a><?php endif; ?></li>
+            <?php for ($pageNumber = max(1, $queuePage - 2); $pageNumber <= min($queueLastPage, $queuePage + 2); $pageNumber++): ?>
+                <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $queueEsc($queuePageUrl($pageNumber)) ?>" <?= $pageNumber === $queuePage ? 'aria-current="page"' : '' ?>><?= $pageNumber ?></a></li>
+            <?php endfor; ?>
+            <li class="w-pagination__item"><?php if ($queuePage >= $queueLastPage): ?><span class="w-pagination__link" aria-disabled="true"><lang>下一页</lang></span><?php else: ?><a class="w-pagination__link" href="<?= $queueEsc($queuePageUrl($queuePage + 1)) ?>"><lang>下一页</lang></a><?php endif; ?></li>
+        </ul>
+        <span class="w-queue-pagination__summary"><?= $queueEsc(__('第 %{1} / %{2} 页，共 %{3} 条', [$queuePage, $queueLastPage, $queueTotalSize])) ?></span>
+    </nav>
 <?php endif; ?>
-{{pagination}}

@@ -12,29 +12,89 @@ $display = static function (mixed $value) use ($escape): string {
     if (is_array($value)) return $escape(json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
     return $escape($value);
 };
+$websiteSelectValue = '0';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
 <section class="commerce-control-center" data-testid="b2b-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
-    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between"><h4 style="--w-mb-sm:0;"><?= $escape($title) ?></h4><span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="end"><span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
     <div class="w-alert" role="status" data-tone="info"><?= $form === [] ? __('此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。') : __('写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。') ?></div>
     <?php if ($form !== []): ?>
         <div class="w-card" data-testid="b2b-<?= $escape($code) ?>-write-form" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $kind === 'quote' ? __('签发并审批报价') : __('新增配置') ?></h5></div><div class="w-card__body">
             <w:form method="post" action="@var($formActionUrl)"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
                 <?php if ($kind === 'group'): ?>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户组 ID') ?></label><input class="w-input" name="group_id" maxlength="64" required></div>
-                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('网站 ID') ?></label><input class="w-input" type="number" min="0" name="website_id" value="0" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                        <w:websites:website:select
+                            id="b2b-cc-group-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('代码') ?></label><input class="w-input" name="code" maxlength="64" required></div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('状态') ?></label><select class="w-select" name="status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
                 <?php elseif ($kind === 'price-list'): ?>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('价目表 ID') ?></label><input class="w-input" name="list_id" maxlength="64" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户组 ID') ?></label><input class="w-input" name="group_id" maxlength="64" required></div>
-                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('网站 ID') ?></label><input class="w-input" type="number" min="0" name="website_id" value="0" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                        <w:websites:website:select
+                            id="b2b-cc-price-list-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('版本') ?></label><input class="w-input" type="number" min="1" name="version" value="1" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('SKU') ?></label><input class="w-input" name="sku" maxlength="128" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('金额（分）') ?></label><input class="w-input" type="number" min="0" name="amount_minor" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('渠道 ID（可选）') ?></label><input class="w-input" name="channel_id" maxlength="64"></div>
                 <?php else: ?>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户 ID') ?></label><input class="w-input" name="customer_id" maxlength="64" required></div>
-                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('网站 ID') ?></label><input class="w-input" type="number" min="0" name="website_id" value="0" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                        <w:websites:website:select
+                            id="b2b-cc-quote-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('SKU') ?></label><input class="w-input" name="sku" maxlength="128" required></div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('零售价（分）') ?></label><input class="w-input" type="number" min="0" name="retail_amount_minor" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('订单引用') ?></label><input class="w-input" name="order_ref" maxlength="64" required></div>

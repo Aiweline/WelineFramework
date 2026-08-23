@@ -253,8 +253,8 @@ class FontSubsetService
 
     private function normalizeChars(string $chars): string
     {
-        // LATIN_BASE + dedupe via charset resolver (same path as language subsets).
-        return $this->charsetResolver->resolve('', $chars);
+        // chars= 只抽属性里的字，不并入 LATIN_BASE / 语言表（语言子集仍走 resolve()）。
+        return $this->charsetResolver->uniqueOnly($chars);
     }
 
     /**

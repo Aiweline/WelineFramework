@@ -127,7 +127,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     <h5 class="section-title">文件内容</h5>
     
     <!-- 标签页导航 -->
-    <ul class="nav w-tabs__list" id="fileTabs" role="tablist" data-w-component="tabs">
+    <ul class="w-nav w-tabs__list" id="fileTabs" role="tablist" data-w-component="tabs">
         <li role="presentation">
             <button class="w-tabs__tab" id="sticker-tab" type="button" role="tab" aria-controls="sticker-content" aria-selected="true" data-w-target="#sticker-content" data-state="active">
                 Sticker文件
@@ -186,7 +186,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-bottom: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .sticker-detail-section {
+[data-theme="dark"] .sticker-detail-section {
     border-bottom-color: #2d3448;
 }
 
@@ -199,7 +199,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-bottom: 2px solid #0bb197;
 }
 
-[data-theme-mode="dark"] .section-title {
+[data-theme="dark"] .section-title {
     color: #e9ecef;
 }
 
@@ -215,7 +215,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     font-size: 14px;
 }
 
-[data-theme-mode="dark"] .info-item label {
+[data-theme="dark"] .info-item label {
     color: #8590a5;
 }
 
@@ -229,7 +229,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     margin-top: 5px;
 }
 
-[data-theme-mode="dark"] .error-message {
+[data-theme="dark"] .error-message {
     background-color: #2a1a1a;
     border-color: #4a2a2a;
     color: #fc8181;
@@ -248,7 +248,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-radius: 6px;
 }
 
-[data-theme-mode="dark"] .action-item {
+[data-theme="dark"] .action-item {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -270,7 +270,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     color: #74788d;
 }
 
-[data-theme-mode="dark"] .action-position {
+[data-theme="dark"] .action-position {
     color: #8590a5;
 }
 
@@ -298,8 +298,8 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     font-size: 14px;
 }
 
-[data-theme-mode="dark"] .action-target label, 
-[data-theme-mode="dark"] .action-code label {
+[data-theme="dark"] .action-target label, 
+[data-theme="dark"] .action-code label {
     color: #8590a5;
 }
 
@@ -317,7 +317,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     overflow-y: auto;
 }
 
-[data-theme-mode="dark"] .code-block {
+[data-theme="dark"] .code-block {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -330,7 +330,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     font-family: 'Courier New', Courier, monospace;
 }
 
-[data-theme-mode="dark"] .code-block code {
+[data-theme="dark"] .code-block code {
     color: #e9ecef;
 }
 
@@ -340,7 +340,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     margin-bottom: 15px;
 }
 
-[data-theme-mode="dark"] .nav-tabs {
+[data-theme="dark"] .nav-tabs {
     border-bottom-color: #2d3448;
 }
 
@@ -355,7 +355,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     transition: all 0.2s ease-in-out;
 }
 
-[data-theme-mode="dark"] .nav-link {
+[data-theme="dark"] .nav-link {
     color: #8590a5;
 }
 
@@ -364,7 +364,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-color: #eff2f7;
 }
 
-[data-theme-mode="dark"] .nav-link:hover {
+[data-theme="dark"] .nav-link:hover {
     border-color: #2d3448;
 }
 
@@ -375,7 +375,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-bottom-color: #fff;
 }
 
-[data-theme-mode="dark"] .nav-link.active {
+[data-theme="dark"] .nav-link.active {
     background-color: #252b3b;
     border-color: #2d3448;
     border-bottom-color: #252b3b;
@@ -388,7 +388,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     padding: 15px;
 }
 
-[data-theme-mode="dark"] .tab-content {
+[data-theme="dark"] .tab-content {
     background-color: #252b3b;
     border-color: #2d3448;
 }
@@ -417,36 +417,36 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     white-space: nowrap;
 }
 
-.badge-primary { 
+.weline-badge-primary { 
     background-color: #0bb197; 
     color: white; 
 }
 
-.badge-info { 
+.weline-badge-info { 
     background-color: #4aa3ff; 
     color: white; 
 }
 
-.badge-success { 
+.weline-badge-success { 
     background-color: #0ac074; 
     color: white; 
 }
 
-.badge-warning { 
+.weline-badge-warning { 
     background-color: #fcb92c; 
     color: #212529; 
 }
 
-[data-theme-mode="dark"] .badge-warning {
+[data-theme="dark"] .weline-badge-warning {
     color: #e9ecef;
 }
 
-.badge-danger { 
+.weline-badge-danger { 
     background-color: #ff3d60; 
     color: white; 
 }
 
-.badge-secondary { 
+.weline-badge-secondary { 
     background-color: #74788d; 
     color: white; 
 }
@@ -462,7 +462,7 @@ code {
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] code {
+[data-theme="dark"] code {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -475,7 +475,7 @@ code {
     color: #74788d !important;
 }
 
-[data-theme-mode="dark"] .text-secondary {
+[data-theme="dark"] .text-secondary {
     color: #8590a5 !important;
 }
 
@@ -483,7 +483,7 @@ code {
     color: #74788d !important;
 }
 
-[data-theme-mode="dark"] .text-muted {
+[data-theme="dark"] .text-muted {
     color: #8590a5 !important;
 }
 </style>

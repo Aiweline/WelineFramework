@@ -294,8 +294,7 @@ class File extends BinaryStream {
     }
 
     $gids = array(
-      0, // .notdef
-      1, // .null
+      0, // .notdef — required; do NOT force source gid 1 (often "space" in CJK fonts, not .null)
     );
 
     foreach ($subset as $code) {

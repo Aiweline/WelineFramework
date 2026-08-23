@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Setup;
 
 use Weline\Framework\App\Exception;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\UpgradeInterface;
@@ -12,16 +13,31 @@ use Weline\Backend\Setup\Ui\IconDataMigrator;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ProductPageLayoutNormalizer;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\Scoped\ThemeScopeMigrationService;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.0.0';
+    public const VERSION = '2.1.1';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
         $this->backfillDefaultAreaThemes();
         $this->relocateProductBestsellersFromSidebar();
         $this->migrateSemanticIcons();
+        $this->migrateScopedThemeInheritance();
+    }
+
+    private function migrateScopedThemeInheritance(): void
+    {
+        try {
+            $result = ObjectManager::getInstance(ThemeScopeMigrationService::class)->apply();
+            Env::log_info(
+                'theme_scope_migration',
+                (string)(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'),
+            );
+        } catch (\Throwable $e) {
+            throw new Exception(__('Theme 2.1.1 Scope 继承迁移失败：%{1}', [$e->getMessage()]), 0, $e);
+        }
     }
 
     private function migrateSemanticIcons(): void

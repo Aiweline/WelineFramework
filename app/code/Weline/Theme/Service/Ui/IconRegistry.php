@@ -11,7 +11,7 @@ final class IconRegistry
         'home' => '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5M9.5 20v-6h5v6"/>',
         'user' => '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3.1-6 7-6s6.3 2 7 6"/>',
         'users' => '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c.6-4 2.7-6 6-6s5.4 2 6 6M15 15c3 0 4.8 1.7 5.3 5"/>',
-        'settings' => '<circle cx="12" cy="12" r="3"/><path d="M19 13.5v-3l-2.2-.7-.7-1.6 1.1-2-2.1-2.1-2 1.1-1.6-.7L10.5 2h-3l-.7 2.2-1.6.7-2-1.1-2.1 2.1 1.1 2-.7 1.6L0 10.5v3l2.2.7.7 1.6-1.1 2 2.1 2.1 2-1.1 1.6.7.7 2.2h3l.7-2.2 1.6-.7 2 1.1 2.1-2.1-1.1-2 .7-1.6z" transform="translate(2 -0.5) scale(.83)"/>',
+        'settings' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
         'search' => '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
         'plus' => '<path d="M12 5v14M5 12h14"/>',
         'minus' => '<path d="M5 12h14"/>',
@@ -116,6 +116,21 @@ final class IconRegistry
         'cash' => '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M7 9h.01M17 15h.01"/>',
         'beaker' => '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M8 15h8"/>',
         'sort' => '<path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/>',
+        'fullscreen' => '<path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/>',
+        'fullscreen-exit' => '<path d="M3 8h5V3M21 8h-5V3M3 16h5v5M21 16h-5v5"/>',
+        'cursor' => '<path d="m5 3 13 9-6 1 3 6-3 2-3-6-4 4z"/>',
+        'layout-header' => '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
+        'layout-footer' => '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15h18"/>',
+        'layout-sidebar' => '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>',
+        'layout-row' => '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M3 16h18"/>',
+        'layout-column' => '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M10 3v18M16 3v18"/>',
+        'slideshow' => '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="m10 8 5 3-5 3zM8 22h8M12 18v4"/>',
+        'inbox' => '<path d="M4 4h16l2 11v5H2v-5zM3 15h5l2 2h4l2-2h5"/>',
+        'stack' => '<path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/>',
+        'drag' => '<path d="M8 5h.01M8 12h.01M8 19h.01M16 5h.01M16 12h.01M16 19h.01" stroke-width="3"/>',
+        'copyright' => '<circle cx="12" cy="12" r="9"/><path d="M15.5 9.5a4 4 0 1 0 0 5"/>',
+        'quote' => '<path d="M5 10h5v7H3v-5c0-4 2-6 6-7M16 10h5v7h-7v-5c0-4 2-6 6-7"/>',
+        'widgets' => '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h4v4h-7z"/>',
     ];
 
     public function names(): array
@@ -167,7 +182,7 @@ final class IconRegistry
         }
 
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            . '<svg xmlns="http://www.w3.org/2000/svg" style="display:none">'
+            . '<svg xmlns="http://www.w3.org/2000/svg" hidden aria-hidden="true">'
             . implode('', $symbols)
             . "</svg>\n";
     }

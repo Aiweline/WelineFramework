@@ -9,13 +9,15 @@ $models = $this->getData('models') ?? [];
 $adapterCount = $this->getData('adapter_count') ?? 0;
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI助手平台 - 科技赋能未来</title>
-    <css>Weline_Frontend::assets/css/bootstrap.min.css</css>
-    <css>Weline_Frontend::assets/css/icons.min.css</css>
+    <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
+    <css>Weline_Theme::ui/weline-foundation.css</css>
+    <css>Weline_Theme::ui/weline-frontend.css</css>
+    <js type="module">Weline_Theme::ui/weline-ui.js</js>
     <style>
         * {
             margin: 0;
@@ -137,7 +139,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         /* 科技感按钮 */
-        .btn-tech {
+        .weline-btn-tech {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             color: white;
@@ -150,7 +152,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
         }
 
-        .btn-tech::before {
+        .weline-btn-tech::before {
             content: '';
             position: absolute;
             top: 50%;
@@ -163,12 +165,12 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             transition: width 0.6s, height 0.6s;
         }
 
-        .btn-tech:hover {
+        .weline-btn-tech:hover {
             transform: translateY(-3px);
             box-shadow: 0 0 40px rgba(102, 126, 234, 0.8), 0 5px 20px rgba(0, 0, 0, 0.3);
         }
 
-        .btn-tech:hover::before {
+        .weline-btn-tech:hover::before {
             width: 300px;
             height: 300px;
         }
@@ -427,7 +429,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         <div class="w-container w-text" data-align="center">
             <h1 class="hero-title fade-in">AI助手工具平台</h1>
             <p class="hero-subtitle fade-in">智能对话 · 场景适配 · 多模型支持</p>
-            <a href="<?= $this->getUrl('*/frontend/chat') ?>" class="w-button btn-tech fade-in">
+            <a href="<?= $this->getUrl('*/frontend/chat') ?>" class="w-button weline-btn-tech fade-in">
                 <w:icon name="circle" size="sm"></w:icon> 立即开始
             </a>
         </div>
@@ -498,7 +500,6 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         </div>
     </div>
 
-    <js>Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js</js>
     <script>
         // 创建粒子背景
         function createParticles() {

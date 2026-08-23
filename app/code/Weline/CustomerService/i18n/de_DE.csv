@@ -122,7 +122,7 @@ settings,settings
 分钟,Minuten
 最长,Längste
 秒,Sekunden
-欢迎使用客服服务,欢迎使用客服服务
+客服服务,Kundenservice
 我的语言,"Meine Sprache"
 显示模式,Anzeigemodus
 欢迎使用客服服务！,"Willkommen beim Kundenservice!"
@@ -133,13 +133,13 @@ settings,settings
 原文+译文,"Original + Übersetzung"
 仅显示原文,"Nur Original"
 客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
-鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
+欢迎使用客服服务,欢迎使用客服服务
+在线客服,在线客服
 "AI 智能客服",KI-Service
-鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
+离线,离线
 请输入有效的邮箱地址,"Bitte geben Sie eine gültige E-Mail-Adresse ein"
 会话未初始化，请刷新页面重试,"Sitzung nicht initialisiert"
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
-客服服务,Kundenservice
 检测中...,Prüfung...
 接收客服回复与优惠通知,接收客服回复与优惠通知
 留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
@@ -247,3 +247,5 @@ ID,ID
 翻译：,Übersetzung:
 "客服服务 - 邮箱绑定验证","Kundenservice - E-Mail-Bestätigung"
 客服系统,Kundenservice-System
+鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
+鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠

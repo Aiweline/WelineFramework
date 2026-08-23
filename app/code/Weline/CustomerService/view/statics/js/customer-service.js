@@ -230,7 +230,7 @@ const CustomerServiceWidget = (function() {
 
     function updateWidgetLocaleText() {
         const textMap = {
-            'cs-title-text': __('欢迎使用客服服务'),
+            'cs-title-text': __('客服服务'),
             'cs-locale-label-text': __('我的语言'),
             'cs-display-mode-label-text': __('显示模式'),
             'cs-welcome-title': __('欢迎使用客服服务！'),
@@ -810,40 +810,42 @@ const CustomerServiceWidget = (function() {
     }
 
     /**
-     * 閺囧瓨鏌婇悩鑸碘偓浣瑰瘹缁€鍝勬珤 UI
-     * online=缂佽儻澹? ai=閽冩繆澹? offline=閻忔媽澹?
+     * 更新在线状态指示器 UI
+     * online=在线, ai=AI, offline=离线
      */
     function updateStatusIndicator() {
         const dot = document.getElementById('cs-status-dot');
         const label = document.getElementById('cs-status-label');
         if (!dot) return;
 
-        // 缁夊娅庨弮褏娈戦悩鑸碘偓浣鸿
-        dot.classList.remove('cs-status-online', 'cs-status-ai', 'cs-status-offline');
+        const statusClasses = ['cs-status-online', 'cs-status-ai', 'cs-status-offline'];
+        dot.classList.remove(...statusClasses);
+        if (label) {
+            label.classList.remove(...statusClasses);
+            label.style.backgroundColor = '';
+            label.style.color = '';
+        }
 
         switch (state.serviceStatus) {
             case 'online':
                 dot.classList.add('cs-status-online');
                 if (label) {
-                    label.textContent = __('鐎广垺婀囬崷銊у殠');
-                    label.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
-                    label.style.color = '#16a34a';
+                    label.classList.add('cs-status-online');
+                    label.textContent = __('在线客服');
                 }
                 break;
             case 'ai':
                 dot.classList.add('cs-status-ai');
                 if (label) {
+                    label.classList.add('cs-status-ai');
                     label.textContent = __('AI 智能客服');
-                    label.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
-                    label.style.color = '#2563eb';
                 }
                 break;
             default:
                 dot.classList.add('cs-status-offline');
                 if (label) {
-                    label.textContent = __('鐎广垺婀囩粋鑽ゅ殠');
-                    label.style.backgroundColor = 'rgba(156, 163, 175, 0.15)';
-                    label.style.color = '#9ca3af';
+                    label.classList.add('cs-status-offline');
+                    label.textContent = __('离线');
                 }
                 break;
         }

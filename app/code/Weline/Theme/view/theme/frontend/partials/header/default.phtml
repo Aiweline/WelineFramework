@@ -30,13 +30,18 @@ $extraClasses = array_values(array_filter(
 $renderLinks = static function (array $items): string {
     $html = '';
     foreach ($items as $item) {
-        if (!is_array($item)) continue;
+        if (!is_array($item)) {
+            continue;
+        }
         $text = htmlspecialchars((string)($item['text'] ?? ''), ENT_QUOTES, 'UTF-8');
         $url = htmlspecialchars((string)($item['url'] ?? '#'), ENT_QUOTES, 'UTF-8');
         $html .= '<li><a class="w-frontend-nav__link" href="' . $url . '">' . $text . '</a></li>';
     }
     return $html;
 };
+$mobileNavIdSuffix = (string)spl_object_id($this);
+$mobileNavPanelId = 'w-frontend-mobile-nav-panel-' . $mobileNavIdSuffix;
+$mobileNavTitleId = 'w-frontend-mobile-nav-title-' . $mobileNavIdSuffix;
 ?>
 <a class="w-visually-hidden w-skip-link" href="#main-content"><?= htmlspecialchars((string)__('跳转到主要内容'), ENT_QUOTES, 'UTF-8') ?></a>
 <header class="w-frontend-header <?= htmlspecialchars(implode(' ', $extraClasses), ENT_QUOTES, 'UTF-8') ?>">
@@ -48,6 +53,7 @@ $renderLinks = static function (array $items): string {
 
         <nav class="w-frontend-nav__desktop" aria-label="<?= htmlspecialchars((string)__('主导航'), ENT_QUOTES, 'UTF-8') ?>">
             <ul class="w-frontend-nav__links"><?= $renderLinks($navItems) ?></ul>
+            <w:hook>header-nav-links</w:hook>
         </nav>
 
         <?php if ($showSearch): ?>
@@ -59,15 +65,56 @@ $renderLinks = static function (array $items): string {
         <?php endif; ?>
 
         <div class="w-frontend-nav__actions">
+            <w:hook>header-location-selector</w:hook>
             <w:hook>header-language-switcher</w:hook>
             <w:hook>header-currency-switcher</w:hook>
-            <?php if ($showUserMenu): ?><w:hook>header-account</w:hook><?php endif; ?>
+            <span class="w-frontend-nav__actions-desktop">
+                <w:hook>header-orders</w:hook>
+                <w:hook>header-cart</w:hook>
+                <w:hook>header-user-info</w:hook>
+                <?php if ($showUserMenu): ?><w:hook>header-account</w:hook><?php endif; ?>
+            </span>
         </div>
 
-        <details class="w-frontend-mobile-nav">
-            <summary class="w-button" data-tone="quiet" data-size="sm"><w:icon name="menu" /><span class="w-visually-hidden"><?= htmlspecialchars((string)__('打开导航'), ENT_QUOTES, 'UTF-8') ?></span></summary>
-            <nav aria-label="<?= htmlspecialchars((string)__('移动导航'), ENT_QUOTES, 'UTF-8') ?>"><ul class="w-frontend-mobile-nav__links"><?= $renderLinks($navItems) ?></ul></nav>
-        </details>
+        <div class="w-frontend-mobile-nav" data-w-component="popover" data-w-placement="bottom-end" data-w-anchor-mode="element">
+            <button class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" type="button"
+                    data-w-popover-trigger aria-expanded="false" aria-haspopup="dialog"
+                    aria-controls="<?= htmlspecialchars($mobileNavPanelId, ENT_QUOTES, 'UTF-8') ?>"
+                    aria-label="<?= htmlspecialchars((string)__('打开导航'), ENT_QUOTES, 'UTF-8') ?>">
+                <w:icon name="menu" /><span class="w-visually-hidden"><?= htmlspecialchars((string)__('打开导航'), ENT_QUOTES, 'UTF-8') ?></span>
+            </button>
+            <div id="<?= htmlspecialchars($mobileNavPanelId, ENT_QUOTES, 'UTF-8') ?>"
+                 class="w-popover w-frontend-mobile-nav__panel"
+                 data-w-popover-panel data-w-viewport-padding="12" data-state="closed"
+                 role="dialog" aria-modal="false"
+                 aria-labelledby="<?= htmlspecialchars($mobileNavTitleId, ENT_QUOTES, 'UTF-8') ?>"
+                 aria-hidden="true" hidden>
+                <div class="w-frontend-mobile-nav__header">
+                    <h2 id="<?= htmlspecialchars($mobileNavTitleId, ENT_QUOTES, 'UTF-8') ?>" class="w-frontend-mobile-nav__title"><?= htmlspecialchars((string)__('导航'), ENT_QUOTES, 'UTF-8') ?></h2>
+                    <button class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" type="button"
+                            data-w-popover-close aria-label="<?= htmlspecialchars((string)__('关闭导航'), ENT_QUOTES, 'UTF-8') ?>">
+                        <w:icon name="close" />
+                    </button>
+                </div>
+                <nav class="w-frontend-mobile-nav__body" aria-label="<?= htmlspecialchars((string)__('移动导航'), ENT_QUOTES, 'UTF-8') ?>">
+                    <ul class="w-frontend-mobile-nav__links"><?= $renderLinks($navItems) ?></ul>
+                    <w:hook>header-nav-links</w:hook>
+                    <?php if ($showUserMenu): ?>
+                        <div class="w-frontend-mobile-nav__ops">
+                            <w:hook>header-orders</w:hook>
+                            <w:hook>header-cart</w:hook>
+                            <w:hook>header-user-info</w:hook>
+                        </div>
+                        <div class="w-frontend-mobile-nav__account">
+                            <p class="w-frontend-mobile-nav__section-title"><?= htmlspecialchars((string)__('个人中心'), ENT_QUOTES, 'UTF-8') ?></p>
+                            <ul class="w-frontend-mobile-nav__account-links" role="menu">
+                                <w:hook>header-account-links</w:hook>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+                </nav>
+            </div>
+        </div>
     </div>
     <w:hook>Weline_Theme::frontend::partials::header::after</w:hook>
 </header>

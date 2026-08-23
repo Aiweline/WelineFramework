@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Model\WelineTheme;
 
 class ThemeSlotContractService
 {
     private const RESOURCE_TYPES = ['layouts', 'partials', 'components', 'widgets'];
+    private const SENT_WARNING_CONTEXT_KEY = 'theme.slot_contract.sent_warnings';
+    private const MAX_SENT_WARNING_SIGNATURES = 128;
 
     public function __construct(
         private readonly ThemeResourceCatalog $resourceCatalog,
@@ -96,12 +99,17 @@ class ThemeSlotContractService
             return;
         }
 
-        static $sent = [];
+        $sent = RequestContext::get(self::SENT_WARNING_CONTEXT_KEY, []);
+        $sent = is_array($sent) ? $sent : [];
         $signature = $this->buildWarningSignature($warnings, $area);
         if (isset($sent[$signature])) {
             return;
         }
+        if (count($sent) >= self::MAX_SENT_WARNING_SIGNATURES) {
+            return;
+        }
         $sent[$signature] = true;
+        RequestContext::set(self::SENT_WARNING_CONTEXT_KEY, $sent);
 
         \w_msg(
             'theme_slot_contract_missing',

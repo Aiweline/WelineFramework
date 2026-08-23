@@ -24,6 +24,7 @@ return [
 - `register.php` 参数只是第三方模块迁移桥，生产启动不得反向解析它。
 - 架构门禁不把 `register.php` / `etc/module.php` 中的 `Vendor_Module` 资源字符串当作 PHP 内部 API；依赖以 `etc/module.php` 为准，两类文件里的真实 PHP 类引用仍然必须经过边界检查。
 - Composer `require/suggest` 必须与 `requires/optional` 同步；PHP 基线为 `^8.4`。
+- 模块版本约束支持 `*`、精确版本、`=` / `==`、单一比较符 `>=` / `<=` / `>` / `<` / `!=`、同主版本的 `^`，以及同主次版本的 `~`；组合范围不在当前契约内。
 - `requires` 的目标必须存在、启用、版本匹配且整个声明图无环。
 
 ## 跨模块规则

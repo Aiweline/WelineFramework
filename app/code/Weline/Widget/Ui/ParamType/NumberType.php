@@ -25,7 +25,7 @@ class NumberType extends AbstractParamType
         $currentValue = $value ?? $this->getDefaultValue($param);
         $inputAttrs = array_merge([
             'type' => 'number',
-            'class' => 'w-param-input',
+            'class' => 'w-input',
             'id' => $fieldId,
             'name' => $key,
             'value' => $currentValue !== null ? (string)$currentValue : '',

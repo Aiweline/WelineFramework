@@ -123,7 +123,7 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                                     <w:icon name="tag" size="sm"></w:icon>
                                     <lang>AI优化建议</lang>
                                 </h5>
-                                <button type="button" class="w-button btn-refresh-suggestion" id="refreshSuggestion" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>" data-size="sm">
+                                <button type="button" class="w-button weline-btn-refresh-suggestion" id="refreshSuggestion" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>" data-size="sm">
                                     <w:icon name="refresh" size="sm"></w:icon>
                                     <lang>刷新建议</lang>
                                 </button>
@@ -154,7 +154,7 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                                 <h5 class="w-card__title" style="--w-mb:0;">
                                     <w:icon name="circle" size="sm"></w:icon>
                                     <lang>关键词列表</lang>
-                                    <span class="w-badge ms-2" data-w-background="muted"><?= count($keywords) ?></span>
+                                    <span class="w-badge" data-w-background="muted"><?= count($keywords) ?></span>
                                 </h5>
                             </div>
                             <div class="w-card__body">

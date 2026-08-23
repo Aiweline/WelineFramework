@@ -9,9 +9,51 @@ $block = ObjectManager::getInstance(Notification::class);
 $notifications = $block->getNotifications();
 $unreadCount = $block->getUnreadCount();
 $iconRegistry = ObjectManager::getInstance(IconRegistry::class);
+$escape = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$notificationLabel = $escape(__('通知'));
+$unreadLabel = $escape(__('未读通知'));
+$closeLabel = $escape(__('关闭通知'));
+$emptyLabel = $escape(__('暂无通知'));
+$allLabel = $escape(__('查看全部'));
+$subscriptionLabel = $escape(__('管理订阅'));
+$allUrl = $escape($this->getBackendUrl('system/backend/notification'));
+$subscriptionUrl = $escape($this->getBackendUrl('system/backend/notificationsubscription'));
+$triggerBadgeHtml = '';
+$headerBadgeHtml = '';
+if ($unreadCount > 0) {
+    $displayUnreadCount = $unreadCount > 99 ? '99+' : (string)(int)$unreadCount;
+    $triggerBadgeHtml = '<span class="w-notification-trigger__badge" aria-label="' . $unreadLabel . '">' . $displayUnreadCount . '</span>';
+    $headerBadgeHtml = '<span class="w-badge" data-tone="info">' . (int)$unreadCount . '</span>';
+}
+
+$notificationsHtml = '';
+if ($notifications === []) {
+    $notificationsHtml = '<div class="w-empty-state" role="status">'
+        . $iconRegistry->render('bell', 'lg')
+        . '<p>' . $emptyLabel . '</p></div>';
+} else {
+    foreach ($notifications as $notification) {
+        $type = strtolower((string)($notification['type'] ?? 'info'));
+        $notificationId = (int)($notification['notification_id'] ?? 0);
+        $detailUrl = $escape($this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]));
+        $isRead = (bool)($notification['is_read'] ?? false);
+        $content = strip_tags((string)($notification['content'] ?? ''));
+        $shortContent = mb_substr($content, 0, 80) . (mb_strlen($content) > 80 ? '…' : '');
+        $tone = in_array($type, ['success', 'warning', 'error', 'urgent', 'info'], true) ? $type : 'info';
+        $notificationsHtml .= '<a class="w-menu__item w-notification-item" role="menuitem" href="' . $detailUrl . '" data-state="' . ($isRead ? 'read' : 'unread') . '">'
+            . '<span class="w-notification-item__icon" data-tone="' . $tone . '">'
+            . $iconRegistry->render($block->getTypeIcon($type), 'sm')
+            . '</span><span class="w-notification-item__content">'
+            . '<strong>' . $escape($notification['title'] ?? '') . '</strong>'
+            . '<span>' . $escape($shortContent) . '</span>'
+            . '<small>' . $escape($notification['notification_time'] ?? '') . '</small>'
+            . '</span></a>';
+    }
+}
 ?>
-<div class="w-backend-topbar__menu" data-w-component="menu" data-w-placement="bottom-end">
+<div class="w-backend-topbar__menu w-menu-root" data-w-component="menu" data-w-placement="bottom-end" data-w-anchor-mode="element">
     <button
+        id="w-backend-notification-trigger"
         class="w-button w-notification-trigger"
         data-tone="quiet"
         data-size="sm"
@@ -19,52 +61,32 @@ $iconRegistry = ObjectManager::getInstance(IconRegistry::class);
         data-w-menu-trigger
         aria-expanded="false"
         aria-controls="w-backend-notification-menu"
-        aria-label="<?= htmlspecialchars((string)__('通知'), ENT_QUOTES, 'UTF-8') ?>"
+        aria-label="<?= $notificationLabel ?>"
     >
         <w:icon name="bell" />
-        <?php if ($unreadCount > 0): ?>
-            <span class="w-notification-trigger__badge" aria-label="<?= htmlspecialchars((string)__('未读通知'), ENT_QUOTES, 'UTF-8') ?>"><?= $unreadCount > 99 ? '99+' : (int)$unreadCount ?></span>
-        <?php endif; ?>
+        <?php echo $triggerBadgeHtml; ?>
     </button>
-    <div id="w-backend-notification-menu" class="w-menu w-notification-menu" data-w-menu-panel role="menu" hidden>
+    <div id="w-backend-notification-menu" class="w-menu w-notification-menu" data-w-menu-panel data-state="closed" role="menu" aria-labelledby="w-backend-notification-trigger" aria-hidden="true" hidden>
         <div class="w-notification-menu__header">
-            <strong><?= htmlspecialchars((string)__('通知'), ENT_QUOTES, 'UTF-8') ?></strong>
-            <?php if ($unreadCount > 0): ?><span class="w-badge" data-tone="info"><?= (int)$unreadCount ?></span><?php endif; ?>
+            <strong><?= $notificationLabel ?></strong>
+            <span class="w-notification-menu__header-actions">
+                <?php echo $headerBadgeHtml; ?>
+                <button
+                    class="w-button w-notification-menu__close"
+                    data-tone="quiet"
+                    data-size="sm"
+                    type="button"
+                    data-w-menu-close
+                    aria-label="<?= $closeLabel ?>"
+                ><w:icon name="close" size="sm" /></button>
+            </span>
         </div>
         <div class="w-notification-menu__list">
-            <?php if ($notifications === []): ?>
-                <div class="w-empty-state" role="status">
-                    <w:icon name="bell" size="lg" />
-                    <p><?= htmlspecialchars((string)__('暂无通知'), ENT_QUOTES, 'UTF-8') ?></p>
-                </div>
-            <?php else: ?>
-                <?php foreach ($notifications as $notification): ?>
-                    <?php
-                    $type = (string)($notification['type'] ?? 'info');
-                    $notificationId = (int)($notification['notification_id'] ?? 0);
-                    $detailUrl = $this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]);
-                    $isRead = (bool)($notification['is_read'] ?? false);
-                    $content = strip_tags((string)($notification['content'] ?? ''));
-                    ?>
-                    <a
-                        class="w-menu__item w-notification-item"
-                        role="menuitem"
-                        href="<?= htmlspecialchars($detailUrl, ENT_QUOTES, 'UTF-8') ?>"
-                        data-state="<?= $isRead ? 'read' : 'unread' ?>"
-                    >
-                        <span class="w-notification-item__icon" data-tone="<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?>"><?= $iconRegistry->render($block->getTypeIcon($type), 'sm') ?></span>
-                        <span class="w-notification-item__content">
-                            <strong><?= htmlspecialchars((string)($notification['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                            <span><?= htmlspecialchars(mb_substr($content, 0, 80), ENT_QUOTES, 'UTF-8') ?><?= mb_strlen($content) > 80 ? '…' : '' ?></span>
-                            <small><?= htmlspecialchars((string)($notification['notification_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
-                        </span>
-                    </a>
-                <?php endforeach; ?>
-            <?php endif; ?>
+            <?php echo $notificationsHtml; ?>
         </div>
         <div class="w-notification-menu__footer">
-            <a class="w-button" data-size="sm" href="<?= htmlspecialchars($this->getBackendUrl('system/backend/notification'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)__('查看全部'), ENT_QUOTES, 'UTF-8') ?></a>
-            <a class="w-button" data-size="sm" data-tone="neutral" href="<?= htmlspecialchars($this->getBackendUrl('system/backend/notificationsubscription'), ENT_QUOTES, 'UTF-8') ?>"><w:icon name="settings" size="sm" /><span class="w-visually-hidden"><?= htmlspecialchars((string)__('管理订阅'), ENT_QUOTES, 'UTF-8') ?></span></a>
+            <a class="w-button" data-size="sm" href="<?= $allUrl ?>"><?= $allLabel ?></a>
+            <a class="w-button" data-size="sm" data-tone="neutral" href="<?= $subscriptionUrl ?>"><w:icon name="settings" size="sm" /><span class="w-visually-hidden"><?= $subscriptionLabel ?></span></a>
         </div>
     </div>
 </div>

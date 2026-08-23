@@ -6,9 +6,15 @@ require dirname(__DIR__, 7) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR 
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
+use Weline\Theme\Model\ThemeScopePatch;
+use Weline\Theme\Model\ThemeScopeRelease;
+use Weline\Theme\Model\ThemeScopeRevision;
+use Weline\Theme\Model\ThemeScopeWorkspace;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
@@ -145,12 +151,15 @@ function snapshot_theme_editor_fixture(
 
 function dashboard_identity(int $viewId, int $websiteId): array
 {
-    return [
-        'layout_option' => DashboardView::LAYOUT_OPTION,
-        'scope' => 'dashboard_view:' . $viewId,
-        'target_type' => DashboardView::TARGET_TYPE_WEBSITE,
-        'target_id' => $websiteId,
-    ];
+    /** @var DashboardView $view */
+    $view = clone ObjectManager::getInstance(DashboardView::class);
+    $view->clearData()->clearQuery()->load($viewId);
+    if ($view->getViewId() !== $viewId || $view->getWebsiteId() !== $websiteId) {
+        fail('Dashboard layout identity cannot resolve its Website Scope.');
+    }
+    /** @var DashboardViewService $dashboardViews */
+    $dashboardViews = ObjectManager::getInstance(DashboardViewService::class);
+    return $dashboardViews->layoutIdentity($view)->toArray();
 }
 
 function cleanup_dashboard_identity_fixture(
@@ -343,6 +352,233 @@ function prepare_dashboard_identities_fixture(
     ];
 }
 
+/** @param class-string<\Weline\Framework\Database\Model> $modelClass */
+function delete_theme_scope_rows(string $modelClass, string $field, int $workspaceId): int
+{
+    $model = clone ObjectManager::getInstance($modelClass);
+    $rows = $model->clearData()->clearQuery()
+        ->where($field, $workspaceId)
+        ->select()
+        ->fetchArray();
+    $count = is_array($rows) ? count($rows) : 0;
+    if ($count === 0) {
+        return 0;
+    }
+    $model->getConnection()->getQuery()
+        ->table($model->getTable())
+        ->where($field, $workspaceId)
+        ->delete()
+        ->fetch();
+
+    return $count;
+}
+
+/** @param list<string> $scopes */
+function cleanup_theme_scope_workspaces(array $scopes): array
+{
+    $deleted = ['patches' => 0, 'revisions' => 0, 'releases' => 0, 'workspaces' => 0];
+    foreach (array_values(array_unique($scopes)) as $scope) {
+        if (!str_starts_with($scope, 'e2e-theme-scope-')) {
+            throw new RuntimeException('Refusing Theme Scope cleanup outside its owned namespace.');
+        }
+        /** @var ThemeScopeWorkspace $workspaceModel */
+        $workspaceModel = clone ObjectManager::getInstance(ThemeScopeWorkspace::class);
+        $rows = $workspaceModel->clearData()->clearQuery()
+            ->where(ThemeScopeWorkspace::schema_fields_SCOPE, $scope)
+            ->select()
+            ->fetchArray();
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $workspaceId = (int)($row[ThemeScopeWorkspace::schema_fields_ID] ?? 0);
+            if ($workspaceId <= 0) {
+                continue;
+            }
+            $deleted['patches'] += delete_theme_scope_rows(
+                ThemeScopePatch::class,
+                ThemeScopePatch::schema_fields_WORKSPACE_ID,
+                $workspaceId,
+            );
+            $deleted['revisions'] += delete_theme_scope_rows(
+                ThemeScopeRevision::class,
+                ThemeScopeRevision::schema_fields_WORKSPACE_ID,
+                $workspaceId,
+            );
+            $deleted['releases'] += delete_theme_scope_rows(
+                ThemeScopeRelease::class,
+                ThemeScopeRelease::schema_fields_WORKSPACE_ID,
+                $workspaceId,
+            );
+            $workspaceModel->getConnection()->getQuery()
+                ->table($workspaceModel->getTable())
+                ->where(ThemeScopeWorkspace::schema_fields_ID, $workspaceId)
+                ->delete()
+                ->fetch();
+            $deleted['workspaces']++;
+        }
+    }
+
+    return $deleted;
+}
+
+/** @return array{website_code:string,store_code:string,channel_code:string,scopes:array<string,string>} */
+function theme_scope_fixture_identity(string $token): array
+{
+    $websiteCode = 'e2e-theme-scope-' . str_replace('_', '-', $token);
+    $storeCode = 'scope_store';
+    $channelCode = 'scope_channel';
+    /** @var ScopeHierarchyInterface $scopes */
+    $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+
+    return [
+        'website_code' => $websiteCode,
+        'store_code' => $storeCode,
+        'channel_code' => $channelCode,
+        'scopes' => [
+            'website' => $scopes->contextFromIdentity(ScopeIdentity::website(1, $websiteCode))->storageScope,
+            'store' => $scopes->contextFromIdentity(
+                ScopeIdentity::store(1, $websiteCode, $storeCode, ScopeIdentity::MODE_NORMAL),
+            )->storageScope,
+            'channel' => $scopes->contextFromIdentity(
+                ScopeIdentity::channel(
+                    1,
+                    $websiteCode,
+                    $storeCode,
+                    $channelCode,
+                    ScopeIdentity::MODE_NORMAL,
+                ),
+            )->storageScope,
+        ],
+    ];
+}
+
+function cleanup_theme_scope_hierarchy(int $themeId, string $pageType, string $token): array
+{
+    $fixture = theme_scope_fixture_identity($token);
+    $websiteCode = $fixture['website_code'];
+    if (!str_starts_with($websiteCode, 'e2e-theme-scope-')) {
+        throw new RuntimeException('Refusing Theme Scope hierarchy cleanup outside its owned namespace.');
+    }
+
+    /** @var ThemeLayout $layoutModel */
+    $layoutModel = clone ObjectManager::getInstance(ThemeLayout::class);
+    /** @var ThemeLayoutVersion $versionModel */
+    $versionModel = clone ObjectManager::getInstance(ThemeLayoutVersion::class);
+    foreach ($fixture['scopes'] as $scope) {
+        cleanup_theme_editor_fixture($layoutModel, $versionModel, $themeId, $pageType, [
+            'layout_option' => 'default',
+            'scope' => $scope,
+            'target_type' => 'global',
+            'target_id' => 0,
+        ]);
+    }
+    $deletedScopes = cleanup_theme_scope_workspaces(array_values($fixture['scopes']));
+
+    /** @var Website $website */
+    $website = clone ObjectManager::getInstance(Website::class);
+    $row = $website->clearData()->clearQuery()
+        ->where(Website::schema_fields_CODE, $websiteCode)
+        ->find()
+        ->fetchArray();
+    $websiteId = is_array($row) ? (int)($row[Website::schema_fields_ID] ?? 0) : 0;
+    if ($websiteId > 0) {
+        foreach ([
+            SalesChannel::class,
+            Store::class,
+            WebsiteDomain::class,
+            WebsiteCurrency::class,
+            WebsiteLanguage::class,
+        ] as $modelClass) {
+            $model = clone ObjectManager::getInstance($modelClass);
+            $model->getConnection()->getQuery()
+                ->table($model->getTable())
+                ->where($modelClass::schema_fields_WEBSITE_ID, $websiteId)
+                ->delete()
+                ->fetch();
+        }
+        $website->getConnection()->getQuery()
+            ->table($website->getTable())
+            ->where(Website::schema_fields_ID, $websiteId)
+            ->where(Website::schema_fields_CODE, $websiteCode)
+            ->delete()
+            ->fetch();
+    }
+
+    return ['success' => true, 'deleted_scopes' => $deletedScopes];
+}
+
+function prepare_theme_scope_hierarchy(int $themeId, string $pageType, string $token): array
+{
+    cleanup_theme_scope_hierarchy($themeId, $pageType, $token);
+    $fixture = theme_scope_fixture_identity($token);
+    $websiteCode = $fixture['website_code'];
+
+    /** @var Website $website */
+    $website = clone ObjectManager::getInstance(Website::class);
+    $website->clearData()->clearQuery()
+        ->setName('E2E 主题作用范围 Website With A Deliberately Long Name ' . $token)
+        ->setCode($websiteCode)
+        ->setUrl('https://' . $websiteCode . '.test')
+        ->setDefaultCurrency('CNY')
+        ->setDefaultLanguage('zh_Hans_CN')
+        ->setDefaultTimezone('Asia/Shanghai')
+        ->setScope('e2e-theme-scope')
+        ->save();
+    $websiteId = $website->getWebsiteId();
+
+    /** @var Store $store */
+    $store = clone ObjectManager::getInstance(Store::class);
+    $store->clearData()->clearQuery()
+        ->setWebsiteId($websiteId)
+        ->setCode($fixture['store_code'])
+        ->setName('E2E 店铺继承范围 Store With A Deliberately Long Name')
+        ->setStoreMode(Store::MODE_NORMAL)
+        ->setIsDefault(false)
+        ->setStatus(true)
+        ->setUrl(null)
+        ->save();
+
+    /** @var SalesChannel $channel */
+    $channel = clone ObjectManager::getInstance(SalesChannel::class);
+    $channel->clearData()->clearQuery()
+        ->setWebsiteId($websiteId)
+        ->setStoreId($store->getStoreId())
+        ->setCode($fixture['channel_code'])
+        ->setName('E2E 渠道继承范围 Channel With A Deliberately Long Name')
+        ->setIsDefault(false)
+        ->setStatus(true)
+        ->save();
+
+    $identities = [
+        'website' => ScopeIdentity::website($websiteId, $websiteCode),
+        'store' => ScopeIdentity::store(
+            $websiteId,
+            $websiteCode,
+            $fixture['store_code'],
+            ScopeIdentity::MODE_NORMAL,
+        ),
+        'channel' => ScopeIdentity::channel(
+            $websiteId,
+            $websiteCode,
+            $fixture['store_code'],
+            $fixture['channel_code'],
+            ScopeIdentity::MODE_NORMAL,
+        ),
+    ];
+    /** @var ScopeHierarchyInterface $scopes */
+    $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+
+    return [
+        'success' => true,
+        'website_id' => $websiteId,
+        'store_id' => $store->getStoreId(),
+        'channel_id' => $channel->getChannelId(),
+        'identities' => array_map(static fn(ScopeIdentity $identity): array => $identity->toArray(), $identities),
+        'scopes' => array_map(
+            static fn(ScopeIdentity $identity): string => $scopes->contextFromIdentity($identity)->storageScope,
+            $identities,
+        ),
+    ];
+}
+
 $payload = read_payload();
 $action = (string)($payload['action'] ?? '');
 $themeId = (int)($payload['theme_id'] ?? 0);
@@ -364,6 +600,16 @@ $identity = resolve_layout_identity($payload);
 $token = fixture_token($payload);
 
 try {
+    if ($action === 'prepare_scope_hierarchy') {
+        output_json(prepare_theme_scope_hierarchy($themeId, $pageType, $token));
+        exit(0);
+    }
+
+    if ($action === 'cleanup_scope_hierarchy') {
+        output_json(cleanup_theme_scope_hierarchy($themeId, $pageType, $token));
+        exit(0);
+    }
+
     if ($action === 'prepare_dashboard_identity') {
         output_json(prepare_dashboard_identity_fixture($layout, $version, $themeId, $token));
         exit(0);

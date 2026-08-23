@@ -18,51 +18,6 @@
 
 $activeTab = $active_tab ?? 'domain_list';
 ?>
-<style>
-.domain-tabs-nav {
-    display: flex;
-    gap: 4px;
-    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
-    padding-bottom: 0;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-}
-.domain-tab {
-    padding: 10px 20px;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    background: transparent;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-weight: 500;
-    transition: all 0.2s;
-    border-radius: 4px 4px 0 0;
-}
-.domain-tab:hover {
-    color: var(--backend-color-primary, #556ee6);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-}
-.domain-tab.active {
-    color: var(--backend-color-primary, #556ee6);
-    border-bottom-color: var(--backend-color-primary, #556ee6);
-    background: transparent;
-}
-.account-card {
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
-    transition: box-shadow 0.2s;
-}
-.account-card:hover {
-    box-shadow: var(--backend-shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
-}
-.status-badge {
-    font-size: 0.75rem;
-    padding: 0.2em 0.6em;
-    border-radius: 4px;
-}
-</style>
 
 <!-- 页面标题 -->
 <div class="w-grid" data-testid="domain-management">
@@ -91,20 +46,20 @@ $activeTab = $active_tab ?? 'domain_list';
 <!-- Tab 导航 -->
 <div class="w-card">
     <div class="w-card__body">
-        <nav class="domain-tabs-nav w-tabs__list" role='tablist' data-w-component="tabs">
-            <button class="w-button domain-tab <?= $activeTab === 'domain_list' ? 'active' : '' ?> w-tabs__tab" type='button' id='domain-list-tab' role="tab" aria-controls="domain-list" aria-selected='<?= $activeTab === 'domain_list' ? 'true' : 'false' ?>' data-w-target='#domain-list'>
+        <nav class="w-tabs__list" role='tablist' data-w-component="tabs">
+            <button class="w-tabs__tab" type='button' id='domain-list-tab' role="tab" aria-controls="domain-list" aria-selected='<?= $activeTab === 'domain_list' ? 'true' : 'false' ?>' data-w-target='#domain-list'>
                 <w:icon name="globe" size="sm"></w:icon>
                 <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名列表') ?></span>
             </button>
-            <button class="w-button domain-tab <?= $activeTab === 'domain_pool' ? 'active' : '' ?> w-tabs__tab" type='button' id='domain-pool-tab' role="tab" aria-controls="domain-pool" aria-selected='<?= $activeTab === 'domain_pool' ? 'true' : 'false' ?>' data-w-target='#domain-pool'>
+            <button class="w-tabs__tab" type='button' id='domain-pool-tab' role="tab" aria-controls="domain-pool" aria-selected='<?= $activeTab === 'domain_pool' ? 'true' : 'false' ?>' data-w-target='#domain-pool'>
                 <w:icon name="database" size="sm"></w:icon>
                 <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名池') ?></span>
             </button>
-            <button class="w-button domain-tab <?= $activeTab === 'registrar' ? 'active' : '' ?> w-tabs__tab" type='button' id='domain-registrar-tab' role="tab" aria-controls="domain-registrar" aria-selected='<?= $activeTab === 'registrar' ? 'true' : 'false' ?>' data-w-target='#domain-registrar'>
+            <button class="w-tabs__tab" type='button' id='domain-registrar-tab' role="tab" aria-controls="domain-registrar" aria-selected='<?= $activeTab === 'registrar' ? 'true' : 'false' ?>' data-w-target='#domain-registrar'>
                 <w:icon name="store" size="sm"></w:icon>
                 <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名商管理') ?></span>
             </button>
-            <button class="w-button domain-tab <?= $activeTab === 'purchase' ? 'active' : '' ?> w-tabs__tab" type='button' id='domain-purchase-tab' role="tab" aria-controls="domain-purchase" aria-selected='<?= $activeTab === 'purchase' ? 'true' : 'false' ?>' data-w-target='#domain-purchase'>
+            <button class="w-tabs__tab" type='button' id='domain-purchase-tab' role="tab" aria-controls="domain-purchase" aria-selected='<?= $activeTab === 'purchase' ? 'true' : 'false' ?>' data-w-target='#domain-purchase'>
                 <w:icon name="cart" size="sm"></w:icon>
                 <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名购买') ?></span>
             </button>
@@ -115,22 +70,22 @@ $activeTab = $active_tab ?? 'domain_list';
         <!-- Tab 内容 -->
         <div class="w-tabs__content">
             <!-- Tab1: 域名列表 -->
-            <div class="w-tabs__panel <?= $activeTab === 'domain_list' ? 'show active' : '' ?>" id='domain-list' role='tabpanel' aria-labelledby='domain-list-tab' hidden>
+            <div class="w-tabs__panel" id='domain-list' role='tabpanel' aria-labelledby='domain-list-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/domain_list_tab.phtml') ?>
             </div>
 
             <!-- Tab2: 域名池 -->
-            <div class="w-tabs__panel <?= $activeTab === 'domain_pool' ? 'show active' : '' ?>" id='domain-pool' role='tabpanel' aria-labelledby='domain-pool-tab' hidden>
+            <div class="w-tabs__panel" id='domain-pool' role='tabpanel' aria-labelledby='domain-pool-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/domain_pool_tab.phtml') ?>
             </div>
 
             <!-- Tab3: 域名商管理 -->
-            <div class="w-tabs__panel <?= $activeTab === 'registrar' ? 'show active' : '' ?>" id='domain-registrar' role='tabpanel' aria-labelledby='domain-registrar-tab' hidden>
+            <div class="w-tabs__panel" id='domain-registrar' role='tabpanel' aria-labelledby='domain-registrar-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/registrar_tab.phtml') ?>
             </div>
 
             <!-- Tab4: 域名购买 -->
-            <div class="w-tabs__panel <?= $activeTab === 'purchase' ? 'show active' : '' ?>" id='domain-purchase' role='tabpanel' aria-labelledby='domain-purchase-tab' hidden>
+            <div class="w-tabs__panel" id='domain-purchase' role='tabpanel' aria-labelledby='domain-purchase-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/purchase_tab.phtml') ?>
             </div>
 
@@ -139,62 +94,3 @@ $activeTab = $active_tab ?? 'domain_list';
         </div>
     </div>
 </div>
-
-
-<script>
-(function() {
-    'use strict';
-    
-    function showToast(message, type) {
-        type = type || 'info';
-        if (typeof Weline.UI.toast !== 'undefined') {
-            Weline.UI.toast[type] ? Weline.UI.toast[type](message) : Weline.UI.toast.info(message);
-            return;
-        }
-        var bgColor = {
-            success: 'var(--backend-color-success, #34c38f)', 
-            error: 'var(--backend-color-danger, #f46a6a)', 
-            warning: 'var(--backend-color-warning, #f1b44c)', 
-            info: 'var(--backend-color-primary, #556ee6)'
-        }[type] || 'var(--backend-color-primary, #556ee6)';
-        var toast = document.createElement('div');
-        toast.textContent = message;
-        toast.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;z-index:10000;color:#fff;background:' + bgColor + ';box-shadow:var(--backend-shadow-lg);animation:slideInRight 0.3s ease;';
-        document.body.appendChild(toast);
-        setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 2500);
-        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-    }
-    
-    window.showToast = showToast;
-
-    function initTabs() {
-        var tabButtons = document.querySelectorAll('.domain-tab[data-bs-toggle="tab"]');
-        tabButtons.forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                var targetSelector = btn.getAttribute('data-bs-target');
-                var target = document.querySelector(targetSelector);
-                if (!target) return;
-
-                tabButtons.forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-                btn.classList.add('active');
-                btn.setAttribute('aria-selected', 'true');
-
-                document.querySelectorAll('.tab-pane').forEach(function(pane) {
-                    pane.classList.remove('show', 'active');
-                });
-                target.classList.add('show', 'active');
-
-                var event = new CustomEvent('shown.bs.tab', { bubbles: true });
-                btn.dispatchEvent(event);
-            });
-        });
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTabs);
-    } else {
-        initTabs();
-    }
-})();
-</script>

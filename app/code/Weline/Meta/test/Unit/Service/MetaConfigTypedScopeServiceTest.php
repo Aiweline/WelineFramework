@@ -87,7 +87,33 @@ final class MetaConfigTypedScopeServiceTest extends TestCase
         self::assertNull($miss);
     }
 
-    private function record(string $scope, string $value): MetaConfigRecord
+    public function testRequestedLocaleFallsBackWithinSameScopeBeforeParentScope(): void
+    {
+        $repo = new InMemoryMetaConfigRepository([
+            $this->record('shop.main.default', 'store-default', null),
+            $this->record('shop.default.default', 'website-zh', 'zh_Hans_CN'),
+        ]);
+        $service = new MetaConfigTypedScopeService($repo, new SystemConfigScopeResolver());
+        $result = $service->resolveTyped(
+            'ns',
+            'k',
+            ScopeIdentity::store(0, 'shop', 'main', ScopeIdentity::MODE_NORMAL),
+            'zh_Hans_CN',
+        );
+
+        self::assertSame('store-default', $result->value());
+        self::assertSame(MetaConfigScopeSource::KIND_FALLBACK, $result->source->sourceKind);
+        self::assertNull($result->source->locale);
+    }
+
+    public function testBlankRawWriteScopeIsRejected(): void
+    {
+        $service = new MetaConfigTypedScopeService(new InMemoryMetaConfigRepository([]), new SystemConfigScopeResolver());
+        $this->expectException(\InvalidArgumentException::class);
+        $service->toWritableStorageScope('');
+    }
+
+    private function record(string $scope, string $value, ?string $locale = null): MetaConfigRecord
     {
         return new MetaConfigRecord(
             id: 1,
@@ -95,7 +121,7 @@ final class MetaConfigTypedScopeServiceTest extends TestCase
             configKey: 'k',
             value: $value,
             scope: $scope,
-            locale: null,
+            locale: $locale,
             identifyId: '0',
             metaId: null,
             metaIdentify: null,

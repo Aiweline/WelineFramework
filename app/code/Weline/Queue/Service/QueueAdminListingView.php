@@ -36,7 +36,7 @@ final class QueueAdminListingView
      * @param array<string,mixed> $params
      * @return array{
      *   queues:array<int,mixed>,module:string,status:string,q:string,biz_key:string,
-     *   queue_id:int,page:int,stats:array<string,int>,pagination:string
+     *   queue_id:int,page:int,stats:array<string,int>,pagination:array<string,mixed>
      * }
      */
     public function state(array $params, bool $snapshot = false): array
@@ -112,7 +112,7 @@ final class QueueAdminListingView
         if ($snapshot) {
             $this->compactListingItems($items);
         }
-        unset($queueListing->pagination['html']);
+        $pagination = $queueListing->getPaginationState();
 
         return [
             'queues' => $items,
@@ -123,11 +123,7 @@ final class QueueAdminListingView
             'queue_id' => $queueId,
             'page' => $page,
             'stats' => $this->queueStats(),
-            'pagination' => $queueListing->getPagination(
-                'pagination-rounded',
-                'queue/backend/queue',
-                true,
-            ),
+            'pagination' => $pagination,
         ];
     }
 

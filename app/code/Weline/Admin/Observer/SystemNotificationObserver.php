@@ -121,9 +121,16 @@ class SystemNotificationObserver implements ObserverInterface
             }
             // 如果指定了 is_img，使用图片
             elseif (isset($data['is_img']) && $data['is_img']) {
-                $notification->setIsIcon(0)
-                            ->setIsImg(1)
-                            ->setAvatar($data['avatar'] ?? 'assets/images/users/avatar-1.jpg');
+                $avatar = trim((string)($data['avatar'] ?? ''));
+                if ($avatar !== '') {
+                    $notification->setIsIcon(0)
+                                ->setIsImg(1)
+                                ->setAvatar($avatar);
+                } else {
+                    $notification->setIsIcon(1)
+                                ->setIsImg(0)
+                                ->setAvatar('bell');
+                }
             }
             // 默认使用图标
             else {
@@ -255,4 +262,3 @@ class SystemNotificationObserver implements ObserverInterface
         return __('未知来源');
     }
 }
-

@@ -19,10 +19,10 @@
 删除失败：,删除失败：
 历史记录已清空,历史记录已清空
 清空失败：,清空失败：
-clock,clock
+clock,钟
 下载历史记录,下载历史记录
 查看历史,查看历史
-list,list
+list,列表
 查看下载历史,查看下载历史
 删除记录,删除记录
 trash,trash
@@ -50,16 +50,16 @@ trash,trash
 当前账户还没有该应用的许可证，请先在官网获取或购买。,当前账户还没有该应用的许可证，请先在官网获取或购买。
 未找到可安装的应用或应用尚未发布。,未找到可安装的应用或应用尚未发布。
 商城首页,商城首页
-circle,circle
+circle,圆圈
 应用商城首页,应用商城首页
 查看商城,查看商城
 查看应用商城,查看应用商城
 下载模块,下载模块
-download,download
+download,下载
 从官网商城下载模块包,从官网商城下载模块包
 模块列表,模块列表
 获取模块列表,获取模块列表
-check,check
+check,查看
 安装前确认应用权限,安装前确认应用权限
 安装模块,安装模块
 下载并安装模块,下载并安装模块
@@ -70,10 +70,10 @@ check,check
 请输入邮箱和密码,请输入邮箱和密码
 绑定失败：,绑定失败：
 解绑失败：,解绑失败：
-link,link
+link,关联
 绑定官网账户,绑定官网账户
 查看账户,查看账户
-user,user
+user,用户
 查看账户绑定状态,查看账户绑定状态
 官网授权,官网授权
 跳转官网授权当前终端,跳转官网授权当前终端
@@ -84,7 +84,7 @@ arrow-left,arrow-left
 解绑账户,解绑账户
 解绑官网账户,解绑官网账户
 账户状态,账户状态
-info,info
+info,信息
 获取账户绑定状态,获取账户绑定状态
 许可证管理,许可证管理
 获取授权令牌失败，请重新绑定账户,获取授权令牌失败，请重新绑定账户
@@ -93,7 +93,7 @@ info,info
 激活失败：,激活失败：
 验证失败：,验证失败：
 续订失败：,续订失败：
-key,key
+key,钥匙
 查看许可证,查看许可证
 查看许可证列表,查看许可证列表
 激活许可证,激活许可证
@@ -118,24 +118,22 @@ key,key
 请先绑定官网账户后检查更新,请先绑定官网账户后检查更新
 检查更新失败,检查更新失败
 检查更新失败：,检查更新失败：
-puzzle,puzzle
+puzzle,谜
 "App 商城安装来源记录","App 商城安装来源记录"
 查看模块,查看模块
 "查看 App 商城安装来源记录","查看 App 商城安装来源记录"
 模块详情,模块详情
 查看模块详情,查看模块详情
 系统卸载提示,系统卸载提示
-terminal,terminal
+terminal,终端
 提示使用系统模块卸载,提示使用系统模块卸载
 检查更新,检查更新
 检查模块更新,检查模块更新
 更新模块,更新模块
-arrow-down,arrow-down
+arrow-down,向下箭头
 下载并升级已安装模块,下载并升级已安装模块
-鏇存柊妯″潡,鏇存柊妯″潡
-涓嬭浇骞跺崌绾у凡瀹夎妯″潡,涓嬭浇骞跺崌绾у凡瀹夎妯″潡
 提交评价,提交评价
-star,star
+star,星星
 从终端提交应用评分和评价,从终端提交应用评分和评价
 卸载模块,卸载模块
 "通过系统卸载流程卸载 App 商城模块","通过系统卸载流程卸载 App 商城模块"
@@ -188,8 +186,8 @@ star,star
 更新检查不可用,更新检查不可用
 标签,标签
 全部标签,全部标签
-Surface,Surface
-"全部 Surface","全部 Surface"
+Surface,表面
+"全部 Surface","全部 表面"
 筛选,筛选
 清除筛选,清除筛选
 模块,模块
@@ -335,19 +333,19 @@ Surface,Surface
 "模块结构无效：无法解析 register.php","模块结构无效：无法解析 register.php"
 模块结构无效：缺少模块名,模块结构无效：缺少模块名
 "模块名格式无效，必须是 Vendor_Module 格式","模块名格式无效，必须是 Vendor_Module 格式"
-"Invalid app store package manifest.","Invalid app store package manifest."
+"Invalid app store package manifest.",应用程序商店包清单无效。
 "模块 Marketplace Meta 校验失败：","模块 Marketplace Meta 校验失败："
-"Invalid app store package path:","Invalid app store package path:"
-"Invalid bundled source path:","Invalid bundled source path:"
-"App code path does not exist.","App code path does not exist."
-"Invalid bundled target path:","Invalid bundled target path:"
+"Invalid app store package path:",无效的应用商店包路径：
+"Invalid bundled source path:",无效的捆绑源路径：
+"App code path does not exist.",应用程序代码路径不存在。
+"Invalid bundled target path:",无效的捆绑目标路径：
 "模块 register.php 不存在","模块 register.php 不存在"
 无法创建模块安装脚本,无法创建模块安装脚本
 无法写入商城应用说明文件：,无法写入商城应用说明文件：
 "无法写入 AppStore 安装记录：","无法写入 AppStore 安装记录："
 "下载文件失败，HTTP 状态码：","下载文件失败，HTTP 状态码："
-"Module download failed:","Module download failed:"
-"failed to save failure log:","failed to save failure log:"
+"Module download failed:",模块下载失败：
+"failed to save failure log:",保存失败日志失败：
 "缺少平台模块 ID，无法刷新 Meta","缺少平台模块 ID，无法刷新 Meta"
 "请先绑定官网账户后刷新 Meta","请先绑定官网账户后刷新 Meta"
 "平台未返回有效 Meta","平台未返回有效 Meta"

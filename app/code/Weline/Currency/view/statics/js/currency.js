@@ -10,8 +10,8 @@
 (function (window, document) {
     'use strict';
 
-    // 防止重复初始化
-    if (window.WelineCurrency && window.WelineCurrency.__initialized) {
+    // 防止重复初始化（版本 bump：portal 后货币点击 + 作用域 Cookie 同步）
+    if (window.WelineCurrency && window.WelineCurrency.__initialized === 2) {
         return;
     }
 
@@ -61,18 +61,37 @@
         if (!key) {
             return;
         }
-        const normalizedOptions = Object.assign({ path: '/' }, options || {});
-        if (typeof window.setCookie === 'function') {
-            window.setCookie(key, value, expiry, normalizedOptions);
-            return;
-        }
+        // Always write preference cookies via document.cookie so Path=/ scoped
+        // names (WELINE_USER_CURRENCY_wN) update even when window.setCookie is a
+        // minimal helper that does not encode or merge options correctly.
         const expires = new Date();
         expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
-        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
-        Object.keys(normalizedOptions).forEach((optionKey) => {
-            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        const path = String((options && options.path) || '/');
+        const sameSite = String((options && (options.SameSite || options.samesite)) || 'Lax');
+        document.cookie = `${key}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=${path};SameSite=${sameSite}`;
+    }
+
+    function currencyCookieNames(explicitWebsiteId = '') {
+        const names = [];
+        const add = (name) => {
+            const value = String(name || '').trim();
+            if (value && !names.includes(value)) {
+                names.push(value);
+            }
+        };
+        const websiteId = explicitWebsiteId || window.site?.website_id || window.site?.websiteId || '';
+        if (String(websiteId) !== '') {
+            add(`WELINE_USER_CURRENCY_w${websiteId}`);
+        }
+        // Keep already-scoped site cookies in sync (portal pages may lack site.website_id).
+        String(document.cookie || '').split(';').forEach((part) => {
+            const key = String(part.split('=')[0] || '').trim();
+            if (/^WELINE_USER_CURRENCY_w\d+$/.test(key)) {
+                add(key);
+            }
         });
-        document.cookie = cookieString;
+        add('WELINE_USER_CURRENCY');
+        return names;
     }
 
     function writeCurrencyPreference(currency) {
@@ -85,7 +104,9 @@
         } catch (error) {
             // localStorage can be unavailable in privacy modes.
         }
-        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+        currencyCookieNames().forEach((name) => {
+            writeCookieValue(name, currency, 365, { path: '/', SameSite: 'Lax' });
+        });
     }
 
     /**
@@ -93,16 +114,19 @@
      */
     function isBackendLocalizedPath(pathParts) {
         const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
-        if (config.area === 'backend' || (config.theme && config.theme.area === 'backend')) {
-            return true;
+        const site = window.site || {};
+        // 仅当路径中确实出现后台 area 前缀时，才按后台 URL 结构处理。
+        // 禁止仅凭 config.area==='backend' 把 /dev/tool/... 等前台路径的首段当成 admin 前缀。
+        const backendKey = String(
+            (config.url && (config.url.adminArea || config.url.backendArea))
+            || site.area
+            || ''
+        ).replace(/^\/+|\/+$/g, '');
+        if (!backendKey || !Array.isArray(pathParts) || pathParts.length === 0) {
+            return false;
         }
-        const backendKey = String((config.url && config.url.adminArea) || '');
-        if (backendKey && pathParts.some(part => String(part).toLowerCase() === backendKey.toLowerCase())) {
-            return true;
-        }
-        return document.documentElement
-            && document.documentElement.getAttribute('data-theme') === 'backend'
-            && pathParts.length > 0;
+        const key = backendKey.toLowerCase();
+        return pathParts.some((part) => String(part || '').toLowerCase() === key);
     }
 
     function getThemeConfig() {
@@ -380,7 +404,7 @@
             // 保存货币偏好到 Cookie（如果 getCookie/setCookie 函数存在）
 
             // 立即跳转到新 URL
-            window.location.href = currencyUrl;
+            window.location.assign(currencyUrl);
             return;
         }
 
@@ -392,7 +416,7 @@
             writeCurrencyPreference(currency);
 
             // 立即跳转到新 URL
-            window.location.href = currencyUrl;
+            window.location.assign(currencyUrl);
             return;
         }
 
@@ -414,7 +438,7 @@
         writeCurrencyPreference(currency);
 
         // 立即跳转到新 URL
-        window.location.href = currencyUrl;
+        window.location.assign(currencyUrl);
     }
 
     /**
@@ -451,42 +475,39 @@
             setTimeout(waitForUrlModule, 0);
         }
 
-        // 监听货币切换事件，立即切换URL并访问
-        // 只处理带有 data-currency-switcher 标记的容器内的货币选项
+        // 监听货币切换事件，立即切换URL并访问。
+        // 注意：菜单 panel 会 portal 到 <body>，选项不再位于 [data-currency-switcher] 内部。
         document.addEventListener('click', function (e) {
-            // 检查点击的元素是否在带有 data-currency-switcher 标记的容器内
-            const currencySwitcher = e.target.closest('[data-currency-switcher]');
-            if (!currencySwitcher) {
+            const currencyOption = e.target.closest('[data-currency-option], .currency-option, a[data-currency]');
+            if (!currencyOption) {
                 return;
             }
 
-            // 通过属性标记查找货币选项（优先使用 data-currency-option）
-            const currencyOption = e.target.closest('[data-currency-option], .currency-option, a[data-currency]');
-            if (currencyOption) {
-                const currencyCode = (currencyOption.getAttribute('data-currency') || currencyOption.dataset.currency || '').toUpperCase();
-                if (currencyCode) {
-                    // 阻止默认跳转行为
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    // 立即切换货币（会自动保持当前语言）
-                    // 优先使用 select_currency（来自 url-frontend 模块，会自动保持语言）
-                    if (typeof window.select_currency === 'function') {
-                        window.select_currency(currencyCode);
-                        return;
-                    }
-
-                    // 次优先使用 switchCurrency（currency 模块的方法）
-                    switchCurrency(currencyCode).catch(err => {
-                        console.error('[WelineCurrency] 切换货币失败:', err);
-                        // 如果切换失败，尝试使用 href 作为降级方案
-                        const href = currencyOption.getAttribute('href');
-                        if (href && href !== '#' && href !== '#!') {
-                            window.location.href = href;
-                        }
-                    });
-                }
+            const currencyCode = (currencyOption.getAttribute('data-currency') || currencyOption.dataset.currency || '').toUpperCase();
+            if (!currencyCode) {
+                return;
             }
+
+            // 阻止默认跳转行为
+            e.preventDefault();
+            e.stopPropagation();
+
+            // 先同步作用域 Cookie，再走 select_currency（其内部也会写 Cookie 并跳转）
+            writeCurrencyPreference(currencyCode);
+            if (typeof window.select_currency === 'function') {
+                window.select_currency(currencyCode);
+                return;
+            }
+
+            // 次优先使用 switchCurrency（currency 模块的方法）
+            switchCurrency(currencyCode).catch(err => {
+                console.error('[WelineCurrency] 切换货币失败:', err);
+                // 如果切换失败，尝试使用 href 作为降级方案
+                const href = currencyOption.getAttribute('href');
+                if (href && href !== '#' && href !== '#!') {
+                    window.location.assign(href);
+                }
+            });
         });
 
         // 监听 URL 变化（用于浏览器前进/后退）
@@ -501,7 +522,7 @@
 
     // 导出模块 API
     window.WelineCurrency = {
-        __initialized: true,
+        __initialized: 2,
         getCurrentCurrency: getCurrentCurrency,
         updateCurrentCurrencyDisplay: updateCurrentCurrencyDisplay,
         updateCurrencySwitcherLinks: updateCurrencySwitcherLinks,

@@ -69,15 +69,25 @@
     .w-theme-preview-notice__copy small { color: var(--weline-theme-text-muted); }
     .w-theme-preview-notice__exit { margin-inline-start: auto; }
 
-    .w-dashboard-preview { min-block-size: 100vh; padding: var(--weline-space-5); }
+    .w-dashboard-preview,
+    .w-dashboard-layout-grid {
+        --w-dashboard-surface: var(--weline-theme-surface);
+        --w-dashboard-surface-soft: var(--weline-theme-surface-muted);
+        --w-dashboard-text: var(--weline-theme-text);
+        --w-dashboard-heading: var(--weline-theme-text);
+        --w-dashboard-muted: var(--weline-theme-text-muted);
+        --w-dashboard-border: var(--weline-theme-border);
+        --w-dashboard-primary: var(--weline-theme-primary);
+    }
+    .w-dashboard-preview { min-block-size: 100vh; padding: var(--weline-space-5); color: var(--weline-theme-text); }
     .w-dashboard-layout-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--weline-space-4); align-items: start; }
-    .w-dashboard-region { min-inline-size: 0; padding: var(--weline-space-4); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-lg); background: var(--weline-theme-surface); }
+    .w-dashboard-region { min-inline-size: 0; padding: var(--weline-space-4); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-lg); background: var(--weline-theme-surface); color: var(--weline-theme-text); }
     .w-dashboard-region-summary { grid-column: 1 / span 4; }
     .w-dashboard-region-analysis { grid-column: 5 / span 5; }
     .w-dashboard-region-side { grid-column: 10 / span 3; grid-row: 1 / span 2; }
     .w-dashboard-region-detail { grid-column: 1 / span 9; }
     .w-dashboard-region-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--weline-space-3); margin-block-end: var(--weline-space-3); }
-    .w-dashboard-region-head h2 { margin: 0; font-size: var(--weline-font-size-md); }
+    .w-dashboard-region-head h2 { margin: 0; color: var(--weline-theme-text); font-size: var(--weline-font-size-md); }
     .w-dashboard-region-head p,
     .w-dashboard-region-head span { margin: var(--weline-space-1) 0 0; color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); }
     .w-dashboard-slot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--weline-space-3); }
@@ -85,15 +95,29 @@
     .w-dashboard-slot-summary > [data-widget-code="overview_kpi"] { grid-column: 1 / -1; }
     .w-dashboard-slot-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--weline-space-3); }
     .widget-wrapper { min-inline-size: 0; }
-    .dashboard-widget { min-inline-size: 0; block-size: 100%; padding: var(--weline-space-4); overflow: hidden; border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-lg); background: var(--weline-theme-surface); }
-    .dashboard-widget header { display: flex; align-items: center; justify-content: space-between; gap: var(--weline-space-3); margin-block-end: var(--weline-space-3); }
-    .dashboard-widget h3 { margin: 0; font-size: var(--weline-font-size-lg); }
-    .dashboard-widget header span,
-    .dashboard-widget small { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); white-space: nowrap; }
+    .dashboard-widget { min-inline-size: 0; block-size: 100%; color: var(--weline-theme-text); }
+    .dashboard-widget.w-card { padding: 0; overflow: hidden; }
+    .dashboard-widget:not(.w-card) { padding: var(--weline-space-4); overflow: hidden; border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-lg); background: var(--weline-theme-surface); }
+    .dashboard-widget:not(.w-card) > header { display: flex; align-items: center; justify-content: space-between; gap: var(--weline-space-3); margin-block-end: var(--weline-space-3); }
+    .dashboard-widget:not(.w-card) > header h3,
+    .dashboard-widget .w-card__title { margin: 0; color: var(--weline-theme-text); font-size: var(--weline-font-size-lg); }
+    .dashboard-widget:not(.w-card) > header span,
+    .dashboard-widget:not(.w-card) small { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); white-space: nowrap; }
+    .dashboard-widget-kpi-grid .w-card__body { display: grid; gap: var(--weline-space-1); justify-items: stretch; }
+    .dashboard-widget-kpi-grid .w-text { display: block; }
+    .dashboard-widget-bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--weline-space-2); block-size: 10.5rem; align-items: end; }
+    .dashboard-widget-bars > div { min-inline-size: 0; block-size: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--weline-space-2); text-align: center; }
+    .dashboard-widget-bars i { display: block; inline-size: 100%; min-block-size: 1.5rem; block-size: var(--dashboard-bar-height, 40%); border-radius: var(--weline-radius-md) var(--weline-radius-md) var(--weline-radius-sm) var(--weline-radius-sm); background: var(--weline-theme-primary); }
+    .dashboard-widget-status .w-table th,
+    .dashboard-widget-status .w-table td,
+    .dashboard-widget-detail-snapshot .w-table th,
+    .dashboard-widget-detail-snapshot .w-table td { padding-block: var(--weline-space-3); vertical-align: top; }
+    .dashboard-widget-status .w-table th,
+    .dashboard-widget-detail-snapshot .w-table th { inline-size: 36%; white-space: nowrap; }
+    .dashboard-widget-status .w-table td { text-align: end; }
+    .dashboard-widget-detail-snapshot .w-table td { text-align: start; }
+    .dashboard-widget-detail-snapshot .w-table td .w-text { display: block; }
     .w-dashboard-empty { display: grid; min-block-size: 6rem; place-items: center; gap: var(--weline-space-2); border: 1px dashed var(--weline-theme-border); border-radius: var(--weline-radius-lg); color: var(--weline-theme-text-muted); text-align: center; }
-    .dashboard-widget-detail-snapshot table { inline-size: 100%; border-collapse: collapse; }
-    .dashboard-widget-detail-snapshot th,
-    .dashboard-widget-detail-snapshot td { padding-block: var(--weline-space-3); border-block-end: 1px solid var(--weline-theme-border); font-size: var(--weline-font-size-sm); line-height: 1.4; text-align: start; vertical-align: top; }
 
     .w-theme-preview-error-shell { display: grid; min-block-size: 100vh; place-items: center; padding: var(--weline-space-5); }
     .w-theme-preview-error { inline-size: min(31rem, 100%); text-align: center; }

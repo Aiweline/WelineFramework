@@ -100,7 +100,7 @@
             var icon = document.createElement('span');
             icon.className = 'session-device-card__icon';
             var iconGlyph = document.createElement('i');
-            iconGlyph.className = 'mdi mdi-laptop';
+            iconGlyph.className = 'mdi weline-icon--laptop';
             iconGlyph.setAttribute('aria-hidden', 'true');
             icon.appendChild(iconGlyph);
             article.appendChild(icon);

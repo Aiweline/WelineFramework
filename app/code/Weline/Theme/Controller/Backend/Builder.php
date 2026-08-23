@@ -6,6 +6,9 @@ namespace Weline\Theme\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Api\Layout\LayoutStatus;
+use Weline\Theme\Api\Layout\LayoutWorkspaceInterface;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
@@ -58,20 +61,45 @@ class Builder extends BackendController
             return $this->fetchJson(['success' => false, 'message' => __('缺少主题ID')]);
         }
 
+        if ($publish) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('旧 Theme Builder 不再支持直接发布，请使用 Theme 编辑器的发布流程。'),
+            ]);
+        }
+        if ($status !== ThemeLayout::STATUS_DRAFT) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('旧 Theme Builder 只允许保存草稿。'),
+            ]);
+        }
+
         try {
-            $this->themeLayoutService->saveLayout($themeId, $pageType, $layoutData, $status);
-            if ($publish) {
-                $this->themeLayoutService->publishLayout($themeId, $pageType);
+            $identity = LayoutIdentity::fromArray($data);
+            /** @var LayoutWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(LayoutWorkspaceInterface::class);
+            if (!$workspace->replaceLayout(
+                $themeId,
+                $pageType,
+                $layoutData,
+                LayoutStatus::DRAFT,
+                $identity,
+            )) {
+                throw new \RuntimeException((string)__('Theme 布局草稿保存失败。'));
             }
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => $publish ? __('布局已保存并发布') : __('布局已保存'),
+                'message' => __('布局已保存'),
                 'data' => [
                     'theme_id' => $themeId,
                     'page_type' => $pageType,
-                    'status' => $publish ? ThemeLayout::STATUS_PUBLISHED : $status,
-                    'layout' => $this->themeLayoutService->getFullDraftLayout($themeId, $pageType),
+                    'status' => ThemeLayout::STATUS_DRAFT,
+                    'layout' => $this->themeLayoutService->getFullDraftLayout(
+                        $themeId,
+                        $pageType,
+                        $identity->toArray(),
+                    ),
                 ],
             ]);
         } catch (\Throwable $throwable) {

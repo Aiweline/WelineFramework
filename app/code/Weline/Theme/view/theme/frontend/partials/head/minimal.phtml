@@ -1,32 +1,32 @@
 <?php
 /**
  * @meta.name {default="Weline UI 2.0 Frontend Minimal Head",name="Weline UI 2.0 前台极简头部"}
- * @meta.cache.mode {default="chrome",name="缓存模式"}
+ * @meta.cache.mode {default="off",name="缓存模式"}
  * @meta.cache.auth {default="guest",name="鉴权维度"}
  * @meta.assets.ui {default="module",name="UI JS 以 ES module 加载"}
  */
+$diskOverrideHtml = '';
+try {
+    $diskOverrideHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Disk\ThemeDiskHeadService::class
+    )->buildOverrideLinkHtml('frontend');
+} catch (\Throwable $e) {
+    $diskOverrideHtml = '';
+}
+$uiAssetVersion = static function (string $relative): string {
+    $path = BP . 'app/code/Weline/Theme/view/statics/ui/' . \ltrim($relative, '/');
+    return \is_file($path) ? (string)\filemtime($path) : '0';
+};
+$foundationV = $uiAssetVersion('weline-foundation.css');
+$frontendV = $uiAssetVersion('weline-frontend.css');
+$uiJsV = $uiAssetVersion('weline-ui.js');
+$prepaintV = $uiAssetVersion('weline-theme-prepaint.js');
 ?>
-<script>
-(function () {
-    try {
-        var root = document.documentElement;
-        var preference = localStorage.getItem('weline_theme_preference') || root.getAttribute('data-theme-preference') || 'system';
-        if (preference !== 'system' && preference !== 'light' && preference !== 'dark') {
-            preference = 'system';
-        }
-        var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = preference === 'dark' || (preference === 'system' && systemDark) ? 'dark' : 'light';
-        root.setAttribute('data-theme-preference', preference);
-        root.setAttribute('data-theme', theme);
-        root.style.colorScheme = theme;
-    } catch (e) {}
-})();
-</script>
+<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)?v=<?= $prepaintV ?>"></script>
 <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
-<theme:css>frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
-<theme:css>frontend/colors/_dark.css</theme:css>
-<css>Weline_Theme::ui/weline-foundation.css</css>
-<css>Weline_Theme::ui/weline-frontend.css</css>
-<js type="module">Weline_Theme::ui/weline-ui.js</js>
+<?php echo $diskOverrideHtml; ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)?v=<?= $foundationV ?>">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)?v=<?= $frontendV ?>">
+<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)?v=<?= $uiJsV ?>"></script>

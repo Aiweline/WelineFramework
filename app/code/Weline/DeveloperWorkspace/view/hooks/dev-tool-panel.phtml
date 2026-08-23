@@ -1742,7 +1742,7 @@ $panelType = $panelType ?? 'frontend';
         line-height: 1.25;
     }
 
-    #dev-tool-panel .dev-tool-performance-card-value {
+    #dev-tool-panel .dev-tool-performance-weline-card-value {
         margin-top: 7px;
         color: var(--dev-panel-ink);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -3105,12 +3105,10 @@ $panelType = $panelType ?? 'frontend';
 
 <script>
 (function(g){
-  // Prefer the provider-backed bridge installed by dev-tool-panel-loader.js.
-  if(g.__bqAdmin_developer_workspace_rest) return;
-  g.__bqAdmin_developer_workspace=true;
-  g.__bqAdmin_developer_workspace_rest=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['developer_workspace']=function(url, options){
+  // Prefer the helper installed by dev-tool-panel-loader.js.
+  if(g.__welineDeveloperWorkspaceRequest) return;
+  var W = g.Weline = g.Weline || {};
+  W.developerWorkspaceRequest = function(url, options){
     options=options||{};
     var urlStr=String(url||'');
     var body=options.body;
@@ -3152,6 +3150,7 @@ $panelType = $panelType ?? 'frontend';
     }
     return g.Weline.load('api').then(run).then(toResp);
   };
+  g.__welineDeveloperWorkspaceRequest=true;
 })(window);
 </script>
 <script>
@@ -4368,7 +4367,7 @@ const DevToolPanel = (function() {
             content.innerHTML = '<div class="dev-tool-empty">无法构建 API 地址（请从后台打开本页）</div>';
             return Promise.resolve();
         }
-        return bqAdmin['developer_workspace'](url)
+        return Weline.adminRequest('developer_workspace', url)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -4544,11 +4543,13 @@ const DevToolPanel = (function() {
     }
 
     function devToolFetchJson(url) {
-        var call = (window.bqAdmin && window.bqAdmin['developer_workspace'])
-            ? window.bqAdmin['developer_workspace']
-            : null;
+        var call = (window.Weline && typeof window.Weline.developerWorkspaceRequest === 'function')
+            ? window.Weline.developerWorkspaceRequest
+            : (window.Weline && typeof window.Weline.adminRequest === 'function'
+                ? function(u, o){ return window.Weline.adminRequest('developer_workspace', u, o); }
+                : null);
         if (!call) {
-            return Promise.reject(new Error('开发面板 bin-query 桥接不可用。'));
+            return Promise.reject(new Error('开发面板请求桥接不可用。'));
         }
         return call(url, {
             method: 'GET',
@@ -5371,7 +5372,7 @@ const DevToolPanel = (function() {
             });
         }
 
-        return bqAdmin['developer_workspace'](url.href, {
+        return Weline.adminRequest('developer_workspace', url.href, {
             method: 'HEAD',
             credentials: 'same-origin'
         }).then(function(response) {
@@ -5505,7 +5506,7 @@ const DevToolPanel = (function() {
             return;
         }
 
-        bqAdmin['developer_workspace'](url)
+        Weline.adminRequest('developer_workspace', url)
             .then(function(response) {
                 if (!response.ok) {
                     throw new Error(response.status === 404 ? '请求链路不存在或已过期，请刷新页面重试' : ('HTTP ' + response.status));
@@ -6146,7 +6147,7 @@ const DevToolPanel = (function() {
                     resultEl.style.display = 'block';
                     resultEl.innerHTML = '<span style="color:#888;">执行中…</span>';
                     target.disabled = true;
-                    bqAdmin['developer_workspace'](url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
+                    Weline.adminRequest('developer_workspace', url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
                             target.disabled = false;
@@ -6217,7 +6218,7 @@ const DevToolPanel = (function() {
             var klass = timeClass ? ' ' + timeClass : '';
             var html = '<div class="dev-tool-performance-card' + klass + '">';
             html += '<div class="dev-tool-performance-card-label">' + escapeHtml(label) + '</div>';
-            html += '<div class="dev-tool-performance-card-value">' + escapeHtml(String(value)) + '</div>';
+            html += '<div class="dev-tool-performance-weline-card-value">' + escapeHtml(String(value)) + '</div>';
             html += '</div>';
             return html;
         };

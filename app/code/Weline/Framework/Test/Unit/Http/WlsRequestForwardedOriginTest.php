@@ -145,6 +145,27 @@ final class WlsRequestForwardedOriginTest extends TestCase
         self::assertSame('https://shop.example.test/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
     }
 
+    public function testExplicitHttpSchemeIsNotPromotedByEnvHttps(): void
+    {
+        $request = $this->createRequest(
+            "Host: 127.0.0.1:9555\r\n",
+            [
+                'HTTPS' => '',
+                'REQUEST_SCHEME' => 'http',
+                'WLS_PORT' => 9555,
+            ],
+        );
+
+        self::assertFalse($request->isSecure());
+        self::assertSame('http', $_SERVER['REQUEST_SCHEME'] ?? null);
+        self::assertSame('127.0.0.1:9555', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame(
+            'http://127.0.0.1:9555/customer/account/logout',
+            $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null,
+        );
+        self::assertSame('http://127.0.0.1:9555', $request->getBaseHost());
+    }
+
     /**
      * @param array<string, mixed> $serverInfo
      */

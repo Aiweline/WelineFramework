@@ -879,7 +879,6 @@ CSS;
                 hasDarkAttr(body, 'data-sidebar') ||
                 hasDarkAttr(body, 'data-topbar') ||
                 hasDarkAttr(html, 'data-theme') ||
-                hasDarkAttr(html, 'data-bs-theme') ||
                 hasDarkClass(body) || hasDarkClass(html)
             );
         })();
@@ -990,7 +989,7 @@ CSS;
             document.body.appendChild(this.backdrop);
 
             // 绑定关闭按钮事件
-            const closeButtons = this.element.querySelectorAll('[data-bs-dismiss="modal"]');
+            const closeButtons = this.element.querySelectorAll('[data-w-close]');
             closeButtons.forEach(btn => {
                 btn.addEventListener('click', () => this.hide());
             });
@@ -2242,10 +2241,7 @@ CSS;
             // 如果 modal 不存在或结构不完整，重新创建
             if (modal) {
                 // 如果 modal 存在但结构不完整，先移除旧的
-                const bsModal = bootstrap.Modal.getInstance(modal);
-                if (bsModal) {
-                    bsModal.dispose();
-                }
+                Weline.UI.unmount(modal);
                 modal.remove();
             }
             
@@ -2267,7 +2263,7 @@ CSS;
             modalHeader.className = 'modal-header';
             modalHeader.innerHTML = `
                 <h5 class="modal-title">目录配置</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="w-button" data-tone="quiet" data-size="sm" data-w-close aria-label="关闭"></button>
             `;
             
             // 创建 modal-body
@@ -2279,8 +2275,8 @@ CSS;
             const modalFooter = document.createElement('div');
             modalFooter.className = 'modal-footer';
             modalFooter.innerHTML = `
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" id="` + saveBtnId + `">保存</button>
+                <button type="button" class="w-button" data-tone="neutral" data-w-close>取消</button>
+                <button type="button" class="w-button" id="` + saveBtnId + `">保存</button>
             `;
             
             // 组装 modal 结构
@@ -2309,10 +2305,7 @@ CSS;
                     // 如果仍然找不到，说明结构不完整，重新创建
                     console.warn('[MetaManager] Modal 结构不完整（缺少保存按钮），重新创建');
                     // 清理旧的 modal
-                    const bsModal = bootstrap.Modal.getInstance(modal);
-                    if (bsModal) {
-                        bsModal.dispose();
-                    }
+                    Weline.UI.unmount(modal);
                     modal.remove();
                     modal = null;
                     modalBody = null;
@@ -2336,7 +2329,7 @@ CSS;
                     modalHeader.className = 'modal-header';
                     modalHeader.innerHTML = `
                         <h5 class="modal-title">目录配置</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="w-button" data-tone="quiet" data-size="sm" data-w-close aria-label="关闭"></button>
                     `;
                     
                     // 创建 modal-body
@@ -2348,8 +2341,8 @@ CSS;
                     const modalFooter = document.createElement('div');
                     modalFooter.className = 'modal-footer';
                     modalFooter.innerHTML = `
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                        <button type="button" class="btn btn-primary" id="` + saveBtnId + `">保存</button>
+                        <button type="button" class="w-button" data-tone="neutral" data-w-close>取消</button>
+                        <button type="button" class="w-button" id="` + saveBtnId + `">保存</button>
                     `;
                     
                     // 组装 modal 结构
@@ -2474,11 +2467,7 @@ CSS;
         });
         
         // 显示模态框
-        let bsModal = bootstrap.Modal.getInstance(modal);
-        if (!bsModal) {
-            bsModal = new bootstrap.Modal(modal);
-        }
-        bsModal.show();
+        Weline.UI.dialog.open(modal);
     }
     
     // 保存目录配置
@@ -2555,8 +2544,7 @@ CSS;
                 }
                 const modal = document.getElementById(modalId);
                 if (modal) {
-                    const bsModal = bootstrap.Modal.getInstance(modal);
-                    if (bsModal) bsModal.hide();
+                    Weline.UI.dialog.close(modal, 'saved');
                 }
                 // 触发保存事件
                 if (onSaveEvent) {

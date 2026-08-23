@@ -53,6 +53,9 @@ function mountSlot(slot) {
     const name = String(slot.dataset.wslotName || slot.dataset.wslot || 'Slot');
     if (!slot.hasAttribute('aria-label')) slot.setAttribute('aria-label', name);
 
+    // 完整编辑引擎已经提供 slot 选择、信息面板和拖放能力；此处只做无引擎时的最小适配。
+    if (root.dataset.wEditorPreviewEngine === 'full') return;
+
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'w-theme-preview-slot-action';

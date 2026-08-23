@@ -62,7 +62,7 @@ class PreviewAutoLogin implements ObserverInterface
 
     private function isPreviewMode(): bool
     {
-        if (!$this->previewContextService->shouldUseStoredContext()) {
+        if (!$this->previewContextService->hasAuthoritativePreviewContext()) {
             return false;
         }
 

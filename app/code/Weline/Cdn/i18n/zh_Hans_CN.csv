@@ -36,7 +36,7 @@ CDN账户列表,CDN账户列表
 "域名 ID（更新时必填）","域名 ID（更新时必填）"
 "网站 ID","网站 ID"
 域名名称,域名名称
-"CDN Zone ID","CDN Zone ID"
+"CDN Zone ID","CDN 区域 ID"
 "关联账户 ID","关联账户 ID"
 是否继承默认账户,是否继承默认账户
 预热间隔秒数,预热间隔秒数
@@ -163,7 +163,7 @@ Tag清理失败,Tag清理失败
 "Cloudflare 攻击防护模式已关闭","Cloudflare 攻击防护模式已关闭"
 关闭攻击防护模式失败,关闭攻击防护模式失败
 "关闭攻击防护模式异常: %{1}","关闭攻击防护模式异常: %{1}"
-"Cloudflare API Token未配置","Cloudflare API Token未配置"
+"Cloudflare API Token未配置","Cloudflare API 令牌未配置"
 "请求失败: %{1}","请求失败: %{1}"
 "HTTP错误: %{1}","HTTP错误: %{1}"
 加载域名列表失败：%{1},加载域名列表失败：%{1}
@@ -218,7 +218,7 @@ Tag清理失败,Tag清理失败
 恶意特征,恶意特征
 恶意UA,恶意UA
 保护路径,保护路径
-Slowloris,Slowloris
+Slowloris,斯洛洛里斯
 未知,未知
 进行中,进行中
 已恢复,已恢复
@@ -413,11 +413,11 @@ JSON格式错误,JSON格式错误
 读取缓存规则,读取缓存规则
 编辑缓存规则,编辑缓存规则
 前往Cloudflare创建Token,前往Cloudflare创建Token
-"API Token","API Token"
+"API Token",API令牌
 "请输入API Token","请输入API Token"
-"Account ID","Account ID"
-"请输入Account ID（Cloudflare）","请输入Account ID（Cloudflare）"
-"Cloudflare Zone 创建需要 Account ID","Cloudflare Zone 创建需要 Account ID"
+"Account ID",账户ID
+"请输入Account ID（Cloudflare）",请输入账户ID（Cloudflare）
+"Cloudflare Zone 创建需要 Account ID","Cloudflare 区域创建需要帐户 ID"
 "回源 Origin Token（只读）","回源 Origin Token（只读）"
 "请在 app/etc/env.php 的 server.origin_token 中配置","请在 app/etc/env.php 的 server.origin_token 中配置"
 "CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。","CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。"
@@ -427,7 +427,7 @@ JSON格式错误,JSON格式错误
 搜索域名,搜索域名
 全部状态,全部状态
 网站名称,网站名称
-"Zone ID","Zone ID"
+"Zone ID",区域ID
 暂无数据,暂无数据
 未知网站,未知网站
 "确定要删除域名 ""%{1}"" 吗？此操作不可恢复！","确定要删除域名 ""%{1}"" 吗？此操作不可恢复！"
@@ -454,7 +454,7 @@ JSON格式错误,JSON格式错误
 搜索URL,搜索URL
 处理中,处理中
 已完成,已完成
-URL,URL
+URL,网址
 提供商,提供商
 进度,进度
 重试次数,重试次数
@@ -521,7 +521,14 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+收集失败：%{1},收集失败：%{1}
 "缺少预热 URL 的站点上下文","缺少预热 URL 的站点上下文"
 "站点 %{1} 未找到 URL %{2} 对应的 CDN 域名","站点 %{1} 未找到 URL %{2} 对应的 CDN 域名"
 "domain_id 必须是正整数","domain_id 必须是正整数"
-收集失败：%{1},收集失败：%{1}
+API规则管理,API规则管理
+CDN管理,CDN管理
+域名管理,域名管理
+攻击日志,攻击日志
+规则管理,规则管理
+账户管理,账户管理
+预热管理,预热管理

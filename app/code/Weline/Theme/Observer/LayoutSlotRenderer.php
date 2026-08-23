@@ -10,8 +10,8 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
-use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewRequestInspector;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\SlotRendererService;
@@ -97,6 +97,7 @@ class LayoutSlotRenderer implements ObserverInterface
         $urlToken = $this->request->getParam(PreviewTokenService::TOKEN_KEY);
         if ($urlToken
             && !$this->previewRequestInspector->shouldKeepPreviewStateOnlyForCurrentRequest()
+            && $this->previewRequestInspector->shouldAllowPreviewTokenCookie()
             && $this->previewTokenService->validateToken($urlToken)) {
             // 鑷姩璁剧疆 Cookie锛岃繖鏍峰悗缁〉闈㈣烦杞笉闇€瑕佹瘡娆￠兘甯?token 鍙傛暟
             $this->previewTokenService->setPreviewCookie($urlToken);
@@ -600,39 +601,11 @@ HTML;
      */
     private function detectStatus(): string
     {
-        // 1. 鏈€楂樹紭鍏堢骇锛歎RL 鍙傛暟鏄庣‘鎸囧畾鐘舵€侊紙鐢ㄤ簬鐗堟湰鍒囨崲锛?
-        $statusParam = $this->request->getParam('status');
-        if ($statusParam === ThemeLayout::STATUS_DRAFT || $statusParam === 'draft') {
-            return ThemeLayout::STATUS_DRAFT;
-        }
-        if ($statusParam === ThemeLayout::STATUS_PUBLISHED || $statusParam === 'published') {
-            return ThemeLayout::STATUS_PUBLISHED;
-        }
-        
-        // 2. 棰勮 Token 妫€娴嬶紙鏀寔 URL鍙傛暟/Cookie/Header锛?
-        if ($this->previewTokenService->isPreviewMode()) {
-            return ThemeLayout::STATUS_DRAFT;
-        }
-        if ($this->isPreviewThemeMode()) {
-            return ThemeLayout::STATUS_DRAFT;
-        }
-        
-        // 3. 鍚庡彴缂栬緫鍣?iframe 妯″紡锛氶粯璁ゅ姞杞?draft
-        $editorMode = $this->request->getParam('editor_mode');
-        if ($editorMode === '1' || $editorMode === 'true') {
-            return ThemeLayout::STATUS_DRAFT;
-        }
-        
-        // 4. 鍓嶅彴鑽夌棰勮妯″紡锛氬姞杞?draft锛堝悜鍚庡吋瀹?+ 鏂版ā寮忥級
-        $previewMode = $this->request->getParam('preview_mode');
-        if ($previewMode === '1' || $previewMode === 'true' || $previewMode === 'live' || $previewMode === 'version') {
-            return ThemeLayout::STATUS_DRAFT;
-        }
-        
-        // 5. 妫€鏌?referer 鏄惁鏉ヨ嚜缂栬緫鍣紙澶囩敤鏂规锛?
-        $referer = (string) (\w_env('http_referer', '') ?? '');
-        if (strpos($referer, 'theme-editor') !== false) {
-            return ThemeLayout::STATUS_DRAFT;
+        $context = $this->authoritativePreviewContext();
+        if ($context !== null) {
+            return ($context['status'] ?? ThemeLayout::STATUS_DRAFT) === ThemeLayout::STATUS_PUBLISHED
+                ? ThemeLayout::STATUS_PUBLISHED
+                : ThemeLayout::STATUS_DRAFT;
         }
         
         // 榛樿锛氬墠鍙版甯歌闂紝鍔犺浇宸插彂甯冪増鏈?
@@ -648,75 +621,23 @@ HTML;
      */
     private function isEditorOrPreviewMode(): bool
     {
-        // 棰勮 Token 妯″紡
-        if ($this->previewTokenService->isPreviewMode()) {
-            return true;
-        }
-        if ($this->isPreviewThemeMode()) {
-            return true;
-        }
-        
-        // 鍚庡彴缂栬緫鍣ㄦā寮?
-        $editorMode = $this->request->getParam('editor_mode');
-        if ($editorMode === '1' || $editorMode === 'true') {
-            return true;
-        }
-        
-        // 鍓嶅彴棰勮妯″紡锛堝悜鍚庡吋瀹?+ 鏂版ā寮忥級
-        $previewMode = $this->request->getParam('preview_mode');
-        if ($previewMode === '1' || $previewMode === 'true' || $previewMode === 'live' || $previewMode === 'version') {
-            return true;
-        }
-        
-        // 妫€鏌?referer 鏄惁鏉ヨ嚜缂栬緫鍣?
-        $referer = (string) (\w_env('http_referer', '') ?? '');
-        if (strpos($referer, 'theme-editor') !== false) {
-            return true;
-        }
-        
-        return false;
+        return $this->authoritativePreviewContext() !== null;
     }
 
-    /**
-     * 妫€娴嬫槸鍚﹀浜?legacy preview_theme 棰勮妯″紡
-     *
-     * 鍏煎鑰佸叆鍙ｏ紙preview_theme URL 鍙傛暟 + Session锛夛紝骞堕檺鍒朵负 frontend 棰勮鍦烘櫙銆?     */
-    private function isPreviewThemeMode(): bool
+    /** @return array<string,mixed>|null */
+    private function authoritativePreviewContext(): ?array
     {
-        $requestPreviewThemeId = (int)$this->request->getParam('preview_theme', 0);
-        if ($requestPreviewThemeId > 0) {
-            $requestPreviewArea = (string)$this->request->getParam(
-                'preview_area',
-                (string)$this->request->getParam('editor_area', 'frontend')
-            );
-
-            return $this->normalizePreviewArea($requestPreviewArea) === 'frontend';
-        }
-
         try {
-            if (!PreviewManager::isPreviewMode()) {
-                return false;
+            /** @var PreviewContextService $service */
+            $service = ObjectManager::getInstance(PreviewContextService::class);
+            if (!$service->hasAuthoritativePreviewContext()) {
+                return null;
             }
 
-            $sessionPreviewArea = $this->normalizePreviewArea((string)(PreviewManager::getPreviewArea() ?? ''));
-
-            return $sessionPreviewArea === '' || $sessionPreviewArea === 'frontend';
+            return $service->getCurrentContext();
         } catch (\Throwable) {
-            return false;
+            return null;
         }
-    }
-
-    private function normalizePreviewArea(string $area): string
-    {
-        $normalized = \strtolower(\trim($area));
-        if ($normalized === 'admin' || $normalized === 'backend') {
-            return 'backend';
-        }
-        if ($normalized === 'front' || $normalized === 'frontend') {
-            return 'frontend';
-        }
-
-        return $normalized;
     }
 
     /**
@@ -901,6 +822,10 @@ HTML;
         $previewConfirmOkJson = \json_encode((string)__('确认发布'), $previewMessageJsonFlags) ?: '"确认发布"';
         $previewConfirmCancelJson = \json_encode((string)__('取消'), $previewMessageJsonFlags) ?: '"取消"';
         $previewConfirmTitleJson = \json_encode((string)__('发布预览'), $previewMessageJsonFlags) ?: '"发布预览"';
+        $tokenJson = \json_encode((string)$token, $previewMessageJsonFlags) ?: '""';
+        $editorUrlJson = \json_encode((string)$editorUrl, $previewMessageJsonFlags) ?: '""';
+        $exitPreviewUrlJson = \json_encode((string)$exitPreviewUrl, $previewMessageJsonFlags) ?: '""';
+        $publishAndExitUrlJson = \json_encode((string)$publishAndExitUrl, $previewMessageJsonFlags) ?: '""';
         
         // 娴獥 HTML 鍜屽唴鑱旀牱寮?鑴氭湰
         $floatHtml = <<<HTML
@@ -980,10 +905,10 @@ HTML;
     var floatEl = document.getElementById('weline-preview-exit-float');
     var exitBtn = document.getElementById('weline-preview-exit-btn');
     var publishBtn = document.getElementById('weline-preview-publish-btn');
-    var token = '{$token}';
-    var editorUrl = '{$editorUrl}';
-    var exitUrl = '{$exitPreviewUrl}';
-    var publishUrl = '{$publishAndExitUrl}';
+    var token = {$tokenJson};
+    var editorUrl = {$editorUrlJson};
+    var exitUrl = {$exitPreviewUrlJson};
+    var publishUrl = {$publishAndExitUrlJson};
     var previewMessages = {
         exitFailed: {$previewExitFailedJson},
         publishFailed: {$previewPublishFailedJson},
@@ -997,10 +922,12 @@ HTML;
     function showPreviewMessage(message, type) {
         var finalType = type === 'success' || type === 'warning' || type === 'info' ? type : 'error';
         var finalMessage = String(message || '');
-        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[finalType] === 'function') {
-            window.Weline.UI.toast[finalType](finalMessage);
-            return;
-        }
+        try {
+            if (window.Weline && window.Weline.UI && window.Weline.UI.toast && typeof window.Weline.UI.toast[finalType] === 'function') {
+                window.Weline.UI.toast[finalType](finalMessage);
+                return;
+            }
+        } catch (e) {}
 
         var toast = document.createElement('div');
         toast.setAttribute('role', 'status');
@@ -1025,7 +952,11 @@ HTML;
     }
 
     function confirmPreviewAction(message) {
-        return Weline.UI.dialog.confirm(message);
+        try {
+            if (window.Weline && window.Weline.UI && window.Weline.UI.dialog && typeof window.Weline.UI.dialog.confirm === 'function') {
+                return Promise.resolve(window.Weline.UI.dialog.confirm(message));
+            }
+        } catch (e) {}
 
         return new Promise(function(resolve) {
             var overlay = document.createElement('div');
@@ -1096,6 +1027,73 @@ HTML;
             okBtn.focus();
         });
     }
+
+    function clearPreviewClientState() {
+        document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        try { localStorage.removeItem('weline_preview_float_pos'); } catch (e) {}
+    }
+
+    function finishExit(redirectUrl) {
+        clearPreviewClientState();
+        window.location.href = redirectUrl || editorUrl || '/';
+    }
+
+    function unwrapPreviewPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return {};
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'success')) {
+            return payload;
+        }
+        if (payload.data && typeof payload.data === 'object' && Object.prototype.hasOwnProperty.call(payload.data, 'success')) {
+            return payload.data;
+        }
+        return payload;
+    }
+
+    function parsePreviewJson(response) {
+        return response.text().then(function(text) {
+            var trimmed = String(text || '').trim();
+            if (!trimmed) {
+                throw new Error('empty');
+            }
+            try {
+                return JSON.parse(trimmed);
+            } catch (e) {
+                if (/data-login-form|管理员登录|admin\\/login|login-form/i.test(trimmed)) {
+                    throw new Error('login');
+                }
+                throw new Error('non-json:' + response.status);
+            }
+        });
+    }
+
+    function requestExitPreview() {
+        var body = JSON.stringify({ token: token });
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+            return Promise.resolve(window.Weline.Api.resource('theme')).then(function(api) {
+                if (!api || typeof api.editorRequest !== 'function') {
+                    throw new Error('no-editor-request');
+                }
+                return api.editorRequest({
+                    url: exitUrl,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: body
+                });
+            });
+        }
+        return fetch(exitUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            credentials: 'include',
+            body: body
+        }).then(parsePreviewJson);
+    }
     
     // 鎷栧姩鍔熻兘
     var isDragging = false;
@@ -1154,33 +1152,22 @@ HTML;
     exitBtn.addEventListener('click', function() {
         exitBtn.disabled = true;
         exitBtn.textContent = '处理中...';
-        
-        fetch(exitUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ token: token })
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.success) {
-                // 娓呴櫎棰勮 Cookie
-                document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                localStorage.removeItem('weline_preview_float_pos');
-                window.location.href = editorUrl;
-            } else {
-                showPreviewMessage(data.message || previewMessages.exitFailed, 'error');
-                exitBtn.disabled = false;
-                exitBtn.textContent = '退出预览';
+
+        requestExitPreview()
+        .then(function(payload) {
+            var data = unwrapPreviewPayload(payload);
+            if (data && data.success) {
+                var redirectUrl = (data.data && data.data.editor_url) ? data.data.editor_url : editorUrl;
+                finishExit(redirectUrl);
+                return;
             }
+            // 服务端失败时仍清本地预览态并离开，避免卡死在预览浮窗
+            finishExit(editorUrl);
         })
         .catch(function(err) {
-            showPreviewMessage(previewMessages.networkError, 'error');
-            exitBtn.disabled = false;
-            exitBtn.textContent = '退出预览';
+            console.error('[WelinePreview] exit failed:', err);
+            // 网络/鉴权失败也优先离开预览；编辑器页会自行要求登录
+            finishExit(editorUrl);
         });
     });
     
@@ -1193,30 +1180,48 @@ HTML;
         
         publishBtn.disabled = true;
         publishBtn.textContent = '发布中...';
-        
-        fetch(publishUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ token: token })
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.success) {
-                document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                localStorage.removeItem('weline_preview_float_pos');
-                // 璺宠浆鍒板墠鍙伴椤碉紙闈為瑙堟ā寮忥級
-                window.location.href = data.redirect_url || '/';
+
+        var publishBody = JSON.stringify({ token: token });
+        var publishPromise;
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+            publishPromise = Promise.resolve(window.Weline.Api.resource('theme')).then(function(api) {
+                if (!api || typeof api.editorRequest !== 'function') {
+                    throw new Error('no-editor-request');
+                }
+                return api.editorRequest({
+                    url: publishUrl,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: publishBody
+                });
+            });
+        } else {
+            publishPromise = fetch(publishUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                credentials: 'include',
+                body: publishBody
+            }).then(parsePreviewJson);
+        }
+
+        publishPromise
+        .then(function(payload) {
+            var data = unwrapPreviewPayload(payload);
+            if (data && data.success) {
+                clearPreviewClientState();
+                window.location.href = (data.redirect_url || (data.data && data.data.redirect_url) || '/');
             } else {
-                showPreviewMessage(data.message || previewMessages.publishFailed, 'error');
+                showPreviewMessage((data && data.message) || previewMessages.publishFailed, 'error');
                 publishBtn.disabled = false;
                 publishBtn.textContent = '发布并退出';
             }
         })
         .catch(function(err) {
+            console.error('[WelinePreview] publish-and-exit failed:', err);
             showPreviewMessage(previewMessages.networkError, 'error');
             publishBtn.disabled = false;
             publishBtn.textContent = '发布并退出';

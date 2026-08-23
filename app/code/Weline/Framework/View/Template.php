@@ -288,7 +288,17 @@ class Template extends DataObject
             // 请求级数据必须每次请求都重新绑定，避免单例状态泄漏。
             $modulePath = $this->request->getModulePath();
             $this->view_dir = $modulePath === '' ? '' : rtrim($modulePath, DS) . DS . DataInterface::dir . DS;
-            $this->setData('title', $this->request->getModuleName());
+            // 默认用模块名；若控制器已通过 assign('title') 同步到 meta.controller_title，则恢复，
+            // 避免 ob_file() 每次 init 覆盖掉页面标题（浏览器 <title> / 页头 fallback）。
+            $moduleTitle = (string)$this->request->getModuleName();
+            $this->setData('title', $moduleTitle);
+            $meta = $this->getData('meta');
+            if (is_array($meta)) {
+                $controllerTitle = trim((string)($meta['controller_title'] ?? ''));
+                if ($controllerTitle !== '' && $controllerTitle !== $moduleTitle) {
+                    $this->setData('title', $controllerTitle);
+                }
+            }
             $this->request->setData('url', $this->request->getUrlBuilder()->getCurrentUrl());
             $this->setData('req', new TemplateRequestView());
             $this->setData('env', new TemplateEnvView());

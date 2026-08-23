@@ -395,13 +395,21 @@ HTML;
             ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
             : '/static/Weline/Frontend/js/weline-api-worker.js';
         $template = $this->getTemplateInstance();
+        $runtimeScriptUrl = (string)$template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            'Weline_Frontend::js/runtime.js'
+        );
+        $businessScriptUrl = (string)$template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            'Weline_Frontend::js/weline-api-business.js'
+        );
         $welineScriptUrl = (string)$template->fetchTagSource(
             \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
             'Weline_Frontend::js/weline.js'
         );
-        $themeScriptUrl = (string)$template->fetchTagSource(
-            \Weline\Framework\View\Data\DataInterface::dir_type_THEME,
-            'Weline_Theme::theme/frontend/assets/js/theme.js'
+        $uiScriptUrl = (string)$template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            'Weline_Theme::ui/weline-ui.js'
         );
         $queryBinUrl = $this->resolveFrontendQueryBinUrl();
 
@@ -455,35 +463,18 @@ HTML;
             ],
         ];
 
-        $workerUrlJson = $this->jsonEncodeForScript($apiWorkerUrl);
-        $queryBinUrlJson = $this->jsonEncodeForScript($queryBinUrl);
         $configJson = $this->jsonEncodeForScript($themeConfigPayload);
+        $runtimeScriptUrlEsc = \htmlspecialchars($runtimeScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $businessScriptUrlEsc = \htmlspecialchars($businessScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $welineScriptUrlEsc = \htmlspecialchars($welineScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $themeScriptUrlEsc = \htmlspecialchars($themeScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $uiScriptUrlEsc = \htmlspecialchars($uiScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         return <<<HTML
-    <script data-no-extract="true" data-auth-runtime-config>
-        (function() {
-            window.WelineApiConfig = window.WelineApiConfig || {};
-            window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || {$workerUrlJson};
-            window.WelineApiConfig.endpoint = window.WelineApiConfig.endpoint || window.WelineApiConfig.queryBinUrl || {$queryBinUrlJson};
-            window.WelineApiConfig.queryBinUrl = window.WelineApiConfig.queryBinUrl || {$queryBinUrlJson};
-            window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
-            window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
-
-            if (!window.__WelineThemeConfig) {
-                window.__WelineThemeConfig = {};
-            }
-
-            Object.assign(window.__WelineThemeConfig, {$configJson});
-
-            if (window.__WelineThemeConfig.modulesConfigUrl) {
-                window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
-            }
-        })();
-    </script>
+    <script type="application/json" data-weline-runtime-config data-auth-runtime-config>{$configJson}</script>
+    <script src="{$runtimeScriptUrlEsc}"></script>
+    <script src="{$businessScriptUrlEsc}"></script>
     <script src="{$welineScriptUrlEsc}"></script>
-    <script src="{$themeScriptUrlEsc}"></script>
+    <script type="module" src="{$uiScriptUrlEsc}"></script>
 HTML;
     }
 
@@ -551,7 +542,11 @@ HTML;
      */
     private function jsonEncodeForScript($value): string
     {
-        $encoded = \json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        $encoded = \json_encode(
+            $value,
+            \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP
+                | \JSON_HEX_APOS | \JSON_HEX_QUOT | \JSON_INVALID_UTF8_SUBSTITUTE
+        );
 
         return \is_string($encoded) ? $encoded : 'null';
     }
@@ -861,6 +856,11 @@ HTML;
                 'preview_mode' => (string)$this->readRequestValue('preview_mode') ?: PreviewContextService::DEFAULT_PREVIEW_MODE,
                 'status' => (string)$this->readRequestValue('status') ?: PreviewContextService::DEFAULT_STATUS,
                 'scope' => $scope,
+                'store_id' => (int)$this->readRequestValue('store_id'),
+                'store_code' => (string)$this->readRequestValue('store_code'),
+                'store_mode' => (string)$this->readRequestValue('store_mode') ?: 'normal',
+                'locale_code' => (string)$this->readRequestValue('locale_code') ?: (string)$this->readRequestValue('locale'),
+                'locale' => (string)$this->readRequestValue('locale') ?: (string)$this->readRequestValue('locale_code'),
                 'preview' => true,
             ]);
             $payload = is_array($payload) ? $payload : [];

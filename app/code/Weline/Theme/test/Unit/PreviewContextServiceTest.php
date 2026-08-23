@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Session\Session;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewRequestInspector;
@@ -41,7 +42,7 @@ class PreviewContextServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function testLegacyPreviewThemeOverridesStaleTokenThemeAndClearsToken(): void
+    public function testValidatedTokenKeepsImmutableThemeAndVersionAgainstLegacyParams(): void
     {
         $service = $this->createService(
             [
@@ -62,12 +63,12 @@ class PreviewContextServiceTest extends TestCase
 
         $context = $service->getCurrentContext();
 
-        $this->assertSame(10, $context['frontend_theme_id']);
-        $this->assertSame('', $context['preview_token']);
-        $this->assertNull($context['version_id']);
+        $this->assertSame(11, $context['frontend_theme_id']);
+        $this->assertSame('pv_11_oldtoken', $context['preview_token']);
+        $this->assertSame(88, $context['version_id']);
     }
 
-    public function testExplicitFrontendThemeIdClearsStaleTokenContext(): void
+    public function testValidatedTokenKeepsImmutableContextAgainstExplicitThemeIds(): void
     {
         $service = $this->createService(
             [
@@ -89,10 +90,10 @@ class PreviewContextServiceTest extends TestCase
 
         $context = $service->getCurrentContext();
 
-        $this->assertSame(10, $context['frontend_theme_id']);
+        $this->assertSame(11, $context['frontend_theme_id']);
         $this->assertSame(11, $context['backend_theme_id']);
-        $this->assertSame('', $context['preview_token']);
-        $this->assertNull($context['version_id']);
+        $this->assertSame('pv_11_oldtoken', $context['preview_token']);
+        $this->assertSame(66, $context['version_id']);
     }
 
     public function testRawQueryFrontendThemeIdOverridesRequestParamBagValue(): void
@@ -248,6 +249,8 @@ class PreviewContextServiceTest extends TestCase
         $previewTokenService = $this->createMock(PreviewTokenService::class);
         $previewTokenService->method('getCurrentPreviewData')->willReturn($tokenData);
         $previewTokenService->method('getTokenFromRequest')->willReturn(null);
+        $backendAuthSession = $this->createMock(AuthenticatedSessionInterface::class);
+        $backendAuthSession->method('isLoggedIn')->willReturn(true);
 
         return new PreviewContextService(
             $request,
@@ -255,6 +258,7 @@ class PreviewContextServiceTest extends TestCase
             $previewTokenService,
             $this->createMock(WelineTheme::class),
             new PreviewRequestInspector($request),
+            $backendAuthSession,
         );
     }
 }

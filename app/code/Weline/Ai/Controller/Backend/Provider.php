@@ -554,17 +554,21 @@ class Provider extends BackendPageController
             if (empty($data['account_name'])) {
                 throw new \Exception(__('请输入账户名称'));
             }
-            if (empty($data['api_key']) && !$account->getId()) {
+            $providerCodeNormalized = $this->normalizeProviderCode((string)$data['provider_code']);
+            $isCustomProvider = VendorConfigManager::isCustomProvider($providerCodeNormalized);
+            if (empty($data['api_key']) && !$account->getId() && !$isCustomProvider) {
                 throw new \Exception(__('请输入API密钥'));
             }
 
             // 设置基本信息
-            $account->setData(Account::schema_fields_PROVIDER_CODE, $this->normalizeProviderCode((string)$data['provider_code']));
+            $account->setData(Account::schema_fields_PROVIDER_CODE, $providerCodeNormalized);
             $account->setData(Account::schema_fields_ACCOUNT_NAME, $data['account_name']);
             
-            // 只有当提供新的API密钥时才更新
+            // 只有当提供新的API密钥时才更新；本地供应商允许空密钥（存空串）
             if (!empty($data['api_key'])) {
                 $account->setEncryptedApiKey($data['api_key']);
+            } elseif (!$account->getId() && $isCustomProvider) {
+                $account->setEncryptedApiKey('');
             }
             
             // 设置其他字段
@@ -574,9 +578,14 @@ class Provider extends BackendPageController
             
             $account->setData(
                 Account::schema_fields_BASE_URL,
-                $this->normalizeProviderBaseUrl((string)$data['provider_code'], (string)($data['base_url'] ?? ''))
+                $this->normalizeProviderBaseUrl($providerCodeNormalized, (string)($data['base_url'] ?? ''))
             );
-            $account->setData(Account::schema_fields_BALANCE, (float)($data['balance'] ?? 0));
+            $balance = (float)($data['balance'] ?? 0);
+            // 本地供应商默认给展示用余额，避免「可用账户」因余额为 0 被过滤
+            if ($isCustomProvider && $balance <= 0 && !$account->getId()) {
+                $balance = 999999;
+            }
+            $account->setData(Account::schema_fields_BALANCE, $balance);
             $account->setData(Account::schema_fields_CURRENCY, $data['currency'] ?? 'USD');
             $account->setData(Account::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? 0));
             

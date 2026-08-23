@@ -46,29 +46,34 @@ if (!function_exists('weline_dropdown_safe_url')) {
     }
 }
 
-// 构建CSS类
-$dropdownClass = 'w-dropdown dropdown';
+$dropdownClass = 'w-dropdown';
 if ($position === 'right') {
-    $dropdownClass .= ' w-dropdown-right dropdown-right';
+    $dropdownClass .= ' w-dropdown-right';
 }
 if ($class) {
     $dropdownClass .= ' ' . weline_dropdown_escape($class);
 }
+$idEsc = weline_dropdown_escape($id);
 ?>
-<div class="<?= $dropdownClass ?>">
-    <button class="w-btn w-btn-secondary w-dropdown-toggle dropdown-toggle" type="button" id="<?= weline_dropdown_escape($id) ?>" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+<div class="<?= $dropdownClass ?>" data-w-component="menu">
+    <button class="w-button w-dropdown-toggle" type="button" id="<?= $idEsc ?>" data-w-menu-trigger data-tone="neutral" data-variant="outline" aria-haspopup="menu" aria-expanded="false">
         {{trigger}}
     </button>
-    <div class="w-dropdown-menu w-menu" aria-labelledby="<?= weline_dropdown_escape($id) ?>" data-w-menu-panel role="menu" hidden>
+    <div class="w-dropdown-menu w-menu" aria-labelledby="<?= $idEsc ?>" data-w-menu-panel role="menu" data-state="closed" aria-hidden="true" hidden>
         <?php foreach ($items as $item): ?>
             <?php if (isset($item['divider']) && $item['divider']): ?>
                 <div class="w-dropdown-divider w-menu__divider"></div>
             <?php elseif (isset($item['header'])): ?>
                 <h6 class="w-dropdown-header w-menu__header"><?= weline_dropdown_escape($item['header']) ?></h6>
             <?php else: ?>
-                <a class="w-dropdown-item w-menu__item" href="<?= weline_dropdown_escape(weline_dropdown_safe_url($item['url'] ?? '#')) ?>" <?= isset($item['onclick']) ? 'data-weline-click="' . weline_dropdown_escape($item['onclick']) . '"' : '' ?> role="menuitem" tabindex="-1">
-                    <?php if (isset($item['icon'])): ?>
-                        <i class="<?= weline_dropdown_escape($item['icon']) ?> me-2"></i>
+                <?php
+                $itemUrl = weline_dropdown_escape(weline_dropdown_safe_url($item['url'] ?? '#'));
+                $itemClickAttr = isset($item['onclick']) ? ' data-weline-click="' . weline_dropdown_escape($item['onclick']) . '"' : '';
+                $itemIcon = isset($item['icon']) ? weline_dropdown_escape($item['icon']) : '';
+                ?>
+                <a class="w-dropdown-item w-menu__item" href="<?= $itemUrl ?>"<?= $itemClickAttr ?> role="menuitem" tabindex="-1">
+                    <?php if ($itemIcon !== ''): ?>
+                        <span class="w-menu__icon" data-icon="<?= $itemIcon ?>" aria-hidden="true"></span>
                     <?php endif; ?>
                     <?= weline_dropdown_escape($item['text'] ?? '') ?>
                 </a>

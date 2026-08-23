@@ -96,7 +96,13 @@ class FontFaceService
      */
     public function renderStyleTag(array $options): string
     {
-        $css = $this->renderCss($options);
+        try {
+            $css = $this->renderCss($options);
+        } catch (\Throwable $e) {
+            return '<!-- theme:font subset failed: '
+                . htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . ' -->';
+        }
         if ($css === '' || str_starts_with($css, '/*')) {
             return $css === '' ? '' : '<!-- ' . trim($css, " \t\n\r\0\x0B/*") . ' -->';
         }

@@ -56,9 +56,7 @@ final class StorefrontCacheKeyContextResolver
         StorefrontCacheKeyContext::install($provisional);
 
         try {
-            $fingerprint = $this->generations->fingerprint(
-                $this->namespacePaths((string)$identity->websiteCode),
-            );
+            $fingerprint = $this->generations->fingerprint($this->namespacePathsForIdentity($identity));
             $resolved = new StorefrontCacheKeyContext(
                 $identity,
                 $provisional->lang,
@@ -99,7 +97,7 @@ final class StorefrontCacheKeyContextResolver
         $provisional = $this->requestFence($identity, $lang, $currency, 'legacy_namespace_pending');
         StorefrontCacheKeyContext::install($provisional);
         try {
-            $fingerprint = $this->generations->fingerprint($this->namespacePaths('default'));
+            $fingerprint = $this->generations->fingerprint($this->namespacePathsForIdentity($identity));
             $resolved = new StorefrontCacheKeyContext(
                 $identity,
                 $provisional->lang,
@@ -132,6 +130,33 @@ final class StorefrontCacheKeyContextResolver
             $this->namespacePath->website($websiteCode, ['catalog']),
             $this->namespacePath->website($websiteCode, ['price']),
             $this->namespacePath->website($websiteCode, ['theme']),
+        ];
+    }
+
+    /**
+     * Scope-aware storefront vector. Parent paths remain in the vector, so a
+     * Website bump invalidates its Stores and Channels without enumerating them.
+     *
+     * @return list<string>
+     */
+    public function namespacePathsForIdentity(ScopeIdentity $identity): array
+    {
+        if (!$this->isCompleteChannelIdentity($identity)) {
+            throw new \InvalidArgumentException(__('Storefront 缓存版本缺少完整 Channel Scope'));
+        }
+
+        $websiteCode = (string)$identity->websiteCode;
+        $storeCode = (string)$identity->storeCode;
+        $channelCode = (string)$identity->channelCode;
+        $storeMode = (string)$identity->storeMode;
+
+        return [
+            ...$this->namespacePaths($websiteCode),
+            $this->namespacePath->website($websiteCode, ['theme', 'store', $storeCode, $storeMode]),
+            $this->namespacePath->website(
+                $websiteCode,
+                ['theme', 'store', $storeCode, $storeMode, 'channel', $channelCode],
+            ),
         ];
     }
 

@@ -1,6 +1,7 @@
 # Weline_MediaManager
 
-MediaManager provides the backend media connector and development-time static/media routing for files under `pub/media`.
+MediaManager provides a provider-aware backend media library. Local media is one
+canonical Storage disk; uploads and mutations stay synchronized with FileAsset.
 
 Its file-manager implementation and block extend `Weline\FileManager\Api\FileManager`
 and `Weline\FileManager\Api\Block\FileManager`. Cross-module code must not use the
@@ -19,11 +20,14 @@ must not initialize or inspect Backend theme blocks directly.
 
 - Backend and FileManager are required. FileManager owns the public extension bases;
   the dependency direction is `MediaManager -> FileManager`.
-- Ai, Storage and Theme are optional. Storage only augments the connector's storage-source
-  listing; Theme only publishes development override assets; their absence preserves the local media source.
+- Storage is required and owns every local/remote directory and object operation.
+  Ai and Theme remain optional.
 - Optional calls are resolved only through `Ai\Api\Image\ImageRuntimeInterface`,
   `Ai\Api\Image\TextToImageScenarioBindingInterface`,
-  `Storage\Api\StorageCatalogInterface`, and `Theme\Api\Asset\StaticAssetPublisherInterface`.
+  `Storage\Api\StorageCatalogInterface`,
+  `Storage\Api\StorageDirectoryManagerInterface`, and
+  `FileManager\Api\FileAssetLibraryInterface`, and
+  `Theme\Api\Asset\StaticAssetPublisherInterface`.
 - FileManager must not declare a reverse dependency on MediaManager.
 
 ## AI Draw Binding Contract
@@ -46,9 +50,44 @@ because MediaManager does not own or directly operate the Ai scenario schema.
 - Static request paths are URL-decoded before filesystem resolution.
 - Static routing rejects decoded paths containing `..`, backslashes, NUL, or other control characters.
 - Static files are served only after `realpath()` proves the requested file is inside the allowed root directory.
-- Backend connector hashes and `path` parameters resolve to paths under the media root only.
+- Backend connector hashes and `path` parameters resolve only to normalized object
+  keys on the selected canonical Storage disk.
 - `mkdir`, `rename`, and upload target names must be single basename values without path separators or control characters.
-- Write targets are checked against the real media root before creating directories, renaming, or moving uploaded files.
+- Directory and object writes remain behind Storage provider contracts; the connector
+  contains no direct local-filesystem mutation fallback.
+- Browser business uploads use `Weline.Api.resource('media_manager').connector`;
+  neither raw XHR nor process-global request mutation is part of the upload path.
+- Uploads are capped at 14 MiB per request (within the default 16 MiB WLS body budget), preflight target-name collisions,
+  validate the configured extension against detected MIME, and never overwrite.
+- Wildcard upload permits a safe passive-content list; active browser content is
+  accepted only when an embedding picker explicitly lists its extension.
+- Remote storage names and paths are validated before the provider is resolved; root mutation, traversal, control characters, and rename-overwrite are rejected.
+- Provider operations never fall back to another disk. Capability gaps are reflected as disabled UI actions.
+
+## Storage Directory Management
+
+- The folder tree and media grid expose the same provider-aware directory actions by pointer context menu, keyboard context menu, and a touch-friendly more button.
+- `StorageCatalogInterface` remains read-only discovery. Directory commands use
+  `StorageDirectoryManagerInterface`; FileAsset-aware object mutations use only
+  `FileAssetLibraryInterface`. Adapter objects, ORM models and credentials never
+  cross into MediaManager.
+- The management scope is browse, create directory, rename/move file, rename
+  directory, delete file/directory, FileAsset upload, metadata display/edit,
+  download and preview where the provider advertises the matching capability.
+- External operating-system `Files` dropped on the content area and clipboard File
+  items pasted outside editable controls use the existing connector upload contract
+  and current-directory target. Every file receives its own localized display name,
+  default alt and description. Pure text paste is never intercepted.
+- Existing regular files use a dedicated internal DataTransfer MIME and connector
+  `move` command when dropped on a grid or tree folder. Directories, symbolic links,
+  same-folder moves and target-name overwrites are rejected. Non-local moves always
+  stay behind `StorageDirectoryManagerInterface` capability checks and never fall
+  back to the local media root.
+- Context menus use the native `Weline.UI` Menu shell and `w-menu` semantic skin. A virtual anchor preserves the actual pointer/keyboard invocation point, while the shared floating runtime handles portal ownership, visual-viewport/safe-area flipping and clamping, viewport-change repositioning, keyboard navigation, Escape/Tab, outside dismissal, focus restoration, reload reset, and automatic light/dark/system tokens. MediaManager owns actions only; it must not duplicate menu colors or panel-positioning code.
+- Selecting a file renders its safe FileAsset and locale metadata in the side panel.
+  The ordinary-file context menu exposes “查看详情”, which opens the same complete
+  record in an accessible responsive dialog; hashes and private provider credentials
+  are never displayed.
 
 The connector must preserve normal nested media folders while refusing traversal attempts such as `../../app/etc/env.php`.
 

@@ -7,10 +7,12 @@
         "php": "^8.4",
         "weline/module-backend": "@dev",
         "weline/module-eav": "@dev",
-        "weline/module-queue": "@dev"
+        "weline/module-queue": "@dev",
+        "weline/module-storage": "^1.2"
     },
     "suggest": {
-        "weline/module-server": "Adds the File Manager capability to the WLS panel."
+        "weline/module-server": "Adds the File Manager capability to the WLS panel.",
+        "weline/module-theme": "Validates typed file-image nodes in Theme layouts."
     },
     "authors": [
         {

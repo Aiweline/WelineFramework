@@ -21,6 +21,14 @@
 - Vendor：`Weline`
 - Module：`Checkout`
 
+<!-- weline:module-doc-baseline:start -->
+## 固定模块文档
+
+- [功能现状](功能现状.md)：当前版本、代码能力面、主要入口与未验证边界。
+- [需求](需求.md)：已确认需求、文档基线与待确认产品语义。
+- [开发日志](开发日志.md)：目标版本进度、证据和交付状态。
+<!-- weline:module-doc-baseline:end -->
+
 ## 代码面清单
 
 入口/配置文件：
@@ -127,8 +135,9 @@
 - `app/code/Weline/Checkout/doc/hook/frontend/partials/checkout/shipping-methods.md`
 - `app/code/Weline/Checkout/doc/事件使用指南.md`
 - `app/code/Weline/Checkout/doc/使用指南.md`
+- `app/code/Weline/Checkout/doc/功能现状.md`
 - `app/code/Weline/Checkout/doc/开发日志.md`
-- `app/code/Weline/Checkout/doc/需求.md`
+- `... 另有 1 个文档，请按任务在该模块 doc/ 下继续查找`
 
 ## 开发前门禁
 

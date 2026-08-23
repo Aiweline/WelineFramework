@@ -31,15 +31,14 @@ final class WelineMediaConnectorOriginContractTest extends TestCase
         );
     }
 
-    public function testOpenMediaManagerCoercesConnectorToSameOrigin(): void
+    public function testPickerTemplateUsesTheRelativeConnectorSuppliedByTheBlock(): void
     {
         $path = BP . '/app/code/Weline/MediaManager/view/blocks/weline-media.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
 
-        self::assertStringContainsString('function sameOriginConnector(connectorUrl)', $source);
-        self::assertStringContainsString('window.location.origin + parsed.pathname', $source);
-        self::assertStringContainsString('connectorUrl = sameOriginConnector(connectorUrl);', $source);
-        self::assertStringContainsString('ignoreBackdropUntil', $source);
+        self::assertStringContainsString('data-src="{{connector}}"', $source);
+        self::assertStringNotContainsString('getBackendUrl(', $source);
+        self::assertStringNotContainsString('window.location.origin', $source);
     }
 }

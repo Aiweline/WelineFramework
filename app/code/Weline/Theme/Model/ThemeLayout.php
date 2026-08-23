@@ -6,6 +6,8 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Api\Layout\LayoutIdentityHasher;
 use Weline\Theme\Service\LayoutDataService;
 /** 主题布局模型 - 存储主题中各个区域的部件配置 */
 #[Table(comment: '主题布局配置表')]
@@ -13,25 +15,32 @@ use Weline\Theme\Service\LayoutDataService;
 #[Index(name: 'idx_area_sort', columns: ['area', 'sort_order'])]
 #[Index(name: 'idx_theme_slot', columns: ['theme_id', 'page_type', 'area', 'slot_id'])]
 #[Index(name: 'idx_theme_status', columns: ['theme_id', 'page_type', 'status'])]
-#[Index(name: 'idx_theme_layout_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'status'])]
+#[Index(name: 'idx_theme_layout_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'locale_code', 'target_type', 'target_id', 'status'])]
+#[Index(name: 'uk_theme_layout_identity_node', columns: ['layout_identity_hash'], type: 'UNIQUE')]
 class ThemeLayout extends Model
 {
     public const schema_table = 'theme_layout';
     public const schema_primary_key = 'layout_id';
     #[Col('int', 11, primaryKey: true, autoIncrement: true, nullable: false, comment: '布局ID')]
     public const schema_fields_ID = 'layout_id';
+    #[Col('varchar', 32, nullable: true, comment: '稳定 128-bit 布局节点 UID；迁移后应全部非空')]
+    public const schema_fields_NODE_UID = 'node_uid';
     #[Col('int', 11, nullable: false, comment: '主题ID')]
     public const schema_fields_THEME_ID = 'theme_id';
     #[Col('varchar', 50, nullable: false, default: 'default', comment: '页面类型')]
     public const schema_fields_PAGE_TYPE = 'page_type';
     #[Col('varchar', 100, nullable: false, default: 'default', comment: 'Layout option')]
     public const schema_fields_LAYOUT_OPTION = 'layout_option';
-    #[Col('varchar', 120, nullable: false, default: 'default', comment: 'Scope path')]
+    #[Col('varchar', 400, nullable: false, default: 'default', comment: 'Scope path')]
     public const schema_fields_SCOPE = 'scope';
+    #[Col('varchar', 16, nullable: false, default: '', comment: '独立布局语言；空值为历史语言中立行')]
+    public const schema_fields_LOCALE_CODE = 'locale_code';
     #[Col('varchar', 50, nullable: false, default: 'global', comment: 'Layout target type')]
     public const schema_fields_TARGET_TYPE = 'target_type';
     #[Col('int', 11, nullable: false, default: 0, comment: 'Layout target ID')]
     public const schema_fields_TARGET_ID = 'target_id';
+    #[Col('char', 64, nullable: false, default: '', comment: 'Canonical layout node identity SHA-256')]
+    public const schema_fields_IDENTITY_HASH = 'layout_identity_hash';
     #[Col('varchar', 50, nullable: false, comment: '区域标识')]
     public const schema_fields_AREA = 'area';
     #[Col('varchar', 50, comment: '插槽ID')]
@@ -132,6 +141,19 @@ class ThemeLayout extends Model
     {
         return $this->setData(self::schema_fields_ID, $id);
     }
+    public function getNodeUid(): string
+    {
+        return (string)$this->getData(self::schema_fields_NODE_UID);
+    }
+    public function setNodeUid(string $nodeUid): self
+    {
+        $nodeUid = \strtolower(\trim($nodeUid));
+        if (\preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+            throw new \InvalidArgumentException('theme_layout_node_uid_invalid');
+        }
+
+        return $this->setData(self::schema_fields_NODE_UID, $nodeUid);
+    }
     public function getThemeId(): int
     {
         return (int)$this->getData(self::schema_fields_THEME_ID);
@@ -165,6 +187,14 @@ class ThemeLayout extends Model
     {
         $scope = trim($scope) !== '' ? trim($scope) : 'default';
         return $this->setData(self::schema_fields_SCOPE, $scope);
+    }
+    public function getLocaleCode(): string
+    {
+        return (string)($this->getData(self::schema_fields_LOCALE_CODE) ?: '');
+    }
+    public function setLocaleCode(string $localeCode): self
+    {
+        return $this->setData(self::schema_fields_LOCALE_CODE, trim($localeCode));
     }
     public function getTargetType(): string
     {
@@ -294,5 +324,53 @@ class ThemeLayout extends Model
             self::STATUS_DRAFT => __('草稿'),
             self::STATUS_PUBLISHED => __('已发布'),
         ];
+    }
+
+    public function save_before(): void
+    {
+        parent::save_before();
+        if ($this->getNodeUid() === '') {
+            $this->setNodeUid(\bin2hex(\random_bytes(16)));
+        }
+        $themeId = $this->getThemeId();
+        $pageType = trim($this->getPageType());
+        $layoutOption = trim($this->getLayoutOption());
+        $targetType = trim($this->getTargetType());
+        $status = trim($this->getStatus());
+        $area = trim($this->getArea());
+        if (
+            $themeId < 1
+            || $pageType === '' || strlen($pageType) > 50 || preg_match('/[\x00-\x1F\x7F]/', $pageType) === 1
+            || strlen($layoutOption) > 100
+            || strlen($targetType) > 50
+            || !in_array($status, [self::STATUS_DRAFT, self::STATUS_PUBLISHED], true)
+            || $area === '' || strlen($area) > 50 || preg_match('/[\x00-\x1F\x7F]/', $area) === 1
+        ) {
+            throw new \InvalidArgumentException((string)__('Theme 布局节点身份无效。'));
+        }
+        $identity = new LayoutIdentity(
+            $layoutOption,
+            $this->getScope(),
+            $targetType,
+            $this->getTargetId(),
+            $this->getLocaleCode(),
+        );
+        $this->setData(self::schema_fields_PAGE_TYPE, $pageType);
+        $this->setData(self::schema_fields_LAYOUT_OPTION, $identity->layoutOption);
+        $this->setData(self::schema_fields_SCOPE, $identity->scope);
+        $this->setData(self::schema_fields_LOCALE_CODE, $identity->localeCode);
+        $this->setData(self::schema_fields_TARGET_TYPE, $identity->targetType);
+        $this->setData(self::schema_fields_TARGET_ID, $identity->targetId);
+        $this->setData(self::schema_fields_AREA, $area);
+        $this->setData(self::schema_fields_STATUS, $status);
+        $this->setData(
+            self::schema_fields_IDENTITY_HASH,
+            LayoutIdentityHasher::node($themeId, $pageType, $identity, $status, $this->getNodeUid()),
+        );
+        $now = \date('Y-m-d H:i:s');
+        if (!$this->getLayoutId()) {
+            $this->setData(self::schema_fields_CREATE_TIME, $now);
+        }
+        $this->setData(self::schema_fields_UPDATE_TIME, $now);
     }
 }

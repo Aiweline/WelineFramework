@@ -269,7 +269,6 @@ class Type extends \Weline\Framework\Database\Model
             'title' => $attribute->getName() ?: $type->getName(),
             'placeholder' => __('请输入 ') . $type->getName(),
             'required' => $type->getRequired() ? 'required' : '',
-            $type->getFrontendAttrs() => ''
         ], $attrs);
         unset($attrs['frontend_attrs']);
         unset($attrs['type']);
@@ -341,12 +340,12 @@ class Type extends \Weline\Framework\Database\Model
                 case 'select':
                     $html .= '<select ' . $attrsString . '>';
                     foreach ($option_items as $k => $v) {
-                        $html .= '<option value="' . $k . '" ' . ($value == $k ? 'selected' : '') . '>' . $v . '</option>';
+                        $html .= '<option value="' . self::escape($k) . '" ' . ($value == $k ? 'selected' : '') . '>' . self::escape($v) . '</option>';
                     }
                     $html .= '</select>';
                     break;
                 case 'textarea':
-                    $html .= '<textarea ' . $attrsString . '>' . $value . '</textarea>';
+                    $html .= '<textarea ' . $attrsString . '>' . self::escape($value) . '</textarea>';
                     break;
                 case 'radio':
                 case 'checkbox':
@@ -363,140 +362,116 @@ class Type extends \Weline\Framework\Database\Model
     function processElementAttr(EavAttribute &$attribute, array &$attrs): string
     {
         $type = $attribute->getTypeModel();
-        $id = $this->getCode() . '_' . $attribute->getCode() . '_' . $this->getId();
-        $attrsString = ' id="' . $id . '" data-name="' . $type->getCode() . '" code="' . $attribute->getCode() . '" ';
-        foreach ($attrs as $k => $v) {
-            if (is_array($v)) {
-                $v = json_encode($v);
-            }
-            switch ($k) {
-                case 'type':
-                    switch ($v) {
-                        case 'int':
-                        case 'integer':
-                        case 'float':
-                        case 'smallint':
-                            $attrsString .= ' type="number"';
-                            break;
-                        case self::schema_fields_swatch_image:
-                            $attrsString .= ' type="image"';
-                            break;
-                        case self::schema_fields_swatch_color:
-                            $attrsString .= ' type="color"';
-                            break;
-                        default:
-                            $attrsString .= ' type="text"';
-                            break;
-                    }
-                    break;
-                default:
-                    $attrsString .= ' ' . $k . '="' . $v . '"';
-                    break;
+        $element = strtolower($type->getElement());
+        $id = self::controlId($attribute);
+        $fieldType = (string)($attrs['type'] ?? $attrs['field_type'] ?? 'text');
+        $inputType = match ($fieldType) {
+            'int', 'integer', 'float', 'smallint', 'bigint' => 'number',
+            self::schema_fields_swatch_image => 'file',
+            self::schema_fields_swatch_color => 'color',
+            default => in_array($fieldType, ['text', 'email', 'url', 'password', 'date', 'datetime-local', 'time', 'tel', 'search'], true)
+                ? $fieldType
+                : 'text',
+        };
+        $baseClass = match ($element) {
+            'select' => 'w-select',
+            'textarea' => 'w-textarea',
+            default => 'w-input',
+        };
+        $providedClasses = preg_split('/\s+/', trim((string)($attrs['class'] ?? ''))) ?: [];
+        $classes = [$baseClass];
+        foreach ($providedClasses as $providedClass) {
+            if (preg_match('/^w-[a-z0-9_-]+$/', $providedClass)) {
+                $classes[] = $providedClass;
             }
         }
-        $attrsString .= $type->getFrontendAttrs();
-        return $attrsString;
+
+        $render = [
+            'id' => $id,
+            'name' => (string)($attrs['name'] ?? $attribute->getCode()),
+            'class' => implode(' ', array_values(array_unique($classes))),
+            'title' => (string)($attrs['title'] ?? $attribute->getName()),
+            'placeholder' => (string)($attrs['placeholder'] ?? ''),
+            'data-w-field-code' => $attribute->getCode(),
+        ];
+        if ($element !== 'select' && $element !== 'textarea') {
+            $render['type'] = $inputType;
+        }
+        foreach (['value', 'min', 'max', 'step', 'pattern', 'autocomplete', 'accept', 'rows', 'cols'] as $name) {
+            if (array_key_exists($name, $attrs) && $attrs[$name] !== null && !is_array($attrs[$name])) {
+                $render[$name] = (string)$attrs[$name];
+            }
+        }
+        if (!empty($attrs['length'])) {
+            $render['maxlength'] = (string)(int)$attrs['length'];
+        }
+        if (array_key_exists('model_class_data', $attrs)) {
+            $modelData = is_array($attrs['model_class_data'])
+                ? json_encode($attrs['model_class_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                : (string)$attrs['model_class_data'];
+            $render['data-w-model-class-data'] = $modelData ?: '';
+        }
+        foreach (['required', 'disabled', 'readonly', 'multiple'] as $booleanName) {
+            if (!empty($attrs[$booleanName])) {
+                $render[$booleanName] = $booleanName;
+            }
+        }
+
+        $dependence = trim((string)$attribute->getDependence());
+        if ($dependence !== '') {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $eavModule = Env::getInstance()->getModuleByName('Weline_Eav');
+            $router = trim((string)($eavModule['router'] ?? 'eav'), '/');
+            $render['data-w-component'] = 'dependent-field';
+            $render['data-w-dependencies'] = $dependence;
+            $render['data-w-dependence-resource'] = 'eav_admin';
+            $render['data-w-dependence-url'] = $request->isBackend()
+                ? $request->getUrlBuilder()->getBackendUrl($router . '/backend/attribute/dependence')
+                : $request->getUrlBuilder()->getUrl($router . '/backend/attribute/dependence');
+        }
+
+        $parts = [];
+        foreach ($render as $name => $renderValue) {
+            $parts[] = $name . '="' . self::escape($renderValue) . '"';
+        }
+        return implode(' ', $parts);
     }
 
     static function processLabel(EavAttribute &$attribute, string &$label_class, string &$html): void
     {
         $type = $attribute->getTypeModel();
-        $required = $type->getRequired() ? '<span class="required">*</span>' : '';
-        $name = __($attribute->getName());
-        $typeCode = $type->getCode();
-        $attributeCode = $attribute->getCode();
-        $dependence = $attribute->getDependence() ? '<br>' . __('依赖：') . '<span class="w-text" data-tone="info">' . $attribute->getDependence() . '</span>' : '';
+        $required = $type->getRequired() ? '<span class="w-text" data-tone="danger" aria-hidden="true">*</span>' : '';
+        $name = self::escape((string)__($attribute->getName()));
+        $typeCode = self::escape($type->getCode());
+        $attributeCode = self::escape($attribute->getCode());
+        $dependenceValue = trim((string)$attribute->getDependence());
+        $dependence = $dependenceValue !== ''
+            ? '<small class="w-field__hint">' . self::escape((string)__('依赖：')) . '<span class="w-text" data-tone="info">' . self::escape($dependenceValue) . '</span></small>'
+            : '';
+        $controlId = self::escape(self::controlId($attribute));
         $label = <<<LABEL
-<label title="$attributeCode-$name" data-type-code="$typeCode" class="$label_class">$required $name <span class="w-text" data-tone="primary">$attributeCode</span>$dependence</label>
+<label for="$controlId" title="$attributeCode-$name" data-w-type-code="$typeCode" class="w-field__label">$required $name <span class="w-text" data-tone="primary">$attributeCode</span>$dependence</label>
 LABEL;
         $html = $label . $html;
     }
 
     static function processDependence(EavAttribute &$attribute, string &$html): void
     {
-        $dependence = $attribute->getDependence();
-        $attributeCode = $attribute->getCode();
-        if ($dependence) {
-            /**@var Request $req */
-            $req = ObjectManager::getInstance(Request::class);
-            $eavModel = Env::getInstance()->getModuleByName('Weline_Eav');
-            if (isset($eavModel['router'])) {
-                $dependence = explode(',', $dependence);
-                $eavDependenceUrl = $req->isBackend() ? $req->getUrlBuilder()->getBackendUrl($eavModel['router'] . '/backend/attribute/dependence') : $req->getUrlBuilder()->getUrl($eavModel['router'] . '/backend/attribute/dependence');
-                $js = <<<PRE_JS
-<script>
-$(function() {
-PRE_JS;
+        // Dependency behavior is declared by processElementAttr() and mounted by Weline.UI.
+    }
 
-                foreach ($dependence as $dependenceItem) {
-                    $js .= <<<DEPENDENCE_JS
-                let currentAttribute = $('*[code="$attributeCode"]');
-                let dependenceAttribute = $('*[code="$dependenceItem"]');
-                let update = function() {
-                    let currentAttribute = $('*[code="$attributeCode"]');
-                    let dependenceAttribute = $('*[code="$dependenceItem"]');
-                    // 从ajax获取依赖属性的值，并更新到当前属性
-                    $.ajax({
-                        url: "$eavDependenceUrl",
-                        type: "GET",
-                        data: {
-                            d: dependenceAttribute.attr("code"),
-                            dv: dependenceAttribute.val(),
-                            a: "$attributeCode",
-                        },
-                        success: function(res) {
-                            // 渲染到当前属性,如果是input则英文逗号打断数组填入，如果是select则组装option填入
-                            let items = res['data'];
-                            console.log(items)
-                            let values = [];
-                            for(key in items) {
-                                values.push(items[key]);
-                            }
-                            let currentAttribute = $('*[code="$attributeCode"]');
-                            if(items && currentAttribute.length) {
-                                let attributeElement = currentAttribute[0];
-                                if(attributeElement.tagName === 'INPUT' || attributeElement.tagName === 'TEXTAREA') {
-                                    attributeElement.val(values.join(','));
-                                } else if(attributeElement.tagName === 'SELECT') {
-                                    let optionItems = [];
-                                    for(key in items) {
-                                        optionItems.push('<option value="' + key + '">' + items[key] + '</option>');
-                                    }
-                                    attributeElement.innerHTML = optionItems.join('');
-                                }else{
-                                    attributeElement.innerHTML = values.join('');
-                                }
-                                $('*[dependence="$attributeCode"]').parent().css("display", "block");
-                            }
-                        }
-                    })
-                }
-                
-                let value = dependenceAttribute.val();
-                let disabled = (value === '' || ((Array.isArray(value) && value.length === 0) || dependenceAttribute.attr("disabled")));
-                dependenceAttribute.change(function() {
-                    let value = dependenceAttribute.val();
-                    let disabled = (value === '' || ((Array.isArray(value) && value.length === 0) || dependenceAttribute.attr("disabled")));
-                    if(disabled) {
-                        currentAttribute.attr("disabled", disabled);
-                        currentAttribute.parent().css("display", "none");
-                    }else{
-                        currentAttribute.attr("disabled", false);
-                        currentAttribute.parent().css("display", "block");
-                    }
-                   console.log("依赖更新：dependenceAttribute")
-                   update();
-                });
-                if(disabled) {
-                    currentAttribute.attr("disabled", true);
-                    currentAttribute.parent().css("display", "none");
-                    return;
-                }
-                update();
-DEPENDENCE_JS;
-                }
-                $html .= $js . '});</script>';
-            }
+    private static function controlId(EavAttribute $attribute): string
+    {
+        $raw = $attribute->getTypeModel()->getCode() . '-' . $attribute->getCode() . '-' . $attribute->getTypeId();
+        return trim((string)preg_replace('/[^a-zA-Z0-9_-]+/', '-', $raw), '-');
+    }
+
+    private static function escape(mixed $value): string
+    {
+        if (is_array($value)) {
+            $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
         }
+        return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

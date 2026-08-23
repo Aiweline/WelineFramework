@@ -114,7 +114,37 @@ final class Inventory extends BackendController
         $this->assign('rows', $rows);
         $this->assign('columns', $columns);
         $this->assign('error', $error);
+        $this->assignWebsiteSelect((string)$websiteId);
         return (string)$this->fetch('index');
+    }
+
+    private function assignWebsiteSelect(string $selectedValue): void
+    {
+        $options = [];
+        try {
+            $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+            if (\is_array($queried)) {
+                $options = $queried;
+            }
+        } catch (\Throwable) {
+            $options = [];
+        }
+        $display = '';
+        foreach ($options as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            if ((string)($option['value'] ?? '') === $selectedValue) {
+                $display = \trim((string)($option['label'] ?? ''));
+                break;
+            }
+        }
+        if ($display === '' && $selectedValue !== '') {
+            $display = '#' . $selectedValue;
+        }
+        $this->assign('websiteSelectValue', $selectedValue);
+        $this->assign('websiteSelectDisplay', $display);
+        $this->assign('websiteSelectOptionsJson', \json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
     }
 
     private function handleMutation(string $section, callable $mutation, string $success): string

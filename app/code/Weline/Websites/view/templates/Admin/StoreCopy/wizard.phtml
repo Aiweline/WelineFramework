@@ -28,6 +28,11 @@ $config = [
         'errorCode' => (string)__('错误码'),
     ],
 ];
+$storeCopyTargetWebsiteValue = '';
+$storeCopyTargetWebsiteDisplay = '';
+$storeCopySourceWebsiteValue = '';
+$storeCopySourceWebsiteDisplay = '';
+$storeCopyWebsiteSelectOptionsJson = '[]';
 ?>
 <div class="w-container" data-testid="store-copy-wizard" data-plan-cases="TEST-P2C-COPY-01,TEST-P2C-COPY-02,TEST-P2C-COPY-03,TEST-P2C-COPY-04,TEST-P2C-COPY-05" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
     <div class="w-cluster" data-wrap="true" data-align="start" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
@@ -63,18 +68,40 @@ $config = [
                             </select>
                         </div>
 
-                        <div style="--w-span-md:6;">
-                            <label class="w-field__label" for="store-copy-target-website"><lang>目标 Website</lang></label>
-                            <select class="w-select" id="store-copy-target-website" data-testid="store-copy-target-website"></select>
+                        <div style="--w-span-md:6;" data-testid="store-copy-target-website">
+                            <label class="w-field__label" for="store-copy-target-website_trigger"><lang>目标 Website</lang></label>
+                            <w:websites:website:select
+                                id="store-copy-target-website"
+                                name="target_website_id"
+                                value="storeCopyTargetWebsiteValue"
+                                display="storeCopyTargetWebsiteDisplay"
+                                options="storeCopyWebsiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                                on-select="storeCopyOnTargetWebsiteSelect"
+                            />
                         </div>
                         <div style="--w-span-md:6;">
                             <label class="w-field__label" for="store-copy-target-store"><lang>目标 Store</lang></label>
                             <select class="w-select" id="store-copy-target-store" data-testid="store-copy-target-store"></select>
                         </div>
 
-                        <div data-copy-source-field="website" style="--w-span-md:6;">
-                            <label class="w-field__label" for="store-copy-source-website"><lang>来源 Website</lang></label>
-                            <select class="w-select" id="store-copy-source-website" data-testid="store-copy-source-website"></select>
+                        <div data-copy-source-field="website" style="--w-span-md:6;" data-testid="store-copy-source-website">
+                            <label class="w-field__label" for="store-copy-source-website_trigger"><lang>来源 Website</lang></label>
+                            <w:websites:website:select
+                                id="store-copy-source-website"
+                                name="source_website_id"
+                                value="storeCopySourceWebsiteValue"
+                                display="storeCopySourceWebsiteDisplay"
+                                options="storeCopyWebsiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                                on-select="storeCopyOnSourceWebsiteSelect"
+                            />
                         </div>
                         <div data-copy-source-field="store" style="--w-span-md:6;">
                             <label class="w-field__label" for="store-copy-source-store"><lang>来源 Store</lang></label>
@@ -220,9 +247,9 @@ $config = [
     };
     var elements = {
         entry: document.getElementById('store-copy-entry'),
-        targetWebsite: document.getElementById('store-copy-target-website'),
+        targetWebsite: document.getElementById('store-copy-target-website_value'),
         targetStore: document.getElementById('store-copy-target-store'),
-        sourceWebsite: document.getElementById('store-copy-source-website'),
+        sourceWebsite: document.getElementById('store-copy-source-website_value'),
         sourceStore: document.getElementById('store-copy-source-store'),
         categories: document.getElementById('store-copy-category-ids'),
         excludedCategories: document.getElementById('store-copy-excluded-category-ids'),
@@ -262,16 +289,43 @@ $config = [
         return Promise.resolve(window.Weline.Api.resource(config.provider || 'product_copy'));
     }
 
-    function fillWebsiteSelect(select, selectedValue) {
-        select.innerHTML = '';
-        state.websites.forEach(function (website) {
-            var option = document.createElement('option');
-            option.value = String(website.website_id);
-            option.textContent = website.name + ' (' + website.code + ', ID=' + website.website_id + ')';
-            select.appendChild(option);
+    function websiteSelectApi(id) {
+        return window.WelineWebsiteSelect && window.WelineWebsiteSelect[id]
+            ? window.WelineWebsiteSelect[id]
+            : null;
+    }
+
+    function toWebsiteSelectOptions(websites) {
+        return (websites || []).map(function (website) {
+            return {
+                value: String(website.website_id),
+                label: String(website.name || ''),
+                meta: String(website.code || '')
+            };
         });
-        if (selectedValue !== undefined && selectedValue !== null) {
-            select.value = String(selectedValue);
+    }
+
+    function fillWebsiteSelect(selectId, selectedValue) {
+        var options = toWebsiteSelectOptions(state.websites);
+        var api = websiteSelectApi(selectId);
+        var value = selectedValue !== undefined && selectedValue !== null ? String(selectedValue) : '';
+        if (api && typeof api.setOptions === 'function') {
+            api.setOptions(options);
+            if (typeof api.setValue === 'function') {
+                api.setValue(value);
+            }
+            return;
+        }
+        var hidden = document.getElementById(selectId + '_value');
+        var display = document.getElementById(selectId + '_display');
+        if (hidden) {
+            hidden.value = value;
+        }
+        if (display) {
+            var matched = options.find(function (item) { return item.value === value; });
+            display.textContent = matched
+                ? (matched.label || matched.meta || matched.value)
+                : (messages.emptyOption || '');
         }
     }
 
@@ -313,7 +367,14 @@ $config = [
         document.querySelectorAll('[data-copy-catalog-field]').forEach(function (node) {
             node.classList.toggle('d-none', blank);
         });
-        elements.sourceWebsite.disabled = blank;
+        if (elements.sourceWebsite) {
+            elements.sourceWebsite.disabled = blank;
+        }
+        var sourceWrapper = document.getElementById('store-copy-source-website_wrapper');
+        if (sourceWrapper) {
+            sourceWrapper.style.pointerEvents = blank ? 'none' : '';
+            sourceWrapper.style.opacity = blank ? '0.55' : '';
+        }
         elements.sourceStore.disabled = !inherit;
         elements.categories.disabled = blank;
         elements.excludedCategories.disabled = blank;
@@ -437,8 +498,8 @@ $config = [
             var response = await api.scopeOptions({}, {silent: true});
             state.websites = response.websites || [];
             state.stores = response.stores || [];
-            fillWebsiteSelect(elements.targetWebsite, 0);
-            fillWebsiteSelect(elements.sourceWebsite, 0);
+            fillWebsiteSelect('store-copy-target-website', 0);
+            fillWebsiteSelect('store-copy-source-website', 0);
             fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
             fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
             updateEntryFields();
@@ -529,13 +590,24 @@ $config = [
         }
     }
 
+    window.storeCopyOnTargetWebsiteSelect = function () {
+        fillStoreSelect(elements.targetStore, elements.targetWebsite ? elements.targetWebsite.value : '');
+    };
+    window.storeCopyOnSourceWebsiteSelect = function () {
+        fillStoreSelect(elements.sourceStore, elements.sourceWebsite ? elements.sourceWebsite.value : '');
+    };
+
     elements.entry.addEventListener('change', updateEntryFields);
-    elements.targetWebsite.addEventListener('change', function () {
-        fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
-    });
-    elements.sourceWebsite.addEventListener('change', function () {
-        fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
-    });
+    if (elements.targetWebsite) {
+        elements.targetWebsite.addEventListener('change', function () {
+            fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
+        });
+    }
+    if (elements.sourceWebsite) {
+        elements.sourceWebsite.addEventListener('change', function () {
+            fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
+        });
+    }
     elements.previewButton.addEventListener('click', createAndPreview);
     elements.commitButton.addEventListener('click', commitDraft);
     elements.cancelButton.addEventListener('click', cancelDraft);

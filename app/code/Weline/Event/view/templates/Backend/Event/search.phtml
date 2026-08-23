@@ -59,7 +59,7 @@ $searchTerm = $this->getData('search_term') ?? '';
             <h3>找到 <?= count($results) ?> 个匹配的事件</h3>
             <p>搜索关键词: "<strong><?= htmlspecialchars($searchTerm) ?></strong>"</p>
         </div>
-        <div class="table-container">
+        <div class="weline-table-container">
             <table class="w-table">
                 <thead>
                     <tr>
@@ -153,18 +153,18 @@ $searchTerm = $this->getData('search_term') ?? '';
     margin-bottom: 20px;
 }
 
-.form-group {
+.w-field {
     margin-bottom: 20px;
 }
 
-.form-group label {
+.w-field label {
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
     color: #333;
 }
 
-.form-control {
+.w-input {
     width: 100%;
     padding: 10px;
     border: 1px solid #ddd;
@@ -172,7 +172,7 @@ $searchTerm = $this->getData('search_term') ?? '';
     font-size: 14px;
 }
 
-.form-control:focus {
+.w-input:focus {
     outline: none;
     border-color: #007bff;
     box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
@@ -206,7 +206,7 @@ $searchTerm = $this->getData('search_term') ?? '';
     color: #666;
 }
 
-.table-container {
+.weline-table-container {
     overflow-x: auto;
 }
 
@@ -269,12 +269,12 @@ $searchTerm = $this->getData('search_term') ?? '';
     border-radius: 12px;
 }
 
-.badge-primary { background-color: #007bff; color: white; }
-.badge-info { background-color: #17a2b8; color: white; }
-.badge-success { background-color: #28a745; color: white; }
-.badge-warning { background-color: #ffc107; color: #212529; }
-.badge-danger { background-color: #dc3545; color: white; }
-.badge-secondary { background-color: #6c757d; color: white; }
+.weline-badge-primary { background-color: #007bff; color: white; }
+.weline-badge-info { background-color: #17a2b8; color: white; }
+.weline-badge-success { background-color: #28a745; color: white; }
+.weline-badge-warning { background-color: #ffc107; color: #212529; }
+.weline-badge-danger { background-color: #dc3545; color: white; }
+.weline-badge-secondary { background-color: #6c757d; color: white; }
 
 .btn {
     display: inline-block;
@@ -287,37 +287,37 @@ $searchTerm = $this->getData('search_term') ?? '';
     transition: all 0.3s;
 }
 
-.btn-sm {
+.weline-btn-sm {
     padding: 4px 8px;
     font-size: 12px;
 }
 
-.btn-primary {
+.weline-btn-primary {
     background: #007bff;
     color: white;
 }
 
-.btn-primary:hover {
+.weline-btn-primary:hover {
     background: #0056b3;
 }
 
-.btn-outline-primary {
+.weline-btn-outline-primary {
     color: #007bff;
     border-color: #007bff;
     background: transparent;
 }
 
-.btn-outline-primary:hover {
+.weline-btn-outline-primary:hover {
     background: #007bff;
     color: white;
 }
 
-.btn-secondary {
+.weline-btn-secondary {
     background: #6c757d;
     color: white;
 }
 
-.btn-secondary:hover {
+.weline-btn-secondary:hover {
     background: #5a6268;
 }
 

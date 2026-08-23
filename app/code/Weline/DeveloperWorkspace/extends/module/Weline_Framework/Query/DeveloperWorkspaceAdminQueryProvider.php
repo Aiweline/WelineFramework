@@ -6,10 +6,12 @@ namespace Weline\DeveloperWorkspace\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Db;
-use Weline\DeveloperWorkspace\Api\Rest\V1\Document;
+use Weline\DeveloperWorkspace\Api\Rest\V1\Document as ApiDocument;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Routes;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Seo\Crawl;
 use Weline\DeveloperWorkspace\Api\Rest\V1\Trace;
+use Weline\DeveloperWorkspace\Controller\Admin\Document as AdminDocumentController;
+use Weline\DeveloperWorkspace\Controller\Admin\Document\Catalog as AdminCatalogController;
 use Weline\DeveloperWorkspace\Observer\DevToolPanelObserver;
 use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Http\Request;
@@ -18,10 +20,10 @@ class DeveloperWorkspaceAdminQueryProvider implements QueryProviderInterface
 {
     /** @var array<string,array{method:string,class:class-string,action:string}> */
     private const PANEL_ROUTES = [
-        'document/modules' => ['method' => 'GET', 'class' => Document::class, 'action' => 'getModules'],
-        'document/search' => ['method' => 'GET', 'class' => Document::class, 'action' => 'getSearch'],
-        'document/detail' => ['method' => 'GET', 'class' => Document::class, 'action' => 'getDetail'],
-        'document/catalogs' => ['method' => 'GET', 'class' => Document::class, 'action' => 'getCatalogs'],
+        'document/modules' => ['method' => 'GET', 'class' => ApiDocument::class, 'action' => 'getModules'],
+        'document/search' => ['method' => 'GET', 'class' => ApiDocument::class, 'action' => 'getSearch'],
+        'document/detail' => ['method' => 'GET', 'class' => ApiDocument::class, 'action' => 'getDetail'],
+        'document/catalogs' => ['method' => 'GET', 'class' => ApiDocument::class, 'action' => 'getCatalogs'],
         'routes' => ['method' => 'GET', 'class' => Routes::class, 'action' => 'getIndex'],
         'routes/search' => ['method' => 'GET', 'class' => Routes::class, 'action' => 'getSearch'],
         'trace' => ['method' => 'GET', 'class' => Trace::class, 'action' => 'getIndex'],
@@ -41,6 +43,17 @@ class DeveloperWorkspaceAdminQueryProvider implements QueryProviderInterface
             'adminRequest' => $this->adminRequest($params),
             'docsRequest' => $this->docsRequest($params),
             'panelRequest' => $this->panelRequest($params),
+            'documentAdminView' => $this->documentAdminView($params),
+            'documentAdminDelete' => $this->documentAdminDelete($params),
+            'catalogAdminView' => $this->catalogAdminView($params),
+            'catalogAdminSave' => $this->catalogAdminSave($params),
+            'catalogAdminDelete' => $this->catalogAdminDelete($params),
+            'catalogAdminReorder' => $this->catalogAdminReorder($params),
+            'documentConfigSave' => $this->documentConfigSave($params),
+            'documentTranslationScan' => $this->documentTranslationAction('postTranslationScan'),
+            'documentTranslationTest' => $this->documentTranslationAction('postTranslationTest'),
+            'documentTranslationRun' => $this->documentTranslationAction('postTranslationRun'),
+            'documentTranslationRetry' => $this->documentTranslationAction('postTranslationRetry'),
             default => throw new \InvalidArgumentException('Unsupported operation: ' . $operation),
         };
     }
@@ -91,8 +104,282 @@ class DeveloperWorkspaceAdminQueryProvider implements QueryProviderInterface
                         ['name' => 'body', 'type' => 'string', 'required' => false],
                     ],
                 ],
+                [
+                    'name' => 'documentAdminView',
+                    'description' => 'Read a backend developer document detail',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'read',
+                    'params' => [
+                        ['name' => 'id', 'type' => 'int', 'required' => true],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'documentAdminDelete',
+                    'description' => 'Delete a backend developer document',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'catalogAdminView',
+                    'description' => 'Read a backend developer document catalog',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'read',
+                    'params' => [
+                        ['name' => 'id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'catalogAdminSave',
+                    'description' => 'Create or update a backend developer document catalog',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'id', 'type' => 'int', 'required' => false],
+                        ['name' => 'pid', 'type' => 'int', 'required' => false],
+                        ['name' => 'name', 'type' => 'string', 'required' => true],
+                        ['name' => 'description', 'type' => 'string', 'required' => false],
+                        ['name' => 'is_active', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'catalogAdminDelete',
+                    'description' => 'Delete a backend developer document catalog',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'catalogAdminReorder',
+                    'description' => 'Move a backend developer document catalog',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'id', 'type' => 'int', 'required' => true],
+                        ['name' => 'pid', 'type' => 'int', 'required' => true],
+                        ['name' => 'level', 'type' => 'int', 'required' => true],
+                        ['name' => 'position', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'documentConfigSave',
+                    'description' => 'Save developer document translation configuration',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'enabled', 'type' => 'int', 'required' => false],
+                        ['name' => 'target_locales', 'type' => 'array', 'required' => false],
+                        ['name' => 'ai_enabled', 'type' => 'array', 'required' => false],
+                        ['name' => 'scope_documents', 'type' => 'int', 'required' => false],
+                        ['name' => 'scope_api_documents', 'type' => 'int', 'required' => false],
+                        ['name' => 'scope_catalogs', 'type' => 'int', 'required' => false],
+                        ['name' => 'model_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'batch_size', 'type' => 'int', 'required' => false],
+                        ['name' => 'max_retries', 'type' => 'int', 'required' => false],
+                        ['name' => 'fallback_policy', 'type' => 'string', 'required' => false],
+                        ['name' => 'daily_token_limit', 'type' => 'int', 'required' => false],
+                        ['name' => 'monthly_token_limit', 'type' => 'int', 'required' => false],
+                        ['name' => 'max_document_tokens', 'type' => 'int', 'required' => false],
+                        ['name' => 'show_translation_status', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                ...$this->translationActionDescriptors(),
             ],
         ];
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function translationActionDescriptors(): array
+    {
+        $descriptions = [
+            'documentTranslationScan' => 'Scan the developer document translation adapter',
+            'documentTranslationTest' => 'Test the developer document translation adapter',
+            'documentTranslationRun' => 'Enqueue and process developer document translations',
+            'documentTranslationRetry' => 'Reset failed developer document translation tasks',
+        ];
+        $operations = [];
+        foreach ($descriptions as $name => $description) {
+            $operations[] = [
+                'name' => $name,
+                'description' => $description,
+                'frontend' => true,
+                'auth' => 'backend',
+                'backend' => true,
+                'backend_acl' => ['kind' => 'self'],
+                'mode' => 'write',
+                'params' => [],
+            ];
+        }
+        return $operations;
+    }
+
+    /** @param array<string,mixed> $params */
+    private function documentAdminView(array $params): mixed
+    {
+        return $this->invokeAdminController(
+            AdminDocumentController::class,
+            'getView',
+            'GET',
+            [
+                'id' => max(0, (int)($params['id'] ?? 0)),
+                'locale' => trim((string)($params['locale'] ?? '')),
+            ]
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function documentAdminDelete(array $params): mixed
+    {
+        return $this->invokeAdminController(
+            AdminDocumentController::class,
+            'postDelete',
+            'POST',
+            ['id' => max(0, (int)($params['id'] ?? 0))]
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function catalogAdminView(array $params): mixed
+    {
+        return $this->invokeAdminController(
+            AdminCatalogController::class,
+            'getView',
+            'GET',
+            ['id' => max(0, (int)($params['id'] ?? 0))]
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function catalogAdminSave(array $params): mixed
+    {
+        return $this->invokeAdminController(
+            AdminCatalogController::class,
+            'postPost',
+            'POST',
+            [
+                'id' => max(0, (int)($params['id'] ?? 0)),
+                'pid' => max(0, (int)($params['pid'] ?? 0)),
+                'name' => trim((string)($params['name'] ?? '')),
+                'description' => (string)($params['description'] ?? ''),
+                'is_active' => !empty($params['is_active']) ? 1 : 0,
+            ]
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function catalogAdminDelete(array $params): mixed
+    {
+        return $this->invokeAdminController(
+            AdminCatalogController::class,
+            'postDelete',
+            'POST',
+            ['id' => max(0, (int)($params['id'] ?? 0))]
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function catalogAdminReorder(array $params): mixed
+    {
+        return $this->invokeAdminController(
+            AdminCatalogController::class,
+            'postUpdateOrder',
+            'POST',
+            [
+                'id' => max(0, (int)($params['id'] ?? 0)),
+                'pid' => max(0, (int)($params['pid'] ?? 0)),
+                'level' => max(1, (int)($params['level'] ?? 1)),
+                'position' => max(1, (int)($params['position'] ?? 1)),
+            ]
+        );
+    }
+
+    /** @param array<string,mixed> $params */
+    private function documentConfigSave(array $params): mixed
+    {
+        $targetLocales = array_values(array_filter(array_map(
+            static fn(mixed $locale): string => trim((string)$locale),
+            is_array($params['target_locales'] ?? null) ? $params['target_locales'] : []
+        ), static fn(string $locale): bool => $locale !== ''));
+        $aiEnabled = [];
+        foreach (is_array($params['ai_enabled'] ?? null) ? $params['ai_enabled'] : [] as $locale => $enabled) {
+            $locale = trim((string)$locale);
+            if ($locale !== '') {
+                $aiEnabled[$locale] = !empty($enabled) ? 1 : 0;
+            }
+        }
+        return $this->invokeAdminController(
+            AdminDocumentController::class,
+            'postConfig',
+            'POST',
+            [
+                'enabled' => !empty($params['enabled']) ? 1 : 0,
+                'target_locales' => $targetLocales,
+                'ai_enabled' => $aiEnabled,
+                'scope_documents' => !empty($params['scope_documents']) ? 1 : 0,
+                'scope_api_documents' => !empty($params['scope_api_documents']) ? 1 : 0,
+                'scope_catalogs' => !empty($params['scope_catalogs']) ? 1 : 0,
+                'model_code' => trim((string)($params['model_code'] ?? '')),
+                'batch_size' => max(1, min(200, (int)($params['batch_size'] ?? 10))),
+                'max_retries' => max(0, min(20, (int)($params['max_retries'] ?? 3))),
+                'fallback_policy' => in_array(($params['fallback_policy'] ?? 'source'), ['source', 'empty'], true)
+                    ? (string)$params['fallback_policy']
+                    : 'source',
+                'daily_token_limit' => max(0, (int)($params['daily_token_limit'] ?? 0)),
+                'monthly_token_limit' => max(0, (int)($params['monthly_token_limit'] ?? 0)),
+                'max_document_tokens' => max(1000, (int)($params['max_document_tokens'] ?? 12000)),
+                'show_translation_status' => !empty($params['show_translation_status']) ? 1 : 0,
+            ]
+        );
+    }
+
+    private function documentTranslationAction(string $action): mixed
+    {
+        return $this->invokeAdminController(AdminDocumentController::class, $action, 'POST', []);
+    }
+
+    /**
+     * @param class-string $controller
+     * @param array<string,mixed> $params
+     */
+    private function invokeAdminController(string $controller, string $action, string $method, array $params): mixed
+    {
+        $queryParams = $method === 'GET' ? $params : [];
+        $bodyParams = $method === 'POST' ? $params : [];
+
+        return \Weline\Framework\Service\Query\AdminControllerBridge::invoke(
+            $controller,
+            [$action],
+            $queryParams,
+            $bodyParams,
+            $method,
+            $bodyParams === [] ? '' : http_build_query($bodyParams)
+        );
     }
 
     /** @param array<string,mixed> $params */

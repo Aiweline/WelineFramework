@@ -1,20 +1,20 @@
 ﻿客服消息翻译,客服消息翻译
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。
-"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
-"Missing URL","Missing URL"
-"Unsupported customer service admin path","Unsupported customer service admin path"
-"Controller missing: %{1}","Controller missing: %{1}"
-"Action missing: %{1}","Action missing: %{1}"
-"Session and message content are required.","Session and message content are required."
-"Session ID is required.","Session ID is required."
-"Language code is required.","Language code is required."
-"Language updated.","Language updated."
-"Please enter a valid email address.","Please enter a valid email address."
-"Session token is required.","Session token is required."
-"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
-"Verification email has been sent.","Verification email has been sent."
-"Customer Service Query","Customer Service Query"
-"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
+"Unsupported customer service provider operation: %{1}",不受支持的客户服务提供商操作：%{1}
+"Missing URL",缺少网址
+"Unsupported customer service admin path",不受支持的客户服务管理路径
+"Controller missing: %{1}",缺少控制器：%{1}
+"Action missing: %{1}",缺少操作：%{1}
+"Session and message content are required.",会话和消息内容是必需的。
+"Session ID is required.","需要会话 ID。"
+"Language code is required.",需要语言代码。
+"Language updated.",语言已更新。
+"Please enter a valid email address.",请输入有效的电子邮件地址。
+"Session token is required.",需要会话令牌。
+"Unable to send verification email. Please try again later.",无法发送验证电子邮件。请稍后重试。
+"Verification email has been sent.",验证电子邮件已发送。
+"Customer Service Query",客服查询
+"Provides frontend customer-service chat operations through the worker API.","通过worker API提供前端客服聊天操作。"
 客服聊天,客服聊天
 获取会话失败：%{1},获取会话失败：%{1}
 消息内容不能为空,消息内容不能为空
@@ -48,14 +48,14 @@
 获取成功,获取成功
 获取统计数据失败：%{1},获取统计数据失败：%{1}
 客服人员,客服人员
-user,user
+user,用户
 查看客服人员,查看客服人员
 保存客服人员,保存客服人员
-save,save
+save,节省
 删除客服人员,删除客服人员
 trash,trash
 查看客服统计,查看客服统计
-chart,chart
+chart,图表
 会话管理,会话管理
 加载会话失败：%{1},加载会话失败：%{1}
 会话不存在,会话不存在
@@ -63,20 +63,20 @@ chart,chart
 加载会话详情失败：%{1},加载会话详情失败：%{1}
 会话已关闭,会话已关闭
 关闭会话失败：%{1},关闭会话失败：%{1}
-message,message
+message,信息
 查看会话,查看会话
 查看会话详情,查看会话详情
-eye,eye
+eye,眼睛
 关闭会话,关闭会话
-close,close
+close,关闭
 客服配置,客服配置
 加载配置失败：%{1},加载配置失败：%{1}
-settings,settings
+settings,设置
 客服配置管理,客服配置管理
 查看客服配置,查看客服配置
 保存客服配置,保存客服配置
 您不是客服人员，无法使用工作台,您不是客服人员，无法使用工作台
-客服工作台,"Customer Service Console"
+客服工作台,客服工作台
 加载工作台失败：%{1},加载工作台失败：%{1}
 您不是客服人员,您不是客服人员
 获取会话列表失败：%{1},获取会话列表失败：%{1}
@@ -95,21 +95,21 @@ settings,settings
 暂无消息,暂无消息
 接单,接单
 暂无会话,暂无会话
-会话,Session
-输入消息...,"Type a message..."
-发送,Send
+会话,会话
+输入消息...,输入消息...
+发送,发送
 发送失败,发送失败
 发送失败，请稍后重试,发送失败，请稍后重试
-确定要接单此会话吗？,"Are you sure you want to accept this session?"
+确定要接单此会话吗？,确定要接单此会话吗？
 确认接单,确认接单
 取消,取消
-分配失败,"Assignment failed"
+分配失败,分配失败
 分配失败，请稍后重试,分配失败，请稍后重试
-确定要关闭此会话吗？,"Are you sure you want to close this session?"
+确定要关闭此会话吗？,确定要关闭此会话吗？
 确认关闭,确认关闭
 关闭,关闭
 请选择一个会话开始聊天,请选择一个会话开始聊天
-关闭失败,"Close failed"
+关闭失败,关闭失败
 关闭失败，请稍后重试,关闭失败，请稍后重试
 刚刚,刚刚
 分钟前,分钟前
@@ -122,7 +122,7 @@ settings,settings
 分钟,分钟
 最长,最长
 秒,秒
-欢迎使用客服服务,欢迎使用客服服务
+客服服务,客服服务
 我的语言,我的语言
 显示模式,显示模式
 欢迎使用客服服务！,欢迎使用客服服务！
@@ -133,13 +133,13 @@ settings,settings
 原文+译文,原文+译文
 仅显示原文,仅显示原文
 客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
-鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
+欢迎使用客服服务,欢迎使用客服服务
+在线客服,在线客服
 "AI 智能客服","AI 智能客服"
-鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
+离线,离线
 请输入有效的邮箱地址,请输入有效的邮箱地址
 会话未初始化，请刷新页面重试,会话未初始化，请刷新页面重试
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
-客服服务,客服服务
 检测中...,检测中...
 接收客服回复与优惠通知,接收客服回复与优惠通知
 留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
@@ -166,7 +166,7 @@ settings,settings
 禁用,禁用
 默认客服语言,默认客服语言
 简体中文,简体中文
-English,English
+English,英语
 默认客户语言,默认客户语言
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","当没有客服人员在线时，可启用 AI 自动回复客户消息。"
 "启用 AI 自动回复","启用 AI 自动回复"
@@ -227,7 +227,7 @@ ID,ID
 响应率,响应率
 已响应,已响应
 完结率,完结率
-平均会话时长（分钟）,平均响应时间（分钟）
+平均会话时长（分钟）,平均会话时长（分钟）
 平均消息,平均消息
 会话列表,会话列表
 刷新,刷新
@@ -247,3 +247,5 @@ ID,ID
 翻译：,翻译：
 "客服服务 - 邮箱绑定验证","客服服务 - 邮箱绑定验证"
 客服系统,客服系统
+鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
+鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠

@@ -1585,10 +1585,7 @@ SQL);
         $isSerial = (!empty($col['autoIncrement']) || !empty($col['primaryKey']))
             && in_array(strtolower($col['type'] ?? ''), ['int', 'integer', 'bigint', 'smallint', 'tinyint'], true);
         if ($hasDefault) {
-            $defVal = $col['default'];
-            $clauses[] = is_string($defVal) && strtoupper($defVal) === 'CURRENT_TIMESTAMP'
-                ? 'DEFAULT CURRENT_TIMESTAMP'
-                : (is_string($defVal) ? "DEFAULT '" . str_replace("'", "''", $defVal) . "'" : "DEFAULT {$defVal}");
+            $clauses[] = 'DEFAULT ' . $this->pgsqlDeclaredDefaultLiteral($col, $col['default']);
         } elseif (!$nullable && !$isSerial) {
             $baseType = strtolower($col['type'] ?? 'varchar');
             $clauses[] = match (true) {
@@ -1648,11 +1645,8 @@ SQL);
                 . "\n" . $this->pgsqlColumnCommentSql($table, $col);
         }
         if (isset($col['default']) && $col['default'] !== null) {
-            $defVal = $col['default'];
-            $def = is_string($defVal) && strtoupper($defVal) === 'CURRENT_TIMESTAMP'
-                ? 'CURRENT_TIMESTAMP'
-                : (is_string($defVal) ? "'" . str_replace("'", "''", $defVal) . "'" : (string) $defVal);
-            $parts[] = "ALTER COLUMN {$c} SET DEFAULT {$def}";
+            $parts[] = "ALTER COLUMN {$c} SET DEFAULT "
+                . $this->pgsqlDeclaredDefaultLiteral($col, $col['default']);
         }
         return $prefix . "ALTER TABLE {$t} " . implode(', ', $parts) . ';'
             . "\n" . $this->pgsqlColumnCommentSql($table, $col);
@@ -1672,6 +1666,9 @@ SQL);
     private function pgsqlDefaultForNullFill(array $col): string
     {
         $baseType = strtolower($col['type'] ?? 'varchar');
+        if ($baseType === 'bool' || $baseType === 'boolean') {
+            return $this->pgsqlDeclaredDefaultLiteral($col, $col['default'] ?? false);
+        }
         $isSerial = !empty($col['autoIncrement']) || (is_string($col['default'] ?? '') && stripos((string) $col['default'], 'nextval') !== false);
         if ($isSerial || in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true)) {
             return '0';
@@ -1702,6 +1699,45 @@ SQL);
             $isDateLike => "'1970-01-01 00:00:00'",
             default => "''",
         };
+    }
+
+    private function pgsqlDeclaredDefaultLiteral(array $col, mixed $value): string
+    {
+        $baseType = strtolower((string)($col['type'] ?? 'varchar'));
+        if ($baseType === 'bool' || $baseType === 'boolean') {
+            if (is_bool($value)) {
+                return $value ? 'true' : 'false';
+            }
+            if (is_int($value) || is_float($value)) {
+                if ((float)$value === 0.0) {
+                    return 'false';
+                }
+                if ((float)$value === 1.0) {
+                    return 'true';
+                }
+                throw new \InvalidArgumentException('PostgreSQL boolean default must be 0 or 1.');
+            }
+
+            $normalized = strtolower(trim((string)$value));
+            while (str_starts_with($normalized, '(') && str_ends_with($normalized, ')')) {
+                $normalized = trim(substr($normalized, 1, -1));
+            }
+            $normalized = preg_replace('/::(?:bool|boolean)\z/i', '', $normalized) ?? $normalized;
+            $normalized = trim($normalized, " \t\n\r\0\x0B'\"");
+            return match ($normalized) {
+                '1', 'true', 't', 'yes', 'on' => 'true',
+                '0', 'false', 'f', 'no', 'off', '' => 'false',
+                default => throw new \InvalidArgumentException('PostgreSQL boolean default is invalid.'),
+            };
+        }
+
+        if (is_string($value) && strtoupper($value) === 'CURRENT_TIMESTAMP') {
+            return 'CURRENT_TIMESTAMP';
+        }
+        if (is_string($value)) {
+            return "'" . str_replace("'", "''", $value) . "'";
+        }
+        return (string)$value;
     }
 
     /**

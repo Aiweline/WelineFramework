@@ -109,7 +109,7 @@ $listDrillUrl = $channelCode !== ''
 
     <?php if (!empty($landingPreview['showable']) && !empty($landingPreview['url'])): ?>
         <div class="w-alert w-cluster" data-w-border="border" data-justify="between" data-align="center" data-tone="muted">
-            <div class="w-text me-3" data-truncate="true">
+            <div class="w-text" data-truncate="true">
                 <lang>投放链接</lang>：
                 <code class="user-select-all"><?= $h($landingPreview['url']) ?></code>
             </div>
@@ -163,7 +163,7 @@ $listDrillUrl = $channelCode !== ''
         <div class="w-card__header w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
             <div>
                 <strong><?= $h(\Weline\Visitor\Service\PixelChannelFunnelMode::label($funnelMode)) ?></strong>
-                <span class="w-text ms-2" data-tone="muted" data-size="sm">
+                <span class="w-text" data-tone="muted" data-size="sm">
                     <?= $h(__('按会话去重 · 近 %{1} 天 · %{2}占比', [
                         (string)$timelineDays,
                         \Weline\Visitor\Service\PixelChannelFunnelMode::baselineLabel($funnelMode),
@@ -242,7 +242,7 @@ $listDrillUrl = $channelCode !== ''
         <div class="w-card__header w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
             <div>
                 <strong><lang>事件轨迹</lang></strong>
-                <span class="w-text ms-2" data-tone="muted" data-size="sm">
+                <span class="w-text" data-tone="muted" data-size="sm">
                     <?= $h(__('%{1} 个会话 / %{2} 条事件', [
                         (string)(int)($timeline['session_count'] ?? 0),
                         (string)(int)($timeline['event_count'] ?? 0),
@@ -281,7 +281,7 @@ $listDrillUrl = $channelCode !== ''
                         <ol class="ps-3" style="--w-mb:0;">
                             <?php foreach ($sessionEvents as $event): ?>
                                 <li style="--w-mb:var(--weline-space-2);">
-                                    <div class="align-items-baseline w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                                    <div class="weline-align-baseline w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                                         <span class="w-text" data-tone="muted" data-size="sm"><?= $h($event['created_at'] ?? '') ?></span>
                                         <strong><?= $h($event['event'] ?? '') ?></strong>
                                         <?php if ((float)($event['value'] ?? 0) > 0): ?>

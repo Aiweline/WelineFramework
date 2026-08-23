@@ -13,6 +13,6 @@ Register::register(
     Register::MODULE,
     'Weline_SystemConfig',
     __DIR__,
-    '1.0.0',
+    '1.2.0',
     '<a href="https://bbs.aiweline.com">官网</a>系统配置模块：管理系统配置'
 );

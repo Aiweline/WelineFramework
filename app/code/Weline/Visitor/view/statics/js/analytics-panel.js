@@ -147,7 +147,7 @@ function showNotice(options = {}) {
 
         // 加载商业价值数据
         async function loadBusinessValue() {
-            const websiteId = document.getElementById('business-websiteId').value;
+            const websiteId = document.getElementById('business-websiteId_value').value;
             const period = document.getElementById('business-period').value;
             const startDate = document.getElementById('business-startDate').value;
             const endDate = document.getElementById('business-endDate').value;
@@ -244,7 +244,7 @@ function showNotice(options = {}) {
 
         // 加载大屏数据
         async function loadDashboard() {
-            const websiteId = document.getElementById('dashboard-websiteId').value;
+            const websiteId = document.getElementById('dashboard-websiteId_value').value;
             const interval = document.getElementById('dashboard-interval').value;
             const hours = document.getElementById('dashboard-hours').value;
 
@@ -342,7 +342,7 @@ function showNotice(options = {}) {
 
         // 加载对比数据
         async function loadComparison() {
-            const websiteId = document.getElementById('comparison-websiteId').value;
+            const websiteId = document.getElementById('comparison-websiteId_value').value;
             const days = document.getElementById('comparison-days').value;
 
             const params = { days };
@@ -420,7 +420,7 @@ function showNotice(options = {}) {
 
         // 加载A/B测试列表
         async function loadAbTestList() {
-            const websiteId = document.getElementById('abtest-websiteId').value;
+            const websiteId = document.getElementById('abtest-websiteId_value').value;
             const status = document.getElementById('abtest-status').value;
 
             const params = {};
@@ -487,7 +487,7 @@ function showNotice(options = {}) {
         // 加载A/B测试数据
         async function loadAbTestData() {
             const testId = document.getElementById('abtest-detail-testId').value;
-            const websiteId = document.getElementById('abtest-websiteId').value;
+            const websiteId = document.getElementById('abtest-websiteId_value').value;
 
             if (!testId) {
                 if (window.Weline?.UI?.toast) {
@@ -598,9 +598,8 @@ function showNotice(options = {}) {
                         <label class="w-field__label" for="create-description">测试描述</label>
                         <textarea class="w-textarea" id="create-description" rows="3" placeholder="测试不同按钮颜色对转化率的影响"></textarea>
                     </div>
-                    <div class="w-field">
-                        <label class="w-field__label" for="create-websiteId">站点ID</label>
-                        <input class="w-input" type="number" id="create-websiteId" value="0" min="0">
+                    <div class="w-field" id="create-website-slot">
+                        <label class="w-field__label" for="create-website_trigger">站点</label>
                     </div>
                     <div class="w-field">
                         <label class="w-field__label" for="create-status">状态</label>
@@ -638,8 +637,20 @@ function showNotice(options = {}) {
                     <button class="w-button" type="button" data-visitor-action="submit-create-abtest">创建</button>
                 </footer>
             `;
-            modal.addEventListener('weline:ui:dialog:close', () => modal.remove(), {once: true});
+            modal.addEventListener('weline:ui:dialog:close', () => {
+                const host = document.getElementById('create-website-host');
+                const widget = document.getElementById('create-website_wrapper');
+                if (host && widget) {
+                    host.appendChild(widget);
+                }
+                modal.remove();
+            }, {once: true});
             document.body.appendChild(modal);
+            const slot = document.getElementById('create-website-slot');
+            const widget = document.getElementById('create-website_wrapper');
+            if (slot && widget) {
+                slot.appendChild(widget);
+            }
             window.Weline?.UI?.mount(modal);
             window.Weline?.UI?.dialog.open(modal);
         }
@@ -686,7 +697,7 @@ function showNotice(options = {}) {
                 testId: testId,
                 name: name,
                 description: document.getElementById('create-description').value,
-                websiteId: parseInt(document.getElementById('create-websiteId').value) || 0,
+                websiteId: parseInt(document.getElementById('create-website_value').value, 10) || 0,
                 status: document.getElementById('create-status').value,
                 variantA: variantA,
                 variantB: variantB,
@@ -748,7 +759,7 @@ function showNotice(options = {}) {
 
         // 加载综合报告
         async function loadReport() {
-            const websiteId = document.getElementById('report-websiteId').value;
+            const websiteId = document.getElementById('report-websiteId_value').value;
             const startDate = document.getElementById('report-startDate').value;
             const endDate = document.getElementById('report-endDate').value;
 
@@ -897,7 +908,7 @@ function showNotice(options = {}) {
 
         // 导出数据
         async function exportData() {
-            const websiteId = document.getElementById('report-websiteId').value;
+            const websiteId = document.getElementById('report-websiteId_value').value;
             const startDate = document.getElementById('report-startDate').value;
             const endDate = document.getElementById('report-endDate').value;
 

@@ -126,13 +126,107 @@
         return url.href;
     };
 
-    // DEV / localhost：二进制协议在控制台打印解码后的请求往返，便于排查。
+    // DEV / localhost / explicit flag：友好控制台打印（懒加载 weline-dev-console.js）。
     const isDevMode = () => !!(
         window.DEV
         || window.WELINE_ENV === 'DEV'
         || window.location.hostname === 'localhost'
         || window.location.hostname === '127.0.0.1'
     );
+
+    const isDevConsoleEnabled = () => {
+        if (window.WELINE_DEV_CONSOLE === false) {
+            return false;
+        }
+        if (window.WELINE_DEV_CONSOLE === true) {
+            return true;
+        }
+        try {
+            if (window.localStorage?.getItem('weline_dev_console') === '1') {
+                return true;
+            }
+        } catch (error) {
+            /* ignore */
+        }
+        try {
+            if (new URLSearchParams(window.location.search || '').get('weline_dev_console') === '1') {
+                return true;
+            }
+        } catch (error) {
+            /* ignore */
+        }
+        return isDevMode();
+    };
+
+    let devConsoleLoadPromise = null;
+
+    const defaultDevConsoleUrl = () => {
+        if (window.Weline?.staticResourceResolver?.resolve) {
+            try {
+                return window.Weline.staticResourceResolver.resolve('Weline_Frontend::js/weline-dev-console.js');
+            } catch (error) {
+                /* fallback below */
+            }
+        }
+        return isDevMode()
+            ? '/Weline/Frontend/view/statics/js/weline-dev-console.js'
+            : '/static/Weline/Frontend/js/weline-dev-console.js';
+    };
+
+    const loadDevConsole = () => {
+        if (!isDevConsoleEnabled()) {
+            return Promise.resolve(null);
+        }
+        if (window.Weline?.DevConsole?.__welineDevConsole) {
+            return Promise.resolve(window.Weline.DevConsole);
+        }
+        if (devConsoleLoadPromise) {
+            return devConsoleLoadPromise;
+        }
+        devConsoleLoadPromise = new Promise((resolve) => {
+            let url = defaultDevConsoleUrl();
+            if (isDevMode()) {
+                url += (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+            }
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = url;
+            script.onload = () => resolve(window.Weline?.DevConsole || null);
+            script.onerror = () => resolve(null);
+            (document.head || document.documentElement).appendChild(script);
+        });
+        return devConsoleLoadPromise;
+    };
+
+    const withDevConsole = (callback) => {
+        if (!isDevConsoleEnabled() || typeof callback !== 'function') {
+            return;
+        }
+        loadDevConsole().then((devConsole) => {
+            if (devConsole) {
+                callback(devConsole);
+            }
+        });
+    };
+
+    window.Weline = window.Weline || {};
+    window.Weline.enableDevConsole = () => {
+        window.WELINE_DEV_CONSOLE = true;
+        try {
+            window.localStorage?.setItem('weline_dev_console', '1');
+        } catch (error) {
+            /* ignore */
+        }
+        return loadDevConsole();
+    };
+    window.Weline.disableDevConsole = () => {
+        window.WELINE_DEV_CONSOLE = false;
+        try {
+            window.localStorage?.removeItem('weline_dev_console');
+        } catch (error) {
+            /* ignore */
+        }
+    };
 
     const summarizeApiPayload = (payload) => {
         if (!payload || typeof payload !== 'object') {
@@ -1361,7 +1455,7 @@
         }
 
         reportDevError(error, detail) {
-            if (!isDevMode() || !error) {
+            if (!isDevConsoleEnabled() || !error) {
                 return;
             }
             if (error._welineApiDevLogged) {
@@ -1371,11 +1465,13 @@
             if (detail && detail.skipConsole) {
                 return;
             }
-            this.logDevError('request failed', error, detail);
+            withDevConsole((devConsole) => {
+                devConsole.failed('request failed', error, detail);
+            });
         }
 
         beginDevTrace(messageId, payload) {
-            if (!isDevMode() || !messageId) {
+            if (!isDevConsoleEnabled() || !messageId) {
                 return;
             }
             this.devTraces.set(messageId, {
@@ -1385,7 +1481,7 @@
         }
 
         finishDevTrace(messageId, responseMeta, requestPayloadOverride, startedAtOverride) {
-            if (!isDevMode()) {
+            if (!isDevConsoleEnabled()) {
                 return;
             }
 
@@ -1400,39 +1496,21 @@
             const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
             const summary = summarizeApiPayload(requestPayload);
             const ok = !!(responseMeta && responseMeta.ok === true);
-            const status = responseMeta && responseMeta.status ? ` ${responseMeta.status}` : '';
-            const label = `[Weline.BinQuery] ${ok ? '✓' : '✗'} ${summary}${status} · ${durationMs}ms`;
-
+            const status = responseMeta && responseMeta.status ? responseMeta.status : '';
             const requestLog = cloneDevLogValue(sanitizePayloadForWorker(requestPayload));
             const responseLog = cloneDevLogValue(responseMeta || {});
 
-            if (typeof console.groupCollapsed === 'function') {
-                console.groupCollapsed(label);
-                console.log('endpoint:', this.config.endpoint);
-                console.log('request:', requestLog);
-                console.log('response:', responseLog);
-                console.groupEnd();
-                return;
-            }
-            console.log(label, { endpoint: this.config.endpoint, request: requestLog, response: responseLog });
-        }
-
-        logDevError(context, error, detail) {
-            const label = `[Weline.BinQuery] ${context}`;
-            const extra = detail && typeof detail === 'object' ? detail : {};
-            if (typeof console.groupCollapsed === 'function') {
-                console.groupCollapsed(label);
-                console.error(error);
-                if (error && error.response) {
-                    console.log('response:', error.response);
-                }
-                if (Object.keys(extra).length > 0) {
-                    console.log('detail:', extra);
-                }
-                console.groupEnd();
-                return;
-            }
-            console.error(label, error, error && error.response ? { response: error.response } : null, extra);
+            withDevConsole((devConsole) => {
+                devConsole.binQuery({
+                    ok,
+                    summary,
+                    status,
+                    durationMs,
+                    endpoint: this.config.endpoint,
+                    request: requestLog,
+                    response: responseLog,
+                });
+            });
         }
 
         showDefaultError(error) {

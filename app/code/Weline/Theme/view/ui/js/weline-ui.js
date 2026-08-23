@@ -10,10 +10,11 @@ const lazyComponentSources = new Map([
     ['combobox', './weline-ui-advanced.js'],
     ['tree', './weline-ui-advanced.js'],
     ['transfer-list', './weline-ui-advanced.js'],
+    ['reorder-list', './weline-ui-advanced.js'],
     ['icon-picker', './weline-ui-advanced.js'],
     ['dependent-field', './weline-ui-advanced.js'],
     ['language-select', './components/weline-language-select.js'],
-    ['language-switcher', './components/weline-language-switcher.js'],
+    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-19'],
     ['online-translation-collector', './components/weline-online-translation-collector.js'],
     ['scope-persistence', './components/weline-scope-persistence.js'],
     ['file-preview', './components/weline-file-picker.js'],
@@ -30,10 +31,52 @@ const lazyComponentStyles = new Map([
 const lazyComponentLoads = new Map();
 const lazyStyleLoads = new Map();
 const activeFloatingMonitors = new Set();
+const floatingPortalRecords = new Set();
+let floatingPortalOrder = 0;
 let observer = null;
 let toastRegion = null;
 let floatingViewportFrame = 0;
 const iconSpriteUrl = new URL('./weline-icons.svg', import.meta.url).href;
+const ICON_SPRITE_HOST_ID = 'weline-ui-icon-sprite';
+let iconSpritePromise = null;
+
+/**
+ * External <use href="https://…/weline-icons.svg#id"> is unreliable in Chromium
+ * (empty bbox / invisible glyphs). Inject the sprite once and reference local #ids.
+ */
+function ensureIconSprite() {
+    if (document.getElementById(ICON_SPRITE_HOST_ID)) {
+        return Promise.resolve();
+    }
+    if (iconSpritePromise) {
+        return iconSpritePromise;
+    }
+    iconSpritePromise = fetch(iconSpriteUrl, { credentials: 'same-origin', cache: 'force-cache' })
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error(`icon sprite ${response.status}`);
+            }
+            return response.text();
+        })
+        .then((svgText) => {
+            if (document.getElementById(ICON_SPRITE_HOST_ID)) {
+                return;
+            }
+            const host = document.createElement('div');
+            host.id = ICON_SPRITE_HOST_ID;
+            host.hidden = true;
+            host.setAttribute('aria-hidden', 'true');
+            host.innerHTML = String(svgText || '').replace(/^<\?xml[^>]*>\s*/i, '');
+            (document.body || document.documentElement).prepend(host);
+        })
+        .catch((error) => {
+            iconSpritePromise = null;
+            console.warn('[Weline.UI] icon sprite inject failed', error);
+        });
+    return iconSpritePromise;
+}
+
+ensureIconSprite();
 
 const focusableSelector = [
     'a[href]',
@@ -68,6 +111,7 @@ function normalizeIconName(value) {
 }
 
 function createIcon(name, options = {}) {
+    ensureIconSprite();
     const semanticName = normalizeIconName(name);
     const size = ['xs', 'sm', 'md', 'lg', 'xl'].includes(options.size) ? options.size : 'md';
     const label = String(options.label || '').trim();
@@ -77,13 +121,19 @@ function createIcon(name, options = {}) {
     svg.dataset.size = size;
     svg.dataset.icon = semanticName;
     svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
     if (label === '') {
         svg.setAttribute('aria-hidden', 'true');
     } else {
         svg.setAttribute('role', 'img');
         svg.setAttribute('aria-label', label);
     }
-    use.setAttribute('href', `${iconSpriteUrl}#w-icon-${semanticName}`);
+    // Local fragment only — absolute sprite URLs often paint blank squares.
+    use.setAttribute('href', `#w-icon-${semanticName}`);
     svg.append(use);
     return svg;
 }
@@ -264,6 +314,8 @@ function floatingViewport(padding = 8) {
     const visual = window.visualViewport;
     const width = visual?.width || document.documentElement.clientWidth || window.innerWidth;
     const height = visual?.height || document.documentElement.clientHeight || window.innerHeight;
+    const offsetLeft = visual?.offsetLeft || 0;
+    const offsetTop = visual?.offsetTop || 0;
     const safePadding = Math.max(4, Math.min(32, Number(padding) || 8));
     const rootStyle = getComputedStyle(document.documentElement);
     const safeInset = (side) => Math.max(
@@ -275,10 +327,10 @@ function floatingViewport(padding = 8) {
     const safeBottom = safeInset('bottom');
     const safeLeft = safeInset('left');
     return {
-        left: safePadding + safeLeft,
-        top: safePadding + safeTop,
-        right: width - safePadding - safeRight,
-        bottom: height - safePadding - safeBottom,
+        left: offsetLeft + safePadding + safeLeft,
+        top: offsetTop + safePadding + safeTop,
+        right: offsetLeft + width - safePadding - safeRight,
+        bottom: offsetTop + height - safePadding - safeBottom,
         width: Math.max(0, width - safePadding * 2 - safeLeft - safeRight),
         height: Math.max(0, height - safePadding * 2 - safeTop - safeBottom),
     };
@@ -402,23 +454,18 @@ function floatingLayerFloor(floating) {
 }
 
 /**
- * Native showModal() dialogs live in the browser top layer; body-hosted floatings
- * cannot paint above them via z-index alone. Host menus inside the same overlay
- * shell (dialog / open drawer) — same strategy as toastRegion.
+ * Native showModal() dialogs are the only overlays that must own their floatings:
+ * body content cannot paint above the browser top layer. Drawers and non-native
+ * dialogs stay viewport-relative by portaling to body; transformed shells would
+ * otherwise create a new fixed-position containing block and clip the popup.
  */
 function resolveFloatingHost(from) {
     const start = from instanceof Element
         ? from
         : (from instanceof Node ? from.parentElement : null);
-    if (start) {
-        const dialog = start.closest('dialog');
-        if (dialog instanceof HTMLDialogElement && dialog.open) {
-            return dialog;
-        }
-        const overlay = start.closest('.w-dialog[data-state="open"], .w-drawer[data-state="open"]');
-        if (overlay instanceof HTMLElement) {
-            return overlay;
-        }
+    const dialog = start?.closest('dialog');
+    if (dialog instanceof HTMLDialogElement && dialog.open) {
+        return dialog;
     }
     return document.body;
 }
@@ -478,31 +525,141 @@ function applyFloatingStackElevation(floating, host) {
     floating.style.setProperty('z-index', String(peak));
 }
 
+function floatingPortalContains(record, target, visited = new Set()) {
+    if (!(target instanceof Node) || !record?.mounted || visited.has(record)) return false;
+    visited.add(record);
+    if (record.floating.contains(target)) return true;
+    for (const child of floatingPortalRecords) {
+        if (!child.mounted || child === record || !record.floating.contains(child.marker)) continue;
+        if (floatingPortalContains(child, target, visited)) return true;
+    }
+    return false;
+}
+
+function topmostDismissableFloatingPortal() {
+    let topmost = null;
+    for (const record of floatingPortalRecords) {
+        if (!record.mounted || record.name === 'tooltip' || record.floating.hidden) continue;
+        if (!topmost || record.order > topmost.order) topmost = record;
+    }
+    return topmost;
+}
+
+function floatingPortalOwner(record) {
+    const markerParent = record?.marker?.parentElement;
+    return markerParent instanceof Element
+        ? markerParent.closest('[data-w-component]')
+        : null;
+}
+
+function floatingPortalTrigger(record) {
+    const owner = floatingPortalOwner(record);
+    const panelId = String(record?.floating?.id || '').trim();
+    const scopes = owner instanceof Element ? [owner, document] : [document];
+    if (panelId) {
+        for (const scope of scopes) {
+            for (const candidate of scope.querySelectorAll('[aria-controls]')) {
+                if (
+                    candidate instanceof HTMLElement
+                    && candidate.getAttribute('aria-controls') === panelId
+                ) {
+                    return candidate;
+                }
+            }
+        }
+    }
+    const name = String(record?.name || '').trim();
+    if (!name || !(owner instanceof Element)) return null;
+    const candidate = owner.querySelector(`[data-w-${name}-trigger]`);
+    return candidate instanceof HTMLElement ? candidate : null;
+}
+
+/**
+ * Some interactive header controls intentionally stop click bubbling. Listen in capture phase,
+ * then defer the fallback until the original click has completed so each interaction dismisses
+ * at most the portal that was topmost when it started. Existing component handlers remain first
+ * choice; this only closes the same still-open record when bubbling never reached them.
+ */
+function scheduleFloatingOutsideDismiss(event) {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    const record = topmostDismissableFloatingPortal();
+    if (!record || floatingPortalContains(record, target)) return;
+    const owner = floatingPortalOwner(record);
+    if (
+        record.floating.dataset.wDismissOutside === 'false'
+        || owner?.getAttribute('data-w-dismiss-outside') === 'false'
+    ) {
+        return;
+    }
+    const trigger = floatingPortalTrigger(record);
+    if (!(trigger instanceof HTMLElement) || trigger.contains(target) || trigger.hasAttribute('disabled')) {
+        return;
+    }
+    queueMicrotask(() => {
+        if (
+            topmostDismissableFloatingPortal() !== record
+            || !record.mounted
+            || record.floating.hidden
+        ) {
+            return;
+        }
+        const outsideFocus = document.activeElement;
+        trigger.click();
+        if (
+            outsideFocus instanceof HTMLElement
+            && outsideFocus !== document.body
+            && outsideFocus !== trigger
+            && outsideFocus.isConnected
+            && !record.floating.contains(outsideFocus)
+        ) {
+            outsideFocus.focus({ preventScroll: true });
+        }
+    });
+}
+
+document.addEventListener('click', scheduleFloatingOutsideDismiss, true);
+
 function createFloatingPortal(floating, name = 'floating') {
     if (!(floating instanceof HTMLElement)) {
         return {
             mount() {},
             restore() {},
             contains() { return false; },
+            isTopmost() { return false; },
             destroy() {},
         };
     }
     const marker = document.createComment(`w-${name}-portal`);
+    const record = {
+        floating,
+        marker,
+        name,
+        mounted: false,
+        order: 0,
+    };
     floating.before(marker);
+    floatingPortalRecords.add(record);
     const restore = () => {
+        record.mounted = false;
+        record.order = 0;
         clearFloatingStackElevation(floating);
         if (marker.parentNode && floating.parentNode !== marker.parentNode) marker.after(floating);
     };
     return {
         mount() {
             const host = resolveFloatingHost(marker.parentElement || marker);
+            record.mounted = true;
+            record.order = ++floatingPortalOrder;
             applyFloatingStackElevation(floating, host);
             if (floating.parentNode !== host) host.append(floating);
         },
         restore,
-        contains(target) { return target instanceof Node && floating.contains(target); },
+        contains(target) { return floatingPortalContains(record, target); },
+        isTopmost() { return topmostDismissableFloatingPortal() === record; },
         destroy() {
             restore();
+            floatingPortalRecords.delete(record);
             marker.remove();
         },
     };
@@ -555,6 +712,7 @@ function positionFloating(anchor, floating, placement = 'bottom-start', referenc
     };
     const opposite = { top: 'bottom', right: 'left', bottom: 'top', left: 'right' };
 
+    clearFloatingPosition(floating);
     floating.dataset.wFloatingPositioned = 'pending';
     floating.style.setProperty('--w-floating-max-inline-size', `${Math.floor(viewport.width)}px`);
     floating.style.setProperty('--w-floating-max-block-size', `${Math.floor(viewport.height)}px`);
@@ -666,11 +824,31 @@ function scheduleFloatingViewportUpdate() {
     });
 }
 
+function syncFloatingViewportCssBounds() {
+    const viewport = floatingViewport(8);
+    const root = document.documentElement;
+    root.style.setProperty('--w-floating-viewport-left', `${viewport.left}px`);
+    root.style.setProperty('--w-floating-viewport-top', `${viewport.top}px`);
+    root.style.setProperty('--w-floating-viewport-right', `${viewport.right}px`);
+    root.style.setProperty('--w-floating-viewport-bottom', `${viewport.bottom}px`);
+}
+
+function refreshFloatingViewportGeometry() {
+    // Resize/orientation events expose the new viewport before the next paint. Publish the exact
+    // visualViewport + safe-area bounds first, reposition now, then retain the coalesced frame pass
+    // for browser chrome and virtual-keyboard geometry that settles one frame later.
+    syncFloatingViewportCssBounds();
+    for (const monitor of activeFloatingMonitors) monitor.viewportChanged();
+    scheduleFloatingViewportUpdate();
+}
+
 function installFloatingViewportListeners() {
-    window.addEventListener('resize', scheduleFloatingViewportUpdate, { passive: true });
+    syncFloatingViewportCssBounds();
+    window.addEventListener('resize', refreshFloatingViewportGeometry, { passive: true });
     document.addEventListener('scroll', scheduleFloatingViewportUpdate, { passive: true, capture: true });
-    window.visualViewport?.addEventListener('resize', scheduleFloatingViewportUpdate, { passive: true });
-    window.visualViewport?.addEventListener('scroll', scheduleFloatingViewportUpdate, { passive: true });
+    window.visualViewport?.addEventListener('resize', refreshFloatingViewportGeometry, { passive: true });
+    window.visualViewport?.addEventListener('scroll', refreshFloatingViewportGeometry, { passive: true });
+    window.screen?.orientation?.addEventListener('change', refreshFloatingViewportGeometry, { passive: true });
 }
 
 function define(name, factory) {
@@ -686,8 +864,11 @@ function loadLazyComponent(name, element) {
     const source = lazyComponentSources.get(name);
     if (!source) return;
     if (!lazyComponentLoads.has(source)) {
-        const sourceUrl = new URL(source, import.meta.url).href;
-        lazyComponentLoads.set(source, import(sourceUrl).then((module) => {
+        const sourceUrl = new URL(source, import.meta.url);
+        // Inherit ?v= from weline-ui.js so lazy modules bust with the shell.
+        const shellQuery = new URL(import.meta.url).search;
+        if (shellQuery && !sourceUrl.search) sourceUrl.search = shellQuery;
+        lazyComponentLoads.set(source, import(sourceUrl.href).then((module) => {
             if (typeof module.register !== 'function') {
                 throw new TypeError(`Weline UI lazy module does not export register(): ${source}`);
             }
@@ -697,17 +878,19 @@ function loadLazyComponent(name, element) {
     const styleSource = lazyComponentStyles.get(name);
     let styleLoad = Promise.resolve();
     if (styleSource) {
-        const styleUrl = new URL(styleSource, import.meta.url).href;
-        if (!lazyStyleLoads.has(styleUrl)) {
+        const styleUrl = new URL(styleSource, import.meta.url);
+        const shellQuery = new URL(import.meta.url).search;
+        if (shellQuery && !styleUrl.search) styleUrl.search = shellQuery;
+        if (!lazyStyleLoads.has(styleUrl.href)) {
             const existing = [...document.querySelectorAll('link[rel="stylesheet"]')]
-                .find((link) => link.href === styleUrl);
+                .find((link) => link.href === styleUrl.href);
             if (existing instanceof HTMLLinkElement) {
-                lazyStyleLoads.set(styleUrl, Promise.resolve(existing));
+                lazyStyleLoads.set(styleUrl.href, Promise.resolve(existing));
             } else {
-                lazyStyleLoads.set(styleUrl, new Promise((resolve, reject) => {
+                lazyStyleLoads.set(styleUrl.href, new Promise((resolve, reject) => {
                     const link = document.createElement('link');
                     link.rel = 'stylesheet';
-                    link.href = styleUrl;
+                    link.href = styleUrl.href;
                     link.dataset.wUiStylesheet = name;
                     link.addEventListener('load', () => resolve(link), { once: true });
                     link.addEventListener('error', () => reject(new Error(`Unable to load Weline UI stylesheet: ${styleSource}`)), { once: true });
@@ -715,7 +898,7 @@ function loadLazyComponent(name, element) {
                 }));
             }
         }
-        styleLoad = lazyStyleLoads.get(styleUrl);
+        styleLoad = lazyStyleLoads.get(styleUrl.href);
     }
     Promise.all([lazyComponentLoads.get(source), styleLoad])
         .then(() => {
@@ -768,13 +951,28 @@ function mount(root = document) {
     return root;
 }
 
-function unmount(root) {
-    const elements = [];
-    if (root instanceof Element && root.matches('[data-w-component]')) elements.push(root);
-    if (root instanceof Document || root instanceof DocumentFragment || root instanceof Element) {
-        elements.push(...root.querySelectorAll('[data-w-component]'));
+function logicalUnmountScopes(root) {
+    const scopes = [root];
+    for (let index = 0; index < scopes.length; index += 1) {
+        const scope = scopes[index];
+        if (!(scope instanceof Node)) continue;
+        for (const record of floatingPortalRecords) {
+            if (!record.mounted || scopes.includes(record.floating) || !scope.contains(record.marker)) continue;
+            scopes.push(record.floating);
+        }
     }
-    for (const element of elements.reverse()) {
+    return scopes;
+}
+
+function unmount(root) {
+    const elements = new Set();
+    for (const scope of logicalUnmountScopes(root)) {
+        if (scope instanceof Element && scope.matches('[data-w-component]')) elements.add(scope);
+        if (scope instanceof Document || scope instanceof DocumentFragment || scope instanceof Element) {
+            scope.querySelectorAll('[data-w-component]').forEach((element) => elements.add(element));
+        }
+    }
+    for (const element of [...elements].reverse()) {
         for (const cleanup of (cleanupByElement.get(element) || []).reverse()) cleanup();
         cleanupByElement.delete(element);
         instances.delete(element);
@@ -852,13 +1050,19 @@ function registerDialog() {
             return true;
         };
         listen(element, 'keydown', (event) => {
-            if (!nativeDialog && event.key === 'Escape' && element.dataset.wClosable !== 'false') close('escape');
+            if (topOverlay() !== element) return;
+            if (!nativeDialog && event.key === 'Escape' && element.dataset.wClosable !== 'false') {
+                event.preventDefault();
+                event.stopPropagation();
+                close('escape');
+                return;
+            }
             trapFocus(element, event);
         });
         if (nativeDialog) {
             listen(element, 'cancel', (event) => {
                 event.preventDefault();
-                if (element.dataset.wClosable !== 'false') close('escape');
+                if (topOverlay() === element && element.dataset.wClosable !== 'false') close('escape');
             });
         }
         listen(element, 'click', (event) => {
@@ -935,7 +1139,13 @@ function registerDrawer() {
             return true;
         };
         listen(element, 'keydown', (event) => {
-            if (event.key === 'Escape' && element.dataset.wClosable !== 'false') close('escape');
+            if (topOverlay() !== element) return;
+            if (event.key === 'Escape' && element.dataset.wClosable !== 'false') {
+                event.preventDefault();
+                event.stopPropagation();
+                close('escape');
+                return;
+            }
             trapFocus(element, event);
         });
         if (persistentMedia) {
@@ -1016,7 +1226,8 @@ function registerMenu() {
         if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) return {};
         let pointerReference = null;
         const portal = createFloatingPortal(panel, 'menu');
-        const items = () => [...panel.querySelectorAll('[role="menuitem"]:not([aria-disabled="true"])')];
+        const items = () => [...panel.querySelectorAll('[role="menuitem"]:not([aria-disabled="true"])')]
+            .filter((item) => item.closest('[data-w-menu-panel]') === panel);
         const placement = () => element.dataset.wPlacement || 'bottom-start';
         const anchorMode = () => element.dataset.wAnchorMode === 'pointer' ? 'pointer' : 'element';
         const close = (restore = true, reason = '', force = false) => {
@@ -1071,32 +1282,43 @@ function registerMenu() {
                 ? pointerReference
                 : captureFloatingReference(trigger, event.detail > 0 ? event : null, anchorMode());
             pointerReference = null;
-            open(false, recentPointer);
+            open(event.detail === 0, recentPointer);
         });
         listen(trigger, 'keydown', (event) => {
-            if (event.key === 'Escape' && !panel.hidden) {
+            if (event.key === 'Escape' && !panel.hidden && portal.isTopmost()) {
                 event.preventDefault();
+                event.stopPropagation();
                 pointerReference = null;
                 close(true, 'escape');
                 return;
             }
-            if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
+            if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 pointerReference = null;
                 open(true, captureFloatingReference(trigger));
             }
         });
         listen(panel, 'keydown', (event) => {
+            if (event.key === 'Escape' && portal.isTopmost()) {
+                event.preventDefault();
+                event.stopPropagation();
+                close(true, 'escape');
+                return;
+            }
+            if (event.key === 'Tab') { close(false, 'tab'); return; }
             const menuItems = items();
             if (menuItems.length === 0) return;
             const index = menuItems.indexOf(document.activeElement);
-            if (event.key === 'Escape') { event.preventDefault(); close(true, 'escape'); }
             if (event.key === 'Home') { event.preventDefault(); menuItems[0]?.focus(); }
             if (event.key === 'End') { event.preventDefault(); menuItems.at(-1)?.focus(); }
             if (event.key === 'ArrowDown') { event.preventDefault(); menuItems[(index + 1) % menuItems.length]?.focus(); }
             if (event.key === 'ArrowUp') { event.preventDefault(); menuItems[(index - 1 + menuItems.length) % menuItems.length]?.focus(); }
         });
         listen(panel, 'click', (event) => {
+            if (eventClosest(event, '[data-w-menu-close]')) {
+                close(true, 'dismiss');
+                return;
+            }
             if (eventClosest(event, '[role="menuitem"]')) close(false, 'select');
         });
         listen(document, 'pointerdown', (event) => {
@@ -1169,7 +1391,16 @@ function registerDisclosure() {
             emitLocal(open ? 'open' : 'close', {}, false);
             return true;
         };
-        listen(trigger, 'click', () => setOpen(panel.hidden));
+        const ariaState = trigger.getAttribute('aria-expanded');
+        const initialOpen = ariaState === null ? !panel.hidden : ariaState === 'true';
+        trigger.setAttribute('aria-expanded', String(initialOpen));
+        panel.hidden = !initialOpen;
+        element.dataset.state = initialOpen ? 'open' : 'closed';
+        listen(trigger, 'click', () => {
+            const action = trigger.getAttribute('data-w-action') || '';
+            if (['disclosure.open', 'disclosure.close', 'disclosure.toggle'].includes(action)) return;
+            setOpen(panel.hidden);
+        });
         return { open: () => setOpen(true), close: () => setOpen(false), toggle: () => setOpen(panel.hidden), element };
     });
 }
@@ -1324,12 +1555,14 @@ function registerPopover() {
             if (panel.hidden || (!force && !emitLocal('before-close', { reason }))) return false;
             panel.hidden = true;
             panel.dataset.state = 'closed';
+            panel.setAttribute('aria-hidden', 'true');
             trigger.setAttribute('aria-expanded', 'false');
             monitor.unobserve(panel);
             monitor.reset();
             clearFloatingPosition(panel);
             portal.restore();
             pointerReference = null;
+            if (reason === 'dismiss' || reason === 'escape') trigger.focus({ preventScroll: true });
             emitLocal('close', { reason }, false);
             return true;
         };
@@ -1339,16 +1572,28 @@ function registerPopover() {
             placement,
             () => close('anchor-hidden', true),
         );
-        const open = (reference = null) => {
+        const open = (reference = null, focus = false) => {
             if (!panel.hidden || !emitLocal('before-open')) return false;
             portal.mount();
             panel.hidden = false;
             panel.dataset.state = 'open';
+            panel.setAttribute('aria-hidden', 'false');
             trigger.setAttribute('aria-expanded', 'true');
             monitor.observe(panel);
             if (monitor.place(reference || captureFloatingReference(trigger, null, anchorMode()))?.anchorVisible === false) {
                 close('anchor-hidden', true);
                 return false;
+            }
+            if (focus || panel.getAttribute('role') === 'dialog') {
+                queueMicrotask(() => {
+                    const first = getFocusable(panel)[0];
+                    if (first instanceof HTMLElement) {
+                        first.focus({ preventScroll: true });
+                        return;
+                    }
+                    if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
+                    panel.focus({ preventScroll: true });
+                });
             }
             emitLocal('open', {}, false);
             return true;
@@ -1367,12 +1612,28 @@ function registerPopover() {
                 ? pointerReference
                 : captureFloatingReference(trigger, event.detail > 0 ? event : null, anchorMode());
             pointerReference = null;
-            open(recentPointer);
+            open(recentPointer, event.detail === 0);
         });
         listen(document, 'pointerdown', (event) => {
             if (!element.contains(event.target) && !portal.contains(event.target)) close('outside');
         });
-        listen(document, 'keydown', (event) => { if (!panel.hidden && event.key === 'Escape') close('escape'); });
+        listen(panel, 'click', (event) => {
+            if (eventClosest(event, '[data-w-popover-close]')) close('dismiss');
+        });
+        const dismissOnEscape = (event, immediate = false) => {
+            if (panel.hidden || event.key !== 'Escape' || event.defaultPrevented || !portal.isTopmost()) return;
+            event.preventDefault();
+            if (immediate) event.stopImmediatePropagation();
+            else event.stopPropagation();
+            close('escape');
+        };
+        listen(trigger, 'keydown', (event) => dismissOnEscape(event));
+        listen(panel, 'keydown', (event) => dismissOnEscape(event));
+        listen(document, 'keydown', (event) => dismissOnEscape(event, true));
+        panel.hidden = true;
+        panel.dataset.state = 'closed';
+        panel.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
         return {
             open,
             close,
@@ -1801,6 +2062,7 @@ const createdUI = {
     position: positionFloating,
     icon: {
         create: createIcon,
+        ensureSprite: ensureIconSprite,
         spriteUrl: iconSpriteUrl,
     },
     dialog: {

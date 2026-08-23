@@ -12,9 +12,33 @@ $display = static function (mixed $value) use ($escape): string {
     if (is_array($value)) return $escape(json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
     return $escape($value);
 };
+$websiteSelectValue = '0';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
 <section class="commerce-control-center" data-testid="subscription-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
-    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between"><h4 style="--w-mb-sm:0;"><?= $escape($title) ?></h4><span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="end"><span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
     <div class="w-alert" role="status" data-tone="info"><?= $form === [] ? __('此页面显示订阅、周期与调度持久化事实；生产迁移不在后台触发。') : __('创建与续费复用 Subscription 服务；续费只通过 Order 公共端口和 sandbox Payment 公共端口执行。') ?></div>
     <?php if ($form !== []): ?>
         <div class="w-card" data-testid="subscription-<?= $escape($code) ?>-write-form" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $kind === 'renewal' ? __('执行续费尝试') : __('创建订阅') ?></h5></div><div class="w-card__body">
@@ -22,7 +46,19 @@ $display = static function (mixed $value) use ($escape): string {
                 <?php if ($kind === 'subscription'): ?>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('订阅 ID') ?></label><input class="w-input" name="subscription_id" maxlength="64" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户 ID') ?></label><input class="w-input" name="customer_id" maxlength="64" required></div>
-                    <div style="--w-span-md:2;"><label class="w-field__label"><?= __('网站 ID') ?></label><input class="w-input" type="number" min="0" name="website_id" value="0" required></div>
+                    <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                        <w:websites:website:select
+                            id="subscription-cc-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
+                    </div>
                     <div style="--w-span-md:2;"><label class="w-field__label"><?= __('店铺 ID') ?></label><input class="w-input" type="number" min="0" name="store_id" value="0" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('Provider') ?></label><input class="w-input" name="provider_code" value="interval_monthly" maxlength="64" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('方案代码') ?></label><input class="w-input" name="plan_code" maxlength="128" required></div>

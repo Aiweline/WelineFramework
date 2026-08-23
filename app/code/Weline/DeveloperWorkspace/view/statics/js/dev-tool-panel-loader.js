@@ -1,12 +1,11 @@
 
 (function(g){
-  g.bqAdmin=g.bqAdmin||{};
-  // Install once. The panel shell and REST data both use published
-  // developer_workspace operations; no browser-native request fallback.
-  if(g.__bqAdmin_developer_workspace_rest){
+  // Install once. Panel shell and REST both use published developer_workspace ops.
+  if(g.__welineDeveloperWorkspaceRequest){
     return;
   }
-  g.bqAdmin['developer_workspace']=function(url, options){
+  var W = g.Weline = g.Weline || {};
+  W.developerWorkspaceRequest = function(url, options){
     options=options||{};
     var urlStr=String(url||'');
     var body=options.body;
@@ -51,8 +50,7 @@
     }
     return Promise.reject(new Error('Weline API runtime is unavailable.'));
   };
-  g.__bqAdmin_developer_workspace=true;
-  g.__bqAdmin_developer_workspace_rest=true;
+  g.__welineDeveloperWorkspaceRequest=true;
 })(typeof window!=='undefined'?window:globalThis);
 (function (window, document) {
     'use strict';
@@ -189,7 +187,7 @@
                 headers['Content-Type'] = headers['Content-Type'] || 'application/json';
                 body = JSON.stringify(body);
             }
-            return bqAdmin['developer_workspace'](apiUrl(path, options.params || {}), {
+            return (window.Weline.developerWorkspaceRequest||function(u,o){return window.Weline.adminRequest('developer_workspace',u,o);})( apiUrl(path, options.params || {}), {
                 method: options.method || (body !== undefined && body !== null ? 'POST' : 'GET'),
                 credentials: 'same-origin',
                 cache: options.cache || 'no-store',
@@ -307,7 +305,7 @@
         if (errorNode) {
             errorNode.textContent = '';
         }
-        bqAdmin['developer_workspace'](resolvedSessionUrl(), {
+        (window.Weline.developerWorkspaceRequest||function(u,o){return window.Weline.adminRequest('developer_workspace',u,o);})( resolvedSessionUrl(), {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -410,7 +408,7 @@
         if (loadingPromise) {
             return loadingPromise;
         }
-        loadingPromise = bqAdmin['developer_workspace'](panelUrl(), {
+        loadingPromise = (window.Weline.developerWorkspaceRequest||function(u,o){return window.Weline.adminRequest('developer_workspace',u,o);})( panelUrl(), {
             credentials: 'same-origin',
             headers: {
                 'Accept': 'text/html',

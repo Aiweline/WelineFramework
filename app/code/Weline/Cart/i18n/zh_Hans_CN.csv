@@ -1,0 +1,97 @@
+﻿"Cart 查询器不支持的 operation：%{1}","Cart 查询器不支持的 operation：%{1}"
+"Cart V2 未启用","Cart V2 未启用"
+登录后才能合并游客购物车。,登录后才能合并游客购物车。
+"Frontend cart API","Frontend cart API"
+"Storefront cart session operations exposed through Weline.Api.","Storefront cart session operations exposed through Weline.Api."
+请求方式不允许。,请求方式不允许。
+已加入购物车。,已加入购物车。
+加入购物车失败。,加入购物车失败。
+加入购物车失败：%{1},加入购物车失败：%{1}
+"Direct browser cart API is deprecated. Use the frontend worker API.","Direct browser cart API is deprecated. Use the frontend worker API."
+购物车,购物车
+您的购物车是空的,您的购物车是空的
+购物车检查,购物车检查
+购物车工作台,购物车工作台
+search,search
+"按 Scope 检查真实 Cart V2 持久缓存","按 Scope 检查真实 Cart V2 持久缓存"
+正在加载购物车...,正在加载购物车...
+购物车是空的,购物车是空的
+浏览车型并选择适合您市场的产品。,浏览车型并选择适合您市场的产品。
+购物车加载失败，请重试。,购物车加载失败，请重试。
+商品,商品
+单价,单价
+数量,数量
+小计,小计
+更新,更新
+移除,移除
+购物车更新失败，请重试。,购物车更新失败，请重试。
+检查商品数量，确认无误后进入结账。,检查商品数量，确认无误后进入结账。
+继续购物,继续购物
+浏览车型,浏览车型
+暂时无法加载购物车,暂时无法加载购物车
+重试,重试
+订单摘要,订单摘要
+商品数量,商品数量
+合计,合计
+去结算,去结算
+"Cart V2 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart V2 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
+"输入完整 scope key","输入完整 scope key"
+检查,检查
+匹配购物车：%{1},匹配购物车：%{1}
+Scope,Scope
+所有者类型,所有者类型
+所有者,所有者
+货币,货币
+商品数,商品数
+"请输入 scope key","请输入 scope key"
+未找到购物车,未找到购物车
+"provider_code 不能为空","provider_code 不能为空"
+"global_offer_uuid 不能为空","global_offer_uuid 不能为空"
+"legacy_product_id 须 >=0","legacy_product_id 须 >=0"
+商品不存在或已下架,商品不存在或已下架
+该商品暂不可售,该商品暂不可售
+跨币种购物车不可合并,跨币种购物车不可合并
+库存不足，购物车中该商品数量已达到当前可售库存。,库存不足，购物车中该商品数量已达到当前可售库存。
+库存不足，已按当前可售数量加入购物车。,库存不足，已按当前可售数量加入购物车。
+"guest_token 不能为空","guest_token 不能为空"
+"customer_id 须 >0","customer_id 须 >0"
+"游客车 Scope 不匹配","游客车 Scope 不匹配"
+"客户车 Scope 不匹配","客户车 Scope 不匹配"
+游客购物车已合并。,游客购物车已合并。
+游客购物车已合并；部分数量因可售上限被截断。,游客购物车已合并；部分数量因可售上限被截断。
+购物车包含跨币种商品，禁止合并,购物车包含跨币种商品，禁止合并
+请选择要更新的购物车商品。,请选择要更新的购物车商品。
+未找到要更新的购物车商品。,未找到要更新的购物车商品。
+购物车已更新。,购物车已更新。
+库存不足，已按当前可售数量更新购物车。,库存不足，已按当前可售数量更新购物车。
+请选择要移除的购物车商品。,请选择要移除的购物车商品。
+未找到要移除的购物车商品。,未找到要移除的购物车商品。
+商品已从购物车移除。,商品已从购物车移除。
+购物车已清空。,购物车已清空。
+"游客加购需要 guest_token","游客加购需要 guest_token"
+购物车可售校验服务暂不可用：%{1},购物车可售校验服务暂不可用：%{1}
+购物车可售校验服务暂不可用,购物车可售校验服务暂不可用
+购物车可售校验失败：%{1},购物车可售校验失败：%{1}
+购物车可售校验返回无效结果,购物车可售校验返回无效结果
+"非法 selection 值类型：%{1}","非法 selection 值类型：%{1}"
+"selection JSON 编码失败","selection JSON 编码失败"
+"客户端 selection_hash 与服务端不一致（已忽略客户端，请使用服务端值）","客户端 selection_hash 与服务端不一致（已忽略客户端，请使用服务端值）"
+"当前购物车与结账 Scope 不一致","当前购物车与结账 Scope 不一致"
+当前购物车身份与结账身份不一致,当前购物车身份与结账身份不一致
+购物车为空，无法结账,购物车为空，无法结账
+"购物车行缺少 Offer 身份：%{1}","购物车行缺少 Offer 身份：%{1}"
+"购物车 selection hash 已失效，请重新加入商品","购物车 selection hash 已失效，请重新加入商品"
+商品已不可售,商品已不可售
+购物车数量超过当前可售数量,购物车数量超过当前可售数量
+购物车币种与当前商品币种不一致,购物车币种与当前商品币种不一致
+请选择要加入购物车的商品。,请选择要加入购物车的商品。
+该商品暂不可售。,该商品暂不可售。
+商品不存在或已下架。,商品不存在或已下架。
+该商品暂时缺货。,该商品暂时缺货。
+"商品 #%{1}","商品 #%{1}"
+"channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
+"购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+"Cart V2 Provider code 不能为空","Cart V2 Provider code 不能为空"
+"重复的 Cart V2 Provider code：%{1}","重复的 Cart V2 Provider code：%{1}"
+"未找到 Cart V2 Provider：%{1}","未找到 Cart V2 Provider：%{1}"
+"""Cart 查询器不支持的 operation：%{1}""","Cart 查询器不支持的 operation：%{1}"

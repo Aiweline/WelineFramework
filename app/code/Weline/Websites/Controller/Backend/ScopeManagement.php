@@ -7,6 +7,7 @@ namespace Weline\Websites\Controller\Backend;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Websites\Service\StoreChannelAdminService;
+use Weline\Websites\Service\WebsiteSelectOptions;
 
 final class ScopeManagement extends BackendController
 {
@@ -89,6 +90,10 @@ final class ScopeManagement extends BackendController
         $this->assign('rows', $rows);
         $this->assign('stores', $stores);
         $this->assign('error', $error);
+        $pack = WebsiteSelectOptions::forSelect((string)$websiteId);
+        $this->assign('websiteSelectValue', (string)$websiteId);
+        $this->assign('websiteSelectDisplay', $pack['display']);
+        $this->assign('websiteSelectOptionsJson', $pack['options_json']);
         return (string)$this->fetch('index');
     }
 

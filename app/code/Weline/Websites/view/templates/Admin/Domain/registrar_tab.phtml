@@ -52,9 +52,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         <td><?= htmlspecialchars($account['region'] ?? '-') ?></td>
                         <td>
                             <?php if (($account['status'] ?? '') === 'active'): ?>
-                                <span class="w-badge status-badge" data-w-background="success"><?= __('正常') ?></span>
+                                <span class="w-badge" data-tone="success"><?= __('正常') ?></span>
                             <?php else: ?>
-                                <span class="w-badge status-badge" data-w-background="muted"><?= __('禁用') ?></span>
+                                <span class="w-badge" data-tone="neutral"><?= __('禁用') ?></span>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars($account['created_at'] ?? '-') ?></td>
@@ -133,37 +133,15 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </div>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_websites) return;
-  g.__bqAdmin_websites=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['websites']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('websites').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function() {
 'use strict';
+
+function showToast(message, type) {
+    var tone = type === 'error' ? 'danger' : (type || 'info');
+    Weline.UI.toast.show(message, { tone: tone });
+}
 
 var saveAccountUrl = '<?= $this->getUrl('*/admin/domain/save-account') ?>';
 var deleteAccountUrl = '<?= $this->getUrl('*/admin/domain/account') ?>';
@@ -231,7 +209,7 @@ window.onRegistrarChange = function(code) {
     var formData = new FormData();
     formData.append('registrar_code', code);
     
-    bqAdmin['websites'](getRegistrarInfoUrl, {
+    Weline.adminRequest('websites', getRegistrarInfoUrl, {
         method: 'POST',
         body: formData
     })
@@ -414,7 +392,7 @@ window.saveAccount = function() {
     
     formData.append('extra_config', JSON.stringify(extraConfig));
 
-    bqAdmin['websites'](saveAccountUrl, {
+    Weline.adminRequest('websites', saveAccountUrl, {
         method: 'POST',
         body: formData
     })
@@ -446,7 +424,7 @@ window.removeAccount = function(accountId) {
         if (result.confirmed) {
             var formData = new FormData();
             formData.append('account_id', accountId);
-            bqAdmin['websites'](deleteAccountUrl, {
+            Weline.adminRequest('websites', deleteAccountUrl, {
                 method: 'DELETE',
                 body: formData
             })
@@ -472,7 +450,7 @@ window.testAccountConnection = function(accountId, registrarCode) {
     formData.append('account_id', accountId);
     formData.append('registrar_code', registrarCode);
 
-    bqAdmin['websites'](testConnectionUrl, {
+    Weline.adminRequest('websites', testConnectionUrl, {
         method: 'POST',
         body: formData
     })

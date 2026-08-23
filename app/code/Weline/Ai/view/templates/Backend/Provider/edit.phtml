@@ -114,7 +114,7 @@
                                     <input type="checkbox" id="is_default" name="is_default" value="1" <?= isset($account) && $account->getData('is_default') ? 'checked' : '' ?>>
                                     <label for="is_default">
                                         <lang>设为默认</lang>
-                                        <span class="w-badge ms-1" title="<?= __('只有设置为默认的账户才能被模型调用') ?>" data-w-placement="right" data-w-component="tooltip" data-w-tooltip="<?= __('只有设置为默认的账户才能被模型调用') ?>" data-w-background="muted">?</span>
+                                        <span class="w-badge" title="<?= __('只有设置为默认的账户才能被模型调用') ?>" data-w-placement="right" data-w-component="tooltip" data-w-tooltip="<?= __('只有设置为默认的账户才能被模型调用') ?>" data-w-background="muted">?</span>
                                     </label>
                                 </div>
                             </div>
@@ -147,7 +147,7 @@
                                     ?>
                                     <span class="w-badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
                                     <?php if ($account->getData('connection_test_time')): ?>
-                                        <small class="w-text ms-2" data-tone="muted">
+                                        <small class="w-text" data-tone="muted">
                                             <?= __('最后测试') ?>: <?= date('Y-m-d H:i:s', (int)$account->getData('connection_test_time')) ?>
                                         </small>
                                     <?php endif; ?>
@@ -207,7 +207,7 @@
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="save" size="sm"></w:icon><lang>保存</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button ms-2" data-tone="neutral">
+                            <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button" data-tone="neutral">
                                 <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                             </a>
                         </div>
@@ -265,7 +265,7 @@
         modal.style.display = 'block';
         modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
 
-        var iconClass = type === 'success' ? 'mdi-check-circle text-success' : 'mdi-alert-circle text-danger';
+        var iconClass = type === 'success' ? 'weline-icon--check-circle w-text' : 'weline-icon--alert-circle text-danger';
         var lines = [];
         if (data && data.message) lines.push(String(data.message));
         if (data && data.model_code) lines.push('<?= __('使用的测试模型') ?>: ' + data.model_code);
@@ -276,7 +276,7 @@
         if (data && data.base_url) lines.push('<?= __('基础 URL') ?>: ' + data.base_url);
 
         var imagesHtml = renderTestImagesHtml(images);
-        var dialogClass = imagesHtml !== '' ? 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
+        var dialogClass = imagesHtml !== '' ? 'modal-dialog modal-lg modal-dialog-centered weline-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
 
         modal.innerHTML = '<div class="' + dialogClass + '">'
             + '<div class="w-dialog__surface">'
@@ -364,12 +364,12 @@
             
             if (field.type === 'password') {
                 field.type = 'text';
-                icon.classList.remove('mdi-eye');
-                icon.classList.add('mdi-eye-off');
+                icon.classList.remove('weline-icon--eye');
+                icon.classList.add('weline-icon--eye-off');
             } else {
                 field.type = 'password';
-                icon.classList.remove('mdi-eye-off');
-                icon.classList.add('mdi-eye');
+                icon.classList.remove('weline-icon--eye-off');
+                icon.classList.add('weline-icon--eye');
             }
         },
         

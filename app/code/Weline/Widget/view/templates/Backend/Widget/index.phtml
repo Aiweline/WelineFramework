@@ -1,32 +1,5 @@
 
-<script>
-(function(g){
-  if(g.__bqAdmin_widget) return;
-  g.__bqAdmin_widget=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['widget']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('widget').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <?php
 /**@var \Weline\Framework\View\Template $this */
 
@@ -49,8 +22,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <style>
-    .widget-admin-toolbar .form-control,
-    .widget-admin-toolbar .form-select { min-height: 38px; }
+    .widget-admin-toolbar .w-input,
+    .widget-admin-toolbar .w-select { min-height: 38px; }
     .widget-admin-summary .card { border: 0; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
     .widget-admin-summary .summary-value { font-size: 1.25rem; font-weight: 700; line-height: 1.1; }
     .widget-admin-table td, .widget-admin-table th { vertical-align: middle; }
@@ -60,20 +33,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <!-- 页面标题 -->
                 <div class="w-grid">
                     <div style="--w-span:12;">
-                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-                            <div>
-                                <h4 style="--w-mb:var(--weline-space-1);--w-mb-sm:0;"><?= $page_title ?? __('部件管理') ?></h4>
-                                <small class="w-text" data-tone="muted"><?= __('快速查看、筛选并预览部件详情') ?></small>
-                            </div>
-                            <div class="w-cluster">
-                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                                    <li class="w-breadcrumb__item">
-                                        <span><?= $breadcrumb_parent ?? __('内容管理') ?></span>
-                                    </li>
-                                    <li class="w-breadcrumb__item" data-state="active"><?= $breadcrumb_current ?? __('部件管理') ?></li>
-                                </ol>
-                            </div>
-                        </div>
+                        <small class="w-text" data-tone="muted"><?= __('快速查看、筛选并预览部件详情') ?></small>
                     </div>
                 </div>
 
@@ -132,7 +92,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         if (labelEl) labelEl.textContent = '<?= __('部件详情') ?>';
 
         var url = WIDGET_DETAIL_URL + '?type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name);
-        bqAdmin['widget'](url, { credentials: 'include' })
+        Weline.adminRequest('widget', url, { credentials: 'include' })
             .then(function (resp) { return resp.json(); })
             .then(function (data) {
                 if (!data || !data.success) {
@@ -292,7 +252,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                             <div class="w-card__header">
                                 <h5 class="w-card__title" style="--w-mb:0;">
                                     <?= __('部件列表') ?>
-                                    <span class="w-badge ms-2" data-w-background="primary"><?= (int)$totalWidgetCount ?></span>
+                                    <span class="w-badge" data-w-background="primary"><?= (int)$totalWidgetCount ?></span>
                                 </h5>
                             </div>
                             <div class="w-card__body">

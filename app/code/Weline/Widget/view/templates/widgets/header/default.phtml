@@ -2,6 +2,7 @@
 /** @var \Weline\Framework\View\Template $this */
 $title = $this->getData('title') ?? '网站标题';
 $logo = $this->getData('logo') ?? '';
+$logoFileHtml = (string)($this->getData('logo_file_html') ?? '');
 $showSearch = $this->getData('show_search') ?? true;
 $navItems = $this->getData('nav_items') ?? [];
 ?>
@@ -9,7 +10,9 @@ $navItems = $this->getData('nav_items') ?? [];
     <div class="w-container">
         <div class="w-grid" data-align="center" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
             <div>
-                <?php if ($logo): ?>
+                <?php if ($logoFileHtml !== ''): ?>
+                    <span class="logo logo--asset"><?= $logoFileHtml ?></span>
+                <?php elseif ($logo): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= htmlspecialchars($title) ?>" class="logo" style="max-height: 50px;">
                 <?php else: ?>
                     <h4 style="--w-mb:0;"><?= htmlspecialchars($title) ?></h4>
@@ -18,7 +21,7 @@ $navItems = $this->getData('nav_items') ?? [];
             <div>
                 <?php if (!empty($navItems)): ?>
                 <nav class="main-nav">
-                    <ul class="nav">
+                    <ul class="w-nav">
                         <?php foreach ($navItems as $item): ?>
                         <li>
                             <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
@@ -34,7 +37,7 @@ $navItems = $this->getData('nav_items') ?? [];
             <div>
                 <w:form class="search-form w-cluster">
                     <input type="search" class="w-input" placeholder="搜索...">
-                    <button type="submit" class="w-button ms-2" data-tone="primary">
+                    <button type="submit" class="w-button" data-tone="primary">
                         <w:icon name="search" size="sm"></w:icon>
                     </button>
                 </w:form>
@@ -48,8 +51,12 @@ $navItems = $this->getData('nav_items') ?? [];
     background-color: #fff;
     border-bottom: 1px solid #dee2e6;
 }
+.widget-header .logo--asset img {
+    display: block;
+    max-height: 50px;
+    width: auto;
+}
 .widget-header .main-nav .nav {
     margin-bottom: 0;
 }
 </style>
-

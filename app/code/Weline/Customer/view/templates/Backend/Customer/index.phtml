@@ -1,32 +1,5 @@
 
-<script>
-(function(g){
-  if(g.__bqAdmin_customer_admin) return;
-  g.__bqAdmin_customer_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['customer_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('customer_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <?php
 /**
  * @var \Weline\Framework\View\Template $this
@@ -66,8 +39,7 @@ $keyword = $keyword ?? '';
 
 <div class="w-grid" data-testid="customer-management">
     <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><?= __('前端客户') ?></h4>
+        <div class="w-cluster" data-align="center" data-justify="end">
             <button type="button" class="w-button" data-customer-action="create" data-testid="customer-create" data-tone="success" data-size="sm">
                 <w:icon name="user" size="sm"></w:icon><?= __('新增客户') ?>
             </button>
@@ -94,7 +66,7 @@ $keyword = $keyword ?? '';
                     <div style="--w-span-md:3;">
                         <label class="w-field__label">&nbsp;</label>
                         <div>
-                            <button type="submit" class="w-button me-2" data-tone="primary">
+                            <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon><?= __('搜索') ?>
                             </button>
                             <a href="<?= $this->getBackendUrl('customer/backend/customer/index') ?>" class="w-button" data-tone="neutral">
@@ -140,7 +112,7 @@ $keyword = $keyword ?? '';
                                     <td><?= (int)$customer['user_id'] ?></td>
                                     <td>
                                         <div class="w-cluster" data-align="center">
-                                            <div class="me-3" data-w-avatar="true" style="--w-avatar-size:2rem;">
+                                            <div class="" data-w-avatar="true" style="--w-avatar-size:2rem;">
                                                 <span class="w-text" data-w-avatar-content="true" data-w-radius="round" data-w-background="info" data-tone="info">
                                                     <?= strtoupper(substr($customer['username'] ?? '-', 0, 1)) ?>
                                                 </span>
@@ -384,7 +356,7 @@ $keyword = $keyword ?? '';
         if (!userId) {
             return;
         }
-        bqAdmin['customer_admin'](CUSTOMER_DETAIL_URL + '?user_id=' + encodeURIComponent(userId))
+        Weline.adminRequest('customer_admin', CUSTOMER_DETAIL_URL + '?user_id=' + encodeURIComponent(userId))
             .then(function(response){ return response; })
             .then(function(data) {
                 if (!data.success) {
@@ -411,7 +383,7 @@ $keyword = $keyword ?? '';
         event.preventDefault();
         var form = event.target;
         var formData = new FormData(form);
-        bqAdmin['customer_admin'](CUSTOMER_SAVE_URL, {
+        Weline.adminRequest('customer_admin', CUSTOMER_SAVE_URL, {
             method: 'POST',
             body: formData
         })
@@ -445,7 +417,7 @@ $keyword = $keyword ?? '';
     function submitPasswordForm(event) {
         event.preventDefault();
         var formData = new FormData(event.target);
-        bqAdmin['customer_admin'](CUSTOMER_RESET_PASSWORD_URL, {
+        Weline.adminRequest('customer_admin', CUSTOMER_RESET_PASSWORD_URL, {
             method: 'POST',
             body: formData
         })
@@ -478,7 +450,7 @@ $keyword = $keyword ?? '';
             }
             var formData = new FormData();
             formData.append('user_id', userId);
-            bqAdmin['customer_admin'](CUSTOMER_RESET_TOKEN_URL, {
+            Weline.adminRequest('customer_admin', CUSTOMER_RESET_TOKEN_URL, {
                 method: 'POST',
                 body: formData
             })
@@ -508,7 +480,7 @@ $keyword = $keyword ?? '';
             }
             var formData = new FormData();
             formData.append('user_id', userId);
-            bqAdmin['customer_admin'](CUSTOMER_DELETE_URL, {
+            Weline.adminRequest('customer_admin', CUSTOMER_DELETE_URL, {
                 method: 'POST',
                 body: formData
             })

@@ -12,7 +12,6 @@ declare(strict_types=1);
 
 namespace Weline\Eav;
 
-use Weline\Eav\Controller\Backend\Attribute;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Type;
 

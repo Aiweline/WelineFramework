@@ -24,28 +24,28 @@
 "Dispatched after an SEO task is completed.","Dispatched after an SEO task is completed."
 "SEO trend sync completed","SEO trend sync completed"
 "Dispatched when trend data sync is completed.","Dispatched when trend data sync is completed."
-"SEO 后台查询器不支持的操作：%{1}","SEO 后台查询器不支持的操作：%{1}"
-"分页列出指定站点的 Sitemap URL。","分页列出指定站点的 Sitemap URL。"
-"更新单条 Sitemap URL 的状态、更新频率或优先级。","更新单条 Sitemap URL 的状态、更新频率或优先级。"
-"删除选定的 Sitemap URL；Provider 同步可能重建它们。","删除选定的 Sitemap URL；Provider 同步可能重建它们。"
-"同步选定站点的 Sitemap Provider URL 快照。","同步选定站点的 Sitemap Provider URL 快照。"
-"为选定站点生成 canonical 与所需平台 Sitemap。","为选定站点生成 canonical 与所需平台 Sitemap。"
-"向选定站点已绑定的平台提交 canonical Sitemap。","向选定站点已绑定的平台提交 canonical Sitemap。"
-"保存脱敏的 SEO 平台账户配置。","保存脱敏的 SEO 平台账户配置。"
-"同步一个 SEO 账户所绑定站点的统计数据。","同步一个 SEO 账户所绑定站点的统计数据。"
-保存账户到站点或站点到账户的绑定关系。,保存账户到站点或站点到账户的绑定关系。
-"保存一个站点账户绑定的 Sitemap 配置。","保存一个站点账户绑定的 Sitemap 配置。"
-"解除一个站点与 SEO 账户的绑定。","解除一个站点与 SEO 账户的绑定。"
-"保存嵌入式 SEO 主体。","保存嵌入式 SEO 主体。"
-"删除嵌入式 SEO 主体。","删除嵌入式 SEO 主体。"
-"刷新嵌入式 SEO AI 建议。","刷新嵌入式 SEO AI 建议。"
-"SEO 后台管理查询器","SEO 后台管理查询器"
-"通过 Weline.Api 管理 Sitemap、SEO 账户和站点绑定。","通过 Weline.Api 管理 Sitemap、SEO 账户和站点绑定。"
-请先登录后台,请先登录后台
-"SEO 自动优化","SEO 自动优化"
-配置自动化策略，查看聚合审计，并创建调度器所有的幂等队列。,配置自动化策略，查看聚合审计，并创建调度器所有的幂等队列。
-"AI 优化实时控制中心","AI 优化实时控制中心"
-只读查看站点检测、证据、发布与实验实时状态。,只读查看站点检测、证据、发布与实验实时状态。
+"SEO 后台查询器不支持的操作：%{1}","Operations not supported by SEO background query: %{1}"
+"分页列出指定站点的 Sitemap URL。","Paginated list of Sitemap URLs for a specified site."
+"更新单条 Sitemap URL 的状态、更新频率或优先级。","Update the status, update frequency, or priority of a single Sitemap URL."
+"删除选定的 Sitemap URL；Provider 同步可能重建它们。","Delete selected Sitemap URLs; Provider sync may rebuild them."
+"同步选定站点的 Sitemap Provider URL 快照。","Synchronizes the Sitemap Provider URL snapshot for the selected site."
+"为选定站点生成 canonical 与所需平台 Sitemap。","Generates a canonical and required platform Sitemap for the selected site."
+"向选定站点已绑定的平台提交 canonical Sitemap。","Submits a canonical Sitemap to the platform to which the selected site is bound."
+"保存脱敏的 SEO 平台账户配置。","Save desensitized SEO platform account configuration."
+"同步一个 SEO 账户所绑定站点的统计数据。","Synchronize statistics of sites bound to an SEO account."
+保存账户到站点或站点到账户的绑定关系。,"Save account-to-site or site-to-account bindings."
+"保存一个站点账户绑定的 Sitemap 配置。","Save a Sitemap configuration bound to a site account."
+"解除一个站点与 SEO 账户的绑定。","Unbind a site from an SEO account."
+"保存嵌入式 SEO 主体。","Save embedded SEO body."
+"删除嵌入式 SEO 主体。","Remove embedded SEO body."
+"刷新嵌入式 SEO AI 建议。","Refresh embedded SEO AI suggestions."
+"SEO 后台管理查询器","SEO background management query"
+"通过 Weline.Api 管理 Sitemap、SEO 账户和站点绑定。","Manage Sitemaps, SEO accounts and site bindings via Weline.Api."
+请先登录后台,"Please log in to the backend first"
+"SEO 自动优化","SEO automatic optimization"
+配置自动化策略，查看聚合审计，并创建调度器所有的幂等队列。,"Configure automation policies, view aggregate audits, and create scheduler-owned idempotent queues."
+"AI 优化实时控制中心","AI optimized real-time control center"
+只读查看站点检测、证据、发布与实验实时状态。,"Read-only view of site detection, evidence, publishing and experiment real-time status."
 id属性不能为空,"The id attribute cannot be empty"
 搜索SEO账户...,"Search SEO accounts..."
 请选择SEO账户,"Please select SEO account"
@@ -63,10 +63,10 @@ SEO管理,"SEO Management"
 "Renders SEO body-level markup immediately after the document body starts.","Renders SEO body-level markup immediately after the document body starts."
 "SEO footer output","SEO footer output"
 "Renders SEO footer-level markup before the document body closes.","Renders SEO footer-level markup before the document body closes."
-"SEO ResourceChange Observer 只接受 v1 契约","SEO ResourceChange Observer 只接受 v1 契约"
-"SEO 资源变更任务登记失败","SEO 资源变更任务登记失败"
-"website_id 必须是非负整数","website_id 必须是非负整数"
-"website_id 不能为负数","website_id 不能为负数"
+"SEO ResourceChange Observer 只接受 v1 契约","SEO ResourceChange Observer only accepts v1 contracts"
+"SEO 资源变更任务登记失败","SEO resource change task registration failed"
+"website_id 必须是非负整数","website_id must be a non-negative integer"
+"website_id 不能为负数","website_id cannot be negative"
 "缺少 IndexNow Key","Missing IndexNow Key"
 "Sitemap URL 缺少主机名","Sitemap URL is missing a host"
 "IndexNow 请求失败：%{1}","IndexNow request failed: %{1}"
@@ -123,15 +123,16 @@ SEO主体列表,"SEO subject list"
 AI建议生成成功,"AI suggestion generated successfully"
 生成建议失败：%{1},"Suggestion generation failed: %{1}"
 grid,grid
-查看SEO总览,查看SEO总览
-查看主体详情,查看主体详情
+查看SEO总览,"View SEO Overview"
+查看主体详情,"View subject details"
 file,file
-查看主体SEO详情,查看主体SEO详情
-刷新AI建议,刷新AI建议
+查看主体SEO详情,"View subject SEO details"
+刷新AI建议,"Refresh AI suggestions"
 refresh,refresh
 "AI 优化控制台","AI Optimization Console"
-AI优化控制台,AI优化控制台
-查看AI优化控制台,查看AI优化控制台
+AI优化控制台,"AI optimization console"
+sparkles,sparkles
+查看AI优化控制台,"View the AI ​​optimization console"
 账户不存在,"Account does not exist"
 账户名称不能为空,"Account name cannot be empty"
 平台不能为空,"Platform cannot be empty"
@@ -148,7 +149,7 @@ AI优化控制台,AI优化控制台
 账户ID或站点ID无效,"Invalid account ID or site ID"
 该账户未绑定此站点,"This account is not bound to this site"
 配置保存成功,"Configuration saved successfully"
-"未找到该绑定关系 (website_id=%1, account_id=%2)","未找到该绑定关系 (website_id=%1, account_id=%2)"
+"未找到该绑定关系 (website_id=%1, account_id=%2)","The binding relationship was not found (website_id=%1, account_id=%2)"
 解绑成功,"Unbind Successful"
 解绑失败：%{1},"Unbind Failed: %{1}"
 账户未配置平台,"Account not configured for platform"
@@ -164,17 +165,17 @@ SEO主体管理,"SEO Subject Management"
 商品目录,Catalog
 商品,Product
 站点,Website
-SEO嵌入式管理,SEO嵌入式管理
+SEO嵌入式管理,"SEO Embedded Management"
 circle,circle
-SEO嵌入式管理界面,SEO嵌入式管理界面
-查看嵌入式SEO管理,查看嵌入式SEO管理
-查看嵌入式SEO管理界面,查看嵌入式SEO管理界面
-查看嵌入式SEO详情,查看嵌入式SEO详情
-查看嵌入式SEO主体详情,查看嵌入式SEO主体详情
-刷新嵌入式AI建议,刷新嵌入式AI建议
-保存嵌入式SEO主体,保存嵌入式SEO主体
+SEO嵌入式管理界面,"SEO embedded management interface"
+查看嵌入式SEO管理,"View Embedded SEO Management"
+查看嵌入式SEO管理界面,"View the embedded SEO management interface"
+查看嵌入式SEO详情,"View embedded SEO details"
+查看嵌入式SEO主体详情,"View embedded SEO body details"
+刷新嵌入式AI建议,"Refresh embedded AI suggestions"
+保存嵌入式SEO主体,"Save embedded SEO body"
 save,save
-删除嵌入式SEO主体,删除嵌入式SEO主体
+删除嵌入式SEO主体,"Remove embedded SEO body"
 trash,trash
 加载Sitemap管理失败：%{1},"Failed to load Sitemap management: %{1}"
 生成Sitemap失败：%{1},"Failed to generate Sitemap: %{1}"
@@ -187,7 +188,7 @@ trash,trash
 "URL Provider 数：%{1}","URL Providers: %{1}"
 "Provider 同步明细","Provider Sync Details"
 未知,Unknown
-"%{1} 个URL，新增 %{2}，更新 %{3}，禁用 %{4}","%{1} 个URL，新增 %{2}，更新 %{3}，禁用 %{4}"
+"%{1} 个URL，新增 %{2}，更新 %{3}，禁用 %{4}","%{1} URLs, new %{2}, updated %{3}, disabled %{4}"
 各站点生成明细,"Site Generation Details"
 "站点 #%{1}：%{2}","Site #%{1}: %{2}"
 生成失败,"Generation failed"
@@ -204,9 +205,10 @@ trash,trash
 平台明细,"Platform Details"
 "%{1} 个文件","%{1} files"
 Sitemap管理,"Sitemap Management"
-查看Sitemap管理,查看Sitemap管理
+tree,tree
+查看Sitemap管理,"View Sitemap Management"
 生成Sitemap,"Generate Sitemap"
-"Sitemap 文件路径无效","Sitemap 文件路径无效"
+"Sitemap 文件路径无效","Invalid Sitemap file path"
 "SEO 协议与搜索提交","SEO protocol and search submission"
 robots.txt,robots.txt
 "启用站点 robots 协议输出","Enable site robots protocol output"
@@ -217,24 +219,24 @@ Google-Extended,Google-Extended
 "禁止 Google-Extended","Block Google-Extended"
 "robots.txt 追加规则","robots.txt append rules"
 "每行一条 robots 指令；基础安全规则由 Weline_Seo 自动生成。","One robots directive per line; basic security rules are auto-generated by Weline_Seo."
-搜索引擎账户启用,搜索引擎账户启用
+搜索引擎账户启用,"Search engine account activation"
 账户管理,"Account Management"
-暂无可启用的搜索引擎账户,暂无可启用的搜索引擎账户
-"先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。","先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。"
+暂无可启用的搜索引擎账户,"There are currently no search engine accounts enabled."
+"先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。","First add Google, Bing, Baidu, IndexNow or other search engine accounts in the background SEO account management."
 "URL Push","URL Push"
 Sitemap,Sitemap
 IndexNow,IndexNow
 "Catalog Only","Catalog Only"
 "Sitemap Submit","Sitemap Submit"
-数据同步,数据同步
-"Sitemap 频率","Sitemap 频率"
-抓取频率,抓取频率
+数据同步,"Data synchronization"
+"Sitemap 频率","Sitemap frequency"
+抓取频率,"Crawl frequency"
 "URL 优先级","URL priority"
-启用该账户的网站自动提交,启用该账户的网站自动提交
-"启用该账户的 URL rewrite 推送","启用该账户的 URL rewrite 推送"
-保存后立即更新该网站的搜索引擎账户启用状态。,保存后立即更新该网站的搜索引擎账户启用状态。
-保存启用状态,保存启用状态
-当前网站,当前网站
+启用该账户的网站自动提交,"Enable automatic submission of websites for this account"
+"启用该账户的 URL rewrite 推送","Enable URL rewrite push for this account"
+保存后立即更新该网站的搜索引擎账户启用状态。,"Immediately update the site's search engine account activation status after saving."
+保存启用状态,"Save enabled status"
+当前网站,"Current website"
 实时,Real-Time
 每小时,Hourly
 每天,Daily
@@ -244,17 +246,17 @@ IndexNow,IndexNow
 总是,Always
 每年,Yearly
 从不,Never
-保存中,保存中
-启用状态已保存,启用状态已保存
+保存中,Saving
+启用状态已保存,"Enabled status saved"
 请检查输入后重试,"Please check the input and try again"
 请求失败,"Request failed"
-"Weline API 不可用","Weline API 不可用"
-"Weline API 资源不可用","Weline API 资源不可用"
-"打开 SEO 账户管理","打开 SEO 账户管理"
-未知平台,未知平台
+"Weline API 不可用","Weline API is not available"
+"Weline API 资源不可用","Weline API resource is unavailable"
+"打开 SEO 账户管理","Open SEO Account Management"
+未知平台,"Unknown platform"
 启用,Enabled
-停用,停用
-保存搜索引擎账户启用状态,保存搜索引擎账户启用状态
+停用,deactivate
+保存搜索引擎账户启用状态,"Save search engine account activation status"
 前往SEO管理配置,"Go to SEO Management"
 暂无SEO账户配置,"No SEO accounts configured"
 点击前往配置,"Click to configure"
@@ -274,27 +276,26 @@ Sitemap提交,"Sitemap Submit"
 搜索,Search
 重置,Reset
 暂无SEO主体,"No SEO Entity"
-"点击上方""添加主体""按钮创建第一个SEO主体。","Click the ""Add Subject"" button above to create the first SEO subject."
+点击“添加主体”创建第一条记录。,"Click ""Add Subject"" to create the first record."
 关键词,Keywords
 添加SEO主体,"Add SEO Subject"
 标题,Title
-URL,URL
 主体类型,"Subject type"
 描述,Description
 取消,Cancel
 保存,Save
+保存失败,"Save Failed"
+删除失败,"Deletion failed"
+确定要删除该SEO主体吗？,"Are you sure you want to delete this SEO subject?"
 输入主体标题...,"Enter the main title..."
 全部状态,"All Statuses"
 未命名主体,"Unnamed subject"
 查看详情,"View Details"
 删除,Delete
+关闭,closure
 页面,Page
 店铺,Store
 网站,Website
-保存失败,"Save Failed"
-删除失败,"Deletion failed"
-确定要删除该SEO主体吗？,"Are you sure you want to delete this SEO subject?"
-确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
 返回列表,"Back to List"
 生成AI建议,"AI-generated suggestions"
 基本信息,"Basic information"
@@ -305,41 +306,43 @@ URL,URL
 暂无关键词,"No Keywords"
 "AI SEO建议","AI SEO Suggestions"
 暂无AI建议，点击上方按钮生成,"No AI Suggestions, Click the Button Above to Generate"
+加载中,loading
 正在生成AI建议...,"Generating AI suggestions..."
 编辑SEO主体,"Edit SEO Subject"
-主体详情,"Subject details"
 生成建议失败,"Suggestion generation failed"
+主体详情,"Subject details"
 站点账户绑定,"Site Account Binding"
 "为不同站点绑定 SEO 账户，配置 Sitemap 提交策略。绑定后，系统将按设定频率自动生成并提交 Sitemap 到对应搜索引擎。","Bind SEO accounts to different sites and configure Sitemap submission strategies. After binding, the system will automatically generate and submit the Sitemap to the corresponding search engine at the set frequency."
 域名,Domain
 已绑定账户,"Bound account"
 暂无站点,"No sites"
 请先在站点管理中创建站点,"Please create a site in Site Management first"
-系统默认站,系统默认站
-可生成，尚未提交,可生成，尚未提交
+系统默认站,"System default station"
+可生成，尚未提交,"Can be generated, not submitted yet"
 管理绑定,"Manage bindings"
-"管理站点 SEO 账户启用","管理站点 SEO 账户启用"
-正在读取优化数据…,正在读取优化数据…
-数据加载失败，请稍后重试。,数据加载失败，请稍后重试。
-没有可管理的站点。,没有可管理的站点。
-"当前站点还没有 AI 分析决策。","当前站点还没有 AI 分析决策。"
-当前站点还没有进入观察期的实验。,当前站点还没有进入观察期的实验。
-当前站点还没有自动优化审计记录。,当前站点还没有自动优化审计记录。
-自动化策略已保存。,自动化策略已保存。
-分析任务已进入队列。,分析任务已进入队列。
-队列编号,队列编号
-请选择一个有效站点。,请选择一个有效站点。
-策略保存失败，请检查配置后重试。,策略保存失败，请检查配置后重试。
-分析任务入队失败，请稍后重试。,分析任务入队失败，请稍后重试。
-自动发布需要先完成长期授权。,自动发布需要先完成长期授权。
-自动发布授权已撤销，保存后生效。,自动发布授权已撤销，保存后生效。
-长期授权已生效,长期授权已生效
-尚未授权自动发布,尚未授权自动发布
-授权自动发布,授权自动发布
-撤销授权,撤销授权
-样本达标,样本达标
-样本积累中,样本积累中
-暂无,暂无
+"管理站点 SEO 账户启用","Manage site SEO account activation"
+"站点 %{1}","Site %{1}"
+正在读取优化数据…,"Reading optimization data..."
+数据加载失败，请稍后重试。,"Data loading failed, please try again later."
+没有可管理的站点。,"There are no sites to manage."
+"当前站点还没有 AI 分析决策。","The current site does not yet have AI analysis decisions."
+当前站点还没有进入观察期的实验。,"The current site has no experiments that have entered the observation period."
+当前站点还没有自动优化审计记录。,"The current site does not have automatic optimization audit records."
+自动化策略已保存。,"Automation policy saved."
+分析任务已进入队列。,"The analysis task has been queued."
+队列编号,"queue number"
+请选择一个有效站点。,"Please select a valid site."
+策略保存失败，请检查配置后重试。,"Policy saving failed, please check the configuration and try again."
+分析任务入队失败，请稍后重试。,"The analysis task failed to join the queue, please try again later."
+自动发布需要先完成长期授权。,"Automatic publishing requires long-term authorization to be completed first."
+自动发布授权已撤销，保存后生效。,"The automatic publishing authorization has been revoked and will take effect after saving."
+长期授权已生效,"Long-term authorization has taken effect"
+尚未授权自动发布,"Auto-publishing not authorized yet"
+授权自动发布,"Authorize automatic release"
+撤销授权,"Revoke authorization"
+样本达标,"Sample meets standard"
+样本积累中,"Samples are accumulating"
+暂无,"None yet"
 "未绑定 GSC 或尚无查询词","GSC is not linked or no queries yet"
 "未绑定 GSC，请先在 SEO 账户绑定 Search Console","Link a GSC account in SEO settings first"
 "已绑定 GSC，暂无查询词，请点击同步词云","GSC is linked but has no queries yet. Sync the word cloud."
@@ -357,60 +360,58 @@ URL,URL
 "词云未命中可进化 block","No evolvable block matched the word cloud"
 "请先绑定 GSC 并同步词云","Link GSC and sync the word cloud first"
 热度进化入队失败，请稍后重试,"Heat evolution queue failed. Try again later."
-区块,区块
-允许修改字段,允许修改字段
-来源版本,来源版本
-主要指标,主要指标
-护栏指标,护栏指标
-优化指令,优化指令
-"AI 置信度","AI 置信度"
-基线,基线
-候选,候选
-变化,变化
-分析中,分析中
-影子建议已就绪,影子建议已就绪
-置信度不足,置信度不足
-样本不足,样本不足
+区块,block
+允许修改字段,"Allow fields to be modified"
+来源版本,"Source version"
+主要指标,"Main indicators"
+护栏指标,"guardrail indicator"
+优化指令,"Optimization instructions"
+"AI 置信度","AI confidence"
+基线,baseline
+候选,candidate
+变化,change
+分析中,Analyzing
+影子建议已就绪,"Shadow suggestions are ready"
+置信度不足,"Not enough confidence"
+样本不足,"Insufficient sample"
 证据暂不可用,"Evidence is temporarily unavailable"
-目标冷却中,目标冷却中
-已建议,已建议
-已应用,已应用
-草稿待预览,草稿待预览
-修改失败,修改失败
-已跳过,已跳过
-失败,失败
-已过期,已过期
-等待中,等待中
-等待发布,等待发布
-发布中,发布中
-已发布,已发布
-观察中,观察中
-已保留,已保留
-已回滚,已回滚
-发布失败，已回滚,发布失败，已回滚
-实验失败，已回滚,实验失败，已回滚
-需人工介入,需人工介入
-关闭,关闭
-影子模式,影子模式
-自动草稿,自动草稿
-自动发布,自动发布
-事件驱动优化闭环,事件驱动优化闭环
-"集中查看数据证据、AI 决策、自动修改、发布观察与回滚结果。页面内容仍以 plan_json 为唯一真相源。","集中查看数据证据、AI 决策、自动修改、发布观察与回滚结果。页面内容仍以 plan_json 为唯一真相源。"
-当前自动化模式,当前自动化模式
-站点与操作,站点与操作
-管理站点,管理站点
-正在读取站点…,正在读取站点…
-刷新数据,刷新数据
-立即分析,立即分析
-优化概览,优化概览
-近期分析,近期分析
-"近 50 条运行记录","近 50 条运行记录"
-观察中的实验,观察中的实验
-正在等待效果结论,正在等待效果结论
-已保留候选,已保留候选
-达到提升与护栏要求,达到提升与护栏要求
-已回滚或介入,已回滚或介入
-保护人工内容与业务指标,保护人工内容与业务指标
+目标冷却中,"Target is on cooldown"
+已建议,Suggested
+已应用,Applied
+草稿待预览,"Draft to be previewed"
+修改失败,"Modification failed"
+已跳过,skipped
+失败,fail
+已过期,Expired
+等待中,Waiting
+等待发布,"Waiting for release"
+发布中,Publish
+已发布,Published
+观察中,"Under observation"
+已保留,Reserved
+已回滚,"Rolled back"
+发布失败，已回滚,"Publish failed and has been rolled back"
+实验失败，已回滚,"The experiment failed and has been rolled back"
+需人工介入,"Requires manual intervention"
+影子模式,"shadow mode"
+自动草稿,"automatic draft"
+自动发布,"Automatic publishing"
+事件驱动优化闭环,"Event-driven optimization closed loop"
+"集中查看数据证据、AI 决策、自动修改、发布观察与回滚结果。页面内容仍以 plan_json 为唯一真相源。","Centrally view data evidence, AI decisions, automatic modifications, release observations and rollback results. Page content still has plan_json as the only source of truth."
+当前自动化模式,"Current automation mode"
+站点与操作,"Site and Operations"
+管理站点,"Manage site"
+刷新数据,"Refresh data"
+立即分析,"Analyze now"
+优化概览,"Optimization overview"
+近期分析,"Recent analysis"
+"近 50 条运行记录","Nearly 50 running records"
+观察中的实验,"experiments under observation"
+正在等待效果结论,"Waiting for effect conclusion"
+已保留候选,"Candidates reserved"
+达到提升与护栏要求,"Meet lifting and guardrail requirements"
+已回滚或介入,"Rolled back or intervened"
+保护人工内容与业务指标,"Protect human content and business metrics"
 站点进化,"Site evolution"
 "GSC 词云与访客事件","GSC word cloud and visitor events"
 同步词云,"Sync word cloud"
@@ -418,195 +419,194 @@ URL,URL
 "绑定 GSC 后同步查询词；热度驱动 AI 调整命中词所在 block","After GSC is linked"
 搜索词云,"Search word cloud"
 访客事件热度,"Visitor event heat"
-自动化治理,自动化治理
-策略与发布授权,策略与发布授权
-有未保存更改,有未保存更改
-自动化模式,自动化模式
-不分析、不修改,不分析、不修改
-只分析，不修改,只分析，不修改
-修改预览，不发布,修改预览，不发布
-修改、发布并评估,修改、发布并评估
-授权后，符合样本、置信度、字段白名单和发布门禁的候选可自动上线；恶化或不显著时自动回滚。,授权后，符合样本、置信度、字段白名单和发布门禁的候选可自动上线；恶化或不显著时自动回滚。
-数据门槛与观察规则,数据门槛与观察规则
-"只有达到门槛才会请求 AI","只有达到门槛才会请求 AI"
-最少页面访问,最少页面访问
-最少目标转化,最少目标转化
-最少搜索曝光,最少搜索曝光
-"最低 AI 置信度","最低 AI 置信度"
-最低相对提升（%）,最低相对提升（%）
-护栏最大下降（%）,护栏最大下降（%）
-内容基线天数,内容基线天数
-"SEO 基线天数","SEO 基线天数"
-最短观察天数,最短观察天数
-最长观察天数,最长观察天数
-实验冷却天数,实验冷却天数
-"修改只允许作用于 SEO 字段和已绑定的标题、正文、CTA、alt、锚文本字段。","修改只允许作用于 SEO 字段和已绑定的标题、正文、CTA、alt、锚文本字段。"
-保存自动化策略,保存自动化策略
-系统边界,系统边界
-自动修改保护范围,自动修改保护范围
-允许自动修改,允许自动修改
-"页面 title、description、keywords 与 heading outline","页面 title、description、keywords 与 heading outline"
-"区块标题、正文、CTA 文案、图片 alt、锚文本","区块标题、正文、CTA 文案、图片 alt、锚文本"
-"仅限 editor schema 已绑定的可编辑字段","仅限 editor schema 已绑定的可编辑字段"
-永不自动修改,永不自动修改
-"路由、canonical、href、表单 action 与结构事实","路由、canonical、href、表单 action 与结构事实"
-"价格、法律文本、媒体、HTML、CSS、JS 和组件代码","价格、法律文本、媒体、HTML、CSS、JS 和组件代码"
-登录、会员、支付与结账流程,登录、会员、支付与结账流程
-人工编辑优先,人工编辑优先
-版本或指纹变化时自动任务会过期，不会覆盖人工修改。,版本或指纹变化时自动任务会过期，不会覆盖人工修改。
-只读实时监控,只读实时监控
-"AI 自动优化任务态势","AI 自动优化任务态势"
-实时查看系统正在检测哪个站点、发现了什么问题，以及修改、发布、观察和回滚进度。,实时查看系统正在检测哪个站点、发现了什么问题，以及修改、发布、观察和回滚进度。
-正在连接,正在连接
-最后更新,最后更新
-全部站点,全部站点
-暂停自动滚动,暂停自动滚动
-全局任务统计,全局任务统计
-活跃站点,活跃站点
-正在执行或观察,正在执行或观察
-等待调度,等待调度
-尚未到检测时间,尚未到检测时间
-异常任务,异常任务
-失败或需人工介入,失败或需人工介入
-观察中实验,观察中实验
-等待指标结论,等待指标结论
-当前检测阶段,当前检测阶段
-下一次检测,下一次检测
-优化阶段进度,优化阶段进度
-站点态势,站点态势
-检测与调度状态,检测与调度状态
-模式,模式
-阶段与进度,阶段与进度
-问题,问题
-"最近 / 下次检测","最近 / 下次检测"
+自动化治理,"Automated governance"
+策略与发布授权,"Policy and Release Authorization"
+有未保存更改,"There are unsaved changes"
+自动化模式,"Automation mode"
+不分析、不修改,"No analysis, no modification"
+只分析，不修改,"Only analyze, not modify"
+修改预览，不发布,"Modify preview without publishing"
+修改、发布并评估,"Modify, publish and evaluate"
+授权后，符合样本、置信度、字段白名单和发布门禁的候选可自动上线；恶化或不显著时自动回滚。,"After authorization, candidates that meet the sample, confidence, field whitelist, and release gates can be automatically put online; they will be automatically rolled back if they deteriorate or are not significant."
+数据门槛与观察规则,"Data thresholds and observation rules"
+"只有达到门槛才会请求 AI","AI will only be requested if the threshold is met"
+最少页面访问,"Minimum page visits"
+最少目标转化,"Minimum goal conversion"
+最少搜索曝光,"Minimum search exposure"
+"最低 AI 置信度","Minimum AI confidence"
+最低相对提升（%）,"Minimum relative improvement (%)"
+护栏最大下降（%）,"Maximum drop of guardrail (%)"
+内容基线天数,"Content Baseline Days"
+"SEO 基线天数","SEO baseline days"
+最短观察天数,"Minimum observation days"
+最长观察天数,"Maximum observation days"
+实验冷却天数,"Experiment cooling days"
+"修改只允许作用于 SEO 字段和已绑定的标题、正文、CTA、alt、锚文本字段。","Modifications are only allowed on SEO fields and bound title, body, CTA, alt, and anchor text fields."
+保存自动化策略,"Save automation strategy"
+系统边界,"system boundaries"
+自动修改保护范围,"Automatically modify protection scope"
+允许自动修改,"Allow automatic modification"
+"页面 title、description、keywords 与 heading outline","Page title, description, keywords and heading outline"
+"区块标题、正文、CTA 文案、图片 alt、锚文本","Block title, body text, CTA copy, image alt, anchor text"
+"仅限 editor schema 已绑定的可编辑字段","Editor schema bound editable fields only"
+永不自动修改,"Never modify automatically"
+"路由、canonical、href、表单 action 与结构事实","Routing, canonical, href, form actions and structural facts"
+"价格、法律文本、媒体、HTML、CSS、JS 和组件代码","Prices, legal text, media, HTML, CSS, JS and component code"
+登录、会员、支付与结账流程,"Login, membership, payment and checkout process"
+人工编辑优先,"Human editors are preferred"
+版本或指纹变化时自动任务会过期，不会覆盖人工修改。,"Automatic tasks will expire when the version or fingerprint changes, and manual modifications will not be overwritten."
+只读实时监控,"Read-only real-time monitoring"
+"AI 自动优化任务态势","AI automatically optimizes task situation"
+实时查看系统正在检测哪个站点、发现了什么问题，以及修改、发布、观察和回滚进度。,"See in real time which site the system is detecting, what issues are found, and the progress of modifications, releases, observations, and rollbacks."
+正在连接,Connecting
+最后更新,"last updated"
+全部站点,"All sites"
+暂停自动滚动,"Pause automatic scrolling"
+全局任务统计,"Global task statistics"
+活跃站点,"active site"
+正在执行或观察,"Executing or observing"
+等待调度,"Waiting for dispatch"
+尚未到检测时间,"It’s not time to detect yet"
+异常任务,"Abnormal tasks"
+失败或需人工介入,"Failure or manual intervention required"
+观察中实验,"Experiment under observation"
+等待指标结论,"Waiting for indicator conclusion"
+当前检测阶段,"Current detection stage"
+下一次检测,"Next test"
+优化阶段进度,"Optimization phase progress"
+站点态势,"Site situation"
+检测与调度状态,"Detection and dispatch status"
+模式,model
+阶段与进度,"Stages and Progress"
+问题,question
+"最近 / 下次检测","Most recent/next test"
 查看,View
-实时活动流,实时活动流
-系统动作,系统动作
-父子任务,父子任务
-站点检测任务,站点检测任务
-"只读 · 执行由系统调度器负责","只读 · 执行由系统调度器负责"
-关闭任务详情,关闭任务详情
-任务详情,任务详情
-"AI 优化任务","AI 优化任务"
-任务详情页签,任务详情页签
-时间线,时间线
-修改内容,修改内容
-数据证据,数据证据
-发布与实验,发布与实验
-决策工作台,决策工作台
-分析、实验与审计,分析、实验与审计
-工作台视图,工作台视图
-"AI 决策","AI 决策"
-效果实验,效果实验
-审计轨迹,审计轨迹
-决策证据,决策证据
-"AI 优化建议","AI 优化建议"
-授予自动发布长期授权,授予自动发布长期授权
-"此授权允许系统在所有数据门槛、字段白名单、CAS 冲突检查和发布门禁通过后，自动修改并发布当前站点。","此授权允许系统在所有数据门槛、字段白名单、CAS 冲突检查和发布门禁通过后，自动修改并发布当前站点。"
-我确认自动修改仅限界面列出的安全字段。,我确认自动修改仅限界面列出的安全字段。
-我确认系统会持续评估，并在恶化或不显著时尝试精确回滚。,我确认系统会持续评估，并在恶化或不显著时尝试精确回滚。
-确认并授权,确认并授权
-目标,目标
-观察窗口,观察窗口
-聚合证据,聚合证据
-页面访问,页面访问
-目标转化,目标转化
-搜索曝光,搜索曝光
-样本状态,样本状态
-版本与护栏,版本与护栏
-内容指纹,内容指纹
-没有可用站点,没有可用站点
-"SEO 运维","SEO 运维"
-"URL 同步只更新数据库；生成负责原子发布 canonical 文件；提交只发送给已绑定的平台。","URL 同步只更新数据库；生成负责原子发布 canonical 文件；提交只发送给已绑定的平台。"
-"同步 URL","同步 URL"
-"生成 canonical","生成 canonical"
-提交平台,提交平台
+实时活动流,"Live activity streaming"
+系统动作,"System action"
+父子任务,"father and son mission"
+站点检测任务,"Site detection tasks"
+"只读 · 执行由系统调度器负责","Read-only · Execution is handled by the system scheduler"
+关闭任务详情,"Close task details"
+任务详情,"Mission details"
+"AI 优化任务","AI optimization tasks"
+任务详情页签,"Task details tab"
+时间线,timeline
+修改内容,"Modify content"
+数据证据,"data evidence"
+发布与实验,"Release and experiment"
+决策工作台,"Decision workbench"
+分析、实验与审计,"Analysis, Experimentation and Auditing"
+工作台视图,"Workbench view"
+"AI 决策","AI decision-making"
+效果实验,"Effect experiment"
+审计轨迹,"audit trail"
+决策证据,"evidence for decision making"
+"AI 优化建议","AI optimization suggestions"
+授予自动发布长期授权,"Grant long-term authorization for automatic publishing"
+"此授权允许系统在所有数据门槛、字段白名单、CAS 冲突检查和发布门禁通过后，自动修改并发布当前站点。","This authorization allows the system to automatically modify and publish the current site after all data thresholds, field whitelists, CAS conflict checks, and publishing gates are passed."
+我确认自动修改仅限界面列出的安全字段。,"I confirm that automatic modification is limited to security fields listed in the interface."
+我确认系统会持续评估，并在恶化或不显著时尝试精确回滚。,"I confirm that the system continuously evaluates and attempts to rollback precisely if it deteriorates or is not significant."
+确认并授权,"Confirm and authorize"
+目标,Target
+观察窗口,"observation window"
+聚合证据,"aggregate evidence"
+页面访问,"Page visits"
+目标转化,"goal conversion"
+搜索曝光,"search exposure"
+样本状态,"sample status"
+版本与护栏,"Versions and guardrails"
+内容指纹,"Content fingerprint"
+"SEO 运维","SEO operation and maintenance"
+"URL 同步只更新数据库；生成负责原子发布 canonical 文件；提交只发送给已绑定的平台。","URL synchronization only updates the database; generates canonical files responsible for atomic publishing; submissions are only sent to bound platforms."
+"同步 URL","Sync URL"
+"生成 canonical","generate canonical"
+提交平台,"submission platform"
 选择站点,"Select Website"
-"Provider 筛选","Provider 筛选"
-"全部 Provider","全部 Provider"
-生成状态筛选,生成状态筛选
-已生成,已生成
-待生成,待生成
-可提交,可提交
-操作全部站点,操作全部站点
-选择当前结果,选择当前结果
-暂无可管理站点,暂无可管理站点
-"管理 URL","管理 URL"
-语言桶,语言桶
-"canonical 文件","canonical 文件"
-"域名 Sitemap","域名 Sitemap"
-"主 Sitemap 文件","主 Sitemap 文件"
-"个下级 XML","个下级 XML"
-个域名入口,个域名入口
-"当前站点 Sitemap 地址","当前站点 Sitemap 地址"
+"Provider 筛选","Provider filter"
+"全部 Provider","All Providers"
+生成状态筛选,"Build status filter"
+已生成,Generated
+待生成,"To be generated"
+可提交,"Can be submitted"
+操作全部站点,"Operate all sites"
+选择当前结果,"Select current result"
+暂无可管理站点,"There is currently no site to manage"
+"管理 URL","Management URL"
+URL,URL
+语言桶,"language bucket"
+"canonical 文件","canonical file"
+"域名 Sitemap","Domain name Sitemap"
+"主 Sitemap 文件","Main Sitemap file"
+"个下级 XML","lower level XML"
+个域名入口,"domain name entrance"
+"当前站点 Sitemap 地址","Current site Sitemap address"
 canonical,canonical
-主域名,主域名
-复制,复制
-打开,打开
-个语言分组,个语言分组
-索引文件,索引文件
-个索引条目,个索引条目
-字节,字节
-生成于,生成于
-复制索引地址,复制索引地址
-打开索引,打开索引
-"索引待生成；同步 URL 后执行“生成 canonical”。","索引待生成；同步 URL 后执行“生成 canonical”。"
-"暂无语言文件；请先同步 URL，再生成 canonical Sitemap。","暂无语言文件；请先同步 URL，再生成 canonical Sitemap。"
-"个 XML 分片","个 XML 分片"
-"该语言已有 URL 数据，但当前 manifest 中还没有对应 XML 文件。","该语言已有 URL 数据，但当前 manifest 中还没有对应 XML 文件。"
-最近内容更新,最近内容更新
-复制文件地址,复制文件地址
-打开文件,打开文件
-没有符合筛选条件的站点,没有符合筛选条件的站点
-"Sitemap URL 管理","Sitemap URL 管理"
-全部语言,全部语言
-刷新,刷新
-全选当前页,全选当前页
-批量启用,批量启用
-批量停用,批量停用
-批量删除,批量删除
+主域名,"Primary domain name"
+复制,copy
+打开,Open
+个语言分组,"language groups"
+索引文件,"index file"
+个索引条目,"index entries"
+字节,byte
+生成于,"generated in"
+复制索引地址,"Copy index address"
+打开索引,"open index"
+"索引待生成；同步 URL 后执行“生成 canonical”。","The index is to be generated; execute ""Generate canonical"" after synchronizing the URL."
+"暂无语言文件；请先同步 URL，再生成 canonical Sitemap。","There is no language file yet; please synchronize the URL first and then generate a canonical Sitemap."
+"个 XML 分片","XML fragments"
+"该语言已有 URL 数据，但当前 manifest 中还没有对应 XML 文件。","There is URL data for this language, but there is no corresponding XML file in the current manifest."
+最近内容更新,"Recent content updates"
+复制文件地址,"Copy file address"
+打开文件,"open file"
+没有符合筛选条件的站点,"No sites matching filter criteria"
+"Sitemap URL 管理","Sitemap URL Management"
+全部语言,"All languages"
+刷新,refresh
+全选当前页,"Select all current page"
+批量启用,"Enable in batches"
+批量停用,"Batch deactivation"
+批量删除,"Batch delete"
 Provider,Provider
-更新频率,更新频率
-优先级,优先级
-请选择站点后打开,请选择站点后打开
-上一页,上一页
-下一页,下一页
-"停用会保留记录并排除出下次生成；删除后 Provider 同步可能重建该 URL。","停用会保留记录并排除出下次生成；删除后 Provider 同步可能重建该 URL。"
-"站点 %{1}","站点 %{1}"
-"SEO 后台 API 不可用","SEO 后台 API 不可用"
-"Sitemap URL 已复制","Sitemap URL 已复制"
-复制失败,复制失败
-请至少选择一个站点，或启用“操作全部站点”,请至少选择一个站点，或启用“操作全部站点”
-操作正在执行，请勿重复提交。,操作正在执行，请勿重复提交。
-操作完成,操作完成
-操作失败,操作失败
-"SEO 后台操作失败","SEO 后台操作失败"
-"加载 Sitemap URL 失败","加载 Sitemap URL 失败"
-"暂无 Sitemap URL；请先同步 Provider。","暂无 Sitemap URL；请先同步 Provider。"
-"Sitemap URL 已更新","Sitemap URL 已更新"
-"Sitemap URL 已删除","Sitemap URL 已删除"
-"请先勾选要操作的 URL","请先勾选要操作的 URL"
-"确认删除选中的 URL？Provider 下次同步可能重建它们；长期排除请改用停用。","确认删除选中的 URL？Provider 下次同步可能重建它们；长期排除请改用停用。"
-默认桶,默认桶
-"再次点击确认删除选中的 URL","再次点击确认删除选中的 URL"
-"Sitemap 批量操作","Sitemap 批量操作"
-"Sitemap 概览","Sitemap 概览"
-"活跃 URL","活跃 URL"
-"选择站点 %{1}","选择站点 %{1}"
-"canonical 已生成","canonical 已生成"
-等待生成,等待生成
-已绑定提交账户,已绑定提交账户
-可生成，尚未绑定提交账户,可生成，尚未绑定提交账户
-"语言与 Provider","语言与 Provider"
-"站点各域名 Sitemap 地址","站点各域名 Sitemap 地址"
-"站点缺少可用基础 URL","站点缺少可用基础 URL"
-"站点配置 URL Sitemap","站点配置 URL Sitemap"
-"单个 Sitemap 最多 %{1} 个 URL、%{2} MiB；超过任一上限会自动分割。","单个 Sitemap 最多 %{1} 个 URL、%{2} MiB；超过任一上限会自动分割。"
-"Canonical 文件索引","Canonical 文件索引"
-"默认桶（locale 未声明）","默认桶（locale 未声明）"
-语言：%{1},语言：%{1}
-"复制 %{1} 的 URL","复制 %{1} 的 URL"
-"搜索 URL","搜索 URL"
+更新频率,"update frequency"
+优先级,priority
+请选择站点后打开,"Please select the site and open it"
+上一页,"Previous page"
+下一页,"Next page"
+"停用会保留记录并排除出下次生成；删除后 Provider 同步可能重建该 URL。","Deactivating will keep the record and exclude it from next generation; Provider synchronization may rebuild the URL after deletion."
+"SEO 后台 API 不可用","SEO backend API is not available"
+"Sitemap URL 已复制","Sitemap URL copied"
+复制失败,"Copy failed"
+请至少选择一个站点，或启用“操作全部站点”,"Please select at least one site, or enable ""Action all sites"""
+操作正在执行，请勿重复提交。,"The operation is being executed, please do not submit again."
+操作完成,"Operation completed"
+操作失败,"Operation failed"
+"SEO 后台操作失败","SEO background operation failed"
+"加载 Sitemap URL 失败","Failed to load Sitemap URL"
+"暂无 Sitemap URL；请先同步 Provider。","There is no Sitemap URL yet; please synchronize the Provider first."
+"Sitemap URL 已更新","Sitemap URL updated"
+"Sitemap URL 已删除","Sitemap URL deleted"
+"请先勾选要操作的 URL","Please check the URL you want to operate first"
+"确认删除选中的 URL？Provider 下次同步可能重建它们；长期排除请改用停用。","Confirm to delete selected URL? The Provider may rebuild them the next time it syncs; for long-term exclusions, please disable them instead."
+默认桶,"Default bucket"
+"再次点击确认删除选中的 URL","Click again to confirm to delete the selected URL"
+"Sitemap 批量操作","Sitemap bulk operations"
+"Sitemap 概览","Sitemap overview"
+"活跃 URL","Active URL"
+"选择站点 %{1}","Select site %{1}"
+"canonical 已生成","canonical has been generated"
+等待生成,"Waiting for generation"
+已绑定提交账户,"Submitted account bound"
+可生成，尚未绑定提交账户,"Can be generated, but has not yet been bound to submit an account"
+"语言与 Provider","Languages ​​and Providers"
+"站点各域名 Sitemap 地址","Sitemap address of each domain name of the site"
+"站点缺少可用基础 URL","Site is missing a free base URL"
+"站点配置 URL Sitemap","Site configuration URL Sitemap"
+"单个 Sitemap 最多 %{1} 个 URL、%{2} MiB；超过任一上限会自动分割。","A single Sitemap has a maximum of %{1} URLs and %{2} MiB; it will be automatically split if any limit is exceeded."
+"Canonical 文件索引","Canonical file index"
+"默认桶（locale 未声明）","Default bucket (locale is not declared)"
+语言：%{1},"Language: %{1}"
+"复制 %{1} 的 URL","Copy the URL of %{1}"
+"搜索 URL","Search URL"
 主体列表,"Subject list"
 详情,Details
 关键词数,"Number of Keywords"
@@ -629,28 +629,28 @@ SEO主体总数,"Total number of SEO subjects"
 搜索主体,"Search subject"
 当前没有SEO主体记录。,"No SEO subject record currently exists."
 主体信息,"Subject information"
-"SEO 账户","SEO 账户"
-"统一管理平台能力、自动提交、URL Push、站点绑定和统计同步；敏感配置在列表中始终脱敏。","统一管理平台能力、自动提交、URL Push、站点绑定和统计同步；敏感配置在列表中始终脱敏。"
-站点绑定,站点绑定
+"SEO 账户","SEO account"
+"统一管理平台能力、自动提交、URL Push、站点绑定和统计同步；敏感配置在列表中始终脱敏。","Unified management platform capabilities, automatic submission, URL push, site binding and statistics synchronization; sensitive configurations are always desensitized in the list."
+站点绑定,"site binding"
 新增账户,"Add Account"
-搜索账户,搜索账户
-账户,账户
-平台与能力,平台与能力
-绑定,绑定
+搜索账户,"Search account"
+账户,Account
+平台与能力,"Platform and capabilities"
+绑定,binding
 "SEO 数据","SEO data"
-"暂无 SEO 账户","暂无 SEO 账户"
-"Sitemap 提交","Sitemap 提交"
+"暂无 SEO 账户","No SEO account yet"
+"Sitemap 提交","Sitemap submission"
 个站点,sites
 未绑定,"Not bound"
-统计同步完成,统计同步完成
-统计同步失败,统计同步失败
+统计同步完成,"Statistics synchronization completed"
+统计同步失败,"Statistics synchronization failed"
 已收录页面,"Indexed page"
-平台错误,平台错误
-"搜索账户名称、平台或 scope","搜索账户名称、平台或 scope"
-全局,全局
+平台错误,"Platform error"
+"搜索账户名称、平台或 scope","Search account name, platform or scope"
+全局,"overall situation"
 点击量,"Click count."
 错误数,"Error Count"
-同步中,同步中
+同步中,Synchronizing
 同步统计数据,"Sync statistics"
 编辑SEO账户,"Edit SEO account"
 新增SEO账户,"Add SEO Account"
@@ -659,7 +659,7 @@ Scope,Scope
 由URL参数指定的scope不可修改，用于区分不同业务范围。,"The scope specified by the URL parameter cannot be modified; it is used to distinguish different business scopes."
 账户名称,"Account Name"
 平台(Platform),Platform
-请选择平台（选择后将显示配置获取指南）,请选择平台（选择后将显示配置获取指南）
+请选择平台（选择后将显示配置获取指南）,"Please select a platform (the configuration acquisition guide will be displayed after selection)"
 选择目标搜索引擎平台后，下方将自动显示：,"After selecting the target search engine platform, the following will be displayed automatically:"
 平台支持的功能列表,"List of features supported by the platform"
 详细的配置获取步骤指南,"Detailed configuration acquisition step guide"
@@ -690,87 +690,87 @@ Scope,Scope
 "4. 保持 robots.txt 中的 Sitemap 入口可访问","4. Keep the Sitemap entry in robots.txt accessible"
 确认操作,"Confirm operation"
 确定,Confirm
-"SEO 自动优化分析队列","SEO 自动优化分析队列"
-发现达标目标并生成结构化建议；是否修改由站点策略决定。,发现达标目标并生成结构化建议；是否修改由站点策略决定。
-"SEO 自动优化分析队列参数无效。","SEO 自动优化分析队列参数无效。"
-"SEO 自动优化评估队列","SEO 自动优化评估队列"
-按连续观察窗口保留显著候选，或精确回滚受限字段。,按连续观察窗口保留显著候选，或精确回滚受限字段。
-"SEO 自动优化评估队列参数无效。","SEO 自动优化评估队列参数无效。"
-"SEO 自动优化分析","SEO 自动优化分析"
-"SEO 自动优化评估","SEO 自动优化评估"
-"URL target 数据不是数组","URL target 数据不是数组"
-"缺少 URL 提交 scope","缺少 URL 提交 scope"
-"无法识别 URL 所属站点","无法识别 URL 所属站点"
-"没有可提交的公开 URL","没有可提交的公开 URL"
-已刷新建议,已刷新建议
-刷新失败：%{1},刷新失败：%{1}
-"缺少 website_id 参数","缺少 website_id 参数"
-"website_id 非法","website_id 非法"
-"缺少 url_id 参数","缺少 url_id 参数"
-"Sitemap URL 不存在：%{1}","Sitemap URL 不存在：%{1}"
-"status 仅支持 0 或 1","status 仅支持 0 或 1"
-"changefreq 取值无效：%{1}","changefreq 取值无效：%{1}"
-"priority 必须在 0.0 与 1.0 之间","priority 必须在 0.0 与 1.0 之间"
-没有需要更新的字段,没有需要更新的字段
-"Sitemap URL 已更新；重新生成 canonical 后生效","Sitemap URL 已更新；重新生成 canonical 后生效"
-"缺少 url_ids 参数","缺少 url_ids 参数"
-"单次最多删除 200 条 URL","单次最多删除 200 条 URL"
-"已删除 %{1} 条 URL；Provider 同步会重建其提供的 URL，长期排除请改用停用","已删除 %{1} 条 URL；Provider 同步会重建其提供的 URL，长期排除请改用停用"
-"Sitemap URL 同步完成：新增 %{1}、更新 %{2}、停用 %{3}、未变化 %{4}","Sitemap URL 同步完成：新增 %{1}、更新 %{2}、停用 %{3}、未变化 %{4}"
-"Sitemap URL 同步失败：%{1}","Sitemap URL 同步失败：%{1}"
-"部分 Provider 同步失败，请查看明细","部分 Provider 同步失败，请查看明细"
-"站点 %{1} 生成失败：%{2}","站点 %{1} 生成失败：%{2}"
-"Canonical Sitemap 生成完成","Canonical Sitemap 生成完成"
-"部分 Sitemap 生成失败","部分 Sitemap 生成失败"
-"站点 %{1} 的 %{2} 提交失败：%{3}","站点 %{1} 的 %{2} 提交失败：%{3}"
-"站点 %{1} 提交失败：%{2}","站点 %{1} 提交失败：%{2}"
-"Sitemap 提交完成","Sitemap 提交完成"
-"部分 Sitemap 提交失败","部分 Sitemap 提交失败"
-"website_ids 必须是数组","website_ids 必须是数组"
-站点不存在：%{1},站点不存在：%{1}
-必须选择至少一个站点或启用全部站点,必须选择至少一个站点或启用全部站点
-"账户名称不能为空且不能超过 190 字节","账户名称不能为空且不能超过 190 字节"
-"绑定参数必须包含 account_id+website_ids 或 website_id+account_ids","绑定参数必须包含 account_id+website_ids 或 website_id+account_ids"
-"站点 %{1} 不存在或没有 URL","站点 %{1} 不存在或没有 URL"
-"站点 %{1}：%{2}","站点 %{1}：%{2}"
-统计数据同步失败,统计数据同步失败
-站点绑定保存成功,站点绑定保存成功
-"Sitemap 频率无效","Sitemap 频率无效"
-抓取频率无效,抓取频率无效
-"优先级必须在 0 到 1 之间","优先级必须在 0 到 1 之间"
-"账户配置必须是 JSON 对象","账户配置必须是 JSON 对象"
-"该站点的 Sitemap 正在生成，请稍后重试","该站点的 Sitemap 正在生成，请稍后重试"
-"Sitemap 索引超过协议限制","Sitemap 索引超过协议限制"
-"内容寻址 Sitemap 文件发生哈希冲突","内容寻址 Sitemap 文件发生哈希冲突"
-"无法发布 Sitemap shard：%{1}","无法发布 Sitemap shard：%{1}"
-"无法原子切换 Sitemap 索引","无法原子切换 Sitemap 索引"
-"Sitemap manifest 写入失败：%{1}","Sitemap manifest 写入失败：%{1}"
-"多个 Provider 生成了重复 canonical URL：%{1}","多个 Provider 生成了重复 canonical URL：%{1}"
-"单条 Sitemap URL 超过平台文件大小限制","单条 Sitemap URL 超过平台文件大小限制"
-"数据库中的 lastmod 无法解析","数据库中的 lastmod 无法解析"
-"生成的 Sitemap XML 无效","生成的 Sitemap XML 无效"
-"生成的 Sitemap XML 条目数超过限制","生成的 Sitemap XML 条目数超过限制"
-"现有 Sitemap 索引不可读","现有 Sitemap 索引不可读"
-"现有 Sitemap 索引 XML 无效","现有 Sitemap 索引 XML 无效"
-"Sitemap cleanup journal 无效或目录不匹配","Sitemap cleanup journal 无效或目录不匹配"
-"Sitemap journal 与当前索引状态不一致，需要人工检查","Sitemap journal 与当前索引状态不一致，需要人工检查"
-"无法原子写入 Sitemap 元数据","无法原子写入 Sitemap 元数据"
-"无法创建 Sitemap 文件：%{1}","无法创建 Sitemap 文件：%{1}"
-"Sitemap 文件写入不完整：%{1}","Sitemap 文件写入不完整：%{1}"
-"Sitemap 文件刷新失败：%{1}","Sitemap 文件刷新失败：%{1}"
-"无法创建 Sitemap 目录：%{1}","无法创建 Sitemap 目录：%{1}"
-"%{1} 不是安全目录标识","%{1} 不是安全目录标识"
-"站点基础 URL 必须是绝对 HTTP(S) URL","站点基础 URL 必须是绝对 HTTP(S) URL"
-"Sitemap URL 为空、过长或包含控制字符","Sitemap URL 为空、过长或包含控制字符"
-"Sitemap 目标 URL 无效","Sitemap 目标 URL 无效"
-"Sitemap URL 不允许省略协议","Sitemap URL 不允许省略协议"
-"Sitemap URL 长度必须小于 2048 字节","Sitemap URL 长度必须小于 2048 字节"
-"Sitemap URL 不是绝对 URL","Sitemap URL 不是绝对 URL"
-"Sitemap URL 不允许 credentials 或 fragment","Sitemap URL 不允许 credentials 或 fragment"
-"Sitemap URL 仅支持 HTTP(S)","Sitemap URL 仅支持 HTTP(S)"
-"Sitemap URL 与站点不同源","Sitemap URL 与站点不同源"
-"无法创建 Sitemap 锁目录","无法创建 Sitemap 锁目录"
-"无法打开 Sitemap 操作锁","无法打开 Sitemap 操作锁"
+"SEO 自动优化分析队列","SEO automatic optimization analysis queue"
+发现达标目标并生成结构化建议；是否修改由站点策略决定。,"Discover compliance goals and generate structured recommendations; modifications are determined by site policy."
+"SEO 自动优化分析队列参数无效。","SEO automatic optimization analysis queue parameters are invalid."
+"SEO 自动优化评估队列","SEO automatic optimization evaluation queue"
+按连续观察窗口保留显著候选，或精确回滚受限字段。,"Preserve significant candidates by continuous observation windows, or precisely roll back restricted fields."
+"SEO 自动优化评估队列参数无效。","The SEO automatic optimization evaluation queue parameter is invalid."
+"SEO 自动优化分析","SEO automatic optimization analysis"
+"SEO 自动优化评估","SEO automated optimization assessment"
+"URL target 数据不是数组","URL target data is not an array"
+"缺少 URL 提交 scope","Missing URL submission scope"
+"无法识别 URL 所属站点","Unable to identify the site to which the URL belongs"
+"没有可提交的公开 URL","No public URL to submit"
+已刷新建议,"Suggestions refreshed"
+刷新失败：%{1},"Refresh failed: %{1}"
+"缺少 website_id 参数","Missing website_id parameter"
+"website_id 非法","website_id is illegal"
+"缺少 url_id 参数","Missing url_id parameter"
+"Sitemap URL 不存在：%{1}","Sitemap URL does not exist: %{1}"
+"status 仅支持 0 或 1","status only supports 0 or 1"
+"changefreq 取值无效：%{1}","Invalid changefreq value: %{1}"
+"priority 必须在 0.0 与 1.0 之间","priority must be between 0.0 and 1.0"
+没有需要更新的字段,"There are no fields to update"
+"Sitemap URL 已更新；重新生成 canonical 后生效","Sitemap URL updated; will take effect after canonical regeneration"
+"缺少 url_ids 参数","Missing url_ids parameter"
+"单次最多删除 200 条 URL","A maximum of 200 URLs can be deleted at a time"
+"已删除 %{1} 条 URL；Provider 同步会重建其提供的 URL，长期排除请改用停用","%{1} URLs have been deleted; Provider synchronization will rebuild the URLs provided by it. Please disable it for long-term exclusion."
+"Sitemap URL 同步完成：新增 %{1}、更新 %{2}、停用 %{3}、未变化 %{4}","Sitemap URL synchronization completed: new %{1}, updated %{2}, deactivated %{3}, unchanged %{4}"
+"Sitemap URL 同步失败：%{1}","Sitemap URL sync failed: %{1}"
+"部分 Provider 同步失败，请查看明细","Some providers failed to synchronize, please check the details."
+"站点 %{1} 生成失败：%{2}","Site %{1} generation failed: %{2}"
+"Canonical Sitemap 生成完成","Canonical Sitemap generation completed"
+"部分 Sitemap 生成失败","Partial Sitemap generation failed"
+"站点 %{1} 的 %{2} 提交失败：%{3}","Submission of %{2} for site %{1} failed: %{3}"
+"站点 %{1} 提交失败：%{2}","Site %{1} Submission failed: %{2}"
+"Sitemap 提交完成","Sitemap submission completed"
+"部分 Sitemap 提交失败","Some Sitemap submissions failed"
+"website_ids 必须是数组","website_ids must be an array"
+站点不存在：%{1},"Site does not exist: %{1}"
+必须选择至少一个站点或启用全部站点,"At least one site must be selected or all sites must be enabled"
+"账户名称不能为空且不能超过 190 字节","Account name cannot be empty and cannot exceed 190 bytes"
+"绑定参数必须包含 account_id+website_ids 或 website_id+account_ids","Binding parameters must contain account_id+website_ids or website_id+account_ids"
+"站点 %{1} 不存在或没有 URL","Site %{1} does not exist or has no URL"
+"站点 %{1}：%{2}","Site %{1}: %{2}"
+统计数据同步失败,"Statistics sync failed"
+站点绑定保存成功,"Site binding saved successfully"
+"Sitemap 频率无效","Sitemap frequency is invalid"
+抓取频率无效,"Invalid crawl frequency"
+"优先级必须在 0 到 1 之间","Priority must be between 0 and 1"
+"账户配置必须是 JSON 对象","Account configuration must be a JSON object"
+"该站点的 Sitemap 正在生成，请稍后重试","The sitemap for this site is being generated, please try again later"
+"Sitemap 索引超过协议限制","Sitemap index exceeds protocol limit"
+"内容寻址 Sitemap 文件发生哈希冲突","Content Addressed Sitemap File Has Hash Collision"
+"无法发布 Sitemap shard：%{1}","Unable to publish Sitemap shard: %{1}"
+"无法原子切换 Sitemap 索引","Unable to atomically switch Sitemap index"
+"Sitemap manifest 写入失败：%{1}","Sitemap manifest writing failed: %{1}"
+"多个 Provider 生成了重复 canonical URL：%{1}","Multiple providers generated duplicate canonical URL: %{1}"
+"单条 Sitemap URL 超过平台文件大小限制","A single Sitemap URL exceeds the platform file size limit"
+"数据库中的 lastmod 无法解析","lastmod in database cannot be resolved"
+"生成的 Sitemap XML 无效","The generated Sitemap XML is invalid"
+"生成的 Sitemap XML 条目数超过限制","The number of generated Sitemap XML entries exceeds the limit"
+"现有 Sitemap 索引不可读","Existing Sitemap index is unreadable"
+"现有 Sitemap 索引 XML 无效","Existing Sitemap index XML is invalid"
+"Sitemap cleanup journal 无效或目录不匹配","Sitemap cleanup journal is invalid or the directory does not match"
+"Sitemap journal 与当前索引状态不一致，需要人工检查","Sitemap journal is inconsistent with the current index status and requires manual inspection"
+"无法原子写入 Sitemap 元数据","Unable to write Sitemap metadata atomically"
+"无法创建 Sitemap 文件：%{1}","Unable to create Sitemap file: %{1}"
+"Sitemap 文件写入不完整：%{1}","Incomplete Sitemap file writing: %{1}"
+"Sitemap 文件刷新失败：%{1}","Sitemap file refresh failed: %{1}"
+"无法创建 Sitemap 目录：%{1}","Unable to create Sitemap directory: %{1}"
+"%{1} 不是安全目录标识","%{1} is not a security directory identifier"
+"站点基础 URL 必须是绝对 HTTP(S) URL","Site base URL must be an absolute HTTP(S) URL"
+"Sitemap URL 为空、过长或包含控制字符","Sitemap URL is empty, too long, or contains control characters"
+"Sitemap 目标 URL 无效","Sitemap target URL is invalid"
+"Sitemap URL 不允许省略协议","Sitemap URL does not allow protocol omission"
+"Sitemap URL 长度必须小于 2048 字节","Sitemap URL length must be less than 2048 bytes"
+"Sitemap URL 不是绝对 URL","Sitemap URL is not an absolute URL"
+"Sitemap URL 不允许 credentials 或 fragment","Sitemap URL does not allow credentials or fragments"
+"Sitemap URL 仅支持 HTTP(S)","Sitemap URL only supports HTTP(S)"
+"Sitemap URL 与站点不同源","Sitemap URL does not originate from the site"
+"无法创建 Sitemap 锁目录","Unable to create Sitemap lock directory"
+"无法打开 Sitemap 操作锁","Unable to open Sitemap action lock"
 "已向Google Indexing API 提交 %{success} 个URL","Submitted %{success} URL(s) to Google Indexing API"
 "向Google Indexing API 提交URL失败","Failed to submit URL to Google Indexing API"
 "Sitemap URL为空","Sitemap URL is empty"
@@ -806,67 +806,71 @@ Scope,Scope
 "百度 URL 提交失败","Baidu URL submission failed"
 "百度站长平台 API Token","Baidu Webmaster Platform API Token"
 "已在百度站长平台验证的站点 URL","Site URL verified on Baidu Webmaster Platform"
-"Sitemap 暂不可用，请稍后重试","Sitemap 暂不可用，请稍后重试"
-"Sitemap 文件不存在","Sitemap 文件不存在"
-"Sitemap 文件不可读或超过协议限制","Sitemap 文件不可读或超过协议限制"
-"站点代码无法安全映射 Sitemap 目录","站点代码无法安全映射 Sitemap 目录"
-"Canonical Sitemap 不可读或超过协议限制","Canonical Sitemap 不可读或超过协议限制"
-当前请求缺少站点上下文,当前请求缺少站点上下文
-"当前请求站点 ID 非法","当前请求站点 ID 非法"
-"数据库 fallback URL 数超过单文件限制","数据库 fallback URL 数超过单文件限制"
-"数据库 fallback 包含重复或超长 URL","数据库 fallback 包含重复或超长 URL"
-"数据库 fallback lastmod 无效","数据库 fallback lastmod 无效"
-"数据库 fallback 超过单文件字节限制","数据库 fallback 超过单文件字节限制"
-"Sitemap XML 根节点无效","Sitemap XML 根节点无效"
-"Sitemap XML 条目数无效","Sitemap XML 条目数无效"
-"Sitemap loc 不是有效绝对 URL","Sitemap loc 不是有效绝对 URL"
-"Sitemap loc 与当前站点不同源","Sitemap loc 与当前站点不同源"
-"SEO sitemap Provider 定向同步失败：%{1}","SEO sitemap Provider 定向同步失败：%{1}"
-"Store mode hard gate：dev/test 禁止生成可索引 Sitemap","Store mode hard gate：dev/test 禁止生成可索引 Sitemap"
-"站点 %{1} 缺少可用基础 URL","站点 %{1} 缺少可用基础 URL"
-"Canonical Sitemap 生成失败","Canonical Sitemap 生成失败"
-"Canonical Sitemap 已生成；该站点尚未绑定可提交的 SEO 账户","Canonical Sitemap 已生成；该站点尚未绑定可提交的 SEO 账户"
-"Canonical Sitemap 与平台副本已生成","Canonical Sitemap 与平台副本已生成"
+"Sitemap 暂不可用，请稍后重试","Sitemap is currently unavailable, please try again later"
+"Sitemap 文件不存在","Sitemap file does not exist"
+"Sitemap 文件不可读或超过协议限制","Sitemap file is unreadable or exceeds protocol limits"
+"站点代码无法安全映射 Sitemap 目录","Site code cannot safely map Sitemap directory"
+"Canonical Sitemap 不可读或超过协议限制","Canonical Sitemap is unreadable or exceeds protocol limits"
+当前请求缺少站点上下文,"The current request is missing site context"
+"当前请求站点 ID 非法","The current requested site ID is illegal"
+"数据库 fallback URL 数超过单文件限制","The number of database fallback URLs exceeds the single file limit"
+"数据库 fallback 包含重复或超长 URL","Database fallback contains duplicate or overly long URLs"
+"数据库 fallback lastmod 无效","Database fallback lastmod is invalid"
+"数据库 fallback 超过单文件字节限制","Database fallback exceeds single file byte limit"
+"Sitemap XML 根节点无效","Sitemap XML root node is invalid"
+"Sitemap XML 条目数无效","Invalid number of Sitemap XML entries"
+"Sitemap loc 不是有效绝对 URL","Sitemap loc is not a valid absolute URL"
+"Sitemap loc 与当前站点不同源","Sitemap loc has a different origin than the current site"
+"SEO sitemap Provider 定向同步失败：%{1}","SEO sitemap Provider targeted sync failed: %{1}"
+"Store mode hard gate：dev/test 禁止生成可索引 Sitemap","Store mode hard gate: dev/test prohibits generating indexable Sitemaps"
+"站点 %{1} 缺少可用基础 URL","Site %{1} is missing a free base URL"
+"Canonical Sitemap 生成失败","Canonical Sitemap generation failed"
+"Canonical Sitemap 已生成；该站点尚未绑定可提交的 SEO 账户","Canonical Sitemap generated; the site is not yet bound to a submittable SEO account"
+"Canonical Sitemap 与平台副本已生成","Canonical Sitemap and platform copy generated"
 "平台 %{1} 不支持自动提交","Platform %{1} does not support auto-submit"
 Canonical,Canonical
-"缺少 sitemap 定向同步 module，或 website_id 非法","缺少 sitemap 定向同步 module，或 website_id 非法"
-"Provider %{1} 返回了负数 website_id","Provider %{1} 返回了负数 website_id"
-"Sitemap Provider 目标站点不存在：%{1}","Sitemap Provider 目标站点不存在：%{1}"
-"相同 Provider 与站点正在同步，请稍后重试","相同 Provider 与站点正在同步，请稍后重试"
-"第 %{1} 条 URL 数据不是数组","第 %{1} 条 URL 数据不是数组"
-"重复的 Sitemap 五元组身份","重复的 Sitemap 五元组身份"
-"同一语言存在重复 canonical URL：%{1}","同一语言存在重复 canonical URL：%{1}"
-"第 %{1} 条 URL 无效：%{2}","第 %{1} 条 URL 无效：%{2}"
-"locale 未安装或未启用：%{1}","locale 未安装或未启用：%{1}"
-"loc 为空或包含控制字符","loc 为空或包含控制字符"
-"loc 不允许省略协议","loc 不允许省略协议"
-"站点基础 URL 无效","站点基础 URL 无效"
-"loc 必须是包含协议的完整 HTTP(S) URL","loc 必须是包含协议的完整 HTTP(S) URL"
-"loc 不是有效 HTTP(S) URL","loc 不是有效 HTTP(S) URL"
-"loc 仅支持 HTTP(S)","loc 仅支持 HTTP(S)"
-"loc 不允许 credentials 或 fragment","loc 不允许 credentials 或 fragment"
-"loc 必须与站点同源","loc 必须与站点同源"
-"loc 长度必须小于 2048 字节","loc 长度必须小于 2048 字节"
-"lastmod 必须是 W3C 日期或时间","lastmod 必须是 W3C 日期或时间"
-"lastmod 无法解析","lastmod 无法解析"
-"changefreq 不在 Sitemap 枚举中","changefreq 不在 Sitemap 枚举中"
-"priority 必须是数字","priority 必须是数字"
-"priority 必须在 0.0 到 1.0 之间","priority 必须在 0.0 到 1.0 之间"
-"metadata 必须是 JSON 对象或数组","metadata 必须是 JSON 对象或数组"
-"%{1} 为空、过长或包含控制字符","%{1} 为空、过长或包含控制字符"
-"%{1} 不是有效 UTF-8","%{1} 不是有效 UTF-8"
+"缺少 sitemap 定向同步 module，或 website_id 非法","The sitemap directional synchronization module is missing, or the website_id is illegal"
+"Provider %{1} 返回了负数 website_id","Provider %{1} returned a negative website_id"
+"Sitemap Provider 目标站点不存在：%{1}","Sitemap Provider target site does not exist: %{1}"
+"相同 Provider 与站点正在同步，请稍后重试","The same Provider and site are being synchronized, please try again later."
+"第 %{1} 条 URL 数据不是数组","URL data %{1} is not an array"
+"重复的 Sitemap 五元组身份","Duplicate Sitemap quintuple identity"
+"同一语言存在重复 canonical URL：%{1}","Duplicate canonical URL exists in the same language: %{1}"
+"第 %{1} 条 URL 无效：%{2}","Invalid URL %{1}: %{2}"
+"locale 未安装或未启用：%{1}","locale is not installed or enabled: %{1}"
+"loc 为空或包含控制字符","loc is empty or contains control characters"
+"loc 不允许省略协议","loc does not allow protocols to be omitted"
+"站点基础 URL 无效","Site base URL is invalid"
+"loc 必须是包含协议的完整 HTTP(S) URL","loc must be a complete HTTP(S) URL including protocol"
+"loc 不是有效 HTTP(S) URL","loc is not a valid HTTP(S) URL"
+"loc 仅支持 HTTP(S)","loc only supports HTTP(S)"
+"loc 不允许 credentials 或 fragment","loc does not allow credentials or fragments"
+"loc 必须与站点同源","loc must have the same origin as the site"
+"loc 长度必须小于 2048 字节","loc length must be less than 2048 bytes"
+"lastmod 必须是 W3C 日期或时间","lastmod must be a W3C date or time"
+"lastmod 无法解析","lastmod cannot be parsed"
+"changefreq 不在 Sitemap 枚举中","changefreq is not in Sitemap enumeration"
+"priority 必须是数字","priority must be a number"
+"priority 必须在 0.0 到 1.0 之间","priority must be between 0.0 and 1.0"
+"metadata 必须是 JSON 对象或数组","metadata must be a JSON object or array"
+"%{1} 为空、过长或包含控制字符","%{1} is empty, too long, or contains control characters"
+"%{1} 不是有效 UTF-8","%{1} is not valid UTF-8"
 "Sitemap 提交提示","Sitemap Submission Notice"
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","The following sites are not bound to an SEO account, so sitemaps cannot be submitted automatically:"
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","Please go to ""SEO Management > Sitemap Management"" or ""Site Management"" to bind the SEO account."
 SEO账户配置,"SEO Account Configuration"
 """SEO subject created""","SEO subject created"
+正在读取站点…,"Loading site…"
+没有可用站点,"No site available"
+"点击上方""添加主体""按钮创建第一个SEO主体。","Click the ""Add Subject"" button above to create the first SEO subject."
+确认组件不可用，请刷新页面后重试。,"Confirm that the component is unavailable, please refresh the page and try again."
 成功,Success
 错误,Error
 提示,Prompt
 暂无访客事件,"No visitor events yet"
 "写入隔离的 SEO Search 验收证据。","Write isolated SEO Search acceptance evidence."
 "按回执精确清理 SEO Search 验收证据。","Clean up SEO Search acceptance evidence by receipt."
-"Sitemap 管理","Sitemap 管理"
+"Sitemap 管理","Sitemap management"
 SEO账户列表,"SEO account list"
 绑定站点,"Bind site"
 暂无账户,"No accounts"
@@ -876,56 +880,56 @@ SEO账户列表,"SEO account list"
 已提交URL,"URL submitted"
 最后同步,"Last sync"
 同步,Sync
-"该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL","该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL"
+"该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL","This site does not have URL data, please click the ""Synchronize All Providers"" button to generate the URL first"
 "该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往""站点管理""或""SEO管理 > 账户管理""绑定 SEO 账户。","This site is not bound to an SEO account. There are %{1} URL(s) but no sitemap file can be generated. Please go to ""Site Management"" or ""SEO Management > Account Management"" to bind an SEO account."
-"缺少 sitemap 定向同步 module 或 website_id","缺少 sitemap 定向同步 module 或 website_id"
-"SitemapUrlProvider 必须返回非空 scope 和 module","SitemapUrlProvider 必须返回非空 scope 和 module"
-"第 %{1} 条 URL 缺少 url_key 或 loc","第 %{1} 条 URL 缺少 url_key 或 loc"
-"重复的 sitemap url_key：%{1}","重复的 sitemap url_key：%{1}"
-账户保存失败,账户保存失败
-获取站点列表失败,获取站点列表失败
-解绑失败,解绑失败
-同步失败,同步失败
+"缺少 sitemap 定向同步 module 或 website_id","Missing sitemap targeting sync module or website_id"
+"SitemapUrlProvider 必须返回非空 scope 和 module","SitemapUrlProvider must return non-empty scope and module"
+"第 %{1} 条 URL 缺少 url_key 或 loc","URL %{1} is missing url_key or loc"
+"重复的 sitemap url_key：%{1}","Duplicate sitemap url_key: %{1}"
+账户保存失败,"Account saving failed"
+获取站点列表失败,"Failed to get site list"
+解绑失败,"Unbinding failed"
+同步失败,"Sync failed"
 %{1}：%{2},%{1}：%{2}
-"SEO 站点绑定","SEO 站点绑定"
-"canonical Sitemap 与账户无关；这里的绑定只决定哪些搜索平台接收提交。","canonical Sitemap 与账户无关；这里的绑定只决定哪些搜索平台接收提交。"
-账户凭据只在保存时提交；编辑时留空配置可保留现有凭据，列表与响应不会返回明文秘密。,账户凭据只在保存时提交；编辑时留空配置可保留现有凭据，列表与响应不会返回明文秘密。
-返回账户列表,返回账户列表
-用于识别平台账户和限定调用范围。,用于识别平台账户和限定调用范围。
-搜索平台,搜索平台
-请选择平台,请选择平台
-说明,说明
-平台凭据,平台凭据
-"使用 JSON 对象保存平台所需的 token、key 或站点验证配置。","使用 JSON 对象保存平台所需的 token、key 或站点验证配置。"
-"配置 JSON","配置 JSON"
-"已保存的敏感值不会回显；只有填写新的 JSON 才会替换现有配置。","已保存的敏感值不会回显；只有填写新的 JSON 才会替换现有配置。"
-自动化能力,自动化能力
-平台不支持的能力会在服务端自动关闭。,平台不支持的能力会在服务端自动关闭。
-允许该账户参与站点绑定和平台操作。,允许该账户参与站点绑定和平台操作。
-"自动提交 Sitemap","自动提交 Sitemap"
-"Cron 生成后向该平台提交 canonical 索引。","Cron 生成后向该平台提交 canonical 索引。"
-"允许 URL 变更进入平台即时提交队列。","允许 URL 变更进入平台即时提交队列。"
-保存账户,保存账户
-账户保存完成,账户保存完成
-编辑账户,编辑账户
-留空表示全局,留空表示全局
-留空保持现有凭据不变,留空保持现有凭据不变
-"以下站点已生成 canonical Sitemap，但未绑定 SEO 账户，暂未自动提交：","以下站点已生成 canonical Sitemap，但未绑定 SEO 账户，暂未自动提交："
+"SEO 站点绑定","SEO site binding"
+"canonical Sitemap 与账户无关；这里的绑定只决定哪些搜索平台接收提交。","The canonical Sitemap is account-agnostic; the binding here only determines which search platforms receive submissions."
+账户凭据只在保存时提交；编辑时留空配置可保留现有凭据，列表与响应不会返回明文秘密。,"Account credentials are only submitted when saving; leave the configuration blank when editing to retain existing credentials, and the list and response will not return clear text secrets."
+返回账户列表,"Return to account list"
+用于识别平台账户和限定调用范围。,"Used to identify platform accounts and limit the calling scope."
+搜索平台,"Search platform"
+请选择平台,"Please select a platform"
+说明,illustrate
+平台凭据,"Platform credentials"
+"使用 JSON 对象保存平台所需的 token、key 或站点验证配置。","Use a JSON object to save the token, key, or site authentication configuration required by the platform."
+"配置 JSON","Configuration JSON"
+"已保存的敏感值不会回显；只有填写新的 JSON 才会替换现有配置。","Saved sensitive values ​​are not echoed; only filling in new JSON will replace the existing configuration."
+自动化能力,"Automation capabilities"
+平台不支持的能力会在服务端自动关闭。,"Capabilities not supported by the platform will be automatically turned off on the server side."
+允许该账户参与站点绑定和平台操作。,"Allow this account to participate in site binding and platform operations."
+"自动提交 Sitemap","Automatically submit Sitemap"
+"Cron 生成后向该平台提交 canonical 索引。","After Cron is generated, the canonical index is submitted to the platform."
+"允许 URL 变更进入平台即时提交队列。","Allow URL changes to enter the platform's instant submission queue."
+保存账户,"save account"
+账户保存完成,"Account saving completed"
+编辑账户,"Edit account"
+留空表示全局,"Leave blank for global"
+留空保持现有凭据不变,"Leave blank to keep existing credentials intact"
+"以下站点已生成 canonical Sitemap，但未绑定 SEO 账户，暂未自动提交：","The following sites have generated canonical Sitemaps, but are not bound to SEO accounts and have not yet been automatically submitted:"
 "SEO 模块工作原理","SEO Module Workflow"
 点击查看,"Click to View"
 工作流程概览,"Workflow Overview"
 "URL 数据采集","URL Data Collection"
-"各模块通过 SitemapUrlProvider 提供 URL 数据，包括页面、产品、分类等","各模块通过 SitemapUrlProvider 提供 URL 数据，包括页面、产品、分类等"
+"各模块通过 SitemapUrlProvider 提供 URL 数据，包括页面、产品、分类等","Each module provides URL data through SitemapUrlProvider, including pages, products, categories, etc."
 平台适配器生成,"Platform adapter generation"
 "根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml","Generate a compliant sitemap.xml via the corresponding adapter based on the SEO platform bound to the site"
 自动提交,"Auto Submission"
 "定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap","Scheduled tasks automatically submit sitemaps only to platforms with official APIs or IndexNow support"
 架构设计,"Architecture Design"
 "Provider 扩展机制","Provider Extension Mechanism"
-"各模块通过 <code>extends/module/Weline_Seo/SitemapUrlProvider/</code> 注册自己的 URL 提供器","各模块通过 <code>extends/module/Weline_Seo/SitemapUrlProvider/</code> 注册自己的 URL 提供器"
+"各模块通过 <code>extends/module/Weline_Seo/SitemapUrlProvider/</code> 注册自己的 URL 提供器","Each module registers its own URL provider through <code>extends/module/Weline_Seo/SitemapUrlProvider/</code>"
 "实现 <code>SitemapUrlProviderInterface</code> 接口","Implement the <code>SitemapUrlProviderInterface</code> interface"
-"返回稳定 <code>url_key</code>，SEO 模块负责增量同步","返回稳定 <code>url_key</code>，SEO 模块负责增量同步"
-"URL 数据统一存储在 <code>weline_sitemap_url</code> 表","URL 数据统一存储在 <code>weline_sitemap_url</code> 表"
+"返回稳定 <code>url_key</code>，SEO 模块负责增量同步","Return stable <code>url_key</code>, SEO module is responsible for incremental synchronization"
+"URL 数据统一存储在 <code>weline_sitemap_url</code> 表","URL data is stored uniformly in the <code>weline_sitemap_url</code> table"
 平台适配器模式,"Platform adapter mode"
 每个搜索引擎平台有独立的适配器,"Each search engine platform has its own adapter"
 "适配器负责生成符合平台规范的 XML 文件","Adapters are responsible for generating XML files that comply with platform specifications"
@@ -950,13 +954,13 @@ SEO账户列表,"SEO account list"
 导入模块文档到数据库,"to import module documents to database"
 手动生成,"Manual Generate"
 全站生成,"Generate for All Websites"
-"注意：请先点击下方""同步所有 Provider""按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件","注意：请先点击下方""同步所有 Provider""按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件"
+"注意：请先点击下方""同步所有 Provider""按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件","Note: Please click the ""Sync All Providers"" button below to synchronize URL data, and then click this button to generate the sitemap file."
 "Sitemap URL Provider","Sitemap URL Provider"
 生成,Generate
-"同步所有 Provider","同步所有 Provider"
-"暂无注册的 Sitemap URL Provider","暂无注册的 Sitemap URL Provider"
-"其他模块可通过 SitemapUrlProvider 扩展点注册","其他模块可通过 SitemapUrlProvider 扩展点注册"
-"Sitemap URL 数据","Sitemap URL 数据"
+"同步所有 Provider","Synchronize all Providers"
+"暂无注册的 Sitemap URL Provider","There is no registered Sitemap URL Provider yet."
+"其他模块可通过 SitemapUrlProvider 扩展点注册","Other modules can be registered through the SitemapUrlProvider extension point"
+"Sitemap URL 数据","Sitemap URL data"
 个平台,platforms
 "多平台 Sitemap","Multi-platform Sitemap"
 自动生成,"Auto Generated"
@@ -967,7 +971,7 @@ SEO账户列表,"SEO account list"
 平台总索引,"Platform total index"
 个分片,shards
 "该站点没有 URL 数据","This site has no URL data"
-"请先点击上方的""同步所有 Provider""按钮生成 URL 数据","请先点击上方的""同步所有 Provider""按钮生成 URL 数据"
+"请先点击上方的""同步所有 Provider""按钮生成 URL 数据","Please click the ""Sync All Providers"" button above to generate URL data first"
 "该站点未绑定 SEO 账户","This site is not bound to an SEO account"
 已有,"There are"
 "条 URL 数据，但无法生成 sitemap 文件","items of URL data, but unable to generate sitemap file"
@@ -982,3 +986,5 @@ SEO账户列表,"SEO account list"
 定时任务推送URL,"Scheduled Task Push URL"
 复制地址,"Copy URL"
 打开查看,Open
+SEO账户,"SEO account"
+主体管理,"Subject management"

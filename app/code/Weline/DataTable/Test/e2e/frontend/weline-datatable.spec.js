@@ -66,33 +66,35 @@ async function seedDemoData(page) {
 
 async function waitForTable(page, tableId) {
   await page.waitForFunction((id) => {
-    const instance = window.DataTableManager && window.DataTableManager.instances && window.DataTableManager.instances[id];
-    return !!instance && Array.isArray(instance.data) && instance.data.length > 0;
+    const root = document.getElementById(`w-datatable-${id}`);
+    const instance = root && window.Weline?.UI?.get(root, 'data-table');
+    return !!instance && Array.isArray(instance.state?.data) && instance.state.data.length > 0;
   }, tableId, { timeout: 30000 });
 }
 
 async function waitForForm(page, formId) {
   await page.waitForFunction((id) => {
-    return !!(window.DataTableFormManager && window.DataTableFormManager.instances && window.DataTableFormManager.instances[id]);
+    const form = document.getElementById(id);
+    const root = form?.closest('[data-w-component~="data-table-form"]');
+    return !!(root && window.Weline?.UI?.get(root, 'data-table-form'));
   }, formId, { timeout: 30000 });
 }
 
 async function readTableState(page, tableId) {
   return page.evaluate((id) => {
-    const instance = window.DataTableManager && window.DataTableManager.instances
-      ? window.DataTableManager.instances[id]
-      : null;
+    const root = document.getElementById(`w-datatable-${id}`);
+    const instance = root && window.Weline?.UI?.get(root, 'data-table');
 
     if (!instance) {
       return null;
     }
 
     return {
-      options: instance.options || {},
-      data: Array.isArray(instance.data) ? instance.data : [],
-      displayFields: Array.isArray(instance.displayFields) ? instance.displayFields : [],
-      allFields: Array.isArray(instance.allFields) ? instance.allFields : [],
-      filterFields: Array.isArray(instance.filterFields) ? instance.filterFields : [],
+      options: JSON.parse(root.dataset.wConfig || '{}'),
+      data: Array.isArray(instance.state?.data) ? instance.state.data : [],
+      displayFields: Array.isArray(instance.state?.displayFields) ? instance.state.displayFields : [],
+      allFields: Array.isArray(instance.state?.allFields) ? instance.state.allFields : [],
+      filterFields: Array.isArray(instance.state?.filterFields) ? instance.state.filterFields : [],
     };
   }, tableId);
 }
@@ -122,15 +124,18 @@ test.describe('Weline DataTable frontend demos', () => {
     await waitForForm(page, 'demo-basic-form');
 
     const basicState = await readTableState(page, 'demo-basic-table');
-    expect(basicState.options.apiUrl).toContain('/datatable/rest/v1/demo-table');
-    expect(basicState.options.fieldApiUrl).toContain('/datatable/rest/v1/demo-form/fields');
+    expect(basicState.options.apiProvider).toBe('datatable');
+    expect(basicState.options.operations.data).toBe('data');
+    expect(basicState.options.operations.fields).toBe('fields');
     expect(basicState.data.length).toBeGreaterThan(0);
 
     const basicFormState = await page.evaluate(() => {
-      return window.DataTableFormManager.instances['demo-basic-form'].options;
+      const form = document.getElementById('demo-basic-form');
+      const root = form?.closest('[data-w-component~="data-table-form"]');
+      return root ? JSON.parse(root.dataset.wConfig || '{}') : null;
     });
-    expect(basicFormState.apiUrl).toContain('/datatable/rest/v1/demo-table');
-    expect(basicFormState.fieldApiUrl).toContain('/datatable/rest/v1/demo-form/fields');
+    expect(basicFormState.apiProvider).toBe('datatable');
+    expect(basicFormState.operations.formFields).toBe('formFields');
 
     await gotoFrontend(page, '/datatable/test/join', {
       waitUntil: 'domcontentloaded',
@@ -173,13 +178,12 @@ test.describe('Weline DataTable frontend demos', () => {
     await page.fill('#demo-standalone-form input[name="email"]', 'frontend.form.user@example.com');
     await page.fill('#demo-standalone-form input[name="phone"]', '13800138088');
     await page.selectOption('#demo-standalone-form select[name="status"]', '1');
-    await page.click('#demo-standalone-form .w-form-footer .w-btn-primary');
+    await page.click('button[type="submit"][form="demo-standalone-form"]');
 
     await page.waitForFunction(() => {
-      const instance = window.DataTableManager && window.DataTableManager.instances
-        ? window.DataTableManager.instances['demo-standalone-table']
-        : null;
-      return !!instance && Array.isArray(instance.data) && instance.data.some(row => row.email === 'frontend.form.user@example.com');
+      const root = document.getElementById('w-datatable-demo-standalone-table');
+      const instance = root && window.Weline?.UI?.get(root, 'data-table');
+      return !!instance && Array.isArray(instance.state?.data) && instance.state.data.some(row => row.email === 'frontend.form.user@example.com');
     }, null, { timeout: 30000 });
 
     await gotoFrontend(page, '/datatable/test/upload', {
@@ -204,15 +208,14 @@ test.describe('Weline DataTable frontend demos', () => {
       buffer: Buffer.from('demo attachment body', 'utf8'),
     });
 
-    await expect(page.locator('#demo-upload-form .w-image-preview img')).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('#demo-upload-form .w-file-list .w-file-item')).toContainText('demo-attachment.txt', { timeout: 15000 });
+    await expect(page.locator('[data-w-component~="data-table-form"]:has(#demo-upload-form) .w-datatable-form__file-preview img')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[data-w-component~="data-table-form"]:has(#demo-upload-form) .w-datatable-form__file-preview')).toContainText('demo-attachment.txt', { timeout: 15000 });
 
-    await page.click('#demo-upload-form .w-form-footer .w-btn-primary');
+    await page.click('button[type="submit"][form="demo-upload-form"]');
     await page.waitForFunction(() => {
-      const instance = window.DataTableManager && window.DataTableManager.instances
-        ? window.DataTableManager.instances['demo-upload-table']
-        : null;
-      return !!instance && Array.isArray(instance.data) && instance.data.some(row => row.email === 'upload.demo.user@example.com');
+      const root = document.getElementById('w-datatable-demo-upload-table');
+      const instance = root && window.Weline?.UI?.get(root, 'data-table');
+      return !!instance && Array.isArray(instance.state?.data) && instance.state.data.some(row => row.email === 'upload.demo.user@example.com');
     }, null, { timeout: 30000 });
 
     await gotoFrontend(page, '/datatable/test/transaction', {
@@ -232,13 +235,12 @@ test.describe('Weline DataTable frontend demos', () => {
     await page.fill('#demo-transaction-form input[name="o.total_amount"]', '123.45');
     await page.selectOption('#demo-transaction-form select[name="o.order_status"]', '1');
     await page.selectOption('#demo-transaction-form select[name="o.payment_status"]', '1');
-    await page.click('#demo-transaction-form .w-form-footer .w-btn-primary');
+    await page.click('button[type="submit"][form="demo-transaction-form"]');
 
     await page.waitForFunction(() => {
-      const instance = window.DataTableManager && window.DataTableManager.instances
-        ? window.DataTableManager.instances['demo-transaction-table']
-        : null;
-      return !!instance && Array.isArray(instance.data) && instance.data.some(row => row['o.order_no'] === 'TXN-ORDER-001' && row['u.email'] === 'txn.user@example.com');
+      const root = document.getElementById('w-datatable-demo-transaction-table');
+      const instance = root && window.Weline?.UI?.get(root, 'data-table');
+      return !!instance && Array.isArray(instance.state?.data) && instance.state.data.some(row => row['o.order_no'] === 'TXN-ORDER-001' && row['u.email'] === 'txn.user@example.com');
     }, null, { timeout: 30000 });
 
     await gotoFrontend(page, '/datatable/test/dependency', {
@@ -257,17 +259,16 @@ test.describe('Weline DataTable frontend demos', () => {
     await page.fill('#demo-dependency-form input[name="o.final_amount"]', '88.80');
     await page.selectOption('#demo-dependency-form select[name="o.payment_status"]', '1');
     await page.selectOption('#demo-dependency-form select[name="o.order_status"]', '2');
-    await page.click('#demo-dependency-form .w-form-footer .w-btn-primary');
+    await page.click('button[type="submit"][form="demo-dependency-form"]');
 
     await page.waitForFunction(() => {
-      const instance = window.DataTableManager && window.DataTableManager.instances
-        ? window.DataTableManager.instances['demo-dependency-table']
-        : null;
-      if (!instance || !Array.isArray(instance.data)) {
+      const root = document.getElementById('w-datatable-demo-dependency-table');
+      const instance = root && window.Weline?.UI?.get(root, 'data-table');
+      if (!instance || !Array.isArray(instance.state?.data)) {
         return false;
       }
 
-      return instance.data.some(row => row['o.order_no'] === 'DEPEND-ORDER-001' && String(row['o.user_id']) === String(row['u.id']));
+      return instance.state.data.some(row => row['o.order_no'] === 'DEPEND-ORDER-001' && String(row['o.user_id']) === String(row['u.id']));
     }, null, { timeout: 30000 });
 
     assertNoPageErrors(errors);
@@ -308,18 +309,16 @@ test.describe('Weline DataTable frontend demos', () => {
 
     await page.click('[data-testid="cascade-refresh"]');
     await page.waitForFunction(() => {
-      const userTable = window.DataTableManager && window.DataTableManager.instances
-        ? window.DataTableManager.instances['demo-cascade-users']
-        : null;
-      const orderTable = window.DataTableManager && window.DataTableManager.instances
-        ? window.DataTableManager.instances['demo-cascade-orders']
-        : null;
+      const userRoot = document.getElementById('w-datatable-demo-cascade-users');
+      const orderRoot = document.getElementById('w-datatable-demo-cascade-orders');
+      const userTable = userRoot && window.Weline?.UI?.get(userRoot, 'data-table');
+      const orderTable = orderRoot && window.Weline?.UI?.get(orderRoot, 'data-table');
       return !!userTable
         && !!orderTable
-        && Array.isArray(userTable.data)
-        && Array.isArray(orderTable.data)
-        && !userTable.data.some(row => String(row.id) === '1')
-        && !orderTable.data.some(row => String(row.user_id) === '1');
+        && Array.isArray(userTable.state?.data)
+        && Array.isArray(orderTable.state?.data)
+        && !userTable.state.data.some(row => String(row.id) === '1')
+        && !orderTable.state.data.some(row => String(row.user_id) === '1');
     }, null, { timeout: 30000 });
 
     await gotoFrontend(page, '/datatable/test/performance', {

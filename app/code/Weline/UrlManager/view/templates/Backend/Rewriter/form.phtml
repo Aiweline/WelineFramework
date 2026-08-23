@@ -24,17 +24,21 @@
                                     <div class="w-grid">
                                         <div style="--w-span-md:3;">
                                             <div data-w-position="relative" style="--w-mb:var(--weline-space-4);">
-                                                <label class="w-field__label" for='website_id'>
-                                                    <lang>网站ID</lang>
+                                                <label class="w-field__label" for='website_id_trigger'>
+                                                    <lang>网站</lang>
                                                 </label>
-                                                <input type='number' class="w-input" id='website_id' name="website_id" placeholder='@lang{输入网站ID，0表示默认}' value='<?= htmlspecialchars((string)($url['website_id'] ?? $current_website_id ?? 0)) ?>' min="0" required>
-                                                <div class='valid-tooltip'>
-                                                    <lang>网站ID正确</lang>
-                                                </div>
-                                                <div class='invalid-tooltip'>
-                                                    <lang>请输入网站ID</lang>
-                                                </div>
-                                                <small class="w-text" data-tone="muted"><lang>同一网站ID下重写路径必须唯一</lang></small>
+                                                <w:websites:website:select
+                                                    id="website_id"
+                                                    name="website_id"
+                                                    value="websiteSelectValue"
+                                                    display="websiteSelectDisplay"
+                                                    options="websiteSelectOptionsJson"
+                                                    multiple="false"
+                                                    allow-empty="false"
+                                                    empty-label="@lang(请选择站点)"
+                                                    placeholder="@lang(搜索站点名称或编码)"
+                                                />
+                                                <small class="w-text" data-tone="muted"><lang>同一网站下重写路径必须唯一；可选默认站点（ID 0）</lang></small>
                                             </div>
                                         </div>
                                         <div style="--w-span-md:4;">
@@ -46,7 +50,7 @@
                                                 <div class='valid-tooltip'>
                                                     <lang>输入路径正确</lang>
                                                 </div>
-                                                <div class='invalid-tooltip'>
+                                                <div class='w-field__error'>
                                                     <lang>请输入路径</lang>
                                                 </div>
                                             </div>
@@ -60,7 +64,7 @@
                                                 <div class='valid-tooltip'>
                                                     <lang>输入路径正确</lang>
                                                 </div>
-                                                <div class='invalid-tooltip'>
+                                                <div class='w-field__error'>
                                                     <lang>请输入重写路径</lang>
                                                 </div>
                                             </div>

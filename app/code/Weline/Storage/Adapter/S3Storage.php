@@ -365,7 +365,24 @@ class S3Storage implements StorageInterface
                         $path = \substr($path, \strlen($this->prefix) + 1);
                     }
                     
-                    if ($path === '' || \str_ends_with($path, '/')) {
+                    if ($path === '') {
+                        continue;
+                    }
+
+                    if (\str_ends_with($path, '/')) {
+                        $directoryPath = \rtrim($path, '/');
+                        if ($recursive
+                            && $directoryPath !== ''
+                            && $directoryPath !== \trim(\str_replace('\\', '/', $directory), '/')
+                        ) {
+                            $results[] = [
+                                'path' => $directoryPath,
+                                'name' => \basename($directoryPath),
+                                'type' => 'directory',
+                                'size' => 0,
+                                'last_modified' => null,
+                            ];
+                        }
                         continue;
                     }
                     
@@ -389,24 +406,28 @@ class S3Storage implements StorageInterface
     
     public function makeDirectory(string $path): bool
     {
-        return true;
+        $path = \trim(\str_replace('\\', '/', $path), '/');
+        if ($path === '') {
+            return false;
+        }
+
+        return $this->put($path . '/', '');
     }
     
     public function deleteDirectory(string $path): bool
     {
+        if (\trim(\str_replace('\\', '/', $path), '/') === '') {
+            return false;
+        }
         $items = $this->list($path, true);
-        if (empty($items)) {
-            return true;
-        }
-        
-        $paths = [];
+        $paths = [\trim(\str_replace('\\', '/', $path), '/') . '/'];
         foreach ($items as $item) {
-            if ($item['type'] === 'file') {
-                $paths[] = $item['path'];
-            }
+            $paths[] = $item['type'] === 'directory'
+                ? \rtrim($item['path'], '/') . '/'
+                : $item['path'];
         }
         
-        return $this->deleteMultiple($paths);
+        return $this->deleteMultiple(\array_values(\array_unique($paths)));
     }
     
     public function testConnection(): bool

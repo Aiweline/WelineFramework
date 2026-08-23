@@ -140,7 +140,7 @@ class Installed extends BackendController
         return $this->performUpdate();
     }
 
-    #[Acl('Weline_AppStore::installed_update', '鏇存柊妯″潡', 'arrow-down', '涓嬭浇骞跺崌绾у凡瀹夎妯″潡')]
+    #[Acl('Weline_AppStore::installed_update', '更新模块', 'arrow-down', '下载并升级已安装模块')]
     public function postUpdate(): string
     {
         return $this->performUpdate();

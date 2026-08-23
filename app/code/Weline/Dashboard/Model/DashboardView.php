@@ -29,6 +29,8 @@ class DashboardView extends Model
 
     public const PAGE_TYPE = 'dashboard';
     public const LAYOUT_OPTION = 'default';
+    public const TARGET_TYPE_DASHBOARD_VIEW = 'dashboard_view';
+    /** @deprecated Website belongs to Scope; Dashboard view is the business target. */
     public const TARGET_TYPE_WEBSITE = 'website';
 
     #[Col('int', 11, primaryKey: true, autoIncrement: true, nullable: false, comment: '视图ID')]
@@ -199,19 +201,39 @@ class DashboardView extends Model
         return $this->setData(self::schema_fields_SORT_ORDER, max(0, $sortOrder));
     }
 
-    public function scopeKey(): string
+    /**
+     * Compatibility identity for reading pre-Theme-2.1 rows only.
+     *
+     * New writes must obtain the canonical Website Scope from
+     * DashboardViewService::layoutIdentity(), because this model does not own
+     * the authoritative Website code catalog.
+     */
+    public function legacyScopeKey(): string
     {
         return 'dashboard_view:' . $this->getViewId();
     }
 
-    public function layoutIdentity(): array
+    /** @deprecated Use legacyScopeKey() only at explicit compatibility-read boundaries. */
+    public function scopeKey(): string
+    {
+        return $this->legacyScopeKey();
+    }
+
+    /** @return array{layout_option:string,scope:string,target_type:string,target_id:int} */
+    public function legacyLayoutIdentity(): array
     {
         return [
             'layout_option' => self::LAYOUT_OPTION,
-            'scope' => $this->scopeKey(),
+            'scope' => $this->legacyScopeKey(),
             'target_type' => self::TARGET_TYPE_WEBSITE,
             'target_id' => $this->getWebsiteId(),
         ];
+    }
+
+    /** @deprecated Use DashboardViewService::layoutIdentity(). */
+    public function layoutIdentity(): array
+    {
+        return $this->legacyLayoutIdentity();
     }
 
     public static function visibilityOptions(): array

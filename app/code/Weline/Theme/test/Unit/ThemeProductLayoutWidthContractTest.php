@@ -8,6 +8,24 @@ use PHPUnit\Framework\TestCase;
 
 final class ThemeProductLayoutWidthContractTest extends TestCase
 {
+    public function testProductLayoutFallsBackToControllerContentTemplate(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/product/default.phtml';
+
+        $this->assertFileExists($path);
+        $content = (string) file_get_contents($path);
+
+        $this->assertStringContainsString(
+            '$contentTemplate = trim((string)($this->getData(\'contentTemplate\') ?? \'\'));',
+            $content,
+        );
+        $this->assertStringContainsString('<elseif condition="contentTemplate"/>', $content);
+        $this->assertStringContainsString(
+            '$this->fetch($this->getData("contentTemplate"))',
+            $content,
+        );
+    }
+
     public function testProductLayoutUsesSharedContentWidthToken(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/product/default.phtml';

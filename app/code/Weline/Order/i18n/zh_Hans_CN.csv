@@ -36,7 +36,7 @@
 获取发货状态标签，允许其他模块扩展发货状态标签。,获取发货状态标签，允许其他模块扩展发货状态标签。
 解析完整状态信息,解析完整状态信息
 解析完整状态信息，允许其他模块扩展状态信息解析。,解析完整状态信息，允许其他模块扩展状态信息解析。
-"Weline_Order typed admin operations","Weline_Order typed admin operations"
+"Weline_Order typed admin operations","Weline_Order 输入管理操作"
 "按类型与 Scope 查询订单对象展示号","按类型与 Scope 查询订单对象展示号"
 订单状态后台类型化操作,订单状态后台类型化操作
 页面读取到的对象授权版本,页面读取到的对象授权版本
@@ -54,19 +54,20 @@
 前端订单创建后,前端订单创建后
 在前端订单创建之后注入内容，允许其他模块在订单创建后执行自定义逻辑。,在前端订单创建之后注入内容，允许其他模块在订单创建后执行自定义逻辑。
 订单管理模块安装完成,订单管理模块安装完成
-"已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
+"已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_ payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
 "安装失败: %{1}","安装失败: %{1}"
 发货操作失败，请稍后重试。,发货操作失败，请稍后重试。
 订单发货控制器,订单发货控制器
-truck,truck
+truck,卡车
 订单仓维履约管理,订单仓维履约管理
 查看订单发货,查看订单发货
-list,list
+list,列表
 查看可履约单元和进度,查看可履约单元和进度
 提交发货,提交发货
 "按仓维 CAS 提交部分或全部发货","按仓维 CAS 提交部分或全部发货"
 退款操作失败，请稍后重试。,退款操作失败，请稍后重试。
 订单退款控制器,订单退款控制器
+cash,现金
 订单并发安全退款管理,订单并发安全退款管理
 查看订单退款,查看订单退款
 查看可退款订单项和退款案例,查看可退款订单项和退款案例
@@ -78,12 +79,18 @@ list,list
 参数错误,参数错误
 订单状态更新成功,订单状态更新成功
 订单管理,订单管理
+cart,大车
 查看订单列表,查看订单列表
 查看订单详情,查看订单详情
+eye,眼睛
 编辑订单,编辑订单
+edit,编辑
 保存订单,保存订单
+save,节省
 取消订单,取消订单
+close,关闭
 更新订单状态,更新订单状态
+refresh,刷新
 订单收款记录,订单收款记录
 "支付 ID","支付 ID"
 "订单 ID","订单 ID"
@@ -102,22 +109,21 @@ list,list
 尝试次数,尝试次数
 订单业务记录,订单业务记录
 订单关联业务记录,订单关联业务记录
-edit,edit
-warning,warning
+warning,警告
 查看订单退款补偿异常,查看订单退款补偿异常
 支付处理成功,支付处理成功
 退款成功,退款成功
 处理支付,处理支付
-circle,circle
+circle,圆圈
 退款支付,退款支付
 开票操作失败，请稍后重试。,开票操作失败，请稍后重试。
 订单发票控制器,订单发票控制器
-file,file
+file,文件
 "支付 effect 驱动的订单发票管理","支付 effect 驱动的订单发票管理"
 查看订单发票,查看订单发票
 "查看支付 effect 和最小发票","查看支付 effect 和最小发票"
 "处理开票 effect","处理开票 effect"
-plus,plus
+plus,加
 "在 Payment outbox 事务内幂等生成最小发票","在 Payment outbox 事务内幂等生成最小发票"
 状态不存在,状态不存在
 状态代码和名称不能为空,状态代码和名称不能为空
@@ -135,7 +141,9 @@ plus,plus
 编辑订单状态,编辑订单状态
 保存订单状态,保存订单状态
 删除订单状态,删除订单状态
+trash,trash
 切换订单状态,切换订单状态
+switch,转变
 切换订单状态启用状态,切换订单状态启用状态
 获取订单列表成功,获取订单列表成功
 订单ID不能为空,订单ID不能为空
@@ -167,7 +175,7 @@ plus,plus
 订单详情,订单详情
 订单商品,订单商品
 商品,商品
-SKU,SKU
+SKU,存货单位
 数量,数量
 单价,单价
 小计,小计
@@ -182,7 +190,6 @@ SKU,SKU
 订单明细,订单明细
 退货,退货
 与我的订单,与我的订单
-系统,系统
 订单列表,订单列表
 新建订单,新建订单
 搜索订单号、客户姓名、邮箱,搜索订单号、客户姓名、邮箱
@@ -200,6 +207,7 @@ SKU,SKU
 编辑,编辑
 上一页,上一页
 下一页,下一页
+系统,系统
 订单基本信息,订单基本信息
 客户姓名,客户姓名
 客户邮箱,客户邮箱
@@ -299,26 +307,26 @@ SKU,SKU
 后台退款,后台退款
 退款原因,退款原因
 退款案例与占额状态,退款案例与占额状态
-金额（minor）,金额（minor）
+金额（minor）,金额（小）
 顾客视图,顾客视图
 暂无退款案例,暂无退款案例
 订单发票管理,订单发票管理
 "只处理 Payment 已生成的确定性 invoice effect；页面不能绕过支付事实手工创建发票。每张已支付订单最多生成一张最小发票。","只处理 Payment 已生成的确定性 invoice effect；页面不能绕过支付事实手工创建发票。每张已支付订单最多生成一张最小发票。"
-"开票 effect","开票 effect"
-Outbox,Outbox
-"Effect Key","Effect Key"
+"开票 effect",开票效应
+Outbox,发件箱
+"Effect Key",效果键
 "暂无开票 effect","暂无开票 effect"
 验证幂等结果,验证幂等结果
 处理开票,处理开票
 已生成发票,已生成发票
 发票号,发票号
-税额（minor）,税额（minor）
+税额（minor）,税额（次要）
 暂无发票,暂无发票
 "订单退款 Outbox 消费","订单退款 Outbox 消费"
 幂等处理退款渠道提交、状态对账及到账后的库存和通知任务,幂等处理退款渠道提交、状态对账及到账后的库存和通知任务
 订单支付后副作用消费,订单支付后副作用消费
 幂等生成最小发票并准备履约动作,幂等生成最小发票并准备履约动作
-"Order Facade idempotency 冲突：key=%{1}","Order Facade idempotency 冲突：key=%{1}"
+"Order Facade idempotency 冲突：key=%{1}","Order Facade幂等性冲突：key=%{1}"
 "CheckoutGroup 提交失败并已回滚：%{1}","CheckoutGroup 提交失败并已回滚：%{1}"
 "order_uuid 不能为空","order_uuid 不能为空"
 "Order 不存在：%{1}","Order 不存在：%{1}"
@@ -328,11 +336,11 @@ Outbox,Outbox
 "request_hash 必须为小写 SHA-256","request_hash 必须为小写 SHA-256"
 "currency 必须为三位大写货币代码","currency 必须为三位大写货币代码"
 "customer_id 须 >=0","customer_id 须 >=0"
-"shipping_amount_minor 须 >=0","shipping_amount_minor 须 >=0"
+"shipping_amount_minor 须 >=0","Shipping_amount_minor 须 >=0"
 订单行不能为空,订单行不能为空
 "订单行超过上限 %{1}","订单行超过上限 %{1}"
 "tax_amount_minor 须为非负整数","tax_amount_minor 须为非负整数"
-"行 %{1} 缺少 name/qty_minor/unit_price_minor","行 %{1} 缺少 name/qty_minor/unit_price_minor"
+"行 %{1} 缺少 name/qty_minor/unit_price_minor","行 %{1} 货物名称/qty_minor/unit_price_minor"
 "行 %{1} 名称、数量或单价非法","行 %{1} 名称、数量或单价非法"
 "行 %{1} SKU 非法","行 %{1} SKU 非法"
 "行 %{1} split_key 非法","行 %{1} split_key 非法"
@@ -373,7 +381,7 @@ Outbox,Outbox
 订单已发货,订单已发货
 发货记录不存在,发货记录不存在
 订单已完成,订单已完成
-"CheckoutGroup 不能无 Order","CheckoutGroup 不能无 Order"
+"CheckoutGroup 不能无 Order","CheckoutGroup 不能无订单"
 "CheckoutGroup 金额不守恒","CheckoutGroup 金额不守恒"
 "shipping owner 必须承载组运费 100%","shipping owner 必须承载组运费 100%"
 "非 owner Order 运费必须为 0","非 owner Order 运费必须为 0"
@@ -390,8 +398,8 @@ Outbox,Outbox
 数据库标识符不能为空,数据库标识符不能为空
 "display_number 必须是 10 位数字","display_number 必须是 10 位数字"
 "entity_uuid 不能为空且不能超过 36 字符","entity_uuid 不能为空且不能超过 36 字符"
-"DisplayNumberAllocator all 仅 memory 模式","DisplayNumberAllocator all 仅 memory 模式"
-"DisplayNumberAllocator replaceMemory 仅 memory 模式","DisplayNumberAllocator replaceMemory 仅 memory 模式"
+"DisplayNumberAllocator all 仅 memory 模式","DisplayNumberAllocator 所有单一内存模式"
+"DisplayNumberAllocator replaceMemory 仅 memory 模式","DisplayNumberAllocator ReplaceMemory 仅内存模式"
 支付方式不支持优惠方式：%s,支付方式不支持优惠方式：%s
 "无法唯一证明退款行的原 Warehouse","无法唯一证明退款行的原 Warehouse"
 "查号必须携带 number_kind","查号必须携带 number_kind"
@@ -426,7 +434,7 @@ Outbox,Outbox
 支付成功，订单进入处理,支付成功，订单进入处理
 "未知 cutover mode：%{1}","未知 cutover mode：%{1}"
 "生产 on 必须显式授权令牌","生产 on 必须显式授权令牌"
-"实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token","实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token"
+"实际 cutover 须由 TASK-MIG-P2-ORDER 携带 production_on_token","实际切换须由 TASK-MIG-P2-ORDER 携带 production_on_token"
 "rollback 不得直接设为 on","rollback 不得直接设为 on"
 "已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer","已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer"
 "禁止回滚恢复旧 Checkout writer","禁止回滚恢复旧 Checkout writer"
@@ -447,7 +455,7 @@ Outbox,Outbox
 "Order 不存在","Order 不存在"
 发货数量或版本无效,发货数量或版本无效
 "FulfillmentUnit 不存在","FulfillmentUnit 不存在"
-"FulfillmentUnit 缺少 Warehouse","FulfillmentUnit 缺少 Warehouse"
+"FulfillmentUnit 缺少 Warehouse","FulfillmentUnit 缺货 仓库"
 "履约 CAS 版本冲突","履约 CAS 版本冲突"
 累计发货数量超过可发数量,累计发货数量超过可发数量
 "履约 CAS 写入冲突","履约 CAS 写入冲突"
@@ -457,7 +465,7 @@ Outbox,Outbox
 "%{1} 无效","%{1} 无效"
 订单已生成发票,订单已生成发票
 发票不存在,发票不存在
-"旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）"
+"旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","旧 结帐写入器已被割接门禁止（mode=%{1}）"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）"
 "Material Design Icons 类名，如：mdi-check-circle","Material Design Icons 类名，如：mdi-check-circle"
@@ -486,11 +494,12 @@ Outbox,Outbox
 打印发票,打印发票
 退款,退款
 发票,发票
-"MIG-P2-ORDER：Checkout→Order 单写切流（apply 必须 --database=mig_clone_*）","MIG-P2-ORDER：Checkout→Order 单写切流（apply 必须 --database=mig_clone_*）"
-"已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
-"OrderFacade create 当前仅 memory/harness；请在集成环境挂 DB writer 适配器","OrderFacade create 当前仅 memory/harness；请在集成环境挂 DB writer 适配器"
-"OrderFacade get 当前仅 memory/harness","OrderFacade get 当前仅 memory/harness"
-"OrderFacade getGroup 当前仅 memory/harness","OrderFacade getGroup 当前仅 memory/harness"
+"MIG-P2-ORDER：Checkout→Order 单写切流（apply 必须 --database=mig_clone_*）","MIG-P2-ORDER：结账→下单单写切流（apply 必须 --database=mig_clone_*）"
+"已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_order_ payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
+"已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_order, weline_order_item, weline_order_ payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
 "idempotency_key/request_hash 不能为空","idempotency_key/request_hash 不能为空"
 "行 %{1} 数量/单价非法","行 %{1} 数量/单价非法"
-"DisplayNumberAllocator 当前仅 memory/harness；请挂 Registry writer","DisplayNumberAllocator 当前仅 memory/harness；请挂 Registry writer"
+"OrderFacade create 当前仅 memory/harness；请在集成环境挂 DB writer 适配器","OrderFacade create 当前仅 memory/harness；请在集成环境挂 DB writer 适配器"
+"OrderFacade get 当前仅 memory/harness","OrderFacade 获取当前内存/线束"
+"OrderFacade getGroup 当前仅 memory/harness","OrderFacade getGroup 当前仅限内存/线束"
+"DisplayNumberAllocator 当前仅 memory/harness；请挂 Registry writer",DisplayNumberAllocator当前仅限内存/线束；请挂注册表编写器

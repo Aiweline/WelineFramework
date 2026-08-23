@@ -29,7 +29,7 @@ class RangeType extends AbstractParamType
         $inputHtml .= '</div>';
         $inputHtml .= '<div class="w-param-range-value">';
         if ($showInput) {
-            $inputHtml .= '<input type="number" class="w-param-range-input w-param-input" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" min="' . htmlspecialchars((string)$min) . '" max="' . htmlspecialchars((string)$max) . '" step="' . htmlspecialchars((string)$step) . '" value="' . htmlspecialchars((string)$currentValue) . '" data-slider="' . htmlspecialchars($fieldId) . '_slider">';
+            $inputHtml .= '<input type="number" class="w-input w-param-range-input" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" min="' . htmlspecialchars((string)$min) . '" max="' . htmlspecialchars((string)$max) . '" step="' . htmlspecialchars((string)$step) . '" value="' . htmlspecialchars((string)$currentValue) . '" data-slider="' . htmlspecialchars($fieldId) . '_slider">';
         } else {
             $inputHtml .= '<span class="w-param-range-label" id="' . htmlspecialchars($fieldId) . '_label">' . htmlspecialchars((string)$currentValue) . '</span>';
             $inputHtml .= '<input type="hidden" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars((string)$currentValue) . '">';

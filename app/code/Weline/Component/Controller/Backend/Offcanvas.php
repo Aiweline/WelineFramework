@@ -39,12 +39,11 @@ class Offcanvas extends BackendPageController
     {
         $this->applyOffcanvasLayout();
 
-        $type = $this->request->getParam('type') ?: 'success';
-        $msg = $this->request->getParam('msg') ?: __('请求成功！');
-        $url = $this->request->getParam('url') ?: '';
-        $reload = $this->request->getParam('reload') !== '0';
-
-        $data = ['type' => $type, 'msg' => $msg, 'url' => $url, 'reload' => $reload];
+        $data = $this->resultData(
+            (string)($this->request->getParam('type') ?: 'success'),
+            (string)($this->request->getParam('msg') ?: __('请求成功！')),
+            true,
+        );
 
         $eventData = new \Weline\Framework\DataObject\DataObject(['data' => $data]);
         ObjectManager::getInstance(EventsManager::class)->dispatch('Framework_Component::result_render', $eventData);
@@ -60,22 +59,43 @@ class Offcanvas extends BackendPageController
     public function getSuccess(): string
     {
         $this->applyOffcanvasLayout();
-        $this->assign('msg', $this->request->getParam('msg') ?? __('请求成功！'));
-        $this->assign('reload', $this->request->getParam('reload') ?? 1);
-        $this->assign('time', $this->request->getParam('time') ?? 3);
-        $this->assign('content', $this->request->getParam('content') ?? '');
-        $this->assign('url', $this->request->getParam('url') ?? '');
-        return (string) $this->fetch('Weline_Component::templates/Offcanvas/success');
+        return (string)$this->fetch(
+            'Weline_Component::templates/Offcanvas/result',
+            $this->resultData('success', (string)($this->request->getParam('msg') ?: __('请求成功！')), true),
+        );
     }
 
     public function getError(): string
     {
         $this->applyOffcanvasLayout();
-        $this->assign('msg', $this->request->getParam('msg') ?? __('请求失败！'));
-        $this->assign('reload', $this->request->getParam('reload') ?? 0);
-        $this->assign('time', $this->request->getParam('time') ?? 3);
-        $this->assign('content', $this->request->getParam('content') ?? '');
-        $this->assign('url', $this->request->getParam('url') ?? '');
-        return (string) $this->fetch('Weline_Component::templates/Offcanvas/error');
+        return (string)$this->fetch(
+            'Weline_Component::templates/Offcanvas/result',
+            $this->resultData('error', (string)($this->request->getParam('msg') ?: __('请求失败！')), false),
+        );
+    }
+
+    /**
+     * @return array{type:string,msg:string,content:string,url:string,reload:bool,time:int}
+     */
+    private function resultData(string $type, string $message, bool $defaultReload): array
+    {
+        $type = strtolower(trim($type));
+        if (!in_array($type, ['success', 'error', 'info'], true)) {
+            $type = 'info';
+        }
+
+        $reloadValue = $this->request->getParam('reload');
+        $reload = $reloadValue === null || $reloadValue === ''
+            ? $defaultReload
+            : filter_var($reloadValue, FILTER_VALIDATE_BOOLEAN);
+
+        return [
+            'type' => $type,
+            'msg' => $message,
+            'content' => (string)($this->request->getParam('content') ?? ''),
+            'url' => (string)($this->request->getParam('url') ?? ''),
+            'reload' => $reload,
+            'time' => max(0, min(30, (int)($this->request->getParam('time') ?? 3))),
+        ];
     }
 }

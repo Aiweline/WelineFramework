@@ -1,94 +1,30 @@
 <?php
-$previewWidth = filter_var($this->getData('width'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
-$previewHeight = filter_var($this->getData('height'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
+$previewWidth = filter_var($this->getData('width'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 24, 'max_range' => 4096]]);
+$previewHeight = filter_var($this->getData('height'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 24, 'max_range' => 4096]]);
 $previewWidth = $previewWidth === false ? 50 : $previewWidth;
 $previewHeight = $previewHeight === false ? 50 : $previewHeight;
 ?>
-<!-- 图片预览 -->
-<style media="screen">
-    .file-target-preview {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem
-    }
-
-    .preview-item {
-        display: block;
-        position: relative;
-        float: left;
-        wth: <?= $previewWidth ?>px;
-        height: <?= $previewHeight ?>px;
-        border: 1px sol #CCC;
-    }
-
-    .close {
-        position: absolute;
-        right: 0;
-        wth: 17px;
-        height: 17px;
-        z-index: 1;
-        text-align: center;
-        line-height: 17px;
-        background: transparent;
-        opacity: 0.5
-    }
-
-    .drag-item:hover .close {
-        opacity: 1;
-        color: red;
-    }
-
-    .drag-pic {
-        max-wth: 100%;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        margin: auto;
-    }
-</style>
-<div id="{{id}}-preview" class="file-target-preview">
+<div id="{{id}}-preview" class="w-file-preview" data-w-component="file-preview"
+     data-w-empty-message="<?= htmlspecialchars((string)__('暂无缩略图'), ENT_QUOTES, 'UTF-8') ?>"
+     style="--w-file-preview-width: <?= (int)$previewWidth ?>px; --w-file-preview-height: <?= (int)$previewHeight ?>px;">
     <foreach name="value_items" key="k">
-        <div class="preview-item">
+        <button type="button" class="w-file-preview__item w-file-preview__thumbnail" data-w-file-open
+                data-path="{{v.path}}" aria-label="<?= htmlspecialchars((string)__('预览'), ENT_QUOTES, 'UTF-8') ?> {{v.pathInfo.name}}">
             <img data-src="{{v.path}}" src="{{v.url}}" alt="{{v.pathInfo.name}}"
-                 title="{{v.pathInfo.name}}({{v.pathInfo.size}})"
-                 class="drag-pic img-responsive"
-                 draggable="false"
-                 data-file="">
-        </div>
+                 title="{{v.pathInfo.name}}({{v.pathInfo.size}})" draggable="false">
+        </button>
     </foreach>
-</div>
-<!-- 图片放大modal -->
-<div class="w-dialog bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="Elfinder" aria-hden="true" id="{{id}}-zoom-modal" data-w-component="dialog" data-state="closed" hidden aria-hidden="true">
-    <div class="w-dialog__frame modal-fullscreen-md-down" data-size="lg">
+    <dialog class="w-dialog w-file-preview__dialog" data-w-component="dialog" data-w-file-preview-dialog
+            data-state="closed" aria-label="<?= htmlspecialchars((string)__('预览'), ENT_QUOTES, 'UTF-8') ?>">
         <div class="w-dialog__surface">
-            <div class="w-dialog__header">
-                <h5 class="w-dialog__title">
-                    <lang>预览</lang>
-                </h5>
-                <button type="button" class="w-button" id="{{id}}-zoom-close-modal" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+            <header class="w-dialog__header">
+                <h2 class="w-dialog__title"><lang>预览</lang></h2>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close data-tone="quiet" data-size="sm"
+                        aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>"><w:icon name="close" size="sm"></w:icon></button>
+            </header>
+            <div class="w-dialog__body w-file-preview__dialog-body">
+                <img data-w-file-preview-image alt="">
             </div>
-            <div class="w-dialog__body" id="{{id}}-zoom-preview-image-body">
-                <img src="" alt="" title="">
-            </div>
-        </div><!-- /.modal-content -->
-    </div><!-- /.modal-dialog -->
-</div><!-- /.modal -->
-<script type="text/javascript">
-    $('#{{id}}-preview').on('click', 'img', function () {
-        let src = '/pub/media/' + String($(this).attr('data-src') || '');
-        let zoomModal = $('#{{id}}-zoom-modal');
-        let zoomPreviewImageBody = $('#{{id}}-zoom-preview-image-body');
-        zoomPreviewImageBody.empty()
-        let previewImage = document.createElement('img')
-        previewImage.src = src
-        previewImage.className = 'img-fluid'
-        previewImage.alt = ''
-        zoomPreviewImageBody.append(previewImage)
-        zoomModal.modal('show')
-    })
-</script>
+        </div>
+    </dialog>
+</div>

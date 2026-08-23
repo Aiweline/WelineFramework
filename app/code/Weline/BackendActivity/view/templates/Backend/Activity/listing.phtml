@@ -4,21 +4,6 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-<link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
-
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;">
-                <breadcrumb model="Weline\Backend\Model\Menu" order_field="order" name_field="title"></breadcrumb>
-            </h4>
-            <div class="w-cluster">
-                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order' name_field='title'></breadcrumb>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
@@ -36,7 +21,7 @@
                     </lang>
                     当前请求ID：{{request_id}}
                 </h4>
-                <div class="table-rep-plugin">
+                <div class="weline-table-rep-plugin">
                     <!-- search form -->
                     <div class="w-grid">
                         <div class="w-cluster" style="--w-span:8;--w-gap:var(--weline-space-2);">
@@ -82,7 +67,7 @@
                             <tbody>
                             <foreach name="logs" item="log" key="key">
                                 <tr>
-                                    <td @if{log.fail_total=>'class="text-danger"'}>{{log.backend_activity_log_id}}</td>
+                                    <td @if{log.fail_total=>'class="w-text"'}>{{log.backend_activity_log_id}}</td>
                                     <td class="co-name w-cluster" style="--w-gap:var(--weline-space-1);">
                                         {{log.request_id}}
                                         <button type="button" class="copy weline-activity-copy-btn w-button" data-copy-text="{{log.request_id}}" data-tone="quiet" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">复制</button>
@@ -227,10 +212,6 @@
     </div>
 </div>
 
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
-<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
-<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
 <script>
 (function() {
     'use strict';

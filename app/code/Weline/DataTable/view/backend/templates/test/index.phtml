@@ -1,145 +1,121 @@
-<style>
-    .dt-admin-dashboard{display:grid;gap:20px}
-    .dt-admin-hero{display:grid;gap:16px;padding:24px;border:1px solid #dbe4f0;border-radius:20px;background:linear-gradient(135deg,#f7fbff,#eef4ff)}
-    .dt-admin-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-    .dt-admin-status{min-height:24px;color:#166534}
-    .dt-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-    .dt-admin-card{padding:18px;border:1px solid #dbe4f0;border-radius:18px;background:#fff}
-    .dt-admin-card h3,.dt-admin-card h4{margin-top:0}
-    .dt-admin-list{display:grid;gap:12px}
-    .dt-admin-list-item{padding:16px;border:1px solid #e2e8f0;border-radius:16px;background:#fff}
-    .dt-admin-list-item p{margin:8px 0 0;color:#526071}
-    .dt-admin-pill{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#eef4ff;color:#274690;font-size:12px;margin-right:8px}
-    .dt-admin-relations{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-</style>
+<?php
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+$demoConfig = json_encode([
+    'apiProvider' => 'datatable',
+    'clearConfirm' => (string) __('Clear all DataTable demo data?'),
+    'requestFailed' => (string) __('Request failed.'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-index-js']) ?>
 
-<div class="dt-admin-dashboard">
-    <section class="dt-admin-hero">
-        <div>
-            <h2><?= __('DataTable Backend Dashboard') ?></h2>
-            <p><?= __('Repair target completed here: backend menu entries resolve to real pages, demo services can seed test data, and every major DataTable interaction has a backend route you can open directly.') ?></p>
+<main class="w-container w-datatable-demo__admin" data-w-datatable-admin data-testid="datatable-admin-page">
+    <section class="w-card w-datatable-demo__hero">
+        <header class="w-card__header w-datatable-demo__heading">
+            <div>
+                <p class="w-datatable-demo__eyebrow"><?= __('DataTable') ?></p>
+                <h1 class="w-card__title"><?= __('DataTable Backend Dashboard') ?></h1>
+                <p><?= __('Backend routes, demo data, documentation, and all major DataTable interaction scenarios are available here.') ?></p>
+            </div>
+            <div class="w-cluster" data-justify="end">
+                <a class="w-button" href="<?= $escape($comprehensiveUrl ?? '') ?>" data-testid="datatable-admin-open-comprehensive"><w-icon name="beaker" size="sm"></w-icon><span><?= __('Open Comprehensive Test') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($docUrl ?? '') ?>" data-testid="datatable-admin-open-doc"><w-icon name="book" size="sm"></w-icon><span><?= __('Open Documentation') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($tagTestUrl ?? '') ?>" data-testid="datatable-admin-open-tag"><w-icon name="check-circle" size="sm"></w-icon><span><?= __('Open Tag Verification') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($frontendDemoUrl ?? '') ?>" target="_blank" rel="noreferrer"><w-icon name="external-link" size="sm"></w-icon><span><?= __('Open Frontend Demo') ?></span></a>
+            </div>
+        </header>
+        <div class="w-card__body w-stack">
+            <div class="w-cluster">
+                <button type="button" class="w-button" data-testid="datatable-admin-init" data-w-demo-action="init"><w-icon name="database" size="sm"></w-icon><span><?= __('Init Demo Data') ?></span></button>
+                <button type="button" class="w-button" data-tone="danger" data-testid="datatable-admin-clear" data-w-demo-action="clear"><w-icon name="trash" size="sm"></w-icon><span><?= __('Clear Demo Data') ?></span></button>
+            </div>
+            <div class="w-alert" data-tone="info" data-w-demo-status data-testid="datatable-admin-status" role="status" aria-live="polite" hidden></div>
         </div>
-        <div class="dt-admin-actions">
-            <a class="btn btn-primary" href="<?= $comprehensiveUrl ?>" data-testid="datatable-admin-open-comprehensive"><?= __('Open Comprehensive Test') ?></a>
-            <a class="btn btn-outline-secondary" href="<?= $docUrl ?>" data-testid="datatable-admin-open-doc"><?= __('Open Documentation') ?></a>
-            <a class="btn btn-outline-secondary" href="<?= $tagTestUrl ?>" data-testid="datatable-admin-open-tag"><?= __('Open Tag Verification') ?></a>
-            <a class="btn btn-outline-secondary" href="<?= $frontendDemoUrl ?>" target="_blank" rel="noreferrer"><?= __('Open Frontend Demo') ?></a>
-        </div>
-        <div class="dt-admin-actions">
-            <button type="button" class="btn btn-primary" data-testid="datatable-admin-init" data-datatable-test-action="demo-admin" data-url="<?= htmlspecialchars((string) $demoInitUrl, ENT_QUOTES, 'UTF-8') ?>" data-status-id="datatable-admin-status"><?= __('Init Demo Data') ?></button>
-            <button type="button" class="btn btn-outline-danger" data-testid="datatable-admin-clear" data-datatable-test-action="demo-admin" data-url="<?= htmlspecialchars((string) $demoClearUrl, ENT_QUOTES, 'UTF-8') ?>" data-status-id="datatable-admin-status"><?= __('Clear Demo Data') ?></button>
-        </div>
-        <div id="datatable-admin-status" class="dt-admin-status" data-testid="datatable-admin-status"></div>
     </section>
 
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
-    <section class="dt-admin-grid">
-        <article class="dt-admin-card">
-            <h3><?= __('Scenario Coverage') ?></h3>
-            <p><?= (int) ($summary['scenario_count'] ?? 0) ?> <?= __('routes available') ?></p>
-            <p><?= (int) ($summary['direct_demo_count'] ?? 0) ?> <?= __('direct demos') ?> / <?= (int) ($summary['compatibility_route_count'] ?? 0) ?> <?= __('compatibility routes') ?></p>
+    <section class="w-grid w-datatable-demo__summary" aria-label="<?= $escape(__('Coverage Summary')) ?>">
+        <article class="w-card">
+            <header class="w-card__header"><h2 class="w-card__title"><?= __('Scenario Coverage') ?></h2></header>
+            <div class="w-card__body w-stack">
+                <strong><?= (int) ($summary['scenario_count'] ?? 0) ?> <?= __('routes available') ?></strong>
+                <div class="w-cluster">
+                    <span class="w-badge" data-tone="info"><?= (int) ($summary['direct_demo_count'] ?? 0) ?> <?= __('direct demos') ?></span>
+                    <span class="w-badge" data-tone="neutral"><?= (int) ($summary['compatibility_route_count'] ?? 0) ?> <?= __('alternate routes') ?></span>
+                </div>
+            </div>
         </article>
-        <article class="dt-admin-card">
-            <h3><?= __('Model Coverage') ?></h3>
-            <p><?= (int) ($summary['model_count'] ?? 0) ?> <?= __('demo models') ?></p>
-            <p><?= __('Includes user, order, product, profile, and address relations.') ?></p>
+        <article class="w-card">
+            <header class="w-card__header"><h2 class="w-card__title"><?= __('Model Coverage') ?></h2></header>
+            <div class="w-card__body w-stack">
+                <strong><?= (int) ($summary['model_count'] ?? 0) ?> <?= __('demo models') ?></strong>
+                <p><?= __('Includes user, order, product, profile, and address relations.') ?></p>
+            </div>
         </article>
-        <article class="dt-admin-card">
-            <h3><?= __('Documentation') ?></h3>
-            <p><?= (int) ($summary['doc_count'] ?? 0) ?> <?= __('backend-readable documents') ?></p>
-            <p><?= __('Quick start, usage guide, test cases, API notes, and troubleshooting are linked from the backend.') ?></p>
+        <article class="w-card">
+            <header class="w-card__header"><h2 class="w-card__title"><?= __('Documentation') ?></h2></header>
+            <div class="w-card__body w-stack">
+                <strong><?= (int) ($summary['doc_count'] ?? 0) ?> <?= __('backend-readable documents') ?></strong>
+                <p><?= __('Quick start, usage, test cases, API notes, and troubleshooting remain linked from the backend.') ?></p>
+            </div>
         </article>
     </section>
 
-    <section>
-        <h3><?= __('Scenario Routes') ?></h3>
-        <div class="dt-admin-list">
+    <section class="w-stack" aria-labelledby="w-datatable-scenarios-title">
+        <div class="w-datatable-demo__section-heading">
+            <h2 id="w-datatable-scenarios-title"><?= __('Scenario Routes') ?></h2>
+        </div>
+        <div class="w-grid w-datatable-demo__catalog">
             <?php foreach (($scenarios ?? []) as $scenario): ?>
-                <article class="dt-admin-list-item">
-                    <span class="dt-admin-pill"><?= htmlspecialchars((string) ($scenario['group'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                    <h4><?= htmlspecialchars((string) ($scenario['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
-                    <p><?= htmlspecialchars((string) ($scenario['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-                    <div class="mt-3">
-                        <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars((string) ($scenario['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= __('Open Route') ?></a>
-                    </div>
+                <article class="w-card">
+                    <header class="w-card__header w-stack">
+                        <span class="w-badge" data-tone="info"><?= $escape($scenario['group'] ?? '') ?></span>
+                        <h3 class="w-card__title"><?= $escape($scenario['title'] ?? '') ?></h3>
+                    </header>
+                    <div class="w-card__body"><p><?= $escape($scenario['description'] ?? '') ?></p></div>
+                    <footer class="w-card__footer">
+                        <a class="w-button" data-size="sm" href="<?= $escape($scenario['url'] ?? '') ?>"><?= __('Open Route') ?></a>
+                    </footer>
                 </article>
             <?php endforeach; ?>
         </div>
     </section>
 
-    <section>
-        <h3><?= __('Demo Models') ?></h3>
-        <div class="dt-admin-grid">
+    <section class="w-stack" aria-labelledby="w-datatable-models-title">
+        <div class="w-datatable-demo__section-heading"><h2 id="w-datatable-models-title"><?= __('Demo Models') ?></h2></div>
+        <div class="w-grid w-datatable-demo__catalog">
             <?php foreach (($models ?? []) as $model): ?>
-                <article class="dt-admin-card">
-                    <h4><?= htmlspecialchars((string) ($model['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
-                    <div><code><?= htmlspecialchars((string) ($model['class'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></div>
-                    <p><?= htmlspecialchars((string) ($model['purpose'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-                    <div class="dt-admin-relations">
-                        <?php foreach (($model['relations'] ?? []) as $relation): ?>
-                            <span class="dt-admin-pill"><?= htmlspecialchars((string) $relation, ENT_QUOTES, 'UTF-8') ?></span>
-                        <?php endforeach; ?>
+                <article class="w-card">
+                    <header class="w-card__header"><h3 class="w-card__title"><?= $escape($model['label'] ?? '') ?></h3></header>
+                    <div class="w-card__body w-stack">
+                        <code class="w-datatable-demo__code-inline"><?= $escape($model['class'] ?? '') ?></code>
+                        <p><?= $escape($model['purpose'] ?? '') ?></p>
+                        <div class="w-cluster">
+                            <?php foreach (($model['relations'] ?? []) as $relation): ?>
+                                <span class="w-badge" data-tone="neutral"><?= $escape($relation) ?></span>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                 </article>
             <?php endforeach; ?>
         </div>
     </section>
 
-    <section>
-        <h3><?= __('Documentation Shortcuts') ?></h3>
-        <div class="dt-admin-grid">
+    <section class="w-stack" aria-labelledby="w-datatable-docs-title">
+        <div class="w-datatable-demo__section-heading"><h2 id="w-datatable-docs-title"><?= __('Documentation Shortcuts') ?></h2></div>
+        <div class="w-grid w-datatable-demo__catalog">
             <?php foreach (($docs ?? []) as $doc): ?>
-                <article class="dt-admin-card">
-                    <h4><?= htmlspecialchars((string) ($doc['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
-                    <p><?= htmlspecialchars((string) ($doc['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-                    <p class="text-muted"><?= htmlspecialchars((string) ($doc['preview'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-                    <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars((string) ($doc['url'] ?? $docUrl), ENT_QUOTES, 'UTF-8') ?>"><?= __('Read Document') ?></a>
+                <article class="w-card">
+                    <header class="w-card__header"><h3 class="w-card__title"><?= $escape($doc['title'] ?? '') ?></h3></header>
+                    <div class="w-card__body w-stack">
+                        <p><?= $escape($doc['summary'] ?? '') ?></p>
+                        <small><?= $escape($doc['preview'] ?? '') ?></small>
+                    </div>
+                    <footer class="w-card__footer"><a class="w-button" data-tone="neutral" data-size="sm" href="<?= $escape($doc['url'] ?? $docUrl ?? '') ?>"><?= __('Read Document') ?></a></footer>
                 </article>
             <?php endforeach; ?>
         </div>
     </section>
-</div>
 
-<script>
-    function resolveDemoAdminApiUrl(route) {
-        var normalizedRoute = String(route || '').replace(/^\/+/, '');
-        var currentPath = String(window.location && window.location.pathname || '');
-        var origin = String(window.location && window.location.origin || '').replace(/\/+$/, '');
-        var basePath = '<?= htmlspecialchars((string) ($frontendApiBasePath ?? ''), ENT_QUOTES, 'UTF-8') ?>'.replace(/\/+$/, '');
-        var prefix = currentPath.indexOf('/@backend') === 0 ? '/@api' : basePath;
-
-        return origin + prefix + '/' + normalizedRoute;
-    }
-
-    async function runDemoAdminAction(url, statusId) {
-        const status = document.getElementById(statusId);
-        if (!status) {
-            return;
-        }
-
-        status.textContent = 'Working...';
-        try {
-            const response = await fetch(resolveDemoAdminApiUrl(url), {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-                credentials: 'same-origin',
-                body: JSON.stringify({})
-            });
-            const payload = await response.json();
-            status.textContent = payload.message || payload.msg || 'Done';
-        } catch (error) {
-            status.textContent = error.message || 'Request failed';
-        }
-    }
-
-    document.addEventListener('click', function (event) {
-        const trigger = event.target.closest('[data-datatable-test-action="demo-admin"]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-        runDemoAdminAction(trigger.getAttribute('data-url') || '', trigger.getAttribute('data-status-id') || '');
-    });
-</script>
+    <script type="application/json" id="w-datatable-demo-config"><?= $demoConfig ?: '{}' ?></script>
+</main>

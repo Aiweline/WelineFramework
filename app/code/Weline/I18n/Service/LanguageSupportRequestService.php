@@ -55,13 +55,14 @@ final class LanguageSupportRequestService
         }
 
         $profile = $this->customerProfile();
+        [$prefillFirst, $prefillLast] = $this->splitDisplayName($profile['name']);
         $html = (string)$this->template->fetchModuleThemeHtml(
             'Weline_I18n::templates/Frontend/language-support-request.phtml',
             [
                 'form_id' => 'weline-language-request-' . \bin2hex(\random_bytes(6)),
-                'prefill_name' => $profile['name'],
+                'prefill_first_name' => $prefillFirst,
+                'prefill_last_name' => $prefillLast,
                 'prefill_email' => $profile['email'],
-                'disabled_languages' => $this->supportedWebsiteLocales(),
                 'max_locales' => self::MAX_LOCALES,
             ]
         );
@@ -82,11 +83,8 @@ final class LanguageSupportRequestService
         $hostname = $this->hostname();
         $ip = (string)$this->request->clientIP();
 
-        $name = \trim((string)($params['name'] ?? ''));
+        $name = $this->resolveApplicantName($params);
         $email = \strtolower(\trim((string)($params['email'] ?? '')));
-        if (\mb_strlen($name) < 2 || \mb_strlen($name) > 120) {
-            throw new \InvalidArgumentException((string)__('姓名长度必须在 2 到 120 个字符之间'));
-        }
         if (\filter_var($email, FILTER_VALIDATE_EMAIL) === false || \strlen($email) > 190) {
             throw new \InvalidArgumentException((string)__('请输入有效的邮箱地址'));
         }
@@ -199,6 +197,45 @@ final class LanguageSupportRequestService
         return ['customer_id' => (int)$user->getAuthIdentifier(), 'name' => $name, 'email' => $email];
     }
 
+    /**
+     * Western order: given name + family name. Still accepts legacy combined `name`.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function resolveApplicantName(array $params): string
+    {
+        $first = \trim((string)($params['first_name'] ?? $params['given_name'] ?? ''));
+        $last = \trim((string)($params['last_name'] ?? $params['family_name'] ?? ''));
+        if ($first !== '' || $last !== '') {
+            if ($first === '' || $last === '') {
+                throw new \InvalidArgumentException((string)__('请填写名和姓'));
+            }
+            if (\mb_strlen($first) > 60 || \mb_strlen($last) > 60) {
+                throw new \InvalidArgumentException((string)__('名或姓长度不能超过 60 个字符'));
+            }
+            $name = \trim($first . ' ' . $last);
+        } else {
+            $name = \trim((string)($params['name'] ?? ''));
+        }
+        if (\mb_strlen($name) < 2 || \mb_strlen($name) > 120) {
+            throw new \InvalidArgumentException((string)__('姓名长度必须在 2 到 120 个字符之间'));
+        }
+
+        return $name;
+    }
+
+    /** @return array{0:string,1:string} */
+    private function splitDisplayName(string $name): array
+    {
+        $normalized = \trim((string)\preg_replace('/\s+/u', ' ', $name));
+        if ($normalized === '') {
+            return ['', ''];
+        }
+        $parts = \explode(' ', $normalized, 2);
+
+        return [$parts[0], $parts[1] ?? ''];
+    }
+
     /** @param mixed $raw
      *  @return list<string>
      */
@@ -245,7 +282,7 @@ final class LanguageSupportRequestService
     {
         $count = (clone $this->requests)->clearData()->clearQuery()
             ->where(LanguageSupportRequest::schema_fields_IP_HASH, $ipHash)
-            ->where(LanguageSupportRequest::schema_fields_CREATED_AT, ['>=', \date('Y-m-d H:i:s', \time() - self::RATE_WINDOW_SECONDS)])
+            ->where(LanguageSupportRequest::schema_fields_CREATED_AT, \date('Y-m-d H:i:s', \time() - self::RATE_WINDOW_SECONDS), '>=')
             ->count();
         if ((int)$count >= self::RATE_MAX_REQUESTS) {
             throw new \RuntimeException((string)__('提交过于频繁，请稍后再试'));
@@ -260,7 +297,7 @@ final class LanguageSupportRequestService
     {
         $query = (clone $this->requests)->clearData()->clearQuery()
             ->where(LanguageSupportRequest::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(LanguageSupportRequest::schema_fields_CREATED_AT, ['>=', \date('Y-m-d H:i:s', \time() - self::DUPLICATE_WINDOW_SECONDS)]);
+            ->where(LanguageSupportRequest::schema_fields_CREATED_AT, \date('Y-m-d H:i:s', \time() - self::DUPLICATE_WINDOW_SECONDS), '>=');
         if ($customerId > 0) {
             $query->where(LanguageSupportRequest::schema_fields_CUSTOMER_ID, $customerId);
         } else {

@@ -1,37 +1,27 @@
-<style>
-    .dt-demo-page{max-width:1280px;margin:0 auto;padding:24px 20px 64px}
-    .dt-demo-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
-    .dt-demo-note{padding:16px 18px;border-radius:16px;background:#fff7ed;border:1px solid #fed7aa;margin-bottom:20px}
-    .dt-demo-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
-    .dt-demo-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
-    .dt-demo-panel{padding:18px;border:1px solid #dfe7ef;border-radius:18px;background:#fff}
-    .dt-demo-panel h2{margin-top:0}
-    @media (max-width: 960px){.dt-demo-layout{grid-template-columns:1fr}}
-</style>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-checks-js']) ?>
 
-<?= $worker_bootstrap ?? '' ?>
-
-<div class="dt-demo-page" data-demo-page="<?= $page_key ?>" data-testid="dt-cascade-page">
-    <div class="dt-demo-top">
+<div class="w-container w-datatable-demo__main" data-w-datatable-demo="cascade" data-demo-page="<?= htmlspecialchars((string)$page_key, ENT_QUOTES, 'UTF-8') ?>" data-testid="dt-cascade-page">
+    <header class="w-datatable-demo__heading">
         <div>
-            <h1><?= $page_title ?></h1>
+            <p class="w-datatable-demo__eyebrow">DataTable</p>
+            <h1><?= htmlspecialchars((string)$page_title, ENT_QUOTES, 'UTF-8') ?></h1>
             <p><?= __('Delete users and verify order cascade cleanup.') ?></p>
         </div>
-        <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
-    </div>
+        <a class="w-button" data-tone="neutral" href="<?= htmlspecialchars((string)$demo_links['index'], ENT_QUOTES, 'UTF-8') ?>"><w-icon name="arrow-left" size="sm"></w-icon><?= __('Back') ?></a>
+    </header>
 
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
-    <div class="dt-demo-note" data-testid="dt-cascade-note">
-        <?= __('The demo delete service removes related TestOrder rows whenever a TestUser is deleted. Use the refresh action after a delete to confirm both tables stay in sync.') ?>
+    <div class="w-alert" data-tone="warning" data-testid="dt-cascade-note">
+        <w-icon name="warning" size="sm"></w-icon><span><?= __('The demo delete service removes related TestOrder rows whenever a TestUser is deleted. Use the refresh action after a delete to confirm both tables stay in sync.') ?></span>
     </div>
 
-    <div class="dt-demo-actions">
-        <button type="button" class="btn btn-outline-primary" data-testid="cascade-refresh" data-datatable-test-action="refresh-cascade"><?= __('Refresh Tables') ?></button>
+    <div class="w-cluster">
+        <button type="button" class="w-button" data-testid="cascade-refresh" data-w-datatable-demo-action="refresh-cascade"><w-icon name="refresh" size="sm"></w-icon><?= __('Refresh Tables') ?></button>
     </div>
 
-    <div class="dt-demo-layout">
-        <section class="dt-demo-panel" data-testid="dt-cascade-users-wrap" weline-code="datatable.test.dt_cascade_users_wrap">
+    <div class="w-datatable-demo__grid">
+        <section class="w-card w-datatable-demo__case" data-testid="dt-cascade-users-wrap" weline-code="datatable.test.dt_cascade_users_wrap">
             <h2><?= __('Users') ?></h2>
             <p><?= __('Delete a user here, then refresh the orders table to confirm related rows are gone.') ?></p>
             <w:d-table id="demo-cascade-users"
@@ -43,18 +33,16 @@
                        page-size="5"
                        show-pagination="true"
                        allow-frontend="true">
-                <thead>
-                    <tr>
-                        <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>
-                        <th data-field="name" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Name">Name</th>
-                        <th data-field="email" data-type="email" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Email">Email</th>
-                        <th data-field="status" data-type="select" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Status">Status</th>
-                    </tr>
-                </thead>
+                <w:t-header>
+                    <w:field belong="t-header" name="id" type="text" sortable="true" searchable="true">ID</w:field>
+                    <w:field belong="t-header" name="name" type="text" sortable="true" searchable="true">Name</w:field>
+                    <w:field belong="t-header" name="email" type="email" sortable="true" searchable="true">Email</w:field>
+                    <w:field belong="t-header" name="status" type="select" sortable="true" searchable="true">Status</w:field>
+                </w:t-header>
             </w:d-table>
         </section>
 
-        <section class="dt-demo-panel" data-testid="dt-cascade-orders-wrap" weline-code="datatable.test.dt_cascade_orders_wrap">
+        <section class="w-card w-datatable-demo__case" data-testid="dt-cascade-orders-wrap" weline-code="datatable.test.dt_cascade_orders_wrap">
             <h2><?= __('Orders') ?></h2>
             <p><?= __('Rows here should shrink after the related user is deleted and the tables are refreshed.') ?></p>
             <w:d-table id="demo-cascade-orders"
@@ -65,41 +53,14 @@
                        page-size="6"
                        show-pagination="true"
                        allow-frontend="true">
-                <thead>
-                    <tr>
-                        <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>
-                        <th data-field="user_id" data-type="number" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="User ID">User ID</th>
-                        <th data-field="order_no" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order No">Order No</th>
-                        <th data-field="total_amount" data-type="number" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Total Amount">Total Amount</th>
-                        <th data-field="order_status" data-type="select" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order Status">Order Status</th>
-                    </tr>
-                </thead>
+                <w:t-header>
+                    <w:field belong="t-header" name="id" type="text" sortable="true" searchable="true">ID</w:field>
+                    <w:field belong="t-header" name="user_id" type="number" sortable="true" searchable="true">User ID</w:field>
+                    <w:field belong="t-header" name="order_no" type="text" sortable="true" searchable="true">Order No</w:field>
+                    <w:field belong="t-header" name="total_amount" type="number" sortable="true" searchable="true">Total Amount</w:field>
+                    <w:field belong="t-header" name="order_status" type="select" sortable="true" searchable="true">Order Status</w:field>
+                </w:t-header>
             </w:d-table>
         </section>
     </div>
 </div>
-
-<script>
-    function refreshCascadeTables() {
-        if (!window.DataTableManager || !window.DataTableManager.instances) {
-            return;
-        }
-
-        ['demo-cascade-users', 'demo-cascade-orders'].forEach(function (tableId) {
-            const instance = window.DataTableManager.instances[tableId];
-            if (instance && typeof window.DataTableManager.loadData === 'function') {
-                window.DataTableManager.loadData(instance);
-            }
-        });
-    }
-
-    document.addEventListener('click', function (event) {
-        const trigger = event.target.closest('[data-datatable-test-action="refresh-cascade"]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-        refreshCascadeTables();
-    });
-</script>

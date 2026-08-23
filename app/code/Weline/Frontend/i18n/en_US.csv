@@ -9,11 +9,11 @@
 "这是 WelineFramework 的默认首页","This is the default homepage of WelineFramework"
 模块不存在，请检查模块名称!,"Module does not exist, please check the module name!"
 通知,Notification
-暂无通知,暂无通知
-关闭,关闭
-确定,确定
-取消,取消
-请重试,请重试
+暂无通知,"No notification yet"
+关闭,closure
+确定,Sure
+取消,Cancel
+请重试,"Please try again"
 "模块 %{1} 加载失败：未找到 %{2}","Module %{1} failed to load: %{2} not found."
 "模块 %{1} 加载失败：无法加载 %{2}","Module %{1} failed to load: unable to load %{2}"
 "预加载模块 %{1} 失败","Preloading module %{1} failed"
@@ -30,15 +30,15 @@ API相关页面,"API related pages"
 模块预加载失败,"Module preload failed"
 错误,Error
 当前页面无需预加载模块,"No preload module is needed for the current page"
-"WLS 已启动","WLS 已启动"
-模板加载正常,模板加载正常
-网站维护中…,网站维护中…
-网站正在维护中…,网站正在维护中…
-我们正在升级系统与数据，请稍后再试。,我们正在升级系统与数据，请稍后再试。
-刷新页面,刷新页面
-返回首页,返回首页
+"WLS 已启动","WLS is started"
+模板加载正常,"Template loads normally"
+网站维护中…,"The website is under maintenance..."
+网站正在维护中…,"The website is under maintenance…"
+我们正在升级系统与数据，请稍后再试。,"We are upgrading the system and data, please try again later."
+刷新页面,"refresh page"
+返回首页,"Return to home page"
 切换,Toggle
-用户不存在，请先在系统中注册,用户不存在，请先在系统中注册
+用户不存在，请先在系统中注册,"The user does not exist, please register in the system first"
 用户头像,"User Avatar"
 查看全部,"View all"
 查看更多,"View More"
@@ -61,3 +61,4 @@ Weline,Weline
 搜索,Search
 我的账户,"My Account"
 账户,Account
+前端模板库,"Frontend template library"

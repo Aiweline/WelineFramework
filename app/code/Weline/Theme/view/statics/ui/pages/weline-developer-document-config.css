@@ -1,0 +1,42 @@
+/* Weline UI source: css/document-config.css */
+@layer reset, tokens, base, layout, components, utilities, page;
+
+@layer page {
+    .w-document-config__help {
+        display: inline-grid;
+        inline-size: 1.125rem;
+        block-size: 1.125rem;
+        place-items: center;
+        margin-inline-start: var(--weline-space-1);
+        border: 1px solid var(--weline-theme-border-strong);
+        border-radius: var(--weline-radius-round);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+        cursor: help;
+        font-size: var(--weline-font-size-xs);
+        font-weight: 700;
+        line-height: 1;
+        vertical-align: middle;
+    }
+
+    .w-document-config__result {
+        min-block-size: 7.5rem;
+        max-block-size: 26rem;
+        margin: 0;
+        padding: var(--weline-space-4);
+        overflow: auto;
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+        white-space: pre-wrap;
+    }
+
+    .w-document-config [data-tone="success"] {
+        color: var(--weline-theme-success);
+    }
+
+    .w-document-config [data-tone="warning"] {
+        color: var(--weline-theme-warning);
+    }
+}

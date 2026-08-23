@@ -29,12 +29,14 @@ final class PageTranslationTaskHandlerTest extends TestCase
 
         $request = $handler->prepareStart($owner, [
             'page_id' => 6,
+            'store_id' => 4,
             'request_id' => 'cms-page-6-translate-1',
         ]);
 
-        self::assertSame('cms.page_translation:backend:9:cms-page-6-translate-1', $request->businessKey);
+        self::assertSame('cms.page_translation:backend:9:4:cms-page-6-translate-1', $request->businessKey);
         self::assertSame(['ru_RU'], $request->input['target_locales']);
         self::assertSame(6, $request->input['page_id']);
+        self::assertSame(4, $request->input['store_id']);
     }
 
     public function testPrepareStartRejectsFrontendOwner(): void
@@ -62,6 +64,7 @@ final class PageTranslationTaskHandlerTest extends TestCase
         $owner = new TaskOwner('backend', 'backend:9', websiteId: 0);
         $request = $handler->prepareStart($owner, [
             'page_id' => 6,
+            'store_id' => 4,
             'request_id' => 'cms-page-6-translate-1',
         ]);
         $context = new InMemoryPageTranslationContext();
@@ -100,6 +103,8 @@ final class PageTranslationTaskHandlerTest extends TestCase
     private function payload(): array
     {
         return [
+            'store_id' => 4,
+            'store_code' => 'main',
             'supported_locales' => ['en_US', 'zh_Hans_CN', 'ru_RU'],
             'source_locale' => 'en_US',
             'current_locale' => 'en_US',

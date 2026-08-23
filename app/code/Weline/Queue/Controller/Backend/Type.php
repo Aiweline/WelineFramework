@@ -32,12 +32,14 @@ class Type extends \Weline\Framework\App\Controller\BackendController
     public function index()
     {
         $this->assign('title', __('队列类型'));
-        if ($search = $this->request->getGet('q')) {
+        $search = \trim((string)$this->request->getGet('q', ''));
+        if ($search !== '') {
             $this->type->where('concat(name,type_id)', "%$search%", 'LIKE');
         }
         $this->type->pagination()->select()->fetch();
         $this->assign('types', $this->type->getItems());
-        $this->assign('pagination', $this->type->getPagination());
+        $this->assign('pagination', $this->type->getPaginationState());
+        $this->assign('q', $search);
         return $this->fetch();
     }
 

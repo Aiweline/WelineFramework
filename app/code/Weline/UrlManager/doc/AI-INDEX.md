@@ -37,12 +37,10 @@
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：0
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：3
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 
 ## doc 目录
@@ -50,6 +48,9 @@
 - `app/code/Weline/UrlManager/doc/README.md`
 - `app/code/Weline/UrlManager/doc/route-import-idempotency.md`
 - `app/code/Weline/UrlManager/doc/url-rewrite-slug-redirect-plan.md`
+- `app/code/Weline/UrlManager/doc/功能现状.md`
+- `app/code/Weline/UrlManager/doc/开发日志.md`
+- `app/code/Weline/UrlManager/doc/需求.md`
 
 ## 开发前门禁
 

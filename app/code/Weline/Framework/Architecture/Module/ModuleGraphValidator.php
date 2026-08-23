@@ -92,6 +92,11 @@ final class ModuleGraphValidator
         if ($constraint === '' || $constraint === '*') {
             return true;
         }
+        if (preg_match('/^(>=|<=|!=|==|>|<|=)\s*(.+)$/', $constraint, $matches) === 1) {
+            $required = trim($matches[2]);
+            $operator = $matches[1] === '=' ? '==' : $matches[1];
+            return $required !== '' && version_compare($version, $required, $operator);
+        }
         if ($constraint[0] === '^') {
             $required = substr($constraint, 1);
             $requiredParts = array_map('intval', explode('.', $required));

@@ -108,78 +108,32 @@ class Local implements \Weline\Framework\Taglib\TaglibInterface
             $submitText = __('提交');
             return match ($tag_key) {
                 'tag' => <<<TAG
-                    <a class="link-info local-translation-link w-cluster" style='cursor: pointer' aria-controls='{$idName}' data-href='{$action}&value={$name}&id={$parserId}' data-i18n-local-translation-link data-w-target='#{$idName}' data-w-action="drawer.open" data-align="center">
+                    <button type="button" class="w-button" aria-controls='{$idName}' data-w-target='#{$idName}' data-w-action="drawer.open" data-tone="quiet" data-size="sm">
                         <span>{$name}</span>
                         <w-icon name="language" size="sm"></w-icon>
-                    </a>
-                    <!-- {$idName} -->
-                    <div class="w-drawer offcanvas-end" tabindex='-1' id='{$idName}' aria-labelledby='{$idName}Label' data-w-width="75" data-w-height="full" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+                    </button>
+                    <div class="w-drawer" tabindex='-1' id='{$idName}' aria-labelledby='{$idName}Label'
+                         data-w-component="drawer local-translation" data-w-source="{$action}&value={$name}&id={$parserId}"
+                         data-size="lg" data-state="closed" hidden aria-hidden="true">
                         <div class="w-drawer__header">
                             <h5 id='{$idName}Label'>
                                 <lang>{$titileText}</lang>
                             </h5>
-                            <div class="ms-auto w-cluster" style="--w-gap:var(--weline-space-2);">
-                                <button id="{$idName}SubmitBtn" type='submit' class="w-button" data-tone="primary" data-size="sm">
-                                    <w-icon name="save" size="sm"></w-icon>{$submitText}
+                            <div class="w-cluster" style="--w-gap: var(--weline-space-2);">
+                                <button type='button' class="w-button" data-w-local-submit data-tone="primary" data-size="sm">
+                                    <span class="w-spinner" data-w-local-spinner role="status" data-size="sm" hidden></span>
+                                    <w-icon name="save" size="sm"></w-icon><span>{$submitText}</span>
                                 </button>
-                                <a id="{$idName}IframeRefreshBtn" class="w-button" aria-label='{$refreshText}' data-tone="info" data-size="sm">
+                                <button type="button" class="w-button" data-w-local-refresh aria-label='{$refreshText}' data-tone="info" data-size="sm">
                                     <w-icon name="refresh" size="sm"></w-icon>{$refreshText}
-                                </a>
-                                <button type='button' class="w-button" aria-label='{$closeText}' data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                                </button>
+                                <button type='button' class="w-button" aria-label='{$closeText}' data-w-action="drawer.close" data-w-close data-tone="quiet" data-size="sm"><w:icon name="close" size="sm"></w:icon></button>
                             </div>
                         </div>
                         <div class="w-drawer__body">
-                            <div data-w-position="relative" data-w-width="full" data-w-height="full">
-                                <iframe id='{$idName}Iframe' data-src="{$action}&value={$name}&id={$parserId}" frameborder='0' data-w-width="full" data-w-height="full"></iframe>
-                            </div>
+                            <iframe class="w-local-translation__frame" data-w-local-frame src="about:blank" title="{$titileText}"></iframe>
                         </div>
                     </div>
-                    <script>
-                        //weline:ui:drawer:before-open
-                        $('#{$idName}').on('weline:ui:drawer:before-open', function (e) {
-                            let Iframe = $('#{$idName}Iframe')
-                            Iframe.attr('src', Iframe.attr('data-src'))
-                        })
-                        $('#{$idName}IframeRefreshBtn').on('click', function (e) {
-                            let Iframe = $('#{$idName}Iframe')
-                            Iframe.attr('src', Iframe.attr('data-src'))
-                        })
-                        // 提交按钮点击事件
-                        $('#{$idName}SubmitBtn').on('click', function (e) {
-                            const btn = $(this);
-                            const Iframe = $('#{$idName}Iframe');
-                            const iframeDoc = Iframe[0].contentWindow?.document;
-
-                            if (!iframeDoc) {
-                                console.error('Iframe document not accessible');
-                                return;
-                            }
-                            // 获取id为localTranslationForm的表单元素
-                            const form = iframeDoc.getElementById('localTranslationForm');
-                            if (!form) {
-                                console.error('Form not found in iframe');
-                                return;
-                            }
-                            
-                            // 防止重复提交
-                            btn.prop('disabled', true);
-                            btn.html(`<span class="w-spinner me-1" role="status" data-size="sm"></span>\${btn.text()}`);
-
-                            try {
-                                form.submit();
-
-                                // 监听iframe加载完成事件
-                                Iframe.on('load', function() {
-                                    btn.prop('disabled', false);
-                                    btn.html(`<w-icon name="save" size="sm"></w-icon>{$submitText}`);
-                                });
-                            } catch (error) {
-                                console.error('Form submit error:', error);
-                                btn.prop('disabled', false);
-                                btn.html(`<w-icon name="save" size="sm"></w-icon>{$submitText}`);
-                            }
-                        })
-                    </script>
 TAG,
             };
         };
@@ -221,6 +175,6 @@ class StoreDescription extends \Weline\I18n\LocalModel
     public const fields_NAME = Store::schema_fields_NAME;
     public const fields_DESCRIPTION = Store::schema_fields_DESCRIPTION;
 }
-</pre>示例中，我们设置店铺的name字段可以翻译。<span style="color:red;">除了那么，还可以添加多个字段，比如店铺详情等，使用时指定字段即可。</span>';
+</pre>示例中，我们设置店铺的name字段可以翻译。还可以添加多个字段，比如店铺详情等，使用时指定字段即可。';
     }
 }

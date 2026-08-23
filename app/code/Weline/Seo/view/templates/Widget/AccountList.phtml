@@ -40,7 +40,7 @@ $platformVisual = ObjectManager::getInstance(PlatformVisual::class);
             <w:icon name="info" size="sm"></w:icon>
             <lang>暂无SEO账户配置</lang>
             <?php if ($show_manage_link): ?>
-            <a href="<?= htmlspecialchars($manage_url, ENT_QUOTES) ?>" class="alert-link ms-2" target="_blank">
+            <a href="<?= htmlspecialchars($manage_url, ENT_QUOTES) ?>" class="weline-alert-link" target="_blank">
                 <lang>点击前往配置</lang>
             </a>
             <?php endif; ?>
@@ -119,7 +119,7 @@ $platformVisual = ObjectManager::getInstance(PlatformVisual::class);
             <w:icon name="info" size="sm"></w:icon>
             <lang>共</lang> <?= count($accounts) ?> <lang>个账户</lang>
             <?php if ($scope || $module): ?>
-            <span class="ms-2">
+            <span class="">
                 (<lang>过滤条件</lang>: 
                 <?php if ($scope): ?>scope=<code><?= htmlspecialchars($scope, ENT_QUOTES) ?></code><?php endif; ?>
                 <?php if ($scope && $module): ?>, <?php endif; ?>

@@ -42,14 +42,18 @@
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：1
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：0
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：6
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 识别到 QueryProvider 相关 PHP 文件：extends/module/Weline_Framework/Query/MetaAdminQueryProvider.php；前端/跨模块读数据先查 query 帮助。
+
+## Meta 与公共 Scope 边界
+
+- 精确 `MetaConfigRepositoryInterface` 不执行 Scope 回落；需要 `Channel → Store → Website → Global` 来源解析时使用 `MetaConfigTypedScopeService`，并传入经公共 `ScopeHierarchyInterface` 规范化的 typed identity。
+- Theme 的逐路径 Meta 继承由 Theme scoped workspace 持有，Meta 行仅作本模块拥有的兼容投影。`target_type/target_id` 始终是业务 owner，与 Website/Store/Channel Scope 正交。
+- 旧 Scope 只兼容读取；任何新写入都必须保留显式空值并拒绝 Session 推断、短 Scope 与客户端伪造的 ID/code 组合。
 
 ## doc 目录
 
@@ -59,7 +63,10 @@
 - `app/code/Weline/Meta/doc/public-repository-contract.md`
 - `app/code/Weline/Meta/doc/w-meta标签使用说明.md`
 - `app/code/Weline/Meta/doc/使用指南.md`
+- `app/code/Weline/Meta/doc/功能现状.md`
 - `app/code/Weline/Meta/doc/完整实现方案.md`
+- `app/code/Weline/Meta/doc/开发日志.md`
+- `app/code/Weline/Meta/doc/需求.md`
 
 ## 开发前门禁
 

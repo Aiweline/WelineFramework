@@ -6,7 +6,18 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
         <div><h4 style="--w-mb:var(--weline-space-1);"><?= $escape($title) ?></h4><div class="w-text" data-tone="muted"><lang>库存内核管理工作台</lang> · website_id=<?= $website_id ?></div></div>
         <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
-            <input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" aria-label="<lang>网站 ID</lang>">
+            <label class="w-visually-hidden" for="inventory-filter-website_trigger"><lang>网站</lang></label>
+            <w:websites:website:select
+                id="inventory-filter-website"
+                name="website_id"
+                value="websiteSelectValue"
+                display="websiteSelectDisplay"
+                options="websiteSelectOptionsJson"
+                multiple="false"
+                allow-empty="false"
+                empty-label="@lang(请选择站点)"
+                placeholder="@lang(搜索站点名称或编码)"
+            />
             <button class="w-button" type="submit" data-tone="primary"><lang>切换网站</lang></button>
         </form>
     </div>
@@ -14,7 +25,19 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <?php if ($section === 'warehouses'): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
             <w:form method="post" action="@backend-url('*/backend/inventory/create-warehouse')" csrf="auto" class="w-grid" data-testid="inventory-warehouse-create-form" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>网站 ID</lang></label><input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="inventory-create-warehouse-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <div style="--w-span-md:3;"><label class="w-field__label"><lang>仓代码</lang></label><input class="w-input" name="warehouse_code" maxlength="64" required></div>
                 <div style="--w-span-md:3;"><label class="w-field__label"><lang>仓名称</lang></label><input class="w-input" name="name" maxlength="128" required></div>
                 <div style="--w-span-md:1;"><label class="w-field__label"><lang>模式</lang></label><select class="w-select" name="mode"><option value="normal">normal</option><option value="test">test</option></select></div>
@@ -25,7 +48,19 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <?php elseif ($section === 'authorizations'): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
             <w:form method="post" action="@backend-url('*/backend/inventory/authorize-warehouse')" csrf="auto" class="w-grid" data-testid="inventory-warehouse-authorization-form" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>网站 ID</lang></label><input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="inventory-authorize-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <div style="--w-span-md:3;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="1" name="store_id" required></div>
                 <div style="--w-span-md:3;"><label class="w-field__label"><lang>Warehouse ID</lang></label><input class="w-input" type="number" min="1" name="warehouse_id" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>默认逻辑仓</lang></label><select class="w-select" name="is_default"><option value="0">否</option><option value="1">是</option></select></div>
@@ -35,7 +70,19 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <?php elseif ($section === 'adjustments'): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
             <w:form method="post" action="@backend-url('*/backend/inventory/adjust-stock')" csrf="auto" class="w-grid" data-testid="inventory-stock-adjust-form" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>网站 ID</lang></label><input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="inventory-adjust-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="1" name="store_id" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>Offer ID</lang></label><input class="w-input" type="number" min="1" name="offer_id" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>在手库存</lang></label><input class="w-input" type="number" min="0" name="on_hand_minor" required></div>

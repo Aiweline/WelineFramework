@@ -45,6 +45,7 @@ final class BackendVerificationCodeGate
             return [
                 'should_display_captcha' => true,
                 'should_block' => true,
+                // Chinese source keys — Login.php wraps with __() under request locale.
                 'error_message' => '请输入验证码！',
             ];
         }

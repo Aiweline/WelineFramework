@@ -69,3 +69,11 @@
   recovery gate 已实现；`TASK-MIG-P3C` shadow/alias/cutover 已完成工程
   验收，独立重跑 TEST-P3C-01..04 后 `GATE-P3C=GO`，P3 聚合复验后
   `GATE-P3=GO`。生产 `mode=on` 与 `PG-8` 尚未在本文档宣告完成。
+
+<!-- weline:module-doc-baseline:start -->
+## 固定模块文档
+
+- [功能现状](功能现状.md)：当前版本、代码能力面、主要入口与未验证边界。
+- [需求](需求.md)：已确认需求、文档基线与待确认产品语义。
+- [开发日志](开发日志.md)：目标版本进度、证据和交付状态。
+<!-- weline:module-doc-baseline:end -->

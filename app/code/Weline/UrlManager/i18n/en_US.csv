@@ -6,21 +6,15 @@
 路由重写路径必须是字符串。,"The URL rewrite path must be a string."
 路由表,"Route table"
 静态路由管理：可定制属于自己的静态url来提升seo。,"Static Route Management: Customize your own static URLs to improve SEO."
-网站ID,"Site ID"
-网站ID正确,"Site ID is correct"
-请输入网站ID,"Please enter the website ID"
-同一网站ID下重写路径必须唯一,"Rewrite paths must be unique under the same site ID"
+网站,website
+"同一网站下重写路径必须唯一；可选默认站点（ID 0）","The rewrite path must be unique under the same website; the default site (ID 0) is optional"
 路径,Path
 输入路径正确,"The entered path is correct"
 请输入路径,"Please enter the path"
 重写路径,"Rewrite path"
 请输入重写路径,"Please enter the rewrite path"
 重写路由,"Rewrite route"
-输入网站ID，0表示默认,"Enter the website ID, 0 means default"
 输入路径,"Enter the path"
-"URL 管理","URL management"
-系统配置,"System Configuration"
-"URL 管理器","URL manager"
 路由列表,"Route List"
 "管理系统中可访问的 URL，可为关键页面设置更友好的自定义地址，提升 SEO 和可读性。","Manage accessible URLs and set friendly custom addresses for key pages to improve SEO and readability."
 按路径搜索…,"Search by path…"
@@ -38,6 +32,7 @@
 暂无路由数据,"No route data"
 请检查相关模块是否正确注册,"Please check if related modules are registered correctly"
 添加,Add
+网站ID,"Site ID"
 "URL ID","URL ID"
 指纹,Fingerprint
 是否已删除,Deleted
@@ -45,5 +40,15 @@
 否,No
 编辑,Edit
 删除,Delete
+"URL 管理","URL management"
+系统配置,"System Configuration"
+"URL 管理器","URL manager"
 URL管理,"URL management"
 URL管理器,"URL manager"
+网站ID正确,"Site ID is correct"
+请输入网站ID,"Please enter the website ID"
+同一网站ID下重写路径必须唯一,"Rewrite paths must be unique under the same site ID"
+输入网站ID，0表示默认,"Enter the website ID, 0 means default"
+SEO优化,"SEO optimization"
+URL路由列表,"URL route list"
+URL路由重写,"URL route rewrite"

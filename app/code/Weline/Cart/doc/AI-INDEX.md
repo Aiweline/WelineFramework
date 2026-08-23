@@ -47,6 +47,7 @@
 
 - `app/code/Weline/Cart/doc/README.md`
 - `app/code/Weline/Cart/doc/cart-v2.md`
+- `app/code/Weline/Cart/doc/功能现状.md`
 - `app/code/Weline/Cart/doc/开发日志.md`
 - `app/code/Weline/Cart/doc/需求.md`
 

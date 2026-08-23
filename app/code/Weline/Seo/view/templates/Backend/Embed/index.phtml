@@ -1,441 +1,104 @@
 <?php
-/**
- * SEO 嵌入式管理界面 - 主体列表
- * 
- * 用于嵌入到其他模块中，无 header/sidebar
- * 
- * @var \Weline\Framework\View\Template $this
- * @var array $subjects SEO主体列表
- * @var string $title 页面标题
- * @var string $module 模块标识
- * @var string $scope 业务scope
- * @var string $search 搜索关键词
- * @var string $status 状态筛选
- * @var bool $is_embed 是否嵌入模式
- */
-
-$subjects = $this->getData('subjects') ?: [];
-$title = $this->getData('title') ?: __('SEO主体管理');
-$module = $this->getData('module') ?: '';
-$scope = $this->getData('scope') ?: '';
-$search = $this->getData('search') ?: '';
+/** @var \Weline\Framework\View\Template $this */
+$subjects = is_array($this->getData('subjects')) ? $this->getData('subjects') : [];
+$title = (string)($this->getData('title') ?: __('SEO主体管理'));
+$module = (string)($this->getData('module') ?: '');
+$scope = (string)($this->getData('scope') ?: '');
+$search = (string)($this->getData('search') ?: '');
 $status = $this->getData('status');
-
-// 构建基础 URL 参数
-$baseParams = [];
-if ($scope) $baseParams['scope'] = $scope;
-
-$jsJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
-$jsString = static function (mixed $value) use ($jsJsonFlags): string {
-    return json_encode((string)$value, $jsJsonFlags);
-};
+$baseParams = $scope !== '' ? ['scope' => $scope] : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$config = ['text' => [
+    'saveSuccess' => (string)__('保存成功'),
+    'saveFailed' => (string)__('保存失败'),
+    'deleteFailed' => (string)__('删除失败'),
+    'requestFailed' => (string)__('请求失败'),
+    'confirmDelete' => (string)__('确定要删除该SEO主体吗？'),
+]];
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP
+    | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN">
+<!doctype html>
+<html lang="zh-CN" data-w-area="backend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($title) ?></title>
-    <!-- 使用本地后台静态资源，避免第三方脚本/样式注入面 -->
-    <link href="@static(Weline_Admin::backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
-    <style>
-        body {
-            background: #f5f5f5;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-        
-        .embed-container {
-            padding: 20px;
-            max-width: 100%;
-        }
-        
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        .page-header h4 {
-            margin: 0;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .search-box {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 20px;
-        }
-        
-        .subject-card {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 15px;
-            transition: all 0.2s ease;
-        }
-        
-        .subject-card:hover {
-            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-        }
-        
-        .subject-card-header {
-            padding: 15px 20px;
-            border-bottom: 1px solid #f0f0f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .subject-title {
-            font-weight: 600;
-            color: #333;
-            font-size: 1rem;
-            text-decoration: none;
-        }
-        
-        .subject-title:hover {
-            color: #0bb197;
-        }
-        
-        .subject-card-body {
-            padding: 15px 20px;
-        }
-        
-        .subject-url {
-            font-size: 0.85rem;
-            color: #6c757d;
-            word-break: break-all;
-        }
-        
-        .subject-meta {
-            display: flex;
-            gap: 15px;
-            font-size: 0.85rem;
-            color: #6c757d;
-            margin-top: 10px;
-        }
-        
-        .badge-status {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-        }
-        
-        .keyword-count {
-            display: inline-flex;
-            align-items: center;
-            padding: 3px 10px;
-            background: #e3f2fd;
-            color: #1976d2;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-            background: #fff;
-            border-radius: 8px;
-        }
-        
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }
-        
-        .action-btn {
-            padding: 6px 14px;
-            font-size: 0.85rem;
-        }
-
-        /* Modal 样式 */
-        .modal-header {
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        .form-label {
-            font-weight: 500;
-            color: #333;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= $escape($title) ?></title>
+    <w:block class="Weline\Backend\Block\Header\Base" template="Weline_Backend::header/base.phtml"/>
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)">
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-seo-embed.css)">
+    <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
+    <script type="module" src="@static(Weline_Theme::ui/pages/weline-seo-embed-index.js)"></script>
 </head>
 <body data-testid="seo-subject-management">
-    <div class="embed-container">
-        <!-- 页面标题 -->
-        <div class="page-header">
-            <h4>
-                <w:icon name="chart" size="sm"></w:icon>
-                <?= htmlspecialchars($title) ?>
-                <span class="w-badge ms-2" data-w-background="muted"><?= count($subjects) ?></span>
-            </h4>
-            <button type="button" class="w-button action-btn" data-w-target="#addSubjectModal" data-w-action="dialog.open" data-tone="primary">
-                <w:icon name="plus" size="sm"></w:icon>
-                <lang>添加主体</lang>
-            </button>
-        </div>
+<main class="w-seo-embed w-stack">
+    <header class="w-seo-embed__header w-cluster" data-justify="between">
+        <div class="w-cluster"><h1 class="w-seo-embed__title"><w:icon name="chart" size="sm"></w:icon><?= $escape($title) ?></h1><span class="w-badge" data-tone="neutral"><?= count($subjects) ?></span></div>
+        <button type="button" class="w-button" data-w-target="#addSubjectModal" data-w-action="dialog.open" data-tone="primary"><w:icon name="plus" size="sm"></w:icon><lang>添加主体</lang></button>
+    </header>
 
-        <!-- 搜索框 -->
-        <div class="search-box">
-            <w:form method="get" action="@var($this->getUrl('*/backend/embed', $baseParams))">
-                <?php if ($module): ?><input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>"><?php endif; ?>
-                <?php if ($scope): ?><input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>"><?php endif; ?>
-                <div class="w-grid" data-align="end">
-                    <div style="--w-span-md:5;">
-                        <label class="w-field__label"><lang>搜索</lang></label>
-                        <input type="text" class="w-input" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= __('输入主体标题...') ?>">
-                    </div>
-                    <div style="--w-span-md:3;">
-                        <label class="w-field__label"><lang>状态</lang></label>
-                        <select class="w-select" name="status">
-                            <option value=""><?= __('全部状态') ?></option>
-                            <option value="1" <?= $status === '1' ? 'selected' : '' ?>><?= __('启用') ?></option>
-                            <option value="0" <?= $status === '0' ? 'selected' : '' ?>><?= __('禁用') ?></option>
-                        </select>
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <button type="submit" class="w-button action-btn" data-tone="primary">
-                            <w:icon name="search" size="sm"></w:icon>
-                            <lang>搜索</lang>
-                        </button>
-                        <a href="<?= $this->getUrl('*/backend/embed', $baseParams) ?>" class="w-button action-btn ms-2" data-tone="neutral" data-variant="outline">
-                            <w:icon name="refresh" size="sm"></w:icon>
-                            <lang>重置</lang>
-                        </a>
-                    </div>
+    <section class="w-card">
+        <div class="w-card__body">
+            <w:form method="get" action="@var($this->getUrl('*/backend/embed', $baseParams))" class="w-grid">
+                <?php if ($module !== ''): ?><input type="hidden" name="module" value="<?= $escape($module) ?>"><?php endif; ?>
+                <?php if ($scope !== ''): ?><input type="hidden" name="scope" value="<?= $escape($scope) ?>"><?php endif; ?>
+                <label class="w-field" style="--w-span:5;"><span class="w-field__label"><lang>搜索</lang></span><input class="w-input" name="search" value="<?= $escape($search) ?>" placeholder="<?= $escape(__('输入主体标题...')) ?>"></label>
+                <label class="w-field" style="--w-span:3;"><span class="w-field__label"><lang>状态</lang></span><select class="w-select" name="status">
+                    <option value=""><?= $escape(__('全部状态')) ?></option>
+                    <option value="1" <?= $status === '1' ? 'selected' : '' ?>><?= $escape(__('启用')) ?></option>
+                    <option value="0" <?= $status === '0' ? 'selected' : '' ?>><?= $escape(__('禁用')) ?></option>
+                </select></label>
+                <div class="w-cluster" data-self="end" style="--w-span:4;">
+                    <button type="submit" class="w-button" data-tone="primary"><w:icon name="search" size="sm"></w:icon><lang>搜索</lang></button>
+                    <a href="<?= $escape($this->getUrl('*/backend/embed', $baseParams)) ?>" class="w-button" data-tone="neutral"><w:icon name="refresh" size="sm"></w:icon><lang>重置</lang></a>
                 </div>
             </w:form>
         </div>
+    </section>
 
-        <!-- 主体列表 -->
-        <?php if (empty($subjects)): ?>
-            <div class="empty-state">
-                <w:icon name="file" size="sm"></w:icon>
-                <h5><lang>暂无SEO主体</lang></h5>
-                <p class="w-text" data-tone="muted"><lang>点击上方"添加主体"按钮创建第一个SEO主体。</lang></p>
-            </div>
+    <section class="w-stack" id="seoSubjectList">
+        <?php if ($subjects === []): ?>
+            <div class="w-empty"><w:icon name="file" size="lg"></w:icon><h2><lang>暂无SEO主体</lang></h2><p><lang>点击“添加主体”创建第一条记录。</lang></p></div>
         <?php else: ?>
             <?php foreach ($subjects as $subject): ?>
-                <div class="subject-card" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>">
-                    <div class="subject-card-header">
-                        <div>
-                            <a href="<?= $this->getUrl('*/backend/embed/detail', array_merge($baseParams, ['id' => $subject['subject_id']])) ?>" 
-                               class="subject-title">
-                                <?= htmlspecialchars($subject['title'] ?? __('未命名主体')) ?>
-                            </a>
-                            <?php if ((int)($subject['status'] ?? 0) === 1): ?>
-                                <span class="w-badge badge-status ms-2" data-w-background="success"><lang>启用</lang></span>
-                            <?php else: ?>
-                                <span class="w-badge badge-status ms-2" data-w-background="muted"><lang>禁用</lang></span>
-                            <?php endif; ?>
+                <?php $detailUrl = $this->getUrl('*/backend/embed/detail', array_merge($baseParams, ['id' => $subject['subject_id']])); ?>
+                <article class="w-card w-seo-embed__subject" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>">
+                    <header class="w-card__header w-cluster" data-justify="between">
+                        <div class="w-cluster"><a href="<?= $escape($detailUrl) ?>" class="w-card__title"><?= $escape($subject['title'] ?? __('未命名主体')) ?></a><span class="w-badge" data-tone="<?= (int)($subject['status'] ?? 0) === 1 ? 'success' : 'neutral' ?>"><?= (int)($subject['status'] ?? 0) === 1 ? __('启用') : __('禁用') ?></span></div>
+                        <div class="w-cluster">
+                            <span class="w-seo-embed__keyword"><w:icon name="tag" size="sm"></w:icon><?= (int)($subject['keyword_count'] ?? 0) ?> <lang>关键词</lang></span>
+                            <a href="<?= $escape($detailUrl) ?>" class="w-button" aria-label="<?= $escape(__('查看详情')) ?>" data-tone="neutral" data-size="sm"><w:icon name="eye" size="sm"></w:icon></a>
+                            <button type="button" class="w-button" data-seo-action="delete" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>" aria-label="<?= $escape(__('删除')) ?>" data-tone="danger" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>
                         </div>
-                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
-                            <span class="keyword-count">
-                                <w:icon name="tag" size="sm"></w:icon>
-                                <?= (int)($subject['keyword_count'] ?? 0) ?> <lang>关键词</lang>
-                            </span>
-                            <a href="<?= $this->getUrl('*/backend/embed/detail', array_merge($baseParams, ['id' => $subject['subject_id']])) ?>" class="w-button" title="<?= __('查看详情') ?>" data-tone="primary" data-variant="outline" data-size="sm">
-                                <w:icon name="eye" size="sm"></w:icon>
-                            </a>
-                            <button type="button" class="w-button btn-delete" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline" data-size="sm">
-                                <w:icon name="trash" size="sm"></w:icon>
-                            </button>
-                        </div>
+                    </header>
+                    <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-2);">
+                        <?php if (!empty($subject['url'])): ?><a href="<?= $escape($subject['url']) ?>" target="_blank" rel="noopener noreferrer"><w:icon name="link" size="sm"></w:icon><?= $escape($subject['url']) ?></a><?php endif; ?>
+                        <?php if (!empty($subject['description'])): ?><p class="w-text" data-tone="muted"><?= $escape(mb_substr((string)$subject['description'], 0, 150)) ?><?= mb_strlen((string)$subject['description']) > 150 ? '…' : '' ?></p><?php endif; ?>
+                        <div class="w-cluster w-text" data-tone="muted"><span><w:icon name="clock" size="sm"></w:icon><?= $escape($subject['updated_at'] ?? '-') ?></span><?php if (!empty($subject['locale'])): ?><span><w:icon name="language" size="sm"></w:icon><?= $escape($subject['locale']) ?></span><?php endif; ?></div>
                     </div>
-                    <div class="subject-card-body">
-                        <?php if (!empty($subject['url'])): ?>
-                            <div class="subject-url">
-                                <w:icon name="link" size="sm"></w:icon>
-                                <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank"><?= htmlspecialchars($subject['url']) ?></a>
-                            </div>
-                        <?php endif; ?>
-                        <?php if (!empty($subject['description'])): ?>
-                            <p class="w-text" style="font-size: 0.9rem;" data-tone="muted">
-                                <?= htmlspecialchars(mb_substr($subject['description'], 0, 150)) ?>
-                                <?= mb_strlen($subject['description']) > 150 ? '...' : '' ?>
-                            </p>
-                        <?php endif; ?>
-                        <div class="subject-meta">
-                            <span>
-                                <w:icon name="clock" size="sm"></w:icon>
-                                <?= htmlspecialchars($subject['updated_at'] ?? '-') ?>
-                            </span>
-                            <?php if (!empty($subject['locale'])): ?>
-                            <span>
-                                <w:icon name="language" size="sm"></w:icon>
-                                <?= htmlspecialchars($subject['locale']) ?>
-                            </span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
+                </article>
             <?php endforeach; ?>
         <?php endif; ?>
-    </div>
+    </section>
+</main>
 
-    <!-- 添加主体 Modal -->
-    <div class="w-dialog" id="addSubjectModal" tabindex="-1" aria-labelledby="addSubjectModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
-        <div class="w-dialog__frame" data-size="lg">
-            <div class="w-dialog__surface">
-                <div class="w-dialog__header">
-                    <h5 class="w-dialog__title" id="addSubjectModalLabel">
-                        <w:icon name="plus" size="sm"></w:icon>
-                        <lang>添加SEO主体</lang>
-                    </h5>
-                    <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
-                </div>
-                <w:form id="addSubjectForm">
-                    <div class="w-dialog__body">
-                        <input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>">
-                        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
-                        
-                        <div class="w-grid">
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="subjectTitle"><lang>标题</lang> <span class="w-text" data-tone="danger">*</span></label>
-                                <input type="text" class="w-input" id="subjectTitle" name="title" required>
-                            </div>
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="subjectUrl"><lang>URL</lang></label>
-                                <input type="url" class="w-input" id="subjectUrl" name="url" placeholder="https://">
-                            </div>
-                        </div>
-                        
-                        <div class="w-grid">
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="subjectType"><lang>主体类型</lang></label>
-                                <select class="w-select" id="subjectType" name="subject_type">
-                                    <option value="page"><?= __('页面') ?></option>
-                                    <option value="product"><?= __('商品') ?></option>
-                                    <option value="store"><?= __('店铺') ?></option>
-                                    <option value="website"><?= __('网站') ?></option>
-                                </select>
-                            </div>
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="subjectStatus"><lang>状态</lang></label>
-                                <select class="w-select" id="subjectStatus" name="status">
-                                    <option value="1"><?= __('启用') ?></option>
-                                    <option value="0"><?= __('禁用') ?></option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div style="--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="subjectDescription"><lang>描述</lang></label>
-                            <textarea class="w-textarea" id="subjectDescription" name="description" rows="3"></textarea>
-                        </div>
-                    </div>
-                    <div class="w-dialog__footer">
-                        <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral">
-                            <lang>取消</lang>
-                        </button>
-                        <button type="submit" class="w-button" data-tone="primary">
-                            <w:icon name="save" size="sm"></w:icon>
-                            <lang>保存</lang>
-                        </button>
-                    </div>
-                </w:form>
+<dialog class="w-dialog" id="addSubjectModal" aria-labelledby="addSubjectModalLabel" data-w-component="dialog" data-state="closed">
+    <header class="w-dialog__header"><h2 class="w-dialog__title" id="addSubjectModalLabel"><w:icon name="plus" size="sm"></w:icon><lang>添加SEO主体</lang></h2><button type="button" class="w-button" data-w-action="dialog.close" data-tone="quiet" aria-label="<?= $escape(__('关闭')) ?>">×</button></header>
+    <w:form id="addSubjectForm" class="w-stack">
+        <div class="w-dialog__body w-stack">
+            <input type="hidden" name="module" value="<?= $escape($module) ?>"><input type="hidden" name="scope" value="<?= $escape($scope) ?>">
+            <div class="w-grid">
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label"><lang>标题</lang></span><input class="w-input" name="title" required></label>
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label">URL</span><input type="url" class="w-input" name="url" placeholder="https://"></label>
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label"><lang>主体类型</lang></span><select class="w-select" name="subject_type"><option value="page"><?= $escape(__('页面')) ?></option><option value="product"><?= $escape(__('商品')) ?></option><option value="store"><?= $escape(__('店铺')) ?></option><option value="website"><?= $escape(__('网站')) ?></option></select></label>
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label"><lang>状态</lang></span><select class="w-select" name="status"><option value="1"><?= $escape(__('启用')) ?></option><option value="0"><?= $escape(__('禁用')) ?></option></select></label>
             </div>
+            <label class="w-field"><span class="w-field__label"><lang>描述</lang></span><textarea class="w-textarea" name="description" rows="3"></textarea></label>
         </div>
-    </div>
-
-    <!-- Bootstrap JS -->
-    <script src="@static(Weline_Admin::backend/lib/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js)"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const saveUrl = <?= $jsString($this->getUrl('*/backend/embed/save')) ?>;
-        const deleteUrl = <?= $jsString($this->getUrl('*/backend/embed/delete')) ?>;
-        const text = {
-            saveSuccess: <?= $jsString(__('保存成功')) ?>,
-            saveFailed: <?= $jsString(__('保存失败')) ?>,
-            deleteFailed: <?= $jsString(__('删除失败')) ?>,
-            requestFailed: <?= $jsString(__('请求失败')) ?>,
-            confirmDelete: <?= $jsString(__('确定要删除该SEO主体吗？')) ?>,
-            confirmUnavailable: <?= $jsString(__('确认组件不可用，请刷新页面后重试。')) ?>
-        };
-
-        function getBackendTool(name) {
-            if (window[name]) {
-                return window[name];
-            }
-            try {
-                if (window.parent && window.parent !== window && window.parent[name]) {
-                    return window.parent[name];
-                }
-            } catch (error) {
-                return null;
-            }
-            return null;
-        }
-
-        function notify(type, message) {
-            var toast = getBackendTool('Weline.UI.toast');
-            if (toast && typeof toast[type] === 'function') {
-                toast[type](typeof message === 'string' ? message : String(message || ''));
-            }
-        }
-
-        function requestFailedMessage(error) {
-            return text.requestFailed + (error && error.message ? ': ' + error.message : '');
-        }
-        
-        // 添加主体表单提交
-        document.getElementById('addSubjectForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            var formData = new FormData(this);
-            var params = {};
-            formData.forEach(function(v,k){ params[k]=v; });
-            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-            .then(function(api){ return api.resource('seo_admin').saveEmbedSubject(params); })
-            .then(function(data) {
-                if (data && data.success !== false) {
-                    notify('success', (data && data.message) || text.saveSuccess);
-                    location.reload();
-                } else {
-                    notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError({response:{data:data}}, text.saveFailed)) || text.saveFailed);
-                }
-            })
-            .catch(function(error) {
-                notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, text.requestFailed)) || requestFailedMessage(error));
-            });
-        });
-        
-        // 删除按钮
-        document.querySelectorAll('.btn-delete').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var subjectId = this.dataset.subjectId;
-                var self = this;
-                var doDelete = function(confirmed) {
-                    if (!confirmed) return;
-                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-                    .then(function(api){ return api.resource('seo_admin').deleteEmbedSubject({ subject_id: subjectId }); })
-                    .then(function(data) {
-                        if (data && data.success !== false) {
-                            var card = self.closest('.subject-card');
-                            if (card) card.remove();
-                        } else {
-                            notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError({response:{data:data}}, text.deleteFailed)) || text.deleteFailed);
-                        }
-                    })
-                    .catch(function(error) {
-                        notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, text.requestFailed)) || requestFailedMessage(error));
-                    });
-                };
-                Weline.UI.dialog.confirm(text.confirmDelete, {
-                    tone: 'danger',
-                    dangerous: true
-                }).then(doDelete);
-            });
-        });
-    });
-    </script>
+        <footer class="w-dialog__footer"><button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><lang>取消</lang></button><button type="submit" class="w-button" data-tone="primary"><w:icon name="save" size="sm"></w:icon><lang>保存</lang></button></footer>
+    </w:form>
+</dialog>
+<script type="application/json" id="weline-seo-embed-index-config" data-seo-embed-index-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
 </body>
 </html>

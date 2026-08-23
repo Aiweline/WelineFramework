@@ -348,7 +348,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     <tr>
                                         <td>
                                             <?= $h(__($labelKey)) ?>
-                                            <code class="w-text ms-1" data-tone="muted" data-size="sm"><?= $h($stepKey) ?></code>
+                                            <code class="w-text" data-tone="muted" data-size="sm"><?= $h($stepKey) ?></code>
                                         </td>
                                         <td class="w-text" data-align="end"><?= $num($step['sessions'] ?? 0) ?></td>
                                         <td class="w-text" data-align="end"><?= $h(number_format($rate * 100, 1)) ?>%</td>
@@ -616,7 +616,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                             <?php $width = max(4, (int)round(((int)($pathRow['sessions'] ?? 0) / $maxPathSessions) * 100)); ?>
                                             <div>
                                                 <div class="w-text w-cluster" data-justify="between" data-size="sm" style="--w-mb:var(--weline-space-1);">
-                                                    <code class="w-text me-2" style="max-width:75%" data-truncate="true"><?= $h($pathRow['path'] ?? '') ?></code>
+                                                    <code class="w-text" style="max-width:75%" data-truncate="true"><?= $h($pathRow['path'] ?? '') ?></code>
                                                     <span><?= $num($pathRow['sessions'] ?? 0) ?></span>
                                                 </div>
                                                 <div class="weline-pixel-bar"><i style="width:<?= $width ?>%"></i></div>
@@ -739,7 +739,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                     <?php if ($reportTabs === []): ?>
                         <div class="w-text" data-tone="muted"><?= __('暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。') ?></div>
                     <?php else: ?>
-                        <ul class="nav w-tabs__list" role="tablist" data-pixel-report-tabs data-w-component="tabs" style="--w-mb:var(--weline-space-4);">
+                        <ul class="w-nav w-tabs__list" role="tablist" data-pixel-report-tabs data-w-component="tabs" style="--w-mb:var(--weline-space-4);">
                             <?php foreach ($reportTabs as $tab): ?>
                                 <?php
                                 $code = (string)($tab['code'] ?? '');

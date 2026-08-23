@@ -140,19 +140,23 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
                                 <p><?= $safe(__('表格、排行与可展开列表。')) ?></p>
                             </div>
                         </header>
-                        <section class="dashboard-widget dashboard-widget-detail-snapshot">
-                            <header>
-                                <h3><?= $safe(__('默认明细')) ?></h3>
-                                <span><?= $safe(__('Dashboard')) ?></span>
-                            </header>
-                            <table>
-                                <tbody>
-                                <tr><th><?= $safe(__('视图')) ?></th><td><strong><?= $safe(__('默认概览')) ?></strong><span><?= $safe(__('系统共享视图')) ?></span></td></tr>
-                                <tr><th><?= $safe(__('布局')) ?></th><td><strong><?= $safe(__('4 个固定区域')) ?></strong><span><?= $safe(__('指标、分析、侧栏、明细')) ?></span></td></tr>
-                                <tr><th><?= $safe(__('部件')) ?></th><td><strong><?= $safe(__('后台专用')) ?></strong><span><?= $safe(__('由后台统计部件提供')) ?></span></td></tr>
-                                </tbody>
-                            </table>
-                        </section>
+                        <article class="w-card dashboard-widget dashboard-widget-detail-snapshot" data-w-height="full">
+                            <div class="w-card__header">
+                                <h3 class="w-card__title"><?= $safe(__('默认明细')) ?></h3>
+                                <span class="w-text" data-tone="muted" data-size="sm"><?= $safe(__('Dashboard')) ?></span>
+                            </div>
+                            <div class="w-card__body" style="--w-pt:0;--w-pb:0;">
+                                <div class="w-table-wrap">
+                                    <table class="w-table" style="--w-mb:0;">
+                                        <tbody>
+                                        <tr><th scope="row"><span class="w-text" data-tone="muted"><?= $safe(__('视图')) ?></span></th><td><strong class="w-text" data-weight="strong"><?= $safe(__('默认概览')) ?></strong><span class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= $safe(__('系统共享视图')) ?></span></td></tr>
+                                        <tr><th scope="row"><span class="w-text" data-tone="muted"><?= $safe(__('布局')) ?></span></th><td><strong class="w-text" data-weight="strong"><?= $safe(__('4 个固定区域')) ?></strong><span class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= $safe(__('指标、分析、侧栏、明细')) ?></span></td></tr>
+                                        <tr><th scope="row"><span class="w-text" data-tone="muted"><?= $safe(__('部件')) ?></span></th><td><strong class="w-text" data-weight="strong"><?= $safe(__('后台专用')) ?></strong><span class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= $safe(__('由后台统计部件提供')) ?></span></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </article>
                     </w:slot>
                 </div>
             </section>

@@ -330,6 +330,7 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
 };
 ?>
 
+<link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-language-select.css)">
 <style>
     .weline-system-config-page {
         --wsc-border: #e8edf5;
@@ -950,14 +951,6 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
 <div class="weline-system-config-page" data-testid="system-config-management">
 <div class="w-grid">
     <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>统一配置中心</lang></h4>
-        </div>
-    </div>
-</div>
-
-<div class="w-grid">
-    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
@@ -1103,7 +1096,7 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                             empty-text="wscLocaleEmpty"
                             search-placeholder="wscLocalePlaceholder"
                             show-reference="false"
-                            on-change="wscOnLocaleChange"
+                            auto-submit="true"
                         />
                     </div>
                     <div class="wsc-filter-search">
@@ -1116,28 +1109,6 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                         </button>
                     </div>
                 </w:form>
-                <script>
-                    window.wscOnLocaleChange = (function () {
-                        var ready = false;
-                        window.setTimeout(function () {
-                            ready = true;
-                        }, 0);
-                        return function () {
-                            if (!ready) {
-                                return;
-                            }
-                            var f = document.getElementById('wsc-filter-form');
-                            if (!f) {
-                                return;
-                            }
-                            if (f.requestSubmit) {
-                                f.requestSubmit();
-                            } else {
-                                f.submit();
-                            }
-                        };
-                    })();
-                </script>
             </div>
         </div>
     </div>

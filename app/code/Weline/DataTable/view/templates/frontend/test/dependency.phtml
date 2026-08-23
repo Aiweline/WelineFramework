@@ -1,29 +1,22 @@
-<style>
-    .dt-demo-page{max-width:1280px;margin:0 auto;padding:24px 20px 64px}
-    .dt-demo-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
-    .dt-demo-note{padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #dfe7ef;margin-bottom:20px}
-    .dt-demo-layout{display:grid;grid-template-columns:minmax(320px,440px) minmax(0,1fr);gap:20px}
-    @media (max-width: 960px){.dt-demo-layout{grid-template-columns:1fr}}
-</style>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-checks-js']) ?>
 
-<?= $worker_bootstrap ?? '' ?>
-
-<div class="dt-demo-page" data-demo-page="<?= $page_key ?>" data-testid="dt-dependency-page">
-    <div class="dt-demo-top">
+<div class="w-container w-datatable-demo__main" data-w-datatable-demo="dependency" data-demo-page="<?= htmlspecialchars((string)$page_key, ENT_QUOTES, 'UTF-8') ?>" data-testid="dt-dependency-page">
+    <header class="w-datatable-demo__heading">
         <div>
-            <h1><?= $page_title ?></h1>
+            <p class="w-datatable-demo__eyebrow">DataTable</p>
+            <h1><?= htmlspecialchars((string)$page_title, ENT_QUOTES, 'UTF-8') ?></h1>
             <p><?= __('Dependency-ordered multi-model frontend create flow.') ?></p>
         </div>
-        <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
-    </div>
+        <a class="w-button" data-tone="neutral" href="<?= htmlspecialchars((string)$demo_links['index'], ENT_QUOTES, 'UTF-8') ?>"><w-icon name="arrow-left" size="sm"></w-icon><?= __('Back') ?></a>
+    </header>
 
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
-    <div class="dt-demo-note" data-testid="dt-dependency-note">
-        <?= __('This page uses the same alias dependency mapping as the transaction demo, but leaves transaction mode off so the ordering logic can be verified independently.') ?>
+    <div class="w-alert" data-tone="info" data-testid="dt-dependency-note">
+        <w-icon name="info" size="sm"></w-icon><span><?= __('This page uses the same alias dependency mapping as the transaction demo, but leaves transaction mode off so the ordering logic can be verified independently.') ?></span>
     </div>
 
-    <div class="dt-demo-layout">
+    <div class="w-datatable-demo__split">
         <section data-testid="dt-dependency-form-wrap" weline-code="datatable.test.dt_dependency_form_wrap">
             <w:d-form id="demo-dependency-form"
                       model="Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o"
@@ -37,18 +30,18 @@
                       show-trigger-button="false">
                 <fieldset id="u">
                     <legend><?= __('User') ?></legend>
-                    <div class="w-form-field" data-type="text">
-                        <label class="w-field-label" for="field-dependency-u-name">Name<span class="w-required-mark">*</span></label>
-                        <div class="w-field-control"><input id="field-dependency-u-name" name="u.name" type="text" class="w-form-control" required></div>
+                    <div class="w-field" data-type="text">
+                        <label class="w-field__label" for="field-dependency-u-name">Name<span class="w-datatable-form__required">*</span></label>
+                        <div class="w-field__control"><input id="field-dependency-u-name" name="u.name" type="text" class="w-input" required></div>
                     </div>
-                    <div class="w-form-field" data-type="email">
-                        <label class="w-field-label" for="field-dependency-u-email">Email<span class="w-required-mark">*</span></label>
-                        <div class="w-field-control"><input id="field-dependency-u-email" name="u.email" type="email" class="w-form-control" required></div>
+                    <div class="w-field" data-type="email">
+                        <label class="w-field__label" for="field-dependency-u-email">Email<span class="w-datatable-form__required">*</span></label>
+                        <div class="w-field__control"><input id="field-dependency-u-email" name="u.email" type="email" class="w-input" required></div>
                     </div>
-                    <div class="w-form-field" data-type="select">
-                        <label class="w-field-label" for="field-dependency-u-status">Status</label>
-                        <div class="w-field-control">
-                            <select id="field-dependency-u-status" name="u.status" class="w-form-control">
+                    <div class="w-field" data-type="select">
+                        <label class="w-field__label" for="field-dependency-u-status">Status</label>
+                        <div class="w-field__control">
+                            <select class="w-select" id="field-dependency-u-status" name="u.status">
                                 <option value="">Please select</option>
                                 <option value="1">Enabled</option>
                                 <option value="0">Disabled</option>
@@ -58,18 +51,18 @@
                 </fieldset>
                 <fieldset id="o">
                     <legend><?= __('Order') ?></legend>
-                    <div class="w-form-field" data-type="text">
-                        <label class="w-field-label" for="field-dependency-o-order-no">Order No<span class="w-required-mark">*</span></label>
-                        <div class="w-field-control"><input id="field-dependency-o-order-no" name="o.order_no" type="text" class="w-form-control" required></div>
+                    <div class="w-field" data-type="text">
+                        <label class="w-field__label" for="field-dependency-o-order-no">Order No<span class="w-datatable-form__required">*</span></label>
+                        <div class="w-field__control"><input id="field-dependency-o-order-no" name="o.order_no" type="text" class="w-input" required></div>
                     </div>
-                    <div class="w-form-field" data-type="number">
-                        <label class="w-field-label" for="field-dependency-o-final-amount">Final Amount<span class="w-required-mark">*</span></label>
-                        <div class="w-field-control"><input id="field-dependency-o-final-amount" name="o.final_amount" type="number" step="0.01" class="w-form-control" required></div>
+                    <div class="w-field" data-type="number">
+                        <label class="w-field__label" for="field-dependency-o-final-amount">Final Amount<span class="w-datatable-form__required">*</span></label>
+                        <div class="w-field__control"><input id="field-dependency-o-final-amount" name="o.final_amount" type="number" step="0.01" class="w-input" required></div>
                     </div>
-                    <div class="w-form-field" data-type="select">
-                        <label class="w-field-label" for="field-dependency-o-payment-status">Payment Status</label>
-                        <div class="w-field-control">
-                            <select id="field-dependency-o-payment-status" name="o.payment_status" class="w-form-control">
+                    <div class="w-field" data-type="select">
+                        <label class="w-field__label" for="field-dependency-o-payment-status">Payment Status</label>
+                        <div class="w-field__control">
+                            <select class="w-select" id="field-dependency-o-payment-status" name="o.payment_status">
                                 <option value="">Please select</option>
                                 <option value="0">Pending</option>
                                 <option value="1">Paid</option>
@@ -77,10 +70,10 @@
                             </select>
                         </div>
                     </div>
-                    <div class="w-form-field" data-type="select">
-                        <label class="w-field-label" for="field-dependency-o-order-status">Order Status</label>
-                        <div class="w-field-control">
-                            <select id="field-dependency-o-order-status" name="o.order_status" class="w-form-control">
+                    <div class="w-field" data-type="select">
+                        <label class="w-field__label" for="field-dependency-o-order-status">Order Status</label>
+                        <div class="w-field__control">
+                            <select class="w-select" id="field-dependency-o-order-status" name="o.order_status">
                                 <option value="">Please select</option>
                                 <option value="0">Pending</option>
                                 <option value="1">Confirmed</option>
@@ -104,16 +97,14 @@
                        page-size="6"
                        show-pagination="true"
                        allow-frontend="true">
-                <thead>
-                    <tr>
-                        <th data-field="u.id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="User ID">User ID</th>
-                        <th data-field="u.name" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="User Name">User Name</th>
-                        <th data-field="o.user_id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order User ID">Order User ID</th>
-                        <th data-field="o.order_no" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order No">Order No</th>
-                        <th data-field="o.final_amount" data-type="number" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Final Amount">Final Amount</th>
-                        <th data-field="o.payment_status" data-type="select" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Payment Status">Payment Status</th>
-                    </tr>
-                </thead>
+                <w:t-header>
+                    <w:field belong="t-header" name="u.id" type="text" sortable="true" searchable="true">User ID</w:field>
+                    <w:field belong="t-header" name="u.name" type="text" sortable="true" searchable="true">User Name</w:field>
+                    <w:field belong="t-header" name="o.user_id" type="text" sortable="true" searchable="true">Order User ID</w:field>
+                    <w:field belong="t-header" name="o.order_no" type="text" sortable="true" searchable="true">Order No</w:field>
+                    <w:field belong="t-header" name="o.final_amount" type="number" sortable="true" searchable="true">Final Amount</w:field>
+                    <w:field belong="t-header" name="o.payment_status" type="select" sortable="true" searchable="true">Payment Status</w:field>
+                </w:t-header>
             </w:d-table>
         </section>
     </div>

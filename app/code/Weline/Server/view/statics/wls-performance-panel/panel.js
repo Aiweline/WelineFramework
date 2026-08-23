@@ -1,10 +1,10 @@
 
 (function(g){
-  g.bqAdmin=g.bqAdmin||{};
-  if(g.__bqAdmin_server_http){
+  if(g.__welineServerAdminRequestHttp){
     return;
   }
-  g.bqAdmin['server']=function(url, options){
+  var W = g.Weline = g.Weline || {};
+  W.serverAdminRequest = function(url, options){
     options=options||{};
     var urlStr=String(url||'');
     // Real HTTP endpoints (WLS health probe + Test\WlsPerformancePanel routes).
@@ -22,27 +22,12 @@
       }
       return fetch(urlStr, fetchOpts);
     }
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('server').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
+    if(typeof W.adminRequest === 'function'){
+      return W.adminRequest('server', url, options);
+    }
+    return Promise.reject(new Error('Weline.adminRequest unavailable'));
   };
-  g.__bqAdmin_server=true;
-  g.__bqAdmin_server_http=true;
+  g.__welineServerAdminRequestHttp=true;
 })(typeof window!=='undefined'?window:globalThis);
 (function (window, document) {
   "use strict";
@@ -296,7 +281,11 @@
         "X-WLS-FPC-Bypass": "1"
       }
     };
-    var bridge = window.bqAdmin && window.bqAdmin['server'];
+    var bridge = (window.Weline && typeof window.Weline.serverAdminRequest === 'function')
+      ? window.Weline.serverAdminRequest
+      : (window.Weline && typeof window.Weline.adminRequest === 'function'
+        ? function(url, options){ return window.Weline.adminRequest('server', url, options); }
+        : null);
     if (!bridge) {
       return Promise.reject(new Error("WLS 面板 bin-query 桥接不可用。"));
     }

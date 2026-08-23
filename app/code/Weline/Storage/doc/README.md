@@ -48,8 +48,12 @@
 
 ## 维护规则
 
-- 跨模块只通过 `StorageCatalogInterface` 获取数据化存储源清单；`StorageManager` 和驱动实例不跨模块暴露。
+- 跨模块通过 `StorageCatalogInterface` 获取数据化存储源清单；通过
+  `StorageDirectoryManagerInterface` 执行经过路径校验的目录/文件管理命令。
+  `StorageManager`、驱动实例和凭据不跨模块暴露。
 - `StorageCatalog::all(?ScopeIdentity $scope)`：目录 `info` 脱敏（去掉 credentials/secret 等）；传入 Scope 时附加 COW `media_base_url`（软依赖 `Weline_Cdn`）。
+- `StorageDirectoryManager`：只接受存储源名称和相对路径，提供 capability、list、makeDirectory、move、delete；拒绝根目录变更、路径穿越和覆盖式重命名。
+- OSS/S3 的空目录以目录标记对象表示；整目录重命名先完成目标复制再清理源，清理失败时保留目标副本以便恢复。
 - 凭据密封全局约定：`app/code/Weline/Framework/doc/3-开发/secret_ref凭据密封.md`。
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。

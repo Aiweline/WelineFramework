@@ -58,7 +58,7 @@ class MetaConfig extends AbstractModel
     public const schema_fields_NAMESPACE = 'namespace';
     #[Col('varchar', 255, nullable: false, comment: '配置键')]
     public const schema_fields_CONFIG_KEY = 'config_key';
-    #[Col('varchar', 255, nullable: false, comment: '配置值')]
+    #[Col('text', nullable: false, comment: '配置值')]
     public const schema_fields_CONFIG_VALUE = 'config_value';
     #[Col('varchar', 100, default: 'default', comment: '作用域')]
     public const schema_fields_SCOPE = 'scope';

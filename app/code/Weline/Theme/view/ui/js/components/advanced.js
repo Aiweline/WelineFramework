@@ -10,13 +10,18 @@ export function register(UI) {
         if (!(input instanceof HTMLInputElement) || !(panel instanceof HTMLElement)) return {};
         const portal = floating.portal(panel, 'combobox');
         const options = () => [...panel.querySelectorAll('[role="option"]')].filter((option) => !option.hidden);
-        const close = (reason = 'api') => {
-            if (panel.hidden) return false;
+        const close = (reason = 'api', force = false) => {
+            if (panel.hidden || (!force && !emit('before-close', {reason}, true))) return false;
             panel.hidden = true;
+            panel.dataset.state = 'closed';
+            panel.setAttribute('aria-hidden', 'true');
             input.setAttribute('aria-expanded', 'false');
+            element.dataset.state = 'closed';
             monitor.unobserve(panel);
+            monitor.reset();
             floating.clear(panel);
             portal.restore();
+            emit('close', {reason}, false);
             return true;
         };
         const monitor = floating.monitor(
@@ -26,15 +31,19 @@ export function register(UI) {
             () => close('anchor-hidden'),
         );
         const open = () => {
-            if (!panel.hidden) return false;
+            if (!panel.hidden || !emit('before-open', {}, true)) return false;
             portal.mount();
             panel.hidden = false;
+            panel.dataset.state = 'open';
+            panel.setAttribute('aria-hidden', 'false');
             input.setAttribute('aria-expanded', 'true');
+            element.dataset.state = 'open';
             monitor.observe(panel);
             if (monitor.place()?.anchorVisible === false) {
-                close('anchor-hidden');
+                close('anchor-hidden', true);
                 return false;
             }
+            emit('open', {}, false);
             return true;
         };
         const choose = (option) => {
@@ -55,7 +64,12 @@ export function register(UI) {
         listen(input, 'keydown', (event) => {
             const visible = options();
             const active = visible.findIndex((option) => option.dataset.state === 'active');
-            if (event.key === 'Escape') close('escape');
+            if (event.key === 'Escape' && !panel.hidden && portal.isTopmost()) {
+                event.preventDefault();
+                event.stopPropagation();
+                close('escape');
+                return;
+            }
             if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && visible.length > 0) {
                 event.preventDefault();
                 open();
@@ -78,13 +92,20 @@ export function register(UI) {
         listen(document, 'pointerdown', (event) => {
             if (!element.contains(event.target) && !portal.contains(event.target)) close('outside');
         });
+        listen(window, 'pagehide', () => close('pagehide', true));
+        listen(window, 'pageshow', () => close('pageshow', true));
+        panel.hidden = true;
+        panel.dataset.state = 'closed';
+        panel.setAttribute('aria-hidden', 'true');
+        input.setAttribute('aria-expanded', 'false');
+        element.dataset.state = 'closed';
         return {
             open,
             close,
             choose,
             element,
             destroy: () => {
-                close('unmount');
+                close('unmount', true);
                 monitor.destroy();
                 portal.destroy();
             },
@@ -110,6 +131,215 @@ export function register(UI) {
             if (event.key === 'ArrowLeft' && item.getAttribute('aria-expanded') === 'true') item.querySelector('[data-w-tree-toggle]')?.click();
         });
         return {element};
+    });
+
+    UI.define('reorder-list', ({ element, listen, emit }) => {
+        const itemSelector = '[data-w-reorder-item]';
+        const handleSelector = '[data-w-reorder-handle]';
+        const liveRegion = document.createElement('span');
+        let pointerSession = null;
+
+        liveRegion.className = 'w-visually-hidden';
+        liveRegion.setAttribute('aria-live', 'polite');
+        liveRegion.setAttribute('aria-atomic', 'true');
+        element.append(liveRegion);
+        if (!element.hasAttribute('role')) element.setAttribute('role', 'list');
+
+        const items = () => [...element.children]
+            .filter((child) => child instanceof HTMLElement && child.matches(itemSelector));
+        const disabled = () => element.dataset.wReorderDisabled === 'true';
+        const handleFor = (item) => item?.querySelector(handleSelector) || null;
+        const resolveItem = (target) => {
+            const handle = target instanceof Element ? target.closest(handleSelector) : null;
+            const item = handle?.closest(itemSelector);
+            return handle && item?.parentElement === element ? {handle, item} : null;
+        };
+        const refresh = () => {
+            const ordered = items();
+            const total = ordered.length;
+            ordered.forEach((item, index) => {
+                if (!item.hasAttribute('role')) item.setAttribute('role', 'listitem');
+                item.dataset.index = String(index);
+                item.setAttribute('aria-posinset', String(index + 1));
+                item.setAttribute('aria-setsize', String(total));
+                const handle = handleFor(item);
+                if (!(handle instanceof HTMLElement)) return;
+                if (!(handle instanceof HTMLButtonElement)) {
+                    handle.setAttribute('role', 'button');
+                    handle.tabIndex = 0;
+                }
+                handle.setAttribute('aria-keyshortcuts', element.dataset.wReorderAxis === 'horizontal'
+                    ? 'ArrowLeft ArrowRight Home End'
+                    : 'ArrowUp ArrowDown Home End');
+                handle.setAttribute('aria-disabled', String(disabled()));
+                handle.setAttribute('draggable', 'false');
+            });
+            return ordered;
+        };
+        const announce = (position, total) => {
+            const template = element.dataset.wReorderAnnouncement || 'Moved to position {position} of {total}';
+            liveRegion.textContent = template
+                .replace('{position}', String(position))
+                .replace('{total}', String(total));
+        };
+        const placeAt = (item, targetIndex) => {
+            const ordered = items();
+            const oldIndex = ordered.indexOf(item);
+            const numericTarget = Number(targetIndex);
+            if (!Number.isFinite(numericTarget)) return false;
+            const nextIndex = Math.max(0, Math.min(ordered.length - 1, Math.trunc(numericTarget)));
+            if (oldIndex < 0 || oldIndex === nextIndex) return false;
+            if (nextIndex < oldIndex) {
+                element.insertBefore(item, ordered[nextIndex]);
+            } else {
+                element.insertBefore(item, ordered[nextIndex].nextSibling);
+            }
+            return true;
+        };
+        const commit = (item, oldIndex, reason) => {
+            const ordered = refresh();
+            const newIndex = ordered.indexOf(item);
+            if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return false;
+            const handle = handleFor(item);
+            handle?.focus({preventScroll: true});
+            announce(newIndex + 1, ordered.length);
+            emit('change', {item, oldIndex, newIndex, order: ordered, reason}, false);
+            return true;
+        };
+        const move = (item, targetIndex, reason = 'api') => {
+            if (!(item instanceof HTMLElement) || item.parentElement !== element || disabled()) return false;
+            const oldIndex = items().indexOf(item);
+            if (!placeAt(item, targetIndex)) {
+                handleFor(item)?.focus({preventScroll: true});
+                return false;
+            }
+            return commit(item, oldIndex, reason);
+        };
+        const pointerTargetIndex = (event, item) => {
+            const horizontal = element.dataset.wReorderAxis === 'horizontal';
+            const coordinate = horizontal ? event.clientX : event.clientY;
+            const candidates = items().filter((candidate) => candidate !== item);
+            let position = candidates.length;
+            candidates.some((candidate, index) => {
+                const rect = candidate.getBoundingClientRect();
+                const midpoint = horizontal
+                    ? rect.left + (rect.width / 2)
+                    : rect.top + (rect.height / 2);
+                if (coordinate >= midpoint) return false;
+                position = index;
+                return true;
+            });
+            return position;
+        };
+        const autoScroll = (event) => {
+            const rect = element.getBoundingClientRect();
+            const edge = 32;
+            const horizontal = element.dataset.wReorderAxis === 'horizontal';
+            let delta = 0;
+            if (horizontal && event.clientX < rect.left + edge) delta = -16;
+            if (horizontal && event.clientX > rect.right - edge) delta = 16;
+            if (!horizontal && event.clientY < rect.top + edge) delta = -16;
+            if (!horizontal && event.clientY > rect.bottom - edge) delta = 16;
+            if (delta === 0) return;
+            if (typeof element.scrollBy === 'function') {
+                element.scrollBy(horizontal ? {left: delta} : {top: delta});
+            } else if (horizontal) {
+                element.scrollLeft += delta;
+            } else {
+                element.scrollTop += delta;
+            }
+        };
+        const finishPointer = (cancelled = false) => {
+            if (!pointerSession) return false;
+            const session = pointerSession;
+            pointerSession = null;
+            if (cancelled && session.item.isConnected) placeAt(session.item, session.oldIndex);
+            session.item.removeAttribute('data-state');
+            session.handle.removeAttribute('data-state');
+            element.removeAttribute('data-state');
+            try {
+                if (session.handle.hasPointerCapture?.(session.pointerId)) {
+                    session.handle.releasePointerCapture(session.pointerId);
+                }
+            } catch (_error) {
+                // The browser may release pointer capture before pointercancel/pagehide.
+            }
+            refresh();
+            if (cancelled) {
+                session.handle.focus({preventScroll: true});
+                return false;
+            }
+            return commit(session.item, session.oldIndex, 'pointer');
+        };
+
+        listen(element, 'keydown', (event) => {
+            if (event.key === 'Escape' && pointerSession) {
+                event.preventDefault();
+                finishPointer(true);
+                return;
+            }
+            const resolved = resolveItem(event.target);
+            if (!resolved || disabled()) return;
+            const ordered = items();
+            const currentIndex = ordered.indexOf(resolved.item);
+            const horizontal = element.dataset.wReorderAxis === 'horizontal';
+            let targetIndex = currentIndex;
+            if (event.key === 'Home') targetIndex = 0;
+            else if (event.key === 'End') targetIndex = ordered.length - 1;
+            else if ((!horizontal && event.key === 'ArrowUp') || (horizontal && event.key === 'ArrowLeft')) targetIndex--;
+            else if ((!horizontal && event.key === 'ArrowDown') || (horizontal && event.key === 'ArrowRight')) targetIndex++;
+            else return;
+            event.preventDefault();
+            move(resolved.item, targetIndex, 'keyboard');
+        });
+        listen(element, 'pointerdown', (event) => {
+            const resolved = resolveItem(event.target);
+            if (pointerSession || !resolved || disabled() || event.button !== 0 || event.isPrimary === false) return;
+            event.preventDefault();
+            resolved.handle.focus({preventScroll: true});
+            pointerSession = {
+                item: resolved.item,
+                handle: resolved.handle,
+                oldIndex: items().indexOf(resolved.item),
+                pointerId: event.pointerId,
+            };
+            resolved.item.dataset.state = 'dragging';
+            resolved.handle.dataset.state = 'dragging';
+            element.dataset.state = 'dragging';
+            try {
+                resolved.handle.setPointerCapture?.(event.pointerId);
+            } catch (_error) {
+                // Pointer capture is an enhancement; delegated events still preserve reordering.
+            }
+        });
+        listen(element, 'pointermove', (event) => {
+            if (!pointerSession || pointerSession.pointerId !== event.pointerId) return;
+            event.preventDefault();
+            autoScroll(event);
+            placeAt(pointerSession.item, pointerTargetIndex(event, pointerSession.item));
+        });
+        listen(element, 'pointerup', (event) => {
+            if (pointerSession?.pointerId === event.pointerId) finishPointer(false);
+        });
+        listen(element, 'pointercancel', (event) => {
+            if (pointerSession?.pointerId === event.pointerId) finishPointer(true);
+        });
+        listen(window, 'blur', () => finishPointer(true));
+        listen(window, 'pagehide', () => finishPointer(true));
+
+        const observer = new MutationObserver(() => refresh());
+        observer.observe(element, {childList: true, attributes: true, attributeFilter: ['data-w-reorder-disabled']});
+        refresh();
+        return {
+            move,
+            refresh,
+            element,
+            destroy: () => {
+                finishPointer(true);
+                observer.disconnect();
+                liveRegion.remove();
+            },
+        };
     });
 
     UI.define('dependent-field', ({ element, listen, emit }) => {
@@ -225,7 +455,7 @@ export function register(UI) {
         return {move, element};
     });
 
-    UI.define('icon-picker', ({ element, listen, floating, emit }) => {
+    UI.define('icon-picker', ({ element, listen, floating, emit, UI: componentUI }) => {
         const input = element.querySelector('[data-w-icon-input]');
         const trigger = element.querySelector('[data-w-icon-trigger]');
         const panel = element.querySelector('[data-w-icon-panel]');
@@ -233,65 +463,99 @@ export function register(UI) {
         const preview = element.querySelector('[data-w-icon-preview]');
         const text = element.querySelector('[data-w-icon-text]');
         const empty = element.querySelector('[data-w-icon-empty]');
+        const clear = element.querySelector('[data-w-icon-clear]');
+        const custom = panel?.querySelector('[data-w-icon-custom]');
         if (!(input instanceof HTMLInputElement)
             || !(trigger instanceof HTMLElement)
             || !(panel instanceof HTMLElement)
             || !(preview instanceof HTMLElement)) return {};
         const portal = floating.portal(panel, 'icon-picker');
         const options = [...element.querySelectorAll('[data-w-icon-value]')];
+        const normalize = (value) => {
+            const name = String(value || '').trim().toLowerCase();
+            return /^[a-z][a-z0-9-]{0,63}$/.test(name) && !/^(?:mdi|fa[brs]?|ri)-/.test(name)
+                ? name
+                : '';
+        };
         const sync = () => {
-            const selected = options.find((option) => option.dataset.wIconValue === input.value);
+            const value = normalize(input.value);
+            if (input.value !== value) input.value = value;
+            const selected = options.find((option) => option.dataset.wIconValue === value);
             options.forEach((option) => option.setAttribute('aria-selected', String(option === selected)));
             preview.replaceChildren();
-            if (selected) {
-                const icon = selected.querySelector('.w-icon')?.cloneNode(true);
-                if (icon) preview.append(icon);
-            }
-            if (text) text.textContent = input.value;
+            if (value !== '') preview.append(componentUI.icon.create(value, {size: 'sm'}));
+            if (text) text.textContent = value || element.dataset.wEmptyLabel || '';
+            if (clear instanceof HTMLElement) clear.hidden = value === '';
+            if (custom instanceof HTMLInputElement && document.activeElement !== custom) custom.value = value;
         };
-        const close = () => {
+        const close = (reason = 'api', restoreFocus = false, force = false) => {
             if (panel.hidden) return false;
+            if (!force && !emit('before-close', {reason}, true)) return false;
             panel.hidden = true;
             panel.dataset.state = 'closed';
+            panel.setAttribute('aria-hidden', 'true');
             trigger.setAttribute('aria-expanded', 'false');
+            element.dataset.state = 'closed';
             monitor.unobserve(panel);
+            monitor.reset();
             floating.clear(panel);
             portal.restore();
+            if (restoreFocus && trigger.isConnected) trigger.focus({preventScroll: true});
+            emit('close', {reason}, false);
             return true;
         };
         const monitor = floating.monitor(
             trigger,
             () => panel,
             () => element.dataset.wPlacement || 'bottom-start',
-            () => close(),
+            () => close('anchor-hidden', false, true),
         );
-        const open = () => {
-            if (!panel.hidden) return false;
+        const open = (event = null) => {
+            if (!panel.hidden || !emit('before-open', {}, true)) return false;
             portal.mount();
             panel.hidden = false;
             panel.dataset.state = 'open';
+            panel.setAttribute('aria-hidden', 'false');
             trigger.setAttribute('aria-expanded', 'true');
+            element.dataset.state = 'open';
             monitor.observe(panel);
-            if (monitor.place()?.anchorVisible === false) {
-                close();
+            const reference = floating.capture(trigger, event, 'element');
+            if (monitor.place(reference)?.anchorVisible === false) {
+                close('anchor-hidden', false, true);
                 return false;
             }
             search?.focus();
+            emit('open', {}, false);
             return true;
         };
-        const choose = (value) => {
-            input.value = value;
+        const choose = (value, restoreFocus = false) => {
+            const normalized = value === '' ? '' : normalize(value);
+            if (value !== '' && normalized === '') return false;
+            input.value = normalized;
             sync();
             input.dispatchEvent(new Event('change', {bubbles: true}));
-            emit('change', {value}, false);
-            close();
+            emit('change', {value: normalized}, false);
+            close('select', restoreFocus);
+            return true;
         };
-        listen(trigger, 'click', () => panel.hidden ? open() : close());
+        const applyCustom = () => {
+            if (!(custom instanceof HTMLInputElement)) return false;
+            const value = normalize(custom.value);
+            const valid = custom.value.trim() === '' || value !== '';
+            custom.setAttribute('aria-invalid', String(!valid));
+            if (!valid) {
+                custom.focus();
+                return false;
+            }
+            return choose(value, true);
+        };
+        listen(trigger, 'click', (event) => panel.hidden ? open(event) : close('toggle'));
         const onPick = (event) => {
             const target = event.target instanceof Element ? event.target : null;
             const option = target?.closest('[data-w-icon-value]');
-            if (option) choose(option.dataset.wIconValue || '');
-            if (target?.closest('[data-w-icon-clear]')) choose('');
+            if (option) choose(option.dataset.wIconValue || '', event.detail === 0);
+            if (target?.closest('[data-w-icon-clear]')) choose('', event.detail === 0);
+            if (target?.closest('[data-w-icon-apply]')) applyCustom();
         };
         listen(element, 'click', onPick);
         listen(panel, 'click', onPick);
@@ -305,15 +569,34 @@ export function register(UI) {
             if (empty) empty.hidden = visible !== 0;
             if (!panel.hidden) monitor.place();
         });
-        listen(element, 'keydown', (event) => {
-            if (event.key === 'Escape') {
-                close();
-                trigger.focus();
+        if (custom instanceof HTMLInputElement) {
+            listen(custom, 'input', () => custom.removeAttribute('aria-invalid'));
+            listen(custom, 'keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyCustom();
+                }
+            });
+        }
+        const onKeydown = (event) => {
+            if (event.key === 'Escape' && !panel.hidden && portal.isTopmost()) {
+                event.preventDefault();
+                event.stopPropagation();
+                close('escape', true);
             }
-        });
+        };
+        listen(element, 'keydown', onKeydown);
+        listen(panel, 'keydown', onKeydown);
         listen(document, 'pointerdown', (event) => {
-            if (!element.contains(event.target) && !portal.contains(event.target)) close();
+            if (!element.contains(event.target) && !portal.contains(event.target)) close('outside');
         });
+        listen(window, 'pagehide', () => close('pagehide', false, true));
+        listen(window, 'pageshow', () => close('pageshow', false, true));
+        panel.hidden = true;
+        panel.dataset.state = 'closed';
+        panel.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
+        element.dataset.state = 'closed';
         sync();
         return {
             open,
@@ -321,7 +604,7 @@ export function register(UI) {
             choose,
             element,
             destroy: () => {
-                close();
+                close('unmount', false, true);
                 monitor.destroy();
                 portal.destroy();
             },

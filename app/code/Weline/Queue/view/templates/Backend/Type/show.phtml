@@ -1,254 +1,76 @@
 <?php
 /**
- * 队列类型详情页面
+ * Native Weline UI Queue type detail.
+ *
  * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Queue\Model\Queue\Type $type
  */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$typeId = (int)$type->getData('type_id');
+$name = (string)$type->getData('name');
+$module = (string)$type->getData('module_name');
+$class = (string)$type->getData('class');
+$tip = trim((string)$type->getData('tip'));
+$enabled = (int)$type->getData('enable') === 1;
 ?>
-<style>
-.weline-queue-type-detail {
-    background: var(--backend-color-card-bg, #fff);
-}
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-admin.css)">
 
-.weline-queue-type-detail-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding-bottom: var(--backend-spacing-md, 16px);
-    margin-bottom: var(--backend-spacing-md, 16px);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-queue-type-detail-icon {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    color: var(--backend-color-primary, #556ee6);
-    border-radius: var(--backend-border-radius-md, 8px);
-    font-size: 1.5rem;
-}
-
-.weline-queue-type-detail-title {
-    flex: 1;
-}
-
-.weline-queue-type-detail-title h4 {
-    margin: 0 0 4px 0;
-    color: var(--backend-color-text-primary, #212529);
-    font-size: 1.25rem;
-    font-weight: 600;
-}
-
-.weline-queue-type-detail-title p {
-    margin: 0;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.875rem;
-}
-
-.weline-queue-type-detail-info {
-    display: grid;
-    gap: var(--backend-spacing-md, 16px);
-}
-
-.weline-queue-type-detail-row {
-    display: flex;
-    flex-wrap: wrap;
-    padding: var(--backend-spacing-sm, 12px) 0;
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-queue-type-detail-row:last-child {
-    border-bottom: none;
-}
-
-.weline-queue-type-detail-label {
-    flex: 0 0 140px;
-    font-weight: 500;
-    color: var(--backend-color-text-secondary, #6c757d);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.weline-queue-type-detail-label i {
-    font-size: 1rem;
-    opacity: 0.7;
-}
-
-.weline-queue-type-detail-value {
-    flex: 1;
-    color: var(--backend-color-text-primary, #212529);
-    word-break: break-all;
-}
-
-.weline-queue-type-detail-code {
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.875rem;
-    padding: 8px 12px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-radius: var(--backend-border-radius, 6px);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-queue-type-detail-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: var(--backend-border-radius-pill, 50rem);
-    font-weight: 500;
-}
-
-.weline-queue-type-detail-status--enabled {
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
-}
-
-.weline-queue-type-detail-status--disabled {
-    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
-    color: var(--backend-color-danger, #f46a6a);
-}
-
-.weline-queue-type-detail-tip {
-    padding: var(--backend-spacing-md, 16px);
-    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
-    border-radius: var(--backend-border-radius-md, 8px);
-    border-left: 4px solid var(--backend-color-info, #50a5f1);
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.weline-queue-type-detail-tip-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: var(--backend-color-info, #50a5f1);
-}
-
-.weline-queue-type-detail-module {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    color: var(--backend-color-primary, #556ee6);
-    border-radius: var(--backend-border-radius-sm, 4px);
-    font-size: 0.875rem;
-}
-</style>
-
-<!-- start page message -->
-<div class="w-grid">
+<main class="w-queue-detail w-stack" data-testid="queue-type-detail">
     <template>Weline_Component::message.phtml</template>
-</div>
-<!-- end message -->
 
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-card weline-queue-type-detail">
-            <div class="w-card__body">
-                <!-- Header -->
-                <div class="weline-queue-type-detail-header">
-                    <div class="weline-queue-type-detail-icon">
-                        <w:icon name="settings" size="sm"></w:icon>
-                    </div>
-                    <div class="weline-queue-type-detail-title">
-                        <h4>{{type.name}}</h4>
-                        <p><lang>队列类型详细信息</lang></p>
-                    </div>
-                    <if condition="type.enable == 1">
-                        <span class="weline-queue-type-detail-status weline-queue-type-detail-status--enabled">
-                            <w:icon name="check" size="sm"></w:icon>
-                            <lang>已启用</lang>
-                        </span>
-                    <else/>
-                        <span class="weline-queue-type-detail-status weline-queue-type-detail-status--disabled">
-                            <w:icon name="close" size="sm"></w:icon>
-                            <lang>已禁用</lang>
-                        </span>
-                    </if>
+    <section class="w-card">
+        <div class="w-card__body w-stack">
+            <header class="w-queue-detail__header">
+                <span class="w-queue-detail__icon" data-tone="<?= $enabled ? 'success' : 'danger' ?>" aria-hidden="true">
+                    <w:icon name="settings" size="lg" />
+                </span>
+                <div class="w-queue-detail__title">
+                    <h1><?= $escape($name !== '' ? $name : __('未命名队列类型')) ?></h1>
+                    <span class="w-text" data-tone="muted"><?= $escape(__('队列消费者类型详细信息')) ?></span>
                 </div>
-                
-                <!-- Info Grid -->
-                <div class="weline-queue-type-detail-info">
-                    <div class="weline-queue-type-detail-row">
-                        <div class="weline-queue-type-detail-label">
-                            <w:icon name="tag" size="sm"></w:icon>
-                            <lang>类型 ID</lang>
-                        </div>
-                        <div class="weline-queue-type-detail-value">
-                            <strong>{{type.type_id}}</strong>
-                        </div>
+                <span class="w-badge" data-tone="<?= $enabled ? 'success' : 'danger' ?>">
+                    <?php if ($enabled): ?><w:icon name="check" size="xs" /><?php else: ?><w:icon name="close" size="xs" /><?php endif; ?>
+                    <?= $escape($enabled ? __('已启用') : __('已禁用')) ?>
+                </span>
+            </header>
+
+            <section class="w-queue-detail__section" aria-labelledby="queue-type-basic-heading">
+                <h2 class="w-queue-detail__section-title" id="queue-type-basic-heading">
+                    <w:icon name="info" size="sm" /> <?= $escape(__('基本信息')) ?>
+                </h2>
+                <dl class="w-queue-detail__grid">
+                    <div class="w-queue-detail__item">
+                        <dt class="w-queue-detail__label"><w:icon name="tag" size="xs" /><?= $escape(__('类型 ID')) ?></dt>
+                        <dd class="w-queue-detail__value"><strong>#<?= $typeId ?></strong></dd>
                     </div>
-                    
-                    <div class="weline-queue-type-detail-row">
-                        <div class="weline-queue-type-detail-label">
-                            <w:icon name="refresh" size="sm"></w:icon>
-                            <lang>类型名称</lang>
-                        </div>
-                        <div class="weline-queue-type-detail-value">
-                            <strong>{{type.name}}</strong>
-                        </div>
+                    <div class="w-queue-detail__item">
+                        <dt class="w-queue-detail__label"><w:icon name="puzzle" size="xs" /><?= $escape(__('所属模块')) ?></dt>
+                        <dd class="w-queue-detail__value"><span class="w-badge" data-tone="info"><?= $escape($module !== '' ? $module : '—') ?></span></dd>
                     </div>
-                    
-                    <div class="weline-queue-type-detail-row">
-                        <div class="weline-queue-type-detail-label">
-                            <w:icon name="close" size="sm"></w:icon>
-                            <lang>所属模块</lang>
-                        </div>
-                        <div class="weline-queue-type-detail-value">
-                            <span class="weline-queue-type-detail-module">
-                                <w:icon name="puzzle" size="sm"></w:icon>
-                                {{type.module_name}}
-                            </span>
-                        </div>
+                    <div class="w-queue-detail__item" data-wide="true">
+                        <dt class="w-queue-detail__label"><w:icon name="code" size="xs" /><?= $escape(__('执行类')) ?></dt>
+                        <dd class="w-queue-detail__value"><code class="w-queue-detail__code"><?= $escape($class !== '' ? $class : '—') ?></code></dd>
                     </div>
-                    
-                    <div class="weline-queue-type-detail-row">
-                        <div class="weline-queue-type-detail-label">
-                            <w:icon name="code" size="sm"></w:icon>
-                            <lang>执行类</lang>
-                        </div>
-                        <div class="weline-queue-type-detail-value">
-                            <div class="weline-queue-type-detail-code">{{type.class}}</div>
-                        </div>
+                    <div class="w-queue-detail__item">
+                        <dt class="w-queue-detail__label"><w:icon name="calendar" size="xs" /><?= $escape(__('创建时间')) ?></dt>
+                        <dd class="w-queue-detail__value"><?= $escape($type->getData('create_time') ?: '—') ?></dd>
                     </div>
-                    
-                    <div class="weline-queue-type-detail-row">
-                        <div class="weline-queue-type-detail-label">
-                            <w:icon name="clock" size="sm"></w:icon>
-                            <lang>创建时间</lang>
-                        </div>
-                        <div class="weline-queue-type-detail-value">
-                            {{type.create_time}}
-                        </div>
+                    <div class="w-queue-detail__item">
+                        <dt class="w-queue-detail__label"><w:icon name="refresh" size="xs" /><?= $escape(__('更新时间')) ?></dt>
+                        <dd class="w-queue-detail__value"><?= $escape($type->getData('update_time') ?: '—') ?></dd>
                     </div>
-                    
-                    <div class="weline-queue-type-detail-row">
-                        <div class="weline-queue-type-detail-label">
-                            <w:icon name="refresh" size="sm"></w:icon>
-                            <lang>更新时间</lang>
-                        </div>
-                        <div class="weline-queue-type-detail-value">
-                            {{type.update_time}}
-                        </div>
+                </dl>
+            </section>
+
+            <?php if ($tip !== ''): ?>
+                <aside class="w-alert" data-tone="info">
+                    <w:icon name="info" size="sm" />
+                    <div class="w-alert__content">
+                        <strong><?= $escape(__('执行注意事项')) ?></strong>
+                        <p><?= $escape($tip) ?></p>
                     </div>
-                </div>
-                
-                <!-- Tip Section -->
-                <notempty name="type.tip">
-                    <div class="weline-queue-type-detail-tip" style="--w-mt:var(--weline-space-6);">
-                        <div class="weline-queue-type-detail-tip-title">
-                            <w:icon name="info" size="sm"></w:icon>
-                            <lang>执行注意事项</lang>
-                        </div>
-                        <div>{{type.tip}}</div>
-                    </div>
-                </notempty>
-            </div>
+                </aside>
+            <?php endif; ?>
         </div>
-    </div>
-</div>
+    </section>
+</main>

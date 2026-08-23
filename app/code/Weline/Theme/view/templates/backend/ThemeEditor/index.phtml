@@ -1,285 +1,808 @@
 <?php
 /**
- * Weline UI 2.0 theme workbench.
+ * 主题可视化编辑器
  *
  * @var \Weline\Framework\View\Template $this
+ * @var int $theme_id
+ * @var string $page_type
  */
 
-$themeId = max(0, (int)($this->getData('theme_id') ?: 0));
-$themes = is_array($this->getData('themes')) ? $this->getData('themes') : [];
-$pageType = (string)($this->getData('page_type') ?: 'homepage');
-$pageTypes = is_array($this->getData('page_types')) ? $this->getData('page_types') : [];
-$layoutOption = (string)($this->getData('layout_option') ?: 'default');
-$layoutOptionsByType = is_array($this->getData('layout_options_by_type'))
-    ? $this->getData('layout_options_by_type')
-    : [];
-$currentLayoutOptions = is_array($layoutOptionsByType[$pageType] ?? null)
-    ? $layoutOptionsByType[$pageType]
-    : [];
-if ($currentLayoutOptions === []) {
-    $currentLayoutOptions[] = [
-        'value' => $layoutOption,
-        'label' => $layoutOption === 'default' ? (string)__('默认') : $layoutOption,
-    ];
-}
-$installedLocales = is_array($this->getData('installed_locales'))
-    ? $this->getData('installed_locales')
-    : [];
-$editorArea = (string)($this->getData('editor_area') ?: 'frontend');
-$editorArea = $editorArea === 'backend' ? 'backend' : 'frontend';
-$themeHasBackend = (bool)$this->getData('theme_has_backend');
-$previewContext = is_array($this->getData('preview_context')) ? $this->getData('preview_context') : [];
-$previewStatus = (string)($previewContext['status'] ?? 'draft');
-$layoutLock = is_array($this->getData('layout_editor_lock'))
-    ? $this->getData('layout_editor_lock')
-    : ['enabled' => false];
-$editorLocked = !empty($layoutLock['enabled']);
-$layoutIdentity = is_array($this->getData('layout_identity')) ? $this->getData('layout_identity') : [];
-$scope = (string)($layoutIdentity['scope'] ?? $previewContext['scope'] ?? 'default');
-$targetType = (string)($layoutIdentity['target_type'] ?? 'global');
-$targetId = max(0, (int)($layoutIdentity['target_id'] ?? 0));
-$frontendThemeId = max(0, (int)($this->getData('frontend_theme_id') ?: ($editorArea === 'frontend' ? $themeId : 0)));
-$backendThemeId = max(0, (int)($this->getData('backend_theme_id') ?: ($editorArea === 'backend' ? $themeId : 0)));
-$defaultLocale = \Weline\Framework\App\Env::default_LANGUAGE_CODE;
-$selectedLocale = trim((string)$this->request->getParam('locale', ''));
-$jsonFlags = JSON_UNESCAPED_UNICODE
+$theme_id = (int)($this->getData('theme_id') ?: 0);
+$page_type = $this->getData('page_type') ?: 'homepage';
+$layout_option = (string)($this->getData('layout_option') ?: 'default');
+$layout_options_by_type = $this->getData('layout_options_by_type') ?: [];
+$installed_locales = $this->getData('installed_locales') ?: [];
+$installed_locales = is_array($installed_locales) ? $installed_locales : [];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
     | JSON_HEX_AMP
     | JSON_HEX_APOS
     | JSON_HEX_QUOT
     | JSON_INVALID_UTF8_SUBSTITUTE;
-$layoutOptionsJson = json_encode($layoutOptionsByType, $jsonFlags) ?: '{}';
-
-$previewParams = [
-    'theme_id' => $themeId,
-    'frontend_theme_id' => $frontendThemeId,
-    'backend_theme_id' => $backendThemeId,
-    'page_type' => $pageType,
-    'layout_type' => $pageType,
-    'layout_option' => $layoutOption,
-    'editor_area' => $editorArea,
-    'preview_area' => $editorArea,
-    'preview_mode' => 'live',
-    'editor_mode' => '1',
-    'status' => $previewStatus,
-    'scope' => $scope,
-    'target_type' => $targetType,
-    'target_id' => $targetId,
-    'locale' => $selectedLocale !== '' ? $selectedLocale : $defaultLocale,
-];
-$previewUrl = 'about:blank';
-if ($themeId > 0) {
-    $previewUrl = $editorArea === 'backend'
-        ? $this->getUrl('theme/backend/theme-editor/layout-preview', $previewParams)
-        : $this->getFrontendUrl('theme/frontend/theme-preview/content', $previewParams);
+$layout_options_json = json_encode($layout_options_by_type, $jsonForScriptFlags) ?: '{}';
+$installed_locales_json = json_encode($installed_locales, $jsonForScriptFlags) ?: '[]';
+$editor_area = $this->getData('editor_area') ?: 'frontend';
+$theme_has_backend = (bool)$this->getData('theme_has_backend');
+$preview_context = $this->getData('preview_context') ?: [];
+$preview_status = is_array($preview_context) ? (string)($preview_context['status'] ?? 'draft') : 'draft';
+$layout_editor_lock = $this->getData('layout_editor_lock') ?: ['enabled' => false];
+$layout_editor_lock = is_array($layout_editor_lock) ? $layout_editor_lock : ['enabled' => false];
+$layout_editor_locked = !empty($layout_editor_lock['enabled']);
+$layout_lock_source = strtolower(trim((string)($layout_editor_lock['lock_source'] ?? '')));
+$scope_legacy_readonly = (bool)$this->getData('scope_legacy_readonly');
+$editorShellClasses = ['theme-editor-container'];
+if ($layout_editor_locked) {
+    $editorShellClasses[] = 'theme-editor-locked';
 }
-$safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+if ($layout_lock_source === 'cms') {
+    $editorShellClasses[] = 'theme-editor-cms-embed';
+}
+if ($scope_legacy_readonly) {
+    $editorShellClasses[] = 'theme-editor-scope-readonly';
+}
+$layout_editor_lock_json = json_encode($layout_editor_lock, $jsonForScriptFlags) ?: '{"enabled":false}';
+$layout_identity = $this->getData('layout_identity') ?: [];
+$layout_identity = is_array($layout_identity) ? $layout_identity : [];
+$layout_identity_scope = (string)($layout_identity['scope'] ?? ($preview_context['scope'] ?? $this->request->getParam('scope', 'default')));
+$selected_scope = trim((string)$this->getData('selected_scope'));
+if ($selected_scope !== '') {
+    $layout_identity_scope = $selected_scope;
+}
+$layout_identity_target_type = (string)($layout_identity['target_type'] ?? (
+    $preview_context['theme_layout_target_type']
+    ?? $this->request->getParam('theme_layout_target_type', $this->request->getParam('target_type', 'global'))
+));
+$layout_identity_target_id = max(0, (int)($layout_identity['target_id'] ?? (
+    $preview_context['theme_layout_target_id']
+    ?? $this->request->getParam('theme_layout_target_id', $this->request->getParam('target_id', 0))
+)));
+$layout_identity_locale = (string)($layout_identity['locale_code'] ?? (
+    $preview_context['locale'] ?? $this->request->getParam('locale_code', $this->request->getParam('locale', ''))
+));
+$frontend_theme_id = (int)($this->getData('frontend_theme_id') ?: ($editor_area === 'frontend' ? $theme_id : 0));
+$backend_theme_id = (int)($this->getData('backend_theme_id') ?: ($editor_area === 'backend' ? $theme_id : 0));
+$default_locale = \Weline\Framework\App\Env::default_LANGUAGE_CODE;
+$previewParams = [
+    'theme_id' => $theme_id,
+    'page_type' => $page_type,
+    'layout_type' => $page_type,
+    'layout_option' => $layout_option,
+    'editor_mode' => '1',
+    'preview_mode' => 'live',
+    'status' => $preview_status,
+    'editor_area' => $editor_area,
+    'preview_area' => $editor_area,
+    'frontend_theme_id' => $frontend_theme_id,
+    'backend_theme_id' => $backend_theme_id,
+    'locale' => $layout_identity_locale !== '' ? $layout_identity_locale : (string)$this->request->getParam('locale', $default_locale),
+    'locale_code' => $layout_identity_locale !== '' ? $layout_identity_locale : (string)$this->request->getParam('locale', $default_locale),
+    '_t' => time(),
+];
+$previewTargetIsConcrete = static function (string $targetType, int $targetId): bool {
+    return $targetType !== ''
+        && $targetType !== 'global'
+        && ($targetId > 0 || $targetType === 'website');
+};
+if ($layout_editor_locked) {
+    $previewParams['scope'] = (string)($layout_editor_lock['scope'] ?? ($preview_context['scope'] ?? 'default'));
+    $previewParams['store_mode'] = (string)($layout_editor_lock['store_mode'] ?? 'normal');
+    $previewParams['website_id'] = (int)($layout_editor_lock['website_id'] ?? 0);
+    $previewParams['website_code'] = (string)($layout_editor_lock['website_code'] ?? '');
+    $previewParams['store_id'] = (int)($layout_editor_lock['store_id'] ?? 0);
+    $previewParams['store_code'] = (string)($layout_editor_lock['store_code'] ?? '');
+    $previewTargetType = trim((string)($layout_editor_lock['target_type'] ?? ''));
+    $previewTargetId = (int)($layout_editor_lock['target_id'] ?? 0);
+    if ($previewTargetIsConcrete($previewTargetType, $previewTargetId)) {
+        $previewParams['target_type'] = $previewTargetType;
+        $previewParams['target_id'] = $previewTargetId;
+        $previewParams['theme_layout_target_type'] = $previewTargetType;
+        $previewParams['theme_layout_target_id'] = $previewTargetId;
+        $previewParams['theme_layout_source_target_type'] = $previewTargetType;
+        $previewParams['theme_layout_source_target_id'] = $previewTargetId;
+    }
+} else {
+    $previewScope = trim((string)($preview_context['scope'] ?? $this->request->getParam('scope', '')));
+    if ($previewScope !== '') {
+        $previewParams['scope'] = $previewScope;
+    }
+    $previewTargetType = trim((string)(
+        $preview_context['theme_layout_target_type']
+        ?? $this->request->getParam('theme_layout_target_type', '')
+    ));
+    $previewTargetId = (int)(
+        $preview_context['theme_layout_target_id']
+        ?? $this->request->getParam('theme_layout_target_id', 0)
+    );
+    if ($previewTargetIsConcrete($previewTargetType, $previewTargetId)) {
+        $previewParams['target_type'] = $previewTargetType;
+        $previewParams['target_id'] = $previewTargetId;
+        $previewParams['theme_layout_target_type'] = $previewTargetType;
+        $previewParams['theme_layout_target_id'] = $previewTargetId;
+        $previewParams['theme_layout_source_target_type'] = trim((string)(
+            $preview_context['theme_layout_source_target_type']
+            ?? $this->request->getParam('theme_layout_source_target_type', $previewTargetType)
+        ));
+        $previewParams['theme_layout_source_target_id'] = (int)(
+            $preview_context['theme_layout_source_target_id']
+            ?? $this->request->getParam('theme_layout_source_target_id', $previewTargetId)
+        );
+    }
+}
+$initialPreviewUrl = 'about:blank';
+if ($theme_id) {
+    $initialPreviewUrl = $editor_area === 'frontend'
+        ? 'about:blank'
+        : $this->getUrl('theme/backend/theme-editor/layout-preview', $previewParams);
+}
+
+// Theme 动态图片必须由 MediaManager 返回 file-image/ImageUsage。
+// 旧文件管理器只能返回路径或 URL，允许它参与新选择会把裸 URL
+// 再次写入布局，并绕过 FileAsset 的翻译、权限与 URL Adapter。
+$fileManagerConnectorUrl = $this->getBackendUrl('media/backend/manager/iframe');
+
+$escape = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$editorShellClassSafe = $escape(implode(' ', $editorShellClasses));
+$themeIdSafe = (string)$theme_id;
+$editorAreaSafe = $escape($editor_area);
+$previewStatusSafe = $escape($preview_status);
+$themeHasBackendSafe = $theme_has_backend ? '1' : '0';
+$fileManagerConnectorUrlSafe = $escape($fileManagerConnectorUrl);
+$pageTypeSafe = $escape($page_type);
+$layoutOptionSafe = $escape($layout_option);
+$layoutIdentityScopeSafe = $escape($layout_identity_scope);
+$layoutIdentityTargetTypeSafe = $escape($layout_identity_target_type);
+$layoutIdentityTargetIdSafe = (string)$layout_identity_target_id;
+$layoutIdentityLocaleSafe = $escape($layout_identity_locale);
+$defaultLocaleSafe = $escape($default_locale);
+$layoutOptionsJsonSafe = $escape($layout_options_json);
+$installedLocalesJsonSafe = $escape($installed_locales_json);
+$layoutLockEnabledSafe = $layout_editor_locked ? '1' : '0';
+$layoutLockSourceSafe = $escape($layout_lock_source);
+$layoutEditorLockJsonSafe = $escape($layout_editor_lock_json);
+$selectorDisabledAttribute = ($layout_editor_locked || $scope_legacy_readonly) ? ' disabled' : '';
+$editorAreaHiddenAttribute = $theme_has_backend ? '' : ' hidden';
+$initialPreviewUrlSafe = $escape($initialPreviewUrl);
+$themeListUrlSafe = $escape($this->getBackendUrl('theme/backend/index'));
+$apiBaseSafe = $escape($this->getUrl('theme/backend/theme-editor'));
+$apiSaveWidgetSafe = $escape($this->getUrl('theme/backend/theme-editor/save-widget'));
+$apiUpdateConfigSafe = $escape($this->getUrl('theme/backend/theme-editor/update-config'));
+$apiDeleteWidgetSafe = $escape($this->getUrl('theme/backend/theme-editor/remove-widget'));
+$apiWidgetsSafe = $escape($this->getUrl('theme/backend/theme-editor/widgets'));
+$apiDefaultInjectionsSafe = $escape($this->getUrl('theme/backend/theme-editor/default-injections'));
+$apiApplyDefaultInjectionSafe = $escape($this->getUrl('theme/backend/theme-editor/apply-default-injection'));
+$apiPublishSafe = $escape($this->getUrl('theme/backend/theme-editor/publish'));
+$apiPreviewSafe = $escape($this->getUrl('theme/backend/theme-editor/preview'));
+$apiRenderWidgetSafe = $escape($this->getUrl('theme/backend/theme-editor/render-widget'));
+$apiWidgetPreviewSafe = $escape($this->getUrl('theme/backend/theme-editor/widget-preview'));
+$apiCompileLayoutSafe = $escape($this->getUrl('theme/backend/theme-editor/compile-layout'));
+$apiLayoutConfigSafe = $escape($this->getUrl('theme/backend/theme-editor/layout-config'));
+$apiLayoutOptionsSafe = $escape($this->getUrl('theme/backend/theme-editor/layout-options'));
+$apiSaveLayoutSelectionSafe = $escape($this->getUrl('theme/backend/theme-editor/save-layout-selection'));
+$apiSaveLayoutConfigSafe = $escape($this->getUrl('theme/backend/theme-editor/save-layout-config'));
+$apiAiTranslateConfigSafe = $escape($this->getUrl('theme/backend/theme-editor/ai-translate-config'));
+$apiVirtualThemeAiCatalogSafe = $escape($this->getUrl('theme/backend/virtual-theme/ai-catalog'));
+$apiVirtualThemeCreateDraftSafe = $escape($this->getUrl('theme/backend/virtual-theme/create-draft'));
+$apiVirtualThemeBlockActionSafe = $escape($this->getUrl('theme/backend/virtual-theme/block-action'));
+$apiVirtualThemeSourceSafe = $escape($this->getUrl('theme/backend/virtual-theme/source'));
+$apiVirtualThemeSaveSourceSafe = $escape($this->getUrl('theme/backend/virtual-theme/save-source'));
+$apiVirtualThemePublishVersionSafe = $escape($this->getUrl('theme/backend/virtual-theme/publish-version'));
+$apiLayoutPreviewSafe = $escape($this->getUrl('theme/backend/theme-editor/layout-preview'));
+$apiFrontendLayoutPreviewSafe = $escape($this->getFrontendUrl('theme/frontend/theme-preview/content'));
+$apiParamRenderFormSafe = $escape($this->getUrl('theme/backend/widget/paramrender/form'));
+$apiSaveCompiledLayoutSafe = $escape($this->getUrl('theme/backend/theme-editor/save-compiled-layout'));
+$apiVersionsSafe = $escape($this->getUrl('theme/backend/theme-editor/versions'));
+$apiSaveVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/save-version'));
+$apiSwitchVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/switch-version'));
+$apiRestoreOriginalSafe = $escape($this->getUrl('theme/backend/theme-editor/restore-original'));
+$apiPublishVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/publish-version'));
+$apiDeleteVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/delete-version'));
+$apiRenameVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/rename-version'));
+$apiStartPreviewSafe = $escape($this->getUrl('theme/backend/theme-editor/start-preview'));
+$apiExitPreviewSafe = $escape($this->getUrl('theme/backend/theme-editor/exit-preview'));
+$apiPublishAndExitSafe = $escape($this->getUrl('theme/backend/theme-editor/publish-and-exit'));
+$apiCheckLockSafe = $escape($this->getUrl('theme/backend/theme-editor/check-lock'));
+$apiReleaseLockSafe = $escape($this->getUrl('theme/backend/theme-editor/release-lock'));
+$apiUpdateActivitySafe = $escape($this->getUrl('theme/backend/theme-editor/update-activity'));
+$apiRequestTakeoverSafe = $escape($this->getUrl('theme/backend/theme-editor/request-takeover'));
+$apiCheckTakeoverRequestSafe = $escape($this->getUrl('theme/backend/theme-editor/check-takeover-request'));
+$apiForceTakeoverSafe = $escape($this->getUrl('theme/backend/theme-editor/force-takeover'));
+$apiThemeTokensSafe = $escape($this->getUrl('theme/backend/theme-editor/theme-tokens'));
+$apiDiskSaveSafe = $escape($this->getUrl('theme/backend/theme-editor/disk-save'));
+$apiDiskSaveAsSafe = $escape($this->getUrl('theme/backend/theme-editor/disk-save-as'));
+$apiDiskSelectSafe = $escape($this->getUrl('theme/backend/theme-editor/disk-select'));
+$apiDiskDeleteSafe = $escape($this->getUrl('theme/backend/theme-editor/disk-delete'));
+$apiScopedWorkspaceSafe = $escape($this->getUrl('theme/backend/theme-editor/scoped-workspace'));
+$apiPublishScopedWorkspaceSafe = $escape($this->getUrl('theme/backend/theme-editor/publish-scoped-workspace'));
+$themeOptionsHtml = (string)$this->getData('theme_options_html');
+$scopeIdentity = $this->getData('scope_identity');
+$scopeIdentity = is_array($scopeIdentity) ? $scopeIdentity : [];
+$scope_identity_json = json_encode($scopeIdentity, $jsonForScriptFlags) ?: '{}';
+$scope_identity_json_safe = $escape($scope_identity_json);
+$scope_control_disabled = $layout_editor_locked || $scope_legacy_readonly;
+$scopeLegacyReadonlySafe = $scope_legacy_readonly ? '1' : '0';
+$scopeLegacyValueSafe = $escape($selected_scope);
+$scopeLegacyAlertHiddenAttribute = $scope_legacy_readonly ? '' : ' hidden';
+$pageTypeOptionsHtml = (string)$this->getData('page_type_options_html');
+$layoutOptionsHtml = (string)$this->getData('layout_options_html');
+$editorAreaOptionsHtml = (string)$this->getData('editor_area_options_html');
+$localeOptionsHtml = (string)$this->getData('locale_options_html');
+$widgetLibraryHtml = (string)$this->getData('widget_library_html');
+$structureWidgetsHtml = $this->getData('structure_widgets_html');
+$structureWidgetsHtml = is_array($structureWidgetsHtml) ? $structureWidgetsHtml : [];
+$headerStructureHtml = (string)($structureWidgetsHtml['header'] ?? '');
+$contentStructureHtml = (string)($structureWidgetsHtml['content'] ?? '');
+$footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
+
 ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-theme-editor.css)">
+<css>Weline_Theme::ui/pages/weline-theme-editor.css?v=20260822-scope-dropdown-bg</css>
+<css>Weline_Theme::ui/pages/weline-theme-editor-widget-config.css</css>
+<css>Weline_Theme::ui/pages/weline-theme-editor-widget-param.css</css>
 
-<section
-    id="w-theme-editor"
-    class="w-theme-editor"
-    data-w-component="theme-editor"
-    data-theme-id="<?= $themeId ?>"
-    data-frontend-theme-id="<?= $frontendThemeId ?>"
-    data-backend-theme-id="<?= $backendThemeId ?>"
-    data-editor-area="<?= $safe($editorArea) ?>"
-    data-page-type="<?= $safe($pageType) ?>"
-    data-layout-option="<?= $safe($layoutOption) ?>"
-    data-layout-options="<?= $safe($layoutOptionsJson) ?>"
-    data-preview-status="<?= $safe($previewStatus) ?>"
-    data-preview-url="<?= $safe($previewUrl) ?>"
-    data-scope="<?= $safe($scope) ?>"
-    data-target-type="<?= $safe($targetType) ?>"
-    data-target-id="<?= $targetId ?>"
-    data-editor-locked="<?= $editorLocked ? 'true' : 'false' ?>"
-    data-api-widgets="<?= $safe($this->getUrl('theme/backend/theme-editor/widgets')) ?>"
-    data-api-publish="<?= $safe($this->getUrl('theme/backend/theme-editor/publish')) ?>"
-    data-api-versions="<?= $safe($this->getUrl('theme/backend/theme-editor/versions')) ?>"
-    data-api-save-version="<?= $safe($this->getUrl('theme/backend/theme-editor/save-version')) ?>"
->
-    <header class="w-theme-editor__toolbar">
-        <div class="w-theme-editor__heading">
-            <a class="w-button" data-tone="quiet" data-size="sm" href="<?= $safe($this->getBackendUrl('theme/backend/index')) ?>">
-                <w:icon name="arrow-left" size="sm" />
-                <span><?= $safe(__('主题列表')) ?></span>
+<div class="<?= $editorShellClassSafe ?>" id="themeEditor"
+     data-theme-id="<?= $themeIdSafe ?>"
+     data-editor-area="<?= $editorAreaSafe ?>"
+     data-preview-status="<?= $previewStatusSafe ?>"
+     data-theme-has-backend="<?= $themeHasBackendSafe ?>"
+     data-file-manager-connector-base="<?= $fileManagerConnectorUrlSafe ?>"
+     data-page-type="<?= $pageTypeSafe ?>"
+     data-layout-type="<?= $pageTypeSafe ?>"
+     data-layout-option="<?= $layoutOptionSafe ?>"
+     data-scope="<?= $layoutIdentityScopeSafe ?>"
+     data-locale-code="<?= $layoutIdentityLocaleSafe ?>"
+     data-config-locale="<?= $layoutIdentityLocaleSafe ?>"
+     data-scope-identity="<?= $scope_identity_json_safe ?>"
+     data-legacy-scope-readonly="<?= $scopeLegacyReadonlySafe ?>"
+     data-target-type="<?= $layoutIdentityTargetTypeSafe ?>"
+     data-target-id="<?= $layoutIdentityTargetIdSafe ?>"
+     data-theme-layout-target-type="<?= $layoutIdentityTargetTypeSafe ?>"
+     data-theme-layout-target-id="<?= $layoutIdentityTargetIdSafe ?>"
+     data-theme-layout-source-target-type="<?= $layoutIdentityTargetTypeSafe ?>"
+     data-theme-layout-source-target-id="<?= $layoutIdentityTargetIdSafe ?>"
+     data-default-locale="<?= $defaultLocaleSafe ?>"
+     data-layout-options="<?= $layoutOptionsJsonSafe ?>"
+     data-installed-locales="<?= $installedLocalesJsonSafe ?>"
+     data-layout-lock-enabled="<?= $layoutLockEnabledSafe ?>"
+     data-layout-lock-source="<?= $layoutLockSourceSafe ?>"
+     data-layout-lock="<?= $layoutEditorLockJsonSafe ?>"
+     data-api-base="<?= $apiBaseSafe ?>"
+     data-api-save-widget="<?= $apiSaveWidgetSafe ?>"
+     data-api-update-config="<?= $apiUpdateConfigSafe ?>"
+     data-api-delete-widget="<?= $apiDeleteWidgetSafe ?>"
+     data-api-widgets="<?= $apiWidgetsSafe ?>"
+     data-api-default-injections="<?= $apiDefaultInjectionsSafe ?>"
+     data-api-apply-default-injection="<?= $apiApplyDefaultInjectionSafe ?>"
+     data-api-publish="<?= $apiPublishSafe ?>"
+     data-api-preview="<?= $apiPreviewSafe ?>"
+     data-api-render-widget="<?= $apiRenderWidgetSafe ?>"
+     data-api-widget-preview="<?= $apiWidgetPreviewSafe ?>"
+     data-api-compile-layout="<?= $apiCompileLayoutSafe ?>"
+     data-api-layout-config="<?= $apiLayoutConfigSafe ?>"
+     data-api-layout-options="<?= $apiLayoutOptionsSafe ?>"
+     data-api-save-layout-selection="<?= $apiSaveLayoutSelectionSafe ?>"
+     data-api-save-layout-config="<?= $apiSaveLayoutConfigSafe ?>"
+     data-api-ai-translate-config="<?= $apiAiTranslateConfigSafe ?>"
+     data-api-virtual-theme-ai-catalog="<?= $apiVirtualThemeAiCatalogSafe ?>"
+     data-api-virtual-theme-create-draft="<?= $apiVirtualThemeCreateDraftSafe ?>"
+     data-api-virtual-theme-block-action="<?= $apiVirtualThemeBlockActionSafe ?>"
+     data-api-virtual-theme-source="<?= $apiVirtualThemeSourceSafe ?>"
+     data-api-virtual-theme-save-source="<?= $apiVirtualThemeSaveSourceSafe ?>"
+     data-api-virtual-theme-publish-version="<?= $apiVirtualThemePublishVersionSafe ?>"
+     data-api-layout-preview="<?= $apiLayoutPreviewSafe ?>"
+     data-api-frontend-layout-preview="<?= $apiFrontendLayoutPreviewSafe ?>"
+     data-api-param-render-form="<?= $apiParamRenderFormSafe ?>"
+     data-api-save-compiled-layout="<?= $apiSaveCompiledLayoutSafe ?>"
+     data-api-versions="<?= $apiVersionsSafe ?>"
+     data-api-save-version="<?= $apiSaveVersionSafe ?>"
+     data-api-switch-version="<?= $apiSwitchVersionSafe ?>"
+     data-api-restore-original="<?= $apiRestoreOriginalSafe ?>"
+     data-api-publish-version="<?= $apiPublishVersionSafe ?>"
+     data-api-delete-version="<?= $apiDeleteVersionSafe ?>"
+     data-api-rename-version="<?= $apiRenameVersionSafe ?>"
+     data-api-start-preview="<?= $apiStartPreviewSafe ?>"
+     data-api-exit-preview="<?= $apiExitPreviewSafe ?>"
+     data-api-publish-and-exit="<?= $apiPublishAndExitSafe ?>"
+     data-api-check-lock="<?= $apiCheckLockSafe ?>"
+     data-api-release-lock="<?= $apiReleaseLockSafe ?>"
+     data-api-update-activity="<?= $apiUpdateActivitySafe ?>"
+     data-api-request-takeover="<?= $apiRequestTakeoverSafe ?>"
+     data-api-check-takeover-request="<?= $apiCheckTakeoverRequestSafe ?>"
+     data-api-force-takeover="<?= $apiForceTakeoverSafe ?>"
+     data-api-theme-tokens="<?= $apiThemeTokensSafe ?>"
+     data-api-disk-save="<?= $apiDiskSaveSafe ?>"
+     data-api-disk-save-as="<?= $apiDiskSaveAsSafe ?>"
+     data-api-disk-select="<?= $apiDiskSelectSafe ?>"
+     data-api-disk-delete="<?= $apiDiskDeleteSafe ?>"
+     data-api-scoped-workspace="<?= $apiScopedWorkspaceSafe ?>"
+     data-api-publish-scoped-workspace="<?= $apiPublishScopedWorkspaceSafe ?>"
+     data-editor-overlay-css="@static(Weline_Theme::ui/pages/weline-theme-editor-overlay.css)?v=20260821-overlay-v1">
+    <!-- 顶部工具栏 -->
+    <div class="editor-toolbar">
+        <div class="toolbar-left">
+            <a href="<?= $themeListUrlSafe ?>" class="toolbar-back-link" title="@lang{返回主题列表}">
+                <w:icon name="chevron-left" size="sm"></w:icon>
+                <span class="toolbar-back-text">@lang{返回}</span>
             </a>
-            <div>
-                <h1><?= $safe(__('主题编辑器')) ?></h1>
-                <p><?= $safe(__('使用当前主题与布局上下文预览、检查并发布页面。')) ?></p>
+            <h1 class="editor-title">
+                <w:icon name="palette" size="sm"></w:icon>
+                @lang{主题编辑器}
+            </h1>
+
+            <div class="toolbar-select-field toolbar-select-field-scope toolbar-select-field-primary">
+                <span class="toolbar-select-label">@lang{作用范围}</span>
+                <w:scope
+                    id="scopeSelect"
+                    name="scope"
+                    value="selected_scope"
+                    placeholder="@lang(选择网站、店铺或渠道作用域)"
+                    search-placeholder="@lang(搜索网站、店铺或渠道)"
+                    aria-label="@lang(选择网站、店铺或渠道作用域)"
+                    searchable="true"
+                    default-expand-all="true"
+                    disabled="scope_control_disabled"
+                    required="true"
+                />
+            </div>
+
+            <div class="toolbar-selects w-toolbar-overflow" data-w-component="toolbar-overflow" data-w-placement="bottom-start" data-state="closed">
+                <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
+                <label class="toolbar-select-field toolbar-select-field-editor-area"<?= $editorAreaHiddenAttribute ?>>
+                    <span class="toolbar-select-label">@lang{编辑区域}</span>
+                    <select id="editorAreaSelect" class="w-select" title="@lang{前端/后端主题}" aria-label="@lang{编辑区域}"<?= $selectorDisabledAttribute ?>>
+                        <?php echo $editorAreaOptionsHtml; ?>
+                    </select>
+                </label>
+                <div class="toolbar-select-field toolbar-select-field-theme">
+                    <span class="toolbar-select-label">@lang{主题}</span>
+                    <select id="themeSelect" class="w-select" aria-label="@lang{主题}"<?= $selectorDisabledAttribute ?>>
+                        <?php echo $themeOptionsHtml; ?>
+                    </select>
+                    <span class="theme-binding-ownership">
+                        <span class="w-badge" id="themeBindingSource" data-owned="false">@lang{继承上一级}</span>
+                        <button type="button" class="w-button" id="themeBindingInherit" data-tone="neutral" data-variant="link" data-size="sm" hidden>
+                            @lang{恢复继承}
+                        </button>
+                    </span>
+                </div>
+                <label class="toolbar-select-field toolbar-select-field-layout-type">
+                    <span class="toolbar-select-label">@lang{布局类型}</span>
+                    <select id="pageTypeSelect" class="w-select" title="@lang{选择布局类型}" aria-label="@lang{布局类型}"<?= $selectorDisabledAttribute ?>>
+                        <?php echo $pageTypeOptionsHtml; ?>
+                    </select>
+                </label>
+                <label class="toolbar-select-field toolbar-select-field-layout-option">
+                    <span class="toolbar-select-label">@lang{布局选项}</span>
+                    <select id="layoutOptionSelect" class="w-select" title="@lang{选择布局选项}" aria-label="@lang{布局选项}"<?= $selectorDisabledAttribute ?>>
+                        <?php echo $layoutOptionsHtml; ?>
+                    </select>
+                </label>
+                <label class="toolbar-select-field toolbar-select-field-language">
+                    <span class="toolbar-select-label">@lang{语言}</span>
+                    <select id="editorLangSwitcher" class="w-select" title="@lang{配置语言}" aria-label="@lang{配置语言}">
+                        <?php echo $localeOptionsHtml; ?>
+                    </select>
+                </label>
+                </div>
+                <div class="w-toolbar-overflow__more" data-w-toolbar-overflow-more hidden>
+                    <button type="button" class="w-button" id="themeEditorSelectsMore" data-tone="neutral" data-variant="outline" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorSelectsOverflowMenu" aria-expanded="false" title="@lang{更多}">
+                        <w:icon name="more-horizontal" size="sm"></w:icon>
+                        <span class="w-theme-editor-toolbar-button-text">@lang{更多}</span>
+                    </button>
+                    <div class="w-menu w-toolbar-overflow__menu" id="themeEditorSelectsOverflowMenu" data-w-toolbar-overflow-menu data-state="closed" hidden role="group" aria-labelledby="themeEditorSelectsMore" aria-hidden="true"></div>
+                </div>
             </div>
         </div>
 
-        <div class="w-theme-editor__actions">
-            <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-w-editor-action="refresh-preview">
-                <w:icon name="refresh" size="sm" />
-                <span><?= $safe(__('刷新预览')) ?></span>
+        <div class="toolbar-right w-toolbar-overflow" data-w-component="toolbar-overflow" data-w-placement="bottom-end" data-state="closed">
+            <!-- 版本控制面板 -->
+            <div class="version-selector-wrapper" data-w-component="popover" data-w-placement="bottom-end" data-w-anchor-mode="element" data-w-toolbar-overflow-pin>
+                <button type="button" class="w-button w-theme-editor-version-toggle" id="versionHistoryTrigger" data-tone="neutral" data-variant="outline" data-w-popover-trigger aria-haspopup="dialog" aria-controls="versionPanel" aria-expanded="false">
+                    <w:icon name="history" size="sm"></w:icon>
+                    <span id="currentVersionDisplay">@lang{加载中...}</span>
+                    <w:icon name="chevron-down" size="sm"></w:icon>
+                </button>
+
+                <!-- 版本面板（下拉展开） -->
+                <div id="versionPanel" class="w-popover version-panel" data-w-popover-panel data-state="closed" role="dialog" aria-labelledby="versionPanelTitle" aria-hidden="true" hidden>
+                    <div class="version-panel-header">
+                        <h5 id="versionPanelTitle"><w:icon name="branch" size="sm"></w:icon> @lang{版本历史}</h5>
+                        <button type="button" class="w-button w-theme-editor-close-panel" data-tone="quiet" data-size="sm" data-w-popover-close aria-label="@lang{关闭版本面板}">
+                            <w:icon name="close" size="sm"></w:icon>
+                        </button>
+                    </div>
+
+                    <div class="version-panel-actions">
+                        <button type="button" class="w-button" data-tone="primary" data-size="sm" id="btnSaveNewVersion" data-theme-editor-action="save-new-version">
+                            <w:icon name="save" size="sm"></w:icon> @lang{保存新版本}
+                        </button>
+                    </div>
+
+                    <div class="version-panel-body">
+                        <div id="versionList" class="version-list">
+                            <div class="version-item" data-state="empty">@lang{加载中...}</div>
+                        </div>
+                    </div>
+
+                    <div class="version-panel-footer">
+                        <small class="w-text" data-tone="muted">
+                            <w:icon name="info" size="sm"></w:icon>
+                            @lang{点击"切换"可恢复到历史版本继续编辑}
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="btnPreview" title="@lang{后台预览}">
+                    <w:icon name="eye" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{预览}</span>
+                </button>
+                <button type="button" class="w-button" data-tone="info" data-variant="outline" id="btnFrontendPreview" title="@lang{在真实前端页面中预览，可查看完整效果}">
+                    <w:icon name="external-link" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{前端预览}</span>
+                </button>
+                <button type="button" class="w-button" data-tone="primary" data-variant="outline" id="btnSave" title="@lang{保存当前布局为新版本}">
+                    <w:icon name="save" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{保存版本}</span>
+                </button>
+                <button type="button" class="w-button" data-tone="warning" id="btnThemeDiskAppearance" title="@lang{主题级颜色与变量盘}">
+                    <w:icon name="palette" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{全局外观}</span>
+                </button>
+            </div>
+            <button type="button" class="w-button" data-tone="primary" id="btnPublish" data-w-toolbar-overflow-pin title="@lang{发布当前版本到前台}">
+                <w:icon name="upload" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{发布}</span>
             </button>
-            <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-w-editor-action="open-preview">
-                <w:icon name="external-link" size="sm" />
-                <span><?= $safe(__('新窗口预览')) ?></span>
-            </button>
-            <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-w-editor-action="versions">
-                <w:icon name="history" size="sm" />
-                <span><?= $safe(__('版本')) ?></span>
-            </button>
-            <button type="button" class="w-button" data-size="sm" data-w-editor-action="publish" <?= $themeId < 1 || $editorLocked ? 'disabled' : '' ?>>
-                <w:icon name="upload" size="sm" />
-                <span><?= $safe(__('发布')) ?></span>
-            </button>
+            <div class="w-toolbar-overflow__more" data-w-toolbar-overflow-more hidden>
+                <button type="button" class="w-button" id="themeEditorToolbarMore" data-tone="neutral" data-variant="outline" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorToolbarOverflowMenu" aria-expanded="false" title="@lang{更多}">
+                    <w:icon name="more-horizontal" size="sm"></w:icon>
+                    <span class="w-theme-editor-toolbar-button-text">@lang{更多}</span>
+                </button>
+                <div class="w-menu w-toolbar-overflow__menu" id="themeEditorToolbarOverflowMenu" data-w-toolbar-overflow-menu data-state="closed" hidden role="group" aria-labelledby="themeEditorToolbarMore" aria-hidden="true"></div>
+            </div>
         </div>
-    </header>
-
-    <?php if ($editorLocked): ?>
-        <div class="w-alert" data-tone="info" role="status">
-            <w:icon name="lock" />
-            <div>
-                <strong><?= $safe(__('当前布局由上游上下文锁定')) ?></strong>
-                <p><?= $safe(__('可浏览预览与版本；需要在拥有该布局的入口中进行变更。')) ?></p>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <form class="w-theme-editor__selectors" data-w-editor-selectors>
-        <label class="w-field">
-            <span class="w-field__label"><?= $safe(__('主题')) ?></span>
-            <select class="w-select" name="theme_id" data-w-editor-select="theme_id" <?= $editorLocked ? 'disabled' : '' ?>>
-                <option value=""><?= $safe(__('-- 选择主题 --')) ?></option>
-                <?php foreach ($themes as $theme): ?>
-                    <?php
-                    $candidateId = (int)(is_array($theme) ? ($theme['id'] ?? 0) : (is_object($theme) ? $theme->getId() : 0));
-                    $candidateName = (string)(is_array($theme)
-                        ? ($theme['name'] ?? '')
-                        : (is_object($theme) && method_exists($theme, 'getName') ? $theme->getName() : ''));
-                    $active = (bool)(is_array($theme)
-                        ? ($theme['is_active'] ?? false)
-                        : (is_object($theme) && method_exists($theme, 'getIsActive') ? $theme->getIsActive() : false));
-                    ?>
-                    <option value="<?= $candidateId ?>" <?= $candidateId === $themeId ? 'selected' : '' ?>><?= $safe($candidateName . ($active ? ' · ' . __('已启用') : '')) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-
-        <label class="w-field">
-            <span class="w-field__label"><?= $safe(__('布局类型')) ?></span>
-            <select class="w-select" name="page_type" data-w-editor-select="page_type" <?= $editorLocked ? 'disabled' : '' ?>>
-                <?php foreach ($pageTypes as $code => $label): ?>
-                    <option value="<?= $safe($code) ?>" <?= (string)$code === $pageType ? 'selected' : '' ?>><?= $safe($label) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-
-        <label class="w-field">
-            <span class="w-field__label"><?= $safe(__('布局选项')) ?></span>
-            <select class="w-select" name="layout_option" data-w-editor-select="layout_option" <?= $editorLocked ? 'disabled' : '' ?>>
-                <?php foreach ($currentLayoutOptions as $option): ?>
-                    <?php $value = (string)($option['value'] ?? 'default'); ?>
-                    <option value="<?= $safe($value) ?>" <?= $value === $layoutOption ? 'selected' : '' ?>><?= $safe($option['label'] ?? $value) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-
-        <label class="w-field" <?= !$themeHasBackend ? 'hidden' : '' ?>>
-            <span class="w-field__label"><?= $safe(__('区域')) ?></span>
-            <select class="w-select" name="editor_area" data-w-editor-select="editor_area" <?= $editorLocked ? 'disabled' : '' ?>>
-                <option value="frontend" <?= $editorArea === 'frontend' ? 'selected' : '' ?>><?= $safe(__('前台')) ?></option>
-                <option value="backend" <?= $editorArea === 'backend' ? 'selected' : '' ?>><?= $safe(__('后台')) ?></option>
-            </select>
-        </label>
-
-        <label class="w-field">
-            <span class="w-field__label"><?= $safe(__('语言')) ?></span>
-            <select class="w-select" name="locale" data-w-editor-select="locale">
-                <option value=""><?= $safe(__('默认语言')) ?></option>
-                <?php foreach ($installedLocales as $locale): ?>
-                    <?php
-                    $localeData = is_object($locale)
-                        ? (method_exists($locale, 'getData') ? (array)$locale->getData() : get_object_vars($locale))
-                        : (is_array($locale) ? $locale : []);
-                    $localeCode = trim((string)($localeData['code'] ?? ''));
-                    if ($localeCode === '') continue;
-                    $localeName = trim((string)($localeData['name'] ?? $localeCode));
-                    ?>
-                    <option value="<?= $safe($localeCode) ?>" <?= $localeCode === $selectedLocale ? 'selected' : '' ?>><?= $safe($localeCode . ($localeName !== $localeCode ? ' · ' . $localeName : '')) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-    </form>
-
-    <div class="w-theme-editor__workspace">
-        <aside class="w-card w-theme-editor__library" aria-labelledby="w-theme-editor-library-title">
-            <div class="w-card__header">
-                <div>
-                    <h2 id="w-theme-editor-library-title" class="w-card__title"><?= $safe(__('部件目录')) ?></h2>
-                    <p><?= $safe(__('按当前区域和布局显示可用部件。')) ?></p>
-                </div>
-                <span class="w-badge" data-tone="neutral" data-w-widget-count>0</span>
-            </div>
-            <div class="w-card__body w-stack" data-gap="sm">
-                <label class="w-visually-hidden" for="w-theme-editor-widget-search"><?= $safe(__('搜索部件')) ?></label>
-                <input id="w-theme-editor-widget-search" class="w-input" type="search" autocomplete="off" placeholder="<?= $safe(__('搜索部件…')) ?>" data-w-widget-search>
-                <div class="w-theme-editor__widget-list" data-w-widget-list aria-live="polite">
-                    <div class="w-skeleton" data-shape="line"></div>
-                    <div class="w-skeleton" data-shape="line"></div>
-                    <div class="w-skeleton" data-shape="line"></div>
-                </div>
-            </div>
-        </aside>
-
-        <section class="w-card w-theme-editor__preview" aria-labelledby="w-theme-editor-preview-title">
-            <div class="w-card__header">
-                <div>
-                    <h2 id="w-theme-editor-preview-title" class="w-card__title"><?= $safe(__('实时预览')) ?></h2>
-                    <p data-w-preview-status><?= $safe($previewStatus === 'published' ? __('已发布版本') : __('草稿版本')) ?></p>
-                </div>
-                <span class="w-spinner" data-size="sm" data-w-preview-spinner hidden><span class="w-visually-hidden"><?= $safe(__('加载中')) ?></span></span>
-            </div>
-            <div class="w-theme-editor__frame-wrap">
-                <iframe
-                    class="w-theme-editor__frame"
-                    src="<?= $safe($previewUrl) ?>"
-                    title="<?= $safe(__('主题布局预览')) ?>"
-                    data-w-preview-frame
-                    referrerpolicy="same-origin"
-                ></iframe>
-            </div>
-        </section>
-
-        <aside class="w-card w-theme-editor__summary" aria-labelledby="w-theme-editor-summary-title">
-            <div class="w-card__header">
-                <h2 id="w-theme-editor-summary-title" class="w-card__title"><?= $safe(__('当前上下文')) ?></h2>
-            </div>
-            <dl class="w-card__body w-description-list">
-                <div><dt><?= $safe(__('主题 ID')) ?></dt><dd><?= $themeId ?: '—' ?></dd></div>
-                <div><dt><?= $safe(__('区域')) ?></dt><dd><?= $safe($editorArea) ?></dd></div>
-                <div><dt><?= $safe(__('布局')) ?></dt><dd><?= $safe($pageType . ' / ' . $layoutOption) ?></dd></div>
-                <div><dt><?= $safe(__('作用域')) ?></dt><dd><?= $safe($scope) ?></dd></div>
-                <div><dt><?= $safe(__('目标')) ?></dt><dd><?= $safe($targetType . ':' . $targetId) ?></dd></div>
-            </dl>
-        </aside>
     </div>
 
-    <dialog id="w-theme-editor-versions" class="w-dialog" data-size="lg" data-w-component="dialog" aria-labelledby="w-theme-editor-versions-title">
-        <div class="w-dialog__header">
-            <h2 id="w-theme-editor-versions-title"><?= $safe(__('布局版本')) ?></h2>
-            <button type="button" class="w-button" data-tone="quiet" data-size="sm" data-w-action="dialog.close" data-w-target="#w-theme-editor-versions" aria-label="<?= $safe(__('关闭')) ?>">
-                <w:icon name="close" />
-            </button>
-        </div>
-        <div class="w-dialog__body w-stack">
-            <form class="w-cluster" data-w-version-form>
-                <label class="w-field w-theme-editor__version-name">
-                    <span class="w-field__label"><?= $safe(__('新版本名称')) ?></span>
-                    <input class="w-input" name="version_name" maxlength="120" required>
-                </label>
-                <button type="submit" class="w-button"><w:icon name="save" size="sm" /><?= $safe(__('保存当前版本')) ?></button>
-            </form>
-            <div class="w-divider"></div>
-            <div class="w-theme-editor__version-list" data-w-version-list aria-live="polite"></div>
-        </div>
-    </dialog>
-</section>
+    <div class="w-alert theme-editor-legacy-scope-alert" data-tone="warning" role="alert"<?= $scopeLegacyAlertHiddenAttribute ?>>
+        @lang{当前旧作用域只能兼容读取，不能产生新写入。请先完成作用域迁移：}<code><?= $scopeLegacyValueSafe ?></code>
+    </div>
 
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)"></script>
+    <section id="themeScopeConflictPanel" class="theme-scope-conflicts" hidden role="alert" aria-live="polite">
+        <div class="theme-scope-conflicts__header">
+            <w:icon name="alert-triangle" size="sm"></w:icon>
+            <strong>@lang{当前 Scope 与上级发布版本存在结构冲突}</strong>
+        </div>
+        <p class="theme-scope-conflicts__hint">@lang{前台继续使用最后一个有效版本。请重置、本级重新基线化或重新定位冲突节点后再发布。}</p>
+        <div class="theme-scope-conflicts__list" data-theme-scope-conflict-list></div>
+    </section>
+
+    <!-- 顶部预览工具栏：与 editor-main 三列对齐，动作只落在中间预览列，避免压到部件库 -->
+    <div class="preview-toolbar editor-preview-toolbar">
+        <div class="preview-toolbar-gutter preview-toolbar-gutter--config" aria-hidden="true"></div>
+        <div class="preview-toolbar-main">
+            <div class="preview-tabs">
+                <button type="button" class="preview-tab active" data-view="preview">@lang{实时预览}</button>
+                <button type="button" class="preview-tab" data-view="structure">@lang{结构视图}</button>
+            </div>
+            <div class="preview-actions w-toolbar-overflow" data-w-component="toolbar-overflow" data-w-placement="bottom-end" data-state="closed">
+                <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
+                    <button type="button" class="w-button" data-tone="warning" data-variant="outline" data-size="sm" id="btnRestoreLayout" title="@lang{恢复到主题模板原始布局（自动创建备份）}">
+                        <w:icon name="history" size="sm"></w:icon><span class="w-theme-editor-preview-action-text">@lang{恢复原始布局}</span>
+                    </button>
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnRefreshPreview" title="@lang{刷新预览}">
+                        <w:icon name="refresh" size="sm"></w:icon><span class="w-theme-editor-preview-action-text">@lang{刷新}</span>
+                    </button>
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnFullscreenPreview" title="@lang{全屏预览}">
+                        <w:icon name="monitor" size="sm"></w:icon><span class="w-theme-editor-preview-action-text">@lang{全屏}</span>
+                    </button>
+                </div>
+                <div class="w-toolbar-overflow__more" data-w-toolbar-overflow-more hidden>
+                    <button type="button" class="w-button" id="themeEditorPreviewMore" data-tone="neutral" data-variant="outline" data-size="sm" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorPreviewOverflowMenu" aria-expanded="false" title="@lang{更多}">
+                        <w:icon name="more-horizontal" size="sm"></w:icon>
+                        <span class="w-theme-editor-preview-action-text">@lang{更多}</span>
+                    </button>
+                    <div class="w-menu w-toolbar-overflow__menu" id="themeEditorPreviewOverflowMenu" data-w-toolbar-overflow-menu data-state="closed" hidden role="group" aria-labelledby="themeEditorPreviewMore" aria-hidden="true"></div>
+                </div>
+            </div>
+        </div>
+        <div class="preview-toolbar-gutter preview-toolbar-gutter--widget" aria-hidden="true"></div>
+    </div>
+
+    <div class="editor-floating-panel-actions" aria-label="@lang{编辑面板}">
+        <button type="button" class="editor-panel-toggle editor-panel-toggle-config" data-theme-editor-action="open-config-panel" title="@lang{配置}">
+            <w:icon name="chevron-right" size="sm" class="w-theme-editor-panel-toggle-arrow"></w:icon>
+            <span>@lang{配置}</span>
+        </button>
+        <button type="button" class="editor-panel-toggle editor-panel-toggle-widget" data-theme-editor-action="open-widget-panel" title="@lang{部件库}">
+            <span>@lang{部件}</span>
+            <w:icon name="chevron-left" size="sm" class="w-theme-editor-panel-toggle-arrow"></w:icon>
+        </button>
+    </div>
+
+    <!-- 主编辑区 -->
+    <div class="editor-main">
+        <!-- 左侧：配置面板 -->
+        <div class="editor-config-panel" id="configPanel">
+            <div class="panel-header">
+                <div class="config-mode-tabs" role="tablist">
+                    <button type="button" class="config-mode-tab active" id="configModeLayout" data-config-mode="layout">@lang{布局配置}</button>
+                    <button type="button" class="config-mode-tab" id="configModeWidget" data-config-mode="widget">@lang{部件配置}</button>
+                </div>
+                <button type="button" class="panel-close" id="closeConfigPanel" data-theme-editor-action="close-config-panel" title="@lang{关闭配置}">
+                    <w:icon name="close" size="sm"></w:icon>
+                </button>
+            </div>
+
+            <div class="panel-content" id="configContent">
+                <div class="no-widget-selected">
+                    <w:icon name="edit" size="sm"></w:icon>
+                    <p>@lang{点击预览区域中的部件进行配置}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间：预览区域 - 使用 iframe 加载插槽式预览 -->
+        <div class="editor-preview-area">
+            <div class="preview-wrapper">
+                <!-- iframe 实时预览（编译后的布局页面） -->
+                <div class="preview-view preview-view-preview active" id="previewViewPreview">
+                    <iframe id="previewFrame"
+                            src="<?= $initialPreviewUrlSafe ?>"
+                            class="preview-iframe"></iframe>
+                    <div class="preview-loading" id="previewLoading">
+                        <span class="w-spinner" role="status"><span class="w-visually-hidden">@lang{加载中...}</span></span>
+                    </div>
+                    <!-- 插槽信息面板 -->
+                    <div class="slots-info-panel" id="slotsInfoPanel">
+                        <div class="slots-info-header">
+                            <span>@lang{页面插槽}</span>
+                            <button type="button" class="w-button w-theme-editor-slots-close" data-tone="quiet" data-size="sm" data-icon-only="true" id="closeSlotsPanel" aria-label="@lang{关闭插槽面板}"><w:icon name="close" size="sm"></w:icon></button>
+                        </div>
+                        <div class="slots-info-list" id="slotsInfoList">
+                            <!-- 插槽列表由 JS 动态填充 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 结构视图（用于拖放操作） -->
+                <div class="preview-view preview-view-structure" id="previewViewStructure">
+                    <div class="structure-frame">
+
+                        <!-- ========== HEADER 区域（单一 Slot） ========== -->
+                        <!--
+                            Header 是一个完整的 slot 区域
+                            接受 position=['header'] 的部件
+                            整个 header 可以被一个 header 类型的部件替换
+                        -->
+                        <div class="preview-area area-header area-slot"
+                             data-area="header"
+                             data-slot="header"
+                             data-slot-name="@lang{头部区域}"
+                             data-slot-multiple="true">
+                            <div class="area-label"><w:icon name="monitor" size="sm"></w:icon> @lang{Header}</div>
+                            <div class="area-description">@lang{拖入头部部件（Logo、导航、搜索等）}</div>
+                            <div class="area-widgets header-slot-widgets" data-area="header">
+                                <?php echo $headerStructureHtml; ?>
+                            </div>
+                        </div>
+
+                        <!-- ========== CONTENT 区域（单一 Slot） ========== -->
+                        <!--
+                            Content 是一个完整的 slot 区域
+                            接受 position=['content'] 的部件，无限制
+                            可以容纳任意部件，包括容器、轮播、产品列表等
+                        -->
+                        <div class="preview-area area-content area-slot"
+                             data-area="content"
+                             data-slot="content"
+                             data-slot-name="@lang{内容区域}"
+                             data-slot-multiple="true">
+                            <div class="area-label"><w:icon name="grid" size="sm"></w:icon> @lang{Content}</div>
+                            <div class="area-description">@lang{拖入任意部件或容器}</div>
+                            <div class="area-widgets content-slot-widgets" data-area="content">
+                                <?php echo $contentStructureHtml; ?>
+                            </div>
+                        </div>
+
+                        <!-- ========== FOOTER 区域（单一 Slot） ========== -->
+                        <!--
+                            Footer 是一个完整的 slot 区域
+                            接受 position=['footer'] 的部件
+                            整个 footer 可以被一个 footer 类型的部件替换
+                        -->
+                        <div class="preview-area area-footer area-slot"
+                             data-area="footer"
+                             data-slot="footer"
+                             data-slot-name="@lang{底部区域}"
+                             data-slot-multiple="true">
+                            <div class="area-label"><w:icon name="layout-footer" size="sm"></w:icon> @lang{Footer}</div>
+                            <div class="area-description">@lang{拖入底部部件（链接、版权、社交等）}</div>
+                            <div class="area-widgets footer-slot-widgets" data-area="footer">
+                                <?php echo $footerStructureHtml; ?>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：部件列表 -->
+        <div class="editor-widget-panel" id="widgetPanel">
+            <div class="panel-header">
+                <h3 class="panel-title">@lang{部件库}</h3>
+                <div class="panel-search">
+                    <input type="text" id="widgetSearch" class="w-input" data-size="sm" placeholder="@lang{搜索部件...}">
+                </div>
+                <button type="button" class="panel-close panel-close-widget" data-theme-editor-action="close-widget-panel" title="@lang{关闭部件库}">
+                    <w:icon name="close" size="sm"></w:icon>
+                </button>
+            </div>
+
+            <div class="widget-library-tabs" id="widgetLibraryTabs" hidden>
+                <button type="button" class="widget-library-tab active" data-widget-library-tab="general">
+                    <span class="widget-library-tab-main">
+                        <w:icon name="chart" size="sm"></w:icon>
+                        <span>@lang{通用部件}</span>
+                    </span>
+                    <span class="widget-library-tab-count" data-widget-library-tab-count="general">0</span>
+                </button>
+                <button type="button" class="widget-library-tab" data-widget-library-tab="basic">
+                    <span class="widget-library-tab-main">
+                        <w:icon name="puzzle" size="sm"></w:icon>
+                        <span>@lang{基础组件}</span>
+                    </span>
+                    <span class="widget-library-tab-count" data-widget-library-tab-count="basic">0</span>
+                </button>
+                <button type="button" class="widget-library-tab" data-widget-library-tab="applications">
+                    <span class="widget-library-tab-main">
+                        <w:icon name="grid" size="sm"></w:icon>
+                        <span>@lang{应用}</span>
+                    </span>
+                    <span class="widget-library-tab-count" data-widget-library-tab-count="applications">0</span>
+                </button>
+            </div>
+
+            <div class="panel-content">
+                <div class="widget-list" id="widgetList">
+                    <?php echo $widgetLibraryHtml; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 部件配置对话框：业务表单与保存流程不变，仅切换为 Weline UI 壳。 -->
+<dialog class="w-dialog w-theme-editor-dialog" id="widgetConfigModal"
+        aria-labelledby="widgetConfigModalLabel" data-w-component="dialog" data-state="closed"
+        data-size="lg" data-w-closable="true" data-w-backdrop="dismissible">
+    <header class="w-dialog__header">
+        <h2 class="w-dialog__title" id="widgetConfigModalLabel">
+            <w:icon name="settings" size="sm"></w:icon> @lang{部件配置}
+        </h2>
+        <button type="button" class="w-button" data-w-action="dialog.close" data-w-close
+                data-tone="quiet" data-size="sm" aria-label="@lang{关闭}"><w:icon name="close" size="sm"></w:icon></button>
+    </header>
+    <div class="w-dialog__body w-theme-editor-dialog__body" id="widgetConfigModalBody">
+        <div class="w-theme-editor-loading" role="status">
+            <span class="w-spinner" aria-hidden="true"></span>
+            <span class="w-visually-hidden">@lang{加载中...}</span>
+        </div>
+    </div>
+</dialog>
+
+<!-- 组件预览对话框：完整保留 PC / iPad / Mobile / 响应式四种视口。 -->
+<dialog class="w-dialog w-theme-editor-dialog w-theme-editor-preview-dialog" id="componentPreviewModal"
+        aria-labelledby="componentPreviewModalLabel" data-w-component="dialog" data-state="closed"
+        data-size="lg" data-w-closable="true" data-w-backdrop="dismissible">
+    <header class="w-dialog__header">
+        <h2 class="w-dialog__title" id="componentPreviewModalLabel">
+            <w:icon name="device-mobile" size="sm"></w:icon>
+            <span id="componentPreviewModalTitle">@lang{组件预览}</span>
+        </h2>
+        <button type="button" class="w-button" data-w-action="dialog.close" data-w-close
+                data-tone="quiet" data-size="sm" aria-label="@lang{关闭}"><w:icon name="close" size="sm"></w:icon></button>
+    </header>
+    <div class="w-dialog__body w-theme-editor-preview-dialog__body">
+        <div class="w-tabs" id="componentPreviewTabs" data-w-component="tabs">
+            <div class="w-tabs__list" role="tablist" aria-label="@lang{预览设备}">
+                <button class="w-tabs__tab" id="tab-pc" type="button" role="tab"
+                        aria-controls="panel-pc" aria-selected="true">PC (1200px)</button>
+                <button class="w-tabs__tab" id="tab-ipad" type="button" role="tab"
+                        aria-controls="panel-ipad" aria-selected="false">iPad (768px)</button>
+                <button class="w-tabs__tab" id="tab-mobile" type="button" role="tab"
+                        aria-controls="panel-mobile" aria-selected="false">Mobile (375px)</button>
+                <button class="w-tabs__tab" id="tab-responsive" type="button" role="tab"
+                        aria-controls="panel-responsive" aria-selected="false">@lang{响应式}</button>
+            </div>
+            <div class="w-tabs__content" id="componentPreviewTabContent">
+                <div class="w-tabs__panel" id="panel-pc" role="tabpanel" aria-labelledby="tab-pc">
+                    <div class="component-preview-viewport component-preview-viewport-pc" data-width="1200">
+                        <div class="component-preview-inner"></div>
+                    </div>
+                </div>
+                <div class="w-tabs__panel" id="panel-ipad" role="tabpanel" aria-labelledby="tab-ipad" hidden>
+                    <div class="component-preview-viewport component-preview-viewport-ipad" data-width="768">
+                        <div class="component-preview-inner"></div>
+                    </div>
+                </div>
+                <div class="w-tabs__panel" id="panel-mobile" role="tabpanel" aria-labelledby="tab-mobile" hidden>
+                    <div class="component-preview-viewport component-preview-viewport-mobile" data-width="375">
+                        <div class="component-preview-inner"></div>
+                    </div>
+                </div>
+                <div class="w-tabs__panel" id="panel-responsive" role="tabpanel" aria-labelledby="tab-responsive" hidden>
+                    <div class="component-preview-responsive-wrap">
+                        <label class="w-field w-theme-editor-responsive-field">
+                            <span class="w-field__label">@lang{宽度}</span>
+                            <input type="range" class="w-range" id="componentPreviewResponsiveWidth" min="320" max="1200" value="768">
+                            <output id="componentPreviewResponsiveWidthLabel" for="componentPreviewResponsiveWidth">768px</output>
+                        </label>
+                        <div class="component-preview-viewport component-preview-viewport-responsive" id="componentPreviewViewportResponsive">
+                            <div class="component-preview-inner"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="w-theme-editor-loading" id="componentPreviewLoading" role="status">
+            <span class="w-spinner" aria-hidden="true"></span>
+            <span>@lang{加载预览...}</span>
+        </div>
+    </div>
+</dialog>
+
+<!-- Weline UI 2.0 theme editor route style block 1 extracted -->
+
+<!-- Widget owns the source; the Theme Editor route owns the compiled loading boundary. -->
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260822-weline-ui"></script>
+
+<!-- 全局外观（整盘）：左右分栏，左侧选盘 / 右侧编辑 / 底栏保存 -->
+<aside id="themeDiskAppearanceModal" class="w-drawer w-theme-disk-appearance-panel" hidden
+       role="dialog" aria-modal="true" aria-labelledby="themeDiskAppearanceTitle"
+       data-w-component="drawer" data-state="closed" data-size="lg" data-w-side="end" data-w-closable="true">
+    <div class="w-drawer__header w-theme-disk-appearance-panel__header">
+        <h5 id="themeDiskAppearanceTitle" class="w-drawer__title w-theme-disk-appearance-panel__title">
+            <w:icon name="palette" size="sm"></w:icon>
+            <span>@lang{全局外观}</span>
+        </h5>
+        <button type="button" class="w-button" id="btnThemeDiskAppearanceClose"
+                data-w-action="drawer.close" data-tone="quiet" data-size="sm" aria-label="@lang{关闭}">
+            <w:icon name="close" size="sm"></w:icon>
+        </button>
+    </div>
+    <div class="w-toolbar w-theme-disk-appearance-toolbar">
+        <label class="w-field w-theme-disk-field--inline">
+            <span class="w-field__label">@lang{面板}</span>
+            <select class="w-select w-theme-disk-panel-select" data-size="sm" id="themeDiskAppearancePanel" data-w-appearance-panel></select>
+        </label>
+        <p class="w-theme-disk-appearance-hint">@lang{原生盘只读选用；修改先进入 Scope 草稿，发布后写入兼容投影并合编 CSS}</p>
+    </div>
+    <div class="w-drawer__body w-theme-disk-appearance-main">
+        <aside class="w-theme-disk-appearance-rail" aria-label="@lang{盘子列表}">
+            <div class="w-theme-disk-appearance-lists" data-w-appearance-disks></div>
+        </aside>
+        <section class="w-theme-disk-appearance-workspace" aria-label="@lang{编辑区}">
+            <div class="w-theme-disk-appearance-empty" data-w-appearance-empty>
+                <w:icon name="edit" size="sm"></w:icon>
+                <p>@lang{当前面板尚未选用盘子；选用后将自动展开编辑，也可点「继承编辑」或「编辑」}</p>
+            </div>
+            <div class="w-theme-disk-appearance-editor" data-w-appearance-editor hidden>
+                <div class="w-theme-disk-appearance-editor__head">
+                    <h6 class="w-theme-disk-appearance-editor__title" data-w-appearance-editor-title>@lang{编辑我的盘}</h6>
+                    <label class="w-field w-theme-disk-field--compact">
+                        <span class="w-field__label">@lang{名称}</span>
+                        <input type="text" class="w-input" data-size="sm" id="themeDiskAppearanceName" data-w-appearance-name maxlength="80">
+                    </label>
+                </div>
+                <div class="w-theme-disk-appearance-tokens" data-w-appearance-tokens></div>
+            </div>
+        </section>
+    </div>
+    <div class="w-drawer__footer w-theme-disk-appearance-footer" data-w-appearance-footer hidden>
+        <button type="button" class="w-button" data-tone="primary" data-w-appearance-action="save-as">
+            <w:icon name="save" size="sm"></w:icon><span>@lang{另存为我的盘}</span>
+        </button>
+        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-w-appearance-action="save">
+            <w:icon name="check" size="sm"></w:icon><span>@lang{保存当前我的盘}</span>
+        </button>
+    </div>
+</aside>
+
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260823-appearance-auto-edit"></script>

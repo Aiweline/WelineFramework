@@ -5,44 +5,44 @@
 数据暂时无法加载。参考编号：%{1},数据暂时无法加载。参考编号：%{1}
 状态暂时无法读取。参考编号：%{1},状态暂时无法读取。参考编号：%{1}
 订阅管理,订阅管理
-refresh,refresh
+refresh,刷新
 订阅创建、周期与续费管理,订阅创建、周期与续费管理
 订阅,订阅
-check,check
+check,查看
 查看订阅,查看订阅
 订阅周期,订阅周期
-calendar,calendar
+calendar,日历
 查看订阅周期,查看订阅周期
 续费调度,续费调度
-circle,circle
+circle,圆圈
 查看续费调度租约,查看续费调度租约
 续费尝试,续费尝试
-history,history
+history,历史
 查看续费尝试,查看续费尝试
 失败水位,失败水位
-warning,warning
+warning,警告
 查看订阅失败水位,查看订阅失败水位
 迁移状态,迁移状态
-eye,eye
+eye,眼睛
 只读查看订阅迁移状态,只读查看订阅迁移状态
 创建订阅,创建订阅
-plus,plus
+plus,加
 创建订阅并开启首个周期,创建订阅并开启首个周期
 执行续费,执行续费
 通过订单与沙箱支付端口执行续费尝试,通过订单与沙箱支付端口执行续费尝试
 "store_id 不能为负数：%{1}","store_id 不能为负数：%{1}"
 "Subscription 必填字段为空：%{1}","Subscription 必填字段为空：%{1}"
-"Subscription version/CAS/hash 非法","Subscription version/CAS/hash 非法"
-"Subscription scheduler lease 非法","Subscription scheduler lease 非法"
-"非法 Subscription status：%{1}","非法 Subscription status：%{1}"
+"Subscription version/CAS/hash 非法","订阅版本/CAS/hash 非法"
+"Subscription scheduler lease 非法","Subscription Scheduler 租赁 非法"
+"非法 Subscription status：%{1}","非法 订阅状态​​：%{1}"
 "website_id 不能为负数：%{1}","website_id 不能为负数：%{1}"
-"非法 Subscription environment：%{1}","非法 Subscription environment：%{1}"
-"非法 SubscriptionPeriod status：%{1}","非法 SubscriptionPeriod status：%{1}"
-"SubscriptionPeriod identity/version/CAS 非法","SubscriptionPeriod identity/version/CAS 非法"
-"Subscription missed watermark 非法","Subscription missed watermark 非法"
-"Subscription Billing Attempt 非法","Subscription Billing Attempt 非法"
-"Subscription Billing Attempt active guard 非法","Subscription Billing Attempt active guard 非法"
-"Subscription Billing Attempt terminal guard 非法","Subscription Billing Attempt terminal guard 非法"
+"非法 Subscription environment：%{1}","非法 订阅环境：%{1}"
+"非法 SubscriptionPeriod status：%{1}",非法认购期状态：%{1}
+"SubscriptionPeriod identity/version/CAS 非法","订阅期标识/版本/CAS 非法"
+"Subscription missed watermark 非法","订阅错过水印 非法"
+"Subscription Billing Attempt 非法","订阅计费尝试 非法"
+"Subscription Billing Attempt active guard 非法","订阅计费尝试 active Guard 非法"
+"Subscription Billing Attempt terminal guard 非法","订阅计费尝试终端防护 非法"
 我的订阅,我的订阅
 查看订阅周期与账单状态,查看订阅周期与账单状态
 订阅周期订单由系统按期新建，可在此查看状态。,订阅周期订单由系统按期新建，可在此查看状态。
@@ -55,78 +55,79 @@ plus,plus
 执行续费尝试,执行续费尝试
 "订阅 ID","订阅 ID"
 "客户 ID","客户 ID"
-"网站 ID","网站 ID"
+网站,网站
 "店铺 ID","店铺 ID"
-Provider,Provider
+Provider,提供商
 方案代码,方案代码
 幂等键,幂等键
 环境,环境
-"Worker ID","Worker ID"
+"Worker ID",工人ID
 创建,创建
 当前没有记录。,当前没有记录。
 "Subscription 周期续费","Subscription 周期续费"
 "按 Subscription lease 执行单周期续费或 missed 恢复","按 Subscription lease 执行单周期续费或 missed 恢复"
-"Subscription renewal queue content 必须是 JSON object","Subscription renewal queue content 必须是 JSON object"
-"Subscription renewal queue 参数非法","Subscription renewal queue 参数非法"
-"Subscription missed watermark identity 非法","Subscription missed watermark identity 非法"
+"Subscription renewal queue content 必须是 JSON object",订阅续订队列内容必须是JSON对象
+"Subscription renewal queue 参数非法","订阅续订队列 参数非法"
+"Subscription missed watermark identity 非法","订阅错过水印身份 非法"
 "Subscription missed watermark 并发更新冲突","Subscription missed watermark 并发更新冲突"
-"Subscription Billing Attempt identity 非法","Subscription Billing Attempt identity 非法"
-"Subscription Billing Attempt Order reference 非法","Subscription Billing Attempt Order reference 非法"
+"Subscription Billing Attempt identity 非法","订阅计费尝试 身份 非法"
+"Subscription Billing Attempt Order reference 非法","订阅计费尝试 订单编号 非法"
 "Billing Attempt 已绑定不同 Order：%{1}","Billing Attempt 已绑定不同 Order：%{1}"
 "Billing Attempt 不存在：%{1}","Billing Attempt 不存在：%{1}"
-"Subscription Billing Attempt status 非法","Subscription Billing Attempt status 非法"
+"Subscription Billing Attempt status 非法","订阅计费尝试状态 非法"
 "Billing Attempt 并发更新冲突：%{1}","Billing Attempt 并发更新冲突：%{1}"
-"Subscription Billing Attempt 字段过长","Subscription Billing Attempt 字段过长"
-"Subscription recover period_index 非法","Subscription recover period_index 非法"
+"Subscription Billing Attempt 字段过长","订阅计费尝试 字段过长"
+"Subscription recover period_index 非法","订阅恢复期_index 非法"
 "Billing Attempt 尚未绑定 Order，禁止替代重试","Billing Attempt 尚未绑定 Order，禁止替代重试"
 已取消或暂停订阅不可调度：%{1},已取消或暂停订阅不可调度：%{1}
 "Scheduler lease 被占用：%{1}","Scheduler lease 被占用：%{1}"
 "Subscription scheduler mode off：禁止新 tick，既有义务可 recover","Subscription scheduler mode off：禁止新 tick，既有义务可 recover"
-"Subscription Provider 已存在：%{1}","Subscription Provider 已存在：%{1}"
-"Subscription Provider 不存在：%{1}","Subscription Provider 不存在：%{1}"
-"Subscription Provider 已禁用：%{1}","Subscription Provider 已禁用：%{1}"
+"Subscription Provider 已存在：%{1}",订阅提供商已存在：%{1}
+"Subscription Provider 不存在：%{1}",订阅提供商不存在：%{1}
+"Subscription Provider 已禁用：%{1}",订阅提供商已禁用：%{1}
 订阅已取消：%{1},订阅已取消：%{1}
-"Subscription capability mode off，禁止写路径","Subscription capability mode off，禁止写路径"
+"Subscription capability mode off，禁止写路径",订阅能力模式关闭，禁止写路径
 客户无权操作该订阅,客户无权操作该订阅
-"Subscription Payment command 非法","Subscription Payment command 非法"
-"TASK-P4B-002 只允许 sandbox Payment","TASK-P4B-002 只允许 sandbox Payment"
-"Subscription Payment query identity 非法","Subscription Payment query identity 非法"
-"Subscription Store Scope 非法","Subscription Store Scope 非法"
+"Subscription Payment command 非法","Subscription 支付命令 非法"
+"TASK-P4B-002 只允许 sandbox Payment","TASK-P4B-002 只允许沙盒支付"
+"Subscription Payment query identity 非法","订阅付款查询身份 非法"
+"Subscription Store Scope 非法","Subscription Store 范围 非法"
 "Store 不允许创建新 Subscription 续费义务","Store 不允许创建新 Subscription 续费义务"
-"Period 缺少 subscription_id/period_key/period_index","Period 缺少 subscription_id/period_key/period_index"
-"SubscriptionPeriod identity 过长","SubscriptionPeriod identity 过长"
+"Period 缺少 subscription_id/period_key/period_index","期间缺少 subscription_id/period_key/period_index"
+"SubscriptionPeriod identity 过长",订阅周期标识过长
 "Period 不存在：%{1}","Period 不存在：%{1}"
-"SubscriptionPeriod Order reference 非法","SubscriptionPeriod Order reference 非法"
+"SubscriptionPeriod Order reference 非法","SubscriptionPeriod 订单编号 非法"
 "Period 已绑定不同 Order：%{1}","Period 已绑定不同 Order：%{1}"
-"SubscriptionPeriod missed reason 非法","SubscriptionPeriod missed reason 非法"
+"SubscriptionPeriod missed reason 非法","错过认购期的原因 非法"
 "已出账 Period 不能标记 missed：%{1}","已出账 Period 不能标记 missed：%{1}"
 "SubscriptionPeriod 并发更新冲突","SubscriptionPeriod 并发更新冲突"
-"SubscriptionPeriod identity 已占用：%{1}","SubscriptionPeriod identity 已占用：%{1}"
+"SubscriptionPeriod identity 已占用：%{1}","SubscriptionPeriod 身份 已占用：%{1}"
 "Subscription Order 创建失败（测试注入）","Subscription Order 创建失败（测试注入）"
 "Subscription 创建缺少必填字段","Subscription 创建缺少必填字段"
 "Subscription 创建字段过长","Subscription 创建字段过长"
-"Subscription ID 过长","Subscription ID 过长"
+"Subscription ID 过长","订阅 ID 过长"
 "Subscription 不存在：%{1}","Subscription 不存在：%{1}"
-"Subscription current_period_index 非法","Subscription current_period_index 非法"
-"Subscription idempotency 冲突：%{1}","Subscription idempotency 冲突：%{1}"
+"Subscription current_period_index 非法","订阅 current_period_index 非法"
+"Subscription idempotency 冲突：%{1}",订阅幂等性冲突：%{1}
 "Subscription 已存在：%{1}","Subscription 已存在：%{1}"
 同一客户/站点/计划订阅已存在,同一客户/站点/计划订阅已存在
-"Subscription 版本冲突：expected=%{1} actual=%{2}","Subscription 版本冲突：expected=%{1} actual=%{2}"
-"Subscription Order command 非法","Subscription Order command 非法"
+"Subscription 版本冲突：expected=%{1} actual=%{2}","订阅版本冲突：预期=%{1} 实际=%{2}"
+"Subscription Order command 非法","Subscription 订单命令 非法"
 "Subscription Period 必须创建且只创建一个 Order","Subscription Period 必须创建且只创建一个 Order"
-"Subscription scheduler lease identity 非法","Subscription scheduler lease identity 非法"
+"Subscription scheduler lease identity 非法","订阅调度器 租赁身份 非法"
 "MIG-P4B：Subscription 周期水位与 scheduler allowlist（仅登记的 full clone）","MIG-P4B：Subscription 周期水位与 scheduler allowlist（仅登记的 full clone）"
 打印帮助,打印帮助
-"在 full clone 只读清点 Subscription/Period/Attempt/Watermark/Lease","在 full clone 只读清点 Subscription/Period/Attempt/Watermark/Lease"
+"在 full clone 只读清点 Subscription/Period/Attempt/Watermark/Lease","在完整克隆 言语清点 订阅/期限/尝试/水印/租赁"
 "写前 checkpoint，只补 gap Period/watermark 并保持 shadow","写前 checkpoint，只补 gap Period/watermark 并保持 shadow"
 "新进程重载 checkpoint，重算事实 hash、周期连续性与水位","新进程重载 checkpoint，重算事实 hash、周期连续性与水位"
 "fresh verify 后仅放量 checkpoint 冻结的 Website scheduler","fresh verify 后仅放量 checkpoint 冻结的 Website scheduler"
 "按 checkpoint mode off，保留既有 Period/Order/Payment 义务","按 checkpoint mode off，保留既有 Period/Order/Payment 义务"
-"migration registry 已登记的 full mig_clone_*","migration registry 已登记的 full mig_clone_*"
-"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）"
+"migration registry 已登记的 full mig_clone_*","迁移注册表已注册完整的 mig_clone_*"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）",apply输出的检查点ID（verify/allowlist/rollback必需）
 "目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
 显示本帮助,显示本帮助
+"网站 ID","网站 ID"
 "MIG lease 探针失败","MIG lease 探针失败"
-"MIG-P4B：Subscription shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4B：Subscription shadow 到 allowlist（apply 必须 --database=mig_clone_*）"
+"MIG-P4B：Subscription shadow 到 allowlist（apply 必须 --database=mig_clone_*）",MIG-P4B：订阅影子到白名单（必须--database=mig_clone_*）
 已取消订阅不可调度：%{1},已取消订阅不可调度：%{1}
 "Period key 已占用：%{1}","Period key 已占用：%{1}"

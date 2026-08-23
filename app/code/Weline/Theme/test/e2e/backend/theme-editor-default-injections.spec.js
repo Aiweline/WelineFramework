@@ -223,32 +223,19 @@ function defaultInjectionItem(page) {
     .first();
 }
 
-async function applyFromApplicationsTab(page, scope = 'current') {
+async function applyFromApplicationsTab(page) {
   const item = defaultInjectionItem(page);
   await expect(item).toBeVisible({ timeout: 30000 });
   await expect(item).toContainText(selectedWidget().slot_id);
   await expect(item).toContainText('当前布局身份');
   await expect(item.locator('.btn-apply-default-injection[data-apply-scope="current"]')).toBeVisible();
-  await expect(item.locator('.btn-apply-default-injection[data-apply-scope="all"]')).toBeVisible();
-  const selector = scope === 'all'
-    ? '.btn-apply-default-injection[data-apply-scope="all"]'
-    : '.btn-apply-default-injection[data-apply-scope="current"]';
-  const responsePromise = page.waitForResponse((response) => (
-    response.request().method() === 'POST'
-      && response.url().includes('/apply-default-injection')
-  ));
-  await item.locator(selector).click();
-  const response = await responsePromise;
-  expect(response.ok()).toBeTruthy();
-  const result = await response.json();
-  expectEditorSuccess(result, `apply default injection (${scope})`);
-  expect(Number(result.applied_count || 0)).toBeGreaterThan(0);
-  const currentUrl = new URL(page.url());
-  const data = result.data || {};
-  expect(data.scope).toBe(currentUrl.searchParams.get('scope'));
-  expect(String(data.target_type)).toBe(currentUrl.searchParams.get('theme_layout_target_type'));
-  expect(Number(data.target_id)).toBe(Number(currentUrl.searchParams.get('theme_layout_target_id')));
-  return result;
+  await expect(item.locator('.btn-apply-default-injection[data-apply-scope="all"]')).toHaveCount(0);
+  await item.locator('.btn-apply-default-injection[data-apply-scope="current"]').click();
+  // Theme Editor mutations are transported through theme.editorRequest (BinQuery),
+  // so the browser never emits a response whose URL is the controller route.
+  // The item disappearing is the UI's completion signal; callers then assert
+  // the persisted rows and the API projection for the requested identity.
+  await expect(item).toHaveCount(0, { timeout: 30000 });
 }
 
 async function waitForDefaultInjectionAbsent(page, defaultInjectionsApi, payload) {
@@ -287,9 +274,9 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         identity = prepared.identity;
         expect(identity).toMatchObject({
           layout_option: 'default',
-          scope: `dashboard_view:${prepared.view_id}`,
-          target_type: 'website',
-          target_id: prepared.website_id,
+          scope: expect.stringMatching(/\.default\.default$/),
+          target_type: 'dashboard_view',
+          target_id: prepared.view_id,
         });
         const basePayload = identityPayload(themeId, identity);
 
@@ -308,11 +295,6 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
           '/theme/backend/theme-editor/default-injections',
         );
 
-        await expect.poll(() => snapshotRows(themeId, identity).length, {
-          timeout: 10000,
-          intervals: [250, 500],
-        }).toBe(0);
-
         const missingBefore = await callEditorRequest(
           page,
           buildQueryPath(defaultInjectionsApi, basePayload),
@@ -328,6 +310,11 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
           && item.area);
         expect(defaultItem, JSON.stringify(missingBefore.items || [])).toBeTruthy();
         selectedDefaultWidget = defaultItem;
+
+        await expect.poll(() => snapshotRows(themeId, identity).length, {
+          timeout: 10000,
+          intervals: [250, 500],
+        }).toBe(0);
 
         await openApplicationsTab(page);
         await applyFromApplicationsTab(page);
@@ -352,8 +339,10 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         const structureWidget = page.locator(`.preview-widget-item[data-layout-id="${firstLayoutId}"]`).first();
         await expect(structureWidget).toBeVisible({ timeout: 30000 });
         await structureWidget.hover();
-        await structureWidget.locator('.btn-delete-widget').click({ force: true });
-        await page.locator('.custom-confirm-dialog .btn-confirm').click();
+        await structureWidget.locator('.w-theme-editor-delete-widget').click({ force: true });
+        await page.locator('dialog.w-dialog[open]')
+          .getByRole('button', { name: '确认删除', exact: true })
+          .click();
         await waitForWidgetRows(themeId, identity, 0);
 
         await openApplicationsTab(page);
@@ -384,7 +373,7 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
   moduleCase(
     test,
     { module: MODULE, id: 'THEME-DEFAULT-INJECTION-002' },
-    'applications tab can restore a default widget to every identity of the same layout',
+    'applications tab owns only the current identity and leaves peer identities untouched',
     async ({ page }, testInfo) => {
       const themeId = resolveThemeId();
       test.skip(themeId <= 0, 'No active backend theme found in runtime info.');
@@ -442,12 +431,20 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         expect(selectedDefaultWidget, JSON.stringify(missingBefore.items || [])).toBeTruthy();
 
         await openApplicationsTab(page);
-        const applyResult = await applyFromApplicationsTab(page, 'all');
-        expect(Number(applyResult.applied_count || 0)).toBeGreaterThanOrEqual(2);
-        expect(applyResult.data?.slot_id).toBe(selectedWidget().slot_id);
-        expect(applyResult.data?.status).toBe('draft');
+        await applyFromApplicationsTab(page);
+        const primaryRows = await waitForWidgetRows(themeId, primaryIdentity, 1);
+        expect(primaryRows[0].slot_id).toBe(selectedWidget().slot_id);
+        expect(primaryRows[0].area).toBe(selectedWidget().area);
+        expect(primaryRows[0].status).toBe('draft');
+        expect(snapshotRows(themeId, secondaryIdentity)).toHaveLength(0);
         await waitForDefaultInjectionAbsent(page, defaultInjectionsApi, identityPayload(themeId, primaryIdentity));
-        await waitForDefaultInjectionAbsent(page, defaultInjectionsApi, identityPayload(themeId, secondaryIdentity));
+        const secondaryMissing = await callEditorRequest(
+          page,
+          buildQueryPath(defaultInjectionsApi, identityPayload(themeId, secondaryIdentity)),
+          'GET',
+        );
+        expectEditorSuccess(secondaryMissing, 'default injections for untouched peer identity');
+        expect(findDefaultInjection(secondaryMissing.items)).toBeTruthy();
         await expect(defaultInjectionItem(page)).toHaveCount(0, { timeout: 30000 });
       } finally {
         for (const identity of identities) {

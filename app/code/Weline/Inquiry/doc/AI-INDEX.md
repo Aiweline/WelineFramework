@@ -34,3 +34,11 @@
 php bin/w taglib:collect Weline_Inquiry
 php bin/w e2e:run --module=Weline_Inquiry --project=chromium --workers=1
 ```
+
+<!-- weline:module-doc-baseline:start -->
+## 固定模块文档
+
+- [功能现状](功能现状.md)：当前版本、代码能力面、主要入口与未验证边界。
+- [需求](需求.md)：已确认需求、文档基线与待确认产品语义。
+- [开发日志](开发日志.md)：目标版本进度、证据和交付状态。
+<!-- weline:module-doc-baseline:end -->

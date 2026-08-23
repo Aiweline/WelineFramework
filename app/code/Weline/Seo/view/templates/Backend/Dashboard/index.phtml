@@ -126,7 +126,7 @@ $title = $this->getData('seo_page_title') ?: __('SEO总览');
                                                     <w:icon name="tag" size="sm"></w:icon>
                                                     <?= $subject['keyword_count'] ?? 0 ?> <lang>个关键词</lang>
                                                 </span>
-                                                <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" class="w-button btn-view-detail">
+                                                <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" class="w-button weline-btn-view-detail">
                                                     <w:icon name="eye" size="sm"></w:icon>
                                                     <lang>查看详情</lang>
                                                 </a>
@@ -147,7 +147,7 @@ $title = $this->getData('seo_page_title') ?: __('SEO总览');
                                                         <span class="priority"><?= $index + 1 ?></span>
                                                         <?= htmlspecialchars($keyword['keyword'] ?? '') ?>
                                                         <?php if (!empty($keyword['priority'])): ?>
-                                                            <span class="w-badge ms-2" data-w-background="muted"><?= $keyword['priority'] ?></span>
+                                                            <span class="w-badge" data-w-background="muted"><?= $keyword['priority'] ?></span>
                                                         <?php endif; ?>
                                                     </div>
                                                 <?php endforeach; ?>

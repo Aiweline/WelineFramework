@@ -52,8 +52,12 @@ final class Diagnostics extends BackendController
                 $safeRows = [];
                 foreach ($rows as $row) if (is_array($row)) $safeRows[] = array_intersect_key($row, array_flip($definition[1]));
                 $datasets[] = ['label' => __($label), 'rows' => $safeRows, 'error' => ''];
-            } catch (\Throwable $throwable) {
-                $datasets[] = ['label' => __($label), 'rows' => [], 'error' => $throwable->getMessage()];
+            } catch (\Throwable) {
+                $datasets[] = [
+                    'label' => __($label),
+                    'rows' => [],
+                    'error' => __('诊断数据暂时不可用，请检查运行日志。'),
+                ];
             }
         }
         $this->assign('workspace_code', $code);

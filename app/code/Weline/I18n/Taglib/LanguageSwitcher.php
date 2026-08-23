@@ -22,7 +22,6 @@ class LanguageSwitcher implements TaglibInterface
     private const SWITCHER_HTML_CACHE_TTL = 60.0;
     private const SWITCHER_LANGUAGE_CACHE_TTL = 300.0;
     public const TAG_NAME = 'i18n:switcher';
-    public const LEGACY_TAG_NAME = 'i18n:language:switcher';
 
     /**
      * @var array<string, array{expires: float, html: string}>
@@ -35,12 +34,18 @@ class LanguageSwitcher implements TaglibInterface
     private static array $languageCache = [];
 
     /**
+     * @var array<string, array<string, string>>
+     */
+    private static array $chromeDictionaryCache = [];
+
+    /**
      * Drop process-local language/html memo so lifecycle changes take effect immediately.
      */
     public static function clearProcessCaches(): void
     {
         self::$htmlCache = [];
         self::$languageCache = [];
+        self::$chromeDictionaryCache = [];
     }
 
     public static function name(): string
@@ -77,6 +82,8 @@ class LanguageSwitcher implements TaglibInterface
             'website-id' => false,
             'show-request' => false,
             'label-mode' => false,
+            'show-search' => false,
+            'search-placeholder' => false,
         ];
     }
 
@@ -96,6 +103,8 @@ class LanguageSwitcher implements TaglibInterface
                 . '\'website_id\' => $Taglib__website_id ?? null,'
                 . '\'show_request\' => $Taglib__show_request ?? null,'
                 . '\'label_mode\' => (string)($Taglib__label_mode ?? \'short\'),'
+                . '\'show_search\' => $Taglib__show_search ?? null,'
+                . '\'search_placeholder\' => (string)($Taglib__search_placeholder ?? \'\'),'
                 . ']); ?>';
         };
     }
@@ -137,6 +146,11 @@ class LanguageSwitcher implements TaglibInterface
             if (!\in_array($labelMode, ['short', 'display'], true)) {
                 $labelMode = 'short';
             }
+            $showSearch = self::normalizeOptionalBool($attributes['show_search'] ?? null);
+            if ($showSearch === null) {
+                $showSearch = true;
+            }
+            $searchPlaceholderAttr = \trim((string)($attributes['search_placeholder'] ?? ''));
 
             /** @var LocaleCatalogScopeResolver $scopeResolver */
             $scopeResolver = ObjectManager::getInstance(LocaleCatalogScopeResolver::class);
@@ -152,6 +166,21 @@ class LanguageSwitcher implements TaglibInterface
             $showLanguageRequest = $scope->allowRequest;
             $currentCode = $scope->currentCode;
             $displayLocale = $scope->displayLocale;
+            // WLS only loads the current request module CSV into Phrase layers.
+            // Login/header pages are often Weline_Admin / Theme, so chrome copy
+            // must come from Weline_I18n's own dictionary for displayLocale.
+            $searchPlaceholder = $searchPlaceholderAttr !== ''
+                ? $searchPlaceholderAttr
+                : self::translateChrome('搜索国家、语言或代码...', $displayLocale);
+            $labelSwitchLanguage = self::translateChrome('切换语言', $displayLocale);
+            $labelNoMatch = self::translateChrome('没有匹配的语言', $displayLocale);
+            $labelRequest = self::translateChrome('申请支持其他语言', $displayLocale);
+            $labelLoading = self::translateChrome('正在加载语言目录与人机验证...', $displayLocale);
+            $labelLoadFail = self::translateChrome('申请表加载失败', $displayLocale);
+            $labelRetry = self::translateChrome('重新加载', $displayLocale);
+            $labelError = self::translateChrome('加载失败，请稍后重试', $displayLocale);
+            $labelClose = self::translateChrome('关闭', $displayLocale);
+            $labelUngrouped = self::translateChrome('未分组国家', $displayLocale);
             $welineLanguages = self::buildLanguagesFromScope($scope, $displayLocale);
             $languageGroups = self::groupLanguagesByCountry($welineLanguages, $displayLocale, $currentCode);
 
@@ -232,8 +261,12 @@ class LanguageSwitcher implements TaglibInterface
                 $backendRoute = trim((string)(Env::getAreaRoutePrefix('backend') ?? $backendRoute), '/');
             }
             $currentCurrency = State::getCurrency();
-            if (!State::isAllowedCurrencyCode($currentCurrency)) {
+            // Keep path/State currency for hrefs even if the allow-list is still empty
+            // for this Fiber; demoting to site default drops /USD from language links.
+            if ($currentCurrency === '' || !preg_match('/^[A-Z]{3}$/', strtoupper(trim($currentCurrency)))) {
                 $currentCurrency = self::defaultCurrency();
+            } else {
+                $currentCurrency = strtoupper(trim($currentCurrency));
             }
             $websiteMount = self::resolveWebsiteMountPath($request instanceof Request ? $request : null);
             $htmlCacheKey = self::buildHtmlCacheKey(
@@ -241,6 +274,7 @@ class LanguageSwitcher implements TaglibInterface
                 $websiteId,
                 $renderFor,
                 $currentCode,
+                $displayLocale,
                 $currentCurrency,
                 $currentPath,
                 $currentSearch,
@@ -248,7 +282,9 @@ class LanguageSwitcher implements TaglibInterface
                 \array_keys($welineLanguages)
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
-                . '|markup=weline-ui-2-lang-native-path-nav-11'
+                . '|show_search=' . ($showSearch ? '1' : '0')
+                . '|label_mode=' . $labelMode
+                . '|markup=weline-ui-2-language-switcher-component-19'
                 . '|mount=' . $websiteMount;
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
@@ -256,11 +292,6 @@ class LanguageSwitcher implements TaglibInterface
             }
             unset(self::$htmlCache[$htmlCacheKey]);
 
-            $i18nRuntimeFile = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'I18n' . DS
-                . 'view' . DS . 'statics' . DS . 'js' . DS . 'i18n.js';
-            $i18nRuntimeVersion = \is_file($i18nRuntimeFile)
-                ? (string)(\filemtime($i18nRuntimeFile) ?: 0)
-                : '0';
             $safeSwitcherId = htmlspecialchars($switcherId, ENT_QUOTES, 'UTF-8');
             $safeToggleId = htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8');
             $safePanelId = htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8');
@@ -269,24 +300,36 @@ class LanguageSwitcher implements TaglibInterface
             $currentLabel = $renderFor === 'js' ? $currentDisplay : $currentName;
             $html = [];
             $html[] = '<div class="w-language-switcher w-menu-root"'
-                . ' data-w-component="menu" data-w-placement="bottom-end"'
+                . ' data-w-component="menu language-switcher" data-w-placement="bottom-end" data-w-anchor-mode="element"'
                 . ' data-i18n-switcher data-i18n-switcher-id="' . $safeSwitcherId . '"'
                 . ' data-i18n-navigation="' . $safeNavigation . '"'
+                . ' data-website-id="' . (int)$websiteId . '"'
+                . ($showLanguageRequest ? ' data-language-request="1"' : '')
                 . ' data-website-mount="' . $safeWebsiteMount . '">';
             $html[] = '    <button type="button" id="' . $safeToggleId . '"'
                 . ' class="w-button w-language-switcher__trigger" data-tone="quiet" data-size="sm"'
                 . ' data-w-menu-trigger aria-expanded="false" aria-haspopup="menu"'
                 . ' aria-controls="' . $safePanelId . '"'
-                . ' aria-label="' . htmlspecialchars((string)__('切换语言'), ENT_QUOTES, 'UTF-8') . '">';
+                . ' aria-label="' . htmlspecialchars($labelSwitchLanguage, ENT_QUOTES, 'UTF-8') . '">';
             $html[] = '        <span class="w-language-switcher__flag">' . $currentFlag . '</span>'
                 . '<span class="w-language-switcher__current current-language">' . $currentLabel . '</span>'
                 . '<w-icon name="chevron-down" size="xs"></w-icon>';
             $html[] = '    </button>';
             $html[] = '    <div id="' . $safePanelId . '" class="w-menu w-language-switcher__menu"'
                 . ' data-w-menu-panel role="menu" aria-labelledby="' . $safeToggleId . '" hidden>';
+            if ($showSearch) {
+                $html[] = '        <div class="w-language-switcher__search-wrap">'
+                    . '<input class="w-input w-language-switcher__search" type="search"'
+                    . ' placeholder="' . htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' autocomplete="off" data-w-language-search'
+                    . ' aria-label="' . htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') . '"></div>';
+                $html[] = '        <p class="w-language-switcher__empty" data-w-language-empty hidden>'
+                    . htmlspecialchars($labelNoMatch, ENT_QUOTES, 'UTF-8')
+                    . '</p>';
+            }
 
             foreach ($languageGroups as $groupIndex => $languageGroup) {
-                $countryNameRaw = (string)($languageGroup['country_name'] ?? __('未分组国家'));
+                $countryNameRaw = (string)($languageGroup['country_name'] ?? $labelUngrouped);
                 $countryCodeRaw = (string)($languageGroup['country_code'] ?? '');
                 $groupId = $switcherId . '-group-' . (int)$groupIndex;
                 $html[] = '        <div class="w-language-switcher__group" role="group" aria-labelledby="'
@@ -317,10 +360,20 @@ class LanguageSwitcher implements TaglibInterface
                         $currentCurrency,
                         $backendRoute,
                     );
+                    $searchBlob = \trim(\implode(' ', \array_filter([
+                        (string)($language['search_terms'] ?? ''),
+                        $nameRaw,
+                        $selfName,
+                        $referenceName,
+                        $code,
+                        $countryNameRaw,
+                        $countryCodeRaw,
+                    ], static fn(string $part): bool => $part !== '')));
                     $html[] = '            <a class="w-menu__item w-language-switcher__option"'
                         . ' role="menuitemradio" aria-checked="' . ($active ? 'true' : 'false') . '"'
                         . ' data-state="' . ($active ? 'active' : 'idle') . '"'
                         . ' data-i18n-authoritative-href="1" data-language-option="1"'
+                        . ' data-w-search="' . htmlspecialchars(\mb_strtolower($searchBlob), ENT_QUOTES, 'UTF-8') . '"'
                         . ' data-lang="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '"'
                         . ' href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '">'
                         . '<span class="w-language-switcher__flag">'
@@ -334,55 +387,50 @@ class LanguageSwitcher implements TaglibInterface
             }
 
             if ($showLanguageRequest) {
-                $requestPath = $isBackendArea
-                    ? '/' . trim($backendRoute, '/') . '/i18n/backend/language-requests'
-                    : '/i18n/frontend/language-support-request';
+                $requestDialogId = $switcherId . '-request-dialog';
+                $requestTitleId = $switcherId . '-request-title';
                 $html[] = '        <div class="w-menu__divider"></div>';
-                $html[] = '        <a class="w-menu__item" role="menuitem" href="'
-                    . htmlspecialchars($requestPath, ENT_QUOTES, 'UTF-8') . '">'
+                $html[] = '        <button type="button" class="w-menu__item w-language-switcher__request"'
+                    . ' role="menuitem" data-language-request-open'
+                    . ' aria-haspopup="dialog"'
+                    . ' aria-controls="' . htmlspecialchars($requestDialogId, ENT_QUOTES, 'UTF-8') . '">'
                     . '<w-icon name="language" size="sm"></w-icon><span>'
-                    . htmlspecialchars((string)__('申请支持其他语言'), ENT_QUOTES, 'UTF-8')
-                    . '</span></a>';
+                    . htmlspecialchars($labelRequest, ENT_QUOTES, 'UTF-8')
+                    . '</span></button>';
             }
 
             $html[] = '    </div>';
+            if ($showLanguageRequest) {
+                $requestDialogId = $switcherId . '-request-dialog';
+                $requestTitleId = $switcherId . '-request-title';
+                // Native <dialog> uses the browser top layer so the Theme overlay
+                // cannot bury the panel under .wf-nav's low stacking context.
+                $html[] = '    <dialog id="' . htmlspecialchars($requestDialogId, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' class="w-dialog" data-w-component="dialog" data-size="lg"'
+                    . ' data-language-request-modal'
+                    . ' data-loading-text="' . htmlspecialchars($labelLoading, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' data-load-fail-text="' . htmlspecialchars($labelLoadFail, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' data-retry-text="' . htmlspecialchars($labelRetry, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' data-error-text="' . htmlspecialchars($labelError, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' aria-labelledby="' . htmlspecialchars($requestTitleId, ENT_QUOTES, 'UTF-8') . '">';
+                $html[] = '        <header class="w-dialog__header">'
+                    . '<h2 id="' . htmlspecialchars($requestTitleId, ENT_QUOTES, 'UTF-8') . '" class="w-dialog__title">'
+                    . htmlspecialchars($labelRequest, ENT_QUOTES, 'UTF-8')
+                    . '</h2>'
+                    . '<button type="button" class="w-button" data-tone="quiet" data-size="sm"'
+                    . ' data-w-action="dialog.close" data-w-close'
+                    . ' data-language-request-close'
+                    . ' aria-label="' . htmlspecialchars($labelClose, ENT_QUOTES, 'UTF-8') . '">'
+                    . '<w-icon name="close" size="sm"></w-icon></button>'
+                    . '</header>';
+                // Shell only — form HTML arrives on first open via QueryProvider.
+                $html[] = '        <div class="w-dialog__body" data-language-request-body>'
+                    . '<p class="w-text" data-tone="muted" role="status">'
+                    . htmlspecialchars($labelLoading, ENT_QUOTES, 'UTF-8')
+                    . '</p></div>';
+                $html[] = '    </dialog>';
+            }
             $html[] = '</div>';
-            // Theme UI owns open/close; this runtime writes language preference and
-            // forces same-path reload when switching back to the default locale
-            // (authoritative href often omits the default language segment).
-            $html[] = '<script src="/Weline/I18n/view/statics/js/i18n.js?v='
-                . htmlspecialchars($i18nRuntimeVersion, ENT_QUOTES, 'UTF-8')
-                . '" data-weline-i18n-runtime="1"></script>';
-            $html[] = '<script>(function(){';
-            $html[] = 'var currentScript=document.currentScript;var root=null;';
-            $html[] = 'if(currentScript){var node=currentScript.previousElementSibling;while(node&&!(node.getAttribute&&node.getAttribute("data-i18n-switcher-id"))){node=node.previousElementSibling;}root=node;}';
-            $html[] = 'if(!root&&document.querySelector){root=document.querySelector(\'[data-i18n-switcher-id="' . $safeSwitcherId . '"]\');}';
-            $html[] = 'if(!root||root.dataset.welineI18nNative==="1"){return;}root.dataset.welineI18nNative="1";';
-            $html[] = 'var navigation=String(root.getAttribute("data-i18n-navigation")||"path").toLowerCase();';
-            $html[] = 'var panel=root.querySelector("[data-w-menu-panel]")||root;';
-            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(opt){';
-            $html[] = 'var code=opt.getAttribute("data-lang")||"";if(!code){return;}';
-            $html[] = 'if(opt.dataset.welineLangBound==="1"){return;}opt.dataset.welineLangBound="1";';
-            $html[] = 'opt.addEventListener("click",function(event){';
-            $html[] = 'var href=opt.getAttribute("href")||"";var i18n=window.WelineI18n;';
-            $html[] = 'if(navigation==="emit"){';
-            $html[] = 'event.preventDefault();';
-            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
-            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(node){var active=(node.getAttribute("data-lang")||"")===code;node.setAttribute("aria-checked",active?"true":"false");node.setAttribute("data-state",active?"active":"idle");});';
-            $html[] = 'var currentEl=root.querySelector(".current-language");if(currentEl){var parts=String(code).split("_");var short=parts.length>=2?(parts[0].toUpperCase()==="ZH"?(String(parts[1]).toUpperCase()==="HANT"?"TW":"ZH"):parts[0].substring(0,2).toUpperCase()):String(code).substring(0,2).toUpperCase();currentEl.textContent=short;}';
-            $html[] = 'try{root.dispatchEvent(new CustomEvent("weline:i18n:locale-change",{bubbles:true,detail:{locale:code}}));}catch(err){}';
-            $html[] = 'return;}';
-            // Path/LIVE mode: write the language cookie then let the browser follow
-            // the authoritative <a href>. preventDefault + location.assign races
-            // into an empty document in Chromium/Electron (200 + decodedBodySize 0).
-            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
-            $html[] = 'if(i18n&&typeof i18n.writeLanguagePreference==="function"){i18n.writeLanguagePreference(code);}';
-            $html[] = 'try{var target=new URL(href||"#",window.location.origin);var samePath=target.pathname===(window.location.pathname||"/")&&target.search===(window.location.search||"")&&target.hash===(window.location.hash||"");if(samePath){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}else{window.location.reload();}return;}}catch(err){}';
-            $html[] = 'if(!href||href==="#"){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}return;}';
-            // Native navigation — do not preventDefault.
-            $html[] = '});';
-            $html[] = '});';
-            $html[] = '})();</script>';
             $output = \implode("\n", $html);
             self::$htmlCache[$htmlCacheKey] = [
                 'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
@@ -539,7 +587,7 @@ class LanguageSwitcher implements TaglibInterface
                 'flag' => (string)($item['flag'] ?? ''),
                 'country_code' => (string)($item['country_code'] ?? ''),
                 'country_name' => (string)($item['country_name'] ?? ''),
-                'search_terms' => (string)($item['search_terms'] ?? ''),
+                'search_terms' => (string)($item['search_terms'] ?? ($item['search'] ?? '')),
             ];
         }
 
@@ -656,7 +704,7 @@ class LanguageSwitcher implements TaglibInterface
             $countryCode = \strtoupper(\trim((string)($language['country_code'] ?? '')));
             $countryName = \trim((string)($language['country_name'] ?? ''));
             if ($countryName === '') {
-                $countryName = $countryCode !== '' ? $countryCode : (string)__('未分组国家');
+                $countryName = $countryCode !== '' ? $countryCode : self::translateChrome('未分组国家', $displayLocale);
             }
             $groupKey = \strtolower($countryCode . '|' . $countryName);
             if (!isset($groupIndexes[$groupKey])) {
@@ -871,6 +919,7 @@ class LanguageSwitcher implements TaglibInterface
         int $websiteId,
         string $renderFor,
         string $currentCode,
+        string $displayLocale,
         string $currentCurrency,
         string $currentPath,
         string $currentSearch,
@@ -881,12 +930,80 @@ class LanguageSwitcher implements TaglibInterface
             'scope' => $isBackendArea ? 'backend' : 'frontend:' . $websiteId,
             'for' => $renderFor,
             'lang' => $currentCode,
+            'display' => $displayLocale,
             'currency' => $currentCurrency,
             'path' => $currentPath,
             'search' => self::sanitizeLanguageSearch($currentSearch),
             'backend_route' => $backendRoute,
             'languages' => $languageCodes,
         ], \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE) ?: '');
+    }
+
+    /**
+     * Translate switcher chrome copy from Weline_I18n module CSV for a locale.
+     *
+     * WLS Phrase layers only load the current request module CSV; Admin/Theme
+     * pages therefore miss I18n-owned strings when using __() alone.
+     */
+    private static function translateChrome(string $source, string $locale): string
+    {
+        $source = \trim($source);
+        if ($source === '') {
+            return '';
+        }
+        $locale = \trim($locale) !== '' ? \trim($locale) : 'zh_Hans_CN';
+        $dictionary = self::loadChromeDictionary($locale);
+        if (isset($dictionary[$source]) && $dictionary[$source] !== '') {
+            return $dictionary[$source];
+        }
+        try {
+            $fallback = (string)__($source);
+            if ($fallback !== '') {
+                return $fallback;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $source;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function loadChromeDictionary(string $locale): array
+    {
+        if (isset(self::$chromeDictionaryCache[$locale])) {
+            return self::$chromeDictionaryCache[$locale];
+        }
+
+        $path = \dirname(__DIR__) . '/i18n/' . $locale . '.csv';
+        if (!\is_file($path)) {
+            return self::$chromeDictionaryCache[$locale] = [];
+        }
+
+        $handle = @\fopen($path, 'rb');
+        if ($handle === false) {
+            return self::$chromeDictionaryCache[$locale] = [];
+        }
+
+        $words = [];
+        try {
+            while (($row = \fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
+                if (!isset($row[0], $row[1])) {
+                    continue;
+                }
+                $key = \trim((string)$row[0]);
+                $value = \trim((string)$row[1]);
+                if ($key === '' || $value === '') {
+                    continue;
+                }
+                $words[$key] = $value;
+            }
+        } finally {
+            \fclose($handle);
+        }
+
+        return self::$chromeDictionaryCache[$locale] = $words;
     }
 
     private static function sanitizeInlineFlagMarkup(string $markup): string
@@ -1451,6 +1568,6 @@ class LanguageSwitcher implements TaglibInterface
 
     public static function document(): string
     {
-        return '<p><code>&lt;w:i18n:switcher /&gt;</code> 按国家分组、支持搜索的标准语言切换标签。旧名 <code>&lt;w:i18n:language:switcher /&gt;</code> 为兼容别名。</p>';
+        return '<p><code>&lt;w:i18n:switcher /&gt;</code> 按国家分组、支持搜索的标准语言切换标签。</p>';
     }
 }

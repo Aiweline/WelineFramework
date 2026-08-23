@@ -4,13 +4,17 @@
  * @var array|null $config
  * @var array|null $configArray
  * @var array $drivers
+ * @var array $driverFields
  * @var array $statusOptions
  */
 $config = $this->getData('config');
 $configArray = $this->getData('configArray') ?: [];
 $drivers = $this->getData('drivers') ?: [];
+$driverFields = $this->getData('driverFields') ?: [];
 $statusOptions = $this->getData('statusOptions') ?: [];
 $isEdit = !empty($config['config_id']);
+$currentDriver = (string)($config['driver'] ?? array_key_first($drivers) ?? 'local::filesystem');
+$escape = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <w:backend:card>
     <w:slot:header>
@@ -28,8 +32,8 @@ $isEdit = !empty($config['config_id']);
             <div class="w-grid" style="--w-gap:var(--weline-space-4);">
                 <div style="--w-span-md:6;">
                     <label class="w-field__label"><?= __('存储标识') ?> <span class="w-text" data-tone="danger">*</span></label>
-                    <input type="text" class="w-input" name="name" value="<?= htmlspecialchars($config['name'] ?? '') ?>" required pattern="^[a-zA-Z][a-zA-Z0-9_]*$" <?= $isEdit ? 'readonly' : '' ?>>
-                    <div class="w-field__hint"><?= __('唯一标识，只能包含字母、数字和下划线') ?></div>
+                    <input type="text" class="w-input" name="name" value="<?= htmlspecialchars($config['name'] ?? '') ?>" required pattern="^(?:[a-zA-Z0-9][a-zA-Z0-9_-]*|[a-zA-Z0-9][a-zA-Z0-9_-]*::[a-zA-Z0-9][a-zA-Z0-9_-]*::[a-zA-Z0-9][a-zA-Z0-9_-]*)$" <?= $isEdit ? 'readonly' : '' ?>>
+                    <div class="w-field__hint"><?= __('可填实例名，保存后统一为 type::vendor::instance 三段式磁盘代码') ?></div>
                 </div>
                 
                 <div style="--w-span-md:6;">
@@ -39,9 +43,10 @@ $isEdit = !empty($config['config_id']);
                 
                 <div style="--w-span-md:6;">
                     <label class="w-field__label"><?= __('驱动类型') ?> <span class="w-text" data-tone="danger">*</span></label>
-                    <select class="w-select" name="driver" id="driver-select" required>
+                    <?php if ($isEdit): ?><input type="hidden" name="driver" value="<?= $escape($currentDriver) ?>"><?php endif; ?>
+                    <select class="w-select" name="driver" id="driver-select" required <?= $isEdit ? 'disabled' : '' ?>>
                         <?php foreach ($drivers as $key => $label): ?>
-                        <option value="<?= $key ?>" <?= ($config['driver'] ?? 'local') === $key ? 'selected' : '' ?>><?= $label ?></option>
+                        <option value="<?= $escape($key) ?>" <?= $currentDriver === $key ? 'selected' : '' ?>><?= $escape($label) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -65,90 +70,53 @@ $isEdit = !empty($config['config_id']);
             
             <hr style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-6);">
             
-            <!-- 本地存储配置 -->
-            <div id="config-local" class="driver-config" style="<?= ($config['driver'] ?? 'local') === 'local' ? '' : 'display:none' ?>">
-                <h6 style="--w-mb:var(--weline-space-4);"><?= __('本地存储配置') ?></h6>
+            <?php foreach ($driverFields as $providerCode => $fields): ?>
+            <div class="driver-config" data-provider="<?= $escape($providerCode) ?>" style="<?= $currentDriver === $providerCode ? '' : 'display:none' ?>">
+                <h6 style="--w-mb:var(--weline-space-4);"><?= $escape($drivers[$providerCode] ?? $providerCode) ?> <?= __('配置') ?></h6>
                 <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                    <div style="--w-span-md:6;">
-                        <label class="w-field__label"><?= __('根目录路径') ?></label>
-                        <input type="text" class="w-input" name="config_root_path" value="<?= htmlspecialchars($configArray['root_path'] ?? '') ?>" placeholder="<?= PUB ?>media">
-                    </div>
-                    <div style="--w-span-md:6;">
-                        <label class="w-field__label"><?= __('基础 URL') ?></label>
-                        <input type="text" class="w-input" name="config_base_url" value="<?= htmlspecialchars($configArray['base_url'] ?? '') ?>" placeholder="/pub/media">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- S3 存储配置 -->
-            <div id="config-s3" class="driver-config" style="<?= ($config['driver'] ?? 'local') === 's3' ? '' : 'display:none' ?>">
-                <h6 style="--w-mb:var(--weline-space-4);"><?= __('AWS S3 配置') ?></h6>
-                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                    <div style="--w-span-md:6;">
-                        <label class="w-field__label"><?= __('Access Key') ?> <span class="w-text" data-tone="danger">*</span></label>
-                        <input type="text" class="w-input" name="config_key" value="<?= htmlspecialchars($configArray['key'] ?? '') ?>">
-                    </div>
-                    <div style="--w-span-md:6;">
-                        <label class="w-field__label"><?= __('Secret Key') ?> <span class="w-text" data-tone="danger">*</span></label>
-                        <input type="password" class="w-input" name="config_secret" value="<?= htmlspecialchars($configArray['secret'] ?? '') ?>">
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <label class="w-field__label"><?= __('Region') ?></label>
-                        <input type="text" class="w-input" name="config_region" value="<?= htmlspecialchars($configArray['region'] ?? 'us-east-1') ?>">
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <label class="w-field__label"><?= __('Bucket') ?> <span class="w-text" data-tone="danger">*</span></label>
-                        <input type="text" class="w-input" name="config_bucket" value="<?= htmlspecialchars($configArray['bucket'] ?? '') ?>">
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <label class="w-field__label"><?= __('前缀路径') ?></label>
-                        <input type="text" class="w-input" name="config_prefix" value="<?= htmlspecialchars($configArray['prefix'] ?? '') ?>" placeholder="uploads">
-                    </div>
-                    <div style="--w-span-md:6;">
-                        <label class="w-field__label"><?= __('自定义 Endpoint') ?></label>
-                        <input type="text" class="w-input" name="config_endpoint" value="<?= htmlspecialchars($configArray['endpoint'] ?? '') ?>" placeholder="<?= __('留空使用默认') ?>">
-                    </div>
-                    <div style="--w-span-md:6;">
+                    <?php foreach ($fields as $field):
+                        $key = (string)($field['key'] ?? '');
+                        $type = (string)($field['type'] ?? 'text');
+                        $value = $currentDriver === $providerCode && array_key_exists($key, $configArray)
+                            ? $configArray[$key]
+                            : ($field['default'] ?? '');
+                        $required = !empty($field['required']) && !($isEdit && !empty($field['secret']));
+                    ?>
+                    <div style="--w-span-md:<?= (int)($field['span'] ?? 6) ?>;">
+                        <?php if ($type === 'checkbox'): ?>
                         <div class="w-check" style="--w-mt:var(--weline-space-6);">
-                            <input type="checkbox" name="config_use_path_style_endpoint" value="1" <?= ($configArray['use_path_style_endpoint'] ?? false) ? 'checked' : '' ?>>
-                            <label><?= __('使用路径风格 Endpoint') ?></label>
+                            <input type="hidden" name="config[<?= $escape($key) ?>]" value="0">
+                            <input type="checkbox" name="config[<?= $escape($key) ?>]" value="1" <?= !empty($value) ? 'checked' : '' ?>>
+                            <label><?= $escape($field['label'] ?? $key) ?></label>
                         </div>
+                        <?php else: ?>
+                        <label class="w-field__label">
+                            <?= $escape($field['label'] ?? $key) ?>
+                            <?php if (!empty($field['required'])): ?><span class="w-text" data-tone="danger">*</span><?php endif; ?>
+                        </label>
+                        <?php if ($type === 'select'): ?>
+                        <select class="w-select" name="config[<?= $escape($key) ?>]" <?= $required ? 'required' : '' ?>>
+                            <?php foreach (($field['options'] ?? []) as $optionValue => $optionLabel): ?>
+                            <option value="<?= $escape($optionValue) ?>" <?= (string)$value === (string)$optionValue ? 'selected' : '' ?>><?= $escape($optionLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php else: ?>
+                        <input
+                            type="<?= $type === 'password' ? 'password' : ($type === 'number' ? 'number' : 'text') ?>"
+                            class="w-input"
+                            name="config[<?= $escape($key) ?>]"
+                            value="<?= $type === 'password' ? '' : $escape($value) ?>"
+                            placeholder="<?= $escape($isEdit && !empty($field['secret']) ? __('留空保留原密钥') : ($field['placeholder'] ?? '')) ?>"
+                            <?= $required ? 'required' : '' ?>
+                            <?= $type === 'password' ? 'autocomplete="new-password"' : '' ?>
+                        >
+                        <?php endif; ?>
+                        <?php endif; ?>
                     </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
-            
-            <!-- OSS 存储配置 -->
-            <div id="config-oss" class="driver-config" style="<?= ($config['driver'] ?? 'local') === 'oss' ? '' : 'display:none' ?>">
-                <h6 style="--w-mb:var(--weline-space-4);"><?= __('阿里云 OSS 配置') ?></h6>
-                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                    <div style="--w-span-md:6;">
-                        <label class="w-field__label"><?= __('AccessKey ID') ?> <span class="w-text" data-tone="danger">*</span></label>
-                        <input type="text" class="w-input" name="config_access_key_id" value="<?= htmlspecialchars($configArray['access_key_id'] ?? '') ?>">
-                    </div>
-                    <div style="--w-span-md:6;">
-                        <label class="w-field__label"><?= __('AccessKey Secret') ?> <span class="w-text" data-tone="danger">*</span></label>
-                        <input type="password" class="w-input" name="config_access_key_secret" value="<?= htmlspecialchars($configArray['access_key_secret'] ?? '') ?>">
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <label class="w-field__label"><?= __('Endpoint') ?></label>
-                        <input type="text" class="w-input" name="config_endpoint" value="<?= htmlspecialchars($configArray['endpoint'] ?? 'oss-cn-hangzhou.aliyuncs.com') ?>">
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <label class="w-field__label"><?= __('Bucket') ?> <span class="w-text" data-tone="danger">*</span></label>
-                        <input type="text" class="w-input" name="config_bucket" value="<?= htmlspecialchars($configArray['bucket'] ?? '') ?>">
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <label class="w-field__label"><?= __('前缀路径') ?></label>
-                        <input type="text" class="w-input" name="config_prefix" value="<?= htmlspecialchars($configArray['prefix'] ?? '') ?>" placeholder="uploads">
-                    </div>
-                    <div style="--w-span-md:6;">
-                        <div class="w-check">
-                            <input type="checkbox" name="config_use_ssl" value="1" <?= ($configArray['use_ssl'] ?? true) ? 'checked' : '' ?>>
-                            <label><?= __('使用 HTTPS') ?></label>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <?php endforeach; ?>
             
             <hr style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-6);">
             
@@ -165,44 +133,21 @@ $isEdit = !empty($config['config_id']);
 </w:backend:card>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_storage) return;
-  g.__bqAdmin_storage=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['storage']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('storage').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script type="module">
 
 const driverSelect = document.getElementById('driver-select');
 const driverConfigs = document.querySelectorAll('.driver-config');
 
-driverSelect.addEventListener('change', function() {
-    driverConfigs.forEach(el => el.style.display = 'none');
-    const target = document.getElementById('config-' + this.value);
-    if (target) target.style.display = '';
-});
+function syncDriverFields() {
+    driverConfigs.forEach(el => {
+        const active = el.dataset.provider === driverSelect.value;
+        el.style.display = active ? '' : 'none';
+        el.querySelectorAll('input, select, textarea').forEach(field => field.disabled = !active);
+    });
+}
+driverSelect?.addEventListener('change', syncDriverFields);
+syncDriverFields();
 
 const form = document.getElementById('storage-config-form');
 
@@ -218,7 +163,7 @@ form.addEventListener('submit', async function(e) {
     try {
         var saveUrl = '<?= $this->getUrl('storage/backend/config/save') ?>';
         var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
-        var res = await bqAdmin['storage'](saveUrl, saveOpts);
+        var res = await Weline.adminRequest('storage', saveUrl, saveOpts);
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
@@ -247,7 +192,7 @@ document.getElementById('btn-test').addEventListener('click', async function() {
     try {
         var url = '<?= $this->getUrl('storage/backend/config/test') ?>';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
-        var res = await bqAdmin['storage'](url, opts);
+        var res = await Weline.adminRequest('storage', url, opts);
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {

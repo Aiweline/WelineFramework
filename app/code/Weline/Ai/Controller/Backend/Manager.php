@@ -29,6 +29,7 @@ class Manager extends BackendController
             'agent' => 'ai/backend/agent',
             'skill' => 'ai/backend/skill',
             'style' => 'ai/backend/style',
+            'custom_vendor' => 'ai/backend/customvendor',
             'account' => 'ai/backend/provider',
         ];
         $path = $map[$tab] ?? $map['model'];

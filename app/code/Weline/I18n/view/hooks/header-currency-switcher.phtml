@@ -182,6 +182,7 @@ foreach ($currencies as $currency) {
 
     $currencyName = $normalizeCurrencyName($currencyCode, (string)($currency['name'] ?? $currencyCode));
     $aliases = [$currencyCode, $currencySymbol, $currencyName, (string)($currency['format'] ?? '')];
+    $localNamesByLocale = [];
 
     foreach ($aliasDisplayLocales as $displayLocale) {
         $aliases[] = $intlCurrencyName($currencyCode, $displayLocale);
@@ -190,11 +191,23 @@ foreach ($currencies as $currency) {
 
     if ($currencyLocalDescriptionService instanceof CurrencyLocalDescriptionService) {
         try {
-            foreach ($currencyLocalDescriptionService->getLocalNames((int)($currency['currency_id'] ?? 0)) as $localName) {
+            $currencyId = (int)($currency['currency_id'] ?? $currency['id'] ?? 0);
+            $localNamesByLocale = $currencyLocalDescriptionService->getLocalNames($currencyId);
+            foreach ($localNamesByLocale as $localName) {
                 $aliases[] = $localName;
             }
         } catch (\Throwable) {
+            $localNamesByLocale = [];
         }
+    }
+
+    // Prefer locale-specific display name (local description → ICU → existing).
+    $localizedDisplayName = trim((string)($localNamesByLocale[$currentLocale] ?? ''));
+    if ($localizedDisplayName === '') {
+        $localizedDisplayName = $intlCurrencyName($currencyCode, $currentLocale);
+    }
+    if ($localizedDisplayName !== '') {
+        $currencyName = $localizedDisplayName;
     }
 
     $normalizedCurrencies[] = [

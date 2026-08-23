@@ -1,76 +1,41 @@
-<style>
-    .dt-inheritance-page{max-width:1080px;margin:0 auto;padding:24px 20px 64px;display:grid;gap:20px}
-    .dt-inheritance-card{padding:22px;border:1px solid #dbe4f0;border-radius:20px;background:#fff}
-    .dt-inheritance-note{padding:18px;border-radius:18px;background:#eef6ff;border:1px solid #d6e8fb}
-    .dt-inheritance-output{white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px}
-</style>
+<?php
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+$adminConfig = json_encode([
+    'verifyUrl' => (string) ($verifyTagsUrl ?? ''),
+    'requestFailed' => (string) __('Verification failed.'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-admin-js']) ?>
 
-<div class="dt-inheritance-page" data-testid="datatable-inheritance-page">
-    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+<main class="w-container w-datatable-demo__admin" data-w-datatable-verification data-testid="datatable-inheritance-page">
+    <header class="w-datatable-demo__heading">
         <div>
+            <p class="w-datatable-demo__eyebrow"><?= __('DataTable') ?></p>
             <h1><?= __('Attribute Inheritance Verification') ?></h1>
-            <p><?= __('This backend route focuses on the inherited table attributes and scope generation checks that were previously hidden inside the broken legacy template set.') ?></p>
+            <p><?= __('This backend route isolates inherited table attributes and generated scopes while using the same complete Taglib implementation as the other demos.') ?></p>
         </div>
-        <div class="d-flex gap-2">
-            <a class="btn btn-outline-secondary" href="<?= $comprehensiveUrl ?>"><?= __('Back') ?></a>
-            <a class="btn btn-outline-secondary" href="<?= $tagTestUrl ?>?focus=attribute_inheritance"><?= __('Open Full Tag Report') ?></a>
+        <div class="w-cluster" data-justify="end">
+            <a class="w-button" data-tone="neutral" href="<?= $escape($comprehensiveUrl ?? '') ?>"><w-icon name="arrow-left" size="sm"></w-icon><span><?= __('Back') ?></span></a>
+            <a class="w-button" data-tone="neutral" href="<?= $escape(($tagTestUrl ?? '') . '?focus=attribute_inheritance') ?>"><w-icon name="check-circle" size="sm"></w-icon><span><?= __('Open Full Tag Report') ?></span></a>
         </div>
-    </div>
+    </header>
 
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
-    <section class="dt-inheritance-note">
-        <?= __('The verification endpoint exercises inherited model, sortable, and searchable attributes through TableContext::inheritTableAttributes(). This page isolates that result so we can keep the compatibility route working while avoiding the old broken page shell.') ?>
-    </section>
+    <div class="w-alert" data-tone="info">
+        <w-icon name="info" size="sm"></w-icon>
+        <p><?= __('The verification endpoint exercises inherited model, sortable, searchable, API provider, dependency, and transaction attributes through TableContext::inheritTableAttributes().') ?></p>
+    </div>
 
-    <section class="dt-inheritance-card">
-        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
-            <h2 class="mb-0"><?= __('Run Verification') ?></h2>
-            <button type="button" class="btn btn-primary" data-testid="datatable-inheritance-run" data-datatable-test-action="load-inheritance-verification"><?= __('Run Now') ?></button>
+    <section class="w-card">
+        <header class="w-card__header w-datatable-demo__section-heading">
+            <h2 class="w-card__title"><?= __('Run Verification') ?></h2>
+            <button type="button" class="w-button" data-testid="datatable-inheritance-run" data-w-datatable-verify data-section="attribute_inheritance"><w-icon name="play" size="sm"></w-icon><span><?= __('Run Now') ?></span></button>
+        </header>
+        <div class="w-card__body">
+            <pre id="datatable-inheritance-output" class="w-datatable-demo__document" data-w-datatable-verify-output data-testid="datatable-inheritance-output" tabindex="0"><?= $escape(__('No verification run yet.')) ?></pre>
         </div>
-        <div id="datatable-inheritance-output" class="dt-inheritance-output" data-testid="datatable-inheritance-output"><?= __('No verification run yet.') ?></div>
     </section>
-</div>
 
-<script>
-    function resolveInheritanceBackendRoute(route) {
-        var normalizedRoute = String(route || '').replace(/^\/+/, '');
-        var currentPath = String(window.location && window.location.pathname || '');
-        var basePath = '<?= htmlspecialchars((string) ($backendBasePath ?? ''), ENT_QUOTES, 'UTF-8') ?>'.replace(/\/+$/, '');
-
-        if (currentPath.indexOf('/@backend') === 0) {
-            return '/@backend/' + normalizedRoute;
-        }
-
-        return basePath + '/' + normalizedRoute;
-    }
-
-    async function loadInheritanceVerification() {
-        const host = document.getElementById('datatable-inheritance-output');
-        host.textContent = 'Working...';
-        try {
-            const response = await fetch(resolveInheritanceBackendRoute('<?= htmlspecialchars((string) $verifyTagsUrl, ENT_QUOTES, 'UTF-8') ?>'), {
-                method: 'GET',
-                headers: {'X-Requested-With': 'XMLHttpRequest'},
-                credentials: 'same-origin'
-            });
-            const payload = await response.json();
-            const section = payload && payload.data && payload.data.sections
-                ? payload.data.sections.attribute_inheritance || payload.data.attribute_inheritance || {}
-                : {};
-            host.textContent = JSON.stringify(section, null, 2);
-        } catch (error) {
-            host.textContent = error.message || 'Verification failed';
-        }
-    }
-
-    document.addEventListener('click', function (event) {
-        const trigger = event.target.closest('[data-datatable-test-action="load-inheritance-verification"]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-        loadInheritanceVerification();
-    });
-</script>
+    <script type="application/json" id="w-datatable-admin-config"><?= $adminConfig ?: '{}' ?></script>
+</main>

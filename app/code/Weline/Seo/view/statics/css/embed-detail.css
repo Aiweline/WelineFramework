@@ -1,0 +1,56 @@
+@layer reset, tokens, base, layout, components, utilities, page;
+
+@layer page {
+    .w-seo-embed {
+        width: min(100% - 2rem, 90rem);
+        margin-inline: auto;
+        padding-block: var(--weline-space-6);
+    }
+
+    .w-seo-embed__header {
+        padding-block-end: var(--weline-space-4);
+        border-block-end: 1px solid var(--weline-theme-border);
+    }
+
+    .w-seo-embed__back,
+    .w-seo-embed__title,
+    .w-seo-embed__datum,
+    .w-seo-embed__keyword {
+        display: flex;
+        align-items: center;
+        gap: var(--weline-space-2);
+    }
+
+    .w-seo-embed__back {
+        width: fit-content;
+        color: var(--weline-theme-text-muted);
+        text-decoration: none;
+    }
+
+    .w-seo-embed__title { font-size: var(--weline-font-size-xl); }
+
+    .w-seo-embed__datum {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: var(--weline-space-1);
+    }
+
+    .w-seo-embed__datum > span { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
+
+    .w-seo-embed__keyword {
+        padding: var(--weline-space-2) var(--weline-space-3);
+        border-radius: var(--weline-radius-round);
+        background: var(--weline-theme-info-surface);
+        color: var(--weline-theme-info);
+    }
+
+    .w-seo-embed__keyword small {
+        padding-inline: var(--weline-space-2);
+        border-radius: var(--weline-radius-round);
+        background: var(--weline-theme-warning-surface);
+        color: var(--weline-theme-warning);
+    }
+
+    .w-seo-embed__suggestion { align-self: start; }
+    .w-seo-embed__suggestion-content { white-space: pre-line; }
+}

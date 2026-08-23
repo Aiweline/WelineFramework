@@ -50,6 +50,37 @@ final class SystemConfigScopeResolverTest extends TestCase
         ], $this->resolver->chainFromIdentity($identity));
     }
 
+    public function testDefaultStoreAndChannelRoundTripWithoutCollidingWithParents(): void
+    {
+        $store = ScopeIdentity::store(0, 'default', 'default', ScopeIdentity::MODE_NORMAL);
+        $channel = ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL);
+
+        self::assertSame('default.__store__.default', $this->resolver->toStorageScope($store));
+        self::assertSame('default.__store__.__channel__', $this->resolver->toStorageScope($channel));
+        self::assertTrue($store->equals($this->resolver->fromStorageScope('default.__store__.default')));
+        self::assertTrue($channel->equals($this->resolver->fromStorageScope('default.__store__.__channel__')));
+        self::assertSame([
+            'default.__store__.__channel__',
+            'default.__store__.default',
+            'default.__website__.default',
+            SystemConfig::SCOPE_GLOBAL,
+        ], $this->resolver->chainFromIdentity($channel));
+    }
+
+    public function testLegacyDefaultStoreScopeRemainsReadableButNotWritable(): void
+    {
+        $legacy = $this->resolver->fromStorageScope('shop.default.__store__', true);
+
+        self::assertInstanceOf(ScopeIdentity::class, $legacy);
+        self::assertSame(ScopeIdentity::KIND_STORE, $legacy->scopeKind);
+        self::assertSame('default', $legacy->storeCode);
+        self::assertSame('shop.__store__.default', $this->resolver->toStorageScope($legacy));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('system_config_noncanonical_scope_write_forbidden');
+        $this->resolver->assertWritableRawScope('shop.default.__store__');
+    }
+
     public function testLayerOverridePrefersNearestExplicit(): void
     {
         $identity = ScopeIdentity::store(0, 'default', 'main', ScopeIdentity::MODE_NORMAL);
@@ -91,6 +122,23 @@ final class SystemConfigScopeResolverTest extends TestCase
         self::assertSame(ScopeIdentity::KIND_WEBSITE, $result->source->scopeKind);
     }
 
+    public function testExplicitEmptyFalseZeroAndNullRemainOwnedValues(): void
+    {
+        $identity = ScopeIdentity::store(2, 'shop', 'main', ScopeIdentity::MODE_NORMAL);
+        $storage = $this->resolver->toStorageScope($identity);
+
+        foreach (['', false, 0, null] as $ownedValue) {
+            $result = $this->resolver->resolveForIdentity([
+                $storage => [SystemConfigScopeResolver::KEY_VALUE => $ownedValue],
+                'shop.default.default' => [SystemConfigScopeResolver::KEY_VALUE => 'website'],
+            ], $identity);
+
+            self::assertTrue($result->found());
+            self::assertSame($ownedValue, $result->value);
+            self::assertSame(ConfigScopeSource::KIND_EXACT, $result->source->sourceKind);
+        }
+    }
+
     public function testLocalePrefersExactThenDefaultLocale(): void
     {
         $identity = ScopeIdentity::website(2, 'shop');
@@ -114,6 +162,44 @@ final class SystemConfigScopeResolverTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('system_config_short_scope_write_forbidden');
         $this->resolver->assertWritableRawScope('default');
+    }
+
+    public function testTypedClaimsRejectFieldsOutsideTheirDeclaredLevel(): void
+    {
+        $invalidClaims = [
+            array_replace(
+                ScopeIdentity::website(2, 'shop')->toArray(),
+                ['store_code' => 'main'],
+            ),
+            array_replace(
+                ScopeIdentity::store(2, 'shop', 'main', ScopeIdentity::MODE_NORMAL)->toArray(),
+                ['channel_code' => 'web'],
+            ),
+            array_replace(
+                ScopeIdentity::channel(2, 'shop', 'main', 'web', ScopeIdentity::MODE_NORMAL)->toArray(),
+                ['channel_code' => null],
+            ),
+        ];
+
+        foreach ($invalidClaims as $claims) {
+            try {
+                $this->resolver->contextFromClaims($claims, ScopeIdentity::global());
+                self::fail('Claims carrying an invalid level shape must be rejected.');
+            } catch (\InvalidArgumentException) {
+                self::addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function testTypedClaimsMustMatchServerAuthoritativeIdentity(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('system_config_scope_claim_identity_mismatch');
+
+        $this->resolver->contextFromClaims(
+            ScopeIdentity::website(7, 'shop')->toArray(),
+            ScopeIdentity::website(8, 'shop'),
+        );
     }
 
     public function testDefaultValueSourceWhenNoRows(): void

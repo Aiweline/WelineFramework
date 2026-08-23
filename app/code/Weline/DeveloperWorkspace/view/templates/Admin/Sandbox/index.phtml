@@ -9,18 +9,6 @@ $closeUrl = $this->getBackendUrl('*/admin/sandbox/close');
 $saveUrl = $this->getBackendUrl('*/admin/sandbox/setSandboxKey');
 ?>
 
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;"><?= __('沙盒环境配置') ?></h4>
-            <div class="w-cluster">
-                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order'
-                            name_field='title'></breadcrumb>
-            </div>
-        </div>
-    </div>
-</div>
-
 <template>Weline_DeveloperWorkspace::Backend/AsyncEventProbe/index.phtml</template>
 
 <div class="w-grid">

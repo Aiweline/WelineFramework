@@ -11,13 +11,15 @@ $api_key_count = $this->api_key_count ?? 0;
 $user = $this->user ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= __('个人中心') ?> - AI助手平台</title>
-    <css>Weline_Frontend::assets/css/bootstrap.min.css</css>
-    <css>Weline_Frontend::assets/css/icons.min.css</css>
+    <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
+    <css>Weline_Theme::ui/weline-foundation.css</css>
+    <css>Weline_Theme::ui/weline-frontend.css</css>
+    <js type="module">Weline_Theme::ui/weline-ui.js</js>
     <style>
         body {
             background-color: #f5f7fa;
@@ -275,7 +277,5 @@ $user = $this->user ?? [];
     </div>
 </div>
 
-<js>Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js</js>
 </body>
 </html>
-

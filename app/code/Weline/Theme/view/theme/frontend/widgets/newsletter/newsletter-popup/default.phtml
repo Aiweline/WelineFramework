@@ -22,7 +22,8 @@
 
 $title = __((string)($this->getData('title') ?: '订阅获取优惠'));
 $description = __((string)($this->getData('description') ?: '订阅我们的邮件，立即获得10%折扣码！'));
-$image = $this->getData('image') ?? '';
+$image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('image') ?? '');
+$imageFileHtml = (string)($this->getData('image_file_html') ?? '');
 $buttonText = __((string)($this->getData('button_text') ?: '立即订阅'));
 $trigger = $this->getData('trigger') ?? 'delay';
 $delaySeconds = (int)($this->getData('delay_seconds') ?? 5);
@@ -58,7 +59,9 @@ $isEditorPreview = $this->getData('_editor_preview') ||
         </button>
         
         <div class="popup-content">
-            <?php if ($image): ?>
+            <?php if ($imageFileHtml !== ''): ?>
+                <div class="popup-image popup-image--asset"><?= $imageFileHtml ?></div>
+            <?php elseif ($image): ?>
                 <div class="popup-image">
                     <img src="<?= htmlspecialchars($image) ?>" alt="">
                 </div>

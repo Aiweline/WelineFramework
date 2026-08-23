@@ -1,41 +1,41 @@
 ﻿"WLS Database Manager","WLS Database Manager"
-"Invalid request method.","Invalid request method."
+"Invalid request method.",请求方法无效。
 "Source DBA connection profile was not found.","未找到源 DBA 连接配置。"
 "Lifecycle SQL execution failed.","生命周期 SQL 执行失败。"
 "Source database connection profile was not found.","未找到源数据库连接 Profile。"
-"Restore rollback failed.","Restore rollback failed."
+"Restore rollback failed.",恢复回滚失败。
 "Restore action failed.",恢复操作失败。
 "Migration action failed.",迁移操作失败。
 "SQL apply execution failed.","SQL 应用执行失败。"
 "Database backup execution failed.",数据库备份执行失败。
-"WLS reload was not completed.","WLS reload was not completed."
-"Project database profile save failed.","Project database profile save failed."
+"WLS reload was not completed.","WLS 重新加载未完成。"
+"Project database profile save failed.",项目数据库配置文件保存失败。
 "Database env apply failed.","数据库 env 应用失败。"
 "Database env rollback failed.","数据库 env 回滚失败。"
 "Database slave create failed.","数据库 slave 创建失败。"
 "Database slave remove failed.","数据库 slave 移除失败。"
-"No enabled project database profile was found.","No enabled project database profile was found."
-"Database connection test failed.","Database connection test failed."
-"Database profile was not found.","Database profile was not found."
+"No enabled project database profile was found.",未找到启用的项目数据库配置文件。
+"Database connection test failed.",数据库连接测试失败。
+"Database profile was not found.",未找到数据库配置文件。
 "Confirm the database health probe with CHECK_DB_HEALTH before submitting.","提交前请勾选确认并输入 CHECK_DB_HEALTH 以运行数据库健康探测。"
 "Database health probe failed.",数据库健康探测失败。
-Default,Default
-Configured,Configured
-Empty,Empty
-Ready,Ready
-"Needs attention","Needs attention"
-"Driver available","Driver available"
-"PDO driver is not available","PDO driver is not available"
-"Sandbox database config is available and may be used by the current runtime.","Sandbox database config is available and may be used by the current runtime."
-"Configuration is read from app/etc/env.php.","Configuration is read from app/etc/env.php."
-"No explicit database config was found; the framework fallback profile is shown.","No explicit database config was found; the framework fallback profile is shown."
-Profiles,Profiles
-Guard,Guard
-Writable,Writable
-Guarded,Guarded
-"Database connection test passed.","Database connection test passed."
-"Project database profile saved.","Project database profile saved."
-"Project database profile saved and WLS reload was requested.","Project database profile saved and WLS reload was requested."
+Default,默认
+Configured,已配置
+Empty,空的
+Ready,准备好
+"Needs attention",需要注意
+"Driver available",有司机
+"PDO driver is not available","PDO 驱动程序不可用"
+"Sandbox database config is available and may be used by the current runtime.",沙箱数据库配置可用，并且可以由当前运行时使用。
+"Configuration is read from app/etc/env.php.","配置是从 app/etc/env.php 读取的。"
+"No explicit database config was found; the framework fallback profile is shown.",未找到显式数据库配置；显示了框架后备配置文件。
+Profiles,型材
+Guard,警卫
+Writable,可写
+Guarded,守卫
+"Database connection test passed.",数据库连接测试通过。
+"Project database profile saved.",已保存项目数据库配置文件。
+"Project database profile saved and WLS reload was requested.","已保存项目数据库配置文件并请求重新加载 WLS。"
 "Database env applied and backup created.","数据库 env 已应用并创建备份。"
 "No database env changes were needed.","数据库 env 没有需要写入的变更。"
 "Database env restored from backup.","数据库 env 已从备份恢复。"
@@ -50,61 +50,61 @@ Guarded,Guarded
 "Database migration import completed successfully after pre-migration backup.",迁移前备份完成后，数据库迁移导入已成功完成。
 "SQL apply completed successfully after pre-apply backup.","应用前备份后 SQL 应用已成功完成。"
 "Database health probe passed.",数据库健康探测通过。
-settings,settings
-"WLS Panel database profile entry","WLS Panel database profile entry"
-"View WLS Database Manager","View WLS Database Manager"
-search,search
-"View WLS Panel database profiles","View WLS Panel database profiles"
-"View WLS Database Summary","View WLS Database Summary"
-grid,grid
-"View WLS Panel database summary","View WLS Panel database summary"
-"View WLS Database Profiles","View WLS Database Profiles"
-"View WLS Database Health","View WLS Database Health"
-heart,heart
-"View WLS Panel database health","View WLS Panel database health"
-"View WLS Database Project Profile","View WLS Database Project Profile"
-edit,edit
-"View WLS Panel project database profile","View WLS Panel project database profile"
-"View WLS Database Lifecycle","View WLS Database Lifecycle"
-plus,plus
-"View WLS Panel database lifecycle","View WLS Panel database lifecycle"
-"View WLS Database Backup Plan","View WLS Database Backup Plan"
-arrow-down,arrow-down
-"View WLS Panel database backup plan","View WLS Panel database backup plan"
-"View WLS Database Env Apply","View WLS Database Env Apply"
-"View WLS Panel database env apply","View WLS Panel database env apply"
-"View WLS Database Slaves","View WLS Database Slaves"
-"View WLS Panel database slaves","View WLS Panel database slaves"
-"View WLS Database Test","View WLS Database Test"
-check,check
-"View WLS Panel database connection test","View WLS Panel database connection test"
-"Execute WLS Database Lifecycle SQL","Execute WLS Database Lifecycle SQL"
-arrow-up,arrow-up
-"Execute guarded WLS Panel database lifecycle SQL","Execute guarded WLS Panel database lifecycle SQL"
-"Execute WLS Database Backup","Execute WLS Database Backup"
-database,database
-"Execute guarded WLS Panel database backup","Execute guarded WLS Panel database backup"
-"Save WLS Database Profile","Save WLS Database Profile"
-"Save WLS Panel project database profile","Save WLS Panel project database profile"
-"Apply WLS Database env","Apply WLS Database env"
-"Apply WLS Panel project database profile to env.php","Apply WLS Panel project database profile to env.php"
-"Rollback WLS Database env","Rollback WLS Database env"
-file,file
-"Restore a Database Manager env.php backup","Restore a Database Manager env.php backup"
-"Create WLS Database Slave","Create WLS Database Slave"
-"Create a guarded WLS Panel database slave env profile","Create a guarded WLS Panel database slave env profile"
-"Remove WLS Database Slave","Remove WLS Database Slave"
-minus,minus
-"Remove a guarded WLS Panel database slave env profile","Remove a guarded WLS Panel database slave env profile"
-"Test WLS Database Connection","Test WLS Database Connection"
-"Run a guarded WLS Panel database connection test","Run a guarded WLS Panel database connection test"
-"Run WLS Database Health Probe","Run WLS Database Health Probe"
-"Run a guarded read-only WLS Panel database health probe","Run a guarded read-only WLS Panel database health probe"
-"SQLite path is required.","SQLite path is required."
-"Database host, name, and username are required.","Database host, name, and username are required."
-"Secret fields cannot contain control characters.","Secret fields cannot contain control characters."
+settings,设置
+"WLS Panel database profile entry",WLS面板数据库配置文件条目
+"View WLS Database Manager","查看 WLS 数据库管理器"
+search,搜索
+"View WLS Panel database profiles","查看 WLS Panel 数据库配置文件"
+"View WLS Database Summary","查看 WLS 数据库摘要"
+grid,网格
+"View WLS Panel database summary","查看 WLS Panel 数据库摘要"
+"View WLS Database Profiles","查看 WLS 数据库配置文件"
+"View WLS Database Health","查看 WLS 数据库运行状况"
+heart,心
+"View WLS Panel database health","查看 WLS Panel 数据库运行状况"
+"View WLS Database Project Profile","查看 WLS 数据库项目简介"
+edit,编辑
+"View WLS Panel project database profile","查看 WLS Panel 项目数据库简介"
+"View WLS Database Lifecycle","查看 WLS 数据库生命周期"
+plus,加
+"View WLS Panel database lifecycle","查看 WLS Panel 数据库生命周期"
+"View WLS Database Backup Plan","查看 WLS 数据库备份计划"
+arrow-down,向下箭头
+"View WLS Panel database backup plan","查看 WLS Panel 数据库备份计划"
+"View WLS Database Env Apply","查看 WLS 数据库环境 应用"
+"View WLS Panel database env apply",查看WLS面板数据库环境应用
+"View WLS Database Slaves","查看 WLS 数据库从站"
+"View WLS Panel database slaves","查看 WLS Panel 数据库从站"
+"View WLS Database Test","查看 WLS 数据库测试"
+check,查看
+"View WLS Panel database connection test","查看WLS Panel数据库连接测试"
+"Execute WLS Database Lifecycle SQL","执行 WLS 数据库生命周期 SQL"
+arrow-up,向上箭头
+"Execute guarded WLS Panel database lifecycle SQL","执行受保护的 WLS Panel 数据库生命周期 SQL"
+"Execute WLS Database Backup",执行WLS数据库备份
+database,数据库
+"Execute guarded WLS Panel database backup","执行受保护的 WLS Panel 数据库备份"
+"Save WLS Database Profile","保存 WLS 数据库配置文件"
+"Save WLS Panel project database profile","保存 WLS Panel 项目数据库配置文件"
+"Apply WLS Database env",应用WLS数据库环境
+"Apply WLS Panel project database profile to env.php","将 WLS Panel 项目数据库配置文件应用到 env.php"
+"Rollback WLS Database env",回滚WLS数据库环境
+file,文件
+"Restore a Database Manager env.php backup","恢复数据库管理器 env.php 备份"
+"Create WLS Database Slave",创建WLS数据库从属
+"Create a guarded WLS Panel database slave env profile","创建受保护的 WLS Panel 数据库从环境配置文件"
+"Remove WLS Database Slave","删除 WLS 数据库从属"
+minus,减
+"Remove a guarded WLS Panel database slave env profile","删除受保护的 WLS Panel 数据库从属环境配置文件"
+"Test WLS Database Connection","测试 WLS 数据库连接"
+"Run a guarded WLS Panel database connection test","运行受保护的 WLS Panel 数据库连接测试"
+"Run WLS Database Health Probe","运行 WLS 数据库运行状况探测"
+"Run a guarded read-only WLS Panel database health probe","运行受保护的只读 WLS Panel 数据库运行状况探测"
+"SQLite path is required.","SQLite 路径是必需的。"
+"Database host, name, and username are required.",数据库主机、名称和用户名是必需的。
+"Secret fields cannot contain control characters.",秘密字段不能包含控制字符。
 "Database port must be between 1 and 65535.","数据库端口必须在 1 到 65535 之间。"
-"Public schema only","仅 public schema"
+"Public schema only",仅公共架构
 "Not required",不需要
 "Stored in Profile","已存入 Profile"
 "Only in source env profile","仅存在于源 env 配置"
@@ -114,88 +114,88 @@ minus,minus
 "Empty password",空密码
 "Existing slave","已有 slave"
 "Direct db","直接 db"
-Master/default,Master/default
-"WLS Standalone Backend","WLS Standalone Backend"
-"Database Manager","Database Manager"
-"Database manager navigation","Database manager navigation"
-Summary,Summary
+Master/default,主/默认
+"WLS Standalone Backend","WLS 独立后端"
+"Database Manager",数据库管理器
+"Database manager navigation",数据库管理器导航
+Summary,概括
 Health,健康
-"Project Profile","Project Profile"
+"Project Profile",项目简介
 Lifecycle,生命周期
 "Backup Plan",备份计划
 "Env Apply","Env 应用"
-Slaves,Slaves
-Test,Test
-Marketplace,Marketplace
-Dark,Dark
-Light,Light
-"WLS Panel Plugin","WLS Panel Plugin"
-"Database profile readout and guarded connection checks for the selected WLS project context.","Database profile readout and guarded connection checks for the selected WLS project context."
-"WLS Panel","WLS Panel"
-"Project Admin","Project Admin"
+Slaves,奴隶
+Test,测试
+Marketplace,市场
+Dark,黑暗的
+Light,光
+"WLS Panel Plugin","WLS 面板插件"
+"Database profile readout and guarded connection checks for the selected WLS project context.","所选 WLS 项目上下文的数据库配置文件读出和受保护的连接检查。"
+"WLS Panel",WLS面板
+"Project Admin",项目管理员
 "Project Health",项目健康
 "Read-only readiness summary for the selected WLS database context. The guarded probe below only runs SELECT 1 and never runs migrations, applies SQL, restores data, or reloads WLS.","所选 WLS 数据库上下文的只读就绪摘要。下方受控探测只运行 SELECT 1，不会运行迁移、应用 SQL、恢复数据或重载 WLS。"
 Attention,关注
 Blocked,已阻断
 "A database profile is required before running a health probe.","运行健康探测前需要数据库 Profile。"
-"Probe Profile","探测 Profile"
+"Probe Profile",探头轮廓
 "I understand this health probe opens a short read-only database connection.",我理解此健康探测会打开一次短暂的只读数据库连接。
 "Health Probe Phrase",健康探测确认短语
 "Run Health Probe",运行健康探测
 "The active health probe executes one SELECT 1 check, records a sanitized audit event, and never writes schema, data, env.php, or WLS runtime state.","主动健康探测只执行一次 SELECT 1 检查，记录脱敏审计事件，不会写入结构、数据、env.php 或 WLS 运行时状态。"
-"Project Context","Project Context"
-Operation,Operation
-"Project ID","Project ID"
-Domain,Domain
-"Project Type","Project Type"
-"Database Profiles","Database Profiles"
-"Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project.","Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project."
-"No database profiles were found.","No database profiles were found."
-Driver,Driver
-Host,Host
-Port,Port
-Database,Database
-Username,Username
-Password,Password
-Prefix,Prefix
-Charset,Charset
-"Project Database Profile","Project Database Profile"
-"Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs.","Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs."
-"Enabled Profile","Enabled Profile"
-"Saved Disabled","Saved Disabled"
-Inherited,Inherited
-"Enable project database profile","Enable project database profile"
-"Persistent connection","Persistent connection"
-"Confirm guarded save","Confirm guarded save"
-"Source profile","Source profile"
-"No env profile","No env profile"
-"Used as the inherited baseline before this project saves overrides.","Used as the inherited baseline before this project saves overrides."
-"SQLite path","SQLite path"
-"Configured, leave blank to keep","Configured, leave blank to keep"
-"Not saved in Profile","Not saved in Profile"
-State,State
+"Project Context",项目背景
+Operation,手术
+"Project ID",项目编号
+Domain,领域
+"Project Type",项目类型
+"Database Profiles",数据库配置文件
+"Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project.","连接详细信息被屏蔽。使用下面的项目配置文件保存此 WLS 项目的受保护数据库配置。"
+"No database profiles were found.",未找到数据库配置文件。
+Driver,司机
+Host,主持人
+Port,港口
+Database,数据库
+Username,用户名
+Password,密码
+Prefix,前缀
+Charset,字符集
+"Project Database Profile",项目数据库简介
+"Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs.","保存所选 WLS 项目的数据库配置文件。秘密在静态时被加密，在 UI 中被屏蔽，并在审核日志中被忽略。"
+"Enabled Profile",启用配置文件
+"Saved Disabled","已保存 已禁用"
+Inherited,遗传
+"Enable project database profile",启用项目数据库配置文件
+"Persistent connection",持久连接
+"Confirm guarded save",确认受保护的保存
+"Source profile",来源简介
+"No env profile",没有环境配置文件
+"Used as the inherited baseline before this project saves overrides.",在此项目保存覆盖之前用作继承的基线。
+"SQLite path",SQLite路径
+"Configured, leave blank to keep",配置好，留空保留
+"Not saved in Profile",未保存在个人资料中
+State,状态
 "Copy source env password into Profile","复制源 env 密码到 Profile"
 "Copy confirmation",复制确认
 "Copies the selected source env profile password into this Project Profile without showing it.","将选择的源 env profile 密码复制到当前项目 Profile，全程不显示明文。"
-Collation,Collation
-"Runtime action","Runtime action"
-"Save only","Save only"
-"Request WLS reload","Request WLS reload"
-"Target WLS instance","Target WLS instance"
-"Pre SQL","Pre SQL"
-Description,Description
-"Optional operator note for this WLS project database profile.","Optional operator note for this WLS project database profile."
-"Clear stored password","Clear stored password"
-"Last runtime action","Last runtime action"
-"Runtime result","Runtime result"
-"Last test","Last test"
-"Test message","Test message"
-"Save Project Profile","Save Project Profile"
-"Recent Audit","Recent Audit"
-"Latest DbManager profile save and connection-test audit entries.","Latest DbManager profile save and connection-test audit entries."
-Time,Time
-Event,Event
-Scope,Scope
+Collation,整理
+"Runtime action",运行时动作
+"Save only",仅保存
+"Request WLS reload","请求 WLS 重新加载"
+"Target WLS instance","目标 WLS 实例"
+"Pre SQL","预 SQL"
+Description,描述
+"Optional operator note for this WLS project database profile.","此 WLS 项目数据库配置文件的可选操作员注释。"
+"Clear stored password",清除存储的密码
+"Last runtime action",上次运行时操作
+"Runtime result",运行时结果
+"Last test",最后一次测试
+"Test message",测试消息
+"Save Project Profile",保存项目简介
+"Recent Audit",最近的审计
+"Latest DbManager profile save and connection-test audit entries.","最新的 DbManager 配置文件保存和连接测试审核条目。"
+Time,时间
+Event,事件
+Scope,范围
 "Database Lifecycle Plan",数据库生命周期计划
 "Preview create database, create user, or grant intent before any future DBA adapter is allowed to execute vendor-specific SQL.","在未来 DBA 适配器允许执行数据库方言 SQL 前，先预览创建数据库、创建用户或授权意图。"
 "Waiting for Input",等待输入
@@ -208,7 +208,7 @@ Scope,Scope
 "Grant Mode",授权模式
 "Read Write",读写
 "Read Only",只读
-"Schema Owner","Schema Owner"
+"Schema Owner",模式所有者
 Execution,执行
 "Execution disabled in this slice",当前切片禁用执行
 "Preview Lifecycle Plan",预览生命周期计划
@@ -246,7 +246,7 @@ Execution,执行
 "Backup Artifact",备份产物
 "Migration Target",迁移目标
 "Profile Source","Profile 来源"
-"No Profile","无 Profile"
+"No Profile",无简介
 "Artifact Directory",产物目录
 "Preview Backup Plan",预览备份计划
 "Database Backup Execution Boundary",数据库备份执行边界
@@ -259,7 +259,7 @@ Execution,执行
 "No rollback backup is ready.",暂无可用回滚备份。
 "Original Restore",原恢复产物
 "Rollback Phrase",回滚确认短语
-"PostgreSQL Reset Phrase","PostgreSQL Reset 短语"
+"PostgreSQL Reset Phrase","PostgreSQL 重置短语"
 "I understand rollback is destructive and will restore the recorded pre-restore backup.",我理解回滚是破坏性操作，并会恢复已记录的恢复前备份。
 "I understand PostgreSQL rollback will reset the public schema before replaying the backup.","我理解 PostgreSQL 回滚会在回放备份前重置 public schema。"
 "Rollback Guard",回滚防护
@@ -301,7 +301,7 @@ Execution,执行
 "SQL Apply Phrase","SQL 应用确认短语"
 "I understand SQL apply will modify the target database after creating a fresh pre-apply backup.","我理解 SQL 应用会在创建新的应用前备份后修改目标数据库。"
 "SQL Allowlist","SQL 白名单"
-"Allowed: CREATE TABLE, CREATE INDEX, ALTER TABLE ADD. Blocked: DROP, TRUNCATE, DELETE, UPDATE, GRANT, REVOKE, LOAD, COPY, and database-level SQL.","允许：CREATE TABLE、CREATE INDEX、ALTER TABLE ADD。阻断：DROP、TRUNCATE、DELETE、UPDATE、GRANT、REVOKE、LOAD、COPY 和数据库级 SQL。"
+"Allowed: CREATE TABLE, CREATE INDEX, ALTER TABLE ADD. Blocked: DROP, TRUNCATE, DELETE, UPDATE, GRANT, REVOKE, LOAD, COPY, and database-level SQL.","允许：创建表、创建索引、更改表添加。阻止：DROP、TRUNCATE、DELETE、UPDATE、GRANT、REVOKE、LOAD、COPY 和数据库级 SQL。"
 "SQL Apply Guard","SQL 应用防护"
 "Run SQL Apply","执行 SQL 应用"
 "SQL apply never accepts arbitrary paths or inline SQL; it only reads safe artifact names inside var/backups/wls/db-manager/database.","SQL 应用不接受任意路径或内联 SQL；它只读取 var/backups/wls/db-manager/database 内的安全产物名。"
@@ -315,12 +315,12 @@ Execution,执行
 "Latest Backup",最新备份
 "This apply updates only the existing slave profile shown above. Use Slave Create / Remove for db.slaves list changes.","本次应用只会更新上方显示的已有 slave 配置。如需变更 db.slaves 列表，请使用 Slave Create / Remove。"
 "No database env changes are pending for this profile.","当前项目数据库配置没有待写入的 env 差异。"
-Field,Field
+Field,场地
 "Current env.php","当前 env.php"
 "Apply only",仅应用
 "I understand Database Manager will update app/etc/env.php after creating a backup.","我确认 Database Manager 会在创建备份后更新 app/etc/env.php。"
 "Apply env.php","应用 env.php"
-Backup,Backup
+Backup,备份
 "Restore only",仅恢复
 "I understand Database Manager will restore the selected app/etc/env.php backup.","我确认 Database Manager 会恢复所选 app/etc/env.php 备份。"
 "Rollback env.php","回滚 env.php"
@@ -330,25 +330,25 @@ Backup,Backup
 "Source Profile","来源 Profile"
 "Existing Slaves","已有 Slaves"
 "Database slave create is not available.","数据库 slave 创建当前不可用。"
-"New slave key","新 slave key"
+"New slave key",新的从属钥匙
 "Lowercase key, for example reporting_slave.","小写 key，例如 reporting_slave。"
 "Create only",仅创建
 "I understand Database Manager will add a db.slaves entry after creating an env backup.","我确认 Database Manager 会先创建 env 备份，再添加 db.slaves 条目。"
-"Create Slave","创建 Slave"
+"Create Slave",创建从站
 "Existing Slave Profiles","已有 Slave 配置"
 "No database slave profiles are configured in app/etc/env.php.","app/etc/env.php 中尚未配置数据库 slave。"
-Slave,Slave
+Slave,奴隶
 User,用户
 "Remove after backup",备份后移除
 Remove,移除
-"Connection Test","Connection Test"
-"Runs a single POST-only SELECT 1 check and returns a sanitized result.","Runs a single POST-only SELECT 1 check and returns a sanitized result."
-"A database profile is required before testing.","A database profile is required before testing."
-Profile,Profile
-"Test Connection","Test Connection"
-"Missing fields: %{1}","Missing fields: %{1}"
+"Connection Test",连接测试
+"Runs a single POST-only SELECT 1 check and returns a sanitized result.","运行单个仅 POST SELECT 1 检查并返回经过清理的结果。"
+"A database profile is required before testing.",测试之前需要数据库配置文件。
+Profile,轮廓
+"Test Connection",测试连接
+"Missing fields: %{1}",缺失字段：%{1}
 "Migration preflight failed.",迁移预检失败。
-"Enable and save the Project Profile before migration execution.","Enable and save the Project Profile before migration execution."
+"Enable and save the Project Profile before migration execution.",在迁移执行之前启用并保存项目配置文件。
 "Project migration connection is incomplete: %{1}",项目迁移连接信息不完整：%{1}
 "Migration execution currently supports mysql Project Profiles only.","迁移执行当前仅支持 mysql 项目 Profile。"
 "Submitted migration driver does not match the enabled Project Profile.","提交的迁移驱动与已启用的项目 Profile 不一致。"
@@ -385,13 +385,13 @@ Profile,Profile
 "Unable to reserve migration process output storage.",无法预留迁移进程输出存储。
 "Database migration execution failed.",数据库迁移执行失败。
 "Restore preflight failed.",恢复预检失败。
-"Enable and save the Project Profile before restore execution.","Enable and save the Project Profile before restore execution."
+"Enable and save the Project Profile before restore execution.",在恢复执行之前启用并保存项目配置文件。
 "Project restore connection is incomplete: %{1}",项目恢复连接不完整：%{1}
 "Restore execution currently supports mysql and pgsql Project Profiles.","恢复执行当前支持 mysql 和 pgsql Project Profile。"
 "Submitted restore driver does not match the enabled Project Profile.","提交的恢复驱动与已启用 Project Profile 不匹配。"
 "Restore artifact is empty.",恢复产物为空。
 "Restore artifact checksum could not be calculated.",无法计算恢复产物校验和。
-"Pre-restore backup failed; restore execution was stopped.","Pre-restore backup failed; restore execution was stopped."
+"Pre-restore backup failed; restore execution was stopped.",预恢复备份失败；恢复执行已停止。
 "Save and enable the Project Profile before restore rollback.","执行恢复回滚前，请先保存并启用项目 Profile。"
 "Run a guarded restore first so WLS can record a pre-restore backup.","请先执行一次受控恢复，让 WLS 记录恢复前备份。"
 "Restore Rollback",恢复回滚
@@ -399,7 +399,7 @@ Profile,Profile
 "Rollback is available for the latest recorded pre-restore backup.",可基于最近记录的恢复前备份执行回滚。
 "WLS only offers artifacts recorded as pre-restore backups.","WLS 只提供审计中记录为恢复前备份的产物。"
 "Profile Guard","Profile 防护"
-Enabled,Enabled
+Enabled,启用
 "Rollback uses the current enabled Project Profile and re-runs restore verification.","回滚使用当前启用的项目 Profile，并会重新执行恢复验证。"
 "Restore rollback backup was not found.",未找到恢复回滚备份。
 "Restore rollback plan is not ready.",恢复回滚计划未就绪。
@@ -433,9 +433,9 @@ Enabled,Enabled
 "Restore artifact database does not match the enabled Project Profile.","恢复产物数据库与已启用 Project Profile 不匹配。"
 "Restore artifact byte size does not match metadata.",恢复产物字节大小与元数据不匹配。
 "Restore artifact checksum does not match metadata.",恢复产物校验和与元数据不匹配。
-"proc_open is required for database restore execution.","proc_open is required for database restore execution."
-"Unable to start PostgreSQL restore command.","Unable to start PostgreSQL restore command."
-"PostgreSQL restore command failed.","PostgreSQL restore command failed."
+"proc_open is required for database restore execution.","执行数据库恢复需要 proc_open。"
+"Unable to start PostgreSQL restore command.","无法启动 PostgreSQL 恢复命令。"
+"PostgreSQL restore command failed.","PostgreSQL 恢复命令失败。"
 "Unable to start MySQL restore command.","无法启动 MySQL 恢复命令。"
 "Unable to open restore command input pipe.",无法打开恢复命令输入管道。
 "MySQL restore command failed.","MySQL 恢复命令失败。"
@@ -448,7 +448,7 @@ Enabled,Enabled
 "Restore verification query failed.",恢复验证查询失败。
 "Unable to reserve restore process output storage.",无法预留恢复进程输出存储。
 "Use a .sql or .sql.gz artifact before MySQL restore execution.","MySQL 恢复执行前请使用 .sql 或 .sql.gz 产物。"
-"Use a .sql, .sql.gz, .dump, or .backup artifact before PostgreSQL restore execution.","Use a .sql, .sql.gz, .dump, or .backup artifact before PostgreSQL restore execution."
+"Use a .sql, .sql.gz, .dump, or .backup artifact before PostgreSQL restore execution.","在 PostgreSQL 恢复执行之前使用 .sql、.sql.gz、.dump 或 .backup 工件。"
 "Restore execution currently supports mysql and pgsql artifacts.","恢复执行当前支持 mysql 和 pgsql 产物。"
 "Database restore execution failed.",数据库恢复执行失败。
 "Enable and save the Project Profile before migration preflight.","迁移预检前请启用并保存 Project Profile。"
@@ -508,10 +508,10 @@ Available,可用
 None,无
 "Create an env backup before applying or rolling back database profile changes.","应用或回滚数据库 Profile 变更前请先创建 env 备份。"
 Idle,空闲
-"Select a backup, restore, or migration dry-run action when planning DB changes.","Select a backup, restore, or migration dry-run action when planning DB changes."
+"Select a backup, restore, or migration dry-run action when planning DB changes.",规划数据库更改时选择备份、还原或迁移试运行操作。
 "The selected backup plan has reached its guarded readiness state.",已选备份计划已达到受保护的就绪状态。
 "Resolve backup plan warnings before execution or preflight.",执行或预检前请先处理备份计划警告。
-"Slave Profiles","Slave Profiles"
+"Slave Profiles",从属配置文件
 "Configured slave profiles are visible to the panel.","面板可见已配置的 slave Profiles。"
 "No slave profile is configured; this is optional for single-database projects.","未配置 slave Profile；单数据库项目可不配置。"
 "No blocking database panel health issues were detected.",未发现阻塞数据库面板的健康问题。
@@ -549,7 +549,7 @@ Idle,空闲
 "SQL 计划已生成","SQL 计划已生成"
 创建角色,创建角色
 数据库权限,数据库权限
-"Schema 权限","Schema 权限"
+"Schema 权限",模式权限
 表权限,表权限
 序列权限,序列权限
 连接权限,连接权限
@@ -585,7 +585,7 @@ Removed,已移除
 "The selected slave database profile was not found in app/etc/env.php. Save or select an existing env slave before applying.","未在 app/etc/env.php 中找到所选 slave 数据库配置。请先选择已有 env slave 再应用。"
 "Use a lowercase slave key that starts with a letter and contains only letters, numbers, dot, underscore, or hyphen.","请使用小写 slave key，必须以字母开头，且只能包含字母、数字、点、下划线或连字符。"
 "The selected database slave key is reserved.","所选数据库 slave key 为保留值。"
-"Configured (updated)","Configured (updated)"
+"Configured (updated)",已配置（已更新）
 "Only the current app/etc/env.php file can be managed by Database Manager.","Database Manager 只能管理当前 app/etc/env.php 文件。"
 "app/etc/env.php must be readable and writable before apply or rollback.","应用或回滚前，app/etc/env.php 必须可读写。"
 "Unable to write the database env backup file.","无法写入数据库 env 备份文件。"
@@ -599,7 +599,7 @@ Removed,已移除
 "Select a running WLS instance before requesting reload.","请求重载前请选择正在运行的 WLS 实例。"
 "Source DBA connection is incomplete: %{1}","源 DBA 连接配置不完整：%{1}"
 "Enable and save the Project Profile before executing lifecycle SQL.","执行生命周期 SQL 前，请先保存并启用项目 Profile。"
-"Lifecycle SQL plan has no executable statements.","Lifecycle SQL plan has no executable statements."
+"Lifecycle SQL plan has no executable statements.","生命周期 SQL 计划没有可执行语句。"
 "Confirm lifecycle SQL execution before submitting.","提交前请确认生命周期 SQL 执行。"
 "Type RUN_DB_LIFECYCLE to execute lifecycle SQL.","输入 RUN_DB_LIFECYCLE 后才能执行生命周期 SQL。"
 "Lifecycle plan is not ready for execution.",生命周期计划尚未准备好执行。
@@ -608,12 +608,12 @@ Removed,已移除
 "Project Profile password is required for this lifecycle action.","此生命周期动作需要项目 Profile 密码。"
 "Database password could not be quoted safely by PDO.","PDO 无法安全引用数据库密码。"
 "Lifecycle SQL still contains an unresolved secret placeholder.","生命周期 SQL 仍包含未解析的密钥占位符。"
-"SQL Statement","SQL Statement"
+"SQL Statement",SQL语句
 "Target database is required for this lifecycle statement.",当前生命周期语句需要目标数据库。
 "Target-database lifecycle statements currently require pgsql.","目标数据库生命周期语句当前要求 pgsql。"
 "Source DBA connection test failed.","源 DBA 连接测试失败。"
-"Database profile is incomplete: %{1}","Database profile is incomplete: %{1}"
-"%{1} is not available for this runtime.","%{1} is not available for this runtime."
+"Database profile is incomplete: %{1}",数据库配置文件不完整：%{1}
+"%{1} is not available for this runtime.","%{1} 对此运行时不可用。"
 "Enable and save the Project Profile before backup execution.","备份执行前请先启用并保存 Project Profile。"
 "Project backup connection is incomplete: %{1}",项目备份连接配置不完整：%{1}
 "Backup execution currently supports mysql and pgsql profiles.","备份执行当前支持 mysql 和 pgsql Profile。"
@@ -648,7 +648,7 @@ Removed,已移除
 "No host was provided; a future MySQL adapter must choose a safe host scope before execution.","未提供主机范围；未来 MySQL 适配器执行前必须选择安全的 host 范围。"
 "Grant preview assumes the database and user already exist; future execution must verify both before applying privileges.",授权预览假设数据库和用户已存在；未来执行前必须验证二者后再授予权限。
 "Execution blocked until the lifecycle plan is valid.",生命周期计划有效前执行会被阻断。
-"Dry Run Only","仅 Dry Run"
+"Dry Run Only",仅试运行
 "Execution is unavailable until the adapter SQL plan is ready.","适配器 SQL 计划准备好前不可执行。"
 "Save and enable the Project Profile before lifecycle execution.","生命周期执行前请先保存并启用项目 Profile。"
 "Ready To Execute",可执行
@@ -678,7 +678,7 @@ Removed,已移除
 "%{1} adapter builds vendor-specific SQL with identifier quoting inside the adapter boundary.","%{1} 适配器在适配器边界内生成带标识符引用的数据库厂商 SQL。"
 "Execute only through the guarded POST route after the plan is rebuilt server-side and RUN_DB_LIFECYCLE is confirmed.","仅在服务端重建计划并确认 RUN_DB_LIFECYCLE 后，通过受控 POST 路由执行。"
 "Append an audit record and run adapter verification queries after the database operation succeeds.",数据库操作成功后追加审计记录并运行适配器验证查询。
-"Enable and save the Project Profile before SQL apply execution.","Enable and save the Project Profile before SQL apply execution."
+"Enable and save the Project Profile before SQL apply execution.","在 SQL 应用执行之前启用并保存项目配置文件。"
 "Project SQL apply connection is incomplete: %{1}","项目 SQL 应用连接信息不完整：%{1}"
 "SQL apply currently supports mysql and pgsql profiles.","SQL 应用当前支持 mysql 和 pgsql Profile。"
 "Submitted SQL apply driver does not match the enabled Project Profile.","提交的 SQL 应用驱动与已启用的项目 Profile 不一致。"
@@ -703,10 +703,10 @@ Removed,已移除
 "SQL apply artifact cannot create or alter databases.","SQL 应用产物不能创建或修改数据库。"
 "SQL apply only allows additive CREATE TABLE, CREATE INDEX, or ALTER TABLE ADD statements in this slice.","此切片中 SQL 应用只允许增量 CREATE TABLE、CREATE INDEX 或 ALTER TABLE ADD 语句。"
 "Pre-apply backup failed.",应用前备份失败。
-"Panel Profile","Panel Profile"
-"Env default","Env default"
-"Confirm the database profile save before submitting.","Confirm the database profile save before submitting."
-"Select a target WLS instance before requesting reload.","Select a target WLS instance before requesting reload."
+"Panel Profile",面板简介
+"Env default",环境默认值
+"Confirm the database profile save before submitting.",提交前确认数据库配置文件保存。
+"Select a target WLS instance before requesting reload.","在请求重新加载之前选择目标 WLS 实例。"
 "Type COPY_ENV_PASSWORD to copy the source env profile password.","请输入 COPY_ENV_PASSWORD 才能复制源 env profile 密码。"
 "Source env profile was not found.","未找到源 env profile。"
 "The selected source env profile has no password to copy.","选择的源 env profile 没有可复制的密码。"
@@ -744,7 +744,7 @@ Removed,已移除
 "Scope is passed to the database dump adapter when execution is enabled.","启用执行时，备份范围会传给数据库 dump 适配器。"
 "SQL apply always creates a schema and data pre-apply backup before executing additive statements.","SQL 应用执行增量语句前总会创建结构和数据备份。"
 "Scope is ignored unless the selected action is backup.",除备份动作外，此范围会被忽略。
-"Artifact Boundary","Artifact Boundary"
+"Artifact Boundary",神器边界
 "SQL apply requires an existing reviewed .sql or .sql.gz artifact inside var/backups/wls/db-manager/database.","SQL 应用需要 var/backups/wls/db-manager/database 内已存在且已审核的 .sql 或 .sql.gz 产物。"
 "Migration preflight requires an existing Database Manager backup artifact with matching metadata; MySQL execution accepts only .sql or .sql.gz.","迁移预检需要已存在且元数据匹配的 Database Manager 备份产物；MySQL 执行只接受 .sql 或 .sql.gz。"
 "Execution may only write backup artifacts inside var/backups/wls/db-manager/database.","执行只能把备份产物写入 var/backups/wls/db-manager/database。"
@@ -806,15 +806,15 @@ Removed,已移除
 "MySQL mysqldump","MySQL mysqldump"
 "PostgreSQL pg_dump","PostgreSQL pg_dump"
 "MySQL Restore","MySQL 恢复"
-"PostgreSQL psql schema reset","PostgreSQL psql schema reset"
+"PostgreSQL psql schema reset","PostgreSQL psql 模式重置"
 "PostgreSQL pg_restore","PostgreSQL pg_restore"
-"""WLS Database Manager""","WLS Database Manager"
+"""WLS Database Manager""","“WLS 数据库管理器”"
 "mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
-"mdi mdi-database-search-outline","mdi mdi-database-search-outline"
-"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+"mdi mdi-database-search-outline","MDI MDI 数据库搜索大纲"
+"mdi mdi-view-dashboard-outline","MDI MDI-视图-仪表板-大纲"
 "mdi mdi-heart-pulse","mdi mdi-heart-pulse"
-"mdi mdi-database-edit-outline","mdi mdi-database-edit-outline"
-"mdi mdi-database-plus-outline","mdi mdi-database-plus-outline"
+"mdi mdi-database-edit-outline","mdi mdi-数据库编辑大纲"
+"mdi mdi-database-plus-outline","MDI MDI 数据库加大纲"
 "mdi mdi-database-arrow-down-outline","mdi mdi-database-arrow-down-outline"
 "mdi mdi-file-cog-outline","mdi mdi-file-cog-outline"
 "mdi mdi-database-check-outline","mdi mdi-database-check-outline"

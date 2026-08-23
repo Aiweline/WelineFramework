@@ -1,1252 +1,204 @@
 <?php
-/**
- * 开发文档分类管理（内容模板）
- * 
- * 由布局系统自动包裹 HTML 框架
- *
- * @var \Weline\Framework\View\Template $this
- */
+/** @var \Weline\Framework\View\Template $this */
+$catalogs = is_array($this->getData('catalogs')) ? $this->getData('catalogs') : [];
+$catalog = $this->getData('catalog');
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$catalogValue = static function (mixed $row, string $key, mixed $default = ''): mixed {
+    if (is_array($row)) {
+        return $row[$key] ?? $default;
+    }
+    if (is_object($row) && method_exists($row, 'getData')) {
+        $value = $row->getData($key);
+        return $value === null ? $default : $value;
+    }
+    return $default;
+};
+$selectedId = is_object($catalog) && method_exists($catalog, 'getId') ? max(0, (int)$catalog->getId()) : 0;
+$isNew = (int)($this->request->getParam('new') ?? 0) === 1;
+$editing = $isNew || $selectedId > 0;
+$parentId = $isNew
+    ? max(0, (int)($this->request->getParam('pid') ?? 0))
+    : max(0, (int)$catalogValue($catalog, 'pid', 0));
+$isSystem = !$isNew && (int)$catalogValue($catalog, 'is_system', 0) === 1;
+$isActive = $isNew || (int)$catalogValue($catalog, 'is_active', 1) === 1;
+$flatCatalogs = [];
+$flatten = function (array $nodes, int $depth = 0, array $ancestors = []) use (&$flatten, &$flatCatalogs): void {
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $id = max(0, (int)($node['id'] ?? 0));
+        if ($id === 0) {
+            continue;
+        }
+        $flatCatalogs[] = [
+            'id' => $id,
+            'name' => (string)($node['name'] ?? ''),
+            'depth' => $depth,
+            'ancestors' => $ancestors,
+        ];
+        $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
+        if ($children !== []) {
+            $flatten($children, $depth + 1, [...$ancestors, $id]);
+        }
+    }
+};
+$flatten($catalogs);
+$catalogPageUrl = function (array $params = []): string {
+    return (string)$this->getBackendUrl('dev/tool/admin/document/catalog', $params);
+};
+$renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $catalogPageUrl): void {
+    if ($nodes === []) {
+        return;
+    }
+    echo '<ul class="w-tree">';
+    $count = count($nodes);
+    foreach (array_values($nodes) as $index => $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $id = max(0, (int)($node['id'] ?? 0));
+        if ($id === 0) {
+            continue;
+        }
+        $name = (string)($node['name'] ?? '');
+        $pid = max(0, (int)($node['pid'] ?? 0));
+        $level = max(1, (int)($node['level'] ?? 1));
+        $system = (int)($node['is_system'] ?? 0) === 1;
+        $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
+        $rowState = $selectedId === $id ? 'selected' : ($system ? 'locked' : 'idle');
+        echo '<li class="w-catalog-tree__item">';
+        echo '<div class="w-tree__row w-catalog-tree__row" data-state="' . $rowState . '">';
+        echo '<a class="w-catalog-tree__link" href="' . $escape($catalogPageUrl(['id' => $id])) . '"' . ($selectedId === $id ? ' aria-current="page"' : '') . '>';
+        echo '<w-icon name="' . ($system ? 'settings' : 'folder') . '" size="sm"></w-icon><span>' . $escape($name) . '</span>';
+        if ($system) {
+            echo '<span class="w-badge" data-tone="info">' . $escape(__('系统')) . '</span>';
+        }
+        echo '</a>';
+        if (!$system) {
+            echo '<span class="w-catalog-tree__actions">';
+            echo '<button class="w-button" type="button" data-tone="quiet" data-size="sm" data-catalog-reorder data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '" data-position="' . max(1, $index) . '" aria-label="' . $escape(__('上移 %{1}', $name)) . '"' . ($index === 0 ? ' disabled' : '') . '><w-icon name="chevron-up" size="sm"></w-icon></button>';
+            echo '<button class="w-button" type="button" data-tone="quiet" data-size="sm" data-catalog-reorder data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '" data-position="' . min($count, $index + 2) . '" aria-label="' . $escape(__('下移 %{1}', $name)) . '"' . ($index >= $count - 1 ? ' disabled' : '') . '><w-icon name="chevron-down" size="sm"></w-icon></button>';
+            echo '</span>';
+        }
+        echo '</div>';
+        echo '<a class="w-catalog-tree__add" href="' . $escape($catalogPageUrl(['new' => 1, 'pid' => $id])) . '"><w-icon name="plus" size="sm"></w-icon>' . $escape(__('添加子分类')) . '</a>';
+        if ($children !== []) {
+            $renderTree($children);
+        }
+        echo '</li>';
+    }
+    echo '</ul>';
+};
 ?>
-<style>
-#catalog-tree-container {
-    min-height: 500px;
-    border-radius: 6px;
-    padding: 10px;
-    overflow-x: auto;
-    overflow-y: auto;
-    width: 100%;
-    max-width: 100%;
-    user-select: none;
-}
-#catalog-tree-container.dragging {
-    cursor: grabbing !important;
-}
-#catalog-tree {
-    font-size: 13px;
-    min-width: 100%;
-    width: max-content;
-}
-.jstree-node {
-    min-height: 28px;
-    line-height: 28px;
-    margin: 1px 0;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-    min-width: 100%;
-    width: max-content;
-}
-.jstree-node:nth-child(even) {
-    background-color: transparent;
-}
-.jstree-node:nth-child(odd) {
-    background-color: transparent;
-}
-.jstree-anchor {
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    color: var(--backend-color-text-primary, #495057);
-    min-height: 28px;
-    white-space: nowrap;
-    vertical-align: top;
-    max-width: none;
-    overflow: visible;
-}
-.jstree-anchor > * {
-    vertical-align: middle;
-}
-.jstree-container-ul {
-    min-width: 100%;
-    width: max-content;
-}
-#catalog-tree-container .jstree {
-    min-width: 100%;
-    width: max-content;
-}
-.jstree-anchor:hover {
-    background-color: rgba(var(--backend-color-primary-rgb, 11, 177, 151), 0.1) !important;
-    color: var(--backend-color-primary, #0bb197) !important;
-    box-shadow: 0 2px 4px rgba(var(--backend-color-primary-rgb, 11, 177, 151), 0.15);
-    transform: translateX(2px);
-}
-.jstree-clicked {
-    background-color: rgba(var(--backend-color-primary-rgb, 11, 177, 151), 0.15) !important;
-    color: var(--backend-color-primary, #0a9d85) !important;
-    box-shadow: 0 2px 6px rgba(var(--backend-color-primary-rgb, 11, 177, 151), 0.25);
-}
-.jstree-anchor i.mdi {
-    font-size: 16px;
-    line-height: 1;
-    margin-right: 4px;
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-}
-.jstree-contextmenu {
-    z-index: 10000;
-    border-radius: 6px;
-    overflow: hidden;
-}
-.jstree-contextmenu .jstree-contextmenu-item {
-    padding: 10px 20px;
-    transition: all 0.2s ease;
-}
-.jstree-contextmenu .jstree-contextmenu-item:hover {
-    background-color: rgba(var(--backend-color-primary-rgb, 11, 177, 151), 0.1);
-    color: var(--backend-color-primary, #0bb197);
-}
-.jstree-contextmenu .jstree-contextmenu-item.jstree-contextmenu-disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    color: var(--backend-color-text-secondary, #6c757d) !important;
-    background-color: var(--backend-color-bg-tertiary, #e9ecef) !important;
-    position: relative;
-    pointer-events: auto;
-}
-.jstree-contextmenu .jstree-contextmenu-item.jstree-contextmenu-disabled:hover {
-    background-color: var(--backend-color-bg-tertiary, #e9ecef) !important;
-    color: var(--backend-color-text-secondary, #6c757d) !important;
-    cursor: not-allowed;
-}
-.jstree-contextmenu .jstree-contextmenu-item.jstree-contextmenu-disabled a {
-    pointer-events: none;
-}
-.system-badge {
-    font-size: 0.7em;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-weight: 600;
-    background: linear-gradient(135deg, var(--backend-color-primary, #0bb197) 0%, #0a9d85 100%) !important;
-    box-shadow: 0 1px 3px rgba(var(--backend-color-primary-rgb, 11, 177, 151), 0.3);
-    display: inline-flex;
-    align-items: center;
-    white-space: nowrap;
-}
-.system-badge i {
-    font-size: 0.85em;
-    margin-right: 2px !important;
-}
-.jstree-node[data-system="true"] .jstree-anchor {
-    border-left: 2px solid var(--backend-color-primary, #0bb197);
-    padding-left: 6px;
-}
-.jstree-node[data-system="true"] {
-    background-color: transparent !important;
-}
-small.text-muted {
-    font-size: 0.8em;
-    font-weight: normal;
-}
-</style>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-catalogs.css)">
 
-<?= \Weline\Framework\View\Form\FormRenderer::runtimeBootstrap() ?>
-
-<!-- jstree 树形插件 -->
-<link rel="stylesheet" href="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)" />
-
-<script>
-(function(g){
-  if(g.__bqAdmin_developer_workspace) return;
-  g.__bqAdmin_developer_workspace=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['developer_workspace']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('developer_workspace').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script src="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)"></script>
-
-<!-- 国际化字符串 -->
-<script>
-(function() {
-    'use strict';
-    
-    window.i18n = {
-        'pageTitle': '<?=__('开发文档分类管理')?>',
-        'pageDescription': '<?=__('左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动')?>',
-        'addTopLevelCategory': '<?=__('添加顶级分类')?>',
-        'back': '<?=__('返回')?>',
-        'close': '<?=__('关闭')?>',
-        'loading': '<?=__('加载中...')?>',
-        'loadingCatalogTree': '<?=__('正在加载分类树...')?>',
-        'noCategories': '<?=__('暂无分类，点击"添加顶级分类"开始创建')?>',
-        'addCategory': '<?=__('添加分类')?>',
-        'addSubCategory': '<?=__('添加子分类')?>',
-        'editCategory': '<?=__('编辑分类')?>',
-        'categoryName': '<?=__('分类名称')?>',
-        'categoryDescription': '<?=__('分类描述')?>',
-        'enableCategory': '<?=__('启用分类')?>',
-        'pleaseEnterCategoryName': '<?=__('请输入分类名称')?>',
-        'pleaseEnterCategoryDescription': '<?=__('请输入分类描述')?>',
-        'cancel': '<?=__('取消')?>',
-        'save': '<?=__('保存')?>',
-        'delete': '<?=__('删除')?>',
-        'edit': '<?=__('编辑')?>',
-        'editCategoryMenu': '<?=__('编辑分类')?>',
-        'deleteCategoryMenu': '<?=__('删除分类')?>',
-        'addSubCategoryMenu': '<?=__('添加子分类')?>',
-        'systemCategoryNotEditable': '<?=__('系统分类不允许编辑')?>',
-        'systemCategoryNotDeletable': '<?=__('系统分类不允许删除')?>',
-        'hasSystemChildNotDeletable': '<?=__('下层有系统分类，不允许删除')?>',
-        'systemCategory': '<?=__('系统分类')?>',
-        'saveSuccess': '<?=__('保存成功！')?>',
-        'saveFailed': '<?=__('保存失败')?>',
-        'deleteSuccess': '<?=__('删除成功！')?>',
-        'deleteFailed': '<?=__('删除失败')?>',
-        'categoryNameRequired': '<?=__('分类名称不能为空')?>',
-        'catalogTreeNotInitialized': '<?=__('分类树未初始化，请刷新页面重试')?>',
-        'jstreeNotAvailable': '<?=__('jstree实例不可用，请刷新页面重试')?>',
-        'nodeNotExists': '<?=__('节点不存在，ID:')?>',
-        'nodeDataFormatError': '<?=__('节点数据格式错误，请刷新页面')?>',
-        'nodeDataFormatErrorShort': '<?=__('节点数据格式错误')?>',
-        'editNodeFailed': '<?=__('编辑节点失败:')?>',
-        'addSubCategoryFailed': '<?=__('添加子分类失败:')?>',
-        'deleteNodeFailed': '<?=__('删除节点失败:')?>',
-        'cannotFindModalElement': '<?=__('无法找到对话框元素，请刷新页面重试')?>',
-        'cannotOpenAddModal': '<?=__('无法打开添加分类对话框，请刷新页面重试')?>',
-        'cannotOpenEditModal': '<?=__('无法打开编辑分类对话框，请刷新页面重试')?>',
-        'loadCatalogTreeFailed': '<?=__('加载分类树失败：')?>',
-        'cannotSetSelfAsParent': '<?=__('不能将自己作为父分类')?>',
-        'systemCategoryNotDraggable': '<?=__('系统分类不允许拖动排序')?>',
-        'duplicateCategoryName': '<?=__('目标位置已存在同名分类')?>',
-        'sortSaved': '<?=__('排序已保存')?>',
-        'saveSortFailed': '<?=__('保存排序失败，已恢复原位置')?>',
-        'confirmDelete': '<?=__('确定要删除该分类吗？此操作不可恢复！')?>',
-        'confirmDeleteCategory': '<?=__('确定要删除分类')?>',
-        'deleteWarning': '<?=__('⚠️ 警告：删除分类会同时删除其所有子分类！')?>',
-        'deleteWarning2': '<?=__('此操作不可恢复，请谨慎操作！')?>',
-        'unnamedCategory': '<?=__('未命名分类')?>',
-        'confirm': '<?=__('确认')?>',
-        'confirmDeleteQuestion': '<?=__('确认删除吗？')?>',
-        'confirmDialogUnavailable': <?=json_encode((string)__('确认组件不可用，删除操作已取消，请刷新页面重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)?>,
-        'deleteRequestFailed': '<?=__('删除请求失败')?>',
-        'categoryTree': '<?=__('分类树')?>',
-        'categoryInfo': '<?=__('分类信息')?>',
-        'pleaseSelectCategory': '<?=__('请从左侧选择一个分类进行编辑')?>',
-        'category': '<?=__('父分类')?>',
-        'topLevelCategory': '<?=__('顶级分类')?>',
-        'level': '<?=__('层级')?>',
-        'systemCategoryCannotEditName': '<?=__('系统分类不允许修改名称')?>',
-        'systemCategoryCannotEdit': '<?=__('这是系统分类，部分字段不允许修改')?>'
-    };
-})();
-</script>
-
-<!-- 页面标题 -->
-<div class="w-grid" style="--w-mb:var(--weline-space-4);">
-    <div style="--w-span:12;">
-        <div class="w-cluster" data-justify="between" data-align="center">
-            <div>
-                <h4 style="--w-mb:var(--weline-space-1);"><?=__('开发文档分类管理')?></h4>
-                <p class="w-text" data-tone="muted" style="--w-mb:0;"><?=__('左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动')?></p>
-            </div>
-            <div>
-                <button type="button" class="w-button" id="btn-add-top-level" data-tone="primary">
-                    <w:icon name="plus" size="sm"></w:icon> <?=__('添加顶级分类')?>
-                </button>
-                <a href="@admin-url('dev/tool/admin/document')" class="w-button" data-tone="neutral">
-                    <w:icon name="arrow-left" size="sm"></w:icon> <?=__('返回')?>
-                </a>
-            </div>
+<section
+    class="w-backend-page w-catalog-admin"
+    data-catalog-admin
+    data-text-save-success="<?= $escape(__('分类已保存')) ?>"
+    data-text-save-failed="<?= $escape(__('分类保存失败')) ?>"
+    data-text-delete-title="<?= $escape(__('删除分类')) ?>"
+    data-text-delete-message="<?= $escape(__('删除分类会同时删除其子分类，且无法恢复。确定继续吗？')) ?>"
+    data-text-delete-success="<?= $escape(__('分类已删除')) ?>"
+    data-text-delete-failed="<?= $escape(__('分类删除失败')) ?>"
+    data-text-reorder-success="<?= $escape(__('分类顺序已保存')) ?>"
+    data-text-reorder-failed="<?= $escape(__('分类排序失败')) ?>"
+>
+    <header class="w-backend-page__heading">
+        <div class="w-stack">
+            <h1><w:icon name="tree" size="md"></w:icon><?= $escape(__('开发文档分类')) ?></h1>
+            <p class="w-text" data-tone="muted"><?= $escape(__('使用键盘可操作的树形列表维护层级，通过上移和下移按钮调整同级顺序')) ?></p>
         </div>
-    </div>
-</div>
+        <nav class="w-cluster" aria-label="<?= $escape(__('分类管理操作')) ?>">
+            <a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加顶级分类')) ?></a>
+            <a class="w-button" data-tone="neutral" href="@admin-url('dev/tool/admin/document')"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回文档')) ?></a>
+        </nav>
+    </header>
 
-<!-- 消息提示 -->
-<template>Weline_Component::message.phtml</template>
+    <template>Weline_Component::message.phtml</template>
 
-<!-- AJAX消息提示容器 -->
-<div id="ajax-message-container" class="w-grid" style="display: none;">
-    <div style="--w-span:12;"></div>
-</div>
-
-<!-- 左右分栏布局 -->
-<div class="w-grid">
-    <!-- 左侧分类树 -->
-    <div style="--w-span-md:5;--w-span-lg:3;">
-        <div class="w-card">
-            <div class="w-card__header">
-                <h5 class="w-card__title" style="--w-mb:0;">
-                    <w:icon name="folder" size="sm"></w:icon>
-                    <?=__('分类树')?>
-                </h5>
-            </div>
-            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
-                <div id="catalog-tree-container" style="min-height: 500px; overflow-x: auto; overflow-y: auto;">
-                    <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
-                        <div class="w-spinner w-text" role="status" data-tone="primary">
-                            <span class="w-visually-hidden"><?=__('加载中...')?></span>
-                        </div>
-                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);"><?=__('正在加载分类树...')?></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 右侧编辑面板 -->
-    <div style="--w-span-md:7;--w-span-lg:9;">
-        <div class="w-card">
-            <div class="w-card__header">
-                <h5 class="w-card__title" id="catalog-edit-title" style="--w-mb:0;">
-                    <w:icon name="edit" size="sm"></w:icon>
-                    <?=__('分类信息')?>
-                </h5>
-            </div>
+    <div class="w-catalog-admin__layout">
+        <aside class="w-card w-catalog-admin__tree-card" aria-labelledby="catalog-tree-heading">
+            <header class="w-card__header"><h2 class="w-card__title" id="catalog-tree-heading"><w:icon name="folder" size="sm"></w:icon><?= $escape(__('分类树')) ?></h2></header>
             <div class="w-card__body">
-                <div id="catalog-edit-container">
-                    <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
-                        <w:icon name="folder" size="sm"></w:icon>
-                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?=__('请从左侧选择一个分类进行编辑')?></p>
-                    </div>
-                </div>
+                <?php if ($catalogs !== []): ?>
+                    <nav class="w-catalog-tree" aria-label="<?= $escape(__('文档分类树')) ?>"><?php $renderTree($catalogs); ?></nav>
+                <?php else: ?>
+                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('暂无分类')) ?></p><a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><?= $escape(__('添加分类')) ?></a></div>
+                <?php endif; ?>
             </div>
-        </div>
+        </aside>
+
+        <main class="w-card w-catalog-admin__editor" aria-labelledby="catalog-editor-heading">
+            <header class="w-card__header">
+                <h2 class="w-card__title" id="catalog-editor-heading">
+                    <w:icon name="<?= $isNew ? 'plus' : 'edit' ?>" size="sm"></w:icon>
+                    <?= $escape($isNew ? __('添加分类') : ($selectedId > 0 ? __('编辑分类') : __('分类信息'))) ?>
+                </h2>
+            </header>
+            <div class="w-card__body">
+                <?php if (!$editing): ?>
+                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('请从左侧选择分类，或添加一个新分类')) ?></p></div>
+                <?php else: ?>
+                    <form class="w-form w-catalog-form" method="post" action="@admin-url('dev/tool/admin/document/catalog/post')" data-catalog-form>
+                        <input type="hidden" name="id" value="<?= $selectedId ?>">
+                        <label class="w-field">
+                            <span class="w-field__label"><?= $escape(__('分类名称')) ?></span>
+                            <input class="w-input" type="text" name="name" maxlength="60" required value="<?= $escape($isNew ? '' : $catalogValue($catalog, 'name', '')) ?>" <?= $isSystem ? 'readonly' : '' ?>>
+                            <?php if ($isSystem): ?><span class="w-field__hint"><?= $escape(__('系统分类不能修改名称或父级')) ?></span><?php endif; ?>
+                        </label>
+
+                        <label class="w-field">
+                            <span class="w-field__label"><?= $escape(__('分类描述')) ?></span>
+                            <textarea class="w-textarea" name="description" rows="5"><?= $escape($isNew ? '' : $catalogValue($catalog, 'description', '')) ?></textarea>
+                        </label>
+
+                        <label class="w-field">
+                            <span class="w-field__label"><?= $escape(__('父分类')) ?></span>
+                            <?php if ($isSystem): ?>
+                                <input type="hidden" name="pid" value="<?= $parentId ?>">
+                            <?php endif; ?>
+                            <select class="w-select" name="pid" <?= $isSystem ? 'disabled' : '' ?>>
+                                <option value="0" <?= $parentId === 0 ? 'selected' : '' ?>><?= $escape(__('顶级分类')) ?></option>
+                                <?php foreach ($flatCatalogs as $option): ?>
+                                    <?php
+                                    $optionId = (int)$option['id'];
+                                    $isSelf = !$isNew && $optionId === $selectedId;
+                                    $isDescendant = !$isNew && in_array($selectedId, $option['ancestors'], true);
+                                    if ($isSelf || $isDescendant) { continue; }
+                                    ?>
+                                    <option value="<?= $optionId ?>" <?= $optionId === $parentId ? 'selected' : '' ?>><?= $escape(str_repeat('—', (int)$option['depth']) . $option['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+
+                        <label class="w-switch">
+                            <input type="hidden" name="is_active" value="0">
+                            <input type="checkbox" name="is_active" value="1" <?= $isActive ? 'checked' : '' ?>>
+                            <span><?= $escape(__('启用分类')) ?></span>
+                        </label>
+
+                        <?php if ($isSystem): ?>
+                            <div class="w-alert" data-tone="info"><w:icon name="info" size="sm"></w:icon><div><strong><?= $escape(__('系统分类')) ?></strong><p><?= $escape(__('可修改描述和启用状态；名称、父级、排序及删除受保护。')) ?></p></div></div>
+                        <?php endif; ?>
+
+                        <footer class="w-catalog-form__actions w-cluster" data-justify="between">
+                            <div>
+                                <?php if (!$isNew && $selectedId > 0 && !$isSystem): ?>
+                                    <button class="w-button" type="button" data-tone="danger" data-catalog-delete="<?= $selectedId ?>"><w:icon name="trash" size="sm"></w:icon><?= $escape(__('删除')) ?></button>
+                                <?php endif; ?>
+                            </div>
+                            <div class="w-cluster">
+                                <a class="w-button" data-tone="neutral" href="<?= $escape($catalogPageUrl()) ?>"><?= $escape(__('取消')) ?></a>
+                                <button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存')) ?></button>
+                            </div>
+                        </footer>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </main>
     </div>
-</div>
+</section>
 
-<script>
-(function() {
-    'use strict';
-    
-    var catalogTree = null;
-    var currentCatalogId = null;
-    var isSavingOrder = false;
-    var saveOrderTimer = null;
-    
-    $(document).ready(function() {
-        loadCatalogTree();
-        
-        $('#btn-add-top-level').on('click', function() {
-            showAddCatalogForm(0);
-        });
-        
-        $(document).on('submit', '#catalog-edit-form', function(e) {
-            e.preventDefault();
-            saveCatalog();
-        });
-
-        $(document).on('click', '[data-catalog-action="clear-edit"]', function(e) {
-            e.preventDefault();
-            clearCatalogEditForm();
-        });
-
-        $(document).on('click', '[data-catalog-action="delete"]', function(e) {
-            e.preventDefault();
-            var button = this;
-            var catalogId = button.dataset ? button.dataset.catalogId : button.getAttribute('data-catalog-id');
-            var catalogName = button.dataset ? button.dataset.catalogName : button.getAttribute('data-catalog-name');
-
-            if (!catalogId) {
-                showNotification(i18n.nodeDataFormatErrorShort, 'error');
-                return;
-            }
-
-            handleDeleteCatalog(catalogId, catalogName || i18n.unnamedCategory);
-        });
-    });
-
-    function escapeHtml(value) {
-        return String(value === null || value === undefined ? '' : value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    function escapeHtmlAttribute(value) {
-        return escapeHtml(value);
-    }
-    
-    function hasSystemChild(catalogId) {
-        if (!catalogTree || !catalogTree.jstree) {
-            return false;
-        }
-        try {
-            var node = catalogTree.jstree('get_node', catalogId.toString());
-            if (!node) {
-                return false;
-            }
-            
-            var isSystem = false;
-            if (node.original) {
-                if (node.original.is_system !== undefined) {
-                    isSystem = node.original.is_system == 1;
-                } else if (node.original.data && node.original.data.is_system !== undefined) {
-                    isSystem = node.original.data.is_system == 1;
-                }
-            } else if (node.data && node.data.is_system !== undefined) {
-                isSystem = node.data.is_system == 1;
-            }
-            
-            if (isSystem) {
-                return true;
-            }
-            
-            if (node.children && node.children.length > 0) {
-                for (var i = 0; i < node.children.length; i++) {
-                    var childId = node.children[i];
-                    if (hasSystemChild(childId)) {
-                        return true;
-                    }
-                }
-            }
-            
-            return false;
-        } catch(e) {
-            console.warn('检查系统子分类时出错:', e);
-            return false;
-        }
-    }
-    
-    function loadCatalogTree() {
-        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
-            url: '@admin-url("dev/tool/admin/document/catalog/tree")',
-            dataType: 'json'
-        }).done(function(data) {
-            if (!data || data.length === 0) {
-                $('#catalog-tree-container').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><p class="w-text" data-tone="muted">' + i18n.noCategories + '</p></div>');
-                return;
-            }
-            
-            var treeData = convertToJSTreeFormat(data);
-            
-            if (catalogTree && catalogTree.jstree) {
-                try {
-                    if (saveOrderTimer) {
-                        clearTimeout(saveOrderTimer);
-                        saveOrderTimer = null;
-                    }
-                    isSavingOrder = false;
-                    catalogTree.jstree('destroy');
-                } catch(e) {
-                    console.warn('[CatalogTree] 销毁旧实例时出错:', e);
-                }
-            }
-            
-            $('#catalog-tree-container').html('<div id="catalog-tree"></div>');
-            var $catalogTree = $('#catalog-tree');
-            catalogTree = $catalogTree.jstree({
-                'core': {
-                    'data': treeData,
-                    'check_callback': function(operation, node, node_parent, node_position, more) {
-                        if (operation === 'move_node') {
-                            var nodeData = node.original && node.original.data ? node.original.data : {};
-                            var isSystem = nodeData.is_system == 1 || node.original.is_system == 1;
-                            if (isSystem) {
-                                return false;
-                            }
-                            return true;
-                        }
-                        return true;
-                    },
-                    'themes': {
-                        'responsive': true,
-                        'variant': 'large',
-                        'stripes': false
-                    }
-                },
-                'plugins': ['dnd', 'contextmenu'],
-                'dnd': {
-                    'copy': false,
-                    'inside_pos': 'last'
-                },
-                'contextmenu': {
-                    'items': function(node) {
-                        var isSystem = false;
-                        var nodeData = null;
-                        
-                        if (node.original) {
-                            if (node.original.is_system !== undefined) {
-                                isSystem = node.original.is_system == 1;
-                            }
-                            if (node.original.data) {
-                                nodeData = node.original.data;
-                                if (node.original.is_system === undefined && nodeData.is_system !== undefined) {
-                                    isSystem = nodeData.is_system == 1;
-                                }
-                            }
-                        }
-                        
-                        if (!nodeData && node.data) {
-                            nodeData = node.data;
-                            if (isSystem === false && nodeData.is_system !== undefined) {
-                                isSystem = nodeData.is_system == 1;
-                            }
-                        }
-                        
-                        var items = {};
-                        
-                        var hasSystemChildren = nodeData && nodeData.id ? hasSystemChild(nodeData.id) : false;
-                        items['delete'] = {
-                            'label': '<w:icon name="trash" size="sm"></w:icon> ' + i18n.delete,
-                            'action': function(data) {
-                                if (isSystem || hasSystemChildren) {
-                                    return false;
-                                }
-                                handleDeleteNode(data.reference);
-                                return true;
-                            },
-                            '_disabled': isSystem || hasSystemChildren,
-                            'title': isSystem ? i18n.systemCategoryNotDeletable : (hasSystemChildren ? i18n.hasSystemChildNotDeletable : i18n.deleteCategoryMenu),
-                            'separator_after': true
-                        };
-                        
-                        items['add_child'] = {
-                            'label': '<w:icon name="plus" size="sm"></w:icon> ' + i18n.addSubCategoryMenu,
-                            'action': function(data) {
-                                handleAddChildNode(data.reference);
-                            },
-                            'title': i18n.addSubCategoryMenu
-                        };
-                        
-                        return items;
-                    }
-                }
-            }).on('ready.jstree', function() {
-                markSystemNodes();
-            }).on('select_node.jstree', function(e, data) {
-                var nodeId = data.node.id;
-                loadCatalogForEdit(nodeId);
-            }).on('model.jstree', function() {
-                setTimeout(markSystemNodes, 100);
-            }).on('move_node.jstree', function(e, data) {
-                if (isSavingOrder) {
-                    return;
-                }
-                
-                if (saveOrderTimer) {
-                    clearTimeout(saveOrderTimer);
-                    saveOrderTimer = null;
-                }
-                
-                saveOrderTimer = setTimeout(function() {
-                    saveOrderTimer = null;
-                    if (isSavingOrder) {
-                        return;
-                    }
-                    try {
-                        saveTreeOrder(data);
-                    } catch(error) {
-                        console.error('[CatalogTree] 保存排序时出错:', error);
-                        isSavingOrder = false;
-                    }
-                }, 500);
-            });
-        }).fail(function(xhr, status, error) {
-            $('#catalog-tree-container').html('<div class="w-alert" data-tone="danger">' + i18n.loadCatalogTreeFailed + error + '</div>');
-        });
-    }
-    
-    function markSystemNodes() {
-        if (!catalogTree || !catalogTree.jstree) {
-            return;
-        }
-        try {
-            var allNodes = catalogTree.jstree('get_json', null, {flat: true});
-            allNodes.forEach(function(node) {
-                var nodeElement = catalogTree.jstree('get_node', node.id, true);
-                if (nodeElement && nodeElement.length) {
-                    var nodeData = null;
-                    if (node.original && node.original.data) {
-                        nodeData = node.original.data;
-                    } else if (node.data) {
-                        nodeData = node.data;
-                    }
-                    
-                    if (nodeData) {
-                        var isSystem = nodeData.is_system == 1;
-                        var nodeId = nodeData.id;
-                        
-                        var anchor = nodeElement.find('.jstree-anchor');
-                        if (anchor.length) {
-                            anchor.attr('data-is-system', isSystem ? '1' : '0');
-                            anchor.attr('data-node-id', nodeId || '');
-                        }
-                        
-                        var jstreeNode = nodeElement.closest('.jstree-node');
-                        if (jstreeNode.length) {
-                            jstreeNode.attr('data-is-system', isSystem ? '1' : '0');
-                            jstreeNode.attr('data-node-id', nodeId || '');
-                            if (isSystem) {
-                                jstreeNode.attr('data-system', 'true');
-                            } else {
-                                jstreeNode.removeAttr('data-system');
-                            }
-                        }
-                    }
-                }
-            });
-        } catch(e) {
-            console.warn('标记系统节点时出错:', e);
-        }
-    }
-    
-    function convertToJSTreeFormat(data, level) {
-        level = level || 1;
-        var result = [];
-        if (!data || !Array.isArray(data)) {
-            return result;
-        }
-        
-        data.forEach(function(item) {
-            if (!item || !item.id) {
-                return;
-            }
-            
-            var itemLevel = item.level || level;
-            var isSystem = item.is_system == 1;
-            var isActive = item.is_active == 1;
-            
-            var iconHtml = '';
-            if (!isActive) {
-                iconHtml = '<w:icon name="folder" size="sm"></w:icon>';
-            } else if (isSystem) {
-                iconHtml = '<w:icon name="settings" size="sm"></w:icon>';
-            } else {
-                iconHtml = '<w:icon name="folder" size="sm"></w:icon>';
-            }
-            
-            var node = {
-                id: item.id.toString(),
-                text: iconHtml + item.name + (item.description ? ' <small class="w-text ms-2" data-tone="muted">(' + (item.description.length > 30 ? item.description.substring(0, 30) + '...' : item.description) + ')</small>' : '') + 
-                      (isSystem ? ' <span class="w-badge system-badge ms-2" data-w-background="primary"><w:icon name="check" size="sm"></w:icon>' + i18n.systemCategory + '</span>' : ''),
-                data: {
-                    id: item.id,
-                    name: item.name || '',
-                    description: item.description || '',
-                    pid: item.pid || 0,
-                    level: itemLevel,
-                    is_active: item.is_active || 0,
-                    is_system: item.is_system || 0
-                },
-                is_system: item.is_system || 0,
-                is_active: item.is_active || 0,
-                node_id: item.id,
-                node_name: item.name || '',
-                state: {
-                    opened: itemLevel <= 2,
-                    disabled: !isActive
-                },
-                icon: false
-            };
-            
-            if (item.nodes && Array.isArray(item.nodes) && item.nodes.length > 0) {
-                node.children = convertToJSTreeFormat(item.nodes, itemLevel + 1);
-            }
-            
-            result.push(node);
-        });
-        return result;
-    }
-    
-    function loadCatalogForEdit(catalogId) {
-        currentCatalogId = catalogId;
-        
-        $('#catalog-edit-container').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><div class="w-spinner w-text" role="status" data-tone="primary"><span class="w-visually-hidden">' + i18n.loading + '</span></div></div>');
-        
-        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
-            url: '@admin-url("dev/tool/admin/document/catalog/view")',
-            method: 'GET',
-            data: { id: catalogId },
-            dataType: 'json',
-            success: function(response) {
-                if (response.code === 200 && response.data) {
-                    renderCatalogEditForm(response.data);
-                } else {
-                    $('#catalog-edit-container').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + (response.msg || i18n.loadDocumentFailed) + '</div>');
-                }
-            },
-            error: function() {
-                $('#catalog-edit-container').html('<div class="w-alert" data-tone="danger"><w:icon name="warning" size="sm"></w:icon>' + i18n.loadDocumentFailedRefresh + '</div>');
-            }
-        });
-    }
-    
-    function renderCatalogEditForm(catalog) {
-        var isSystem = catalog.is_system == 1;
-        var isReadonly = isSystem;
-        var catalogId = catalog.id ? String(catalog.id) : '';
-        var catalogName = catalog.name || '';
-        
-        var html = '<form id="catalog-edit-form" data-weline-form="1" data-weline-form-intent="developer.catalog.edit" data-weline-form-captcha="auto">' +
-            '<input type="hidden" name="id" id="catalog_id" value="' + escapeHtmlAttribute(catalogId) + '">' +
-            '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(catalog.pid ? String(catalog.pid) : '0') + '">' +
-            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_name" class="w-field__label">' + i18n.categoryName + ' <span class="w-text" data-tone="danger">*</span></label>' +
-            '<input type="text" class="w-input" id="catalog_name" name="name" value="' + escapeHtmlAttribute(catalogName) + '" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '" readonly :>' +
-            (isReadonly ? '<small class="w-text" data-tone="muted"><w:icon name="info" size="sm"></w:icon>' + i18n.systemCategoryCannotEditName + '</small>' : '') + '</div>' +
-            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_description" class="w-field__label">' + i18n.categoryDescription + '</label>' +
-            '<textarea class="w-textarea" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '" readonly :>' + escapeHtml(catalog.description || '') + '</textarea></div>' +
-            '<div style="--w-mb:var(--weline-space-4);"><div class="w-switch"><input type="checkbox" id="catalog_is_active" name="is_active" value="1" checked : disabled><label for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
-            '<div style="--w-mb:var(--weline-space-4);"><label class="w-field__label">' + i18n.category + '</label><div class="w-input"><span class="w-badge" data-w-background="info">' + escapeHtml(catalog.parent_name || i18n.topLevelCategory) + '</span></div></div>' +
-            '<div style="--w-mb:var(--weline-space-4);"><label class="w-field__label">' + i18n.level + '</label><div class="w-input"><span class="w-badge" data-w-background="muted">' + escapeHtml(catalog.level || 1) + '</span></div></div>' +
-            (isSystem ? '<div class="w-alert" data-tone="info"><w:icon name="info" size="sm"></w:icon>' + i18n.systemCategoryCannotEdit + '</div>' : '') +
-            '<div class="w-cluster" data-justify="between" data-align="center"><div>' +
-            (!isSystem && catalogId ? '<button type="button" class="w-button btn-delete-catalog" data-catalog-action="delete" data-catalog-id="' + escapeHtmlAttribute(catalogId) + '" data-catalog-name="' + escapeHtmlAttribute(catalogName) + '" data-tone="danger"><w:icon name="trash" size="sm"></w:icon> ' + i18n.delete + '</button>' : '') +
-            '</div><div class="w-cluster" style="--w-gap:var(--weline-space-2);"><button type="button" class="w-button" data-catalog-action="clear-edit" data-tone="neutral">' + i18n.cancel + '</button><button type="submit" class="w-button" disabled : data-tone="primary">' + i18n.save + '</button></div></div></form>';
-        
-        $('#catalog-edit-title').html('<w:icon name="edit" size="sm"></w:icon>' + i18n.editCategory + ': ' + escapeHtml(catalogName));
-        $('#catalog-edit-container').html(html);
-    }
-    
-    function showAddCatalogForm(parentId) {
-        currentCatalogId = null;
-        
-        var parentName = i18n.topLevelCategory;
-        if (parentId) {
-            var parentNode = catalogTree.jstree('get_node', parentId.toString());
-            if (parentNode) {
-                parentName = parentNode.text.replace(/<[^>]*>/g, '').trim();
-            }
-        }
-        
-        var html = '<form id="catalog-edit-form" data-weline-form="1" data-weline-form-intent="developer.catalog.create" data-weline-form-captcha="auto">' +
-            '<input type="hidden" name="id" id="catalog_id" value="">' +
-            '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(parentId || '0') + '">' +
-            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_name" class="w-field__label">' + i18n.categoryName + ' <span class="w-text" data-tone="danger">*</span></label>' +
-            '<input type="text" class="w-input" id="catalog_name" name="name" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '"></div>' +
-            '<div style="--w-mb:var(--weline-space-4);"><label for="catalog_description" class="w-field__label">' + i18n.categoryDescription + '</label>' +
-            '<textarea class="w-textarea" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '"></textarea></div>' +
-            '<div style="--w-mb:var(--weline-space-4);"><div class="w-switch"><input type="checkbox" id="catalog_is_active" name="is_active" value="1" checked><label for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
-            '<div style="--w-mb:var(--weline-space-4);"><label class="w-field__label">' + i18n.category + '</label><div class="w-input"><span class="w-badge" data-w-background="info">' + escapeHtml(parentName) + '</span></div></div>' +
-            '<div class="w-cluster" data-justify="end" style="--w-gap:var(--weline-space-2);"><button type="button" class="w-button" data-catalog-action="clear-edit" data-tone="neutral">' + i18n.cancel + '</button><button type="submit" class="w-button" data-tone="primary">' + i18n.save + '</button></div></form>';
-        
-        $('#catalog-edit-title').html('<w:icon name="plus" size="sm"></w:icon>' + (parentId ? i18n.addSubCategory : i18n.addTopLevelCategory));
-        $('#catalog-edit-container').html(html);
-    }
-    
-    function clearCatalogEditForm() {
-        $('#catalog-edit-container').html('<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="folder" size="sm"></w:icon><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);">' + i18n.pleaseSelectCategory + '</p></div>');
-        $('#catalog-edit-title').html('<w:icon name="edit" size="sm"></w:icon>' + i18n.categoryInfo);
-        currentCatalogId = null;
-        if (catalogTree) {
-            catalogTree.jstree('deselect_all');
-        }
-    }
-    
-    window.clearCatalogEditForm = clearCatalogEditForm;
-    
-    function saveCatalog() {
-        var catalogId = $('#catalog_id').val();
-        var formData = {
-            pid: $('#catalog_pid').val() || '0',
-            name: $('#catalog_name').val().trim(),
-            description: $('#catalog_description').val().trim(),
-            is_active: $('#catalog_is_active').is(':checked') ? 1 : 0
-        };
-        
-        if (catalogId && catalogId !== '' && catalogId !== '0') {
-            formData.id = String(catalogId);
-        }
-        
-        if (!formData.name) {
-            showNotification(i18n.categoryNameRequired, 'error');
-            return;
-        }
-        
-        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
-            url: '@admin-url("dev/tool/admin/document/catalog/post")',
-            method: 'POST',
-            data: formData,
-            dataType: 'json',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            success: function(response) {
-                if (response && response.success) {
-                    loadCatalogTree();
-                    
-                    if (formData.id) {
-                        setTimeout(function() {
-                            loadCatalogForEdit(formData.id);
-                            if (catalogTree) {
-                                catalogTree.jstree('select_node', formData.id.toString());
-                            }
-                        }, 500);
-                    } else {
-                        clearCatalogEditForm();
-                    }
-                    
-                    showPageMessage(response.msg || i18n.saveSuccess, 'success');
-                } else {
-                    showPageMessage(response.msg || response.message || i18n.saveFailed, 'error');
-                }
-            },
-            error: function(xhr) {
-                var errorMsg = i18n.saveFailed;
-                try {
-                    var response = JSON.parse(xhr.responseText);
-                    errorMsg = response.msg || response.message || errorMsg;
-                } catch(e) {
-                    if (xhr.responseText && xhr.responseText.length < 200) {
-                        errorMsg = xhr.responseText;
-                    }
-                }
-                showPageMessage(errorMsg, 'error');
-            }
-        });
-    }
-
-    function buildDeleteCategoryMessage(categoryName) {
-        var displayName = categoryName || i18n.unnamedCategory;
-        return i18n.confirmDeleteCategory + ' "' + displayName + '"\n\n' + i18n.deleteWarning + '\n' + i18n.deleteWarning2;
-    }
-
-    function requestDeleteCategoryApproval(categoryName, onApproved) {
-        Weline.UI.dialog.confirm(buildDeleteCategoryMessage(categoryName), {
-            title: i18n.confirmDeleteQuestion,
-            tone: 'danger',
-            dangerous: true,
-            confirmLabel: i18n.delete,
-            cancelLabel: i18n.cancel
-        }).then(function(approved) {
-            if (approved) onApproved();
-        });
-    }
-    
-    function handleDeleteNode(nodeId) {
-        try {
-            if (typeof catalogTree === 'undefined' || !catalogTree) {
-                showNotification(i18n.catalogTreeNotInitialized, 'error');
-                return;
-            }
-            
-            if (!catalogTree.jstree) {
-                showNotification(i18n.jstreeNotAvailable, 'error');
-                return;
-            }
-            
-            var node = catalogTree.jstree('get_node', nodeId);
-            
-            if (!node) {
-                showNotification(i18n.nodeNotExists + ' ' + nodeId, 'error');
-                return;
-            }
-            
-            var nodeData = null;
-            var isSystem = false;
-            
-            if (node.original) {
-                if (node.original.is_system !== undefined) {
-                    isSystem = node.original.is_system == 1;
-                }
-                if (node.original.data) {
-                    nodeData = node.original.data;
-                    if (node.original.is_system === undefined && nodeData.is_system !== undefined) {
-                        isSystem = nodeData.is_system == 1;
-                    }
-                }
-            }
-            
-            if (!nodeData && node.data) {
-                nodeData = node.data;
-                if (isSystem === false && nodeData.is_system !== undefined) {
-                    isSystem = nodeData.is_system == 1;
-                }
-            }
-            
-            if (!nodeData) {
-                console.error('节点数据结构异常:', node);
-                showNotification(i18n.nodeDataFormatErrorShort, 'error');
-                return;
-            }
-            
-            if (isSystem) {
-                showNotification(i18n.systemCategoryNotDeletable, 'warning');
-                return;
-            }
-            
-            if (hasSystemChild(nodeData.id)) {
-                showNotification(i18n.hasSystemChildNotDeletable, 'warning');
-                return;
-            }
-            
-            requestDeleteCategoryApproval(nodeData.name, function() {
-                performDelete(nodeData.id);
-            });
-        } catch(e) {
-            console.error('删除节点失败:', e);
-            showNotification(i18n.deleteNodeFailed + ' ' + e.message, 'error');
-        }
-    }
-    
-    function handleAddChildNode(nodeId) {
-        showAddCatalogForm(nodeId);
-    }
-    
-    function handleDeleteCatalog(catalogId, catalogName) {
-        if (catalogTree && catalogTree.jstree) {
-            var node = catalogTree.jstree('get_node', catalogId.toString());
-            if (node) {
-                var isSystem = false;
-                if (node.original) {
-                    if (node.original.is_system !== undefined) {
-                        isSystem = node.original.is_system == 1;
-                    } else if (node.original.data && node.original.data.is_system !== undefined) {
-                        isSystem = node.original.data.is_system == 1;
-                    }
-                }
-                
-                if (isSystem) {
-                    showNotification(i18n.systemCategoryNotDeletable, 'warning');
-                    return;
-                }
-                
-                if (hasSystemChild(catalogId)) {
-                    showNotification(i18n.hasSystemChildNotDeletable, 'warning');
-                    return;
-                }
-            }
-        }
-        
-        requestDeleteCategoryApproval(catalogName, function() {
-            performDelete(catalogId);
-        });
-    }
-    
-    window.handleDeleteCatalog = handleDeleteCatalog;
-    
-    function performDelete(id) {
-        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
-            url: '@admin-url("dev/tool/admin/document/catalog/delete")',
-            method: 'POST',
-            data: { id: id },
-            dataType: 'json',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            success: function(response) {
-                if (response && response.success) {
-                    loadCatalogTree();
-                    clearCatalogEditForm();
-                    showNotification(response.msg || i18n.deleteSuccess, 'success');
-                } else {
-                    showNotification(response.msg || response.message || i18n.deleteFailed, 'error');
-                }
-            },
-            error: function(xhr) {
-                var errorMsg = i18n.deleteFailed;
-                try {
-                    var response = JSON.parse(xhr.responseText);
-                    errorMsg = response.msg || response.message || errorMsg;
-                } catch(e) {
-                    errorMsg = xhr.responseText || errorMsg;
-                }
-                showNotification(errorMsg, 'error');
-            }
-        });
-    }
-    
-    function saveTreeOrder(data) {
-        if (isSavingOrder) {
-            return;
-        }
-        
-        if (!data || !data.node) {
-            console.error('[CatalogTree] saveTreeOrder 失败：data或node无效', data);
-            return;
-        }
-        
-        isSavingOrder = true;
-        
-        var node = data.node;
-        var newParent = data.parent;
-        var newPosition = typeof data.position === 'number' ? data.position + 1 : 1;
-        var oldParent = data.old_parent;
-        var oldPosition = data.old_position;
-        
-        var nodeData = {};
-        
-        if (node.original && node.original.data) {
-            nodeData = node.original.data;
-        } else if (node.original) {
-            nodeData = node.original;
-        } else if (node.data) {
-            nodeData = node.data;
-        }
-        
-        if (!nodeData.id && node.id) {
-            var fullNode = catalogTree.jstree('get_node', node.id);
-            if (fullNode) {
-                if (fullNode.original && fullNode.original.data) {
-                    nodeData = fullNode.original.data;
-                } else if (fullNode.original) {
-                    nodeData = fullNode.original;
-                } else if (fullNode.data) {
-                    nodeData = fullNode.data;
-                } else {
-                    nodeData = {
-                        id: fullNode.node_id || fullNode.id || node.id,
-                        name: fullNode.node_name || fullNode.text || '',
-                        is_system: fullNode.is_system || 0,
-                        is_active: fullNode.is_active || 0
-                    };
-                }
-            } else {
-                nodeData = {
-                    id: node.node_id || node.id,
-                    name: node.node_name || node.text || '',
-                    is_system: node.is_system || 0,
-                    is_active: node.is_active || 0
-                };
-            }
-        }
-        
-        if (!nodeData.id) {
-            if (node.id) {
-                nodeData.id = node.id;
-            } else {
-                console.warn('[CatalogTree] saveTreeOrder 失败：无法获取节点ID');
-                isSavingOrder = false;
-                return;
-            }
-        }
-        
-        if (!nodeData.name && node.text) {
-            nodeData.name = node.text.replace(/<[^>]*>/g, '').trim();
-        }
-        if (nodeData.is_system === undefined) {
-            nodeData.is_system = node.is_system || 0;
-        }
-        
-        var newParentId = 0;
-        var newLevel = 1;
-        if (newParent !== '#') {
-            var parentNode = catalogTree.jstree('get_node', newParent);
-            if (parentNode) {
-                var parentData = null;
-                if (parentNode.original && parentNode.original.data) {
-                    parentData = parentNode.original.data;
-                } else if (parentNode.original) {
-                    parentData = parentNode.original;
-                } else if (parentNode.data) {
-                    parentData = parentNode.data;
-                }
-                
-                if (parentData && parentData.id) {
-                    newParentId = parseInt(parentData.id, 10) || 0;
-                    newLevel = (parseInt(parentData.level, 10) || 0) + 1;
-                }
-            }
-        }
-        
-        var currentNodeId = parseInt(nodeData.id, 10);
-        
-        if (newParentId > 0 && newParentId == currentNodeId) {
-            catalogTree.jstree('move_node', node, oldParent, oldPosition);
-            showNotification(i18n.cannotSetSelfAsParent, 'error');
-            isSavingOrder = false;
-            return;
-        }
-        
-        var isSystem = nodeData.is_system == 1;
-        if (isSystem) {
-            catalogTree.jstree('move_node', node, oldParent, oldPosition);
-            isSavingOrder = false;
-            return;
-        }
-        
-        if (isNaN(currentNodeId)) {
-            console.error('[CatalogTree] saveTreeOrder 失败：节点ID不是有效数字', nodeData.id);
-            isSavingOrder = false;
-            return;
-        }
-        
-        var saveData = {
-            id: currentNodeId,
-            pid: newParentId,
-            level: newLevel,
-            position: newPosition
-        };
-        
-        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
-            url: '@admin-url("dev/tool/admin/document/catalog/update-order")',
-            method: 'POST',
-            data: saveData,
-            dataType: 'json',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            success: function(response) {
-                isSavingOrder = false;
-                
-                if (response && response.success) {
-                    var selectedNodeId = currentCatalogId;
-                    loadCatalogTree();
-                    
-                    if (selectedNodeId) {
-                        setTimeout(function() {
-                            if (catalogTree) {
-                                catalogTree.jstree('select_node', selectedNodeId.toString());
-                                loadCatalogForEdit(selectedNodeId);
-                            }
-                        }, 500);
-                    }
-                    
-                    showPageMessage(response.msg || i18n.sortSaved, 'success');
-                } else {
-                    catalogTree.jstree('move_node', node, oldParent, oldPosition);
-                    showPageMessage(response.msg || i18n.saveSortFailed, 'error');
-                }
-            },
-            error: function(xhr, status, error) {
-                isSavingOrder = false;
-                catalogTree.jstree('move_node', node, oldParent, oldPosition);
-                var errorMsg = i18n.saveSortFailed;
-                try {
-                    var response = JSON.parse(xhr.responseText);
-                    errorMsg = response.msg || response.message || errorMsg;
-                } catch(e) {
-                    if (xhr.status === 404) {
-                        errorMsg = i18n.saveSortFailed + ' (接口不存在)';
-                    } else {
-                        errorMsg = xhr.responseText || errorMsg;
-                    }
-                }
-                showPageMessage(errorMsg, 'error');
-            }
-        });
-    }
-    
-    function showNotification(message, type) {
-        if (typeof Weline.UI.toast !== 'undefined') {
-            Weline.UI.toast[type] ? Weline.UI.toast[type](message) : Weline.UI.toast.info(message);
-        } else {
-            showPageMessage(message, type);
-        }
-    }
-    
-    function showPageMessage(message, type) {
-        type = type || 'success';
-        var container = $('#ajax-message-container .col-12');
-        var alertClass = type === 'success' ? 'success' : type === 'error' ? 'danger' : type === 'warning' ? 'warning' : 'info';
-        var iconClass = type === 'success' ? 'check' : type === 'error' ? 'warning' : type === 'warning' ? 'warning' : 'info';
-        
-        container.empty();
-        
-        var messageHtml = '<div class="w-alert alert-' + alertClass ' alert-dismissible" role="alert"><i class="mdi ' + iconClass + ' me-2"></i> ' + message + '<button type="button" class="w-button" aria-label="Close" data-w-action="element.remove" data-w-close="" data-tone="quiet" data-size="sm"></button></div>';
-        
-        container.html(messageHtml);
-        $('#ajax-message-container').slideDown(300);
-        
-        setTimeout(function() {
-            $('#ajax-message-container').slideUp(300, function() {
-                container.empty();
-            });
-        }, 3000);
-    }
-    
-    function initDragScroll() {
-        var catalogTreeContainer = document.getElementById('catalog-tree-container');
-        if (!catalogTreeContainer) return;
-        
-        var isMouseDown = false;
-        var isDragging = false;
-        var startX = 0;
-        var startY = 0;
-        var scrollLeft = 0;
-        var scrollTop = 0;
-        var dragThreshold = 5;
-        
-        catalogTreeContainer.addEventListener('mousedown', function(e) {
-            if (e.button !== 0) return;
-            
-            if (e.target.tagName === 'A' || e.target.closest('a') || 
-                e.target.closest('.jstree-anchor') ||
-                e.target.closest('.jstree-node')) {
-                if (e.target.classList.contains('jstree-ocl') || 
-                    e.target.closest('.jstree-ocl')) {
-                    return;
-                }
-            }
-            
-            isMouseDown = true;
-            isDragging = false;
-            startX = e.pageX;
-            startY = e.pageY;
-            scrollLeft = catalogTreeContainer.scrollLeft;
-            scrollTop = catalogTreeContainer.scrollTop;
-            e.preventDefault();
-        });
-        
-        document.addEventListener('mousemove', function(e) {
-            if (!isMouseDown || !catalogTreeContainer) return;
-            
-            if (!isDragging) {
-                var deltaX = Math.abs(e.pageX - startX);
-                var deltaY = Math.abs(e.pageY - startY);
-                
-                if (deltaX > dragThreshold || deltaY > dragThreshold) {
-                    isDragging = true;
-                    catalogTreeContainer.classList.add('dragging');
-                    var rect = catalogTreeContainer.getBoundingClientRect();
-                    startX = e.pageX - rect.left;
-                    startY = e.pageY - rect.top;
-                    scrollLeft = catalogTreeContainer.scrollLeft;
-                    scrollTop = catalogTreeContainer.scrollTop;
-                } else {
-                    return;
-                }
-            }
-            
-            e.preventDefault();
-            var rect = catalogTreeContainer.getBoundingClientRect();
-            var x = e.pageX - rect.left;
-            var y = e.pageY - rect.top;
-            var walkX = (x - startX) * 2;
-            var walkY = (y - startY) * 2;
-            catalogTreeContainer.scrollLeft = scrollLeft - walkX;
-            catalogTreeContainer.scrollTop = scrollTop - walkY;
-        });
-        
-        document.addEventListener('mouseup', function() {
-            if (isMouseDown) {
-                isMouseDown = false;
-                if (isDragging) {
-                    isDragging = false;
-                    catalogTreeContainer.classList.remove('dragging');
-                }
-            }
-        });
-        
-        catalogTreeContainer.addEventListener('mouseleave', function() {
-            if (isMouseDown) {
-                isMouseDown = false;
-                if (isDragging) {
-                    isDragging = false;
-                    catalogTreeContainer.classList.remove('dragging');
-                }
-            }
-        });
-    }
-    
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(initDragScroll, 500);
-        });
-    } else {
-        setTimeout(initDragScroll, 500);
-    }
-})();
-</script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-developer-catalogs.js)"></script>

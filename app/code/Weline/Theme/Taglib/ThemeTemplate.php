@@ -29,8 +29,19 @@ use Weline\Framework\Taglib\TaglibInterface;
  */
 class ThemeTemplate implements TaglibInterface
 {
+    private const MAX_TEMPLATE_SOURCE_CACHE_ENTRIES = 512;
     /** @var array<string, array{mtime:int, size:int, content:string}> */
     private static array $templateSourceCache = [];
+
+    public static function clearProcessCache(): void
+    {
+        self::$templateSourceCache = [];
+    }
+
+    public static function processCacheItemCount(): int
+    {
+        return count(self::$templateSourceCache);
+    }
 
     /**
      * @inheritDoc
@@ -296,11 +307,21 @@ class ThemeTemplate implements TaglibInterface
             && ($cached['size'] ?? -1) === $sourceSize
             && array_key_exists('content', $cached)
         ) {
+            unset(self::$templateSourceCache[$sourceFile]);
+            self::$templateSourceCache[$sourceFile] = $cached;
             return $cached['content'];
         }
 
         $content = file_get_contents($sourceFile);
         if (is_string($content)) {
+            unset(self::$templateSourceCache[$sourceFile]);
+            while (count(self::$templateSourceCache) >= self::MAX_TEMPLATE_SOURCE_CACHE_ENTRIES) {
+                $oldest = array_key_first(self::$templateSourceCache);
+                if ($oldest === null) {
+                    break;
+                }
+                unset(self::$templateSourceCache[$oldest]);
+            }
             self::$templateSourceCache[$sourceFile] = [
                 'mtime' => $sourceMtime,
                 'size' => $sourceSize,

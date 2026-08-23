@@ -6,10 +6,10 @@
 发布成功：%{1},发布成功：%{1}
 发布失败。,发布失败。
 发布管理,发布管理
-circle,circle
+circle,圆圈
 发布控制、历史与核心更新,发布控制、历史与核心更新
 发布控制,发布控制
-refresh,refresh
+refresh,刷新
 "查看 Git 历史并手动发布","查看 Git 历史并手动发布"
 执行发布,执行发布
 从发布控制触发部署,从发布控制触发部署
@@ -22,15 +22,13 @@ refresh,refresh
 查看部署配置,查看部署配置
 查看部署信息配置,查看部署信息配置
 保存部署配置,保存部署配置
-save,save
+save,节省
 保存部署信息配置,保存部署信息配置
 请先确认核心更新操作。,请先确认核心更新操作。
 核心更新完成。,核心更新完成。
 备份编号：%{1},备份编号：%{1}
 核心更新失败。,核心更新失败。
-"mdi mdi-rocket-launch-outline","mdi mdi-rocket-launch-outline"
 核心更新,核心更新
-"mdi mdi-update","mdi mdi-update"
 "Web 执行框架核心更新","Web 执行框架核心更新"
 执行核心更新,执行核心更新
 "执行 update:core 命令","执行 update:core 命令"
@@ -44,18 +42,18 @@ save,save
 回滚成功：%{1},回滚成功：%{1}
 回滚失败。,回滚失败。
 发布历史,发布历史
-history,history
+history,历史
 查看发布历史与版本回滚,查看发布历史与版本回滚
 查看发布历史,查看发布历史
 查看发布历史列表,查看发布历史列表
 回滚发布版本,回滚发布版本
-store,store
+store,店铺
 从历史记录回滚版本,从历史记录回滚版本
 "WLS 部署发布","WLS 部署发布"
 "项目发布 Profile 保存失败。","项目发布 Profile 保存失败。"
 发布预检存在阻断项，请先修正标红项。,发布预检存在阻断项，请先修正标红项。
 "请输入需要回放的 Webhook Ref。","请输入需要回放的 Webhook Ref。"
-"Invalid request method.",请求方式无效。
+"Invalid request method.",请求方法无效。
 "Please enter a Git ref for the manual release.","请输入手动发布的 Git ref。"
 "Please enter a Git ref for the manual release plan.","请输入手动发布计划的 Git ref。"
 "Release preflight has blocking items, so the manual release was not executed.",发布预检存在阻断项，未执行手动发布。
@@ -87,7 +85,7 @@ store,store
 "Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。","Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。"
 "仅分支 Push","仅分支 Push"
 "分支 + Tag 都生效","分支 + Tag 都生效"
-"仅 Tag Push","仅 Tag Push"
+"仅 Tag Push",仅标签推送
 成功,成功
 失败,失败
 运行中,运行中
@@ -100,7 +98,7 @@ store,store
 "Policy skipped",策略已跳过
 "Waiting for ref","等待 ref"
 "Current WLS project root","当前 WLS 项目根目录"
-Enabled,已启用
+Enabled,启用
 Disabled,已禁用
 "Enabled, command not configured",已启用，但未配置命令
 "No execution plan yet",暂无执行计划
@@ -111,7 +109,7 @@ Disabled,已禁用
 Backup,备份
 "Create a deploy backup before Git changes.","Git 变更前创建部署备份。"
 "Git update","Git 更新"
-Composer,Composer
+Composer,作曲家
 "Composer is enabled, but no command is configured yet.","已启用 Composer，但尚未配置命令。"
 "Composer is disabled for this project.","该项目未启用 Composer。"
 "Post deploy",部署后命令
@@ -139,47 +137,41 @@ Composer,Composer
 "Manual release was skipped by the current trigger policy; no release was executed.",当前触发策略跳过了手动发布，未执行真实发布。
 "WLS 面板部署发布入口","WLS 面板部署发布入口"
 "查看 WLS 部署发布","查看 WLS 部署发布"
-"mdi mdi-rocket-launch","mdi mdi-rocket-launch"
 "查看 WLS 面板部署发布","查看 WLS 面板部署发布"
-"View WLS Deploy Overview","View WLS Deploy Overview"
-"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
-"View WLS Panel deploy overview","View WLS Panel deploy overview"
-"View WLS Deploy Release Path","View WLS Deploy Release Path"
-"mdi mdi-source-branch-sync","mdi mdi-source-branch-sync"
-"View WLS Panel deploy release path","View WLS Panel deploy release path"
-"View WLS Deploy Configuration","View WLS Deploy Configuration"
-"mdi mdi-tune-variant","mdi mdi-tune-variant"
-"View WLS Panel deploy configuration","View WLS Panel deploy configuration"
-"View WLS Deploy Project Profile","View WLS Deploy Project Profile"
-"mdi mdi-clipboard-edit-outline","mdi mdi-clipboard-edit-outline"
-"View WLS Panel deploy project profile","View WLS Panel deploy project profile"
-"View WLS Deploy Preflight","View WLS Deploy Preflight"
-"mdi mdi-shield-check-outline","mdi mdi-shield-check-outline"
-"View WLS Panel deploy preflight","View WLS Panel deploy preflight"
-"View WLS Deploy Webhooks","View WLS Deploy Webhooks"
-"mdi mdi-replay","mdi mdi-replay"
-"View WLS Panel deploy webhooks","View WLS Panel deploy webhooks"
-"View WLS Deploy Releases","View WLS Deploy Releases"
-"mdi mdi-history","mdi mdi-history"
-"View WLS Panel deploy releases","View WLS Panel deploy releases"
-"View WLS Deploy Manual Plan","View WLS Deploy Manual Plan"
-"mdi mdi-clipboard-list-outline","mdi mdi-clipboard-list-outline"
-"View WLS Panel deploy manual plan","View WLS Panel deploy manual plan"
+"View WLS Deploy Overview","查看 WLS 部署概述"
+grid,网格
+"View WLS Panel deploy overview","查看 WLS 面板部署概述"
+"View WLS Deploy Release Path","查看 WLS 部署发布路径"
+branch,分支
+"View WLS Panel deploy release path",查看WLS面板部署发布路径
+"View WLS Deploy Configuration","查看 WLS 部署配置"
+settings,设置
+"View WLS Panel deploy configuration","查看 WLS 面板部署配置"
+"View WLS Deploy Project Profile","查看 WLS 部署项目配置文件"
+edit,编辑
+"View WLS Panel deploy project profile","查看 WLS Panel 部署项目配置文件"
+"View WLS Deploy Preflight","查看 WLS 部署预检"
+check,查看
+"View WLS Panel deploy preflight","查看 WLS 面板部署预检"
+"View WLS Deploy Webhooks","查看 WLS 部署 Webhook"
+"View WLS Panel deploy webhooks","查看 WLS 面板部署 webhook"
+"View WLS Deploy Releases","查看 WLS 部署版本"
+"View WLS Panel deploy releases","查看 WLS Panel 部署版本"
+"View WLS Deploy Manual Plan","查看 WLS 部署手动计划"
+list,列表
+"View WLS Panel deploy manual plan","查看 WLS Panel 部署手动计划"
 "保存 WLS 项目发布 Profile","保存 WLS 项目发布 Profile"
-"mdi mdi-content-save","mdi mdi-content-save"
 "保存 WLS 面板项目发布 Profile","保存 WLS 面板项目发布 Profile"
 "执行 WLS 项目发布预检","执行 WLS 项目发布预检"
-"mdi mdi-shield-check","mdi mdi-shield-check"
 "执行 WLS 面板项目发布预检","执行 WLS 面板项目发布预检"
 "回放 WLS 发布 Webhook","回放 WLS 发布 Webhook"
 "回放 WLS 面板 Webhook 触发策略","回放 WLS 面板 Webhook 触发策略"
 "执行 WLS 项目发布回滚","执行 WLS 项目发布回滚"
-"mdi mdi-restore","mdi mdi-restore"
 "执行 WLS 面板项目发布回滚","执行 WLS 面板项目发布回滚"
-"Build WLS manual release plan","Build WLS manual release plan"
-"Build read-only WLS Panel manual release execution plan","Build read-only WLS Panel manual release execution plan"
-"Run WLS project rollback","Run WLS project rollback"
-"Run WLS Panel project rollback","Run WLS Panel project rollback"
+"Build WLS manual release plan",构建WLS手动发布计划
+"Build read-only WLS Panel manual release execution plan","构建只读WLS Panel手动发布执行计划"
+"Run WLS project rollback","运行 WLS 项目回滚"
+"Run WLS Panel project rollback","运行 WLS Panel 项目回滚"
 项目仓库地址不合法。,项目仓库地址不合法。
 "Webhook 密钥包含不允许的控制字符。","Webhook 密钥包含不允许的控制字符。"
 已配置，留空表示不修改,已配置，留空表示不修改
@@ -195,18 +187,18 @@ Composer,Composer
 部署行为,部署行为
 部署根目录,部署根目录
 "Git 更新模式","Git 更新模式"
-"Composer 命令","Composer 命令"
+"Composer 命令",作曲家命令
 部署后命令,部署后命令
 允许覆盖本地改动,允许覆盖本地改动
 允许切换分支,允许切换分支
-"更新 Submodule","更新 Submodule"
-"运行 Composer","运行 Composer"
+"更新 Submodule",更新子模块
+"运行 Composer",运行作曲家
 核心仓库,核心仓库
 核心仓库地址,核心仓库地址
 核心默认分支,核心默认分支
 核心仓库用户名,核心仓库用户名
 "核心仓库 Token","核心仓库 Token"
-Webhook,Webhook
+Webhook,网络钩子
 "当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。","当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。"
 域名来源：%{1},域名来源：%{1}
 "尚未生成 Webhook 路径。首次生成：","尚未生成 Webhook 路径。首次生成："
@@ -229,21 +221,21 @@ Webhook,Webhook
 密码,密码
 "填写上方「Webhook 密钥」中保存的值","填写上方「Webhook 密钥」中保存的值"
 触发事件,触发事件
-勾选「Push」,勾选「Push」
+勾选「Push」,勾选「推」
 数据格式,数据格式
 "第 3 步：验证","第 3 步：验证"
 "返回 {""ok"":true} 即表示 Webhook 入口正常。","返回 {""ok"":true} 即表示 Webhook 入口正常。"
 "第 1 步：进入 GitHub 仓库设置","第 1 步：进入 GitHub 仓库设置"
 "打开 GitHub 仓库页面，点击「Settings」","打开 GitHub 仓库页面，点击「Settings」"
 "左侧菜单找到「Webhooks」，点击「Add webhook」","左侧菜单找到「Webhooks」，点击「Add webhook」"
-"选择「Just the push event」","选择「Just the push event」"
+"选择「Just the push event」",选择「仅推送事件」
 "支持的 Webhook 协议","支持的 Webhook 协议"
 "本系统兼容标准 Webhook 协议，支持以下鉴权方式：","本系统兼容标准 Webhook 协议，支持以下鉴权方式："
-"通用 HTTP Bearer Token","通用 HTTP Bearer Token"
+"通用 HTTP Bearer Token","通用 HTTP 承载令牌"
 "URL 参数传递","URL 参数传递"
 "Gitee 专用（自动识别）","Gitee 专用（自动识别）"
-"GitHub 专用（HMAC-SHA256）","GitHub 专用（HMAC-SHA256）"
-"Payload 要求","Payload 要求"
+"GitHub 专用（HMAC-SHA256）",GitHub专用（HMAC-SHA256）
+"Payload 要求",有效载荷要求
 "请求体为 JSON 格式，必须包含 <code>ref</code> 字段：","请求体为 JSON 格式，必须包含 <code>ref</code> 字段："
 "Nginx 反代示例（WLS）","Nginx 反代示例（WLS）"
 "Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。","Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。"
@@ -264,10 +256,10 @@ Webhook,Webhook
 "「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。","「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。"
 "默认「Just the push event」已包含分支和 tag push，无需额外配置。","默认「Just the push event」已包含分支和 tag push，无需额外配置。"
 测试：,测试：
-Cloudflare,Cloudflare
+Cloudflare,云耀
 启用缓存清理,启用缓存清理
-"Cloudflare Zone ID","Cloudflare Zone ID"
-"Cloudflare API Token","Cloudflare API Token"
+"Cloudflare Zone ID","Cloudflare 区域 ID"
+"Cloudflare API Token","Cloudflare API 令牌"
 保存配置,保存配置
 已复制,已复制
 当前版本,当前版本
@@ -281,9 +273,9 @@ Cloudflare,Cloudflare
 范围,范围
 状态,状态
 耗时,耗时
-Commit,Commit
+Commit,犯罪
 当前,当前
-tag,tag
+tag,标签
 全局,全局
 回滚到此版本,回滚到此版本
 确认回滚,确认回滚
@@ -311,16 +303,16 @@ tag,tag
 总览,总览
 发布路径,发布路径
 配置摘要,配置摘要
-"项目 Profile","项目 Profile"
+"项目 Profile",项目简介
 发布预检,发布预检
 "Webhook 回放","Webhook 回放"
 发布记录,发布记录
 插件商城,插件商城
-"Manual Plan","Manual Plan"
+"Manual Plan",手动计划
 深色,深色
 浅色,浅色
 切换明暗色,切换明暗色
-"返回 WLS Panel","返回 WLS Panel"
+"返回 WLS Panel","返回 WLS 面板"
 "WLS 独立插件","WLS 独立插件"
 "集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。","集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。"
 "打开 Deploy 配置","打开 Deploy 配置"
@@ -337,9 +329,9 @@ tag,tag
 默认保守发布策略,默认保守发布策略
 项目发布路径,项目发布路径
 "从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。","从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。"
-"发布 Profile","发布 Profile"
+"发布 Profile",发布简介
 继承全局配置,继承全局配置
-"配置 Profile","配置 Profile"
+"配置 Profile",配置简介
 触发与计划,触发与计划
 默认示例：%{1},默认示例：%{1}
 "%{1} 条","%{1} 条"
@@ -355,14 +347,14 @@ tag,tag
 "项目 Webhook 密钥","项目 Webhook 密钥"
 当前验签来源,当前验签来源
 命令白名单,命令白名单
-"Composer 示例","Composer 示例"
+"Composer 示例",作曲家示例
 部署后命令示例,部署后命令示例
 回滚参考,回滚参考
 回滚示例,回滚示例
 说明,说明
 记录该项目发布注意事项,记录该项目发布注意事项
 "发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。","发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。"
-"保存 Profile","保存 Profile"
+"保存 Profile",保存简介
 "仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。","仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。"
 执行预检,执行预检
 暂无预检结果。,暂无预检结果。
@@ -371,19 +363,19 @@ tag,tag
 "Not configured",未配置
 "Rollback Version",回滚版本
 "Release ID","发布 ID"
-Ref,Ref
+Ref,参考号
 "Confirm rollback in the selected project context",确认在选中项目上下文内执行回滚
 "Run Rollback",执行回滚
 "Webhook 回放预检","Webhook 回放预检"
 "输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。","输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。"
-"Webhook Ref","Webhook Ref"
+"Webhook Ref","Webhook 参考"
 回放预检,回放预检
 回放示例,回放示例
 "Tag 示例","Tag 示例"
 分支示例,分支示例
 判断结果,判断结果
 发布版本,发布版本
-"Git Checkout","Git Checkout"
+"Git Checkout","git 签出"
 原因,原因
 "还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。","还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。"
 "Manual Release Plan",手动发布计划
@@ -399,8 +391,8 @@ Ref,Ref
 "Plan status",计划状态
 Type,类型
 "Deploy version",发布版本
-"Git checkout","Git checkout"
-Profile,Profile
+"Git checkout","git 结账"
+Profile,轮廓
 "Deploy root",部署根目录
 "Remote / mode","Remote / 模式"
 Reason,原因
@@ -411,14 +403,14 @@ pending,等待中
 "Webhook 已生成","Webhook 已生成"
 "Webhook 待生成","Webhook 待生成"
 仓库地址,仓库地址
-"分支 / Remote","分支 / Remote"
+"分支 / Remote",分支/远程
 "Webhook 路径","Webhook 路径"
 未生成,未生成
 "Tag 前缀 / 分支过滤","Tag 前缀 / 分支过滤"
 "全部 Tag","全部 Tag"
 全部分支,全部分支
 密钥状态,密钥状态
-"仓库 Token","仓库 Token"
+"仓库 Token",仓库代币
 后置能力,后置能力
 启用,启用
 关闭,关闭
@@ -455,7 +447,7 @@ pending,等待中
 "正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。","正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。"
 查看分支,查看分支
 刷新提交,刷新提交
-"刷新 Tags","刷新 Tags"
+"刷新 Tags",刷新标签
 分支提交,分支提交
 作者,作者
 确认发布,确认发布
@@ -471,7 +463,7 @@ pending,等待中
 发布,发布
 "加载 Tags 中...","加载 Tags 中..."
 "加载 Tags 失败","加载 Tags 失败"
-"发布 commit","发布 commit"
+"发布 commit",发布提交
 "发布 tag","发布 tag"
 发布执行中...,发布执行中...
 发布成功,发布成功
@@ -486,7 +478,7 @@ pending,等待中
 "命令行 --base-url","命令行 --base-url"
 "运行环境 website_url","运行环境 website_url"
 "环境配置 %{1}","环境配置 %{1}"
-"app/etc/env.php website_url","app/etc/env.php website_url"
+"app/etc/env.php website_url","应用程序/etc/env.php website_url"
 "app/etc/env.php website.url","app/etc/env.php website.url"
 "网站管理默认站点 URL","网站管理默认站点 URL"
 "推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）","推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）"
@@ -505,7 +497,7 @@ pending,等待中
 无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
 无法写入部署版本文件,无法写入部署版本文件
 分支名称无效。,分支名称无效。
-"Git restore commit cannot be empty.","Git restore commit cannot be empty."
+"Git restore commit cannot be empty.","Git 恢复提交不能为空。"
 "Git working directory does not exist: %{1}","Git 工作目录不存在：%{1}"
 "Git process could not be opened.","无法启动 Git 进程。"
 开始发布：%{1},开始发布：%{1}
@@ -531,7 +523,7 @@ pending,等待中
 部署根目录不存在：%{1},部署根目录不存在：%{1}
 无法创建发布保护快照目录。,无法创建发布保护快照目录。
 "部署后命令失败（exit %{1}）：%{2}","部署后命令失败（exit %{1}）：%{2}"
-"Profile 来源","Profile 来源"
+"Profile 来源",简介来源
 "当前发布会优先读取该项目的独立 Profile。","当前发布会优先读取该项目的独立 Profile。"
 "该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。","该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。"
 "当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。","当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。"
@@ -647,7 +639,7 @@ pending,等待中
 "- 跳过文件：%{1} 个（受保护或排除的文件）","- 跳过文件：%{1} 个（受保护或排除的文件）"
 "✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）","✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）"
 "本次核心已更新到最新 commit：","本次核心已更新到最新 commit："
-commit：%{1}（%{2}）,commit：%{1}（%{2}）
+commit：%{1}（%{2}）,提交：%{1}（%{2}）
 作者：%{1},作者：%{1}
 时间：%{1},时间：%{1}
 标题：%{1},标题：%{1}
@@ -778,15 +770,15 @@ commit：%{1}（%{2}）,commit：%{1}（%{2}）
 "请先安装 Git 后才能使用此功能。","请先安装 Git 后才能使用此功能。"
 安装方法：,安装方法：
 "Windows 系统：","Windows 系统："
-"1. 访问 https://git-scm.com/download/win","1. 访问 https://git-scm.com/download/win"
+"1. 访问 https://git-scm.com/download/win",1.访问https://git-scm.com/download/win
 "2. 下载并安装 Git for Windows","2. 下载并安装 Git for Windows"
 "3. 安装完成后重启终端","3. 安装完成后重启终端"
 "Linux 系统：","Linux 系统："
 "Ubuntu/Debian: sudo apt-get install git","Ubuntu/Debian: sudo apt-get install git"
-"CentOS/RHEL: sudo yum install git","CentOS/RHEL: sudo yum install git"
-"Fedora: sudo dnf install git","Fedora: sudo dnf install git"
+"CentOS/RHEL: sudo yum install git","CentOS/RHEL：sudo yum install git"
+"Fedora: sudo dnf install git","Fedora：sudo dnf 安装 git"
 "macOS 系统：","macOS 系统："
-"brew install git","brew install git"
+"brew install git",酿造安装git
 "或者访问 https://git-scm.com/download/mac","或者访问 https://git-scm.com/download/mac"
 "初始化 Git 仓库...","初始化 Git 仓库..."
 当前分支：%{1},当前分支：%{1}
@@ -812,9 +804,9 @@ commit：%{1}（%{2}）,commit：%{1}（%{2}）
 版本：%{1},版本：%{1}
 "发布 ID：%{1}","发布 ID：%{1}"
 "ref 类型：%{1}","ref 类型：%{1}"
-commit：%{1},commit：%{1}
-tag：%{1},tag：%{1}
-"Worker ID：%{1}","Worker ID：%{1}"
+commit：%{1},提交：%{1}
+tag：%{1},标签：%{1}
+"Worker ID：%{1}",工号：%{1}
 部署时间：%{1},部署时间：%{1}
 部署模式：%{1},部署模式：%{1}
 最近发布历史,最近发布历史
@@ -825,7 +817,21 @@ tag：%{1},tag：%{1}
 "第 %{1} 次检测：当前 %{2}，期望 %{3}","第 %{1} 次检测：当前 %{2}，期望 %{3}"
 "超时：版本 %{1} 未在 %{2} 秒内生效","超时：版本 %{1} 未在 %{2} 秒内生效"
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
-"mdi mdi-source-branch","mdi mdi-source-branch"
+"mdi mdi-rocket-launch-outline","MDI MDI 火箭发射大纲"
+"mdi mdi-update","MDI MDI 更新"
+"mdi mdi-rocket-launch","mdi mdi-rocket-launch"
+"mdi mdi-view-dashboard-outline","MDI MDI-视图-仪表板-大纲"
+"mdi mdi-source-branch-sync","mdi mdi-源分支-同步"
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-clipboard-edit-outline","mdi mdi-clipboard-edit-outline"
+"mdi mdi-shield-check-outline","MDI MDI 屏蔽检查大纲"
+"mdi mdi-replay","MDI MDI 重放"
+"mdi mdi-history","MDI MDI 历史"
+"mdi mdi-clipboard-list-outline","mdi mdi-剪贴板-列表-大纲"
+"mdi mdi-content-save","MDI MDI 内容保存"
+"mdi mdi-shield-check","mdi mdi 屏蔽检查"
+"mdi mdi-restore","MDI MDI 恢复"
+"mdi mdi-source-branch","MDI MDI 源分支"
 "从 Git 仓库增量更新框架核心代码（只更新变化的文件）","从 Git 仓库增量更新框架核心代码（只更新变化的文件）"
 "未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像","未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像"
 默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新,默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新
@@ -851,3 +857,5 @@ tag：%{1},tag：%{1}
 "✓ 已更新到分支 %{1} 最新版本","✓ 已更新到分支 %{1} 最新版本"
 "增量模式：Git 变更 + 内容不一致文件同步...","增量模式：Git 变更 + 内容不一致文件同步..."
 "刷新：覆盖 %{1} 个内容与源不一致的核心文件","刷新：覆盖 %{1} 个内容与源不一致的核心文件"
+"返回 {""""""""ok"""""""":true} 即表示 Webhook 入口正常。""""""","返回 {""""""""ok"""""""":true} 即表示 Webhook 入口正常。"""""""
+"返回 {""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。""""""""""""""""""""""""""""""","返回 {""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。"""""""""""""""""""""""""""""""

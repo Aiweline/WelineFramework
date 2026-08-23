@@ -885,37 +885,16 @@ class PixelStatisticsService
      */
     public static function buildWebsiteSelectOptions(): array
     {
-        $rows = [];
         try {
-            $queried = \w_query('websites', 'getWebsiteList', [], 'backend');
+            $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
             if (\is_array($queried)) {
-                $rows = $queried;
+                /** @var list<array{value: string, label: string, meta: string}> $queried */
+                return $queried;
             }
         } catch (\Throwable) {
-            $rows = [];
         }
 
-        $options = [];
-        $seen = [];
-        foreach ($rows as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $id = (int)($row['website_id'] ?? $row['id'] ?? -1);
-            if ($id < 0 || isset($seen[$id])) {
-                continue;
-            }
-            $seen[$id] = true;
-            $name = \trim((string)($row['name'] ?? ''));
-            $code = \trim((string)($row['code'] ?? ''));
-            $options[] = [
-                'value' => (string)$id,
-                'label' => $name !== '' ? $name : (string)__('站点 %{1}', [$id]),
-                'meta' => $code,
-            ];
-        }
-
-        return $options;
+        return [];
     }
 
     /**

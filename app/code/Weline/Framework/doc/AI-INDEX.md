@@ -10,11 +10,10 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Framework/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Framework/doc/README.md`
-6. 认证/设备任务：`app/code/Weline/Framework/doc/需求.md`、`app/code/Weline/Framework/doc/开发日志.md`、`app/code/Weline/SessionManager/doc/设备管理架构.md`
-7. `app/code/Weline/Theme/doc/AI-INDEX.md`
-8. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-9. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-10. 只读取本次任务相关源码、配置和验证入口
+6. `app/code/Weline/Theme/doc/AI-INDEX.md`
+7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+8. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+9. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -22,6 +21,14 @@
 - 目录：`app/code/Weline/Framework`
 - Vendor：`Weline`
 - Module：`Framework`
+
+<!-- weline:module-doc-baseline:start -->
+## 固定模块文档
+
+- [功能现状](功能现状.md)：当前版本、代码能力面、主要入口与未验证边界。
+- [需求](需求.md)：已确认需求、文档基线与待确认产品语义。
+- [开发日志](开发日志.md)：目标版本进度、证据和交付状态。
+<!-- weline:module-doc-baseline:end -->
 
 ## 代码面清单
 
@@ -39,27 +46,23 @@
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：15
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：53
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：38
-- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：2
+- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：3
 - `Ui`：后台/编辑器 UI 参数、schema 或渲染支撑。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：16
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：3
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：3
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 识别到 QueryProvider 相关 PHP 文件：Authorization/Resource/AuthorizationResourceCatalogBuilder.php、Common/functions.php、Compilation/FrameworkCompiler.php、Console/Console/Framework/Compile.php、Console/Console/Query/Help.php、Extends/module/Weline_Framework/Query/AsyncEventDeliveryQueryProvider.php、Extends/module/Weline_Framework/Query/FrameworkAdminQueryProvider.php、Extends/module/Weline_Framework/Query/QueryHelpProvider.php 等；前端/跨模块读数据先查 query 帮助。
 
 ## doc 目录
 
-- `app/code/Weline/Framework/doc/需求.md`
-- `app/code/Weline/Framework/doc/开发日志.md`
 - `app/code/Weline/Framework/doc/0-简介/理念/WelineFramework框架设计目的！.txt`
 - `app/code/Weline/Framework/doc/1-部署/服务器部署.md`
 - `app/code/Weline/Framework/doc/2-快速开始/01-概述.md`
@@ -140,7 +143,7 @@
 - `app/code/Weline/Framework/doc/event/fpc/缓存命中响应.md`
 - `app/code/Weline/Framework/doc/event/framework/resource_changed.md`
 - `app/code/Weline/Framework/doc/event/framework/系统消息通知.md`
-- `... 另有 66 个文档，请按任务在该模块 doc/ 下继续查找`
+- `... 另有 68 个文档，请按任务在该模块 doc/ 下继续查找`
 
 ## 开发前门禁
 

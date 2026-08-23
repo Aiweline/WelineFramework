@@ -9,10 +9,7 @@ use Weline\Framework\Authorization\Resource\SourceIdParser;
 
 final class AclResourcePresentation
 {
-    /**
-     * jstree three_state will check every child if a parent starts selected.
-     * Only preselect leaves; parents become checked/undetermined from children.
-     */
+    /** Only leaves are authoritative selections; branch state is derived by the native tree. */
     public static function assignmentNodePreselected(bool $granted, bool $hasChildren): bool
     {
         return $granted && !$hasChildren;
@@ -35,13 +32,93 @@ final class AclResourcePresentation
     {
         return match ($storageType) {
             'menus' => 'menu',
-            'pc' => 'api',
-            'api' => 'cloud-outline',
-            'query' => 'database-search',
-            'task' => 'timeline-clock',
-            'operation' => 'wrench',
+            'pc' => 'link',
+            'api' => 'cloud',
+            'query' => 'database',
+            'task' => 'clock',
+            'operation' => 'settings',
             default => 'key',
         };
+    }
+
+    /**
+     * Build the shared view model used by role, website and API-user permission trees.
+     *
+     * @return array{
+     *     statistics:array<string,array<string,mixed>>,
+     *     modules:list<string>,
+     *     types:list<string>,
+     *     total:int,
+     *     selected:int
+     * }
+     */
+    public static function summarizeTrees(iterable $trees): array
+    {
+        $statistics = [];
+        $modules = [];
+        $types = [];
+        $total = 0;
+        $selected = 0;
+
+        $count = static function (object $node) use (&$count, &$modules, &$types): array {
+            $nodeTotal = 1;
+            $nodeSelected = $node->getData('role_id') ? 1 : 0;
+            $sourceId = \trim((string)$node->getSourceId());
+            $module = \trim((string)$node->getModule());
+            if ($module === '' && $sourceId !== '') {
+                $module = (string)(\explode('::', $sourceId)[0] ?? '');
+            }
+            $type = \trim((string)$node->getType());
+            if ($module !== '') {
+                $modules[$module] = true;
+            }
+            if ($type !== '') {
+                $types[$type] = true;
+            }
+            foreach ($node->getSub() ?: [] as $child) {
+                if (!\is_object($child)) {
+                    continue;
+                }
+                $childSummary = $count($child);
+                $nodeTotal += $childSummary['total'];
+                $nodeSelected += $childSummary['selected'];
+            }
+            return ['total' => $nodeTotal, 'selected' => $nodeSelected];
+        };
+
+        foreach ($trees as $tree) {
+            if (!\is_object($tree)) {
+                continue;
+            }
+            $sourceId = \trim((string)$tree->getSourceId());
+            if ($sourceId === '') {
+                continue;
+            }
+            $summary = $count($tree);
+            $statistics[$sourceId] = [
+                'source_id' => $sourceId,
+                'source_name' => (string)$tree->getSourceName(),
+                'module' => (string)(\explode('::', $sourceId)[0] ?? $sourceId),
+                'type' => (string)$tree->getType(),
+                'total' => $summary['total'],
+                'selected' => $summary['selected'],
+            ];
+            $total += $summary['total'];
+            $selected += $summary['selected'];
+        }
+
+        $moduleList = \array_keys($modules);
+        $typeList = \array_keys($types);
+        \sort($moduleList, SORT_NATURAL | SORT_FLAG_CASE);
+        \sort($typeList, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return [
+            'statistics' => $statistics,
+            'modules' => $moduleList,
+            'types' => $typeList,
+            'total' => $total,
+            'selected' => $selected,
+        ];
     }
 
     /**
@@ -379,8 +456,8 @@ final class AclResourcePresentation
     }
 
     /**
-     * Posted ids are the grant fact. The role UI only submits jstree leaves, so a
-     * still-granted menu parent is often absent from POST. Do not treat that as
+     * Posted ids are the grant fact. The native tree treats leaves as authoritative,
+     * so a still-granted menu parent can be absent from POST. Do not treat that as
      * unchecking the subtree: only a menu with zero posted descendants of any type
      * is fully unchecked. Posted leaves are never dropped.
      *

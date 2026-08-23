@@ -58,7 +58,7 @@ body {
     font-size: 14px;
 }
 
-.install-btn {
+.install-w-button {
     margin-top: 10px;
     padding: 8px 20px;
     background: var(--primary-color);
@@ -167,7 +167,7 @@ body {
     color: var(--text-muted);
 }
 
-.delete-btn {
+.delete-w-button {
     background: var(--danger-color);
     color: white;
     border: none;
@@ -211,7 +211,7 @@ body {
 }
 
 /* 复制图标按钮 */
-.copy-icon-btn {
+.copy-icon-w-button {
     opacity: 0.6;
     transition: all 0.2s ease;
 }
@@ -276,7 +276,7 @@ body {
 }
 
 /* 次要FAB按钮（导出） */
-.fab-secondary {
+.weline-fab-secondary {
     position: fixed;
     bottom: 90px;
     right: 90px;
@@ -293,12 +293,12 @@ body {
     z-index: 999;
 }
 
-.fab-secondary:hover {
+.weline-fab-secondary:hover {
     background: #218838;
     transform: scale(1.1);
 }
 
-.fab-secondary:active {
+.weline-fab-secondary:active {
     transform: scale(0.95);
 }
 
@@ -317,7 +317,7 @@ body {
 }
 
 /* 模态框 */
-.modal {
+.twofa-modal {
     display: none;
     position: fixed;
     top: 0;
@@ -329,11 +329,11 @@ body {
     justify-content: center;
 }
 
-.modal.active {
+.twofa-modal.active {
     display: flex;
 }
 
-.modal-overlay {
+.w-dialog__overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -343,7 +343,7 @@ body {
     backdrop-filter: blur(5px);
 }
 
-.modal-content {
+.w-dialog__content {
     position: relative;
     background: white;
     border-radius: 15px;
@@ -367,7 +367,7 @@ body {
     }
 }
 
-.modal-header {
+.w-dialog__header {
     padding: 20px;
     border-bottom: 1px solid var(--border-color);
     display: flex;
@@ -375,12 +375,12 @@ body {
     align-items: center;
 }
 
-.modal-header h2 {
+.w-dialog__header h2 {
     margin: 0;
     color: var(--text-color);
 }
 
-.close-btn {
+.close-w-button {
     background: none;
     border: none;
     font-size: 32px;
@@ -399,11 +399,11 @@ body {
     background: var(--light-bg);
 }
 
-.modal-body {
+.w-dialog__body {
     padding: 20px;
 }
 
-.modal-footer {
+.w-dialog__footer {
     padding: 20px;
     border-top: 1px solid var(--border-color);
     display: flex;
@@ -419,7 +419,7 @@ body {
     border-bottom: 2px solid var(--border-color);
 }
 
-.tab-btn {
+.tab-w-button {
     padding: 10px 20px;
     background: none;
     border: none;
@@ -445,19 +445,19 @@ body {
 }
 
 /* 表单 */
-.form-group {
+.w-field {
     margin-bottom: 20px;
 }
 
-.form-group label {
+.w-field label {
     display: block;
     margin-bottom: 8px;
     color: var(--text-color);
     font-weight: 500;
 }
 
-.form-group input,
-.form-group textarea {
+.w-field input,
+.w-field textarea {
     width: 100%;
     padding: 12px;
     border: 2px solid var(--border-color);
@@ -466,13 +466,13 @@ body {
     transition: border-color 0.3s;
 }
 
-.form-group input:focus,
-.form-group textarea:focus {
+.w-field input:focus,
+.w-field textarea:focus {
     outline: none;
     border-color: var(--primary-color);
 }
 
-.form-group small {
+.w-field small {
     display: block;
     margin-top: 5px;
     color: var(--text-muted);
@@ -480,7 +480,7 @@ body {
 }
 
 /* 按钮 */
-.btn {
+.w-button {
     padding: 12px 24px;
     border: none;
     border-radius: 8px;
@@ -490,21 +490,21 @@ body {
     transition: all 0.3s;
 }
 
-.btn-primary {
+.w-button {
     background: var(--primary-color);
     color: white;
 }
 
-.btn-primary:hover {
+.w-button:hover {
     background: var(--primary-dark);
 }
 
-.btn-secondary {
+.w-button {
     background: var(--secondary-color);
     color: white;
 }
 
-.btn-secondary:hover {
+.w-button:hover {
     background: #5a6268;
 }
 
@@ -673,7 +673,7 @@ body {
         letter-spacing: 5px;
     }
 
-    .modal-content {
+    .w-dialog__content {
         width: 95%;
     }
 

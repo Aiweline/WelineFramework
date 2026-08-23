@@ -4727,49 +4727,49 @@ function wlsDispatchRequestFiberStep(
     ) {
         try {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
-            if ($isSseProtocolRequest) {
-                \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
-                    static function (string $data) use (
+            // Generic downloads and SSE share the same bounded, Fiber-owned
+            // non-blocking transport writer.
+            \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
+                static function (string $data) use (
+                    $fiberConnId,
+                    $fiberConn,
+                    &$connections,
+                    &$requestBuffers,
+                    &$connectionLastActivity,
+                    &$requestLogged,
+                    &$writeBuffers,
+                    &$writableConnections,
+                    &$pendingClose
+                ): bool {
+                    return wlsHttpEnqueueSseWriteAndAwaitDrain(
                         $fiberConnId,
                         $fiberConn,
-                        &$connections,
-                        &$requestBuffers,
-                        &$connectionLastActivity,
-                        &$requestLogged,
-                        &$writeBuffers,
-                        &$writableConnections,
-                        &$pendingClose
-                    ): bool {
-                        return wlsHttpEnqueueSseWriteAndAwaitDrain(
-                            $fiberConnId,
-                            $fiberConn,
-                            $data,
-                            $connections,
-                            $requestBuffers,
-                            $connectionLastActivity,
-                            $requestLogged,
-                            $writeBuffers,
-                            $writableConnections,
-                            $pendingClose
-                        );
-                    }
-                );
-                \Weline\Framework\Http\Sse\SseContext::setAliveCallback(
-                    static function () use (
+                        $data,
+                        $connections,
+                        $requestBuffers,
+                        $connectionLastActivity,
+                        $requestLogged,
+                        $writeBuffers,
+                        $writableConnections,
+                        $pendingClose
+                    );
+                }
+            );
+            \Weline\Framework\Http\Sse\SseContext::setAliveCallback(
+                static function () use (
+                    $fiberConnId,
+                    $fiberConn,
+                    &$connections,
+                    &$pendingClose
+                ): bool {
+                    return wlsHttpIsSseClientConnected(
                         $fiberConnId,
                         $fiberConn,
-                        &$connections,
-                        &$pendingClose
-                    ): bool {
-                        return wlsHttpIsSseClientConnected(
-                            $fiberConnId,
-                            $fiberConn,
-                            $connections,
-                            $pendingClose
-                        );
-                    }
-                );
-            }
+                        $connections,
+                        $pendingClose
+                    );
+                }
+            );
             return handleRequest(
                 $rawRequest,
                 $runtime,
@@ -4997,7 +4997,11 @@ function sendResponseAndCleanup(
     ?bool $precomputedKeepAlive = null,
     bool $trustedCacheHit = false,
 ): void {
-    $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
+    $streamedResponse = \Weline\Framework\Http\WlsStreamedResponse::parseMarker($response);
+    $isStreamedResponse = $streamedResponse !== null;
+    $response = $isStreamedResponse
+        ? ''
+        : wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
 
     // 防御性修正：避免响应里出现 header/body 分隔后多出 leading CRLF，
     // 从而导致 Content-Length 与实际 body 字节数不一致（curl/浏览器会超时等待）。
@@ -5020,8 +5024,11 @@ function sendResponseAndCleanup(
         }
     }
 
-    $responseStatus = 200;
-    if (!$trustedCacheHit && \preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
+    $responseStatus = $isStreamedResponse ? (int)$streamedResponse['status'] : 200;
+    if (!$isStreamedResponse
+        && !$trustedCacheHit
+        && \preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)
+    ) {
         $responseStatus = (int) $statusMatches[1];
     }
 
@@ -5078,7 +5085,7 @@ function sendResponseAndCleanup(
         WlsLogger::warning_("HTTP 400 响应 (connId: {$connId}, 请求: {$requestLine})");
     }
 
-    $responseBytes = 0;
+    $responseBytes = $isStreamedResponse ? (int)$streamedResponse['queued_bytes'] : 0;
     $requestHost = $precomputedRequestHost ?? (getHeaderValue($rawRequest, 'Host') ?? '');
     if (\str_contains($requestHost, ':')) {
         $requestHost = (string) \explode(':', $requestHost, 2)[0];
@@ -5086,7 +5093,7 @@ function sendResponseAndCleanup(
 
     $activeRequests = \max(0, $activeRequests - 1);
 
-    $responseLenPre = \strlen($response);
+    $responseLenPre = $isStreamedResponse ? $responseBytes : \strlen($response);
     if ($recordObservability) {
         WlsLogger::debug_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
     }
@@ -5106,7 +5113,9 @@ function sendResponseAndCleanup(
     }
     // SSE 收尾兜底：即便当前上下文标记已经被重置，只要该连接仍有 SSE 写队列待排空，仍按 SSE 模式处理，
     // 禁止回退到普通 HTTP 分支导致提前关连。
-    $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
+    $isSseMode = $isStreamedResponse
+        || $actualSseStarted
+        || ($isSseProtocolRequest && $hasQueuedSsePayload);
     $keepAlive = $isWebSocketMode ? true : ($precomputedKeepAlive ?? isKeepAlive($rawRequest));
     $runtimeDrainPending = \Weline\Server\Service\WorkerResponseMemoryGuard::hasDrainAfterResponseRequest();
     $drainRequestedBeforeResponse = $ipcDraining || $runtimeDrainPending;
@@ -5202,10 +5211,10 @@ function sendResponseAndCleanup(
         http_finalize_skip_write:
     } else {
         $responseLength = \strlen($response);
-        if ($responseLength > 0) {
+        if ($responseLength > 0 && !$isStreamedResponse) {
             WlsLogger::warning_("SSE 模式收到响应体: {$responseLength} bytes，可能未调用 \$sse->complete() (connId: {$connId})");
         } else {
-            WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
+            WlsLogger::info_(($isStreamedResponse ? 'File' : 'SSE') . " 流式响应完成 (connId: {$connId})");
         }
     }
 
@@ -5730,11 +5739,31 @@ function handleRequest(
                 WlsLogger::info_("runtime->handle() 完成，耗时: {$handleDuration}ms，结果类型: " . \gettype($result));
             }
         } catch (\Throwable $handleE) {
+            $streamedMarker = $request->consumeStreamedResponseMarker();
+            if ($streamedMarker !== null) {
+                $runtime->consumePendingCookies();
+                $runtime->consumePendingHeaders();
+                $runtime->consumePendingResponseStatus();
+                if (\session_status() === PHP_SESSION_ACTIVE) {
+                    \session_write_close();
+                }
+                return $streamedMarker;
+            }
             // 302 等响应终止为正常控制流，不记错误
             if (!$handleE instanceof \Weline\Framework\Http\ResponseTerminateException) {
                 WlsLogger::error_("runtime->handle() 异常: " . $handleE->getMessage() . " (" . $handleE->getFile() . ":" . $handleE->getLine() . ")");
             }
             throw $handleE;
+        }
+        $streamedMarker = $request->consumeStreamedResponseMarker();
+        if ($streamedMarker !== null) {
+            $runtime->consumePendingCookies();
+            $runtime->consumePendingHeaders();
+            $runtime->consumePendingResponseStatus();
+            if (\session_status() === PHP_SESSION_ACTIVE) {
+                \session_write_close();
+            }
+            return $streamedMarker;
         }
         if (\session_status() === PHP_SESSION_ACTIVE) {
             \session_write_close();

@@ -1,0 +1,17 @@
+{
+    "name": "weline/module-storage-oss",
+    "description": "Aliyun OSS driver for Weline unified storage",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "aliyuncs/oss-sdk-php": "^2.7",
+        "weline/framework": "^2.5",
+        "weline/module-storage": "^1.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\StorageOss\\": ""
+        }
+    }
+}

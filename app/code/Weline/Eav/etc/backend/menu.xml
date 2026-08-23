@@ -9,29 +9,9 @@
           icon="settings"
           order="20">
         
-        <!-- EAV统一管理界面 -->
+        <!-- Weline UI 2.0 统一管理界面 -->
         <menu source="Weline_Eav::eav_manager" name="eav_manager" title="EAV管理器" action="/eav/backend/manager"
               icon="settings"
               order="10"/>
-        
-        <!-- 实体 -->
-        <menu source="Weline_Eav::eav_entity" name="eav_entity" title="实体" action="/eav/backend/entity"
-              icon="box"
-              order="20"/>
-        
-        <!-- 属性 -->
-        <menu source="Weline_Eav::eav_attribute" name="eav_attribute" title="属性" action="/eav/backend/attribute"
-              icon="list"
-              order="30"/>
-        
-        <!-- 属性组 -->
-        <menu source="Weline_Eav::eav_attribute_group" name="eav_attribute_group" title="属性组" action="/eav/backend/attribute/group"
-              icon="circle"
-              order="40"/>
-        
-        <!-- 属性集 -->
-        <menu source="Weline_Eav::eav_attribute_set" name="eav_attribute_set" title="属性集" action="/eav/backend/attribute/set"
-              icon="box"
-              order="50"/>
     </menu>
 </menus>

@@ -2,16 +2,16 @@
 在用户无权限访问时，执行重定向操作前触发。允许其他模块在重定向前执行自定义操作，如记录日志、发送通知等。,"Triggered before performing a redirect operation when a user does not have permission to access. Allows other modules to execute custom operations before the redirect, such as logging, sending notifications, etc."
 角色检查,"Role check"
 在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,"Triggered when checking user role permissions, allowing other modules to customize the role checking logic."
-"角色 ACL 条目加载后","角色 ACL 条目加载后"
-"角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。","角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。"
-"超管 ACL 旁路检查","超管 ACL 旁路检查"
-"role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。","role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。"
-角色权限保存前,角色权限保存前
-"角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。","角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。"
-角色列表过滤,角色列表过滤
-"角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。","角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。"
-"ACL 分配树行加载后","ACL 分配树行加载后"
-"权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。","权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。"
+"角色 ACL 条目加载后","After role ACL entries are loaded"
+"角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。","Triggered after the role's valid ACL line is loaded from the library, the observer can write back the entries (such as intersecting according to the site-level authorization package). Acl is not Website aware."
+"超管 ACL 旁路检查","Super pipe ACL bypass check"
+"role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。","role_id=1 triggers before short circuit release; observers can set allow_bypass to false to turn off bypass."
+角色权限保存前,"Before saving role permissions"
+"角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。","Fires before role ACL assignment is saved; observers can reject override source_ids (allowed/message)."
+角色列表过滤,"Role list filter"
+"角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。","Triggered before role list/creation; observer can constrain manageable role collection by website_id."
+"ACL 分配树行加载后","ACL allocation tree row after loading"
+"权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。","Fires after permission allocation tree/label rows are loaded; observers can write back rows to prune allocatable resources."
 所有标签,"All tags"
 搜索标签,"Search tags"
 id属性不能为空,"id attribute cannot be empty"
@@ -44,24 +44,24 @@ acl标签缺少source属性,"acl tag missing source attribute"
 "ACL catalog: framework Query compile refreshed before resource collection.","ACL catalog: framework Query compile refreshed before resource collection."
 请先登录,"Please log in first"
 用户已被禁用,"User has been disabled"
-"应用没有任何授权 scope","应用没有任何授权 scope"
-应用无权进行该操作,应用无权进行该操作
+"应用没有任何授权 scope","The application does not have any authorization scope"
+应用无权进行该操作,"App does not have permission to perform this operation"
 用户不存在或已被删除,"User does not exist or has been deleted"
 用户没有分配角色,"User has no role assigned"
 你没有任何权限！请联系管理员！,"You have no permissions! Please contact the administrator!"
 "你无权进行该操作！你不具备：%{1} 操作权限！","You do not have permission to perform this operation! You lack the: %{1} operation permission!"
-你无权进行该操作,你无权进行该操作
+你无权进行该操作,"You don't have permission to perform this action"
 "你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！","You do not have permission to perform this operation! You lack the: %{1} route: %{2} operation permission! You have been redirected to a page you can access!"
 你无权进行该操作！已将你带到你可访问的后台页面：%{1},"You do not have permission to perform this operation! You have been redirected to an accessible backend page: %{1}"
 "超级管理员已拥有全部 ACL 权限，无需追加。","The super admin already has all ACL permissions, no need to add more."
 "已为超级管理员（role_id=1）授予 %{1} 条新权限。","Granted %{1} new permissions to the super administrator (role_id=1)."
 为超级管理员授予权限时出错：%{1},"Error granting permissions to super administrator: %{1}"
-管理权限,管理权限
-"mdi mdi-security","mdi mdi-security"
+管理权限,"Administrative permissions"
+shield,shield
 模块资源,"Module Resources"
-"mdi mdi-puzzle-outline","mdi mdi-puzzle-outline"
+puzzle,puzzle
 标签资源,"Tag Resources"
-"mdi mdi-tag-search-outline","mdi mdi-tag-search-outline"
+search,search
 加载IP白名单失败：%{1},"Failed to load IP whitelist: %{1}"
 IP地址不能为空,"IP address cannot be empty"
 IP地址格式不正确,"IP address format is incorrect"
@@ -83,11 +83,16 @@ IP地址格式不正确,"IP address format is incorrect"
 状态更新失败,"Status Update Failed"
 状态更新失败：%{1},"Status Update Failed: %{1}"
 IP白名单,"IP whitelist"
-查看IP白名单,查看IP白名单
+check,check
+查看IP白名单,"View IP whitelist"
 添加IP白名单,"Add IP whitelist"
-编辑IP白名单,编辑IP白名单
-删除IP白名单,删除IP白名单
-切换IP白名单状态,切换IP白名单状态
+plus,plus
+编辑IP白名单,"Edit IP whitelist"
+edit,edit
+删除IP白名单,"Delete IP whitelist"
+trash,trash
+切换IP白名单状态,"Switch IP whitelist status"
+switch,switch
 登录失败,"Login failed"
 登录成功,"Login successful"
 权限拒绝,"Permission denied"
@@ -96,17 +101,17 @@ ACL违规,"ACL violation"
 加载安全日志失败：%{1},"Failed to load security logs: %{1}"
 安全日志,"Security log"
 warning,warning
-查看安全日志,查看安全日志
-标签词非法,标签词非法
-标签元数据已保存,标签元数据已保存
-标签仍被资源或角色订阅引用，不能删除元数据,标签仍被资源或角色订阅引用，不能删除元数据
-标签元数据已删除,标签元数据已删除
-ACL标签管理,ACL标签管理
-"mdi mdi-tag-multiple","mdi mdi-tag-multiple"
-"管理 ACL source_id 标签元数据","管理 ACL source_id 标签元数据"
-标签列表,标签列表
-保存标签元数据,保存标签元数据
-删除标签元数据,删除标签元数据
+查看安全日志,"View security log"
+标签词非法,"Tag word illegal"
+标签元数据已保存,"Tag metadata saved"
+标签仍被资源或角色订阅引用，不能删除元数据,"Tags are still referenced by resource or role subscriptions and metadata cannot be deleted"
+标签元数据已删除,"Tag metadata removed"
+ACL标签管理,"ACL label management"
+tag,tag
+"管理 ACL source_id 标签元数据","Manage ACL source_id tag metadata"
+标签列表,"tag list"
+保存标签元数据,"Save tag metadata"
+删除标签元数据,"Remove tag metadata"
 角色名不能为空！,"Role name cannot be empty!"
 角色已存在！,"Role already exists!"
 角色创建成功！,"Role created successfully!"
@@ -115,21 +120,20 @@ ACL标签管理,ACL标签管理
 删除成功！,"Deletion successful!"
 仅允许超管分配权限！,"Only admins are allowed to assign permissions!"
 角色ID不存在！,"Role ID does not exist!"
-权限分配被站级授权包拒绝,权限分配被站级授权包拒绝
+权限分配被站级授权包拒绝,"Permission assignment denied by site-level authorization package"
 权限分配失败！,"Permission assignment failed!"
 权限分配成功，所有缓存已刷新！,"Permission assignment succeeded and all caches were refreshed!"
 权限已保存，但所有缓存刷新失败：%{1},"Permissions were saved, but refreshing all caches failed: %{1}"
 搜索成功,"Search Successful"
-shield,shield
-访问控制权限管理,访问控制权限管理
-角色列表,角色列表
-角色添加,角色添加
-角色编辑,角色编辑
-角色删除,角色删除
+访问控制权限管理,"Access control rights management"
+角色列表,"role list"
+角色添加,"Role addition"
+角色编辑,"Role editor"
+角色删除,"Role deletion"
 权限分配,"Permission assignment"
-角色权限分配,角色权限分配
-角色搜索,角色搜索
-搜索角色列表,搜索角色列表
+角色权限分配,"Role permission assignment"
+角色搜索,"Role search"
+搜索角色列表,"Search role list"
 不能删除超级管理员！,"Cannot delete super administrator!"
 添加IP,"Add IP"
 关键词,Keywords
@@ -171,49 +175,140 @@ IP地址,"IP address"
 暂无安全日志记录,"No security log records"
 搜索消息或IP地址,"Search Message or IP Address"
 查看日志ID：,"View Log ID:"
-权限角色,权限角色
-系统配置,"System Configuration"
-Acl权限管理,"Acl permission management"
-Acl角色管理,"Acl role management"
-支持角色权限管理,"Supports role-based permission management"
-添加,Add
-权限管理,"Permission management"
-暂无记录,"No records"
+删除角色,"Delete role"
+确定删除角色“%{1}”吗？此操作无法撤销。,"Are you sure you want to delete the role ""%{1}""? This action cannot be undone."
+权限角色,"Permission role"
+建立角色并按实际职责分配权限。,"Establish roles and assign permissions based on actual responsibilities."
+面包屑,"bread crumbs"
+"ACL 权限管理","ACL permission management"
+角色,Role
+搜索角色,"Search roles"
+搜索名称或描述,"Search name or description"
+清除,Clear
 添加角色,"Add Role"
+创建于,"Created in"
+更新于,"updated on"
+权限管理,"Permission management"
+系统角色,"system role"
+暂无角色,"No role yet"
+角色分页,"Role pagination"
+关闭,closure
 角色名,"Role name"
 请输入角色名称,"Please enter the role name"
 角色描述,"Role description"
 请输入角色描述,"Please enter the role description"
-提交,Submit
-请输入角色名,"Please enter the role name"
-角色管理,"Role management"
 角色权限配置,"Role permission configuration"
-为角色分配系统访问权限，控制菜单和功能的可见性,"Assign system access to roles, control visibility of menus and features"
-操作者,Operator
+使用原生权限树控制菜单、接口、任务和运维能力,"Use the native permission tree to control menus, interfaces, tasks and operation and maintenance capabilities"
+返回列表,"Return to List"
 配置角色,"Configure roles"
+操作者,Operator
+未知,Unknown
+标签包,"label pack"
+"已选择 %{1} 项权限","%{1} permissions selected"
+没有匹配的权限,"No matching permissions"
+保存权限配置,"Save permission configuration"
+保存中…,Saving…
+权限配置操作,"Permission configuration operations"
+当前角色,"current role"
+权限统计,"Permission statistics"
 已授权权限,"Authorized permissions"
 权限总数,"Total permissions"
 权限分组,"Permission groups"
 授权进度,"Authorization progress"
+权限树工具,"Permission tree tool"
+搜索权限,"Search permissions"
+"搜索权限名称、ID 或描述…","Search permission name, ID or description…"
+模块,module
+所有模块,"All modules"
+类型,Type
+所有类型,"All types"
+权限视图,"Permission view"
+菜单维度,"menu dimensions"
+标签维度,"label dimensions"
 展开,Expand
 折叠,Collapse
 全选,"Select All"
 清空,Clear
-菜单维度,菜单维度
-标签维度,标签维度
-取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。,取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。
+菜单与功能权限,"Menu and function permissions"
+勾选父节点会授予整个子树；取消父节点会收回整个子树。,"Checking the parent node will grant the entire subtree; canceling the parent node will take back the entire subtree."
+标签权限包,"Label permission package"
+标签包适合批量授权；取消包内单项时会自动取消覆盖它的标签包。,"Label packages are suitable for batch authorization; when canceling a single item in the package, the label package covering it will be automatically canceled."
+编辑角色,"Edit role"
+角色只描述职责，具体能力在权限配置页中授予。,"Roles only describe responsibilities, and specific capabilities are granted on the permission configuration page."
+保存角色,"save character"
+标签维度资源,"Tag-dimension resources"
+模块维度资源,"Module-dimension resources"
+"按标签浏览与搜索 ACL 资源；可切换到模块维度继续筛选","Browse and search ACL resources by tag; switch to the module dimension to continue filtering"
+"按模块浏览与搜索 ACL 资源；可切换到标签维度继续筛选","Browse and search ACL resources by module; switch to the tag dimension to continue filtering"
+模块维度,"module dimension"
+角色管理,"Role management"
+标签元数据,"Tag metadata"
+涉及模块,"Involved modules"
+资源类型数,"Number of resource types"
+权限列表,"Permission list"
+暂无权限数据,"No permission data"
+资源标识,"Resource identifier"
+资源名称,"Resource name"
+标签,Tag
+请求方法,"Request method"
+路由,Route
+所属模块,"Parent Module"
+更新时间,"Update time"
+搜索权限名称、ID、标签...,"Search permission name, ID, tags..."
+搜索权限名称、ID、路由...,"Search Permission Name, ID, Route..."
+搜索模块名称,"Search module name"
+在标签维度查看,"View in tag dimension"
+在模块维度查看,"View in module dimension"
+Acl权限管理,"Acl permission management"
+系统配置,"System Configuration"
+支持角色权限管理,"Supports role-based permission management"
+权限标签,"Permissions label"
+"ACL 标签管理","ACL label management"
+"标签从 source_id 自动发现；可编辑元数据名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","Tags are discovered from source_id. Edit metadata name, description, color and sort order. Deletion is allowed only for hand-written metadata with no resource references and no role subscriptions."
+发现标签,"Discovered tags"
+已配置元数据,"Configured metadata"
+关联资源数,"Linked resources"
+标签元数据列表,"Tag metadata list"
+个标签,tags
+暂无发现的标签,"No tags found yet"
+资源数,"Number of resources"
+元数据名,"Metadata name"
+颜色,color
+排序,sort
+说明,illustrate
+已配置,Configured
+选择颜色,"Pick color"
+仍有资源引用，无法删除,"Cannot delete while resources still reference this tag"
+删除元数据,"Delete metadata"
+"资源不能以自己为父级： %{1}","Resource cannot have itself as parent: %{1}"
+"检测到循环引用： %{1} -> %{2}","Detected circular reference: %{1} -> %{2}"
+"设置此父级会形成循环引用： %{1} -> %{2}","Setting this parent will create a circular reference: %{1} -> %{2}"
+"非标准父子类型组合： %{1} -> %{2}","Non-standard parent-child type combination: %{1} -> %{2}"
+"资源 ID 不能为空","Resource ID cannot be empty"
+"资源 ID 已存在： %{1}","Resource ID already exists: %{1}"
+"该菜单下有 %{1} 个子菜单，请先删除子菜单","This menu has %{1} submenu(s). Please delete the submenus first"
+操作授权条件不满足,"Operation authorization requirements are not satisfied."
+菜单,Menu
+"HTTP 接口","HTTP interface"
+"REST API","REST API"
+"bin-query 接口","bin-query interface"
+后台任务,"Background tasks"
+运维操作,"Operation and maintenance"
+其他,Other
+系统菜单,"System Menu"
+用户菜单,"User Menu"
+Acl角色管理,"Acl role management"
+添加,Add
+暂无记录,"No records"
+提交,Submit
+请输入角色名,"Please enter the role name"
+为角色分配系统访问权限，控制菜单和功能的可见性,"Assign system access to roles, control visibility of menus and features"
+取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。,"Canceling the label will take back all leaf permissions under the path; save and use the page-level shared permission set to avoid losing permissions when switching views."
 标签权限树,"Tag permission tree"
 勾选标签可整包授权；叶子也可单独勾选或取消,"Checking a tag grants the whole package; leaves can also be checked or unchecked individually"
-标签,Tag
-权限列表,"Permission list"
 勾选需要授予的权限，子权限会自动关联父权限,"Check the permissions to grant; child permissions will automatically associate with parent permissions"
-返回列表,"Return to List"
-保存权限配置,"Save permission configuration"
 "搜索权限名称、ID 或描述...","Search Permission Name, ID, or Description..."
-所有模块,"All modules"
-搜索模块名称,"Search module name"
 按类型筛选,"Filter by type"
-所有类型,"All types"
 展开所有,"Expand all"
 折叠所有,"Collapse All"
 任务,Task
@@ -221,8 +316,6 @@ Acl角色管理,"Acl role management"
 菜单权限,"Menu permissions"
 接口权限,"Interface permission"
 访问权限,"Access permission"
-菜单,Menu
-未知,Unknown
 保存中...,Saving...
 找到,Found
 个匹配权限,"matching permissions"
@@ -235,74 +328,24 @@ Acl角色管理,"Acl role management"
 Acl角色添加,"Acl role addition"
 角色名称验证成功,"Role name validation successful"
 角色描述验证成功,"Role description validation successful"
-标签维度资源,"Tag-dimension resources"
-模块维度资源,"Module-dimension resources"
-"按标签浏览与搜索 ACL 资源；可切换到模块维度继续筛选","Browse and search ACL resources by tag; switch to the module dimension to continue filtering"
-"按模块浏览与搜索 ACL 资源；可切换到标签维度继续筛选","Browse and search ACL resources by module; switch to the tag dimension to continue filtering"
-模块维度,模块维度
-标签元数据,"Tag metadata"
-涉及模块,"Involved modules"
-资源类型数,资源类型数
-暂无权限数据,"No permission data"
-资源标识,"Resource identifier"
-资源名称,"Resource name"
-类型,Type
-请求方法,"Request method"
-路由,Route
-所属模块,"Parent Module"
-更新时间,"Update time"
-搜索权限名称、ID、标签...,"Search permission name, ID, tags..."
-搜索权限名称、ID、路由...,"Search Permission Name, ID, Route..."
-在标签维度查看,"View in tag dimension"
-在模块维度查看,"View in module dimension"
-权限标签,权限标签
-"ACL 标签管理","ACL 标签管理"
-"标签从 source_id 自动发现；可编辑元数据名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","Tags are discovered from source_id. Edit metadata name, description, color and sort order. Deletion is allowed only for hand-written metadata with no resource references and no role subscriptions."
-发现标签,"Discovered tags"
-已配置元数据,"Configured metadata"
-关联资源数,"Linked resources"
-标签元数据列表,"Tag metadata list"
-个标签,tags
-暂无发现的标签,暂无发现的标签
-资源数,资源数
-元数据名,"Metadata name"
-颜色,颜色
-排序,排序
-说明,说明
-已配置,Configured
-选择颜色,"Pick color"
-仍有资源引用，无法删除,"Cannot delete while resources still reference this tag"
-删除元数据,删除元数据
-"资源不能以自己为父级： %{1}","Resource cannot have itself as parent: %{1}"
-"检测到循环引用： %{1} -> %{2}","Detected circular reference: %{1} -> %{2}"
-"设置此父级会形成循环引用： %{1} -> %{2}","Setting this parent will create a circular reference: %{1} -> %{2}"
-"非标准父子类型组合： %{1} -> %{2}","Non-standard parent-child type combination: %{1} -> %{2}"
-"资源 ID 不能为空","Resource ID cannot be empty"
-"资源 ID 已存在： %{1}","Resource ID already exists: %{1}"
-"该菜单下有 %{1} 个子菜单，请先删除子菜单","This menu has %{1} submenu(s). Please delete the submenus first"
-操作授权条件不满足,"Operation authorization requirements are not satisfied."
-"HTTP 接口","HTTP 接口"
-"REST API","REST API"
-"bin-query 接口","bin-query 接口"
-后台任务,后台任务
-运维操作,运维操作
-其他,Other
-系统菜单,"System Menu"
-用户菜单,"User Menu"
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+"mdi mdi-security","mdi mdi-security"
+"mdi mdi-puzzle-outline","mdi mdi-puzzle-outline"
+"mdi mdi-tag-search-outline","mdi mdi-tag-search-outline"
+"mdi mdi-tag-multiple","mdi mdi-tag-multiple"
+确认组件不可用，请刷新页面后重试,"Confirm that the component is unavailable, please refresh the page and try again"
 权限分配成功，权限缓存已清理。,"Permissions assigned successfully; permission cache cleared."
 正在创建...,Creating...
 正在创建角色...,"Creating role..."
 角色创建失败，请检查输入后重试,"Role creation failed. Please check your input and try again."
 权限分配成功！,"Permission assignment succeeded!"
 权限缓存清理成功！,"Permission cache cleared successfully!"
-"标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。"
-元数据,元数据
-删元数据,删元数据
-显示名,显示名
+"标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","Tags are automatically discovered from source_id; display name, description, color and sorting can be edited. Remove manual metadata that only allows no resource references and no role subscriptions."
+元数据,Metadata
+删元数据,"Delete metadata"
+显示名,"display name"
 按模块筛选,"Filter by module"
-"ACL 权限管理","ACL permission management"
 管理系统中所有的访问控制权限，包括菜单、接口等资源,"Manage all access control permissions in the system, including resources such as menus and APIs."
 接口,API
 "对象 Scope 写入授权通过","Object Scope write authorization granted"
 "对象 Scope 授权拒绝","Object Scope authorization denied"
+安全设置,"Security settings"

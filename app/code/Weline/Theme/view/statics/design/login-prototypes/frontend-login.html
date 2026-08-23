@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>原型 · 前台登录</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#ebe4d8;--ink:#1c1915;--muted:#6b645a;--card:#fffaf3;--line:rgba(28,25,21,.12);
+  --coral:#c45c3e;--coral-deep:#9e4228;--radius:12px;
+  --font-ui:"Manrope",system-ui,sans-serif;--font-display:"Cormorant Garamond",Georgia,serif;
+}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{font-family:var(--font-ui);color:var(--ink);background:var(--bg);min-height:100dvh}
+.bar{position:fixed;inset:0 0 auto 0;z-index:20;display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;padding:.55rem 1rem;background:rgba(28,25,21,.92);color:#f3ebe0;border-bottom:1px solid rgba(255,255,255,.08);font-size:.78rem}
+.bar a{color:#f0b59a;text-decoration:none}.bar a:hover{text-decoration:underline}.bar strong{color:#fff}
+.shell{min-width:1100px;display:grid;grid-template-columns:1.05fr .95fr;min-height:100dvh;padding-top:2.4rem}
+.hero{position:relative;margin:1rem 0 1rem 1rem;border-radius:22px;overflow:hidden;background:linear-gradient(145deg,rgba(47,59,46,.88),rgba(28,25,21,.55)),radial-gradient(circle at 30% 20%,#7a8f6e,transparent 45%),linear-gradient(180deg,#445540,#1c1915);color:#f7f1e8;padding:clamp(1.75rem,4vw,3rem);display:flex;flex-direction:column;justify-content:flex-end;min-height:calc(100dvh - 3.5rem)}
+.hero:after{content:"";position:absolute;inset:auto -10% -20% 40%;height:70%;background:radial-gradient(circle,rgba(196,92,62,.35),transparent 60%);pointer-events:none}
+.hero>*{position:relative;z-index:1}
+.chip{align-self:flex-start;margin-bottom:auto;padding:.35rem .7rem;border:1px solid #f7f1e840;border-radius:999px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:#f7f1e8d9}
+.mark{font-family:var(--font-display);font-size:clamp(3rem,6vw,4.5rem);font-weight:700;line-height:.95;letter-spacing:-.02em;margin:0 0 .85rem}
+.hero p{max-width:22ch;margin:0;font-size:1.05rem;line-height:1.5;color:#f7f1e8d1}
+.panel{display:flex;align-items:center;justify-content:center;padding:clamp(1rem,3vw,2rem)}
+.card{width:min(100%,26rem);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.5rem 1.45rem 1.25rem;box-shadow:0 18px 40px #1c19150f}
+.card h1{font-family:var(--font-display);font-size:2.15rem;margin:0 0 .2rem}
+.sub{margin:0 0 1.2rem;color:var(--muted);font-size:.9rem}
+.field{margin-bottom:.85rem}.field label{display:block;margin-bottom:.35rem;font-size:.78rem;font-weight:700}
+.wrap{position:relative}
+.wrap input{width:100%;min-height:2.75rem;padding:.55rem .85rem;border:1px solid var(--line);border-radius:var(--radius);background:#fff;font:inherit;font-size:.95rem}
+.wrap input:focus{outline:2px solid #c45c3e4d;outline-offset:1px;border-color:var(--coral)}
+.toggle{position:absolute;right:.4rem;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--muted);font-size:.72rem;font-weight:700;cursor:pointer;padding:.35rem .45rem;border-radius:6px}
+.remember{margin:.9rem 0 .75rem}.remember>span{display:block;margin-bottom:.45rem;font-size:.78rem;font-weight:700}
+.segs{display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;padding:.3rem;background:#f0e8dc;border-radius:10px}
+.segs label{position:relative;display:grid;place-items:center;min-height:2.1rem;border-radius:8px;font-size:.72rem;font-weight:600;color:var(--muted);cursor:pointer}
+.segs input{position:absolute;opacity:0;pointer-events:none}
+.segs span{width:100%;height:100%;display:grid;place-items:center;border-radius:8px}
+.segs input:checked+span{background:#fff;color:var(--ink);box-shadow:0 1px 2px #1c191514}
+.forgot{text-align:right;margin:0 0 1rem}.forgot a{color:var(--coral-deep);font-size:.82rem;font-weight:600;text-decoration:none}.forgot a:hover{text-decoration:underline}
+.captcha{display:grid;grid-template-columns:1fr auto;gap:.55rem;margin-bottom:.95rem}
+.captcha input{min-height:2.55rem;border:1px solid var(--line);border-radius:var(--radius);padding:.5rem .75rem;font:inherit}
+.captcha button{width:7.2rem;border-radius:10px;border:1px solid var(--line);background:#e8dfd1;font-family:var(--font-display);letter-spacing:.18em;cursor:pointer}
+.btn{width:100%;min-height:2.95rem;border:0;border-radius:var(--radius);background:var(--coral);color:#fffaf3;font:inherit;font-weight:700;font-size:.98rem;cursor:pointer}
+.btn:hover{background:var(--coral-deep)}.btn.busy .idle,.btn:not(.busy) .busy{display:none}
+.div{display:grid;grid-template-columns:1fr auto 1fr;gap:.6rem;align-items:center;margin:1.15rem 0 .85rem;color:var(--muted);font-size:.72rem}
+.div:before,.div:after{content:"";height:1px;background:var(--line)}
+.social{display:grid;gap:.45rem}.social button{min-height:2.55rem;border:1px solid var(--line);border-radius:var(--radius);background:#fff;font:inherit;font-weight:600;font-size:.86rem;cursor:pointer}
+.foot{margin-top:1.15rem;text-align:center;font-size:.86rem;color:var(--muted)}.foot a{color:var(--coral-deep);font-weight:700;text-decoration:none}
+@media(max-width:720px){.shell{grid-template-columns:1fr}.hero{min-height:14rem;margin:3rem 1rem 0}.hero p{max-width:none}}
+</style>
+</head>
+<body>
+<div class="bar"><strong>原型 B · 前台登录</strong><span>保留：账号邮箱 / 密码显隐 / 记住时长 / 忘记密码 / 验证码 / 第三方 Hook / 注册 / 加载态</span><a href="./backend-login.html">后台原型 →</a><a href="./index.html">总览</a></div>
+<div class="shell">
+  <aside class="hero">
+    <div class="chip">Customer Account</div>
+    <div><h1 class="mark">Weline</h1><p>欢迎回来。登录后继续订单、收藏与会员权益——品牌先行，表单克制。</p></div>
+  </aside>
+  <section class="panel">
+    <div class="card">
+      <h1>欢迎回来</h1>
+      <p class="sub">请登录账户以继续</p>
+      <form onsubmit="event.preventDefault();const b=this.querySelector('.btn');b.classList.add('busy');setTimeout(()=>b.classList.remove('busy'),1100)">
+        <div class="field"><label for="username">用户名或邮箱</label><div class="wrap"><input id="username" name="username" autocomplete="username" placeholder="请输入用户名或邮箱" required></div></div>
+        <div class="field"><label for="password">密码</label><div class="wrap"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required><button class="toggle" type="button" onclick="const i=document.getElementById('password');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'显示':'隐藏'">显示</button></div></div>
+        <div class="remember"><span>记住登录状态</span><div class="segs" role="radiogroup" aria-label="记住登录状态">
+          <label><input type="radio" name="remember_duration" value="0"><span>会话</span></label>
+          <label><input type="radio" name="remember_duration" value="86400"><span>1天</span></label>
+          <label><input type="radio" name="remember_duration" value="604800" checked><span>1周</span></label>
+          <label><input type="radio" name="remember_duration" value="2592000"><span>1月</span></label>
+        </div></div>
+        <div class="forgot"><a href="#">忘记密码？</a></div>
+        <div class="captcha" aria-label="验证码"><input name="captcha" placeholder="验证码"><button type="button" onclick="this.textContent=['M2QX','P9LA','H4KT'][Math.floor(Math.random()*3)]">M2QX</button></div>
+        <button class="btn" type="submit"><span class="idle">登录</span><span class="busy">登录中…</span></button>
+      </form>
+      <div class="div">或使用以下方式</div>
+      <div class="social"><button type="button">Multipass / 社交账号继续</button></div>
+      <p class="foot">还没有账户？ <a href="#">立即注册</a></p>
+    </div>
+  </section>
+</div>
+</body>
+</html>

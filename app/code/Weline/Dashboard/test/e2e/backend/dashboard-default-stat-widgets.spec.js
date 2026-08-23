@@ -106,9 +106,9 @@ moduleDescribe(test, MODULE, 'dashboard default statistic widgets', () => {
         expect(prepared.view_id).toBeGreaterThan(0);
         expect(prepared.identity).toMatchObject({
           layout_option: 'default',
-          scope: `dashboard_view:${prepared.view_id}`,
-          target_type: 'website',
-          target_id: prepared.website_id,
+          scope: expect.stringMatching(/\.default\.default$/),
+          target_type: 'dashboard_view',
+          target_id: prepared.view_id,
         });
         expect(prepared.layout || []).toHaveLength(0);
 
@@ -300,9 +300,9 @@ moduleDescribe(test, MODULE, 'dashboard default statistic widgets', () => {
         const frameSrc = await frame.getAttribute('src');
         const frameUrl = new URL(frameSrc || '', page.url());
         expect(frameUrl.searchParams.get('lock_layout_context')).toBe('1');
-        expect(frameUrl.searchParams.get('scope')).toBe(`dashboard_view:${prepared.view_id}`);
-        expect(frameUrl.searchParams.get('layout_lock_target_type')).toBe('website');
-        expect(Number(frameUrl.searchParams.get('layout_lock_target_id'))).toBe(prepared.website_id);
+        expect(frameUrl.searchParams.get('scope')).toBe(prepared.identity.scope);
+        expect(frameUrl.searchParams.get('layout_lock_target_type')).toBe('dashboard_view');
+        expect(Number(frameUrl.searchParams.get('layout_lock_target_id'))).toBe(prepared.view_id);
         await expect(page.frameLocator('[data-dashboard-editor-frame]').locator('#themeEditor')).toBeVisible({ timeout: 90000 });
 
         const saveClose = page.locator('[data-dashboard-editor-save-close]');
@@ -415,9 +415,9 @@ moduleDescribe(test, MODULE, 'dashboard default statistic widgets', () => {
         expect(ensured.view_id).toBeGreaterThan(0);
         expect(ensured.identity).toMatchObject({
           layout_option: 'default',
-          scope: `dashboard_view:${ensured.view_id}`,
-          target_type: 'website',
-          target_id: prepared.website_id,
+          scope: expect.stringMatching(/\.default\.default$/),
+          target_type: 'dashboard_view',
+          target_id: ensured.view_id,
         });
 
         const publishedRows = activePublishedRows(ensured.layout);

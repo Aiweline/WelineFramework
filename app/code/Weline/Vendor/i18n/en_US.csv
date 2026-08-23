@@ -2,32 +2,42 @@
 操作失败，请稍后重试。参考编号：%{1},"The operation failed. Please try again later. Reference: %{1}"
 数据暂时无法加载。参考编号：%{1},"Data is temporarily unavailable. Reference: %{1}"
 状态暂时无法读取。参考编号：%{1},"Status is temporarily unavailable. Reference: %{1}"
-商家管理,商家管理
-商家、授权、商品绑定与结算管理,商家、授权、商品绑定与结算管理
-商家档案,商家档案
-查看商家档案,查看商家档案
-站点授权,站点授权
-查看商家站点授权,查看商家站点授权
-商品绑定,商品绑定
-查看商家商品绑定,查看商家商品绑定
-拆分规则,拆分规则
-查看商家拆分规则,查看商家拆分规则
-结算账本,结算账本
-查看商家结算账本,查看商家结算账本
-退款冲正,退款冲正
-查看商家退款冲正,查看商家退款冲正
-迁移状态,迁移状态
-只读查看商家迁移状态,只读查看商家迁移状态
-创建商家档案,创建商家档案
-授权商家站点,授权商家站点
-授权商家访问站点,授权商家访问站点
-绑定商家商品,绑定商家商品
-绑定商家与商品,绑定商家与商品
-保存拆分规则,保存拆分规则
-保存商家拆分规则,保存商家拆分规则
-调度结算,调度结算
-从不可变快照调度结算,从不可变快照调度结算
-"Vendor reversal 金额或 Store 无效","Vendor reversal 金额或 Store 无效"
+商家管理,"Merchant management"
+store,store
+商家、授权、商品绑定与结算管理,"Merchant, authorization, product binding and settlement management"
+商家档案,"Business profile"
+查看商家档案,"View business profile"
+站点授权,"Site authorization"
+user,user
+查看商家站点授权,"View merchant site authorization"
+商品绑定,"Product binding"
+link,link
+查看商家商品绑定,"View merchant product bindings"
+拆分规则,"Split rules"
+circle,circle
+查看商家拆分规则,"View merchant split rules"
+结算账本,"Settlement ledger"
+cash,cash
+查看商家结算账本,"View merchant settlement ledger"
+退款冲正,"Refund offset"
+查看商家退款冲正,"View merchant refund reimbursements"
+迁移状态,"Migration status"
+eye,eye
+只读查看商家迁移状态,"Read-only view of merchant migration status"
+创建商家档案,"Create business profile"
+save,save
+授权商家站点,"Authorized merchant site"
+check,check
+授权商家访问站点,"Authorize merchants to access the site"
+绑定商家商品,"Bind merchant products"
+plus,plus
+绑定商家与商品,"Bind merchants and products"
+保存拆分规则,"Save split rules"
+保存商家拆分规则,"Save merchant split rules"
+调度结算,"Scheduling settlement"
+clock,clock
+从不可变快照调度结算,"Scheduling settlement from immutable snapshots"
+"Vendor reversal 金额或 Store 无效","Vendor reversal amount or Store is invalid"
 "commission_bps 必须在 0..10000","commission_bps must be between 0 and 10000"
 "Store/Product identity 无效","Invalid Store/Product identity"
 "Store ID 无效","Invalid Store ID"
@@ -37,27 +47,27 @@
 "非法 Vendor code：%{1}","Invalid Vendor code: %{1}"
 "Vendor 分账快照不守恒","Vendor split snapshot is not conserved"
 "Vendor payout ledger 不守恒","Vendor payout ledger is not conserved"
-是,是
-否,否
-只读诊断,只读诊断
-可管理,可管理
-此页面只显示脱敏业务事实；冲正与生产迁移不在普通后台执行。,此页面只显示脱敏业务事实；冲正与生产迁移不在普通后台执行。
-"写操作复用 Vendor 领域服务与 rollout 门禁；结算只调度内部账本，不调用外部资金接口。","写操作复用 Vendor 领域服务与 rollout 门禁；结算只调度内部账本，不调用外部资金接口。"
-业务操作,业务操作
-商家代码,商家代码
-法定名称,法定名称
-环境,环境
-"商家 ID","商家 ID"
-"网站 ID","网站 ID"
-"店铺 ID","店铺 ID"
+是,yes
+否,no
+只读诊断,"Read-only diagnostics"
+可管理,Manageable
+此页面只显示脱敏业务事实；冲正与生产迁移不在普通后台执行。,"This page only displays desensitized business facts; reversal and production migration are not executed in the normal background."
+"写操作复用 Vendor 领域服务与 rollout 门禁；结算只调度内部账本，不调用外部资金接口。","The write operation reuses Vendor domain services and rollout access control; settlement only schedules the internal ledger and does not call the external fund interface."
+业务操作,"business operations"
+商家代码,"merchant code"
+法定名称,"legal name"
+环境,environment
+"商家 ID","Merchant ID"
+"网站 ID","Website ID"
+"店铺 ID","Store ID"
 SKU,SKU
-平台佣金（基点）,平台佣金（基点）
-货币,货币
-法定实体,法定实体
-"不可变快照 ID","不可变快照 ID"
-幂等键,幂等键
-保存,保存
-当前没有记录。,当前没有记录。
+平台佣金（基点）,"Platform commission (basis points)"
+货币,currency
+法定实体,"legal entity"
+"不可变快照 ID","Immutable snapshot ID"
+幂等键,"idempotent keys"
+保存,save
+当前没有记录。,"There are currently no records."
 "payout idempotency key 过长","Payout idempotency key is too long"
 "payout 金额非法","Invalid payout amount"
 "payout 不存在：%{1}","Payout not found: %{1}"
@@ -131,8 +141,8 @@ SKU,SKU
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default website"
 "目标 dev/test Store ID，必须 >=1","Target dev/test Store ID; must be >=1"
 显示本帮助,"Show this help"
-"""仅允许 POST 请求。""","仅允许 POST 请求。"
-"""Vendor reversal 金额或 Store 无效""","Vendor reversal 金额或 Store 无效"
+"""仅允许 POST 请求。""","""Only POST requests are allowed."""
+"""Vendor reversal 金额或 Store 无效""","""Vendor reversal amount or Store is invalid"""
 "MIG-P4A：Vendor shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4A: Vendor shadow to allowlist (apply requires --database=mig_clone_*)"
 "该快照已有 payout：%{1}","Payout already exists for snapshot: %{1}"
 "refund_ref 必填","refund_ref is required"

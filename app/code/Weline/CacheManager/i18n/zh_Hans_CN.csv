@@ -29,12 +29,12 @@
 "后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。","后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。"
 缓存策略已保存，非持久缓存已清理,缓存策略已保存，非持久缓存已清理
 缓存策略,缓存策略
-"mdi mdi-tune-variant","mdi mdi-tune-variant"
+settings,设置
 "运行时缓存 TTL 与共享 Memory 策略","运行时缓存 TTL 与共享 Memory 策略"
 缓存策略设置,缓存策略设置
 查看运行时缓存策略,查看运行时缓存策略
 保存缓存策略,保存缓存策略
-"mdi mdi-content-save","mdi mdi-content-save"
+save,节省
 保存运行时缓存策略,保存运行时缓存策略
 操作成功！,操作成功！
 请至少选择一个缓存项,请至少选择一个缓存项
@@ -42,30 +42,27 @@
 定时任务执行完成！已清理过期缓存文件。,定时任务执行完成！已清理过期缓存文件。
 "定时任务执行失败: %{1}。请检查 Cron 配置和日志。","定时任务执行失败: %{1}。请检查 Cron 配置和日志。"
 缓存管理,缓存管理
-"mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
 系统缓存状态管理,系统缓存状态管理
 缓存列表,缓存列表
-"mdi mdi-view-list","mdi mdi-view-list"
+list,列表
 查看缓存列表,查看缓存列表
 更新缓存状态,更新缓存状态
-"mdi mdi-toggle-switch","mdi mdi-toggle-switch"
+switch,转变
 启用或禁用缓存,启用或禁用缓存
 批量更新缓存状态,批量更新缓存状态
-"mdi mdi-toggle-switch-off-outline","mdi mdi-toggle-switch-off-outline"
+circle,圆圈
 批量启用或禁用缓存,批量启用或禁用缓存
-"mdi mdi-delete","mdi mdi-delete"
+trash,trash
 清理指定缓存池,清理指定缓存池
 清理所有缓存,清理所有缓存
-"mdi mdi-delete-sweep","mdi mdi-delete-sweep"
 清理所有非持久缓存池,清理所有非持久缓存池
 缓存统计,缓存统计
-"mdi mdi-chart-bar","mdi mdi-chart-bar"
+chart,图表
 查看缓存统计信息,查看缓存统计信息
 执行定时任务,执行定时任务
-"mdi mdi-play","mdi mdi-play"
+play,玩
 手动执行缓存清理定时任务,手动执行缓存清理定时任务
 单池统计,单池统计
-"mdi mdi-chart-pie","mdi mdi-chart-pie"
 查看单个缓存池统计,查看单个缓存池统计
 默认值：%{1},默认值：%{1}
 运行时缓存策略,运行时缓存策略
@@ -94,18 +91,30 @@
 系统,系统
 "WLS 常驻内存","WLS 常驻内存"
 "FPM 请求隔离","FPM 请求隔离"
-CLI,CLI
+CLI,命令行界面
 "缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。","缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。"
 缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。,缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。
 未知适配器,未知适配器
 "WLS 共享内存","WLS 共享内存"
 文件缓存,文件缓存
-Redis,Redis
-Memcached,Memcached
-APCu,APCu
+Redis,雷迪斯
+Memcached,内存缓存
+APCu,磷酸铜
 缓存清理任务,缓存清理任务
 自动清理过期的缓存文件，防止缓存目录过大,自动清理过期的缓存文件，防止缓存目录过大
 缓存清理完成,缓存清理完成
 "缓存清理任务执行失败: %{1}","缓存清理任务执行失败: %{1}"
 "缓存清理失败: %{1}","缓存清理失败: %{1}"
-"""参数 identity 不能为空""","参数 identity 不能为空"
+"""参数 identity 不能为空""","""参数 identity 不能为空"""
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-content-save","MDI MDI 内容保存"
+"mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
+"mdi mdi-view-list","MDI MDI 视图列表"
+"mdi mdi-toggle-switch","mdi mdi-toggle-switch"
+"mdi mdi-toggle-switch-off-outline","mdi mdi-toggle-switch-off-outline"
+"mdi mdi-delete","mdi mdi-删除"
+"mdi mdi-delete-sweep","mdi mdi-delete-sweep"
+"mdi mdi-chart-bar","mdi mdi-chart-bar"
+"mdi mdi-play","MDI MDI 播放"
+"mdi mdi-chart-pie","mdi mdi-chart-pie"
+缓存服务,缓存服务

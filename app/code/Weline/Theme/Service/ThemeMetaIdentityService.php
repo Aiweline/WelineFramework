@@ -175,23 +175,27 @@ class ThemeMetaIdentityService
         string $scope,
         string $locale
     ): array {
-        $records = $this->metaConfigRepository()->search(new MetaConfigSearch(
-            namespace: $namespace,
-            scope: $scope,
-            allLocales: true,
-            identifyId: (string)$themeId,
-            metaIdentify: $identify,
-        ));
         $localeOrder = array_values(array_unique([$locale, 'zh_Hans_CN', null], SORT_REGULAR));
         $values = [];
-        $ranks = [];
-        foreach ($records as $record) {
-            $rank = array_search($record->locale, $localeOrder, true);
-            if ($rank === false || (isset($ranks[$record->configKey]) && $ranks[$record->configKey] <= $rank)) {
-                continue;
+        foreach (array_reverse($this->scopeReadChain($scope)) as $candidateScope) {
+            $records = $this->metaConfigRepository()->search(new MetaConfigSearch(
+                namespace: $namespace,
+                scope: $candidateScope,
+                allLocales: true,
+                identifyId: (string)$themeId,
+                metaIdentify: $identify,
+            ));
+            $candidateValues = [];
+            $ranks = [];
+            foreach ($records as $record) {
+                $rank = array_search($record->locale, $localeOrder, true);
+                if ($rank === false || (isset($ranks[$record->configKey]) && $ranks[$record->configKey] <= $rank)) {
+                    continue;
+                }
+                $ranks[$record->configKey] = $rank;
+                $candidateValues[$record->configKey] = $record->value;
             }
-            $ranks[$record->configKey] = $rank;
-            $values[$record->configKey] = $record->value;
+            $values = array_replace($values, $candidateValues);
         }
 
         return $values;
@@ -200,22 +204,33 @@ class ThemeMetaIdentityService
     private function getStoredParamTranslation(string $identify, string $paramName, string $scope, string $locale): ?string
     {
         $metaKey = $identify . '.param.' . $paramName . '.value';
-        $translationKey = '@meta::' . $metaKey;
-        if ($scope !== 'default') {
-            $translationKey .= '|scope:' . $scope;
-        }
-
         $repository = $this->dictionaryRepository();
-        $entry = $repository->getEntry($translationKey, $locale);
-        if ($entry !== null) {
-            return $entry->translation;
+        foreach ($this->scopeReadChain($scope) as $candidateScope) {
+            $translationKey = '@meta::' . $metaKey;
+            if ($candidateScope !== 'default') {
+                $translationKey .= '|scope:' . $candidateScope;
+            }
+            foreach (array_values(array_unique([$locale, 'zh_Hans_CN'], SORT_STRING)) as $candidateLocale) {
+                $entry = $repository->getEntry($translationKey, $candidateLocale);
+                if ($entry !== null) {
+                    return $entry->translation;
+                }
+            }
         }
 
-        if ($scope === 'default') {
-            return null;
-        }
+        return null;
+    }
 
-        return $repository->getEntry('@meta::' . $metaKey, $locale)?->translation;
+    /** @return list<string> */
+    private function scopeReadChain(string $scope): array
+    {
+        try {
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            return $themeContext->resolveStorageScopeChain($scope);
+        } catch (\Throwable) {
+            return [$scope];
+        }
     }
 
     private function dictionaryRepository(): DictionaryRepositoryInterface

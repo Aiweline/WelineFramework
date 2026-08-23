@@ -382,7 +382,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
         font-size: 12px;
         font-weight: 700;
     }
-    .wdep-card-value {
+    .wdep-weline-card-value {
         margin: 0;
         color: var(--wdep-text);
         font-size: 19px;
@@ -1028,22 +1028,22 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
             <div class="wdep-grid">
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('项目')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($projectId !== '' ? $projectId : __('当前 WLS')) ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($projectId !== '' ? $projectId : __('当前 WLS')) ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml($projectType !== '' ? $projectType : __('本机面板')) ?></p>
                 </article>
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('域名')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($domain !== '' ? $domain : __('未指定')) ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($domain !== '' ? $domain : __('未指定')) ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml(__('由项目卡片安全透传')) ?></p>
                 </article>
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('操作')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($operation !== '' ? $operation : 'deploy.tag') ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($operation !== '' ? $operation : 'deploy.tag') ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml(__('来自 WLS capability 链接')) ?></p>
                 </article>
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('触发策略')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($settings['deploy_trigger_mode_label'] ?? __('仅 Tag Push')) ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($settings['deploy_trigger_mode_label'] ?? __('仅 Tag Push')) ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml(__('默认保守发布策略')) ?></p>
                 </article>
             </div>

@@ -116,10 +116,20 @@ final class FormRenderer
             $attributes[$name] = $scope[$value];
         }
 
-        return self::open($attributes) . $content . self::close();
+        // Body is available here, so captcha/extension HTML can land in an
+        // explicit slot ahead of submit controls instead of after </form> content.
+        return self::open($attributes) . self::close($content);
     }
 
-    public static function close(): string
+    /**
+     * Close the current form.
+     *
+     * When $body is provided (compiled Taglib path buffers body between open/close,
+     * runtime path passes tag content), before_close extension HTML is inserted into
+     * an empty `data-weline-form-captcha-slot` marker when present; otherwise it is
+     * appended after the body (legacy position).
+     */
+    public static function close(?string $body = null): string
     {
         $stack = RequestContext::get(self::CONTEXT_KEY, []);
         if (!\is_array($stack) || $stack === []) {
@@ -130,9 +140,9 @@ final class FormRenderer
             throw new \LogicException((string)__('w:form 运行时上下文无效'));
         }
 
-        $html = '';
+        $csrfHtml = '';
         if ($context['csrf'] === 'on' || ($context['csrf'] === 'auto' && $context['method'] === 'post')) {
-            $html .= ObjectManager::getInstance(Csrf::class)->render('csrf');
+            $csrfHtml = ObjectManager::getInstance(Csrf::class)->render('csrf');
         }
 
         $eventData = new DataObject([
@@ -143,15 +153,43 @@ final class FormRenderer
         ]);
         ObjectManager::getInstance(EventsManager::class)->dispatch(self::EVENT_BEFORE_CLOSE, $eventData);
         $extensionHtml = $eventData->getData('html');
-        if (\is_string($extensionHtml) && \strlen($extensionHtml) <= 262144) {
-            $html .= $extensionHtml;
+        if (!\is_string($extensionHtml) || \strlen($extensionHtml) > 262144) {
+            $extensionHtml = '';
         }
         \array_pop($stack);
         RequestContext::set(self::CONTEXT_KEY, $stack);
 
-        $html .= '</form>' . self::runtimeBootstrap();
+        if ($body !== null) {
+            return self::placeExtensionHtml($body, $extensionHtml)
+                . $csrfHtml
+                . '</form>'
+                . self::runtimeBootstrap();
+        }
 
-        return $html;
+        return $csrfHtml . $extensionHtml . '</form>' . self::runtimeBootstrap();
+    }
+
+    /**
+     * Prefer an explicit empty captcha/extension slot; otherwise append after body.
+     */
+    public static function placeExtensionHtml(string $body, string $extensionHtml): string
+    {
+        if ($extensionHtml === '') {
+            return $body;
+        }
+
+        $replaced = \preg_replace(
+            '/<div\b(?=[^>]*\bdata-weline-form-captcha-slot\b)[^>]*>\s*<\/div>/i',
+            $extensionHtml,
+            $body,
+            1,
+            $count
+        );
+        if (\is_string($replaced) && $count > 0) {
+            return $replaced;
+        }
+
+        return $body . $extensionHtml;
     }
 
     /** @return array<string, string>|null */

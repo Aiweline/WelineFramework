@@ -1,13 +1,13 @@
-﻿客户账户登录后,客户账户登录后
-客户身份和前台会话建立成功后同步触发，供购物车合并等登录后业务扩展使用。,客户身份和前台会话建立成功后同步触发，供购物车合并等登录后业务扩展使用。
+﻿客户账户登录后,"After logging in to the customer account"
+客户身份和前台会话建立成功后同步触发，供购物车合并等登录后业务扩展使用。,"Triggered synchronously after the customer identity and front-end session are successfully established, it can be used for post-login business expansion such as shopping cart merging."
 请先登录,"Please log in first"
-缺少账户分区参数,缺少账户分区参数
+缺少账户分区参数,"Missing account partition parameters"
 前台顾客登录扩展区,"Frontend Customer Login Extension Area"
 在顾客登录页注入第三方登录入口等扩展内容。,"Inject extended content such as third-party login options on the customer login page."
 账户首页订阅分区,"Account Homepage Subscriptions Section"
 在顾客账户首页「订阅」分区注入周期性订阅入口等内容。,"Inject recurring subscription entry points and other content into the ""Subscriptions"" section on the customer account homepage."
 账户首页订单分区,"Account Homepage Orders Section"
-在顾客账户首页“我的订单”分区注入订单列表、订单状态与售后入口等内容。,在顾客账户首页“我的订单”分区注入订单列表、订单状态与售后入口等内容。
+在顾客账户首页“我的订单”分区注入订单列表、订单状态与售后入口等内容。,"Inject the order list, order status, after-sales portal, etc. into the ""My Orders"" section on the homepage of the customer account."
 无法统计令牌数量：%{1},"Unable to count tokens: %{1}"
 加载前端客户失败：%{1},"Failed to load frontend client: %{1}"
 无效的用户ID,"Invalid user ID"
@@ -24,29 +24,29 @@
 密码已重置,"Password has been reset"
 前端客户,"Frontend Customers"
 users,users
-查看前端客户,查看前端客户
+查看前端客户,"View front-end customers"
 user,user
-查看前端客户详情,查看前端客户详情
-保存前端客户,保存前端客户
+查看前端客户详情,"View front-end customer details"
+保存前端客户,"Save frontend client"
 save,save
-删除前端客户,删除前端客户
+删除前端客户,"Delete front-end client"
 trash,trash
-重置前端令牌,重置前端令牌
+重置前端令牌,"Reset frontend token"
 refresh,refresh
-重置前端密码,重置前端密码
+重置前端密码,"Reset frontend password"
 lock,lock
-联系我们,联系我们
+联系我们,"Contact us"
 登录,"Log in"
 你已经登录了，请先退出登录.,"You are already logged in. Please log out first."
 请输入用户名/邮箱和密码。,"Username/email and password are required."
-人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
+人机验证失败或已过期，请重试,"Human-machine verification failed or has expired, please try again"
 用户不存在.,"User does not exist."
 登录尝试次数过多，请稍后再试.,"Too many login attempts, please try again later."
 密码错误.,"Incorrect password."
 请完成两步验证。,"Please complete two-factor verification."
 登录成功.,"Login successful."
 "登录失败: %{1}","Login failed: %{1}"
-个人中心,个人中心
+个人中心,"Personal center"
 用户名不能超过100个字符。,"Username cannot exceed 100 characters."
 请输入原密码,"Please enter your current password"
 原密码错误,"Current password is incorrect"
@@ -84,44 +84,43 @@ lock,lock
 安全设置,"Security settings"
 退出登录,"Log Out"
 注册,Register
-客户支持,客户支持
-订单、配送、退换货和账户问题都可以从这里联系支持团队。请优先说明订单号或问题场景，便于客服更快定位。,订单、配送、退换货和账户问题都可以从这里联系支持团队。请优先说明订单号或问题场景，便于客服更快定位。
-打开在线客服,打开在线客服
-返回个人中心,返回个人中心
-需要售后帮助？,需要售后帮助？
-如果你正在申请退换货，请从个人中心的订单或退换货区域进入，系统会带上更完整的订单上下文。,如果你正在申请退换货，请从个人中心的订单或退换货区域进入，系统会带上更完整的订单上下文。
-查看我的售后,查看我的售后
-联系方式,联系方式
-在线客服,在线客服
-适合处理实时咨询、订单状态、退换货进度和账户登录问题。,适合处理实时咨询、订单状态、退换货进度和账户登录问题。
-订单沟通,订单沟通
-请准备好订单号、商品名称和问题说明，避免客服反复确认基础信息。,请准备好订单号、商品名称和问题说明，避免客服反复确认基础信息。
-售后资料,售后资料
-退换货问题建议附上商品照片、包装照片和物流凭证，能减少处理等待。,退换货问题建议附上商品照片、包装照片和物流凭证，能减少处理等待。
-账户菜单,账户菜单
-当前栏目,当前栏目
+客户支持,"customer support"
+订单、配送、退换货和账户问题都可以从这里联系支持团队。请优先说明订单号或问题场景，便于客服更快定位。,"Ordering, shipping, returns, and account questions can all be directed to the support team from here. Please give priority to the order number or problem scenario so that customer service can locate it faster."
+打开在线客服,"Open online customer service"
+返回个人中心,"Return to personal center"
+需要售后帮助？,"Need after-sales help?"
+如果你正在申请退换货，请从个人中心的订单或退换货区域进入，系统会带上更完整的订单上下文。,"If you are applying for a return or exchange, please enter from the order or return/exchange area of ​​your personal center, and the system will bring you a more complete order context."
+查看我的售后,"View my after-sales service"
+联系方式,"Contact information"
+在线客服,"Online customer service"
+适合处理实时咨询、订单状态、退换货进度和账户登录问题。,"Suitable for handling real-time consultation, order status, return and exchange progress, and account login issues."
+订单沟通,"Order communication"
+请准备好订单号、商品名称和问题说明，避免客服反复确认基础信息。,"Please prepare the order number, product name and problem description to avoid customer service repeatedly confirming basic information."
+售后资料,"After-sales information"
+退换货问题建议附上商品照片、包装照片和物流凭证，能减少处理等待。,"For returns and exchanges, it is recommended to attach photos of the product, packaging photos and logistics vouchers, which can reduce the wait for processing."
+账户菜单,"Account menu"
+当前栏目,"Current column"
 确定要退出登录吗？,"Are you sure you want to log out?"
 确认退出,"Log Out"
 取消,Cancel
 新密码,"New Password"
-至少8位，包含字母和数字,"At least 8 characters, including letters and numbers"
 确认密码,"Confirm password"
-请再次输入密码,"Please enter the password again"
 请输入您注册时使用的邮箱地址，我们将向您发送密码重置链接。,"Enter the email address you registered with, and we will send you a password reset link."
 电子邮箱,"Email address"
-请输入邮箱地址,"Please enter the email address"
 发送重置链接,"Send reset link"
 返回登录,"Return to Login"
-处理中...,Processing...
-输入您的新密码以完成账户访问重置,"Enter your new password to complete account access reset"
-输入您的账户邮箱，我们将发送重置链接,"Enter your account email, and we will send a reset link"
-显示密码,"Show password"
-隐藏密码,"Hide password"
 密码长度至少为8位,"Password must be at least 8 characters long"
 两次输入的密码不一致,"The passwords entered twice are inconsistent"
-操作成功！,"Operation successful!"
 操作失败，请稍后重试,"Operation failed, please try again later"
 请求失败，请稍后重试,"Request failed, please try again later"
+操作成功！,"Operation successful!"
+输入您的新密码以完成账户访问重置,"Enter your new password to complete account access reset"
+输入您的账户邮箱，我们将发送重置链接,"Enter your account email, and we will send a reset link"
+至少8位，包含字母和数字,"At least 8 characters, including letters and numbers"
+显示密码,"Show password"
+隐藏密码,"Hide password"
+请再次输入密码,"Please enter the password again"
+请输入邮箱地址,"Please enter the email address"
 使用邮箱注册您的账户,"Register your account using email"
 名,Name
 请输入名,"Enter first name"
@@ -134,8 +133,8 @@ lock,lock
 隐私政策,"Privacy Policy"
 已有账户？,"Already have an account?"
 立即登录,"Log in now"
-注册失败，请稍后重试,注册失败，请稍后重试
-注册请求失败，请稍后重试,注册请求失败，请稍后重试
+注册失败，请稍后重试,"Registration failed, please try again later"
+注册请求失败，请稍后重试,"Registration request failed, please try again later"
 请输入身份验证器应用生成的验证码或备用恢复码,"Please enter the verification code or backup recovery code generated by the authenticator app"
 身份验证器应用,"Authenticator app"
 打开身份验证器应用，获取最新的6位数字验证码；也可以输入8位备用恢复码。,"Open the authenticator app to get the latest 6-digit verification code; you can also enter an 8-digit backup recovery code."
@@ -191,7 +190,7 @@ lock,lock
 修改中...,Modifying...
 修改失败，请稍后重试,"Modification Failed, Please Try Again Later"
 请填写所有字段,"Fill in all fields."
-"新密码长度不能少于 6 位","新密码长度不能少于 6 位"
+"新密码长度不能少于 6 位","New password must be at least 6 characters long"
 服务器返回了无效响应，请稍后重试,"Server returned an invalid response, please try again later"
 保存接口不存在，页面脚本或路由需要同步修复,"Save interface does not exist. Page script or route needs to be fixed synchronously"
 新增客户,"Add Customer"
@@ -234,8 +233,8 @@ Session标识,"Session ID"
 重置密码后将自动注销该客户的所有会话与令牌。,"Resetting the password logs out all sessions and tokens."
 新密码：,"New Password:"
 提交,Submit
-客户注册未返回有效账号,客户注册未返回有效账号
-客户账号不存在,客户账号不存在
+客户注册未返回有效账号,"Customer registration did not return a valid account"
+客户账号不存在,"Customer account does not exist"
 两步验证暂不可用。,"Two-factor verification is not available."
 密码必须至少8个字符，并且包含字母和数字.,"Password must be at least 8 characters and contain both letters and numbers."
 该邮箱已存在，请使用其他邮箱注册.,"This email already exists. Please use a different email to register."
@@ -244,5 +243,6 @@ Session标识,"Session ID"
 认证设备服务不可用。,"Authenticated device service is unavailable."
 重置您的密码,"Reset your password"
 请点击下方链接重置密码。,"Click the link below to reset your password."
+处理中...,Processing...
 个人资料已更新。,"Profile updated successfully."
 请输入用户名。,"Please enter a username."

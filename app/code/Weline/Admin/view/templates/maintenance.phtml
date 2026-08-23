@@ -7,10 +7,11 @@ try {
 } catch (\Throwable) {
 }
 $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
+$defaultLogo = $this->fetchTagSourceFile('statics', 'Weline_Theme::theme/backend/assets/images/theme/logo.png')
+    ?: '/Weline/Theme/view/theme/backend/assets/images/theme/logo.png';
 $logoDark = $this->getData('maintenance_logo_dark')
-    ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png');
+    ?: $defaultLogo;
 $logoLight = $this->getData('maintenance_logo_light')
-    ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-light.png')
     ?: $logoDark;
 ?>
 <!doctype html>
@@ -23,15 +24,14 @@ $logoLight = $this->getData('maintenance_logo_light')
     <title>@lang(网站维护中...)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Weline Framework">
-    <link rel="shortcut icon" href="@static(Weline_Admin::assets/images/favicon.ico)">
+    <template>Weline_Theme::partials/head/site-favicon.phtml</template>
     <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
     <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)">
     <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
-    <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
 </head>
 <body class="w-maintenance">
 <header class="w-maintenance__tools" aria-label="@lang(语言选择)">
-    <w:i18n:language:switcher for="js" />
+    <w:i18n:switcher for="js" />
 </header>
 
 <main class="w-container w-maintenance__main">
