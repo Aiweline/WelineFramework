@@ -56,6 +56,20 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringNotContainsString("handle.addEventListener('mousedown'", $editor);
     }
 
+    public function testEmbeddedEditorReusesOnlyTheSameOriginParentBackendApi(): void
+    {
+        $editor = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+
+        self::assertStringContainsString('function resolveThemeEditorApiHost()', $editor);
+        self::assertStringContainsString(
+            'window.parent.location.origin === window.location.origin',
+            $editor,
+        );
+        self::assertStringContainsString('const apiHost = resolveThemeEditorApiHost();', $editor);
+        self::assertStringContainsString("apiHost.Weline.load('api')", $editor);
+        self::assertStringContainsString('Promise.resolve(apiHost.Weline.Api)', $editor);
+    }
+
     public function testTemplateRetainsEveryProductWorkspaceAndEndpoint(): void
     {
         $template = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');

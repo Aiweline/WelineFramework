@@ -2197,13 +2197,32 @@
 
     let themeEditorResourcePromise = null;
 
+    function resolveThemeEditorApiHost() {
+        if (window.parent && window.parent !== window) {
+            try {
+                if (
+                    window.parent.location.origin === window.location.origin
+                    && window.parent.Weline
+                    && (typeof window.parent.Weline.load === 'function' || window.parent.Weline.Api)
+                ) {
+                    return window.parent;
+                }
+            } catch (error) {
+                // Cross-origin parents must not supply an authenticated backend API.
+            }
+        }
+
+        return window;
+    }
+
     function resolveThemeEditorResource() {
         if (themeEditorResourcePromise) {
             return themeEditorResourcePromise;
         }
-        const apiPromise = typeof Weline.load === 'function'
-            ? Weline.load('api')
-            : Promise.resolve(Weline.Api);
+        const apiHost = resolveThemeEditorApiHost();
+        const apiPromise = typeof apiHost.Weline.load === 'function'
+            ? apiHost.Weline.load('api')
+            : Promise.resolve(apiHost.Weline.Api);
         themeEditorResourcePromise = Promise.resolve(apiPromise)
             .then((api) => {
                 if (!api || typeof api.resource !== 'function') {
