@@ -197,6 +197,19 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertMatchesRegularExpression('/\.w-container\s*\{[^}]*min-width:\s*0/s', $foundation);
     }
 
+    public function testTableStickyEndColumnIsFirstClassInFoundation(): void
+    {
+        $foundation = $this->read('app/code/Weline/Theme/view/ui/css/foundation.css');
+        self::assertStringContainsString('.w-table:has([data-w-sticky])', $foundation);
+        self::assertStringContainsString('th[data-w-sticky="end"]', $foundation);
+        self::assertStringContainsString('td[data-w-sticky="end"]', $foundation);
+        self::assertStringContainsString('inset-inline-end: 0;', $foundation);
+        self::assertStringContainsString('--w-table-sticky-end-min', $foundation);
+        self::assertStringContainsString('[data-w-sticky-end]', $foundation);
+        self::assertFileExists(BP . 'app/code/Weline/Theme/Taglib/Table.php');
+        self::assertStringContainsString('border-collapse: separate', $foundation);
+    }
+
     public function testManifestOwnsCoreAndRouteBundlesExplicitly(): void
     {
         $manifest = $this->read('app/code/Weline/Theme/etc/weline-ui-assets.json');
