@@ -5,7 +5,9 @@
     .w-notification-detail,
     .w-notification-error {
         width: min(100%, 76rem);
+        max-width: 100%;
         margin-inline: auto;
+        min-width: 0;
     }
 
     .w-notification-center__heading {
@@ -17,16 +19,9 @@
         flex-wrap: wrap;
     }
 
-    .w-notification-center__heading h1,
     .w-notification-center__heading p {
         margin: 0;
-    }
-
-    .w-notification-center__title {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--weline-space-2);
-        font-size: clamp(var(--weline-font-size-xl), 3vw, 1.75rem);
+        flex: 1 1 12rem;
     }
 
     .w-notification-center__actions,
@@ -41,9 +36,14 @@
 
     .w-notification-filter__fields {
         display: grid;
-        grid-template-columns: minmax(14rem, 2fr) repeat(2, minmax(9rem, 1fr)) auto;
+        grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto;
         align-items: end;
         gap: var(--weline-space-3);
+        min-width: 0;
+    }
+
+    .w-notification-filter__fields > * {
+        min-width: 0;
     }
 
     .w-notification-filter__actions {
@@ -64,6 +64,7 @@
         position: relative;
         display: grid;
         min-width: 0;
+        max-width: 100%;
         grid-template-columns: auto minmax(0, 1fr);
         gap: var(--weline-space-4);
         padding: var(--weline-space-5);
