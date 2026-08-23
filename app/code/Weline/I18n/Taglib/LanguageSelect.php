@@ -79,6 +79,15 @@ class LanguageSelect implements TaglibInterface
             }
 
             $attributeCode = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
+            // A form field name is an HTML identifier, not a template value.
+            // AttributeCodeCompiler resolves bare words against template scope;
+            // without this literal boundary `name="locale_code"` becomes the
+            // current locale value whenever a `locale_code` variable exists.
+            if (isset($attributes['name']) && trim((string)$attributes['name']) !== '') {
+                $attributeCode .= "\n\$Taglib__name = "
+                    . var_export(trim((string)$attributes['name']), true)
+                    . ';';
+            }
             $html = ['<?php ' . $attributeCode . ' ?>'];
             $html[] = <<<'PHP'
 <?php
