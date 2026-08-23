@@ -158,14 +158,7 @@ $tableBodyHtml = $rowsHtml !== ''
     ? $rowsHtml
     : ('<tr><td colspan="7"><div class="w-text" data-align="center" data-tone="muted" data-review-role="empty" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12)">'
         . '<p style="--w-mb:0">' . $escape(__('暂无评论')) . '</p></div></td></tr>');
-$tableInnerHtml = $tableHeadHtml . '<tbody>' . $tableBodyHtml . '</tbody>'; else {
-    $emptyHtml = '';
-    $tableInnerHtml = '<thead><tr><th>' . $escape(__('评分与评论者')) . '</th><th>' . $escape(__('评论内容'))
-        . '</th><th>' . $escape(__('图片与视频')) . '</th><th>' . $escape(__('评论对象'))
-        . '</th><th>' . $escape(__('状态')) . '</th><th>' . $escape(__('提交时间'))
-        . '</th><th data-w-sticky="end">' . $escape(__('操作')) . '</th></tr></thead><tbody>'
-        . $rowsHtml . '</tbody>';
-}
+$tableInnerHtml = $tableHeadHtml . '<tbody>' . $tableBodyHtml . '</tbody>';
 
 $currentPage = max(1, (int)($pagination['page'] ?? 1));
 $totalPages = max(1, (int)($pagination['lastPage'] ?? 1));
