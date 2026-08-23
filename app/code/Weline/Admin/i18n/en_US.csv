@@ -129,6 +129,19 @@ AJAX分配角色,"AJAX assign role"
 暗黑模式,"Dark Mode"
 界面设置,"Interface settings"
 退出登录,"Log out"
+后台登录,"Backend login"
+"登录 %{name} 管理面板","Login to %{name} Admin Panel"
+安全管理入口,"Security management entrance"
+管理员,Administrator
+请输入管理员账号,"Please enter the admin account"
+密码,Password
+请输入密码,"Enter password"
+验证码,"Verification code"
+请输入验证码,"Please enter the verification code"
+刷新验证码,"Refresh verification code"
+在受信任设备上记住我,"Remember me on trusted devices"
+登录,"Log in"
+登录中…,Login...
 网站维护,"Website Maintenance"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -156,9 +169,7 @@ AJAX分配角色,"AJAX assign role"
 请输入用户名,"Please enter the username"
 邮箱,Email
 请输入有效邮箱,"Please enter a valid email"
-密码,Password
 留空则不修改密码,"Leave empty to keep current password"
-请输入密码,"Enter password"
 保存,Save
 保存中...,Saving...
 编辑,Edit
@@ -182,7 +193,6 @@ AJAX分配角色,"AJAX assign role"
 确定,Confirm
 角色归配,"Role Assignment"
 系统,System
-管理员,Administrator
 返回列表,"Back to List"
 选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。,"Roles are saved automatically after selection. You cannot modify your own role."
 当前角色,"Current Role"
@@ -322,16 +332,6 @@ Cms内容管理,"CMS Content Management"
 区域营收,"Regional Revenue"
 查看更多,"View More"
 最近成交,"Recent Transactions"
-后台登录,"Backend login"
-"登录 %{name} 管理面板","Login to %{name} Admin Panel"
-安全管理入口,"Security management entrance"
-请输入管理员账号,"Please enter the admin account"
-验证码,"Verification code"
-请输入验证码,"Please enter the verification code"
-刷新验证码,"Refresh verification code"
-在受信任设备上记住我,"Remember me on trusted devices"
-登录,"Log in"
-登录中…,Login...
 "WelineFramework Admin","WelineFramework Admin"
 WelineFramework,WelineFramework
 记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
