@@ -109,6 +109,17 @@ final class ReviewAdminService
             throw new \InvalidArgumentException((string)__('评论不存在。'));
         }
 
+        $current = strtolower(trim((string)$this->reviews->getData(ProductReview::schema_fields_STATUS)));
+        // 人工只处理 AI 拿不准的；已通过/已拒绝允许改判
+        $humanAllowed = [
+            ProductReview::STATUS_AI_PENDING_BLOCKED,
+            ProductReview::STATUS_APPROVED,
+            ProductReview::STATUS_REJECTED,
+        ];
+        if (!in_array($current, $humanAllowed, true)) {
+            throw new \InvalidArgumentException((string)__('该评论仍在等待 AI 预审，请稍后再人工处理。'));
+        }
+
         $this->reviews
             ->setData(ProductReview::schema_fields_STATUS, $targetStatus)
             ->setData(ProductReview::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))

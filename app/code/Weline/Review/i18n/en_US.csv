@@ -44,16 +44,16 @@
 店铺,Store
 状态,Status
 筛选,Filter
-待审核,Pending
+"等待 AI 预审","Waiting for AI review"
 "AI 审核待人工","AI review needs a human decision"
 已通过,Approved
 已拒绝,Rejected
 全部状态,"All statuses"
 无媒体,"No media"
 评论图片,"Review photo"
-查看详细内容,"View details"
 通过,Approve
 拒绝,Reject
+查看详细内容,"View details"
 暂无评论,"No reviews"
 评分与评论者,"Rating and reviewer"
 评论内容,"Review content"
@@ -103,7 +103,17 @@
 评论媒体票据已失效，请重新选择文件。,"The review media token expired. Please choose the file again."
 "最多上传 6 张图片和 2 个视频。","Upload up to 6 photos and 2 videos."
 评论媒体状态已变化，请重新提交。,"The review media state changed. Please submit again."
+"AI 返回无法解析，需人工确认。","AI response could not be parsed; human review required."
+未提供理由。,"No reason provided."
+评论需人工审核,"Review needs human moderation"
+"评论 #%{1} AI 无法明确判定，请到评论管理处理。理由：%{2}","Review #%{1} needs human review. Reason: %{2}"
 审核状态无效。,"The moderation status is invalid."
 评论不存在。,"The review does not exist."
+"该评论仍在等待 AI 预审，请稍后再人工处理。","This review is still waiting for AI pre-moderation."
+"评论 AI 预审","Review AI pre-moderation"
+"先由 AI 审核 pending 评论；仅拿不准时转人工","AI reviews pending comments first; humans only when uncertain"
+"评论 AI 预审跳过：Weline_Ai 未启用","Review AI pre-moderation skipped: Weline_Ai is inactive"
+"评论 AI 预审完成：扫描 %{1}，通过 %{2}，拒绝 %{3}，转人工 %{4}，跳过 %{5}，错误 %{6}","Review AI pre-moderation done: scanned %{1}, approved %{2}, rejected %{3}, human %{4}, skipped %{5}, errors %{6}"
+待审核,Pending
 评分,Rating
 "%{1} 条评论","%{1} comments"
