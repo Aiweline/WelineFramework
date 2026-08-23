@@ -47,6 +47,11 @@ final class UiTwoRouteContractTest extends TestCore
         $datatableCss = $this->read('app/code/Weline/DataTable/view/statics/css/datatable.css');
         self::assertStringContainsString('contain: inline-size paint;', $datatableCss);
         self::assertStringContainsString('overscroll-behavior-inline: contain;', $datatableCss);
+        self::assertStringContainsString('overflow: auto;', $datatableCss);
+
+        $manager = $this->read('app/code/Weline/DataTable/view/statics/js/datatable-manager.js');
+        self::assertStringContainsString("dataset.wSticky = 'end'", $manager);
+        self::assertStringContainsString('data-w-sticky-end', $manager);
     }
 
     public function testDemoMigrationPreservesEveryOriginalCapabilityScenario(): void

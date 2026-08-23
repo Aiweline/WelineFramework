@@ -69,6 +69,7 @@
         width: 100%;
         min-width: 0;
         max-height: var(--w-datatable-height, none);
+        overflow: auto;
         contain: inline-size paint;
         overscroll-behavior-inline: contain;
     }
