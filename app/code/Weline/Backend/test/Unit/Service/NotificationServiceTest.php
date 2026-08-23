@@ -152,6 +152,16 @@ class NotificationServiceTest extends TestCase
         $this->assertArrayHasKey('page', $result);
         $this->assertArrayHasKey('limit', $result);
         $this->assertArrayHasKey('pages', $result);
+        $this->assertSame(1, (int) $result['page']);
+        $this->assertSame(10, (int) $result['limit']);
+        $this->assertLessThanOrEqual(10, count($result['items']));
+        $this->assertSame(
+            max(1, (int) ceil(((int) $result['total']) / 10)),
+            (int) $result['pages']
+        );
+        if ((int) $result['total'] > 10) {
+            $this->assertGreaterThan(1, (int) $result['pages']);
+        }
     }
 
     public function testGetUnreadCount(): void
