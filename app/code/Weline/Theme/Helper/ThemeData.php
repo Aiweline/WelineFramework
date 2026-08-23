@@ -72,6 +72,7 @@ final class ThemeDataRequestState
 class ThemeData
 {
     public const WIDGET_I18N_INSTANCE_CONFIG_KEY = '_i18n_instance';
+    public const PROJECTED_TRANSLATION_JSON_PREFIX = '@theme-scoped-json:';
     private const RUNTIME_CACHE_TTL = 86400;
     private const SHARED_CACHE_NAMESPACE = 'weline_site_runtime';
     private const REQUEST_STATE_KEY = 'theme.data.request_state.v1';
@@ -85,6 +86,32 @@ class ThemeData
     private static array $runtimeCache = [];
     private static ?SharedCacheStateInterface $sharedRuntimeCache = null;
     private static bool $sharedRuntimeCacheResolved = false;
+
+    public static function encodeProjectedTranslationValue(mixed $value): string
+    {
+        if (!\is_array($value)) {
+            return (string)$value;
+        }
+
+        return self::PROJECTED_TRANSLATION_JSON_PREFIX . \json_encode(
+            $value,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+    }
+
+    public static function decodeProjectedTranslationValue(string $value): mixed
+    {
+        if (!\str_starts_with($value, self::PROJECTED_TRANSLATION_JSON_PREFIX)) {
+            return $value;
+        }
+
+        $json = \substr($value, \strlen(self::PROJECTED_TRANSLATION_JSON_PREFIX));
+        try {
+            return \json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $value;
+        }
+    }
 
     private static function currentFiber(): ?\Fiber
     {
@@ -2492,16 +2519,25 @@ class ThemeData
         ?string $locale = null
     ): array {
         $effectiveLocale = self::currentConfigLocale($locale);
+        $identifyParts = \explode('.', self::normalizeIdentify($identify));
+        $translationScope = self::resolveRequestedScopeForArea($identifyParts[1] ?? 'frontend');
+        $paths = self::getTranslatablePaths($paramDefs);
+        $baseConfig = self::mergeProjectedStructuredParams(
+            $baseConfig,
+            $paramDefs,
+            $paths['top'],
+            $identify,
+            $translationScope,
+            $locale,
+        );
         if ($effectiveLocale === \Weline\Framework\App\Env::default_LANGUAGE_CODE) {
             return $baseConfig;
         }
 
-        $paths = self::getTranslatablePaths($paramDefs);
-
         foreach ($paths['top'] as $paramName) {
-            $val = self::getParamTranslation($identify, $paramName, 'default', $locale);
+            $val = self::getParamTranslation($identify, $paramName, $translationScope, $locale);
             if ($val !== '' && $val !== null) {
-                $baseConfig[$paramName] = $val;
+                $baseConfig[$paramName] = self::decodeProjectedTranslationValue($val);
             }
         }
 
@@ -2515,11 +2551,49 @@ class ThemeData
                 }
                 foreach ($subFields as $fieldKey) {
                     $path = "{$arrayKey}.{$index}.{$fieldKey}";
-                    $val = self::getPathTranslation($identify, $path, 'default', $locale);
+                    $val = self::getPathTranslation($identify, $path, $translationScope, $locale);
                     if ($val !== null) {
-                        $baseConfig[$arrayKey][$index][$fieldKey] = $val;
+                        $baseConfig[$arrayKey][$index][$fieldKey] = self::decodeProjectedTranslationValue($val);
                     }
                 }
+            }
+        }
+
+        return $baseConfig;
+    }
+
+    /**
+     * Scoped i18n can own typed locale values (for example file-image usage)
+     * even when the legacy parameter type is not a translatable text field.
+     * Only the reserved structured marker crosses that compatibility boundary;
+     * ordinary image/file strings remain locale-neutral as before.
+     *
+     * @param list<string> $alreadyMerged
+     */
+    private static function mergeProjectedStructuredParams(
+        array $baseConfig,
+        array $paramDefs,
+        array $alreadyMerged,
+        string $identify,
+        string $scope,
+        ?string $locale,
+    ): array {
+        $merged = \array_fill_keys($alreadyMerged, true);
+        foreach ($paramDefs as $key => $definition) {
+            if (!\is_array($definition)) {
+                continue;
+            }
+            $paramName = \is_string($key) ? $key : (string)($definition['name'] ?? '');
+            if ($paramName === '' || isset($merged[$paramName])) {
+                continue;
+            }
+            $value = self::getParamTranslation($identify, $paramName, $scope, $locale);
+            if (!\str_starts_with($value, self::PROJECTED_TRANSLATION_JSON_PREFIX)) {
+                continue;
+            }
+            $decoded = self::decodeProjectedTranslationValue($value);
+            if (\is_array($decoded)) {
+                $baseConfig[$paramName] = $decoded;
             }
         }
 

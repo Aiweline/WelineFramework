@@ -367,6 +367,11 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
                         ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
                     )) === $parent['release_id']
                 ) {
+                    $this->adapter->projectPublished(
+                        $context,
+                        $currentRelease->payload(),
+                        $currentRelease->getId(),
+                    );
                     return [
                         'release_id' => $currentRelease->getId(),
                         'revision' => $workspace->getRevision(),

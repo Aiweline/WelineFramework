@@ -67,7 +67,10 @@ final class ThemeScopedPreviewResolver
         $translations = $this->resolveTranslations($context, $includeDraft);
 
         foreach ($layout as &$areaData) {
-            foreach ($areaData['widgets'] ?? [] as &$widget) {
+            if (!\is_array($areaData['widgets'] ?? null)) {
+                continue;
+            }
+            foreach ($areaData['widgets'] as &$widget) {
                 if (!\is_array($widget)) {
                     continue;
                 }
