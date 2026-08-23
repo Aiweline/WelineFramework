@@ -13,5 +13,6 @@ return [
         'Weline_Customer' => '*',
         'Weline_Msg' => '*',
         'Weline_Cron' => '*',
+        'Weline_Ai' => '*',
     ],
 ];
