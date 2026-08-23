@@ -1,28 +1,5 @@
 
-(function(g){
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['cache_manager']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('cache_manager').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(typeof window!=='undefined'?window:globalThis);
+
 (function (window, document) {
     'use strict';
 
@@ -100,7 +77,7 @@
             requestOptions.body = JSON.stringify(requestOptions.body);
         }
 
-        return bqAdmin['cache_manager'](url, requestOptions).then(function (response) {
+        return Weline.adminRequest('cache_manager', url, requestOptions).then(function (response) {
             return response.text().then(function (content) {
                 var payload;
 
@@ -327,7 +304,7 @@
         }
 
         if (statusIcon) {
-            statusIcon.className = enabled ? 'ri-checkbox-circle-line' : 'ri-close-circle-line';
+            statusIcon.className = enabled ? 'weline-icon--check-circle' : 'weline-icon--x-circle';
         }
 
         if (statusText) {

@@ -104,7 +104,7 @@ class Translate implements CommandInterface
      */
     private function translateAllModules(string $targetLocale): void
     {
-        $codePath = Env::path_CODE;
+        $codePath = APP_CODE_PATH;
         $scan = new Scan();
         $modules = $scan->scanDirTree($codePath, 1);
         
@@ -179,20 +179,21 @@ class Translate implements CommandInterface
         $targetFile = $i18nDir . DS . $targetLocale . '.csv';
         $targetWords = file_exists($targetFile) ? $this->loadCsvFile($targetFile) : [];
         
-        // 找出需要翻译的词条（在源文件中存在，但在目标文件中不存在或为空）
+        // 找出需要翻译的词条：
+        // - 目标缺失/空
+        // - 或目标仍是「未译」：含中文的源串在目标里与原文相同（en_US 常见中文占位）
         $needTranslate = [];
         foreach ($sourceWords as $original => $sourceTranslation) {
-            // 跳过空词条
             if (empty(trim($original))) {
                 continue;
             }
-            
-            // 如果目标文件中已有翻译，跳过
-            if (isset($targetWords[$original]) && !empty(trim($targetWords[$original]))) {
+
+            $existing = isset($targetWords[$original]) ? trim((string)$targetWords[$original]) : '';
+            if ($existing !== '' && !$this->isUntranslatedPlaceholder($original, $existing, $targetLocale)) {
                 continue;
             }
-            
-            $needTranslate[$original] = $sourceTranslation;
+
+            $needTranslate[$original] = $sourceTranslation !== '' ? $sourceTranslation : $original;
         }
         
         if (empty($needTranslate)) {
@@ -202,30 +203,27 @@ class Translate implements CommandInterface
         
         $this->printing->note(__('模块 %{1} 需要翻译 %{2} 个词条', [$moduleName, count($needTranslate)]));
         
-        // 批量翻译
+        // 批量翻译（按块请求，减少 AI 往返）
         $translated = 0;
         $failed = 0;
         $total = count($needTranslate);
         $current = 0;
-        
-        foreach ($needTranslate as $original => $sourceTranslation) {
-            $current++;
-            
-            // 显示进度条（使用 \r 覆盖当前行，避免刷屏）
-            // 注意：在 Windows PowerShell 中，可能需要使用 flush 来确保输出
+        $chunkSize = 20;
+        $pending = array_keys($needTranslate);
+
+        foreach (array_chunk($pending, $chunkSize) as $chunk) {
+            $current += count($chunk);
             $percentage = round(($current / $total) * 100, 1);
             $progressBar = $this->buildProgressBar($current, $total, $percentage, $translated);
-            // 使用 \r 回到行首，然后输出进度条，最后不换行
             echo "\r" . $progressBar;
-            // 刷新输出缓冲区，确保进度条实时显示
             if (function_exists('ob_flush')) {
                 @ob_flush();
             }
             flush();
-            
+
             try {
                 $response = $this->translationAdapter->translateBatch(
-                    [$original],
+                    $chunk,
                     $this->sourceLocale,
                     $targetLocale
                 );
@@ -233,30 +231,22 @@ class Translate implements CommandInterface
                     $errors = array_values(array_filter(array_map('strval', (array)($response['errors'] ?? []))));
                     throw new Exception($errors ? implode('; ', $errors) : (string)__('AI 翻译服务不可用'));
                 }
-                $translation = (string)($response['translations'][$original] ?? '');
-                
-                // 验证翻译结果
-                // 注意：如果翻译结果和原文相同，可能是翻译失败，但也可能是某些特殊情况
-                // 对于中文到其他语言的翻译，结果应该不同
-                $translationTrimmed = trim($translation);
-                if (empty($translationTrimmed)) {
-                    $failed++;
-                    // 即使翻译失败，也保留原文，避免丢失数据
-                    $targetWords[$original] = $original;
-                } elseif ($translationTrimmed === $original) {
-                    // 翻译结果和原文相同，可能是翻译失败
-                    // 但为了不丢失数据，仍然保存
-                    $targetWords[$original] = $translationTrimmed;
-                    $failed++;
-                } else {
-                    // 翻译成功
-                    $targetWords[$original] = $translationTrimmed;
-                    $translated++;
+                $map = is_array($response['translations'] ?? null) ? $response['translations'] : [];
+                foreach ($chunk as $original) {
+                    $translationTrimmed = trim((string)($map[$original] ?? ''));
+                    if ($translationTrimmed === '' || $this->isUntranslatedPlaceholder($original, $translationTrimmed, $targetLocale)) {
+                        $failed++;
+                        $targetWords[$original] = $original;
+                    } else {
+                        $targetWords[$original] = $translationTrimmed;
+                        $translated++;
+                    }
                 }
             } catch (\Exception $e) {
-                $failed++;
-                // 即使翻译失败，也保留原文，避免丢失数据
-                $targetWords[$original] = $original;
+                foreach ($chunk as $original) {
+                    $failed++;
+                    $targetWords[$original] = $original;
+                }
             }
         }
         
@@ -281,6 +271,25 @@ class Translate implements CommandInterface
     }
 
     /**
+     * 目标译文是否仍是未译占位（常见：en_US 里中文 key 映射成相同中文）
+     */
+    private function isUntranslatedPlaceholder(string $original, string $translation, string $targetLocale): bool
+    {
+        if ($translation === '') {
+            return true;
+        }
+        if ($translation !== $original) {
+            return false;
+        }
+        // 源串含汉字时，非中文目标 locale 不应仍等于原文
+        if (!preg_match('/[\x{4e00}-\x{9fff}]/u', $original)) {
+            return false;
+        }
+        $locale = strtolower(str_replace('-', '_', $targetLocale));
+        return !str_starts_with($locale, 'zh');
+    }
+
+    /**
      * 查找模块路径
      * 
      * @param string $moduleName
@@ -288,19 +297,19 @@ class Translate implements CommandInterface
      */
     private function findModulePath(string $moduleName): ?string
     {
-        $codePath = Env::path_CODE;
-        
+        $codePath = APP_CODE_PATH;
+
         // 模块名格式：Vendor_Module
         $parts = explode('_', $moduleName, 2);
         if (count($parts) !== 2) {
             return null;
         }
-        
+
         $vendor = $parts[0];
         $module = $parts[1];
-        
+
         $modulePath = $codePath . DS . $vendor . DS . $module;
-        
+
         return is_dir($modulePath) ? $modulePath : null;
     }
 

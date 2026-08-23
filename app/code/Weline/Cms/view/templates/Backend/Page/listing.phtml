@@ -46,45 +46,48 @@ $matchesHighlightedSite = static function (int $websiteId, string $websiteCode) 
     }
     return false;
 };
+$websiteSelectOptions = [];
+foreach ($websites as $website) {
+    if (!is_array($website)) {
+        continue;
+    }
+    $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+    $websiteCode = trim((string)($website['code'] ?? $website['website_code'] ?? 'default'));
+    if ($websiteCode === '') {
+        $websiteCode = 'default';
+    }
+    $websiteSelectOptions[] = [
+        'value' => (string)$websiteId,
+        'label' => (string)($website['label'] ?? $website['name'] ?? $websiteCode),
+        'meta' => $websiteCode,
+    ];
+}
+$websiteSelectValue = $websiteIdFilter;
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = trim((string)($option['label'] ?? ''));
+        if ($websiteSelectDisplay === '') {
+            $websiteSelectDisplay = '#' . $websiteSelectValue;
+        }
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Cms::page" order_field="order" name_field="title"></breadcrumb></h4>
-        </div>
-    </div>
-</div>
-
 <style>
 .cms-page-listing {
-    --cms-surface: var(--w-box-bg, var(--bs-body-bg));
-    --cms-surface-muted: var(--bs-tertiary-bg);
-    --cms-surface-soft: var(--bs-light-bg-subtle);
-    --cms-border: var(--bs-border-color);
-    --cms-text: var(--bs-body-color);
-    --cms-muted: var(--bs-secondary-color);
-    --cms-code: var(--bs-code-color, #d63384);
-    --cms-table-head: var(--bs-tertiary-bg);
-}
-
-html.dark-mode .cms-page-listing,
-body.dark-mode .cms-page-listing,
-html[data-theme-mode="dark"] .cms-page-listing,
-body[data-theme-mode="dark"] .cms-page-listing,
-html[data-layout-mode="dark"] .cms-page-listing,
-body[data-layout-mode="dark"] .cms-page-listing,
-html[data-theme="dark"] .cms-page-listing,
-body[data-theme="dark"] .cms-page-listing,
-[data-theme-mode="dark"] .cms-page-listing,
-[data-theme="dark"] .cms-page-listing {
-    --cms-surface: #0f1726;
-    --cms-surface-muted: #172236;
-    --cms-surface-soft: #111c2e;
-    --cms-border: #2b3952;
-    --cms-text: #e8eef8;
-    --cms-muted: #a7b3c8;
-    --cms-code: #ff6ba8;
-    --cms-table-head: #1d2a40;
+    --cms-surface: var(--weline-theme-surface, var(--w-box-bg, #ffffff));
+    --cms-surface-muted: var(--weline-theme-surface-muted, #f1f5f9);
+    --cms-surface-soft: var(--weline-theme-surface-raised, #f8fafc);
+    --cms-border: var(--weline-theme-border, #dbe3ef);
+    --cms-text: var(--weline-theme-text, #162033);
+    --cms-muted: var(--weline-theme-text-muted, #64748b);
+    --cms-code: var(--weline-theme-text-muted, #64748b);
+    --cms-table-head: var(--weline-theme-surface-muted, #f1f5f9);
 }
 
 .cms-site-group {
@@ -368,7 +371,7 @@ body[data-theme="dark"] .cms-page-listing,
     background: var(--cms-surface);
 }
 
-.cms-copy-panel .form-select {
+.cms-copy-panel .w-select {
     min-width: 0;
 }
 
@@ -472,33 +475,33 @@ body[data-theme="dark"] .cms-page-listing,
     border-color: #f5c2c7;
 }
 
-html[data-theme-mode="dark"] .cms-status-published,
-body[data-theme-mode="dark"] .cms-status-published,
 html[data-theme="dark"] .cms-status-published,
 body[data-theme="dark"] .cms-status-published,
-[data-theme-mode="dark"] .cms-status-published,
+html[data-theme="dark"] .cms-status-published,
+body[data-theme="dark"] .cms-status-published,
+[data-theme="dark"] .cms-status-published,
 [data-theme="dark"] .cms-status-published {
     color: #8ee0b4;
     background: #123226;
     border-color: #1f6f4b;
 }
 
-html[data-theme-mode="dark"] .cms-status-draft,
-body[data-theme-mode="dark"] .cms-status-draft,
 html[data-theme="dark"] .cms-status-draft,
 body[data-theme="dark"] .cms-status-draft,
-[data-theme-mode="dark"] .cms-status-draft,
+html[data-theme="dark"] .cms-status-draft,
+body[data-theme="dark"] .cms-status-draft,
+[data-theme="dark"] .cms-status-draft,
 [data-theme="dark"] .cms-status-draft {
     color: #ffd977;
     background: #3a2d0d;
     border-color: #8a6715;
 }
 
-html[data-theme-mode="dark"] .cms-status-disabled,
-body[data-theme-mode="dark"] .cms-status-disabled,
 html[data-theme="dark"] .cms-status-disabled,
 body[data-theme="dark"] .cms-status-disabled,
-[data-theme-mode="dark"] .cms-status-disabled,
+html[data-theme="dark"] .cms-status-disabled,
+body[data-theme="dark"] .cms-status-disabled,
+[data-theme="dark"] .cms-status-disabled,
 [data-theme="dark"] .cms-status-disabled {
     color: #ffb4bd;
     background: #3b151a;
@@ -517,22 +520,21 @@ body[data-theme="dark"] .cms-status-disabled,
     color: var(--cms-muted) !important;
 }
 
-.cms-page-listing .table {
-    --bs-table-bg: var(--cms-surface);
-    --bs-table-color: var(--cms-text);
-    --bs-table-border-color: var(--cms-border);
-    --bs-table-striped-bg: var(--cms-surface-soft);
-    --bs-table-striped-color: var(--cms-text);
+.cms-page-listing .w-table,
+.cms-page-listing table {
     color: var(--cms-text);
+    background: var(--cms-surface);
 }
 
-.cms-page-listing .table thead th {
+.cms-page-listing .w-table thead th,
+.cms-page-listing table thead th {
     color: var(--cms-text);
     background: var(--cms-table-head);
     border-color: var(--cms-border);
 }
 
-.cms-page-listing .table tbody td {
+.cms-page-listing .w-table tbody td,
+.cms-page-listing table tbody td {
     color: var(--cms-text);
     border-color: var(--cms-border);
 }
@@ -552,10 +554,6 @@ body[data-theme="dark"] .cms-status-disabled,
     }
 }
 </style>
-
-<div class="w-grid">
-    <template>Weline_Component::message.phtml</template>
-</div>
 
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -618,15 +616,18 @@ body[data-theme="dark"] .cms-status-disabled,
                         <input class="w-input" type="search" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= htmlspecialchars((string)__('搜索标题或路径')) ?>">
                     </div>
                     <div style="--w-span-md:2;">
-                        <select class="w-select" name="website_id">
-                            <option value=""><?= __('全部站点') ?></option>
-                            <?php foreach ($websites as $website): ?>
-                                <?php $websiteId = (string)(int)($website['website_id'] ?? 0); ?>
-                                <option value="<?= htmlspecialchars($websiteId) ?>" <?= $websiteIdFilter === $websiteId ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars((string)($website['label'] ?? $website['code'] ?? $websiteId)) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label class="w-visually-hidden" for="cms-listing-website_trigger"><?= __('站点') ?></label>
+                        <w:websites:website:select
+                            id="cms-listing-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            empty-label="@lang(全部站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
                     </div>
                     <div style="--w-span-md:2;">
                         <input class="w-input" type="text" name="path_group" value="<?= htmlspecialchars($pathGroupFilter) ?>" placeholder="<?= htmlspecialchars((string)__('一级 path')) ?>">
@@ -692,12 +693,12 @@ body[data-theme="dark"] .cms-status-disabled,
                                 <div>
                                     <div class="cms-site-group__title">
                                         <?= htmlspecialchars((string)($site['name'] ?? $siteCode)) ?>
-                                        <span class="w-badge cms-count-badge ms-2"><?= (int)($site['page_count'] ?? 0) ?></span>
+                                        <span class="w-badge cms-count-badge"><?= (int)($site['page_count'] ?? 0) ?></span>
                                     </div>
                                     <div class="cms-site-group__meta">
                                         <code><?= htmlspecialchars($siteCode) ?></code>
                                         <?php if (!empty($site['url'])): ?>
-                                            <span class="ms-2"><?= htmlspecialchars((string)$site['url']) ?></span>
+                                            <span class=""><?= htmlspecialchars((string)$site['url']) ?></span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -759,7 +760,7 @@ body[data-theme="dark"] .cms-status-disabled,
                                             <div>
                                                 <div class="cms-path-group__title">
                                                     <?= htmlspecialchars($groupAlias !== '' ? $groupAlias : $groupPath) ?>
-                                                    <span class="w-badge cms-count-badge ms-2"><?= count($groupPages) ?></span>
+                                                    <span class="w-badge cms-count-badge"><?= count($groupPages) ?></span>
                                                 </div>
                                                 <div class="cms-path-group__meta">
                                                     /<code><?= htmlspecialchars($groupPath) ?></code>

@@ -111,21 +111,20 @@ class CacheClear implements TaglibInterface
         $html[] = '<small class="w-field__hint w-text" data-w-display="block" data-tone="muted" style="--w-mt:var(--weline-space-2);">' . $e((string)__('弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。')) . '</small>';
         $html[] = '</div>';
 
-        // 弹窗（初次打开时由 JS 移动到 body，避开右侧栏层叠上下文）
-        $html[] = '<div class="weline-cache-clear-modal" data-role="modal" hidden>';
-        $html[] = '<div class="weline-cache-clear-modal__backdrop" data-role="close"></div>';
-        $html[] = '<div class="weline-cache-clear-modal__dialog" role="dialog" aria-modal="true" aria-label="' . $e((string)__('清理缓存')) . '">';
-        $html[] = '<div class="weline-cache-clear-modal__header">';
-        $html[] = '<h5 style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;"><w-icon name="circle" size="sm"></w-icon>' . $e((string)__('清理缓存')) . '</h5>';
-        $html[] = '<button type="button" class="w-button" data-role="close" aria-label="' . $e((string)__('关闭')) . '" data-w-close="" data-tone="quiet" data-size="sm"></button>';
-        $html[] = '</div>';
-        $html[] = '<div class="weline-cache-clear-modal__body">';
+        // 自研主题 dialog：showModal 进入顶层，暗色跟随 --weline-theme-*
+        $titleId = 'weline-cache-clear-title-' . \bin2hex(\random_bytes(4));
+        $html[] = '<dialog class="w-dialog weline-cache-clear-dialog" data-role="modal" data-w-component="dialog" data-state="closed" aria-labelledby="' . $e($titleId) . '">';
+        $html[] = '<header class="w-dialog__header">';
+        $html[] = '<h2 class="w-dialog__title" id="' . $e($titleId) . '"><w-icon name="circle" size="sm"></w-icon>' . $e((string)__('清理缓存')) . '</h2>';
+        $html[] = '<button type="button" class="w-button" data-w-action="dialog.close" data-w-close aria-label="' . $e((string)__('关闭')) . '" data-tone="quiet" data-size="sm"><w-icon name="close" size="sm"></w-icon></button>';
+        $html[] = '</header>';
+        $html[] = '<div class="w-dialog__body">';
         $html[] = '<input type="text" class="w-input" data-role="search" placeholder="' . $e((string)__('搜索缓存类型（identity / 名称 / 模块）')) . '" autocomplete="off" style="--w-mb:var(--weline-space-2);">';
         $html[] = '<div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-2);">';
         $html[] = '<label class="w-check" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;"><input type="checkbox" data-role="select-all"><span class="ms-1">' . $e((string)__('全选当前结果')) . '</span></label>';
         $html[] = '<span class="w-text" data-tone="muted" data-size="sm"><span data-role="selected-count">0</span> ' . $e((string)__('个已选')) . '</span>';
         $html[] = '</div>';
-        $html[] = '<div class="weline-cache-clear-modal__list" data-role="list">';
+        $html[] = '<div class="weline-cache-clear-dialog__list" data-role="list">';
 
         foreach ($pools as $pool) {
             $identity = $e((string)$pool['identity']);
@@ -137,7 +136,7 @@ class CacheClear implements TaglibInterface
             $html[] = '<input type="checkbox" value="' . $identity . '">';
             $html[] = '<span class="weline-cache-clear-option__text"><strong>' . $name . '</strong><small class="w-text" data-w-display="block" data-tone="muted">' . $identity . ($module !== '' ? ' · ' . $module : '') . '</small></span>';
             if ($permanent) {
-                $html[] = '<span class="w-badge w-text" data-w-background="warning" data-tone="muted">' . $e((string)__('持久')) . '</span>';
+                $html[] = '<span class="w-badge" data-tone="warning">' . $e((string)__('持久')) . '</span>';
             }
             $html[] = '</label>';
         }
@@ -145,17 +144,18 @@ class CacheClear implements TaglibInterface
         $html[] = '<div class="w-text" data-role="empty" hidden data-tone="muted" data-size="sm" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">' . $e((string)__('无匹配缓存')) . '</div>';
         $html[] = '</div>';
         $html[] = '</div>';
-        $html[] = '<div class="weline-cache-clear-modal__footer">';
+        $html[] = '<footer class="w-dialog__footer weline-cache-clear-dialog__footer">';
         if ($canClearAll) {
             $html[] = '<button type="button" class="w-button" data-role="clear-all" data-tone="danger" data-variant="outline"><w-icon name="trash" size="sm"></w-icon>' . $e((string)__('全部清理（非持久）')) . '</button>';
+        } else {
+            $html[] = '<span></span>';
         }
-        $html[] = '<div class="ms-auto w-cluster" style="--w-gap:var(--weline-space-2);">';
-        $html[] = '<button type="button" class="w-button" data-role="close" data-tone="neutral">' . $e((string)__('取消')) . '</button>';
+        $html[] = '<div class="w-cluster" style="--w-gap:var(--weline-space-2);">';
+        $html[] = '<button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral">' . $e((string)__('取消')) . '</button>';
         $html[] = '<button type="button" class="w-button" data-role="clear-selected" disabled data-tone="danger"><w-icon name="trash" size="sm"></w-icon>' . $e((string)__('清理所选')) . '</button>';
         $html[] = '</div>';
-        $html[] = '</div>';
-        $html[] = '</div>';
-        $html[] = '</div>';
+        $html[] = '</footer>';
+        $html[] = '</dialog>';
 
         $html[] = '<script type="application/json" data-role="config">' . $configJson . '</script>';
         $html[] = self::styles();
@@ -211,18 +211,15 @@ class CacheClear implements TaglibInterface
     {
         return <<<'HTML'
 <style>
-.weline-cache-clear-modal{position:fixed;inset:0;z-index:11000;display:flex;align-items:center;justify-content:center;}
-.weline-cache-clear-modal[hidden]{display:none;}
-.weline-cache-clear-modal__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);}
-.weline-cache-clear-modal__dialog{position:relative;width:min(560px,calc(100vw - 32px));max-height:min(78vh,720px);display:flex;flex-direction:column;background:var(--backend-color-card-bg,#fff);border-radius:var(--backend-border-radius-xl,1rem);box-shadow:var(--backend-dropdown-shadow,0 10px 30px rgba(0,0,0,.2));overflow:hidden;}
-.weline-cache-clear-modal__header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--backend-color-border-light,#e9ecef);}
-.weline-cache-clear-modal__body{padding:1rem 1.25rem;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
-.weline-cache-clear-modal__list{overflow-y:auto;min-height:120px;max-height:44vh;border:1px solid var(--backend-color-border-light,#e9ecef);border-radius:var(--backend-border-radius-md,.5rem);padding:.25rem;}
-.weline-cache-clear-option{display:flex;align-items:center;gap:.6rem;width:100%;padding:.5rem .6rem;margin:0;border-radius:var(--backend-border-radius-md,.5rem);cursor:pointer;}
-.weline-cache-clear-option:hover{background:var(--backend-color-bg-secondary,#f8f9fa);}
-.weline-cache-clear-option__text{flex:1 1 auto;min-width:0;}
-.weline-cache-clear-option__text small{word-break:break-all;}
-.weline-cache-clear-modal__footer{display:flex;align-items:center;gap:.5rem;padding:1rem 1.25rem;border-top:1px solid var(--backend-color-border-light,#e9ecef);}
+.weline-cache-clear-dialog { inline-size: min(35rem, calc(100dvw - 2rem)); max-block-size: min(78dvh, 45rem); }
+.weline-cache-clear-dialog[open] { display: flex; flex-direction: column; }
+.weline-cache-clear-dialog .w-dialog__body { display: flex; flex-direction: column; min-block-size: 0; overflow: hidden; }
+.weline-cache-clear-dialog__list { overflow-y: auto; min-block-size: 7.5rem; max-block-size: 44vh; border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); padding: var(--weline-space-1); background: var(--weline-theme-surface); }
+.weline-cache-clear-option { display: flex; align-items: center; gap: var(--weline-space-3); width: 100%; padding: var(--weline-space-2) var(--weline-space-3); margin: 0; border-radius: var(--weline-radius-md); color: var(--weline-theme-text); cursor: pointer; }
+.weline-cache-clear-option:hover { background: var(--weline-theme-surface-hover); }
+.weline-cache-clear-option__text { flex: 1 1 auto; min-width: 0; }
+.weline-cache-clear-option__text small { word-break: break-all; }
+.weline-cache-clear-dialog__footer { justify-content: space-between; flex-wrap: wrap; }
 </style>
 HTML;
     }
@@ -245,16 +242,41 @@ HTML;
     if (!modal) { return; }
 
     function text(key, fallback) { var v = strings[key]; return v == null || v === '' ? fallback : String(v); }
+    function ui() { return (window.Weline && window.Weline.UI) ? window.Weline.UI : null; }
     function notify(type, message) {
-        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') { window.Weline.UI.toast[type](message); return; }
+        var toast = ui() && ui().toast;
+        if (toast && typeof toast[type] === 'function') { toast[type](message); return; }
         console[type === 'error' ? 'error' : 'log'](message);
     }
     function confirmAction(message) {
-        return Weline.UI.dialog.confirm(message, {
-            confirmLabel: text('confirm_continue', 'OK'),
-            cancelLabel: text('confirm_cancel', 'Cancel'),
-            tone: 'warning'
-        });
+        var dialogApi = ui() && ui().dialog;
+        if (dialogApi && typeof dialogApi.confirm === 'function') {
+            return dialogApi.confirm(message, {
+                confirmLabel: text('confirm_continue', 'OK'),
+                cancelLabel: text('confirm_cancel', 'Cancel'),
+                tone: 'warning'
+            });
+        }
+        return Promise.resolve(window.confirm(message));
+    }
+    function openModal() {
+        var dialogApi = ui() && ui().dialog;
+        if (dialogApi && typeof dialogApi.open === 'function') {
+            dialogApi.open(modal);
+        } else if (typeof modal.showModal === 'function') {
+            modal.showModal();
+        }
+        if (searchInput) { searchInput.value = ''; }
+        filter();
+        setTimeout(function () { try { searchInput && searchInput.focus(); } catch (e) {} }, 0);
+    }
+    function closeModal() {
+        var dialogApi = ui() && ui().dialog;
+        if (dialogApi && typeof dialogApi.close === 'function') {
+            dialogApi.close(modal);
+        } else if (typeof modal.close === 'function' && modal.open) {
+            modal.close();
+        }
     }
     function loadApi() {
         if (window.Weline && typeof window.Weline.load === 'function') {
@@ -334,18 +356,8 @@ HTML;
         if (emptyNode) { emptyNode.hidden = visible !== 0; }
         syncState();
     }
-    function openModal() {
-        if (modal.parentElement !== document.body) { document.body.appendChild(modal); }
-        modal.hidden = false;
-        if (searchInput) { searchInput.value = ''; }
-        filter();
-        setTimeout(function () { try { searchInput && searchInput.focus(); } catch (e) {} }, 0);
-    }
-    function closeModal() { modal.hidden = true; }
 
     if (openButton) { openButton.addEventListener('click', openModal); }
-    modal.querySelectorAll('[data-role="close"]').forEach(function (node) { node.addEventListener('click', closeModal); });
-    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && !modal.hidden) { closeModal(); } });
     if (searchInput) { searchInput.addEventListener('input', filter); }
     if (selectAll) {
         selectAll.addEventListener('change', function () {

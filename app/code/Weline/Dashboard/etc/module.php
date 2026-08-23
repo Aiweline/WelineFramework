@@ -7,11 +7,14 @@ return [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',
+        'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',
         'Weline_Websites' => '*',
         'Weline_Widget' => '*',
     ],
     "optional" => [
     ],
-    "provides" => [],
+    "provides" => [
+        'theme.target_type.dashboard_view' => \Weline\Dashboard\Integration\Theme\DashboardViewTargetTypeProvider::class,
+    ],
 ];

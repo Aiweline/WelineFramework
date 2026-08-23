@@ -211,12 +211,13 @@ $dashboardWebsiteSelectOptionsJson = json_encode($dashboardWebsiteSelectOptions,
 
 <style>
 .w-dashboard {
-    --w-dashboard-surface: var(--bs-card-bg, var(--backend-color-bg-primary, #fff));
-    --w-dashboard-surface-soft: var(--bs-tertiary-bg, #f8fafc);
-    --w-dashboard-text: var(--bs-body-color, var(--backend-color-text-primary, #1f2937));
-    --w-dashboard-heading: var(--bs-heading-color, var(--w-dashboard-text));
-    --w-dashboard-muted: var(--bs-secondary-color, var(--backend-color-text-secondary, #6b7280));
-    --w-dashboard-border: var(--bs-border-color, var(--backend-color-border, #e5e7eb));
+    --w-dashboard-surface: var(--weline-theme-surface);
+    --w-dashboard-surface-soft: var(--weline-theme-surface-muted);
+    --w-dashboard-text: var(--weline-theme-text);
+    --w-dashboard-heading: var(--weline-theme-text);
+    --w-dashboard-muted: var(--weline-theme-text-muted);
+    --w-dashboard-border: var(--weline-theme-border);
+    --w-dashboard-primary: var(--weline-theme-primary);
     width: 100%;
     max-width: 100%;
     color: var(--w-dashboard-text);
@@ -226,16 +227,6 @@ $dashboardWebsiteSelectOptionsJson = json_encode($dashboardWebsiteSelectOptions,
 .w-dashboard *::before,
 .w-dashboard *::after {
     box-sizing: border-box;
-}
-body[data-theme-mode="dark"] .w-dashboard,
-body[data-layout-mode="dark"] .w-dashboard,
-html[data-theme="dark"] .w-dashboard {
-    --w-dashboard-surface: rgba(15, 23, 42, 0.92);
-    --w-dashboard-surface-soft: rgba(30, 41, 59, 0.78);
-    --w-dashboard-text: #d8e1f2;
-    --w-dashboard-heading: #f8fafc;
-    --w-dashboard-muted: #9aa7bd;
-    --w-dashboard-border: rgba(148, 163, 184, 0.34);
 }
 .w-dashboard-header {
     display: flex;
@@ -285,18 +276,18 @@ html[data-theme="dark"] .w-dashboard {
     cursor: pointer;
 }
 .w-dashboard-btn.primary {
-    border-color: #2563eb;
-    background: #2563eb;
-    color: #fff;
+    border-color: var(--weline-theme-primary);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
 }
 .w-dashboard-btn.subtle {
     background: var(--w-dashboard-surface-soft);
 }
 .w-dashboard-btn.danger,
 .w-dashboard-panel.danger .w-dashboard-btn {
-    border-color: #dc2626;
-    background: #dc2626;
-    color: #fff;
+    border-color: var(--weline-theme-danger);
+    background: var(--weline-theme-danger);
+    color: var(--weline-theme-on-primary);
 }
 .w-dashboard-site-picker {
     position: relative;
@@ -330,9 +321,9 @@ html[data-theme="dark"] .w-dashboard {
     white-space: nowrap;
 }
 .w-dashboard-view-link.active {
-    background: rgba(37, 99, 235, 0.16);
-    border-color: rgba(37, 99, 235, 0.42);
-    color: var(--bs-primary, #2563eb);
+    background: color-mix(in srgb, var(--weline-theme-primary) 16%, transparent);
+    border-color: color-mix(in srgb, var(--weline-theme-primary) 42%, transparent);
+    color: var(--weline-theme-primary);
 }
 .w-dashboard-view-link span {
     min-width: 0;
@@ -456,7 +447,7 @@ body.w-dashboard-editor-open {
     width: 100%;
     height: 100%;
     border: 0;
-    background: #fff;
+    background: var(--weline-theme-canvas);
 }
 @media (max-width: 720px) {
     .w-dashboard-header,

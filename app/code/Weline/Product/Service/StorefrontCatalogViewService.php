@@ -8,8 +8,11 @@ use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCatalogCartItemSnapshotResolver;
+use Weline\Product\Model\Shard\AttributeValue;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
+use Weline\Product\Repository\AttributeValueRepository;
+use Weline\Product\Repository\MediaRepository;
 use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
 
@@ -26,6 +29,9 @@ final class StorefrontCatalogViewService
         private readonly ProductRepository $products,
         private readonly OfferRepository $offers,
         private readonly ProductCatalogCartItemSnapshotResolver $snapshots,
+        private readonly AttributeValueRepository $attributeValues,
+        private readonly MediaRepository $media,
+        private readonly StorefrontProductDetailProjector $detailProjector,
     ) {
     }
 
@@ -88,6 +94,37 @@ final class StorefrontCatalogViewService
             ];
         }
 
+        if ($rows === []) {
+            return [];
+        }
+
+        $storeId = max(0, RequestContext::getWelineStoreId());
+        $storeIds = array_values(array_unique([0, $storeId]));
+        $attributeRowsByProduct = [];
+        foreach ($this->attributeValues->listExplicitRows(
+            $websiteId,
+            'product',
+            array_values(array_unique(array_map(
+                static fn(array $row): int => (int)($row['product_id'] ?? 0),
+                $rows,
+            ))),
+            $storeIds,
+        ) as $attributeRow) {
+            $attributeRowsByProduct[(int)($attributeRow[AttributeValue::schema_fields_ENTITY_ID] ?? 0)][] = $attributeRow;
+        }
+
+        $locale = trim((string)RequestContext::getWelineUserLang());
+        foreach ($rows as $index => $row) {
+            $productId = (int)($row['product_id'] ?? 0);
+            $rows[$index] = $this->detailProjector->project(
+                $row,
+                $attributeRowsByProduct[$productId] ?? [],
+                [],
+                $storeId,
+                $locale,
+            );
+        }
+
         return $rows;
     }
 
@@ -100,7 +137,23 @@ final class StorefrontCatalogViewService
 
         foreach ($this->publishedOffers(200) as $offer) {
             if ((int)($offer['product_id'] ?? 0) === $productId) {
-                return $offer;
+                $scope = $this->currentScope();
+                $websiteId = (int)$scope->websiteId;
+                $storeId = max(0, RequestContext::getWelineStoreId());
+                $storeIds = array_values(array_unique([0, $storeId]));
+
+                return $this->detailProjector->project(
+                    $offer,
+                    $this->attributeValues->listExplicitRows(
+                        $websiteId,
+                        'product',
+                        [$productId],
+                        $storeIds,
+                    ),
+                    $this->media->listByProductIds($websiteId, [$productId]),
+                    $storeId,
+                    trim((string)RequestContext::getWelineUserLang()),
+                );
             }
         }
 

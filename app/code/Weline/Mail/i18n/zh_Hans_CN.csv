@@ -139,10 +139,10 @@
 "启动服务并检测 SMTP/IMAP/Admin 端口","启动服务并检测 SMTP/IMAP/Admin 端口"
 "Stalwart 可执行文件","Stalwart 可执行文件"
 "SMTP 25 端口","SMTP 25 端口"
-"SMTP Submission 587 端口","SMTP Submission 587 端口"
+"SMTP Submission 587 端口","SMTP 提交 587 端口"
 "IMAP 143 端口","IMAP 143 端口"
 "IMAPS 993 端口","IMAPS 993 端口"
-"Stalwart Admin 8080 端口","Stalwart Admin 8080 端口"
+"Stalwart Admin 8080 端口","Stalwart Admin 8080端口"
 "NSSM Windows 服务包装器","NSSM Windows 服务包装器"
 "systemd 服务管理","systemd 服务管理"
 安装脚本不存在：%{1},安装脚本不存在：%{1}
@@ -208,4 +208,4 @@
 "检测企业邮箱 DNS 记录","检测企业邮箱 DNS 记录"
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","检测 MX/SPF/DKIM/DMARC 记录是否存在"
 邮件服务主机名,邮件服务主机名
-"""Mail 查询器不支持的操作：%{1}""","Mail 查询器不支持的操作：%{1}"
+"""Mail 查询器不支持的操作：%{1}""","""Mail 查询器不支持的操作：%{1}"""

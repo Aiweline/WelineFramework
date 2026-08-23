@@ -149,8 +149,15 @@ class ThemeEditorPreviewContractTest extends TestCore
 
     public function testIndexIncludesPreviewHtml(): void
     {
-        self::initRequest('/theme/backend/theme-editor/index');
+        $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        self::assertNotSame('', $backendPrefix);
+        $requestPath = '/' . $backendPrefix . '/theme/backend/theme-editor/index';
+        self::initRequest($requestPath);
         $request = ObjectManager::getInstance(Request::class);
+        \Weline\Framework\Runtime\RequestContext::setId('theme-editor-preview-contract');
+        $request->getServer();
+        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $requestPath);
+        $request->setServer('REQUEST_URI', $requestPath);
         $request->setGet('theme_id', 1);
         $request->setGet('frontend_theme_id', 1);
         $request->setGet('backend_theme_id', 1);
@@ -175,7 +182,9 @@ class ThemeEditorPreviewContractTest extends TestCore
         $html = $controller->index();
 
         $this->assertIsString($html);
-        $this->assertStringContainsString('widget-preview-placeholder', $html);
-        $this->assertStringContainsString('Demo Widget', $html);
+        $this->assertStringContainsString('id="previewFrame"', $html);
+        $this->assertStringContainsString('src="about:blank"', $html);
+        $this->assertStringContainsString('data-api-start-preview=', $html);
+        $this->assertStringContainsString('id="widgetListLoading"', $html);
     }
 }

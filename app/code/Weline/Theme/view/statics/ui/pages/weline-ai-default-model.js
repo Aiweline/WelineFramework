@@ -52,16 +52,20 @@ function register(UI) {
             status.dataset.tone = tone;
             status.hidden = message === '';
         };
-        const close = (restoreFocus = false) => {
-            if (panel.hidden) return false;
+        const close = (restoreFocus = false, reason = 'api', force = false) => {
+            if (panel.hidden || (!force && !emit('before-close', { reason }, true))) return false;
             panel.hidden = true;
             panel.dataset.state = 'closed';
+            panel.setAttribute('aria-hidden', 'true');
             trigger.setAttribute('aria-expanded', 'false');
             search.setAttribute('aria-expanded', 'false');
+            element.dataset.state = 'closed';
             monitor.unobserve(panel);
+            monitor.reset();
             floating.clear(panel);
             portal.restore();
             if (restoreFocus) trigger.focus();
+            emit('close', { reason }, false);
             return true;
         };
         const monitor = floating.monitor(
@@ -71,19 +75,22 @@ function register(UI) {
             () => close(false),
         );
         const open = async () => {
-            if (!panel.hidden) return;
+            if (!panel.hidden || !emit('before-open', {}, true)) return false;
             portal.mount();
             panel.hidden = false;
             panel.dataset.state = 'open';
+            panel.setAttribute('aria-hidden', 'false');
             trigger.setAttribute('aria-expanded', 'true');
             search.setAttribute('aria-expanded', 'true');
+            element.dataset.state = 'open';
             monitor.observe(panel);
             if (monitor.place()?.anchorVisible === false) {
-                close(false);
-                return;
+                close(false, 'anchor-hidden', true);
+                return false;
             }
             search.focus();
-            if (models) return;
+            emit('open', {}, false);
+            if (models) return true;
             setStatus(element.dataset.aiModelLoading || 'Loading…');
             try {
                 models = await loadModels();
@@ -99,6 +106,7 @@ function register(UI) {
             } catch (_error) {
                 setStatus(element.dataset.aiModelLoadFail || 'Unable to load models.', 'danger');
             }
+            return true;
         };
         const choose = (model) => {
             const code = modelCode(model);
@@ -110,7 +118,7 @@ function register(UI) {
                 : modelLabel(model);
             hidden.dispatchEvent(new Event('change', { bubbles: true }));
             emit('change', { value: code, model }, false);
-            close(true);
+            close(true, 'select');
         };
         const render = () => {
             if (!models) return;
@@ -158,19 +166,27 @@ function register(UI) {
         listen(search, 'keydown', (event) => {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                close(true);
+                close(true, 'escape');
             }
         });
         listen(supplier, 'change', render);
         listen(document, 'pointerdown', (event) => {
-            if (!element.contains(event.target) && !portal.contains(event.target)) close();
+            if (!element.contains(event.target) && !portal.contains(event.target)) close(false, 'outside');
         });
+        listen(window, 'pagehide', () => close(false, 'pagehide', true));
+        listen(window, 'pageshow', () => close(false, 'history-restore', true));
+        panel.hidden = true;
+        panel.dataset.state = 'closed';
+        panel.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
+        search.setAttribute('aria-expanded', 'false');
+        element.dataset.state = 'closed';
         return {
             open,
             close,
             element,
             destroy: () => {
-                close(false);
+                close(false, 'unmount', true);
                 monitor.destroy();
                 portal.destroy();
             },

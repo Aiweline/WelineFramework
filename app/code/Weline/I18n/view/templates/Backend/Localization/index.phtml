@@ -45,27 +45,12 @@ $renderHiddenFields = static function (array $fields): string {
 <div class="i18n-admin-page">
 <div class="w-grid">
     <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;"><?= __('区域管理') ?></h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><?= __('系统配置') ?></li>
-                    <li class="w-breadcrumb__item"><?= __('i18n国际化') ?></li>
-                    <li class="w-breadcrumb__item" data-state="active"><?= __('区域') ?></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="w-grid">
-    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <div class="w-grid i18n-admin-stat-tiles" style="--w-gap:var(--weline-space-2);--w-gap-md:var(--weline-space-4);--w-mb:var(--weline-space-4);--w-mb-md:var(--weline-space-6);">
-    <div class="col-xl" style="--w-span:6;">
+    <div class="" style="--w-span:6;">
         <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
             <div class="w-card__body">
                 <div class="w-text" data-tone="muted" data-size="sm"><?= __('总计:') ?></div>
@@ -73,7 +58,7 @@ $renderHiddenFields = static function (array $fields): string {
             </div>
         </div>
     </div>
-    <div class="col-xl" style="--w-span:6;">
+    <div class="" style="--w-span:6;">
         <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
             <div class="w-card__body">
                 <div class="w-text" data-tone="muted" data-size="sm"><?= __('已安装') ?></div>
@@ -81,7 +66,7 @@ $renderHiddenFields = static function (array $fields): string {
             </div>
         </div>
     </div>
-    <div class="col-xl" style="--w-span:6;">
+    <div class="" style="--w-span:6;">
         <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
             <div class="w-card__body">
                 <div class="w-text" data-tone="muted" data-size="sm"><?= __('已激活') ?></div>
@@ -89,7 +74,7 @@ $renderHiddenFields = static function (array $fields): string {
             </div>
         </div>
     </div>
-    <div class="col-xl" style="--w-span:6;">
+    <div class="" style="--w-span:6;">
         <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
             <div class="w-card__body">
                 <div class="w-text" data-tone="muted" data-size="sm"><?= __('已安装未激活') ?></div>
@@ -97,7 +82,7 @@ $renderHiddenFields = static function (array $fields): string {
             </div>
         </div>
     </div>
-    <div class="col-xl" style="--w-span:6;">
+    <div class="" style="--w-span:6;">
         <div class="w-card" data-w-height="full" data-w-shadow="sm" data-w-border="none">
             <div class="w-card__body">
                 <div class="w-text" data-tone="muted" data-size="sm"><?= __('未安装') ?></div>
@@ -136,7 +121,7 @@ $renderHiddenFields = static function (array $fields): string {
                 </select>
             </div>
             <div style="--w-span-lg:3;--w-span-md:6;">
-                <div class="justify-content-xl-end w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                <div class="weline-justify-xl-end w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                     <button type="submit" class="w-button" data-tone="primary"><?= __('搜索') ?></button>
                     <a href="@backend-url('*/backend/localization')" class="w-button" data-tone="neutral" data-variant="outline"><?= __('重置') ?></a>
                 </div>

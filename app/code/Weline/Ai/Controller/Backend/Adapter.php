@@ -17,6 +17,7 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\AdapterScanner;
+use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
@@ -108,17 +109,49 @@ class Adapter extends BackendController
     {
         /** @var AiModel $aiModel */
         $aiModel = ObjectManager::getInstance(AiModel::class);
-        return $aiModel->reset()
+        $fields = AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ','
+            . AiModel::schema_fields_PRIMARY_MODALITY . ',' . AiModel::schema_fields_SUPPLIER;
+        $active = $aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-            ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ','
-                . AiModel::schema_fields_PRIMARY_MODALITY . ',' . AiModel::schema_fields_SUPPLIER)
+            ->fields($fields)
             ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
             ->select()
             ->fetchArray();
+
+        // 兼容：此前本地模型因「未测通不激活」被挡在绑定列表外，补进可选集
+        $local = $aiModel->reset()
+            ->where(AiModel::schema_fields_MODEL_SOURCE, AiModel::SOURCE_LOCAL)
+            ->where(AiModel::schema_fields_IS_ACTIVE, 0)
+            ->fields($fields)
+            ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        if ($local === []) {
+            return $active;
+        }
+
+        $seen = [];
+        foreach ($active as $row) {
+            $code = (string)($row[AiModel::schema_fields_MODEL_CODE] ?? '');
+            if ($code !== '') {
+                $seen[$code] = true;
+            }
+        }
+        foreach ($local as $row) {
+            $code = (string)($row[AiModel::schema_fields_MODEL_CODE] ?? '');
+            if ($code === '' || isset($seen[$code])) {
+                continue;
+            }
+            $active[] = $row;
+            $seen[$code] = true;
+        }
+
+        return $active;
     }
 
     /**
-     * @return array<string,true> provider_code => true when an active, connected account has an API key
+     * @return array<string,true> provider_code => true when an active account is usable for binding
      */
     private function getReadyProviderCodes(): array
     {
@@ -126,14 +159,26 @@ class Adapter extends BackendController
         $account = ObjectManager::getInstance(Account::class);
         $rows = $account->reset()
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
             ->select()
             ->fetchArray();
         $ready = [];
         foreach ($rows as $row) {
             $code = \strtolower(\trim((string)($row[Account::schema_fields_PROVIDER_CODE] ?? '')));
+            if ($code === '') {
+                continue;
+            }
+            $isCustom = VendorConfigManager::isCustomProvider($code);
+            $status = (string)($row[Account::schema_fields_CONNECTION_STATUS] ?? '');
             $apiKey = \trim((string)($row[Account::schema_fields_API_KEY] ?? ''));
-            if ($code === '' || $apiKey === '') {
+            if ($isCustom) {
+                // 本地/自定义：允许空 Key；failed 以外均可调度
+                if ($status === Account::STATUS_FAILED) {
+                    continue;
+                }
+                $ready[$code] = true;
+                continue;
+            }
+            if ($status !== Account::STATUS_SUCCESS || $apiKey === '') {
                 continue;
             }
             $ready[$code] = true;

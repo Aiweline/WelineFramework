@@ -15,6 +15,7 @@ use Weline\Api\Model\ApiUser;
 use Weline\Api\Model\ApiUserRole;
 use Weline\Acl\Api\Role;
 use Weline\Acl\Api\RoleAccess;
+use Weline\Acl\Service\Resource\AclResourcePresentation;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -455,11 +456,17 @@ class User extends \Weline\Framework\App\Controller\BackendController
         foreach ($currentAccesses as $access) {
             $currentAccessIds[] = $access['source_id'] ?? '';
         }
+        $treeSummary = AclResourcePresentation::summarizeTrees($trees);
         
         $this->assign('user', $user);
         $this->assign('user_role', $userRole);
         $this->assign('trees', $trees);
-        $this->assign('current_accesses', $currentAccessIds);
+        $this->assign('selected_source_ids', $currentAccessIds);
+        $this->assign('tree_statistics', $treeSummary['statistics']);
+        $this->assign('module_list', $treeSummary['modules']);
+        $this->assign('type_list', $treeSummary['types']);
+        $this->assign('tag_tree', []);
+        $this->assign('tag_grants', []);
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/api/backend/user/assign-permissions', ['id' => $userId]));
         return $this->fetch('assign_permissions');
     }
@@ -487,11 +494,15 @@ class User extends \Weline\Framework\App\Controller\BackendController
             
             $roleId = $userRole->getId();
             $aclIds = $this->request->getPost('ids', []);
+            if (!\is_array($aclIds)) {
+                $aclIds = [];
+            }
             
             // 构建权限数据
             $acls = [];
-            foreach ($aclIds as $aclId) {
-                if (empty($aclId)) {
+            foreach (\array_unique(\array_map('strval', $aclIds)) as $aclId) {
+                $aclId = \trim($aclId);
+                if ($aclId === '') {
                     continue;
                 }
                 $acls[] = [

@@ -58,7 +58,15 @@ class ConfigResolver
             $config = $this->resolveFrontendConfig($model, $providerCode, $userConfig, $userId);
         }
         
-        // 4. 验证必要配置
+        // 4. 补齐供应商代码，供本地/自定义供应商放宽 API Key 校验
+        if (empty($config['provider_code']) && $providerCode !== '') {
+            $config['provider_code'] = $providerCode;
+        }
+        if (empty($config['supplier']) && $providerCode !== '') {
+            $config['supplier'] = $providerCode;
+        }
+
+        // 5. 验证必要配置
         $this->validateConfig($config, $modelCode);
         
         return $config;
@@ -296,7 +304,11 @@ class ConfigResolver
      */
     private function validateConfig(array $config, string $modelCode): void
     {
-        if (empty($config['api_key'])) {
+        $providerCode = strtolower(trim((string)($config['provider_code'] ?? $config['supplier'] ?? '')));
+        $allowEmptyApiKey = $providerCode !== ''
+            && \Weline\Ai\Service\Provider\VendorConfigManager::isCustomProvider($providerCode);
+
+        if (empty($config['api_key']) && !$allowEmptyApiKey) {
             $message = __('模型 %{code} 缺少API密钥配置', ['code' => $modelCode]);
             throw new \Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['model_code' => $modelCode]));
         }

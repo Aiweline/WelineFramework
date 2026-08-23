@@ -1,267 +1,31 @@
+import {
+    button,
+    downloadPayload,
+    fieldMap,
+    fieldValueNode,
+    mergeFields,
+    normalizePagination,
+    parseConfig,
+    parseFieldElements,
+    request,
+    responsePayload,
+    safeCssLength,
+    translate,
+    valueFor,
+} from './datatable-common.js';
+
 const Weline = window.Weline = window.Weline || {};
-
-function translate(message, values = []) {
-    if (typeof window.__ === 'function') {
-        return window.__(message, values);
-    }
-    return values.reduce(
-        (result, value, index) => result.replace(`%{${index + 1}}`, String(value)),
-        String(message),
-    );
-}
-
-function parseConfig(element) {
-    try {
-        const value = JSON.parse(element.getAttribute('data-w-config') || '{}');
-        return value && typeof value === 'object' ? value : {};
-    } catch (error) {
-        console.error('Invalid Weline DataTable configuration.', error);
-        return {};
-    }
-}
-
-function isSuccessful(response) {
-    if (!response || typeof response !== 'object') return false;
-    if ('success' in response) return response.success === true;
-    if ('error' in response && response.error === true) return false;
-    if ('code' in response) return response.code === 200 || response.code === '200';
-    return true;
-}
-
-function responsePayload(response) {
-    return response && typeof response.data === 'object' && response.data !== null
-        ? response.data
-        : (response || {});
-}
-
-function responseMessage(response, fallback) {
-    return String(response?.message || response?.msg || fallback);
-}
-
-function normalizeOptions(options) {
-    if (Array.isArray(options)) {
-        return options.map((option) => {
-            if (option && typeof option === 'object') {
-                const value = String(option.value ?? option.id ?? '');
-                return {value, label: String(option.label ?? option.name ?? value)};
-            }
-            return {value: String(option), label: String(option)};
-        });
-    }
-    if (typeof options !== 'string' || options.trim() === '') return [];
-    return options.split(',').map((pair) => {
-        const [value, label] = pair.split(':', 2).map((part) => part.trim());
-        return {value, label: label || value};
-    });
-}
-
-function normalizeField(field) {
-    const value = field && typeof field === 'object' ? field : {};
-    const name = String(value.name || '');
-    return {
-        ...value,
-        name,
-        label: String(value.label || name),
-        type: String(value.type || 'text').toLowerCase(),
-        options: normalizeOptions(value.options),
-        visible: value.visible !== false && value.visible !== 'false',
-        searchable: value.searchable !== false && value.searchable !== 'false',
-        sortable: value.sortable === true || value.sortable === 'true',
-        editable: value.editable === true || value.editable === 'true',
-    };
-}
-
-function mergeFields(primary, secondary) {
-    const map = new Map();
-    for (const field of [...primary, ...secondary].map(normalizeField)) {
-        if (!field.name) continue;
-        map.set(field.name, {...(map.get(field.name) || {}), ...field});
-    }
-    return [...map.values()];
-}
-
-function fieldMap(fields) {
-    return new Map(fields.map((field) => [field.name, field]));
-}
-
-function parseFieldElements(elements) {
-    return [...elements].map((element) => {
-        try {
-            return normalizeField(JSON.parse(element.getAttribute('data-w-field') || '{}'));
-        } catch (_error) {
-            return normalizeField({
-                name: element.getAttribute('data-field') || '',
-                label: element.textContent?.trim() || '',
-                sortable: element.getAttribute('data-sortable') === 'true',
-            });
-        }
-    }).filter((field) => field.name);
-}
-
-function icon(name, size = 'sm') {
-    const element = document.createElement('w-icon');
-    element.setAttribute('name', name);
-    element.setAttribute('size', size);
-    return element;
-}
-
-function button(label, options = {}) {
-    const element = document.createElement('button');
-    element.type = 'button';
-    element.className = options.className || 'w-button';
-    if (options.tone) element.dataset.tone = options.tone;
-    if (options.size) element.dataset.size = options.size;
-    if (options.action) element.dataset.wDatatableAction = options.action;
-    if (options.formAction) element.dataset.wDatatableFormAction = options.formAction;
-    if (options.icon) element.append(icon(options.icon, options.iconSize || 'sm'));
-    const text = document.createElement('span');
-    text.textContent = label;
-    element.append(text);
-    return element;
-}
-
-function valueFor(row, name) {
-    if (row && Object.prototype.hasOwnProperty.call(row, name)) return row[name];
-    let value = row;
-    for (const segment of String(name).split('.')) {
-        if (!value || typeof value !== 'object' || !(segment in value)) return null;
-        value = value[segment];
-    }
-    return value;
-}
-
-function safeImageUrl(value) {
-    if (typeof value !== 'string' || value.trim() === '') return '';
-    try {
-        const url = new URL(value, window.location.origin);
-        return ['http:', 'https:', 'blob:'].includes(url.protocol) ? url.href : '';
-    } catch (_error) {
-        return '';
-    }
-}
-
-function safeCssLength(value) {
-    const raw = String(value || '').trim();
-    if (/^\d+$/.test(raw)) return `${raw}px`;
-    return /^(?:0|\d+(?:\.\d+)?(?:px|rem|em|%|ch))$/.test(raw) ? raw : '';
-}
-
-function fieldValueNode(value, field) {
-    if (field.type === 'image') {
-        const src = safeImageUrl(String(value || ''));
-        if (src) {
-            const image = document.createElement('img');
-            image.src = src;
-            image.alt = field.label;
-            image.loading = 'lazy';
-            image.width = 48;
-            image.height = 48;
-            return image;
-        }
-    }
-    if (typeof value === 'boolean') {
-        const badge = document.createElement('span');
-        badge.className = 'w-badge';
-        badge.dataset.tone = value ? 'success' : 'neutral';
-        badge.textContent = value ? translate('是') : translate('否');
-        return badge;
-    }
-    const text = document.createElement('span');
-    if (value && typeof value === 'object') {
-        text.textContent = JSON.stringify(value);
-    } else {
-        text.textContent = value == null ? '' : String(value);
-    }
-    return text;
-}
-
-async function request(config, operation, payload = {}) {
-    if (!Weline.Api || typeof Weline.Api.resource !== 'function') {
-        throw new Error(translate('Weline.Api 尚未就绪。'));
-    }
-    const provider = String(config.apiProvider || 'datatable');
-    const resource = await Weline.Api.resource(provider);
-    const method = String(config.operations?.[operation] || operation);
-    if (!resource || typeof resource[method] !== 'function') {
-        throw new Error(translate('资源操作不可用：%{1}.%{2}', [provider, method]));
-    }
-    const response = await resource[method](payload, {silent: true});
-    if (!isSuccessful(response)) {
-        throw new Error(responseMessage(response, translate('请求失败。')));
-    }
-    return response;
-}
-
-function normalizePagination(payload, state) {
-    const raw = payload.pagination || {};
-    const pageSize = Math.max(1, Number(raw.pageSize ?? raw.limit ?? payload.pageSize ?? state.pageSize) || 20);
-    const total = Math.max(0, Number(raw.total ?? payload.total ?? 0) || 0);
-    const page = Math.max(1, Number(raw.page ?? payload.page ?? state.page) || 1);
-    const pages = Math.max(1, Number(raw.lastPage ?? payload.pages) || Math.ceil(total / pageSize) || 1);
-    return {page: Math.min(page, pages), pageSize, total, pages};
-}
-
-function downloadPayload(payload, format) {
-    const body = payload.body ?? payload.content ?? '';
-    const contentType = String(payload.content_type || (format === 'json' ? 'application/json' : 'text/csv'));
-    const extension = format === 'json' ? 'json' : (format === 'excel' ? 'xlsx' : 'csv');
-    const proposed = String(payload.filename || `datatable-export.${extension}`);
-    const filename = proposed.replace(/[^A-Za-z0-9._-]+/g, '-') || `datatable-export.${extension}`;
-    const url = URL.createObjectURL(new Blob([body], {type: contentType}));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    queueMicrotask(() => URL.revokeObjectURL(url));
-}
-
-function confirmAction(UI, message, options = {}) {
-    return new Promise((resolve) => {
-        const dialog = document.createElement('dialog');
-        dialog.className = 'w-dialog';
-        dialog.dataset.size = 'sm';
-        dialog.dataset.wComponent = 'dialog';
-        const header = document.createElement('header');
-        header.className = 'w-dialog__header';
-        const title = document.createElement('h2');
-        title.textContent = options.title || translate('请确认');
-        header.append(title);
-        const body = document.createElement('div');
-        body.className = 'w-dialog__body';
-        const paragraph = document.createElement('p');
-        paragraph.textContent = String(message);
-        body.append(paragraph);
-        const footer = document.createElement('footer');
-        footer.className = 'w-dialog__footer';
-        const cancel = button(options.cancelLabel || translate('取消'), {tone: 'neutral'});
-        const confirm = button(options.confirmLabel || translate('确认'), {tone: options.tone || 'danger'});
-        footer.append(cancel, confirm);
-        dialog.append(header, body, footer);
-        document.body.append(dialog);
-        UI.mount(dialog);
-        let settled = false;
-        const finish = (value) => {
-            if (settled) return;
-            settled = true;
-            UI.dialog.close(dialog, value ? 'confirm' : 'cancel');
-            queueMicrotask(() => {
-                UI.unmount(dialog);
-                dialog.remove();
-            });
-            resolve(value);
-        };
-        cancel.addEventListener('click', () => finish(false), {once: true});
-        confirm.addEventListener('click', () => finish(true), {once: true});
-        dialog.addEventListener('cancel', () => finish(false), {once: true});
-        UI.dialog.open(dialog);
-    });
-}
 
 function registerDataTable(UI) {
     UI.define('data-table', ({element, listen}) => {
         const config = parseConfig(element);
+        for (const [property, value] of [
+            ['--w-datatable-height', element.dataset.wDatatableHeight],
+            ['--w-datatable-width', element.dataset.wDatatableWidth],
+        ]) {
+            const length = safeCssLength(value);
+            if (length) element.style.setProperty(property, length);
+        }
         const table = element.querySelector('table');
         const body = table?.querySelector('.w-datatable__body');
         const filterForm = table?.querySelector('[data-w-datatable-filter]');
@@ -527,14 +291,23 @@ function registerDataTable(UI) {
                 const payload = responsePayload(response);
                 const apiFields = Array.isArray(payload.all_fields) ? payload.all_fields : [];
                 state.allFields = mergeFields(state.allFields, apiFields);
+                const hydrateFields = (fields) => {
+                    const available = fieldMap(state.allFields);
+                    return mergeFields([], fields).map((field) => ({
+                        ...(available.get(field.name) || {}),
+                        ...field,
+                    }));
+                };
+                const apiDisplayFields = Array.isArray(payload.display_fields) ? payload.display_fields : [];
+                const apiFilterFields = Array.isArray(payload.filter_fields) ? payload.filter_fields : [];
                 const displaySource = Array.isArray(payload.cached_display_fields) && payload.cached_display_fields.length
                     ? payload.cached_display_fields
-                    : (Array.isArray(payload.display_fields) && payload.display_fields.length ? payload.display_fields : state.displayFields);
+                    : (templateDisplayFields.length ? templateDisplayFields : apiDisplayFields);
                 const filterSource = Array.isArray(payload.cached_filter_fields) && payload.cached_filter_fields.length
                     ? payload.cached_filter_fields
-                    : (Array.isArray(payload.filter_fields) ? payload.filter_fields : state.filterFields);
-                state.displayFields = mergeFields(state.displayFields, displaySource).filter((field) => field.visible !== false);
-                state.filterFields = mergeFields(state.filterFields, filterSource).filter((field) => field.searchable !== false);
+                    : (templateFilterFields.length ? templateFilterFields : apiFilterFields);
+                state.displayFields = hydrateFields(displaySource).filter((field) => field.visible !== false);
+                state.filterFields = hydrateFields(filterSource).filter((field) => field.searchable !== false);
                 if (state.displayFields.length === 0) state.displayFields = state.allFields.filter((field) => field.visible !== false);
                 renderFilters();
             } catch (error) {
@@ -561,7 +334,11 @@ function registerDataTable(UI) {
         const deleteRow = async (rowIndex) => {
             const row = state.data[rowIndex];
             if (!row) return;
-            const confirmed = await confirmAction(UI, translate('确定删除这条记录吗？'));
+            const confirmed = await UI.dialog.confirm(translate('确定删除这条记录吗？'), {
+                title: translate('请确认'),
+                tone: 'danger',
+                dangerous: true,
+            });
             if (!confirmed) return;
             setBusy(true, translate('正在删除…'));
             try {
@@ -712,7 +489,10 @@ function registerDataTable(UI) {
         };
 
         const clearConfig = async () => {
-            const confirmed = await confirmAction(UI, translate('确定恢复默认字段配置吗？'), {tone: 'neutral'});
+            const confirmed = await UI.dialog.confirm(translate('确定恢复默认字段配置吗？'), {
+                title: translate('请确认'),
+                tone: 'neutral',
+            });
             if (!confirmed) return;
             try {
                 await request(config, 'clearConfig', {scope: config.scope, table_id: config.id, type: 'all'});
@@ -819,349 +599,9 @@ function registerDataTable(UI) {
     });
 }
 
-function registerDataTableForm(UI) {
-    UI.define('data-table-form', ({element, listen}) => {
-        const config = parseConfig(element);
-        const form = document.getElementById(String(config.id || '')) || element.querySelector('form');
-        const autoContainer = element.querySelector('[data-w-datatable-form-auto]');
-        const message = element.querySelector('[data-w-datatable-form-message]');
-        const title = element.querySelector('[data-w-datatable-form-title]');
-        const state = {
-            mode: config.mode === 'edit' ? 'edit' : 'add',
-            recordId: config.recordId || '',
-            fieldsLoaded: false,
-            fieldsPromise: null,
-            fields: [],
-            destroyed: false,
-            previewUrls: new Set(),
-        };
-        if (!(form instanceof HTMLFormElement)) return {state};
-
-        const showMessage = (text, tone = '') => {
-            if (!message) return;
-            message.hidden = text === '';
-            message.dataset.tone = tone;
-            message.textContent = text;
-        };
-
-        const setBusy = (busy) => {
-            element.setAttribute('aria-busy', String(busy));
-            form.querySelectorAll('button, input, select, textarea').forEach((control) => {
-                if (control instanceof HTMLButtonElement) control.disabled = busy;
-            });
-        };
-
-        const clearErrors = () => {
-            form.querySelectorAll('[aria-invalid="true"]').forEach((control) => control.removeAttribute('aria-invalid'));
-            form.querySelectorAll('[data-w-field-error]').forEach((error) => {
-                error.hidden = true;
-                error.textContent = '';
-            });
-            showMessage('');
-        };
-
-        const revokePreviews = () => {
-            for (const url of state.previewUrls) URL.revokeObjectURL(url);
-            state.previewUrls.clear();
-        };
-
-        const reset = () => {
-            revokePreviews();
-            form.reset();
-            clearErrors();
-            form.querySelectorAll('[data-w-file-preview]').forEach((preview) => preview.replaceChildren());
-        };
-
-        const createControl = (field) => {
-            const normalized = normalizeField(field);
-            const wrapper = document.createElement('div');
-            wrapper.className = 'w-field w-datatable-form__field';
-            wrapper.dataset.field = normalized.name;
-            wrapper.dataset.type = normalized.type;
-            const id = `w-field-${config.id}-${normalized.name.replace(/[^A-Za-z0-9_-]/g, '-')}`;
-            const label = document.createElement('label');
-            label.className = 'w-field__label';
-            label.htmlFor = id;
-            label.textContent = normalized.label;
-            if (field.required) {
-                const required = document.createElement('span');
-                required.className = 'w-datatable-form__required';
-                required.setAttribute('aria-hidden', 'true');
-                required.textContent = '*';
-                label.append(required);
-            }
-            let control;
-            if (normalized.type === 'textarea') {
-                control = document.createElement('textarea');
-                control.className = 'w-input';
-                control.rows = 4;
-            } else if (normalized.type === 'select') {
-                control = document.createElement('select');
-                control.className = 'w-select';
-                const empty = document.createElement('option');
-                empty.value = '';
-                empty.textContent = translate('请选择');
-                control.append(empty);
-                for (const option of normalized.options) {
-                    const item = document.createElement('option');
-                    item.value = option.value;
-                    item.textContent = option.label;
-                    control.append(item);
-                }
-            } else if (['checkbox', 'switch'].includes(normalized.type)) {
-                const checkLabel = document.createElement('label');
-                checkLabel.className = normalized.type === 'switch' ? 'w-switch' : 'w-check';
-                control = document.createElement('input');
-                control.type = 'checkbox';
-                control.value = '1';
-                const text = document.createElement('span');
-                text.textContent = normalized.label;
-                checkLabel.append(control, text);
-                wrapper.append(checkLabel);
-            } else if (['file', 'image'].includes(normalized.type)) {
-                control = document.createElement('input');
-                control.type = 'file';
-                control.hidden = true;
-                if (normalized.options[0]?.value) control.accept = normalized.options[0].value;
-                const fileBox = document.createElement('div');
-                fileBox.className = 'w-datatable-form__file';
-                const choose = button(
-                    normalized.type === 'image' ? translate('选择图片') : translate('选择文件'),
-                    {tone: 'neutral', formAction: 'file.choose', icon: normalized.type === 'image' ? 'image' : 'upload'},
-                );
-                choose.dataset.wTarget = `#${id}`;
-                const preview = document.createElement('div');
-                preview.className = 'w-datatable-form__file-preview';
-                preview.dataset.wFilePreview = '';
-                fileBox.append(choose, preview);
-                wrapper.append(fileBox);
-            } else {
-                control = document.createElement('input');
-                control.type = normalized.type === 'datetime' ? 'datetime-local' : (
-                    ['text', 'search', 'email', 'tel', 'url', 'password', 'number', 'date', 'time', 'range', 'color'].includes(normalized.type)
-                        ? normalized.type
-                        : 'text'
-                );
-                control.className = 'w-input';
-            }
-            control.id = id;
-            control.name = normalized.name;
-            control.required = field.required === true;
-            control.readOnly = field.readonly === true;
-            control.disabled = field.disabled === true;
-            if ('placeholder' in control) control.placeholder = String(field.placeholder || normalized.label || '');
-            for (const attribute of ['min', 'max', 'step', 'maxlength']) {
-                if (field[attribute] !== undefined && field[attribute] !== null && field[attribute] !== '') {
-                    control.setAttribute(attribute, String(field[attribute]));
-                }
-            }
-            if (!wrapper.contains(control)) wrapper.append(label, control);
-            else wrapper.prepend(label);
-            const error = document.createElement('div');
-            error.className = 'w-field__error';
-            error.dataset.wFieldError = '';
-            error.hidden = true;
-            wrapper.append(error);
-            return wrapper;
-        };
-
-        const manualFields = () => [...form.elements]
-            .filter((control) => control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement)
-            .map((control) => control.name)
-            .filter(Boolean);
-
-        const loadFields = () => {
-            if (!config.autoFields || !autoContainer) {
-                state.fieldsLoaded = true;
-                return Promise.resolve();
-            }
-            if (state.fieldsPromise) return state.fieldsPromise;
-            state.fieldsPromise = request(config, 'formFields', {
-                form_id: config.id,
-                model: config.model,
-                scope: config.scope,
-                exclude_fields: config.excludeFields || [],
-                include_fields: config.includeFields || [],
-                manual_fields: manualFields(),
-                model_config: config.modelConfig || {},
-            }).then((response) => {
-                if (state.destroyed) return;
-                const payload = responsePayload(response);
-                state.fields = Array.isArray(payload.fields) ? payload.fields.map(normalizeField) : [];
-                const fragment = document.createDocumentFragment();
-                for (const field of state.fields) fragment.append(createControl(field));
-                autoContainer.replaceChildren(fragment);
-                state.fieldsLoaded = true;
-            }).catch((error) => {
-                showMessage(error instanceof Error ? error.message : String(error), 'danger');
-                throw error;
-            });
-            return state.fieldsPromise;
-        };
-
-        const setValue = (control, value) => {
-            if (control instanceof HTMLInputElement && control.type === 'checkbox') {
-                control.checked = value === true || value === 1 || value === '1';
-            } else if (control instanceof HTMLInputElement && control.type === 'radio') {
-                control.checked = String(control.value) === String(value ?? '');
-            } else if (!(control instanceof HTMLInputElement && control.type === 'file')) {
-                control.value = value == null ? '' : String(value);
-            }
-        };
-
-        const fill = (record) => {
-            for (const control of form.elements) {
-                if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) || !control.name) continue;
-                setValue(control, valueFor(record, control.name));
-            }
-        };
-
-        const loadRecord = async (recordId) => {
-            const response = await request(config, 'formRecord', {
-                model: config.model,
-                record_id: recordId,
-                model_config: config.modelConfig || {},
-            });
-            const payload = responsePayload(response);
-            return payload.record || payload.data || {};
-        };
-
-        const open = async (mode = 'add', recordId = '', record = null) => {
-            state.mode = mode === 'edit' ? 'edit' : 'add';
-            state.recordId = recordId || '';
-            reset();
-            if (title) title.textContent = state.mode === 'edit' ? translate('编辑记录') : translate('新增记录');
-            if (element instanceof HTMLDialogElement) UI.dialog.open(element);
-            else element.scrollIntoView({block: 'start', behavior: 'smooth'});
-            setBusy(true);
-            try {
-                await loadFields();
-                if (state.mode === 'edit') fill(record || await loadRecord(state.recordId));
-                setBusy(false);
-                const first = form.querySelector('input:not([type="hidden"]), select, textarea');
-                if (first instanceof HTMLElement) first.focus({preventScroll: true});
-            } catch (error) {
-                setBusy(false);
-                showMessage(error instanceof Error ? error.message : String(error), 'danger');
-            }
-        };
-
-        const collect = () => {
-            const result = {};
-            for (const control of form.elements) {
-                if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) || !control.name || control.disabled) continue;
-                if (control instanceof HTMLInputElement && control.type === 'radio' && !control.checked) continue;
-                if (control instanceof HTMLInputElement && control.type === 'checkbox') {
-                    result[control.name] = control.checked ? 1 : 0;
-                } else if (control instanceof HTMLInputElement && control.type === 'file') {
-                    const files = [...(control.files || [])].map((file) => ({
-                        name: file.name,
-                        size: file.size,
-                        type: file.type,
-                        lastModified: file.lastModified,
-                    }));
-                    result[control.name] = control.multiple ? files : (files[0] || '');
-                } else {
-                    result[control.name] = control.value;
-                }
-            }
-            return result;
-        };
-
-        const submit = async () => {
-            clearErrors();
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                const invalid = form.querySelector(':invalid');
-                if (invalid instanceof HTMLElement) invalid.setAttribute('aria-invalid', 'true');
-                return;
-            }
-            setBusy(true);
-            try {
-                const data = collect();
-                const operation = state.mode === 'edit' ? 'update' : 'create';
-                await request(config, operation, {
-                    model: config.model,
-                    id: state.recordId || undefined,
-                    record_id: state.recordId || undefined,
-                    data,
-                    dependencies: config.dependencies || '',
-                    transaction: config.transaction === true,
-                    model_config: config.modelConfig || {},
-                });
-                setBusy(false);
-                UI.toast.success(state.mode === 'edit' ? translate('记录已更新。') : translate('记录已创建。'));
-                element.dispatchEvent(new CustomEvent('weline:datatable:form:saved', {
-                    bubbles: true,
-                    detail: {formId: config.id, mode: state.mode, recordId: state.recordId},
-                }));
-                if (element instanceof HTMLDialogElement) UI.dialog.close(element, 'saved');
-                else reset();
-            } catch (error) {
-                setBusy(false);
-                showMessage(error instanceof Error ? error.message : String(error), 'danger');
-            }
-        };
-
-        const renderFilePreview = (input) => {
-            const wrapper = input.closest('.w-datatable-form__field');
-            const preview = wrapper?.querySelector('[data-w-file-preview]');
-            if (!preview) return;
-            preview.replaceChildren();
-            for (const file of input.files || []) {
-                if (file.type.startsWith('image/')) {
-                    const url = URL.createObjectURL(file);
-                    state.previewUrls.add(url);
-                    const image = document.createElement('img');
-                    image.src = url;
-                    image.alt = file.name;
-                    preview.append(image);
-                }
-                const text = document.createElement('span');
-                text.textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
-                preview.append(text);
-            }
-        };
-
-        listen(form, 'submit', (event) => {
-            event.preventDefault();
-            void submit();
-        });
-        listen(form, 'reset', () => queueMicrotask(clearErrors));
-        listen(element, 'click', (event) => {
-            const action = event.target instanceof Element ? event.target.closest('[data-w-datatable-form-action]') : null;
-            if (!(action instanceof HTMLElement)) return;
-            if (action.dataset.wDatatableFormAction === 'file.choose') {
-                const target = action.dataset.wTarget || '';
-                const input = target ? element.querySelector(target) : null;
-                if (input instanceof HTMLInputElement && input.type === 'file') input.click();
-            }
-        });
-        listen(form, 'change', (event) => {
-            if (event.target instanceof HTMLInputElement && event.target.type === 'file') renderFilePreview(event.target);
-        });
-        if (element instanceof HTMLDialogElement) {
-            listen(element, 'weline:ui:dialog:close', revokePreviews);
-        }
-
-        queueMicrotask(() => void loadFields());
-        return {
-            state,
-            open,
-            reset,
-            submit,
-            destroy() {
-                state.destroyed = true;
-                revokePreviews();
-            },
-        };
-    });
-}
-
 function register() {
     if (!Weline.UI) return;
     registerDataTable(Weline.UI);
-    registerDataTableForm(Weline.UI);
     Weline.UI.mount(document);
 }
 

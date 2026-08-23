@@ -21,7 +21,7 @@ final class PageTranslationTaskProcessorTest extends TestCase
         $pageService = $this->createMock(PageService::class);
         $pageService->method('getPageModel')->with(6)->willReturn($page);
         $localeService = $this->createMock(PageLocaleService::class);
-        $localeService->method('buildEditorPayload')->with($page, '')->willReturn($this->payload());
+        $localeService->method('buildEditorPayload')->with($page, '', 4)->willReturn($this->payload());
         $translator = $this->createMock(TranslationServiceInterface::class);
 
         $processor = new PageTranslationTaskProcessor(
@@ -36,13 +36,15 @@ final class PageTranslationTaskProcessorTest extends TestCase
                 'request_id' => 'cms-page-6-translate-1',
                 'page_id' => 6,
                 'website_id' => 0,
+                'store_id' => 4,
+                'store_code' => 'main',
                 'source_locale' => 'en_US',
                 'source_title' => 'About our team',
                 'source_hash' => hash('sha256', 'About our team'),
                 'supported_locales' => ['en_US', 'zh_Hans_CN', 'ru_RU'],
                 'target_locales' => ['ru_RU'],
             ],
-            $processor->freezeInput(6, 'cms-page-6-translate-1'),
+            $processor->freezeInput(6, 'cms-page-6-translate-1', 4),
         );
     }
 
@@ -80,7 +82,7 @@ final class PageTranslationTaskProcessorTest extends TestCase
         $localeService = $this->createMock(PageLocaleService::class);
         $payload = $this->payload();
         $payload['titles']['ru_RU'] = 'Ручной заголовок';
-        $localeService->method('buildEditorPayload')->with($page, '')->willReturn($payload);
+        $localeService->method('buildEditorPayload')->with($page, '', 4)->willReturn($payload);
         $localeService->expects(self::never())->method('fillMissingTitle');
 
         $processor = new PageTranslationTaskProcessor(
@@ -104,7 +106,7 @@ final class PageTranslationTaskProcessorTest extends TestCase
         $localeService = $this->createMock(PageLocaleService::class);
         $payload = $this->payload();
         $payload['titles']['en_US'] = 'A changed source title';
-        $localeService->method('buildEditorPayload')->with($page, '')->willReturn($payload);
+        $localeService->method('buildEditorPayload')->with($page, '', 4)->willReturn($payload);
         $localeService->expects(self::never())->method('fillMissingTitle');
 
         $processor = new PageTranslationTaskProcessor(
@@ -133,6 +135,8 @@ final class PageTranslationTaskProcessorTest extends TestCase
     private function payload(): array
     {
         return [
+            'store_id' => 4,
+            'store_code' => 'main',
             'supported_locales' => ['en_US', 'zh_Hans_CN', 'ru_RU'],
             'source_locale' => 'en_US',
             'current_locale' => 'en_US',
@@ -153,6 +157,8 @@ final class PageTranslationTaskProcessorTest extends TestCase
             'request_id' => 'cms-page-6-translate-1',
             'page_id' => 6,
             'website_id' => 0,
+            'store_id' => 4,
+            'store_code' => 'main',
             'source_locale' => 'en_US',
             'source_title' => 'About our team',
             'source_hash' => hash('sha256', 'About our team'),

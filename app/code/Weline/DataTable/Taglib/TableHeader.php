@@ -7,10 +7,11 @@ namespace Weline\DataTable\Taglib;
 use Weline\DataTable\Helper\FrontendAccess;
 use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Taglib\OwnsChildCompilationInterface;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Template;
 
-final class TableHeader implements TaglibInterface
+final class TableHeader implements TaglibInterface, OwnsChildCompilationInterface
 {
     public static function name(): string
     {

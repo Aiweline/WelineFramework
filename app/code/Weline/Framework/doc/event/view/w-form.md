@@ -51,6 +51,10 @@ CSRF，GET 不注入。`captcha` 默认使用 `off`，普通 GET/POST 表单都�
 - `Weline_Framework::view::form::prepare`：开始标签前调整白名单属性。
 - `Weline_Framework::view::form::before_close`：结束标签前向 `html` 追加隐藏字段或验证组件。
 
+验证码位置：在提交按钮前放置空的
+`<div data-weline-form-captcha-slot></div>`。`before_close` 产出的挑战 HTML 会优先替换该
+插槽；没有插槽时仍追加在表单内容末尾（旧行为）。CSRF 隐藏字段始终靠近 `</form>`。
+
 浏览器事件：
 
 - `weline:form:mounted`

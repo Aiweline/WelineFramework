@@ -203,7 +203,7 @@ class LocalStorage implements StorageInterface
         $fromPath = $this->getFullPath($from);
         $toPath = $this->getFullPath($to);
         
-        if (!\is_file($fromPath)) {
+        if ((!\is_file($fromPath) && !\is_dir($fromPath)) || \file_exists($toPath)) {
             return false;
         }
         
@@ -268,8 +268,14 @@ class LocalStorage implements StorageInterface
     
     public function deleteDirectory(string $path): bool
     {
+        if (\trim(\str_replace('\\', '/', $path), '/') === '') {
+            return false;
+        }
         $fullPath = $this->getFullPath($path);
         
+        if (\is_link($fullPath)) {
+            return false;
+        }
         if (!\is_dir($fullPath)) {
             return true;
         }
@@ -307,9 +313,19 @@ class LocalStorage implements StorageInterface
     
     private function getFullPath(string $path): string
     {
-        $path = \str_replace(['/', '\\'], DS, $path);
-        $path = \trim($path, DS);
-        return $this->rootPath . $path;
+        $path = \trim(\str_replace('\\', '/', $path), '/');
+        if ($path !== '') {
+            if (\preg_match('/[\x00-\x1F\x7F]/', $path)) {
+                throw new \InvalidArgumentException((string)__('存储路径无效'));
+            }
+            foreach (\explode('/', $path) as $segment) {
+                if ($segment === '' || $segment === '.' || $segment === '..') {
+                    throw new \InvalidArgumentException((string)__('存储路径无效'));
+                }
+            }
+        }
+
+        return $this->rootPath . \str_replace('/', DS, $path);
     }
     
     private function getRelativePath(string $fullPath): string

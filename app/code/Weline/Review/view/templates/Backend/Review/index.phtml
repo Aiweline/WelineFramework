@@ -1,0 +1,767 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var list<array<string,mixed>> $reviews
+ * @var array<string,mixed> $pagination
+ * @var int $total
+ * @var string $status_filter
+ * @var string $website_id_filter
+ * @var string $store_id_filter
+ * @var list<string> $allowed_statuses
+ * @var string $websiteSelectValue
+ * @var string $websiteSelectDisplay
+ * @var string $websiteSelectOptionsJson
+ * @var string $storeSelectValue
+ * @var string $storeSelectDisplay
+ * @var string $storeSelectOptionsJson
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE),
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$statusLabels = [
+    'pending' => __('待审核'),
+    'ai_pending_blocked' => __('AI 审核待人工'),
+    'approved' => __('已通过'),
+    'rejected' => __('已拒绝'),
+];
+$statusClasses = [
+    'pending' => 'is-warning',
+    'ai_pending_blocked' => 'is-info',
+    'approved' => 'is-success',
+    'rejected' => 'is-danger',
+];
+$currentStatus = (string)($status_filter ?? '');
+$currentWebsiteId = trim((string)($website_id_filter ?? ''));
+$currentStoreId = trim((string)($store_id_filter ?? ''));
+$websiteSelectValue = (string)($websiteSelectValue ?? $currentWebsiteId);
+$websiteSelectDisplay = (string)($websiteSelectDisplay ?? '');
+$websiteSelectOptionsJson = (string)($websiteSelectOptionsJson ?? '[]');
+$storeSelectValue = (string)($storeSelectValue ?? $currentStoreId);
+$storeSelectDisplay = (string)($storeSelectDisplay ?? '');
+$storeSelectOptionsJson = (string)($storeSelectOptionsJson ?? '[]');
+$totalText = $escape($total ?? 0);
+$statusOptionsHtml = '<option value=""' . ($currentStatus === '' ? ' selected' : '') . '>'
+    . $escape(__('全部状态')) . '</option>';
+foreach (($allowed_statuses ?? []) as $statusOption) {
+    $statusOption = (string)$statusOption;
+    $statusOptionsHtml .= '<option value="' . $escape($statusOption) . '"'
+        . ($currentStatus === $statusOption ? ' selected' : '') . '>'
+        . $escape($statusLabels[$statusOption] ?? $statusOption) . '</option>';
+}
+$filterQuery = [];
+if ($currentStatus !== '') {
+    $filterQuery['status'] = $currentStatus;
+}
+if ($currentWebsiteId !== '') {
+    $filterQuery['website_id'] = $currentWebsiteId;
+}
+if ($currentStoreId !== '') {
+    $filterQuery['store_id'] = $currentStoreId;
+}
+$filterQueryBase = $filterQuery === [] ? '?' : ('?' . http_build_query($filterQuery) . '&');
+
+$rowsHtml = '';
+foreach (($reviews ?? []) as $review) {
+    $reviewId = (int)($review['review_id'] ?? 0);
+    $status = (string)($review['status'] ?? '');
+    $media = is_array($review['media'] ?? null) ? $review['media'] : [];
+    $ratings = is_array($review['ratings'] ?? null) ? $review['ratings'] : [];
+    $emailHtml = (string)($review['reviewer_email'] ?? '') !== ''
+        ? '<small class="w-text" data-tone="muted" data-size="sm">' . $escape($review['reviewer_email']) . '</small>'
+        : '';
+    $titleHtml = (string)($review['title'] ?? '') !== ''
+        ? '<strong class="w-review-admin__title">' . $escape($review['title']) . '</strong>'
+        : '';
+    $ratingsHtml = '<strong class="w-review-admin__stars">'
+        . str_repeat('★', max(1, min(5, (int)($review['rating'] ?? 5))))
+        . '</strong>';
+    if ($ratings !== []) {
+        $ratingsHtml = '<div class="w-stack" data-review-role="rating-breakdown" style="--w-gap:var(--weline-space-1)">';
+        foreach ($ratings as $ratingItem) {
+            $ratingValue = max(1, min((int)($ratingItem['max'] ?? 5), (int)($ratingItem['value'] ?? 0)));
+            $ratingsHtml .= '<div><small class="w-text" data-tone="muted" data-size="sm">' . $escape($ratingItem['label'] ?? '')
+                . '</small><strong class="w-review-admin__stars" aria-label="'
+                . $escape(($ratingItem['label'] ?? '') . ' ' . $ratingValue . '/5') . '">'
+                . str_repeat('★', $ratingValue) . '</strong></div>';
+        }
+        $ratingsHtml .= '</div>';
+    }
+    $mediaHtml = '<span class="w-text" data-tone="muted">' . $escape(__('无媒体')) . '</span>';
+    if ($media !== []) {
+        $mediaHtml = '<div class="w-cluster" data-wrap="true" data-review-role="media">';
+        foreach ($media as $item) {
+            $kind = (string)($item['kind'] ?? '');
+            $url = $escape($item['url'] ?? '');
+            $mediaHtml .= '<figure class="w-review-admin__media-item">';
+            if ($kind === 'video') {
+                $mediaHtml .= '<video src="' . $url
+                    . '" controls preload="metadata"></video>';
+            } else {
+                $mediaHtml .= '<img src="' . $url . '" alt="'
+                    . $escape($item['name'] ?? __('评论图片'))
+                    . '" loading="lazy">';
+            }
+            $mediaHtml .= '<figcaption class="w-review-admin__media-cap">'
+                . ($kind === 'video' ? 'VIDEO' : 'PHOTO') . '</figcaption></figure>';
+        }
+        $mediaHtml .= '</div>';
+    }
+    $approveDisabled = $status === 'approved' ? ' disabled' : '';
+    $rejectDisabled = $status === 'rejected' ? ' disabled' : '';
+    $stickyCell = 'min-width:190px;position:sticky;right:0;z-index:2;background:var(--weline-theme-surface,#182230);border-left:1px solid var(--weline-theme-border)';
+    $rowsHtml .= '<tr data-review-role="row" data-review-id="' . $escape($reviewId) . '">'
+        . '<td style="min-width:190px">' . $ratingsHtml
+        . '<div class="w-text" data-weight="strong">' . $escape($review['reviewer'] ?? '') . '</div>'
+        . $emailHtml . '</td>'
+        . '<td style="min-width:280px;max-width:460px">' . $titleHtml
+        . '<details><summary class="w-review-admin__summary">' . $escape(__('查看详细内容'))
+        . '</summary><p class="w-review-admin__body">'
+        . $escape($review['content'] ?? '') . '</p></details></td>'
+        . '<td style="min-width:240px">' . $mediaHtml . '</td>'
+        . '<td style="min-width:210px"><span class="w-badge">'
+        . $escape($review['type_code'] ?? 'product') . '</span><code>'
+        . $escape($review['entity_uuid'] ?? '') . '</code><small class="w-text" data-tone="muted" data-size="sm">Website '
+        . $escape($review['website_id'] ?? 0) . ' / Store ' . $escape($review['store_id'] ?? 0)
+        . '</small></td>'
+        . '<td><span class="w-badge ' . $escape($statusClasses[$status] ?? '')
+        . '" data-review-role="status">' . $escape($statusLabels[$status] ?? $status) . '</span></td>'
+        . '<td style="min-width:150px">' . $escape($review['created_at'] ?? '') . '</td>'
+        . '<td style="' . $stickyCell . '"><div class="w-cluster" data-wrap="true">'
+        . '<button class="w-button" data-size="sm" data-tone="success" type="button" data-review-role="approve" data-review-action="approved"'
+        . ' data-review-id="' . $escape($reviewId) . '"' . $approveDisabled
+        . '>' . $escape(__('通过')) . '</button>'
+        . '<button class="w-button" data-size="sm" data-tone="danger" data-variant="outline" type="button" data-review-role="reject" data-review-action="rejected"'
+        . ' data-review-id="' . $escape($reviewId) . '"' . $rejectDisabled
+        . '>' . $escape(__('拒绝')) . '</button>'
+        . '</div></td></tr>';
+}
+
+if ($rowsHtml === '') {
+    $bodyHtml = '<div class="w-card"><div class="w-card__body w-text" data-align="center" data-tone="muted" data-review-role="empty" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12)">'
+        . '<p style="--w-mb:0">' . $escape(__('暂无评论')) . '</p></div></div>';
+} else {
+    $bodyHtml = '<div class="w-card" style="min-width:0;max-width:100%"><div class="w-table-wrap" data-review-role="table-scroll"><table class="w-table">'
+        . '<thead><tr><th>' . $escape(__('评分与评论者')) . '</th><th>' . $escape(__('评论内容'))
+        . '</th><th>' . $escape(__('图片与视频')) . '</th><th>' . $escape(__('评论对象'))
+        . '</th><th>' . $escape(__('状态')) . '</th><th>' . $escape(__('提交时间'))
+        . '</th><th style="position:sticky;right:0;z-index:3;background:var(--weline-theme-surface,#182230);border-left:1px solid var(--weline-theme-border)">' . $escape(__('操作')) . '</th></tr></thead><tbody>'
+        . $rowsHtml . '</tbody></table></div></div>';
+}
+
+$currentPage = max(1, (int)($pagination['page'] ?? 1));
+$totalPages = max(1, (int)($pagination['lastPage'] ?? 1));
+$paginationHtml = '';
+if ($totalPages > 1) {
+    $paginationHtml = '<nav class="w-cluster" style="--w-mt:var(--weline-space-3)" aria-label="' . $escape(__('评论分页')) . '">';
+    if ($currentPage > 1) {
+        $paginationHtml .= '<a class="w-button" data-tone="neutral" data-variant="outline" href="' . $escape($filterQueryBase . 'page=' . ($currentPage - 1))
+            . '">' . $escape(__('上一页')) . '</a>';
+    }
+    if ($currentPage < $totalPages) {
+        $paginationHtml .= '<a class="w-button" data-tone="neutral" data-variant="outline" href="' . $escape($filterQueryBase . 'page=' . ($currentPage + 1))
+            . '">' . $escape(__('下一页')) . '</a>';
+    }
+    $paginationHtml .= '</nav>';
+}
+?>
+<style>
+.w-review-admin {
+    --review-action-column: 8.5rem;
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    gap: var(--weline-space-4);
+    color: var(--weline-theme-text);
+}
+
+.w-review-admin__toolbar {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(28rem, 1fr);
+    align-items: end !important;
+    gap: var(--weline-space-5) !important;
+    margin: 0 !important;
+    padding: var(--weline-space-5);
+    overflow: visible;
+    background:
+        linear-gradient(120deg, var(--weline-theme-primary-surface), transparent 46%),
+        var(--weline-theme-surface);
+    border-color: var(--weline-theme-border);
+    box-shadow: var(--weline-theme-shadow-sm);
+}
+
+.w-review-admin__toolbar h4 {
+    margin: 0 0 var(--weline-space-2) !important;
+    color: var(--weline-theme-text);
+    font-size: var(--weline-font-size-xl);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.w-review-admin__toolbar > div > .text-muted {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--weline-control-height-sm);
+    padding: 0 var(--weline-space-3);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-round);
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text-muted) !important;
+    font-size: var(--weline-font-size-sm);
+}
+
+.w-review-admin__filter {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: end !important;
+    justify-content: flex-end;
+    gap: var(--weline-space-2) !important;
+    min-width: 0;
+    padding: var(--weline-space-3);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    background: var(--weline-theme-surface-raised);
+}
+
+.w-review-admin__filter > div {
+    flex: 1 1 11rem;
+    min-width: 10rem;
+}
+
+.w-review-admin__filter .w-field__label {
+    display: block;
+    margin: 0 0 var(--weline-space-2);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.w-review-admin__filter .w-select {
+    min-width: 12rem;
+}
+
+.w-review-admin > .w-card:not(.w-review-admin__toolbar) {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.w-review-admin .w-table-wrap {
+    max-width: 100%;
+    overflow: auto;
+    overscroll-behavior-inline: contain;
+    border: 0;
+    border-radius: inherit;
+    scrollbar-color: var(--weline-theme-border-strong) transparent;
+    scrollbar-width: thin;
+}
+
+.w-review-admin .w-table-wrap::-webkit-scrollbar {
+    width: 0.6rem;
+    height: 0.6rem;
+}
+
+.w-review-admin .w-table-wrap::-webkit-scrollbar-thumb {
+    border: 0.15rem solid transparent;
+    border-radius: var(--weline-radius-round);
+    background: var(--weline-theme-border-strong);
+    background-clip: padding-box;
+}
+
+.w-review-admin .w-table {
+    min-width: 74rem;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+}
+
+.w-review-admin .w-table th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding-block: var(--weline-space-3);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+    letter-spacing: 0.04em;
+    text-transform: none;
+}
+
+.w-review-admin .w-table td {
+    padding-block: var(--weline-space-4);
+    vertical-align: top;
+    line-height: 1.5;
+    transition:
+        background-color var(--weline-motion-fast),
+        border-color var(--weline-motion-fast);
+}
+
+.w-review-admin .w-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.w-review-admin .w-table tbody tr:has(.bg-warning) td:first-child {
+    box-shadow: inset 0.2rem 0 var(--weline-theme-warning);
+}
+
+.w-review-admin .w-table tbody tr:has(.bg-success) td:first-child {
+    box-shadow: inset 0.2rem 0 var(--weline-theme-success);
+}
+
+.w-review-admin .w-table tbody tr:has(.bg-danger) td:first-child {
+    box-shadow: inset 0.2rem 0 var(--weline-theme-danger);
+}
+
+.w-review-admin .w-table th:nth-child(1),
+.w-review-admin .w-table td:nth-child(1) {
+    width: 11.5rem;
+    min-width: 11.5rem !important;
+}
+
+.w-review-admin .w-table th:nth-child(2),
+.w-review-admin .w-table td:nth-child(2) {
+    width: 14rem;
+    min-width: 14rem !important;
+    max-width: 14rem !important;
+}
+
+.w-review-admin .w-table th:nth-child(3),
+.w-review-admin .w-table td:nth-child(3) {
+    width: 12.5rem;
+    min-width: 12.5rem !important;
+}
+
+.w-review-admin .w-table th:nth-child(4),
+.w-review-admin .w-table td:nth-child(4) {
+    width: 11.5rem;
+    min-width: 11.5rem !important;
+}
+
+.w-review-admin .w-table th:nth-child(5),
+.w-review-admin .w-table td:nth-child(5) {
+    width: 6.5rem;
+}
+
+.w-review-admin .w-table th:nth-child(6),
+.w-review-admin .w-table td:nth-child(6) {
+    width: 9.5rem;
+    min-width: 9.5rem !important;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.w-review-admin .w-table th:nth-child(7),
+.w-review-admin .w-table td:nth-child(7) {
+    width: var(--review-action-column);
+    min-width: var(--review-action-column) !important;
+}
+
+.w-review-admin [data-review-role="rating-breakdown"] {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--weline-space-2) !important;
+}
+
+.w-review-admin [data-review-role="rating-breakdown"] > div {
+    min-width: 0;
+    padding: var(--weline-space-2);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface-raised);
+}
+
+.w-review-admin [data-review-role="rating-breakdown"] small {
+    display: block;
+    overflow: hidden;
+    color: var(--weline-theme-text-muted) !important;
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-review-admin [data-review-role="rating-breakdown"] strong {
+    margin-top: var(--weline-space-1);
+    overflow: hidden;
+    color: var(--weline-theme-warning) !important;
+    font-size: var(--weline-font-size-sm);
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+.w-review-admin .fw-semibold {
+    color: var(--weline-theme-text);
+    font-weight: 700;
+}
+
+.w-review-admin details {
+    margin-top: var(--weline-space-2);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface-raised);
+}
+
+.w-review-admin details[open] {
+    border-color: var(--weline-theme-primary-border);
+    background: var(--weline-theme-primary-surface);
+}
+
+.w-review-admin summary {
+    color: var(--weline-theme-primary) !important;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.w-review-admin summary:focus-visible,
+.w-review-admin .w-button:focus-visible,
+.w-review-admin .btn:focus-visible {
+    outline: none;
+    box-shadow: var(--weline-theme-focus-ring);
+}
+
+.w-review-admin details p {
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.65;
+}
+
+.w-review-admin [data-review-role="media"] {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--weline-space-2) !important;
+}
+
+.w-review-admin [data-review-role="media"] figure {
+    width: auto !important;
+    min-width: 0;
+    margin: 0 !important;
+    border-color: var(--weline-theme-border) !important;
+    border-radius: var(--weline-radius-md) !important;
+    background: var(--weline-theme-surface-raised) !important;
+    box-shadow: var(--weline-theme-shadow-sm);
+}
+
+.w-review-admin [data-review-role="media"] img,
+.w-review-admin [data-review-role="media"] video {
+    width: 100% !important;
+    height: 6rem !important;
+    background: var(--weline-theme-canvas);
+}
+
+.w-review-admin [data-review-role="media"] figcaption {
+    padding: var(--weline-space-2) !important;
+    color: var(--weline-theme-text-muted) !important;
+    font-size: var(--weline-font-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.w-review-admin code {
+    display: block;
+    margin-block: var(--weline-space-2);
+    padding: var(--weline-space-2);
+    overflow-wrap: anywhere;
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-sm);
+    background: var(--weline-theme-canvas);
+    color: var(--weline-theme-primary-emphasis);
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.45;
+}
+
+.w-review-admin .text-muted {
+    color: var(--weline-theme-text-muted) !important;
+}
+
+.w-review-admin .w-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-round);
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text);
+    font-size: var(--weline-font-size-xs);
+    font-weight: 750;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.w-review-admin .w-badge.is-warning {
+    border-color: var(--weline-theme-warning);
+    background: var(--weline-theme-warning-surface) !important;
+    color: var(--weline-theme-warning) !important;
+}
+
+.w-review-admin .w-badge.is-success {
+    border-color: var(--weline-theme-success);
+    background: var(--weline-theme-success-surface) !important;
+    color: var(--weline-theme-success) !important;
+}
+
+.w-review-admin .w-badge.is-danger {
+    border-color: var(--weline-theme-danger);
+    background: var(--weline-theme-danger-surface) !important;
+    color: var(--weline-theme-danger) !important;
+}
+
+.w-review-admin .w-badge.is-info {
+    border-color: var(--weline-theme-info);
+    background: var(--weline-theme-info-surface) !important;
+    color: var(--weline-theme-info) !important;
+}
+
+.w-review-admin .w-table th:last-child,
+.w-review-admin .w-table td:last-child {
+    position: sticky !important;
+    right: 0;
+    border-left: 1px solid var(--weline-theme-border) !important;
+    background: var(--weline-theme-surface) !important;
+    box-shadow: -0.75rem 0 1.5rem color-mix(in srgb, var(--weline-theme-canvas) 58%, transparent);
+}
+
+.w-review-admin .w-table th:last-child {
+    z-index: 5 !important;
+    background: var(--weline-theme-surface-muted) !important;
+}
+
+.w-review-admin .w-table td:last-child {
+    z-index: 2 !important;
+}
+
+.w-review-admin .w-table tbody tr:hover td:last-child {
+    background: var(--weline-theme-surface-hover) !important;
+}
+
+.w-review-admin .w-table td:last-child > div {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: var(--weline-space-2) !important;
+}
+
+.w-review-admin .w-table td:last-child .w-button {
+    width: 100%;
+}
+
+.w-review-admin__filter .w-button {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.w-review-admin .w-button[data-tone="success"] {
+    color: var(--weline-theme-on-success);
+}
+
+.w-review-admin .w-button[data-tone="danger"] {
+    color: var(--weline-theme-danger);
+}
+
+.w-review-admin .w-button:hover:not(:disabled) {
+    box-shadow: var(--weline-theme-shadow-sm);
+}
+
+.w-review-admin .btn-group {
+    display: inline-flex;
+    gap: var(--weline-space-2);
+}
+
+.w-review-admin .btn:not(.w-button) {
+    display: inline-flex;
+    min-height: var(--weline-control-height);
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--weline-space-4);
+    border: 1px solid var(--weline-theme-border-strong);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
+    font-weight: 650;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.w-review-admin .card-body {
+    padding: var(--weline-space-8);
+    color: var(--weline-theme-text-muted);
+}
+
+.w-review-admin .card-body .mdi {
+    color: var(--weline-theme-primary);
+}
+
+@media (max-width: 70rem) {
+    .w-review-admin__toolbar {
+        grid-template-columns: 1fr;
+        align-items: stretch !important;
+    }
+
+    .w-review-admin__filter {
+        justify-content: stretch;
+    }
+
+    .w-review-admin__filter > div {
+        min-width: 0;
+    }
+
+    .w-review-admin__filter .w-select {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 42rem) {
+    .w-review-admin {
+        gap: var(--weline-space-3);
+    }
+
+    .w-review-admin__toolbar {
+        padding: var(--weline-space-4);
+    }
+
+    .w-review-admin__filter {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .w-review-admin__filter .w-button {
+        width: 100%;
+    }
+
+    .w-review-admin .w-table {
+        min-width: 66rem;
+    }
+
+    .w-review-admin .w-table th:last-child,
+    .w-review-admin .w-table td:last-child {
+        position: static !important;
+        box-shadow: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .w-review-admin *,
+    .w-review-admin *::before,
+    .w-review-admin *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+.w-review-admin__media-item {
+    margin: 0;
+    overflow: hidden;
+    inline-size: 6.5rem;
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface-raised);
+}
+.w-review-admin__media-item img,
+.w-review-admin__media-item video {
+    display: block;
+    width: 100%;
+    height: 5.125rem;
+    object-fit: cover;
+}
+.w-review-admin__media-cap {
+    padding: var(--weline-space-1) var(--weline-space-2);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+}
+.w-review-admin__summary {
+    color: var(--weline-theme-primary);
+    cursor: pointer;
+}
+.w-review-admin__body {
+    margin: var(--weline-space-2) 0 0;
+    white-space: pre-wrap;
+}
+.w-review-admin__stars {
+    color: var(--weline-theme-warning);
+}
+.w-review-admin__title {
+    display: block;
+    margin-bottom: var(--weline-space-1);
+}
+</style>
+<div class="container-fluid w-review-admin" data-review-role="management" style="width:100%;min-width:0;max-width:100%;overflow:hidden">
+    <div class="w-card w-toolbar w-review-admin__toolbar d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+        <div>
+            <h4 class="mb-1"><lang>评论管理</lang></h4>
+            <div class="text-muted"><lang>统一管理文字、图片与视频评论</lang> · <?php echo $totalText; ?></div>
+        </div>
+        <form method="get" class="w-toolbar w-review-admin__filter d-flex align-items-end gap-2" data-review-role="filters">
+            <div>
+                <label class="w-field__label" for="review-website_trigger"><lang>网站</lang></label>
+                <w:websites:website:select
+                    id="review-website"
+                    name="website_id"
+                    value="websiteSelectValue"
+                    display="websiteSelectDisplay"
+                    options="websiteSelectOptionsJson"
+                    multiple="false"
+                    allow-empty="true"
+                    clearable="true"
+                    empty-label="@lang(全部网站)"
+                    placeholder="@lang(搜索网站名称或编码)"
+                    on-change="var s=document.getElementById('review-store');if(s){s.value='';s.dispatchEvent(new Event('change',{bubbles:true}));}"
+                />
+            </div>
+            <div>
+                <label class="w-field__label" for="review-store_trigger"><lang>店铺</lang></label>
+                <w:websites:store:select
+                    id="review-store"
+                    name="store_id"
+                    value="storeSelectValue"
+                    options="storeSelectOptionsJson"
+                    allow-empty="true"
+                    clearable="true"
+                    empty-label="@lang(全部店铺)"
+                    placeholder="@lang(搜索店铺)"
+                />
+            </div>
+            <div>
+                <label class="w-field__label" for="review-status"><lang>状态</lang></label>
+                <select class="w-select" id="review-status" name="status"><?php echo $statusOptionsHtml; ?></select>
+            </div>
+            <button class="w-button" type="submit" data-tone="primary"><lang>筛选</lang></button>
+        </form>
+    </div>
+    <?php echo $bodyHtml; ?>
+    <?php echo $paginationHtml; ?>
+    <w:form method="post" action="@backend-url('*/backend/review/moderate')" csrf="auto" data-review-role="moderation-form" style="display:none">
+        <input type="hidden" name="review_id" value="">
+        <input type="hidden" name="status" value="">
+        <input type="hidden" name="status_filter" value="">
+        <input type="hidden" name="website_id_filter" value="">
+        <input type="hidden" name="store_id_filter" value="">
+    </w:form>
+</div>
+<script>
+(function () {
+    const root = document.querySelector('[data-review-role="management"]');
+    if (!root) return;
+    const form = root.querySelector('[data-review-role="moderation-form"]');
+    if (!form) return;
+    const readFilter = function (selector) {
+        const el = document.querySelector(selector);
+        return el ? String(el.value || '') : '';
+    };
+    root.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-review-action]');
+        if (!button || button.disabled) return;
+        form.elements.namedItem('review_id').value = String(button.dataset.reviewId || '');
+        form.elements.namedItem('status').value = String(button.dataset.reviewAction || '');
+        form.elements.namedItem('status_filter').value = readFilter('#review-status');
+        form.elements.namedItem('website_id_filter').value = readFilter('#review-website_value');
+        form.elements.namedItem('store_id_filter').value = readFilter('#review-store');
+        form.requestSubmit();
+    });
+})();
+</script>

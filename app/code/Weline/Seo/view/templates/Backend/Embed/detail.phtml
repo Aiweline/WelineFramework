@@ -1,522 +1,162 @@
 <?php
 /**
- * SEO 嵌入式管理界面 - 主体详情
- * 
- * 用于嵌入到其他模块中，无 header/sidebar
- * 
+ * SEO embedded subject editor. It owns only route markup and data; the
+ * Weline UI foundation and the module page asset provide presentation/runtime.
+ *
  * @var \Weline\Framework\View\Template $this
- * @var array $subject 主体数据
- * @var array $keywords 关键词列表
- * @var array|null $suggestion AI建议
- * @var string $module 模块标识
- * @var string $scope 业务scope
- * @var bool $is_embed 是否嵌入模式
  */
-
-$subject = $this->getData('subject') ?: [];
-$keywords = $this->getData('keywords') ?: [];
-$suggestion = $this->getData('suggestion');
-$scope = $this->getData('scope') ?: '';
-$title = $this->getData('title') ?: __('主体SEO详情');
-
-// 构建基础 URL 参数
-$baseParams = [];
-if ($scope) $baseParams['scope'] = $scope;
-
-$jsJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
-$jsString = static function (mixed $value) use ($jsJsonFlags): string {
-    return json_encode((string)$value, $jsJsonFlags);
-};
+$subject = is_array($this->getData('subject')) ? $this->getData('subject') : [];
+$keywords = is_array($this->getData('keywords')) ? $this->getData('keywords') : [];
+$suggestion = is_array($this->getData('suggestion')) ? $this->getData('suggestion') : null;
+$module = (string)($this->getData('module') ?: '');
+$scope = (string)($this->getData('scope') ?: '');
+$title = (string)($this->getData('title') ?: __('主体SEO详情'));
+$baseParams = $scope !== '' ? ['scope' => $scope] : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$config = [
+    'subjectId' => (int)($subject['subject_id'] ?? 0),
+    'text' => [
+        'saveSuccess' => (string)__('保存成功'),
+        'saveFailed' => (string)__('保存失败'),
+        'generateFailed' => (string)__('生成建议失败'),
+        'requestFailed' => (string)__('请求失败'),
+    ],
+];
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP
+    | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN">
+<!doctype html>
+<html lang="zh-CN" data-w-area="backend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($title) ?></title>
-    <!-- 使用本地后台静态资源，避免第三方脚本/样式注入面 -->
-    <link href="@static(Weline_Admin::backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
-    <style>
-        body {
-            background: #f5f5f5;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-        
-        .embed-container {
-            padding: 20px;
-            max-width: 100%;
-        }
-        
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        .page-header h4 {
-            margin: 0;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .back-btn {
-            color: #6c757d;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-        }
-        
-        .back-btn:hover {
-            color: #0bb197;
-        }
-        
-        .info-card {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 20px;
-        }
-        
-        .info-card-header {
-            padding: 15px 20px;
-            border-bottom: 1px solid #f0f0f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .info-card-header h5 {
-            margin: 0;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .info-card-body {
-            padding: 20px;
-        }
-        
-        .info-item {
-            margin-bottom: 15px;
-        }
-        
-        .info-item:last-child {
-            margin-bottom: 0;
-        }
-        
-        .info-label {
-            font-weight: 500;
-            color: #6c757d;
-            font-size: 0.85rem;
-            margin-bottom: 5px;
-        }
-        
-        .info-value {
-            color: #333;
-        }
-        
-        .keyword-tag {
-            display: inline-flex;
-            align-items: center;
-            padding: 6px 12px;
-            background: #e3f2fd;
-            color: #1976d2;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            margin: 4px;
-        }
-        
-        .keyword-priority {
-            background: #ffc107;
-            color: #333;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            margin-left: 6px;
-        }
-        
-        .suggestion-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
-        }
-        
-        .suggestion-card .info-card-header {
-            border-bottom: 1px solid rgba(255,255,255,0.2);
-        }
-        
-        .suggestion-card .info-card-header h5 {
-            color: #fff;
-        }
-        
-        .suggestion-content {
-            white-space: pre-line;
-            line-height: 1.6;
-        }
-        
-        .action-btn {
-            padding: 6px 14px;
-            font-size: 0.85rem;
-        }
-        
-        .badge-status {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-        }
-        
-        .empty-keywords {
-            text-align: center;
-            padding: 30px;
-            color: #6c757d;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= $escape($title) ?></title>
+    <w:block class="Weline\Backend\Block\Header\Base" template="Weline_Backend::header/base.phtml"/>
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)">
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-seo-embed.css)">
+    <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
+    <script type="module" src="@static(Weline_Theme::ui/pages/weline-seo-embed-detail.js)"></script>
 </head>
 <body>
-    <div class="embed-container">
-        <!-- 页面标题 -->
-        <div class="page-header">
-            <div>
-                <a href="<?= $this->getUrl('*/backend/embed', $baseParams) ?>" class="back-btn" style="--w-mb:var(--weline-space-2);">
-                    <w:icon name="arrow-left" size="sm"></w:icon>
-                    <lang>返回列表</lang>
-                </a>
-                <h4>
-                    <w:icon name="file" size="sm"></w:icon>
-                    <?= htmlspecialchars($subject['title'] ?? __('主体详情')) ?>
-                    <?php if ((int)($subject['status'] ?? 0) === 1): ?>
-                        <span class="w-badge badge-status ms-2" data-w-background="success"><lang>启用</lang></span>
-                    <?php else: ?>
-                        <span class="w-badge badge-status ms-2" data-w-background="muted"><lang>禁用</lang></span>
+<main class="w-seo-embed w-stack">
+    <header class="w-seo-embed__header w-cluster" data-justify="between" data-align="center">
+        <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+            <a href="<?= $escape($this->getUrl('*/backend/embed', $baseParams)) ?>" class="w-seo-embed__back">
+                <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
+            </a>
+            <div class="w-cluster">
+                <h1 class="w-seo-embed__title"><w:icon name="file" size="sm"></w:icon><?= $escape($subject['title'] ?? __('主体详情')) ?></h1>
+                <span class="w-badge" data-tone="<?= (int)($subject['status'] ?? 0) === 1 ? 'success' : 'neutral' ?>">
+                    <?= (int)($subject['status'] ?? 0) === 1 ? __('启用') : __('禁用') ?>
+                </span>
+            </div>
+        </div>
+        <div class="w-cluster">
+            <button type="button" class="w-button" id="btnEdit" data-tone="neutral">
+                <w:icon name="edit" size="sm"></w:icon><lang>编辑</lang>
+            </button>
+            <button type="button" class="w-button" id="btnRefreshSuggestion" data-tone="primary">
+                <w:icon name="robot" size="sm"></w:icon><lang>生成AI建议</lang>
+            </button>
+        </div>
+    </header>
+
+    <div class="w-grid">
+        <section class="w-stack" style="--w-span:12;--w-span-lg:6;">
+            <article class="w-card">
+                <header class="w-card__header"><h2 class="w-card__title"><w:icon name="info" size="sm"></w:icon><lang>基本信息</lang></h2></header>
+                <div class="w-card__body w-stack">
+                    <div class="w-seo-embed__datum"><span><lang>标题</lang></span><strong><?= $escape($subject['title'] ?? '-') ?></strong></div>
+                    <?php if (!empty($subject['url'])): ?>
+                        <div class="w-seo-embed__datum"><span>URL</span><a href="<?= $escape($subject['url']) ?>" target="_blank" rel="noopener noreferrer"><?= $escape($subject['url']) ?></a></div>
                     <?php endif; ?>
-                </h4>
-            </div>
-            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
-                <button type="button" class="w-button action-btn" id="btnEdit" data-tone="primary" data-variant="outline">
-                    <w:icon name="edit" size="sm"></w:icon>
-                    <lang>编辑</lang>
-                </button>
-                <button type="button" class="w-button action-btn" id="btnRefreshSuggestion" data-tone="primary">
-                    <w:icon name="robot" size="sm"></w:icon>
-                    <lang>生成AI建议</lang>
-                </button>
-            </div>
-        </div>
-
-        <div class="w-grid">
-            <!-- 左侧：基本信息 + 关键词 -->
-            <div style="--w-span-lg:6;">
-                <!-- 基本信息 -->
-                <div class="info-card">
-                    <div class="info-card-header">
-                        <h5><w:icon name="info" size="sm"></w:icon><lang>基本信息</lang></h5>
-                    </div>
-                    <div class="info-card-body">
-                        <div class="info-item">
-                            <div class="info-label"><lang>标题</lang></div>
-                            <div class="info-value"><?= htmlspecialchars($subject['title'] ?? '-') ?></div>
-                        </div>
-                        
-                        <?php if (!empty($subject['url'])): ?>
-                        <div class="info-item">
-                            <div class="info-label"><lang>URL</lang></div>
-                            <div class="info-value">
-                                <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" class="w-text" data-tone="primary">
-                                    <?= htmlspecialchars($subject['url']) ?>
-                                    <w:icon name="circle" size="sm"></w:icon>
-                                </a>
-                            </div>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <?php if (!empty($subject['description'])): ?>
-                        <div class="info-item">
-                            <div class="info-label"><lang>描述</lang></div>
-                            <div class="info-value"><?= htmlspecialchars($subject['description']) ?></div>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <div class="w-grid">
-                            <div style="--w-span:6;">
-                                <div class="info-item">
-                                    <div class="info-label"><lang>类型</lang></div>
-                                    <div class="info-value"><?= htmlspecialchars($subject['subject_type'] ?? '-') ?></div>
-                                </div>
-                            </div>
-                            <div style="--w-span:6;">
-                                <div class="info-item">
-                                    <div class="info-label"><lang>语言</lang></div>
-                                    <div class="info-value"><?= htmlspecialchars($subject['locale'] ?? 'zh-CN') ?></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="w-grid">
-                            <div style="--w-span:6;">
-                                <div class="info-item">
-                                    <div class="info-label"><lang>创建时间</lang></div>
-                                    <div class="info-value"><?= htmlspecialchars($subject['created_at'] ?? '-') ?></div>
-                                </div>
-                            </div>
-                            <div style="--w-span:6;">
-                                <div class="info-item">
-                                    <div class="info-label"><lang>更新时间</lang></div>
-                                    <div class="info-value"><?= htmlspecialchars($subject['updated_at'] ?? '-') ?></div>
-                                </div>
-                            </div>
-                        </div>
+                    <?php if (!empty($subject['description'])): ?>
+                        <div class="w-seo-embed__datum"><span><lang>描述</lang></span><div><?= $escape($subject['description']) ?></div></div>
+                    <?php endif; ?>
+                    <div class="w-grid">
+                        <div class="w-seo-embed__datum" style="--w-span:6;"><span><lang>类型</lang></span><strong><?= $escape($subject['subject_type'] ?? '-') ?></strong></div>
+                        <div class="w-seo-embed__datum" style="--w-span:6;"><span><lang>语言</lang></span><strong><?= $escape($subject['locale'] ?? 'zh-CN') ?></strong></div>
+                        <div class="w-seo-embed__datum" style="--w-span:6;"><span><lang>创建时间</lang></span><strong><?= $escape($subject['created_at'] ?? '-') ?></strong></div>
+                        <div class="w-seo-embed__datum" style="--w-span:6;"><span><lang>更新时间</lang></span><strong><?= $escape($subject['updated_at'] ?? '-') ?></strong></div>
                     </div>
                 </div>
+            </article>
 
-                <!-- 关键词 -->
-                <div class="info-card">
-                    <div class="info-card-header">
-                        <h5><w:icon name="tag" size="sm"></w:icon><lang>关键词</lang></h5>
-                        <span class="w-badge" data-w-background="muted"><?= count($keywords) ?></span>
-                    </div>
-                    <div class="info-card-body">
-                        <?php if (empty($keywords)): ?>
-                            <div class="empty-keywords">
-                                <w:icon name="circle" size="sm"></w:icon>
-                                <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><lang>暂无关键词</lang></p>
-                            </div>
-                        <?php else: ?>
-                            <div class="keyword-list">
-                                <?php foreach ($keywords as $keyword): ?>
-                                    <span class="keyword-tag">
-                                        <?= htmlspecialchars($keyword['keyword'] ?? '') ?>
-                                        <?php if (!empty($keyword['priority'])): ?>
-                                            <span class="keyword-priority"><?= (int)$keyword['priority'] ?></span>
-                                        <?php endif; ?>
-                                    </span>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 右侧：AI建议 -->
-            <div style="--w-span-lg:6;">
-                <div class="info-card suggestion-card">
-                    <div class="info-card-header">
-                        <h5><w:icon name="robot" size="sm"></w:icon><lang>AI SEO建议</lang></h5>
-                        <?php if ($suggestion): ?>
-                            <small><?= htmlspecialchars($suggestion['created_at'] ?? '') ?></small>
-                        <?php endif; ?>
-                    </div>
-                    <div class="info-card-body">
-                        <?php if ($suggestion): ?>
-                            <div class="suggestion-content" id="suggestionContent">
-                                <?= nl2br(htmlspecialchars($suggestion['content'] ?? '')) ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="w-text" id="noSuggestion" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
-                                <w:icon name="circle" size="sm"></w:icon>
-                                <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><lang>暂无AI建议，点击上方按钮生成</lang></p>
-                            </div>
-                        <?php endif; ?>
-                        <div id="suggestionLoading" style="display: none;" class="w-text" data-align="center">
-                            <div class="w-spinner w-text" role="status" data-tone="muted">
-                                <span class="w-visually-hidden">Loading...</span>
-                            </div>
-                            <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>正在生成AI建议...</lang></p>
+            <article class="w-card">
+                <header class="w-card__header w-cluster" data-justify="between">
+                    <h2 class="w-card__title"><w:icon name="tag" size="sm"></w:icon><lang>关键词</lang></h2>
+                    <span class="w-badge" data-tone="neutral"><?= count($keywords) ?></span>
+                </header>
+                <div class="w-card__body">
+                    <?php if ($keywords === []): ?>
+                        <div class="w-empty"><w:icon name="tag" size="lg"></w:icon><p><lang>暂无关键词</lang></p></div>
+                    <?php else: ?>
+                        <div class="w-cluster">
+                            <?php foreach ($keywords as $keyword): ?>
+                                <span class="w-seo-embed__keyword">
+                                    <?= $escape($keyword['keyword'] ?? '') ?>
+                                    <?php if (!empty($keyword['priority'])): ?><small><?= (int)$keyword['priority'] ?></small><?php endif; ?>
+                                </span>
+                            <?php endforeach; ?>
                         </div>
-                    </div>
+                    <?php endif; ?>
+                </div>
+            </article>
+        </section>
+
+        <section class="w-card w-seo-embed__suggestion" style="--w-span:12;--w-span-lg:6;">
+            <header class="w-card__header w-cluster" data-justify="between">
+                <h2 class="w-card__title"><w:icon name="robot" size="sm"></w:icon><lang>AI SEO建议</lang></h2>
+                <?php if ($suggestion): ?><small><?= $escape($suggestion['created_at'] ?? '') ?></small><?php endif; ?>
+            </header>
+            <div class="w-card__body">
+                <?php if ($suggestion): ?>
+                    <div class="w-seo-embed__suggestion-content" id="suggestionContent"><?= $escape($suggestion['content'] ?? '') ?></div>
+                <?php else: ?>
+                    <div class="w-empty" id="noSuggestion"><w:icon name="robot" size="lg"></w:icon><p><lang>暂无AI建议，点击上方按钮生成</lang></p></div>
+                <?php endif; ?>
+                <div id="suggestionLoading" class="w-empty" hidden>
+                    <span class="w-spinner" role="status"><span class="w-visually-hidden"><lang>加载中</lang></span></span>
+                    <p><lang>正在生成AI建议...</lang></p>
                 </div>
             </div>
-        </div>
+        </section>
     </div>
+</main>
 
-    <!-- 编辑 Modal -->
-    <div class="w-dialog" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
-        <div class="w-dialog__frame" data-size="lg">
-            <div class="w-dialog__surface">
-                <div class="w-dialog__header">
-                    <h5 class="w-dialog__title" id="editModalLabel">
-                        <w:icon name="edit" size="sm"></w:icon>
-                        <lang>编辑SEO主体</lang>
-                    </h5>
-                    <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
-                </div>
-                <w:form id="editForm">
-                    <div class="w-dialog__body">
-                        <input type="hidden" name="subject_id" value="<?= (int)($subject['subject_id'] ?? 0) ?>">
-                        <input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>">
-                        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
-                        
-                        <div class="w-grid">
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="editTitle"><lang>标题</lang> <span class="w-text" data-tone="danger">*</span></label>
-                                <input type="text" class="w-input" id="editTitle" name="title" value="<?= htmlspecialchars($subject['title'] ?? '') ?>" required>
-                            </div>
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="editUrl"><lang>URL</lang></label>
-                                <input type="url" class="w-input" id="editUrl" name="url" value="<?= htmlspecialchars($subject['url'] ?? '') ?>" placeholder="https://">
-                            </div>
-                        </div>
-                        
-                        <div class="w-grid">
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="editType"><lang>主体类型</lang></label>
-                                <select class="w-select" id="editType" name="subject_type">
-                                    <option value="page" <?= ($subject['subject_type'] ?? '') === 'page' ? 'selected' : '' ?>><?= __('页面') ?></option>
-                                    <option value="product" <?= ($subject['subject_type'] ?? '') === 'product' ? 'selected' : '' ?>><?= __('商品') ?></option>
-                                    <option value="store" <?= ($subject['subject_type'] ?? '') === 'store' ? 'selected' : '' ?>><?= __('店铺') ?></option>
-                                    <option value="website" <?= ($subject['subject_type'] ?? '') === 'website' ? 'selected' : '' ?>><?= __('网站') ?></option>
-                                </select>
-                            </div>
-                            <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="editStatus"><lang>状态</lang></label>
-                                <select class="w-select" id="editStatus" name="status">
-                                    <option value="1" <?= (int)($subject['status'] ?? 1) === 1 ? 'selected' : '' ?>><?= __('启用') ?></option>
-                                    <option value="0" <?= (int)($subject['status'] ?? 1) === 0 ? 'selected' : '' ?>><?= __('禁用') ?></option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div style="--w-mb:var(--weline-space-4);">
-                            <label class="w-field__label" for="editDescription"><lang>描述</lang></label>
-                            <textarea class="w-textarea" id="editDescription" name="description" rows="4"><?= htmlspecialchars($subject['description'] ?? '') ?></textarea>
-                        </div>
-                    </div>
-                    <div class="w-dialog__footer">
-                        <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral">
-                            <lang>取消</lang>
-                        </button>
-                        <button type="submit" class="w-button" data-tone="primary">
-                            <w:icon name="save" size="sm"></w:icon>
-                            <lang>保存</lang>
-                        </button>
-                    </div>
-                </w:form>
-            </div>
-        </div>
+<dialog class="w-dialog" id="editModal" aria-labelledby="editModalLabel" data-w-component="dialog" data-state="closed">
+    <div class="w-dialog__header">
+        <h2 class="w-dialog__title" id="editModalLabel"><w:icon name="edit" size="sm"></w:icon><lang>编辑SEO主体</lang></h2>
+        <button type="button" class="w-button" aria-label="<?= $escape(__('关闭')) ?>" data-w-action="dialog.close" data-tone="quiet" data-size="sm">×</button>
     </div>
+    <w:form id="editForm" class="w-stack">
+        <div class="w-dialog__body w-stack">
+            <input type="hidden" name="subject_id" value="<?= (int)($subject['subject_id'] ?? 0) ?>">
+            <input type="hidden" name="module" value="<?= $escape($module) ?>">
+            <input type="hidden" name="scope" value="<?= $escape($scope) ?>">
+            <div class="w-grid">
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label"><lang>标题</lang></span><input class="w-input" id="editTitle" name="title" value="<?= $escape($subject['title'] ?? '') ?>" required></label>
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label">URL</span><input type="url" class="w-input" id="editUrl" name="url" value="<?= $escape($subject['url'] ?? '') ?>" placeholder="https://"></label>
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label"><lang>主体类型</lang></span><select class="w-select" name="subject_type">
+                    <?php foreach (['page' => __('页面'), 'product' => __('商品'), 'store' => __('店铺'), 'website' => __('网站')] as $value => $label): ?>
+                        <option value="<?= $value ?>" <?= ($subject['subject_type'] ?? '') === $value ? 'selected' : '' ?>><?= $escape($label) ?></option>
+                    <?php endforeach; ?>
+                </select></label>
+                <label class="w-field" style="--w-span:6;"><span class="w-field__label"><lang>状态</lang></span><select class="w-select" name="status">
+                    <option value="1" <?= (int)($subject['status'] ?? 1) === 1 ? 'selected' : '' ?>><?= $escape(__('启用')) ?></option>
+                    <option value="0" <?= (int)($subject['status'] ?? 1) === 0 ? 'selected' : '' ?>><?= $escape(__('禁用')) ?></option>
+                </select></label>
+            </div>
+            <label class="w-field"><span class="w-field__label"><lang>描述</lang></span><textarea class="w-textarea" name="description" rows="4"><?= $escape($subject['description'] ?? '') ?></textarea></label>
+        </div>
+        <footer class="w-dialog__footer">
+            <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><lang>取消</lang></button>
+            <button type="submit" class="w-button" data-tone="primary"><w:icon name="save" size="sm"></w:icon><lang>保存</lang></button>
+        </footer>
+    </w:form>
+</dialog>
 
-    <!-- Bootstrap JS -->
-    <script src="@static(Weline_Admin::backend/lib/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js)"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const saveUrl = <?= $jsString($this->getUrl('*/backend/embed/save')) ?>;
-        const refreshUrl = <?= $jsString($this->getUrl('*/backend/embed/refreshSuggestion')) ?>;
-        const subjectId = <?= (int)($subject['subject_id'] ?? 0) ?>;
-        const text = {
-            saveSuccess: <?= $jsString(__('保存成功')) ?>,
-            saveFailed: <?= $jsString(__('保存失败')) ?>,
-            generateFailed: <?= $jsString(__('生成建议失败')) ?>,
-            requestFailed: <?= $jsString(__('请求失败')) ?>
-        };
-
-        function getBackendTool(name) {
-            if (window[name]) {
-                return window[name];
-            }
-            try {
-                if (window.parent && window.parent !== window && window.parent[name]) {
-                    return window.parent[name];
-                }
-            } catch (error) {
-                return null;
-            }
-            return null;
-        }
-
-        function notify(type, message) {
-            var toast = getBackendTool('Weline.UI.toast');
-            if (toast && typeof toast[type] === 'function') {
-                toast[type](typeof message === 'string' ? message : String(message || ''));
-            }
-        }
-
-        function requestFailedMessage(error) {
-            return text.requestFailed + (error && error.message ? ': ' + error.message : '');
-        }
-        
-        // 编辑按钮
-        document.getElementById('btnEdit').addEventListener('click', function() {
-            const modal = new bootstrap.Modal(document.getElementById('editModal'));
-            modal.show();
-        });
-        
-        // 编辑表单提交
-        document.getElementById('editForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            
-            var params = {};
-            formData.forEach(function(v,k){ params[k]=v; });
-            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-            .then(function(api){ return api.resource('seo_admin').saveEmbedSubject(params); })
-            .then(function(data) {
-                if (data && data.success !== false) {
-                    notify('success', (data && data.message) || text.saveSuccess);
-                    location.reload();
-                } else {
-                    notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError({response:{data:data}}, text.saveFailed)) || text.saveFailed);
-                }
-            })
-            .catch(function(error) {
-                notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, text.requestFailed)) || requestFailedMessage(error));
-            });
-        });
-        
-        // 生成AI建议
-        document.getElementById('btnRefreshSuggestion').addEventListener('click', function() {
-            const suggestionContent = document.getElementById('suggestionContent');
-            const noSuggestion = document.getElementById('noSuggestion');
-            const loading = document.getElementById('suggestionLoading');
-            const formatSuggestionContent = function(value) {
-                return String(value || '')
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;')
-                    .replace(/\n/g, '<br>');
-            };
-            
-            if (suggestionContent) suggestionContent.style.display = 'none';
-            if (noSuggestion) noSuggestion.style.display = 'none';
-            loading.style.display = 'block';
-            
-            const formData = new FormData();
-            formData.append('subject_id', subjectId);
-            
-            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-            .then(function(api){ return api.resource('seo_admin').refreshEmbedSuggestion({ subject_id: subjectId }); })
-            .then(function(data) {
-                loading.style.display = 'none';
-                
-                if (data.success && data.data && data.data.suggestion) {
-                    if (!suggestionContent) {
-                        // 创建内容元素
-                        const contentDiv = document.createElement('div');
-                        contentDiv.id = 'suggestionContent';
-                        contentDiv.className = 'suggestion-content';
-                        contentDiv.innerHTML = formatSuggestionContent(data.data.suggestion.content);
-                        loading.parentNode.insertBefore(contentDiv, loading);
-                    } else {
-                        suggestionContent.innerHTML = formatSuggestionContent(data.data.suggestion.content);
-                        suggestionContent.style.display = 'block';
-                    }
-                    if (noSuggestion) noSuggestion.remove();
-                } else {
-                    if (noSuggestion) noSuggestion.style.display = 'block';
-                    else if (suggestionContent) suggestionContent.style.display = 'block';
-                    notify('error', (data && (data.message || data.msg)) || text.generateFailed);
-                }
-            })
-            .catch(error => {
-                loading.style.display = 'none';
-                if (noSuggestion) noSuggestion.style.display = 'block';
-                else if (suggestionContent) suggestionContent.style.display = 'block';
-                notify('error', requestFailedMessage(error));
-            });
-        });
-    });
-    </script>
+<script type="application/json" id="weline-seo-embed-config" data-seo-embed-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
 </body>
 </html>

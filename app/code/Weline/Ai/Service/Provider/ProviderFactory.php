@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\AiModel;
+use Weline\Ai\Model\Provider\CustomVendor;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -27,12 +28,7 @@ use Weline\Framework\Manager\ObjectManager;
 class ProviderFactory
 {
     /**
-     * 提供者实例缓存
-     * 
-     * @var array
-     */
-    /**
-     * Explicit supplier-to-provider bindings for OpenAI-compatible vendors.
+     * Explicit supplier-to-provider bindings for dedicated protocol vendors.
      *
      * @var array<string,class-string<ProviderInterface>>
      */
@@ -45,12 +41,22 @@ class ProviderFactory
         'deepseek' => OpenAiProvider::class,
     ];
 
+    /**
+     * Dedicated non-OpenAI-compatible protocol vendors (must not fall through to OpenAI).
+     *
+     * @var list<string>
+     */
+    private array $dedicatedProtocolVendors = [
+        'anthropic',
+        'google',
+        'gemini',
+        'vectorengine',
+    ];
+
     private array $providers = [];
 
     /**
-     * 提供者类映射
-     * 
-     * @var array
+     * @var list<class-string<ProviderInterface>>
      */
     private array $providerClasses = [
         AnthropicProvider::class,
@@ -77,11 +83,24 @@ class ProviderFactory
             return $this->providers[$cacheKey];
         }
 
-        // 查找支持该模型的提供者
         if ($vendor !== '') {
             if (isset($this->providerAliases[$vendor])) {
                 /** @var ProviderInterface $provider */
                 $provider = ObjectManager::getInstance($this->providerAliases[$vendor]);
+                $this->providers[$cacheKey] = $provider;
+                return $provider;
+            }
+
+            $config = VendorConfigManager::getProviderConfig($vendor);
+            $driver = is_array($config) ? (string)($config['driver'] ?? '') : '';
+            $source = is_array($config) ? (string)($config['source'] ?? '') : '';
+            if (
+                $driver === CustomVendor::DRIVER_OPENAI_COMPAT
+                || $source === CustomVendor::SOURCE_CUSTOM
+                || !in_array($vendor, $this->dedicatedProtocolVendors, true)
+            ) {
+                /** @var ProviderInterface $provider */
+                $provider = ObjectManager::getInstance(OpenAiProvider::class);
                 $this->providers[$cacheKey] = $provider;
                 return $provider;
             }
@@ -106,7 +125,7 @@ class ProviderFactory
             }
         }
 
-        // 如果没有找到提供者，返回默认的模拟提供者
+        // 空 vendor / 无法识别：保留 Mock 仅用于开发占位
         return $this->getMockProvider();
     }
 
@@ -166,4 +185,3 @@ class ProviderFactory
         return $providers;
     }
 }
-

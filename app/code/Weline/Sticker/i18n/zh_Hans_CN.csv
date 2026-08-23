@@ -1,12 +1,13 @@
-﻿Sticker测试,Sticker测试
+﻿Sticker测试,贴纸测试
+star,星星
 加载Sticker列表失败：%{1},加载Sticker列表失败：%{1}
 参数不完整,参数不完整
-Sticker不存在,Sticker不存在
+Sticker不存在,贴纸不存在
 Sticker详情,Sticker详情
 加载Sticker详情失败：%{1},加载Sticker详情失败：%{1}
 刷新Sticker注册表失败：%{1},刷新Sticker注册表失败：%{1}
 搜索失败：%{1},搜索失败：%{1}
-Sticker管理,Sticker管理
+Sticker管理,贴纸管理
 首页,首页
 系统,系统
 总数：%{1},总数：%{1}
@@ -15,11 +16,11 @@ Sticker管理,Sticker管理
 所有来源模块,所有来源模块
 搜索,搜索
 重置,重置
-暂无Sticker,暂无Sticker
+暂无Sticker,暂无贴纸
 目标模块,目标模块
 目标文件,目标文件
 来源模块,来源模块
-Sticker文件,Sticker文件
+Sticker文件,贴纸文件
 规则数量,规则数量
 操作,操作
 查看详情,查看详情
@@ -82,3 +83,5 @@ Sticker文件,Sticker文件
 "成功: %{1}","成功: %{1}"
 "失败: %{1}","失败: %{1}"
 错误详情:,错误详情:
+Sticker列表,Sticker列表
+刷新注册表,刷新注册表

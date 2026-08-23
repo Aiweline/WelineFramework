@@ -20,6 +20,7 @@ class YesNo implements EavModelInterface
 
     function getHtml(EavAttribute &$attribute, mixed $value, string &$label_class, array &$attrs, array &$option_items = [], bool $only_custom_options = true): string
     {
+        $escape = static fn(mixed $item): string => htmlspecialchars((string)$item, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $dependence = $attribute->getDependence();
         if (!$dependence) {
             $options = $this->getModelData();
@@ -36,10 +37,10 @@ class YesNo implements EavModelInterface
         <select ' . $attrStr . '>';
         foreach ($options as $key => $v) {
             if ($value == $key) {
-                $html .= '<option value="' . $key . '" selected>' . $v . '</option>';
+                $html .= '<option value="' . $escape($key) . '" selected>' . $escape($v) . '</option>';
                 continue;
             }
-            $html .= '<option value="' . $key . '">' . $v . '</option>';
+            $html .= '<option value="' . $escape($key) . '">' . $escape($v) . '</option>';
         }
         $html .= '</select>';
         $type::processLabel($attribute, $label_class, $html);

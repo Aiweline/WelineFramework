@@ -12,6 +12,7 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
     {
         return [
             'request_hooks' => [
+                'header-account',
                 'header-account-links',
             ],
             'diagnostic_hooks' => [
@@ -20,6 +21,7 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
             ],
             'aggregate_hooks' => [
                 'account.sidebar' => ['context' => 'account_sidebar'],
+                'header-account' => ['context' => 'frontend_auth'],
                 'header-account-links' => ['context' => 'frontend_auth'],
                 'header-orders' => ['context' => 'header_action'],
                 'Weline_Theme::frontend::layouts::base::body-end' => ['context' => 'body_end'],

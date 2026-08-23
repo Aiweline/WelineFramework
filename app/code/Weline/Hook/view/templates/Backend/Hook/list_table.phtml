@@ -54,7 +54,7 @@ $buildQuery = static function (array $overrides = []) use (
         <p>系统中还没有定义任何 Hook。</p>
     </div>
 <?php else: ?>
-    <div class="table-container">
+    <div class="weline-table-container">
         <table class="w-table">
             <thead>
                 <tr>
@@ -63,7 +63,7 @@ $buildQuery = static function (array $overrides = []) use (
                         <a href="?<?= $buildQuery(['sort' => 'name', 'order' => $newOrder, 'page' => 1]) ?>" class="sort-link" data-sort="name" data-order="<?= $newOrder ?>">
                             Hook 名
                             <?php if ($currentSort === 'name'): ?>
-                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                             <?php endif; ?>
                         </a>
                     </th>
@@ -75,7 +75,7 @@ $buildQuery = static function (array $overrides = []) use (
                         <a href="?<?= $buildQuery(['sort' => 'files', 'order' => $newOrder, 'page' => 1]) ?>" class="sort-link" data-sort="files" data-order="<?= $newOrder ?>">
                             文件数
                             <?php if ($currentSort === 'files'): ?>
-                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                             <?php endif; ?>
                         </a>
                     </th>
@@ -144,7 +144,7 @@ $buildQuery = static function (array $overrides = []) use (
                         </td>
                         <td>
                             <div class="actions">
-                                <button type="button" class="w-button btn-view-detail" data-hook-name="<?= htmlspecialchars($hookName) ?>" title="查看详情" data-tone="primary" data-variant="outline" data-size="sm">
+                                <button type="button" class="w-button weline-btn-view-detail" data-hook-name="<?= htmlspecialchars($hookName) ?>" title="查看详情" data-tone="primary" data-variant="outline" data-size="sm">
                                     <w:icon name="eye" size="sm"></w:icon> 详情
                                 </button>
                             </div>

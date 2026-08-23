@@ -110,15 +110,15 @@ $providerAccountEndpoints = [
                            action-params="{id: providerAdd.id}"
                            target-tone='primary'
                            icon='plus'
-                           title='<?= __("添加账户") ?>'
+                           title='添加账户'
                            close-button-show='1'
-                           close-button-text='<?= __("关闭") ?>'
-                           target-button-text='<?= __("添加账户") ?>'
+                           close-button-text='关闭'
+                           target-button-text='添加账户'
                            direction='right'
                            drawer-size='md'
                            flush='1'
                            save='1'
-                           flush-button-text='<?= __("刷新") ?>'
+                           flush-button-text='刷新'
 
                     />
                     <button type="button" class="w-button ms-2" data-provider-action="refresh" data-tone="info">
@@ -385,11 +385,11 @@ $providerAccountEndpoints = [
     function waitForWelineApi(attemptsLeft) {
         attemptsLeft = typeof attemptsLeft === 'number' ? attemptsLeft : 80;
         var api = window.Weline && window.Weline.Api;
-        if (api && api.__backend === true && typeof api.request === 'function') {
+        if (api && api.__fallback !== true && typeof api.request === 'function') {
             return Promise.resolve(api);
         }
         if (attemptsLeft <= 0) {
-            return Promise.reject(new Error('Weline.Api backend worker API is unavailable.'));
+            return Promise.reject(new Error('Weline.Api.request is unavailable.'));
         }
         return new Promise(function(resolve, reject) {
             window.setTimeout(function() {
@@ -433,20 +433,38 @@ $providerAccountEndpoints = [
     }
 
     function normalizeProviderAccountResponse(response) {
-        var hasTransportEnvelope = response
-            && typeof response === 'object'
-            && !Array.isArray(response)
-            && Object.prototype.hasOwnProperty.call(response, 'data')
-            && (Object.prototype.hasOwnProperty.call(response, 'status')
-                || Object.prototype.hasOwnProperty.call(response, 'ok')
-                || Object.prototype.hasOwnProperty.call(response, 'headers'));
-        var data = hasTransportEnvelope ? response.data : response;
+        var data = response;
+        var hasTransportEnvelope = data
+            && typeof data === 'object'
+            && !Array.isArray(data)
+            && Object.prototype.hasOwnProperty.call(data, 'data')
+            && (Object.prototype.hasOwnProperty.call(data, 'status')
+                || Object.prototype.hasOwnProperty.call(data, 'ok')
+                || Object.prototype.hasOwnProperty.call(data, 'headers'));
+        if (hasTransportEnvelope) {
+            data = data.data;
+        }
         if (typeof data === 'string') {
             try {
                 data = JSON.parse(data);
             } catch (e) {
                 data = { success: false, message: data };
             }
+        }
+        /* Unwrap nested business envelope (worker may wrap controller JSON). */
+        var guard = 0;
+        while (
+            guard++ < 3
+            && data
+            && typeof data === 'object'
+            && !Array.isArray(data)
+            && data.success === true
+            && data.data
+            && typeof data.data === 'object'
+            && !Array.isArray(data.data)
+            && Object.prototype.hasOwnProperty.call(data.data, 'success')
+        ) {
+            data = data.data;
         }
         return data || {};
     }
@@ -470,8 +488,11 @@ $providerAccountEndpoints = [
             options.body = payload;
         }
 
+        options.silent = true;
         return api.request(url, options).then(normalizeProviderAccountResponse).catch(function(error) {
-            var responseData = error && error.response ? normalizeProviderAccountResponse(error.response.data) : null;
+            var responseData = error && error.response
+                ? normalizeProviderAccountResponse(error.response)
+                : null;
             if (responseData && responseData.success === false) {
                 return responseData;
             }
@@ -488,15 +509,15 @@ $providerAccountEndpoints = [
         });
     }
 
-    // 页面加载完成后初始化
-    document.addEventListener('DOMContentLoaded', function() {
+    // 页面加载完成后初始化（兼容 DOM 已就绪）
+    function __welineProviderBoot() {
         loadAccounts();
-        
+
         // 代理设置切换
         document.getElementById('proxy_enabled').addEventListener('change', function() {
             document.getElementById('proxySettings').style.display = this.checked ? 'block' : 'none';
         });
-        
+
         // 供应商选择时自动填充基础URL
         document.getElementById('provider_code').addEventListener('change', function() {
             onProviderChange();
@@ -554,14 +575,19 @@ $providerAccountEndpoints = [
                 toggleActive(parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0, trigger);
             }
         });
-        
+
         // 回车搜索
         document.getElementById('searchInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 searchAccounts();
             }
         });
-    });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', __welineProviderBoot);
+    } else {
+        __welineProviderBoot();
+    }
 
     // 加载账户列表
     function loadAccounts(page) {
@@ -579,10 +605,12 @@ $providerAccountEndpoints = [
         req.then(function(res) {
             var data = res || {};
             if (data && data.success) {
-                    currentAccounts = Array.isArray(data.data) ? data.data : [];
-                    displayAccounts(data.data);
+                    var rows = Array.isArray(data.data) ? data.data : [];
+                    currentAccounts = rows;
+                    displayAccounts(rows);
                     displayPagination(data.total, data.page, data.limit);
                 } else {
+                    document.getElementById('accountsList').innerHTML = '<tr><td colspan="10" class="w-text" data-align="center" data-tone="danger">' + escapeHtml(data.message || '<?= __('加载失败') ?>') + '</td></tr>';
                     if (typeof BackendModal !== 'undefined') {
                         BackendModal.alert('<?= __('加载失败') ?>', data.message);
                     } else if (typeof Weline.UI.toast !== 'undefined') {
@@ -594,6 +622,7 @@ $providerAccountEndpoints = [
             })
             .catch(function(error) {
                 console.error('Error:', error);
+                document.getElementById('accountsList').innerHTML = '<tr><td colspan="10" class="w-text" data-align="center" data-tone="danger"><?= __('加载失败') ?>: <?= __('请重试') ?></td></tr>';
                 if (typeof BackendModal !== 'undefined') {
                     BackendModal.alert('<?= __('加载失败') ?>', '<?= __('请重试') ?>');
                 } else if (typeof Weline.UI.toast !== 'undefined') {
@@ -606,7 +635,8 @@ $providerAccountEndpoints = [
     // 显示账户列表
     function displayAccounts(accounts) {
         var tbody = document.getElementById('accountsList');
-        
+        accounts = Array.isArray(accounts) ? accounts : [];
+
         if (accounts.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="w-text" data-align="center">暂无数据</td></tr>';
             return;
@@ -624,7 +654,7 @@ $providerAccountEndpoints = [
                 '<td>' + escapeHtml(account.connection_status_text) + '</td>' +
                 '<td>' +
                     '<div class="w-switch">' +
-                        '<input type="checkbox" data-provider-action="toggle-active" data-account-id="' + accountId + '" :>' +
+                        '<input type="checkbox" data-provider-action="toggle-active" data-account-id="' + accountId + '"' + (account.is_active == 1 ? ' checked' : '') + '>' +
                     '</div>' +
                 '</td>' +
                 '<td>' + escapeHtml(account.created_at_formatted) + '</td>' +
@@ -651,14 +681,14 @@ $providerAccountEndpoints = [
         var html = '<nav><ul class="w-pagination" data-justify="center">';
         
         // 上一页
-        html += '<li class="w-pagination__item ' + (page === 1 ? 'disabled' : '')">' +
+        html += '<li class="w-pagination__item ' + (page === 1 ? 'disabled' : '') + '">' +
             '<a class="w-pagination__link" href="#" data-provider-action="page" data-page="' + (page - 1) + '">上一页</a>' +
         '</li>';
         
         // 页码
         for (var i = 1; i <= totalPages; i++) {
             if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
-                html += '<li class="w-pagination__item ' + (i === page ? 'active' : '')">' +
+                html += '<li class="w-pagination__item ' + (i === page ? 'active' : '') + '">' +
                     '<a class="w-pagination__link" href="#" data-provider-action="page" data-page="' + i + '">' + i + '</a>' +
                 '</li>';
             } else if (i === page - 3 || i === page + 3) {
@@ -667,7 +697,7 @@ $providerAccountEndpoints = [
         }
         
         // 下一页
-        html += '<li class="w-pagination__item ' + (page === totalPages ? 'disabled' : '')">' +
+        html += '<li class="w-pagination__item ' + (page === totalPages ? 'disabled' : '') + '">' +
             '<a class="w-pagination__link" href="#" data-provider-action="page" data-page="' + (page + 1) + '">下一页</a>' +
         '</li>';
         
@@ -1330,15 +1360,15 @@ $providerAccountEndpoints = [
         if (totalPages <= 1) { el.innerHTML = ''; return; }
         var accountId = document.getElementById('usageAccountId').value;
         var html = '<nav><ul class="w-pagination" data-justify="center">';
-        html += '<li class="w-pagination__item ' + (page === 1 ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-provider-action="usage-page" data-account-id="' + escapeHtml(accountId) + '" data-page="' + (page-1) + '">上一页</a></li>';
+        html += '<li class="w-pagination__item ' + (page === 1 ? 'disabled' : '') + '"><a class="w-pagination__link" href="#" data-provider-action="usage-page" data-account-id="' + escapeHtml(accountId) + '" data-page="' + (page-1) + '">上一页</a></li>';
         for (var i=1;i<=totalPages;i++) {
             if (i === 1 || i === totalPages || (i >= page-2 && i <= page+2)) {
-                html += '<li class="w-pagination__item ' + (i===page?'active':'')"><a class="w-pagination__link" href="#" data-provider-action="usage-page" data-account-id="' + escapeHtml(accountId) + '" data-page="' + i + '">' + i + '</a></li>';
+                html += '<li class="w-pagination__item ' + (i===page?'active':'') + '"><a class="w-pagination__link" href="#" data-provider-action="usage-page" data-account-id="' + escapeHtml(accountId) + '" data-page="' + i + '">' + i + '</a></li>';
             } else if (i === page-3 || i === page+3) {
                 html += '<li class="w-pagination__item" aria-disabled="true"><span class="w-pagination__link">...</span></li>';
             }
         }
-        html += '<li class="w-pagination__item ' + (page === totalPages ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-provider-action="usage-page" data-account-id="' + escapeHtml(accountId) + '" data-page="' + (page+1) + '">下一页</a></li>';
+        html += '<li class="w-pagination__item ' + (page === totalPages ? 'disabled' : '') + '"><a class="w-pagination__link" href="#" data-provider-action="usage-page" data-account-id="' + escapeHtml(accountId) + '" data-page="' + (page+1) + '">下一页</a></li>';
         html += '</ul></nav>';
         el.innerHTML = html;
     }

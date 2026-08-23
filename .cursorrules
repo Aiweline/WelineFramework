@@ -8,7 +8,7 @@ Always-on Cursor rules include **SSH MCP 远端操作**（`.cursor/rules/ssh-mcp
 
 Always-on Cursor rules include **回撤禁止默认用 Git**（`.cursor/rules/no-git-rollback-unless-asked.mdc`）：用户要求回撤时须逐处手动还原，除非明确要求用 Git。
 
-Always-on Cursor rules include **交付地址用本地内置 Browser**（`.cursor/rules/local-browser-urls.mdc`）：给用户的可点击 URL 默认用 `http://127.0.0.1:{port}/...` 或 `command:simpleBrowser.api.open?"字面完整URL"`；query 的 `?`/`=`/`&` 禁止二次编码；禁止默认用会跳系统浏览器的 `*.weline.test` Markdown 链接。
+Always-on Cursor rules include **交付验收 URL**（`.cursor/rules/local-browser-urls.mdc`）：交付实例真实可访问 Host（优先 `*.weline.test` 等公网入口，不强制 `127.0.0.1`）；query 的 `?`/`=`/`&` 禁止二次编码；交付前探活。
 
 Always-on Cursor rules include **真机验收**（`.cursor/rules/real-device-acceptance.mdc`）：**禁止未测报完成**；每次修改都要测；局部函数可用单测，整体功能须 WebUI；详见 `dev/ai/global-constraints.md` §5 / §10.1。
 
@@ -17,6 +17,10 @@ Always-on Cursor rules include **Model 字段变更必须升模块版本**（`.c
 Always-on Cursor rules include **跨模块禁止硬类引用**（`.cursor/rules/cross-module-event-decoupling.mdc`）：模块之间禁止强制 `use`/注入/`new` 对方具体类；通知与副作用用 Event/Observer 解耦，读取用 Interface 或 `w_query()`。详见 `dev/ai/global-constraints.md` §4。
 
 Always-on Cursor rules include **Framework 核心抽象 + 事件扩展**（`.cursor/rules/framework-core-abstraction-events.mdc`）：`Framework/` 只做平台抽象并提供中立事件；禁止非框架业务语义进入核心；模块接入与模块间协作默认靠 Event。详见 `dev/ai/global-constraints.md` §4。
+
+Always-on Cursor rules include **提交信息须用中文**（`.cursor/rules/commit-message-chinese.mdc`）：`git commit` 的 subject/body 必须用简体中文，禁止纯英文；可选 `feat`/`fix` 等类型前缀后接中文摘要。详见 `dev/ai/global-constraints.md` §7。
+
+Always-on Cursor rules include **Taglib 优先**（`.cursor/rules/taglib-first-controls.mdc`）：语言/货币/站点选择等模板领域控件必须用官方 Taglib 或 Hook，禁止手写同等 `<select>`；技能 `framework-taglib-catalog`。详见 `dev/ai/global-constraints.md` §4。
 
 Additional legacy Cursor protocols remain reference-only unless explicitly triggered by task markers:
 

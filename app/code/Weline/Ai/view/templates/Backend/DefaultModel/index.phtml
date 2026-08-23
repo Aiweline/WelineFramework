@@ -1,431 +1,126 @@
 <?php
-/**
- * 默认模型管理页面模板
- * 
- * @var array $serviceTypes
- * @var array $defaultModels
- */
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
+$serviceTypes = is_array($serviceTypes ?? null) ? $serviceTypes : [];
+$defaultModels = is_array($defaultModels ?? null) ? $defaultModels : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$config = [
+    'messages' => [
+        'selectModel' => (string)__('请选择模型'),
+        'saveSuccess' => (string)__('保存成功！'),
+        'saveFailed' => (string)__('保存失败：'),
+        'requestFailed' => (string)__('请求失败：'),
+        'unknownError' => (string)__('未知错误'),
+        'saveAllConfirm' => (string)__('确定要保存所有默认模型配置吗？'),
+        'saveAllMessage' => (string)__('将保存当前表格中的全部默认模型配置。'),
+        'saving' => (string)__('正在保存所有配置，请稍候...'),
+        'saveAllSuccess' => (string)__('所有默认模型配置已成功保存！'),
+        'clearConfirm' => (string)__('确定要清除默认模型缓存吗？'),
+        'clearMessage' => (string)__('此操作将刷新默认模型配置缓存。'),
+        'clearSuccess' => (string)__('默认模型缓存已成功清除。'),
+        'initConfirm' => (string)__('确定要初始化所有默认模型配置吗？'),
+        'initMessage' => (string)__('此操作将重置所有服务类型的默认模型为系统推荐配置。'),
+        'initSuccess' => (string)__('默认配置已成功初始化。'),
+        'noProtected' => (string)__('暂无受保护的模型'),
+        'confirm' => (string)__('确定'),
+        'cancel' => (string)__('取消'),
+    ],
+];
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-ai-default-model.css)">
 
-<!-- 面包屑导航 -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading">
-            <h4 class="w-backend-page__title">
-                <w:icon name="settings" size="sm"></w:icon> <lang>默认模型管理</lang>
-            </h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><span><lang>AI 中心</lang></span></li>
-                    <li class="w-breadcrumb__item" data-state="active"><lang>默认模型管理</lang></li>
-                </ol>
-            </div>
+<section class="w-ai-default" data-ai-default-model>
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-stack" data-gap="sm">
+            <h1><w:icon name="settings" size="sm" /> <?= $escape(__('默认模型管理')) ?></h1>
+            <p class="w-text" data-tone="muted"><?= $escape(__('为每种 AI 服务能力选择系统默认模型')) ?></p>
         </div>
+        <button type="button" class="w-button" data-ai-default-action="init">
+            <w:icon name="refresh" size="sm" /> <?= $escape(__('初始化默认配置')) ?>
+        </button>
+    </header>
+
+    <div class="w-alert" data-tone="info">
+        <w:icon name="info" size="sm" />
+        <div class="w-alert__content"><?= $escape(__('默认模型用于未显式指定模型的请求；每种服务类型只能设置一个默认模型。')) ?></div>
     </div>
-</div>
 
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-card">
-            <div class="w-card__body">
-                <div class="page-header w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
-                    <h1><?= __('默认模型管理') ?></h1>
-                    <div class="actions">
-                        <button type="button" class="w-button" data-ai-default-action="init" data-tone="primary">
-                            <w:icon name="refresh" size="sm"></w:icon> <?= __('初始化默认配置') ?>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="w-alert" data-tone="info">
-                    <w:icon name="info" size="sm"></w:icon>
-                    <?= __('默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。') ?>
-                </div>
-
-                <div class="w-card">
-                    <div class="w-card__body">
-                        <w:form id="defaultModelForm">
-                            <table class="w-table">
-                                <thead>
-                                    <tr>
-                                        <th width="200"><?= __('服务类型') ?></th>
-                                        <th><?= __('默认模型') ?></th>
-                                        <th width="100"><?= __('优先级') ?></th>
-                                        <th width="100"><?= __('状态') ?></th>
-                                        <th width="150"><?= __('操作') ?></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php
-                                    foreach ($serviceTypes as $type => $label):
-                                        $currentDefault = $defaultModels[$type] ?? [];
-                                        $modelCode = $currentDefault['model_code'] ?? '';
-                                        $modelName = $currentDefault['model_name'] ?? __('请选择模型');
-                                    ?>
-                                    <tr>
-                                        <td><strong><?= $label ?></strong><br><small class="w-text" data-tone="muted"><?= $type ?></small></td>
-                                        <td>
-                                            <w:ai:model:select id="type" name="model_code" value="modelCode|''" display="modelName|请选择模型" service_type="type" data-service-type="type" json="1" data-w-width="full" />
-                                        </td>
-                                        <td>
-                                            <input type="number" class="w-input" name="priority_<?= $type ?>" value="<?= $currentDefault['priority'] ?? 1 ?>" min="1" max="100">
-                                        </td>
-                                        <td>
-                                            <div class="custom-control custom-switch">
-                                                <input type="checkbox" 
-                                                       class="custom-control-input" 
-                                                       id="active_<?= $type ?>" 
-                                                       name="active_<?= $type ?>" 
-                                                       <?= ($currentDefault && $currentDefault['is_active']) ? 'checked' : '' ?>>
-                                                <label class="custom-control-label" for="active_<?= $type ?>"></label>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <button type="button" class="w-button" data-ai-default-action="save" data-service-type="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-size="sm">
-                                                <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </w:form>
-
-                        <div style="--w-mt:var(--weline-space-4);">
-                            <button type="button" class="w-button" data-ai-default-action="save-all" data-tone="success">
-                                <w:icon name="save" size="sm"></w:icon> <?= __('保存全部') ?>
-                            </button>
-                            <button type="button" class="w-button" data-ai-default-action="clear-cache" data-tone="warning">
-                                <w:icon name="circle" size="sm"></w:icon> <?= __('清除缓存') ?>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="w-card" style="--w-mt:var(--weline-space-4);">
-                    <div class="w-card__header">
-                        <h5><?= __('受保护的模型') ?></h5>
-                    </div>
-                    <div class="w-card__body">
-                        <p class="w-text" data-tone="muted"><?= __('以下模型被设置为默认模型，无法删除：') ?></p>
-                        <div id="protectedModelsList"></div>
-                    </div>
-                </div>
-            </div>
+    <form id="w-ai-default-form" class="w-card" data-ai-default-form>
+        <div class="w-table-wrap">
+            <table class="w-table w-ai-default__table">
+                <thead>
+                    <tr>
+                        <th scope="col"><?= $escape(__('服务类型')) ?></th>
+                        <th scope="col"><?= $escape(__('默认模型')) ?></th>
+                        <th scope="col"><?= $escape(__('优先级')) ?></th>
+                        <th scope="col"><?= $escape(__('状态')) ?></th>
+                        <th scope="col"><?= $escape(__('操作')) ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($serviceTypes as $type => $label): ?>
+                        <?php
+                        $currentDefault = is_array($defaultModels[$type] ?? null) ? $defaultModels[$type] : [];
+                        $modelCode = (string)($currentDefault['model_code'] ?? '');
+                        $modelName = (string)($currentDefault['model_name'] ?? '');
+                        $priority = max(1, min(100, (int)($currentDefault['priority'] ?? 100)));
+                        $active = !array_key_exists('is_active', $currentDefault) || (bool)$currentDefault['is_active'];
+                        ?>
+                        <tr data-ai-service-row data-service-type="<?= $escape($type) ?>">
+                            <td>
+                                <span class="w-ai-default__service">
+                                    <strong><?= $escape($label) ?></strong>
+                                    <small class="w-text" data-tone="muted" data-family="mono"><?= $escape($type) ?></small>
+                                </span>
+                            </td>
+                            <td>
+                                <w:ai:model:select
+                                    id="type"
+                                    name="model_code"
+                                    value="modelCode|''"
+                                    display="modelName|''"
+                                    service_type="type"
+                                />
+                            </td>
+                            <td>
+                                <input class="w-input w-ai-default__priority" type="number" data-ai-priority value="<?= $priority ?>" min="1" max="100">
+                            </td>
+                            <td>
+                                <label class="w-switch">
+                                    <input type="checkbox" data-ai-active <?= $active ? 'checked' : '' ?>>
+                                    <span class="w-visually-hidden"><?= $escape(__('启用')) ?></span>
+                                </label>
+                            </td>
+                            <td>
+                                <button type="button" class="w-button" data-size="sm" data-ai-default-action="save">
+                                    <w:icon name="save" size="sm" /> <?= $escape(__('保存')) ?>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-    </div>
-</div>
+        <footer class="w-card__footer w-cluster w-ai-default__actions">
+            <button type="button" class="w-button" data-tone="neutral" data-ai-default-action="clear-cache">
+                <w:icon name="refresh" size="sm" /> <?= $escape(__('清除缓存')) ?>
+            </button>
+            <button type="button" class="w-button" data-ai-default-action="save-all">
+                <w:icon name="save" size="sm" /> <?= $escape(__('保存全部')) ?>
+            </button>
+        </footer>
+    </form>
 
+    <section class="w-card" aria-labelledby="w-ai-protected-title">
+        <header class="w-card__header">
+            <div>
+                <h2 class="w-card__title" id="w-ai-protected-title"><?= $escape(__('受保护的模型')) ?></h2>
+                <p class="w-text" data-tone="muted"><?= $escape(__('正在作为默认值使用的模型不可删除。')) ?></p>
+            </div>
+        </header>
+        <div class="w-card__body w-ai-default__protected" data-ai-protected-list aria-live="polite"></div>
+    </section>
+</section>
 
-<script>
-(function() {
-    'use strict';
-    
-    window.saveDefaultModel = function(serviceType) {
-        var form = document.getElementById('defaultModelForm');
-        var hiddenInput = form.querySelector('input[data-service-type="' + serviceType + '"]');
-        var modelCode = hiddenInput ? hiddenInput.value : '';
-        if (!modelCode && window.AiModelSelectSelected) {
-            var container = form.querySelector('div[data-service-type="' + serviceType + '"]');
-            if (container) {
-                var selectId = container.id.replace('_container', '');
-                modelCode = window.AiModelSelectSelected[selectId] || '';
-            }
-        }
-        var priority = form.querySelector('input[name="priority_' + serviceType + '"]').value;
-        var isActive = form.querySelector('input[name="active_' + serviceType + '"]').checked ? 1 : 0;
-
-        if (!modelCode) {
-            Weline.UI.dialog.request({
-                tone: 'warning',
-                title: '<?= __('提示') ?>',
-                message: '<?= __('请选择模型') ?>',
-                confirmLabel: '<?= __('确定') ?>'
-            });
-            return;
-        }
-
-        var req = window.Weline.Api.resource('ai').defaultSet({
-            service_type: serviceType,
-            model_code: modelCode,
-            priority: parseInt(priority) || 100,
-            is_active: isActive
-        });
-        req.then(function(res) {
-            var data = (res && res.data) || res;
-            if (data.success) {
-                Weline.UI.dialog.request({
-                    tone: 'success',
-                    title: '<?= __('成功') ?>',
-                    message: '<?= __('保存成功！') ?>',
-                    confirmable: false,
-                    duration: 1500
-                });
-                updateProtectedModelsList();
-            } else {
-                Weline.UI.dialog.request({
-                    tone: 'danger',
-                    title: '<?= __('错误') ?>',
-                    message: '<?= __('保存失败：') ?>' + data.message,
-                    confirmLabel: '<?= __('确定') ?>'
-                });
-            }
-        })
-        .catch(function(error) {
-            Weline.UI.dialog.request({
-                tone: 'danger',
-                title: '<?= __('请求失败') ?>',
-                message: '<?= __('请求失败：') ?>' + error.message,
-                confirmLabel: '<?= __('确定') ?>'
-            });
-        });
-    };
-
-    window.saveAllDefaultModels = function() {
-        Weline.UI.dialog.request({
-            title: '<?= __('确认') ?>',
-            message: '<?= __('确定要保存所有默认模型配置吗？') ?>',
-            tone: 'info',
-            cancelable: true,
-            confirmTone: 'primary',
-            cancelTone: 'neutral',
-            confirmLabel: '<?= __('确定') ?>',
-            cancelLabel: '<?= __('取消') ?>'
-        }).then(function(result) {
-            if (result.confirmed) {
-                var form = document.getElementById('defaultModelForm');
-                var configurations = [];
-                
-                <?php foreach ($serviceTypes as $type => $label): ?>
-                (function() {
-                    var serviceType = '<?= $type ?>';
-                    var hiddenInput = form.querySelector('input[data-service-type="' + serviceType + '"]');
-                    var modelCode = hiddenInput ? hiddenInput.value : '';
-                    
-                    if (!modelCode && window.AiModelSelectSelected) {
-                        var container = form.querySelector('div[data-service-type="' + serviceType + '"]');
-                        if (container) {
-                            var selectId = container.id.replace('_container', '');
-                            modelCode = window.AiModelSelectSelected[selectId] || '';
-                        }
-                    }
-                    
-                    var priority = form.querySelector('input[name="priority_' + serviceType + '"]').value || 100;
-                    var isActive = form.querySelector('input[name="active_' + serviceType + '"]').checked ? 1 : 0;
-                    
-                    configurations.push({
-                        service_type: serviceType,
-                        model_code: modelCode,
-                        priority: parseInt(priority) || 100,
-                        is_active: isActive
-                    });
-                })();
-                <?php endforeach; ?>
-                
-                var savingToast = Weline.UI.toast.info(
-                    '<?= __('正在保存所有配置，请稍候...') ?>',
-                    {duration: 0}
-                );
-                
-                var req = window.Weline.Api.resource('ai').defaultBatchSet({ configurations: configurations });
-                req.then(function(res) {
-                    savingToast.close();
-                    var data = (res && res.data) || res;
-                    if (data.success) {
-                        Weline.UI.dialog.request({
-                            tone: 'success',
-                            title: '<?= __('保存成功') ?>',
-                            message: '<?= __('所有默认模型配置已成功保存！') ?>',
-                            confirmable: false,
-                            duration: 1500
-                        }).then(function() {
-                            window.location.reload();
-                        });
-                    } else {
-                        Weline.UI.dialog.request({
-                            tone: 'danger',
-                            title: '<?= __('保存失败') ?>',
-                            message: '<?= __('保存失败：') ?>' + (data.message || '<?= __('未知错误') ?>'),
-                            confirmLabel: '<?= __('确定') ?>'
-                        });
-                    }
-                })
-                .catch(function(error) {
-                    savingToast.close();
-                    Weline.UI.dialog.request({
-                        tone: 'danger',
-                        title: '<?= __('请求失败') ?>',
-                        message: '<?= __('请求失败：') ?>' + error.message,
-                        confirmLabel: '<?= __('确定') ?>'
-                    });
-                });
-            }
-        });
-    };
-
-    window.clearCache = function() {
-        Weline.UI.dialog.request({
-            title: '<?= __('确定要清除默认模型缓存吗？') ?>',
-            message: '<?= __('此操作将刷新默认模型配置缓存。') ?>',
-            tone: 'warning',
-            cancelable: true,
-            confirmTone: 'primary',
-            cancelTone: 'neutral',
-            confirmLabel: '<?= __('确定清除') ?>',
-            cancelLabel: '<?= __('取消') ?>'
-        }).then(function(result) {
-            if (result.confirmed) {
-                var req = window.Weline.Api.resource('ai').defaultClearCache();
-                req.then(function(res) {
-                    var data = (res && res.data) || res;
-                    if (data.success) {
-                        Weline.UI.dialog.request({
-                            title: '<?= __('已清除！') ?>',
-                            message: '<?= __('默认模型缓存已成功清除。') ?>',
-                            tone: 'success'
-                        });
-                    } else {
-                        Weline.UI.dialog.request({
-                            title: '<?= __('清除失败！') ?>',
-                            message: '<?= __('清除失败：') ?>' + data.message,
-                            tone: 'danger'
-                        });
-                    }
-                })
-                .catch(function(error) {
-                    Weline.UI.dialog.request({
-                        title: '<?= __('请求失败！') ?>',
-                        message: '<?= __('请求失败：') ?>' + error.message,
-                        tone: 'danger'
-                    });
-                });
-            }
-        });
-    };
-
-    window.initDefaultModels = function() {
-        Weline.UI.dialog.request({
-            title: '<?= __('确定要初始化所有默认模型配置吗？') ?>',
-            message: '<?= __('此操作将重置所有服务类型的默认模型为系统推荐配置。') ?>',
-            tone: 'warning',
-            cancelable: true,
-            confirmTone: 'primary',
-            cancelTone: 'neutral',
-            confirmLabel: '<?= __('确定初始化') ?>',
-            cancelLabel: '<?= __('取消') ?>'
-        }).then(function(result) {
-            if (result.confirmed) {
-                var req = window.Weline.Api.resource('ai').defaultInitialize();
-                req.then(function(res) {
-                    var data = (res && res.data) || res;
-                    if (data.success) {
-                        Weline.UI.dialog.request({
-                            title: '<?= __('初始化成功！') ?>',
-                            message: '<?= __('默认配置已成功初始化。') ?>',
-                            tone: 'success'
-                        }).then(function() {
-                            location.reload();
-                        });
-                    } else {
-                        Weline.UI.dialog.request({
-                            title: '<?= __('初始化失败！') ?>',
-                            message: '<?= __('初始化失败：') ?>' + data.message,
-                            tone: 'danger'
-                        });
-                    }
-                })
-                .catch(function(error) {
-                    Weline.UI.dialog.request({
-                        title: '<?= __('请求失败！') ?>',
-                        message: '<?= __('请求失败：') ?>' + error.message,
-                        tone: 'danger'
-                    });
-                });
-            }
-        });
-    };
-
-    function updateProtectedModelsList() {
-        var req = window.Weline.Api.resource('ai').defaultProtected();
-        req.then(function(res) {
-            var data = (res && res.data) || res;
-                var container = document.getElementById('protectedModelsList');
-                if (!container) {
-                    return;
-                }
-                container.replaceChildren();
-                if (data.success && data.data.length > 0) {
-                    var list = document.createElement('ul');
-                    list.className = 'w-stack';
-                    data.data.forEach(function(model) {
-                        var item = document.createElement('li');
-                        item.className = 'w-card__body w-cluster';
-                        var name = document.createElement('strong');
-                        name.textContent = model.model_name || '';
-                        var meta = document.createTextNode(' (' + (model.vendor || '') + ') - ');
-                        var badge = document.createElement('span');
-                        badge.className = 'w-badge';
-                        badge.dataset.tone = 'primary';
-                        badge.textContent = Array.isArray(model.service_types) ? model.service_types.join(', ') : '';
-                        item.appendChild(name);
-                        item.appendChild(meta);
-                        item.appendChild(badge);
-                        list.appendChild(item);
-                    });
-                    container.appendChild(list);
-                } else {
-                    var empty = document.createElement('p');
-                    empty.className = 'text-muted';
-                    empty.textContent = '<?= __('暂无受保护的模型') ?>';
-                    container.appendChild(empty);
-                }
-            });
-    }
-
-    document.addEventListener('click', function(event) {
-        var trigger = event.target.closest('[data-ai-default-action]');
-        if (!trigger) {
-            return;
-        }
-        event.preventDefault();
-        var action = trigger.getAttribute('data-ai-default-action');
-        if (action === 'init') {
-            initDefaultModels();
-        } else if (action === 'save') {
-            saveDefaultModel(trigger.getAttribute('data-service-type') || '');
-        } else if (action === 'save-all') {
-            saveAllDefaultModels();
-        } else if (action === 'clear-cache') {
-            clearCache();
-        }
-    });
-
-    document.addEventListener('DOMContentLoaded', updateProtectedModelsList);
-})();
-</script>
-
-<style>
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.custom-control-label {
-    cursor: pointer;
-}
-
-.table select,
-.table input[type="number"] {
-    width: 100%;
-}
-.model-search-input {
-    font-size: 12px;
-}
-.model-item.active,
-.model-item:hover {
-    background-color: var(--backend-color-hover);
-}
-</style>
+<script type="application/json" data-ai-default-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-ai-default-model.js)"></script>

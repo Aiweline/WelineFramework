@@ -90,7 +90,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'input_string_60',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" maxlength="60" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" maxlength="60" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 60,
                 self::FIELD_IS_SWATCH => 0,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -154,7 +154,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'input_string_255',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" maxlength="255" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" maxlength="255" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 0,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -170,7 +170,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'input_string',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 0,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -186,7 +186,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'textarea_varchar',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 0,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -202,7 +202,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'textarea_text',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_TEXT,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 0,
                 self::FIELD_IS_SWATCH => 0,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -218,7 +218,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'textarea_mediumtext',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_MEDIU_TEXT,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 0,
                 self::FIELD_IS_SWATCH => 0,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -234,7 +234,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'textarea_longtext',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_LONG_TEXT,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 0,
                 self::FIELD_IS_SWATCH => 0,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -250,7 +250,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'input_string_swatch_image',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 1,
                 self::FIELD_SWATCH_IMAGE => 1,
@@ -266,7 +266,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'input_string_swatch_color',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 1,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -282,7 +282,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'input_string_swatch_text',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 1,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -298,7 +298,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'input_string_swatch',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 1,
                 self::FIELD_SWATCH_IMAGE => 1,
@@ -314,7 +314,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'select_yes_no',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 1,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -330,7 +330,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'select_option',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 1,
                 self::FIELD_SWATCH_IMAGE => 0,
@@ -346,7 +346,7 @@ class EavAttributeTypeSchema extends AbstractSchema
             [
                 self::FIELD_CODE => 'select_option_multiple',
                 self::FIELD_FIELD_TYPE => TableInterface::column_type_VARCHAR,
-                self::FIELD_FRONTEND_ATTRS => 'type="text" data-parsley-minlength="3" required multiple',
+                self::FIELD_FRONTEND_ATTRS => 'type="text" minlength="3" required multiple',
                 self::FIELD_FIELD_LENGTH => 255,
                 self::FIELD_IS_SWATCH => 1,
                 self::FIELD_SWATCH_IMAGE => 0,

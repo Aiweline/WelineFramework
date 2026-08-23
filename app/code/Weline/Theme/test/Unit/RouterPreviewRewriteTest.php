@@ -38,7 +38,7 @@ class RouterPreviewRewriteTest extends TestCore
         $this->assertSame('homepage', (string)$request->getParam('page_type', ''));
     }
 
-    public function testDefaultThemePublicProductsRouteFallsBackToProductListLayout(): void
+    public function testDefaultThemePublicProductsRouteDefersToInstalledProductModule(): void
     {
         self::initRequest('/products');
 
@@ -51,10 +51,22 @@ class RouterPreviewRewriteTest extends TestCore
 
         Router::rewriteDefaultThemePublicPage($path, $rule);
 
-        $this->assertSame('theme/frontend/policy', $path);
-        $this->assertSame('product_list', (string)$request->getParam('layout_type', ''));
-        $this->assertSame('default', (string)$request->getParam('layout_option', ''));
-        $this->assertSame('products', (string)$request->getParam('theme_public_route', ''));
+        $this->assertSame('products', $path);
+        $this->assertSame('', (string)$request->getParam('layout_type', ''));
+        $this->assertSame([], $rule);
+    }
+
+    public function testDefaultThemeNumericProductRouteDefersToInstalledProductModule(): void
+    {
+        self::initRequest('/product/17');
+
+        $path = 'product/17';
+        $rule = [];
+
+        Router::rewriteDefaultThemePublicPage($path, $rule);
+
+        $this->assertSame('product/17', $path);
+        $this->assertSame([], $rule);
     }
 
     public function testDefaultThemePublicPageDefersWhenCurrentWebsiteIsPageBuilderOwned(): void
@@ -62,6 +74,7 @@ class RouterPreviewRewriteTest extends TestCore
         $source = (string)\file_get_contents(BP . '/app/code/Weline/Theme/Controller/Router.php');
 
         $this->assertStringContainsString('isPageBuilderOwnedCurrentWebsite', $source);
+        $this->assertStringContainsString('isInstalledModuleOwnedPublicRoute', $source);
         $this->assertStringContainsString('pagebuilder_ai_site', $source);
         $this->assertStringContainsString('page_builder', $source);
         $this->assertMatchesRegularExpression(

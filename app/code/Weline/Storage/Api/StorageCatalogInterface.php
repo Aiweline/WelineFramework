@@ -9,7 +9,7 @@ use Weline\Framework\Runtime\ScopeIdentity;
 interface StorageCatalogInterface
 {
     /**
-     * @return list<array{name:string,driver:string,is_default:bool,info:array<string,mixed>,media_base_url?:string}>
+     * @return list<array{disk_code:string,name:string,driver:string,is_default:bool,info:array<string,mixed>}>
      */
     public function all(?ScopeIdentity $scope = null): array;
 }

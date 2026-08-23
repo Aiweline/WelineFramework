@@ -49,7 +49,7 @@ document.addEventListener('click', function (event) {
     } else if (action === 'copy-code') {
         copyCode(trigger.getAttribute('data-code') || '');
     } else if (action === 'close-generated-modal') {
-        const modal = trigger.closest('.modal');
+        const modal = trigger.closest('.twofa-modal');
         if (modal) {
             modal.remove();
         }
@@ -1186,15 +1186,15 @@ function exportAccounts() {
  */
 function showExportModal(accounts) {
     const modal = document.createElement('div');
-    modal.className = 'modal active';
+    modal.className = 'twofa-modal active';
     modal.innerHTML = `
-        <div class="modal-overlay" data-twofa-action="close-generated-modal"></div>
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="twofa-modal-overlay" data-twofa-action="close-generated-modal"></div>
+        <div class="twofa-modal-content">
+            <div class="twofa-modal-header">
                 <h2>选择导出格式</h2>
                 <button class="close-btn" type="button" data-twofa-action="close-generated-modal">×</button>
             </div>
-            <div class="modal-body">
+            <div class="twofa-modal-body">
                 <p style="color: #666; margin-bottom: 20px;">
                     共 ${accounts.length} 个账户 • 选择目标验证器的格式
                 </p>
@@ -1312,7 +1312,7 @@ function doExport(format, accountCount) {
     URL.revokeObjectURL(url);
 
     // 关闭模态框
-    document.querySelector('.modal').remove();
+    document.querySelector('.twofa-modal').remove();
 
     showToast(`✓ 已导出 ${accountCount} 个账户（${getFormatName(format)}格式）`);
 }

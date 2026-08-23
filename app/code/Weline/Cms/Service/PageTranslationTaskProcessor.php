@@ -18,7 +18,7 @@ final class PageTranslationTaskProcessor
     }
 
     /** @return array<string,mixed> */
-    public function freezeInput(int $pageId, string $requestId): array
+    public function freezeInput(int $pageId, string $requestId, ?int $storeId = null): array
     {
         $requestId = trim($requestId);
         if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/D', $requestId)) {
@@ -29,7 +29,7 @@ final class PageTranslationTaskProcessor
             throw new \InvalidArgumentException((string)__('CMS 页面不存在或已删除。'));
         }
 
-        $payload = $this->pageLocaleService->buildEditorPayload($page);
+        $payload = $this->pageLocaleService->buildEditorPayload($page, '', $storeId);
         $supported = array_values(array_map('strval', (array)($payload['supported_locales'] ?? [])));
         $titles = is_array($payload['titles'] ?? null) ? $payload['titles'] : [];
         $sourceLocale = trim((string)($payload['source_locale'] ?? ''));
@@ -43,6 +43,8 @@ final class PageTranslationTaskProcessor
             'request_id' => $requestId,
             'page_id' => $page->getPageId(),
             'website_id' => $page->getWebsiteId(),
+            'store_id' => (int)($payload['store_id'] ?? 0),
+            'store_code' => (string)($payload['store_code'] ?? ''),
             'source_locale' => $sourceLocale,
             'source_title' => $sourceTitle,
             'source_hash' => hash('sha256', $sourceTitle),
@@ -71,6 +73,7 @@ final class PageTranslationTaskProcessor
             'module_name' => 'Weline_Cms',
             'operation' => 'cms_page_title',
             'page_id' => (int)($input['page_id'] ?? 0),
+            'store_id' => (int)($input['store_id'] ?? 0),
         ];
         if ($idempotencyKey !== '') {
             $options['idempotency_key'] = $idempotencyKey;
@@ -104,7 +107,13 @@ final class PageTranslationTaskProcessor
             return 'website_changed';
         }
 
-        $payload = $this->pageLocaleService->buildEditorPayload($page);
+        $storeId = (int)($input['store_id'] ?? 0);
+        $payload = $this->pageLocaleService->buildEditorPayload($page, '', $storeId > 0 ? $storeId : null);
+        if ((int)($payload['store_id'] ?? 0) !== $storeId
+            || !hash_equals((string)($input['store_code'] ?? ''), (string)($payload['store_code'] ?? ''))
+        ) {
+            return 'website_changed';
+        }
         $supported = array_values(array_map('strval', (array)($payload['supported_locales'] ?? [])));
         $targetLocale = trim($targetLocale);
         if (!in_array($targetLocale, $supported, true)) {
@@ -128,6 +137,7 @@ final class PageTranslationTaskProcessor
             $translatedTitle,
             (string)$input['source_hash'],
             $supported,
+            $storeId,
         );
 
         return $saved === null ? 'already_filled' : 'saved';

@@ -64,6 +64,30 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
 
         self::assertNull($reader->get('acl_2_source'));
     }
+
+    public function testLocalMemoryPressureBypassesOnlyL1AndPreservesSharedState(): void
+    {
+        $shared = new SharedCacheStateDouble();
+        $config = [
+            'local_cache_size' => 10,
+            'local_cache_memory_pressure_threshold' => 0.0001,
+        ];
+        $writer = new WlsMemoryAdapter('preview_token_pressure', $config, $shared);
+        $reader = new WlsMemoryAdapter('preview_token_pressure', $config, $shared);
+
+        self::assertTrue($writer->set('token', ['page_id' => 42]));
+        self::assertSame(0, $writer->getMemoryItemCount());
+        self::assertSame(['page_id' => 42], $reader->get('token'));
+        self::assertSame(0, $reader->getMemoryItemCount());
+        self::assertTrue($reader->isAvailable());
+
+        self::assertTrue($reader->compareAndSet(
+            'token',
+            ['page_id' => 42],
+            ['page_id' => 43],
+        ));
+        self::assertSame(['page_id' => 43], $writer->get('token'));
+    }
 }
 
 final class SharedCacheStateDouble implements SharedCacheStateInterface

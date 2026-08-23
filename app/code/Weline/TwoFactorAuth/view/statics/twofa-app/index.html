@@ -44,7 +44,7 @@
         </button>
 
         <!-- 导出按钮 -->
-        <button class="fab-secondary" type="button" data-twofa-action="export-accounts" title="导出备份">
+        <button class="weline-fab-secondary" type="button" data-twofa-action="export-accounts" title="导出备份">
             <span>💾</span>
         </button>
 
@@ -55,40 +55,40 @@
     </div>
 
     <!-- 添加账户模态框 -->
-    <div class="modal" id="addModal">
-        <div class="modal-overlay" data-twofa-action="close-add-modal"></div>
-        <div class="modal-content">
-            <div class="modal-header">
+    <div class="w-dialog" id="addModal">
+        <div class="w-dialog__overlay" data-twofa-action="close-add-modal"></div>
+        <div class="w-dialog__content">
+            <div class="w-dialog__header">
                 <h2>添加账户</h2>
                 <button class="close-btn" type="button" data-twofa-action="close-add-modal">×</button>
             </div>
 
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <div class="tabs">
-                    <button class="tab-btn active" type="button" data-twofa-action="switch-tab" data-tab="manual">手动输入</button>
+                    <button class="tab-w-button active" type="button" data-twofa-action="switch-tab" data-tab="manual">手动输入</button>
                     <button class="tab-btn" type="button" data-twofa-action="switch-tab" data-tab="scan">扫描二维码</button>
                     <button class="tab-btn" type="button" data-twofa-action="switch-tab" data-tab="import">导入备份</button>
                 </div>
 
                 <!-- 手动输入表单 -->
                 <div id="manualTab" class="tab-content active">
-                    <div class="form-group">
+                    <div class="w-field">
                         <label>发行者（如：Weline Framework）</label>
                         <input type="text" id="issuer" placeholder="输入发行者名称">
                     </div>
 
-                    <div class="form-group">
+                    <div class="w-field">
                         <label>账户名（如：admin@example.com）</label>
                         <input type="text" id="accountName" placeholder="输入账户名">
                     </div>
 
-                    <div class="form-group">
+                    <div class="w-field">
                         <label>密钥（Secret Key）</label>
                         <input type="text" id="secret" placeholder="输入密钥或粘贴otpauth://链接">
                         <small>支持Base32密钥或完整的otpauth://链接</small>
                     </div>
 
-                    <div class="form-group">
+                    <div class="w-field">
                         <label>备注（可选）</label>
                         <input type="text" id="accountNote" placeholder="如：公司账号、个人邮箱等">
                         <small>添加备注方便识别不同账户</small>
@@ -106,7 +106,7 @@
                             </p>
                             <input type="file" id="qrImageFile" accept="image/*" style="display: none;"
                                 data-twofa-change="handle-qr-image-upload">
-                            <button class="btn btn-primary" type="button" data-twofa-action="trigger-file-input" data-target-input="qrImageFile">
+                            <button class="w-button" type="button" data-twofa-action="trigger-file-input" data-target-input="qrImageFile">
                                 📁 选择二维码图片
                             </button>
 
@@ -129,7 +129,7 @@
                             <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
                                 使用设备摄像头直接扫描二维码（需要摄像头权限）
                             </p>
-                            <button class="btn btn-secondary" type="button" data-twofa-action="start-camera-scanning">
+                            <button class="w-button" type="button" data-twofa-action="start-camera-scanning">
                                 启动摄像头扫描
                             </button>
 
@@ -137,7 +137,7 @@
                             <div id="cameraPreview" style="display: none; margin-top: 15px;">
                                 <video id="qrVideo" style="width: 100%; max-width: 400px; border-radius: 8px;"></video>
                                 <div style="margin-top: 10px;">
-                                    <button class="btn btn-danger" type="button" data-twofa-action="stop-camera-scanning">停止扫描</button>
+                                    <button class="w-button" type="button" data-twofa-action="stop-camera-scanning">停止扫描</button>
                                 </div>
                             </div>
                         </div>
@@ -153,11 +153,11 @@
                         </p>
                     </div>
 
-                    <div class="form-group">
+                    <div class="w-field">
                         <label>选择备份文件</label>
                         <input type="file" id="importFile" accept=".json,.txt" style="display: none;"
                             data-twofa-change="handle-file-select">
-                        <button class="btn btn-primary" type="button" data-twofa-action="trigger-file-input" data-target-input="importFile">
+                        <button class="w-button" type="button" data-twofa-action="trigger-file-input" data-target-input="importFile">
                             📁 选择文件
                         </button>
                         <div id="fileName" style="margin-top: 10px; color: #666; font-size: 14px;"></div>
@@ -176,24 +176,24 @@
                 </div>
             </div>
 
-            <div class="modal-footer">
-                <button class="btn btn-secondary" type="button" data-twofa-action="close-add-modal">取消</button>
-                <button class="btn btn-primary" id="addBtn" type="button" data-twofa-action="add-account">添加</button>
-                <button class="btn btn-primary" id="importBtn" type="button" data-twofa-action="import-accounts"
+            <div class="w-dialog__footer">
+                <button class="w-button" type="button" data-twofa-action="close-add-modal">取消</button>
+                <button class="w-button" id="addBtn" type="button" data-twofa-action="add-account">添加</button>
+                <button class="w-button" id="importBtn" type="button" data-twofa-action="import-accounts"
                     style="display: none;">导入</button>
             </div>
         </div>
     </div>
 
     <!-- 账户编辑确认框 -->
-    <div class="modal" id="editConfirmModal">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
+    <div class="w-dialog" id="editConfirmModal">
+        <div class="w-dialog__content" style="max-width: 500px;">
+            <div class="w-dialog__header">
                 <h2 data-i18n="edit_confirm_title">✅ 账户已添加，请确认信息</h2>
                 <button class="close-btn" type="button" data-twofa-action="close-edit-confirm-modal" data-abandon="true">×</button>
             </div>
 
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <div class="success-banner"
                     style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
                     <p style="margin: 0; color: #2e7d32; font-weight: 500;" data-i18n="account_added_success">
@@ -201,13 +201,13 @@
                     </p>
                 </div>
 
-                <div class="form-group">
+                <div class="w-field">
                     <label data-i18n="edit_issuer_label">发行者</label>
                     <input type="text" id="editIssuer" readonly style="background: #f5f5f5;">
                     <small data-i18n="edit_issuer_hint">发行者通常不需要修改</small>
                 </div>
 
-                <div class="form-group">
+                <div class="w-field">
                     <label data-i18n="edit_account_label">
                         账户名 <span style="color: #ff9800;">（可修改）</span>
                     </label>
@@ -215,13 +215,13 @@
                     <small data-i18n="edit_account_hint">您可以修改账户名，如添加环境标识：admin-prod</small>
                 </div>
 
-                <div class="form-group">
+                <div class="w-field">
                     <label data-i18n="edit_note_label">备注</label>
                     <input type="text" id="editNote">
                     <small data-i18n="edit_note_hint">添加备注方便日后识别</small>
                 </div>
 
-                <div class="form-group">
+                <div class="w-field">
                     <label style="display: flex; align-items: center; cursor: pointer;">
                         <input type="checkbox" id="editEnableRecovery" style="margin-right: 8px;">
                         <span data-i18n="enable_recovery_label">启用恢复码功能（推荐）</span>
@@ -236,7 +236,7 @@
                     <strong data-i18n="recovery_codes_title">🔑 恢复码（请妥善保存）</strong>
                     <div id="recoveryCodesList" style="margin-top: 10px; font-family: monospace; font-size: 13px;">
                     </div>
-                    <button class="btn btn-sm" type="button" data-twofa-action="copy-recovery-codes" style="margin-top: 10px;"
+                    <button class="w-button " type="button" data-twofa-action="copy-recovery-codes" style="margin-top: 10px;"
                         data-i18n="copy_recovery_codes">
                         📋 复制所有恢复码
                     </button>
@@ -257,11 +257,11 @@
                 </div>
             </div>
 
-            <div class="modal-footer">
-                <button class="btn btn-secondary" type="button" data-twofa-action="close-edit-confirm-modal" data-abandon="false" data-i18n="btn_cancel_edit">
+            <div class="w-dialog__footer">
+                <button class="w-button" type="button" data-twofa-action="close-edit-confirm-modal" data-abandon="false" data-i18n="btn_cancel_edit">
                     取消修改
                 </button>
-                <button class="btn btn-primary" type="button" data-twofa-action="save-edited-account" data-i18n="btn_save_confirm">
+                <button class="w-button" type="button" data-twofa-action="save-edited-account" data-i18n="btn_save_confirm">
                     确认保存
                 </button>
             </div>

@@ -52,6 +52,8 @@
 
 ## 相关文档
 
+- [Theme Editor → Weline UI 2.0 能力保留矩阵](./weline-ui-2-capability-matrix.md)
+- [Theme Editor 网站/店铺作用域切换](./scope-switching.md)
 - [区域隔离规则](./region-isolation.md)
 - [Slot 嵌套规则](./slot-nesting-rules.md)
 - [局部刷新机制](./partial-refresh.md)

@@ -4,41 +4,41 @@
 在配置写入数据库前触发，允许其他模块验证或修改配置值。,在配置写入数据库前触发，允许其他模块验证或修改配置值。
 配置设置后,配置设置后
 "在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。","在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。"
-"SystemConfig query provider does not support: %{1}","SystemConfig query provider does not support: %{1}"
-"System config query","System config query"
-"Provides scope-aware system config read, write, version, and rollback operations.","Provides scope-aware system config read, write, version, and rollback operations."
-"Get a resolved config value, or a field object when return_type=field.","Get a resolved config value, or a field object when return_type=field."
-"Get a resolved config value with source and fallback metadata.","Get a resolved config value with source and fallback metadata."
-"Get resolved config values for a module, or field objects when return_type=fields.","Get resolved config values for a module, or field objects when return_type=fields."
-"Preview normalized scope and fallback scopes.","Preview normalized scope and fallback scopes."
-"List SystemConfig templates registered through Extends.","List SystemConfig templates registered through Extends."
-"Parse one SystemConfig PHTML template without executing it.","Parse one SystemConfig PHTML template without executing it."
-"List modules that provide SystemConfig templates.","List modules that provide SystemConfig templates."
-"Build the SystemConfig template tree by module and area.","Build the SystemConfig template tree by module and area."
-"Save a template-backed config batch after field whitelist validation.","Save a template-backed config batch after field whitelist validation."
-"Precheck whether a template-backed config version can rollback without mutation.","Precheck whether a template-backed config version can rollback without mutation."
-"Rollback a template-backed config version after rollback precheck.","Rollback a template-backed config version after rollback precheck."
-"Set a global compatibility config value.","Set a global compatibility config value."
-"Set one scoped config value and create a version batch.","Set one scoped config value and create a version batch."
-"Delete one scoped value so resolution inherits from fallback scopes.","Delete one scoped value so resolution inherits from fallback scopes."
-"Rollback a scoped config version batch.","Rollback a scoped config version batch."
-"List scoped config version batches.","List scoped config version batches."
-"Get one scoped config version detail with sensitive values masked.","Get one scoped config version detail with sensitive values masked."
-"Preview lower-scope rows affected by locking one config key.","Preview lower-scope rows affected by locking one config key."
-"Lock one config key at the explicit target scope.","Lock one config key at the explicit target scope."
-"Unlock one config key at the explicit target scope.","Unlock one config key at the explicit target scope."
-"Preview suppressed lower-scope rows without mutation.","Preview suppressed lower-scope rows without mutation."
-"Restore selected suppressed rows after replay authorization.","Restore selected suppressed rows after replay authorization."
-"Discard selected suppressed rows after replay authorization.","Discard selected suppressed rows after replay authorization."
-"Register a reviewed Scope security-header candidate before activating the exact same values.","Register a reviewed Scope security-header candidate before activating the exact same values."
-"Export one explicitly authorized scope as an encrypted configuration envelope.","Export one explicitly authorized scope as an encrypted configuration envelope."
-"Decrypt and validate configuration envelope metadata without mutation.","Decrypt and validate configuration envelope metadata without mutation."
-"Import an encrypted configuration envelope after versioned submit authorization.","Import an encrypted configuration envelope after versioned submit authorization."
-"value|field|array; default value keeps compatibility.","value|field|array; default value keeps compatibility."
-"Limit field metadata lookup to one template code when return_type=field.","Limit field metadata lookup to one template code when return_type=field."
-"map|fields; default map keeps compatibility.","map|fields; default map keeps compatibility."
-"Limit field metadata lookup to one template code when return_type=fields.","Limit field metadata lookup to one template code when return_type=fields."
-backend|frontend,backend|frontend
+"SystemConfig query provider does not support: %{1}","SystemConfig 查询提供程序不支持：%{1}"
+"System config query",系统配置查询
+"Provides scope-aware system config read, write, version, and rollback operations.",提供范围感知系统配置读取、写入、版本和回滚操作。
+"Get a resolved config value, or a field object when return_type=field.","获取已解析的配置值，或当 return_type=field 时获取字段对象。"
+"Get a resolved config value with source and fallback metadata.",使用源和后备元数据获取已解析的配置值。
+"Get resolved config values for a module, or field objects when return_type=fields.","当 return_type=fields 时，获取模块或字段对象的解析配置值。"
+"Preview normalized scope and fallback scopes.",预览标准化范围和后备范围。
+"List SystemConfig templates registered through Extends.","列出通过 Extends 注册的 SystemConfig 模板。"
+"Parse one SystemConfig PHTML template without executing it.","解析一个 SystemConfig PHTML 模板而不执行它。"
+"List modules that provide SystemConfig templates.","列出提供 SystemConfig 模板的模块。"
+"Build the SystemConfig template tree by module and area.",按模块和区域构建SystemConfig模板树。
+"Save a template-backed config batch after field whitelist validation.",在字段白名单验证后保存模板支持的配置批次。
+"Precheck whether a template-backed config version can rollback without mutation.",预先检查模板支持的配置版本是否可以在不发生突变的情况下回滚。
+"Rollback a template-backed config version after rollback precheck.",回滚预检查后回滚模板支持的配置版本。
+"Set a global compatibility config value.",设置全局兼容性配置值。
+"Set one scoped config value and create a version batch.",设置一个范围配置值并创建一批版本。
+"Delete one scoped value so resolution inherits from fallback scopes.",删除一个作用域值，以便解析继承后备作用域。
+"Rollback a scoped config version batch.",回滚范围内的配置版本批次。
+"List scoped config version batches.",列出范围内的配置版本批次。
+"Get one scoped config version detail with sensitive values masked.",获取一个范围内的配置版本详细信息，并屏蔽敏感值。
+"Preview lower-scope rows affected by locking one config key.",预览受锁定一个配置键影响的较低范围行。
+"Lock one config key at the explicit target scope.",在显式目标范围锁定一个配置键。
+"Unlock one config key at the explicit target scope.",在显式目标范围解锁一个配置密钥。
+"Preview suppressed lower-scope rows without mutation.",预览抑制较低范围的行而不发生突变。
+"Restore selected suppressed rows after replay authorization.",重播授权后恢复选定的抑制行。
+"Discard selected suppressed rows after replay authorization.",重播授权后丢弃选定的抑制行。
+"Register a reviewed Scope security-header candidate before activating the exact same values.",在激活完全相同的值之前注册经过审查的范围安全标头候选者。
+"Export one explicitly authorized scope as an encrypted configuration envelope.",将一个明确授权的范围导出为加密的配置信封。
+"Decrypt and validate configuration envelope metadata without mutation.",解密并验证配置信封元数据而不发生突变。
+"Import an encrypted configuration envelope after versioned submit authorization.",版本化提交授权后导入加密配置信封。
+"value|field|array; default value keeps compatibility.",值|字段|数组；默认值保持兼容性。
+"Limit field metadata lookup to one template code when return_type=field.","当 return_type=field 时，将字段元数据查找限制为一个模板代码。"
+"map|fields; default map keeps compatibility.",地图|字段；默认地图保持兼容性。
+"Limit field metadata lookup to one template code when return_type=fields.","当 return_type=fields 时，将字段元数据查找限制为一个模板代码。"
+backend|frontend,后端|前端
 "完整三段 scope；写操作与 target_scope 二选一","完整三段 scope；写操作与 target_scope 二选一"
 "显式写目标；禁止依赖 Session","显式写目标；禁止依赖 Session"
 预览/读取时返回的对象授权版本；提交前必须保持一致,预览/读取时返回的对象授权版本；提交前必须保持一致
@@ -55,12 +55,12 @@ backend|frontend,backend|frontend
 保存敏感配置需要重新输入登录密码。,保存敏感配置需要重新输入登录密码。
 无法验证当前管理员身份。,无法验证当前管理员身份。
 密码验证失败，敏感配置未写入。,密码验证失败，敏感配置未写入。
-circle,circle
+circle,圆圈
 查看统一配置中心,查看统一配置中心
 保存统一配置,保存统一配置
-save,save
+save,节省
 配置回滚预检,配置回滚预检
-warning,warning
+warning,警告
 保存配置失败，已回滚本次批次。%{1},保存配置失败，已回滚本次批次。%{1}
 "回滚配置版本 %{1}","回滚配置版本 %{1}"
 回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
@@ -71,10 +71,10 @@ warning,warning
 区域,区域
 后台,后台
 前台,前台
-Website,Website
-Store,Store
-Channel,Channel
-Locale,Locale
+Website,网站
+Store,店铺
+Channel,渠道
+Locale,语言环境
 搜索,搜索
 模板,模板
 字段,字段
@@ -83,7 +83,7 @@ Locale,Locale
 显式提交到,显式提交到
 当前值,当前值
 保存值,保存值
-Scope,Scope
+Scope,范围
 继承,继承
 覆盖,覆盖
 已锁定,已锁定
@@ -101,11 +101,11 @@ Scope,Scope
 搜索模块名称,搜索模块名称
 Global（全部站点）,Global（全部站点）
 搜索站点名称或编码,搜索站点名称或编码
-"Website 层","Website 层"
-"搜索 Store","搜索 Store"
-"Store 层","Store 层"
-"搜索 Channel","搜索 Channel"
-default,default
+"Website 层",网站层
+"搜索 Store",搜索商店
+"Store 层",储存层
+"搜索 Channel",搜索频道
+default,默认
 搜索语言或代码...,搜索语言或代码...
 打开,打开
 "引导步骤 %{1}","引导步骤 %{1}"
@@ -123,6 +123,12 @@ default,default
 同页,同页
 跳转,跳转
 展开,展开
+Global（全部网站、店铺和渠道）,Global（全部网站、店铺和渠道）
+网站：%{1},网站：%{1}
+店铺：%{1},店铺：%{1}
+"店铺：%{1} / %{2}","店铺：%{1} / %{2}"
+渠道：%{1},渠道：%{1}
+"渠道：%{1} / %{2} / %{3}","渠道：%{1} / %{2} / %{3}"
 存在未在配置模板声明的字段。,存在未在配置模板声明的字段。
 配置校验失败，当前配置未改变。,配置校验失败，当前配置未改变。
 没有需要保存的配置。,没有需要保存的配置。
@@ -130,8 +136,8 @@ default,default
 "当前字段不允许保存到所选 scope。","当前字段不允许保存到所选 scope。"
 此字段不能为空。,此字段不能为空。
 字段值不在允许选项内。,字段值不在允许选项内。
-"用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
-"MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）"
+"用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","常用：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
+"MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B 配置范围迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）"
 "当前 TargetScope","当前 TargetScope"
 "写操作只使用表单显式 TargetScope，不信任 Cookie。","写操作只使用表单显式 TargetScope，不信任 Cookie。"
 回落链,回落链

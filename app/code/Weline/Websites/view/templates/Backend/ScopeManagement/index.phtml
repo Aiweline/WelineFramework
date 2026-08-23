@@ -10,7 +10,18 @@ $isStores = $section === 'stores';
             <div class="w-text" data-tone="muted"><lang>Website Scope 管理工作台</lang> · website_id=<?= $website_id ?></div>
         </div>
         <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
-            <input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" aria-label="<lang>网站 ID</lang>">
+            <label class="w-visually-hidden" for="scope-filter-website_trigger"><lang>网站</lang></label>
+            <w:websites:website:select
+                id="scope-filter-website"
+                name="website_id"
+                value="websiteSelectValue"
+                display="websiteSelectDisplay"
+                options="websiteSelectOptionsJson"
+                multiple="false"
+                allow-empty="false"
+                empty-label="@lang(请选择站点)"
+                placeholder="@lang(搜索站点名称或编码)"
+            />
             <button class="w-button" type="submit" data-tone="primary"><lang>切换网站</lang></button>
         </form>
     </div>
@@ -18,7 +29,19 @@ $isStores = $section === 'stores';
     <?php if ($isStores): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
             <w:form method="post" action="@backend-url('*/backend/scope-management/create-store')" csrf="auto" class="w-grid" data-testid="store-management-create-form" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>网站 ID</lang></label><input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="scope-create-store-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>商店代码</lang></label><input class="w-input" name="code" maxlength="64" required></div>
                 <div style="--w-span-md:3;"><label class="w-field__label"><lang>商店名称</lang></label><input class="w-input" name="name" maxlength="128" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>模式</lang></label><select class="w-select" name="store_mode"><option value="normal">normal</option><option value="dev">dev</option><option value="test">test</option></select></div>
@@ -29,7 +52,19 @@ $isStores = $section === 'stores';
     <?php else: ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
             <w:form method="post" action="@backend-url('*/backend/scope-management/create-channel')" csrf="auto" class="w-grid" data-testid="sales-channel-management-create-form" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>网站 ID</lang></label><input class="w-input" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="scope-create-channel-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <div style="--w-span-md:3;"><label class="w-field__label"><lang>所属商店</lang></label><select class="w-select" name="store_id" required>
                     <option value=""><lang>请选择商店</lang></option>
                     <?php foreach ($stores as $store): ?><option value="<?= (int)($store['store_id'] ?? 0) ?>"><?= $escape(($store['name'] ?? '') . ' (' . ($store['code'] ?? '') . ')') ?></option><?php endforeach; ?>

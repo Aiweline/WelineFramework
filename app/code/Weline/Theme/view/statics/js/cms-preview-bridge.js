@@ -6,13 +6,16 @@
         module.exports = api;
     }
     if (root) {
-        root.WelineCmsPreviewBridge = api;
+        root.Weline = root.Weline || {};
+        root.Weline.Theme = root.Weline.Theme || {};
+        root.Weline.Theme.CmsPreviewBridge = api;
     }
 })(typeof window !== 'undefined' ? window : globalThis, function () {
     'use strict';
 
     const MESSAGE_TYPE = 'weline:cms-theme-context';
-    const VERSION = 1;
+    const PROTOCOL = 'weline.cms-theme-editor.v2';
+    const VERSION = 2;
     let requestSequence = 0;
 
     function normalizeLocale(value) {
@@ -46,14 +49,51 @@
             .toLowerCase()
             .replace(/[^a-z0-9_-]+/g, '-')
             .replace(/^[._/-]+|[._/-]+$/g, '')
-            .slice(0, 128);
+            .slice(0, 100);
     }
 
     function normalizeContext(context) {
         const value = context && typeof context === 'object' ? context : {};
+        const claim = function (camelCase, snakeCase, fallback = null) {
+            if (Object.prototype.hasOwnProperty.call(value, camelCase)
+                && value[camelCase] !== null
+                && value[camelCase] !== undefined
+            ) {
+                return value[camelCase];
+            }
+            if (Object.prototype.hasOwnProperty.call(value, snakeCase)
+                && value[snakeCase] !== null
+                && value[snakeCase] !== undefined
+            ) {
+                return value[snakeCase];
+            }
+            return fallback;
+        };
+        const boundedId = function (candidate) {
+            if (typeof candidate === 'number') {
+                return Number.isSafeInteger(candidate) && candidate >= 0 ? candidate : 0;
+            }
+            const text = String(candidate ?? '').trim();
+            if (!/^(?:0|[1-9][0-9]{0,15})$/.test(text)) {
+                return 0;
+            }
+            const number = Number(text);
+            return Number.isSafeInteger(number) && number >= 0 ? number : 0;
+        };
+        const boundedText = function (candidate, maxLength) {
+            return String(candidate ?? '').trim().slice(0, maxLength);
+        };
+        const storeMode = String(claim('storeMode', 'store_mode', 'normal')).trim().toLowerCase();
         return {
+            pageId: boundedId(claim('pageId', 'page_id', 0)),
+            websiteId: boundedId(claim('websiteId', 'website_id', 0)),
+            storeId: boundedId(claim('storeId', 'store_id', 0)),
+            websiteCode: boundedText(claim('websiteCode', 'website_code', ''), 255),
+            storeCode: boundedText(claim('storeCode', 'store_code', ''), 64),
+            scope: boundedText(value.scope, 768),
+            storeMode: ['normal', 'dev', 'test'].includes(storeMode) ? storeMode : 'normal',
             locale: normalizeLocale(value.locale),
-            layoutOption: normalizeLayoutOption(value.layoutOption || value.layout_option),
+            layoutOption: normalizeLayoutOption(claim('layoutOption', 'layout_option', '')),
         };
     }
 
@@ -61,6 +101,7 @@
         return Boolean(data)
             && typeof data === 'object'
             && data.type === MESSAGE_TYPE
+            && data.protocol === PROTOCOL
             && data.version === VERSION
             && data.action === action;
     }
@@ -70,7 +111,6 @@
         const targetWindow = options.targetWindow;
         const origin = options.origin || hostWindow.location.origin;
         const timeoutMs = Math.max(1, Number(options.timeoutMs) || 2000);
-        const onFallback = typeof options.onFallback === 'function' ? options.onFallback : function () {};
         let ready = false;
         let started = false;
         let pending = null;
@@ -92,20 +132,26 @@
             current.resolve(result);
         }
 
-        function fallback(reason) {
+        function failPending(reason) {
             if (!pending) {
                 return;
             }
-            const context = pending.context;
-            onFallback(context, reason);
-            finishPending({ ok: false, fallback: true, reason, context });
+            finishPending({
+                ok: false,
+                fallback: false,
+                reason,
+                context: pending.context,
+            });
         }
 
         function scheduleTimeout(reason) {
             clearPendingTimer();
             const schedule = hostWindow.setTimeout ? hostWindow.setTimeout.bind(hostWindow) : setTimeout;
             pending.timer = schedule(function () {
-                fallback(reason);
+                // Without a v2 handshake/ACK the parent cannot prove that the
+                // Theme iframe is clean. Fail closed for both readiness and ACK
+                // timeouts; a URL reload could otherwise discard editor state.
+                failPending(reason);
             }, timeoutMs);
         }
 
@@ -113,14 +159,36 @@
             if (!pending || !ready) {
                 return;
             }
-            targetWindow.postMessage({
+            if (!post({
                 type: MESSAGE_TYPE,
+                protocol: PROTOCOL,
                 version: VERSION,
                 action: 'set-context',
                 requestId: pending.requestId,
                 context: pending.context,
-            }, origin);
+            })) {
+                failPending('post-failed');
+                return;
+            }
             scheduleTimeout('ack-timeout');
+        }
+
+        function requestReady() {
+            return post({
+                type: MESSAGE_TYPE,
+                protocol: PROTOCOL,
+                version: VERSION,
+                action: 'probe',
+            });
+        }
+
+        function post(payload) {
+            try {
+                targetWindow.postMessage(payload, origin);
+                return true;
+            } catch (error) {
+                return false;
+            }
         }
 
         function onMessage(event) {
@@ -150,6 +218,11 @@
                 }
                 hostWindow.addEventListener('message', onMessage);
                 started = true;
+                // The child may have emitted its one-shot ready message before
+                // the parent listener was attached (for example from a warm
+                // browser cache). Probe explicitly so a dirty editor can never
+                // be mistaken for an unavailable bridge and reloaded.
+                requestReady();
             },
             isReady() {
                 return ready;
@@ -168,7 +241,11 @@
                     if (ready) {
                         sendPending();
                     } else {
-                        scheduleTimeout('not-ready');
+                        if (!requestReady()) {
+                            failPending('post-failed');
+                        } else {
+                            scheduleTimeout('not-ready');
+                        }
                     }
                 });
             },
@@ -193,13 +270,29 @@
         const applyContext = typeof options.applyContext === 'function' ? options.applyContext : async function () {};
         const isDirty = typeof options.isDirty === 'function' ? options.isDirty : function () { return false; };
         let started = false;
+        let applyQueue = Promise.resolve();
 
         function post(payload) {
-            parentWindow.postMessage(Object.assign({ type: MESSAGE_TYPE, version: VERSION }, payload), origin);
+            try {
+                parentWindow.postMessage(
+                    Object.assign({ type: MESSAGE_TYPE, protocol: PROTOCOL, version: VERSION }, payload),
+                    origin,
+                );
+                return true;
+            } catch (error) {
+                return false;
+            }
         }
 
-        async function onMessage(event) {
-            if (!event || event.origin !== origin || event.source !== parentWindow || !isProtocolMessage(event.data, 'set-context')) {
+        function onMessage(event) {
+            if (!event || event.origin !== origin || event.source !== parentWindow) {
+                return;
+            }
+            if (isProtocolMessage(event.data, 'probe')) {
+                post({ action: 'ready' });
+                return;
+            }
+            if (!isProtocolMessage(event.data, 'set-context')) {
                 return;
             }
             const requestId = String(event.data.requestId || '');
@@ -207,22 +300,27 @@
                 return;
             }
             const context = normalizeContext(event.data.context);
-            if (isDirty()) {
-                post({ action: 'ack', requestId, ok: false, dirty: true, reason: 'dirty', context });
-                return;
-            }
-            try {
-                await applyContext(context);
-                post({ action: 'ack', requestId, ok: true, context });
-            } catch (error) {
-                post({
-                    action: 'ack',
-                    requestId,
-                    ok: false,
-                    reason: error && error.message ? String(error.message) : 'apply-failed',
-                    context,
-                });
-            }
+            // Context switches mutate a shared editor state. Serialize them so
+            // rapid Store/Locale changes cannot finish out of order.
+            applyQueue = applyQueue.catch(function () {}).then(async function () {
+                if (isDirty()) {
+                    post({ action: 'ack', requestId, ok: false, dirty: true, reason: 'dirty', context });
+                    return;
+                }
+                try {
+                    await applyContext(context);
+                    post({ action: 'ack', requestId, ok: true, context });
+                } catch (error) {
+                    post({
+                        action: 'ack',
+                        requestId,
+                        ok: false,
+                        dirty: isDirty(),
+                        reason: error && error.message ? String(error.message) : 'apply-failed',
+                        context,
+                    });
+                }
+            });
         }
 
         return {
@@ -245,6 +343,7 @@
 
     return {
         MESSAGE_TYPE,
+        PROTOCOL,
         VERSION,
         normalizeLocale,
         normalizeLayoutOption,

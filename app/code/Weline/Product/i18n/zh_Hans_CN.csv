@@ -12,16 +12,16 @@
 "Product 不存在：%{1}","Product 不存在：%{1}"
 "Product 更新后无法回读：%{1}","Product 更新后无法回读：%{1}"
 "publish_version 不能为负数：%{1}","publish_version 不能为负数：%{1}"
-"Product publish_version 冲突：expected=%{1} actual=%{2}","Product publish_version 冲突：expected=%{1} actual=%{2}"
-"Product publish CAS 失败：product_id=%{1}","Product publish CAS 失败：product_id=%{1}"
+"Product publish_version 冲突：expected=%{1} actual=%{2}","产品发布版本冲突：预期=%{1} 实际=%{2}"
+"Product publish CAS 失败：product_id=%{1}",产品发布CAS失败：product_id=%{1}
 "Product CAS token factory 必须返回 32-64 位十六进制","Product CAS token factory 必须返回 32-64 位十六进制"
 "Offer 写入后无法回读：%{1}","Offer 写入后无法回读：%{1}"
 "Offer 不存在：%{1}","Offer 不存在：%{1}"
-"Offer publish_version 冲突：expected=%{1} actual=%{2}","Offer publish_version 冲突：expected=%{1} actual=%{2}"
-"Offer publish CAS 失败：offer_id=%{1}","Offer publish CAS 失败：offer_id=%{1}"
+"Offer publish_version 冲突：expected=%{1} actual=%{2}","提供publish_version冲突：预期=%{1} 实际=%{2}"
+"Offer publish CAS 失败：offer_id=%{1}",Offer发布CAS失败：offer_id=%{1}
 "Offer CAS token factory 必须返回 32-64 位十六进制","Offer CAS token factory 必须返回 32-64 位十六进制"
 "Price 在 Scope 上已 cleared，当前币种不可售：%{1}","Price 在 Scope 上已 cleared，当前币种不可售：%{1}"
-"Price 未配置：offer=%{1} currency=%{2}","Price 未配置：offer=%{1} currency=%{2}"
+"Price 未配置：offer=%{1} currency=%{2}","价格未配置：报价=%{1} 货币=%{2}"
 "Media path/blob_key 不能为空","Media path/blob_key 不能为空"
 "Media blob_key 已存在；共享必须使用 shareCopy：%{1}","Media blob_key 已存在；共享必须使用 shareCopy：%{1}"
 "源 Media 不存在：%{1}","源 Media 不存在：%{1}"
@@ -34,11 +34,11 @@
 "Media COW 后无法回读：%{1}","Media COW 后无法回读：%{1}"
 "Media cowEdit 并发重试耗尽：media_id=%{1}","Media cowEdit 并发重试耗尽：media_id=%{1}"
 "Media 写入后无法回读：%{1}","Media 写入后无法回读：%{1}"
-"Media blob owner 数量异常：blob=%{1} owners=%{2}","Media blob owner 数量异常：blob=%{1} owners=%{2}"
+"Media blob owner 数量异常：blob=%{1} owners=%{2}","Media blobowner 数量异常：blob=%{1}owners=%{2}"
 "Media blob 没有引用行：%{1}","Media blob 没有引用行：%{1}"
-"Media blob owner ref_count 不守恒：%{1}","Media blob owner ref_count 不守恒：%{1}"
+"Media blob owner ref_count 不守恒：%{1}","媒体 blob 所有者 ref_count 不守恒：%{1}"
 "Media owner 不能指向 cow_source：%{1}","Media owner 不能指向 cow_source：%{1}"
-"Media copy owner/ref_count 不守恒：%{1}","Media copy owner/ref_count 不守恒：%{1}"
+"Media copy owner/ref_count 不守恒：%{1}","媒体副本所有者/ref_count 不守恒：%{1}"
 "共享 Media 缺少可提升 owner：%{1}","共享 Media 缺少可提升 owner：%{1}"
 "Media blob 并发冲突：%{1}","Media blob 并发冲突：%{1}"
 "Media CAS token factory 必须返回 32-64 位十六进制","Media CAS token factory 必须返回 32-64 位十六进制"
@@ -89,9 +89,9 @@
 幂等提交复制草稿,幂等提交复制草稿
 取消未提交复制草稿,取消未提交复制草稿
 "目标 Website 不存在","目标 Website 不存在"
-"目标 Store","目标 Store"
+"目标 Store",目标店
 "来源 Website 不存在","来源 Website 不存在"
-"来源 Store","来源 Store"
+"来源 Store",来源商店
 "%{1} 不存在或不属于所选 Website","%{1} 不存在或不属于所选 Website"
 "%{1} 已归档，不可复制","%{1} 已归档，不可复制"
 缺少参数：%{1},缺少参数：%{1}
@@ -114,47 +114,60 @@
 "%{1} 必须是非负整数","%{1} 必须是非负整数"
 "%{1} 必须是正整数","%{1} 必须是正整数"
 商品管理,商品管理
+box,盒子
 查看商品目录,查看商品目录
 销售报价,销售报价
+tag,标签
 查看销售报价,查看销售报价
 "SKU 注册表","SKU 注册表"
+code,代码
 "查看 SKU 全局身份","查看 SKU 全局身份"
 商品分类,商品分类
+tree,树
 查看商品分类,查看商品分类
 商品媒体,商品媒体
+image,图像
 查看商品媒体,查看商品媒体
 站点文案,站点文案
+language,语言
 "管理商品站点与 Store View 文案","管理商品站点与 Store View 文案"
 网站迁移与复制,网站迁移与复制
+copy,复制
 查看网站迁移与复制任务,查看网站迁移与复制任务
 商品分片,商品分片
+settings,设置
 查看商品分片状态,查看商品分片状态
 "注册 SKU","注册 SKU"
 "注册 SKU 全局身份","注册 SKU 全局身份"
 创建商品,创建商品
+plus,加
 创建销售报价,创建销售报价
 创建商品分类,创建商品分类
 创建商品媒体,创建商品媒体
 编辑商品,编辑商品
+edit,编辑
 保存商品,保存商品
+save,节省
 保存商品设置,保存商品设置
 保存站点文案,保存站点文案
 "保存商品站点与 Store View 文案","保存商品站点与 Store View 文案"
 "Product Search 水位原子建件后无法回读：website_id=%{1}","Product Search 水位原子建件后无法回读：website_id=%{1}"
 "Product Search 水位 CAS 冲突超过 %{1} 次：website_id=%{2}","Product Search 水位 CAS 冲突超过 %{1} 次：website_id=%{2}"
 "Product Search 水位建件失败：website_id=%{1}","Product Search 水位建件失败：website_id=%{1}"
-"非法 product shard key：%{1}","非法 product shard key：%{1}"
+"非法 product shard key：%{1}",非法产品分片键：%{1}
 "product shard key 超出整数范围：%{1}","product shard key 超出整数范围：%{1}"
 "非法 product shard 实体名：%{1}","非法 product shard 实体名：%{1}"
 "Product shard registry 创建后无法读取：website_id=%{1}","Product shard registry 创建后无法读取：website_id=%{1}"
 "Product shard ready 指纹与 schema version 不能为空","Product shard ready 指纹与 schema version 不能为空"
 "Product shard 状态来源不能为空","Product shard 状态来源不能为空"
 "非法 Product shard 状态迁移：%{1}→%{2}","非法 Product shard 状态迁移：%{1}→%{2}"
-"Product shard 终态写入冲突：website_id=%{1} expected=%{2} actual=%{3}","Product shard 终态写入冲突：website_id=%{1} expected=%{2} actual=%{3}"
-"Product shard 未 ready：website_id=%{1} status=%{2}","Product shard 未 ready：website_id=%{1} status=%{2}"
+"Product shard 终态写入冲突：website_id=%{1} expected=%{2} actual=%{3}",产品分片终态写入冲突：website_id=%{1}预期=%{2}实际=%{3}
+"Product shard 未 ready：website_id=%{1} status=%{2}","产品分片未就绪：website_id=%{1} status=%{2}"
 真实商品目录,真实商品目录
 "页面价格、库存与购物车均来自当前网站的持久化商品 Offer。","页面价格、库存与购物车均来自当前网站的持久化商品 Offer。"
 当前网站暂无已发布商品。,当前网站暂无已发布商品。
+联系询价,联系询价
+仅询价,仅询价
 加入购物车,加入购物车
 暂不可售,暂不可售
 查看购物车,查看购物车
@@ -163,15 +176,35 @@
 加入购物车失败,加入购物车失败
 商品已加入购物车。,商品已加入购物车。
 已加入,已加入
+车型类别,车型类别
+品牌,品牌
+系列,系列
+发动机,发动机
+排量,排量
+最大功率,最大功率
+最大扭矩,最大扭矩
+整车尺寸,整车尺寸
+座高,座高
+离地间隙,离地间隙
+油箱容量,油箱容量
+整备质量,整备质量
+轮胎,轮胎
 返回商品目录,返回商品目录
+商品图片,商品图片
+"查看商品图片 %{1}","查看商品图片 %{1}"
 当前网站已发布车型,当前网站已发布车型
 库存,库存
+按项目确认,按项目确认
 销售状态,销售状态
+需询价,需询价
 可购买,可购买
+车型资料,车型资料
+技术数据,技术数据
+规格参数,规格参数
 商品内核管理工作台,商品内核管理工作台
 网站,网站
 切换网站,切换网站
-SKU,SKU
+SKU,存货单位
 请求哈希,请求哈希
 "已注册 SKU","已注册 SKU"
 "商品 SKU","商品 SKU"
@@ -180,10 +213,10 @@ SKU,SKU
 分类路径,分类路径
 创建分类,创建分类
 媒体路径,媒体路径
-"Blob Key","Blob Key"
+"Blob Key",斑点键
 排序,排序
 创建,创建
-"Store ID","Store ID"
+"Store ID",店铺编号
 "商品 ID","商品 ID"
 属性代码,属性代码
 语言,语言
@@ -202,12 +235,12 @@ SKU,SKU
 商品编辑,商品编辑
 "未知 product shard 实体：%{1}","未知 product shard 实体：%{1}"
 "draft_id 已存在","draft_id 已存在"
-"target website_id>=0 且 target store_id>0","target website_id>=0 且 target store_id>0"
-"source website_id 须 >=0","source website_id 须 >=0"
-"store_inherit 需要 source website/store","store_inherit 需要 source website/store"
+"target website_id>=0 且 target store_id>0","目标 website_id>=0 且目标 store_id>0"
+"source website_id 须 >=0","源website_id 须 >=0"
+"store_inherit 需要 source website/store","store_inherit 需要源网站/商店"
 "source 与 target Store 不能相同","source 与 target Store 不能相同"
 "已提交 draft 不可取消","已提交 draft 不可取消"
-"仅 draft 可 preview","仅 draft 可 preview"
+"仅 draft 可 preview",仅草稿可预览
 "同一 draft 的 request_hash 不一致","同一 draft 的 request_hash 不一致"
 "draft 不可提交：%{1}","draft 不可提交：%{1}"
 复制提交失败,复制提交失败
@@ -220,9 +253,9 @@ SKU,SKU
 "Category copy UUID 生成失败","Category copy UUID 生成失败"
 复制提交正在处理中,复制提交正在处理中
 "draft 不可提交","draft 不可提交"
-"Product shard 正在 provisioning：website_id=%{1}","Product shard 正在 provisioning：website_id=%{1}"
-"Product shard 无法进入 provisioning：status=%{1}","Product shard 无法进入 provisioning：status=%{1}"
-"Product shard provision 失败","Product shard provision 失败"
+"Product shard 正在 provisioning：website_id=%{1}",产品分片正在配置：website_id=%{1}
+"Product shard 无法进入 provisioning：status=%{1}",产品分片无法进入配置：status=%{1}
+"Product shard provision 失败",产品分片提供失败
 "Product shard provision 返回身份不匹配：expected=%{1}/%{2} actual=%{3}/%{4}","Product shard provision 返回身份不匹配：expected=%{1}/%{2} actual=%{3}/%{4}"
 "Product shard provision 返回非法状态：%{1}","Product shard provision 返回非法状态：%{1}"
 "Product shard provision 返回重复表名","Product shard provision 返回重复表名"
@@ -239,7 +272,7 @@ SKU,SKU
 "StoreProduct 投影事件必须且只能提供 store_id","StoreProduct 投影事件必须且只能提供 store_id"
 "StoreProduct 投影 store_id 必须为正整数","StoreProduct 投影 store_id 必须为正整数"
 "Product Search 投影找不到 Website：%{1}","Product Search 投影找不到 Website：%{1}"
-"Product Search 投影 Store 不属于 Website：store_id=%{1} website_id=%{2}","Product Search 投影 Store 不属于 Website：store_id=%{1} website_id=%{2}"
+"Product Search 投影 Store 不属于 Website：store_id=%{1} website_id=%{2}","产品搜索投影商店不属于网站：store_id=%{1} website_id=%{2}"
 简单商品,简单商品
 "请先创建 SKU 对应的商品","请先创建 SKU 对应的商品"
 "分类 path 必须是以 / 开头的安全路径","分类 path 必须是以 / 开头的安全路径"
@@ -252,32 +285,32 @@ SKU,SKU
 "website_id 不能为负","website_id 不能为负"
 "Product Provider code 不能为空","Product Provider code 不能为空"
 "Product Provider type 不能为空","Product Provider type 不能为空"
-"重复的 Product Provider code：%{1}","重复的 Product Provider code：%{1}"
-"重复的 Product Provider type：%{1}","重复的 Product Provider type：%{1}"
+"重复的 Product Provider code：%{1}",重复的产品提供商代码：%{1}
+"重复的 Product Provider type：%{1}",重复的产品提供商类型：%{1}
 "Product Provider 注册契约缺失：%{1}","Product Provider 注册契约缺失：%{1}"
-"Product Provider type 不可用：%{1}","Product Provider type 不可用：%{1}"
+"Product Provider type 不可用：%{1}",不可用的产品提供商类型：%{1}
 "Product Provider 扩展缺少可解析类名","Product Provider 扩展缺少可解析类名"
 "Product Provider 扩展类不存在：%{1}","Product Provider 扩展类不存在：%{1}"
 "Product Provider 扩展实例化失败：%{1}","Product Provider 扩展实例化失败：%{1}"
 "Product Provider 扩展未实现接口：%{1}","Product Provider 扩展未实现接口：%{1}"
-"Product Provider required attributes 不能为空：%{1}","Product Provider required attributes 不能为空：%{1}"
-"Product Provider required attribute 非法：%{1}","Product Provider required attribute 非法：%{1}"
-"Product Provider required attribute 重复：%{1}","Product Provider required attribute 重复：%{1}"
-"Product Provider capability map 非法：%{1}","Product Provider capability map 非法：%{1}"
+"Product Provider required attributes 不能为空：%{1}",产品提供商必填属性不能为空：%{1}
+"Product Provider required attribute 非法：%{1}","产品提供商必填属性 非法：%{1}"
+"Product Provider required attribute 重复：%{1}",产品提供商必需属性重复：%{1}
+"Product Provider capability map 非法：%{1}","产品供应商能力图 非法：%{1}"
 "Product Provider capability 接口不存在：%{1}","Product Provider capability 接口不存在：%{1}"
 "Product Provider capability 声明与实例不一致：%{1}","Product Provider capability 声明与实例不一致：%{1}"
 "Product Search 快照包含非法 product_id","Product Search 快照包含非法 product_id"
 "Product Search 增量目标类型无效：%{1}","Product Search 增量目标类型无效：%{1}"
 "Product Search 事件水位超前：event=%{1} current=%{2}","Product Search 事件水位超前：event=%{1} current=%{2}"
-"Product Search 找不到可用 Store/Channel Scope：store_id=%{1}","Product Search 找不到可用 Store/Channel Scope：store_id=%{1}"
-"Product Search Website 没有可用 Store/Channel Scope：website_id=%{1}","Product Search Website 没有可用 Store/Channel Scope：website_id=%{1}"
-"Product Search published 投影缺少 product_id 或 SKU","Product Search published 投影缺少 product_id 或 SKU"
-"Product Search 找不到 Website：%{1}","Product Search 找不到 Website：%{1}"
+"Product Search 找不到可用 Store/Channel Scope：store_id=%{1}",产品搜索找不到可用店铺/渠道范围：store_id=%{1}
+"Product Search Website 没有可用 Store/Channel Scope：website_id=%{1}",产品搜索网站没有可用的商店/频道范围：website_id=%{1}
+"Product Search published 投影缺少 product_id 或 SKU","产品搜索已发布 投影产品_id 或 SKU"
+"Product Search 找不到 Website：%{1}",产品搜索找不到网址：%{1}
 "Product Search 参数 %{1} 必须是规范整数","Product Search 参数 %{1} 必须是规范整数"
 "Product Search 参数 %{1} 不能小于 %{2}","Product Search 参数 %{1} 不能小于 %{2}"
 "SKU claim 写入后无法回读：%{1}","SKU claim 写入后无法回读：%{1}"
 "SKU 不存在：%{1}","SKU 不存在：%{1}"
-"SKU 已 tombstone：%{1}","SKU 已 tombstone：%{1}"
+"SKU 已 tombstone：%{1}","SKU 已墓碑：%{1}"
 "只能重命名 canonical SKU：%{1}","只能重命名 canonical SKU：%{1}"
 "目标 SKU 已被占用：%{1}","目标 SKU 已被占用：%{1}"
 "SKU rename 后无法回读 registry_id=%{1}","SKU rename 后无法回读 registry_id=%{1}"
@@ -297,8 +330,11 @@ SKU,SKU
 "website_id 不能小于 0","website_id 不能小于 0"
 未知商品管理区段：%{1},未知商品管理区段：%{1}
 当前网站商品分片未就绪,当前网站商品分片未就绪
-"""StoreProduct 写入后无法回读""","StoreProduct 写入后无法回读"
+"""StoreProduct 写入后无法回读""","""StoreProduct 写入后无法回读"""
 "网站 ID","网站 ID"
+商品内核只读管理视图,商品内核只读管理视图
+"FCDC 经销商车型","FCDC 经销商车型"
+商品详情暂不可用,商品详情暂不可用
 "Product kernel read-only management view",商品内核只读管理视图
 "Website ID","网站 ID"
 "Switch website",切换网站
@@ -310,6 +346,6 @@ SKU,SKU
 "Published model for this website",当前网站已发布车型
 Stock,库存
 "Sales status",销售状态
-Available,可购买
+Available,可用
 "FCDC dealer model","FCDC 经销商车型"
 "Product details are temporarily unavailable",商品详情暂不可用

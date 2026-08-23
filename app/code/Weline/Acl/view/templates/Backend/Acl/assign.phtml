@@ -4,9 +4,6 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-<link rel='stylesheet' type='text/css' href='@static(Weline_Acl::libs/Groupable-Searchable-Dual-Listbox-Transfer/icon_font/css/icon_font.css)'/>
-<link rel='stylesheet' type='text/css' href='@static(Weline_Acl::libs/Groupable-Searchable-Dual-Listbox-Transfer/css/jquery.transfer.css?v=0.0.3)'/>
-
 <!-- start page title -->
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -52,42 +49,3 @@
         </div>
     </div> <!-- end col -->
 </div> <!-- end row -->
-
-<script>
-(function() {
-    'use strict';
-    
-    var groupDataArray1 = [
-        {
-            'groupName': 'China',
-            'groupData': [
-                {'city': 'Beijing', 'value': 122},
-                {'city': 'Shanghai', 'value': 643},
-                {'city': 'Qingdao', 'value': 422},
-                {'city': 'Tianjin', 'value': 622}
-            ]
-        },
-        {
-            'groupName': 'Japan',
-            'groupData': [
-                {'city': 'Tokyo', 'value': 132},
-                {'city': 'Osaka', 'value': 112},
-                {'city': 'Yokohama', 'value': 191}
-            ]
-        }
-    ];
-
-    var settings3 = {
-        'groupDataArray': groupDataArray1,
-        'groupItemName': 'groupName',
-        'groupArrayName': 'groupData',
-        'itemName': 'city',
-        'valueName': 'value',
-        'callable': function (items) {
-            console.dir(items)
-        }
-    };
-
-    $('#transfer3').transfer(settings3);
-})();
-</script>

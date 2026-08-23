@@ -22,11 +22,11 @@
 (function (window, document) {
     'use strict';
 
-    // 防止重复初始化
-    if (window.__WelineUrlFrontendInitialized) {
+    // 防止重复初始化（版本号升级时可覆盖旧脚本导出）
+    if (window.__WelineUrlFrontendInitialized === 2) {
         return;
     }
-    window.__WelineUrlFrontendInitialized = true;
+    window.__WelineUrlFrontendInitialized = 2;
 
     function isIgnorableSwitchQueryParam(key) {
         key = String(key || '').toLowerCase().trim();
@@ -152,14 +152,41 @@
         }
     }
 
+    function preferenceCookieNames(baseName, websiteId) {
+        const names = [];
+        const add = (name) => {
+            const value = String(name || '').trim();
+            if (value && !names.includes(value)) {
+                names.push(value);
+            }
+        };
+        const siteId = websiteId || window.site?.website_id || window.site?.websiteId || '';
+        if (String(siteId) !== '') {
+            add(`${baseName}_w${siteId}`);
+        }
+        const prefix = `${baseName}_w`;
+        String(document.cookie || '').split(';').forEach((part) => {
+            const key = String(part.split('=')[0] || '').trim();
+            if (key.startsWith(prefix) && /^_w\d+$/.test(key.slice(baseName.length))) {
+                add(key);
+            }
+        });
+        add(baseName);
+        return names;
+    }
+
     function persistLangPreference(lang) {
         writeCanonicalLocalStorage('weline_user_lang', ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG'], lang);
-        setCookie('WELINE_USER_LANG', lang, 7, { path: '/' });
+        preferenceCookieNames('WELINE_USER_LANG').forEach((name) => {
+            setCookie(name, lang, 7, { path: '/' });
+        });
     }
 
     function persistCurrencyPreference(currencyCode) {
         writeCanonicalLocalStorage('weline_user_currency', ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'], currencyCode);
-        setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/' });
+        preferenceCookieNames('WELINE_USER_CURRENCY').forEach((name) => {
+            setCookie(name, currencyCode, 7, { path: '/' });
+        });
     }
 
     /**
@@ -725,7 +752,7 @@
     window.select_language = function (lang) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         persistLangPreference(lang);
-        window.location.href = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '');
+        window.location.assign(inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || ''));
     };
 
     /**
@@ -734,7 +761,7 @@
     window.select_currency = function (currencyCode) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         persistCurrencyPreference(currencyCode);
-        window.location.href = inject_path(window.location.pathname, currencyCode, 'currency') + sanitizeSwitchSearch(window.location.search || '');
+        window.location.assign(inject_path(window.location.pathname, currencyCode, 'currency') + sanitizeSwitchSearch(window.location.search || ''));
     };
 
     /**

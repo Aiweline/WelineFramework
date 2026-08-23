@@ -10,16 +10,74 @@ namespace Weline\Widget\Ui\ParamType;
  */
 class QuerySelectType extends AbstractParamType
 {
-    public function getTypeCode(): string { return 'query_select'; }
+    public function getTypeCode(): string
+    {
+        return 'query_select';
+    }
+
     public function getHtml(string $key, array $param, mixed $value, int|string $layoutId = '', array $attrs = []): string
     {
-        $id = $this->generateFieldId($key, $layoutId); $provider = htmlspecialchars((string)($param['query_provider'] ?? ''), ENT_QUOTES, 'UTF-8'); $operation = htmlspecialchars((string)($param['query_operation'] ?? ''), ENT_QUOTES, 'UTF-8');
-        $valueKey = htmlspecialchars((string)($param['value_key'] ?? 'value'), ENT_QUOTES, 'UTF-8'); $labelKey = htmlspecialchars((string)($param['label_key'] ?? 'label'), ENT_QUOTES, 'UTF-8'); $current = htmlspecialchars((string)($value ?? $this->getDefaultValue($param) ?? ''), ENT_QUOTES, 'UTF-8');
+        $id = $this->generateFieldId($key, $layoutId);
+        $statusId = $id . '_status';
+        $provider = htmlspecialchars($this->normalizeIdentifier($param['query_provider'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $operation = htmlspecialchars($this->normalizeIdentifier($param['query_operation'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $valueKey = htmlspecialchars($this->normalizeResultKey($param['value_key'] ?? 'value', 'value'), ENT_QUOTES, 'UTF-8');
+        $labelKey = htmlspecialchars($this->normalizeResultKey($param['label_key'] ?? 'label', 'label'), ENT_QUOTES, 'UTF-8');
+        $currentValue = (string)($value ?? $this->getDefaultValue($param) ?? '');
+        $current = htmlspecialchars($currentValue, ENT_QUOTES, 'UTF-8');
+        $currentLabel = htmlspecialchars((string)($param['current_label'] ?? $currentValue), ENT_QUOTES, 'UTF-8');
+        $placeholder = htmlspecialchars((string)($param['placeholder'] ?? __('搜索')), ENT_QUOTES, 'UTF-8');
+        $name = htmlspecialchars($key, ENT_QUOTES, 'UTF-8');
         $required = !empty($param['required']) ? ' required' : '';
-        $html = '<div class="w-query-select" data-w-query-select data-provider="' . $provider . '" data-operation="' . $operation . '" data-value-key="' . $valueKey . '" data-label-key="' . $labelKey . '"><input type="search" class="w-param-input" placeholder="' . htmlspecialchars((string)($param['placeholder'] ?? __('搜索')), ENT_QUOTES, 'UTF-8') . '" data-query-search><select id="' . $id . '" class="w-param-select" name="' . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . '" data-query-value' . $required . '><option value="' . $current . '">' . $current . '</option></select></div>';
-        $html .= '<script>(function(){document.querySelectorAll("[data-w-query-select]").forEach(function(root){if(root.dataset.bound)return;root.dataset.bound="1";var input=root.querySelector("[data-query-search]"),select=root.querySelector("[data-query-value]"),run=async function(){try{var api=await Weline.load("api"),items=await api.resource(root.dataset.provider)[root.dataset.operation]({search:input.value});select.innerHTML="";(items||[]).forEach(function(item){var o=document.createElement("option");o.value=item[root.dataset.valueKey]||"";o.textContent=item[root.dataset.labelKey]||o.value;if(o.value===select.dataset.current)o.selected=true;select.appendChild(o)})}catch(e){}};select.dataset.current=select.value;input.addEventListener("input",function(){clearTimeout(input._q);input._q=setTimeout(run,180)});run()})})();</script>';
+
+        $html = '<div class="w-query-select" data-w-component="widget-query-select"'
+            . ' data-provider="' . $provider . '"'
+            . ' data-operation="' . $operation . '"'
+            . ' data-value-key="' . $valueKey . '"'
+            . ' data-label-key="' . $labelKey . '"'
+            . ' data-current="' . $current . '"'
+            . ' data-loading-label="' . htmlspecialchars((string)__('正在加载选项…'), ENT_QUOTES, 'UTF-8') . '"'
+            . ' data-empty-label="' . htmlspecialchars((string)__('没有匹配选项'), ENT_QUOTES, 'UTF-8') . '"'
+            . ' data-error-label="' . htmlspecialchars((string)__('选项加载失败，请重试'), ENT_QUOTES, 'UTF-8') . '">';
+        $html .= '<input type="search" class="w-input w-query-select__search"'
+            . ' placeholder="' . $placeholder . '"'
+            . ' autocomplete="off" data-query-search>';
+        $html .= '<select id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '"'
+            . ' class="w-select w-query-select__value" name="' . $name . '"'
+            . ' aria-describedby="' . htmlspecialchars($statusId, ENT_QUOTES, 'UTF-8') . '" data-query-value' . $required . '>';
+        $html .= '<option value="' . $current . '">' . $currentLabel . '</option>';
+        $html .= '</select>';
+        $html .= '<span id="' . htmlspecialchars($statusId, ENT_QUOTES, 'UTF-8') . '"'
+            . ' class="w-query-select__status" role="status" aria-live="polite" hidden></span>';
+        $html .= '</div>';
+
         return $this->wrapField($key, $param, $html, $layoutId);
     }
-    public function validate(mixed $value, array $param): bool { return parent::validate($value, $param); }
-    public function processValue(mixed $value, array $param): mixed { return trim((string)$value); }
+
+    public function validate(mixed $value, array $param): bool
+    {
+        return parent::validate($value, $param);
+    }
+
+    public function processValue(mixed $value, array $param): mixed
+    {
+        return trim((string)$value);
+    }
+
+    private function normalizeIdentifier(mixed $value): string
+    {
+        $identifier = trim((string)$value);
+        if (!preg_match('/^[a-z][a-z0-9_.-]{0,127}$/i', $identifier)) {
+            return '';
+        }
+        return in_array(strtolower($identifier), ['constructor', 'prototype', '__proto__'], true)
+            ? ''
+            : $identifier;
+    }
+
+    private function normalizeResultKey(mixed $value, string $fallback): string
+    {
+        $key = $this->normalizeIdentifier($value);
+        return $key === '' ? $fallback : $key;
+    }
 }

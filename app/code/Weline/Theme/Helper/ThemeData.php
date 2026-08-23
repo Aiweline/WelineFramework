@@ -14,7 +14,6 @@ use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
@@ -75,13 +74,13 @@ class ThemeData
     public const WIDGET_I18N_INSTANCE_CONFIG_KEY = '_i18n_instance';
     private const RUNTIME_CACHE_TTL = 86400;
     private const SHARED_CACHE_NAMESPACE = 'weline_site_runtime';
+    private const REQUEST_STATE_KEY = 'theme.data.request_state.v1';
+    private const MAX_RUNTIME_CACHE_ENTRIES = 2048;
 
     private static ?ThemeDataRequestState $mainState = null;
 
     /** @var \WeakMap<\Fiber, ThemeDataRequestState>|null */
     private static ?\WeakMap $fiberStates = null;
-    /** @var array<string, ThemeDataRequestState> */
-    private static array $scopedStates = [];
     /** @var array<string, array{expires_at: float, value: mixed}> */
     private static array $runtimeCache = [];
     private static ?SharedCacheStateInterface $sharedRuntimeCache = null;
@@ -104,8 +103,13 @@ class ThemeData
     {
         $scopeKey = self::currentScopeKey();
         if ($scopeKey !== null) {
-            self::$scopedStates[$scopeKey] ??= new ThemeDataRequestState();
-            return self::$scopedStates[$scopeKey];
+            $requestStateKey = self::requestStateKey($scopeKey);
+            $state = RequestContext::get($requestStateKey);
+            if (!$state instanceof ThemeDataRequestState) {
+                $state = new ThemeDataRequestState();
+                RequestContext::set($requestStateKey, $state);
+            }
+            return $state;
         }
 
         $fiber = self::currentFiber();
@@ -126,7 +130,7 @@ class ThemeData
     {
         $scopeKey = self::currentScopeKey();
         if ($scopeKey !== null) {
-            self::$scopedStates[$scopeKey] = new ThemeDataRequestState();
+            RequestContext::set(self::requestStateKey($scopeKey), new ThemeDataRequestState());
             return;
         }
 
@@ -151,6 +155,11 @@ class ThemeData
         return $scopeId === null || $scopeId === '' ? null : 'conn:' . $scopeId;
     }
 
+    private static function requestStateKey(string $scopeKey): string
+    {
+        return self::REQUEST_STATE_KEY . '.' . \hash('sha256', $scopeKey);
+    }
+
     private static function resolveRequestedScopeForArea(string $area): string
     {
         $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
@@ -159,13 +168,9 @@ class ThemeData
             return $state->requestedScopes[$area];
         }
 
-        try {
-            /** @var ThemeContextService $themeContext */
-            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
-            return $state->requestedScopes[$area] = $themeContext->resolveCurrentScope($area);
-        } catch (\Throwable) {
-            return $state->requestedScopes[$area] = 'default';
-        }
+        /** @var ThemeContextService $themeContext */
+        $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+        return $state->requestedScopes[$area] = $themeContext->resolveCurrentScope($area);
     }
 
     private static function resolveEffectiveScope(string $scope = 'default', ?string $area = null): string
@@ -200,6 +205,18 @@ class ThemeData
         }
     }
 
+    /** @return list<string> */
+    private static function scopeReadChain(string $scope, string $area): array
+    {
+        try {
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            return $themeContext->resolveStorageScopeChain($scope);
+        } catch (\Throwable) {
+            return [$scope];
+        }
+    }
+
     /**
      * @return array{0: bool, 1: mixed}
      */
@@ -208,6 +225,8 @@ class ThemeData
         $entry = self::$runtimeCache[$key] ?? null;
         if (is_array($entry)) {
             if (($entry['expires_at'] ?? 0.0) >= microtime(true)) {
+                unset(self::$runtimeCache[$key]);
+                self::$runtimeCache[$key] = $entry;
                 return [true, $entry['value'] ?? null];
             }
             unset(self::$runtimeCache[$key]);
@@ -223,6 +242,7 @@ class ThemeData
             if ($value === null) {
                 return [false, null];
             }
+            self::pruneRuntimeCache();
             self::$runtimeCache[$key] = [
                 'expires_at' => microtime(true) + self::runtimeCacheTtl(),
                 'value' => $value,
@@ -237,6 +257,7 @@ class ThemeData
 
     private static function setRuntimeCache(string $key, mixed $value): void
     {
+        self::pruneRuntimeCache();
         self::$runtimeCache[$key] = [
             'expires_at' => microtime(true) + self::runtimeCacheTtl(),
             'value' => $value,
@@ -252,6 +273,23 @@ class ThemeData
         } catch (\Throwable) {
             self::$sharedRuntimeCache = null;
             self::$sharedRuntimeCacheResolved = true;
+        }
+    }
+
+    private static function pruneRuntimeCache(): void
+    {
+        $now = microtime(true);
+        foreach (self::$runtimeCache as $key => $entry) {
+            if (!is_array($entry) || (float)($entry['expires_at'] ?? 0.0) < $now) {
+                unset(self::$runtimeCache[$key]);
+            }
+        }
+        while (count(self::$runtimeCache) >= self::MAX_RUNTIME_CACHE_ENTRIES) {
+            $oldest = array_key_first(self::$runtimeCache);
+            if ($oldest === null) {
+                break;
+            }
+            unset(self::$runtimeCache[$oldest]);
         }
     }
 
@@ -323,13 +361,40 @@ class ThemeData
 
     private static function currentConfigLocale(?string $locale = null): string
     {
-        $locale = trim((string)($locale ?? ''));
+        $locale = trim(str_replace('-', '_', (string)($locale ?? '')));
         if ($locale !== '') {
-            return $locale;
+            return self::normalizeConfigLocale($locale);
         }
 
         $state = self::state();
-        return $state->configLocale ??= Cookie::getLang() ?? Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        if ($state->configLocale !== null && $state->configLocale !== '') {
+            return $state->configLocale;
+        }
+        $requestLocale = trim((string)(RequestContext::locale() ?? ''));
+        if ($requestLocale === '') {
+            throw new \RuntimeException((string)__('Theme 配置读取缺少冻结的 locale。'));
+        }
+
+        return $state->configLocale = self::normalizeConfigLocale($requestLocale);
+    }
+
+    private static function normalizeConfigLocale(string $locale): string
+    {
+        if (preg_match('/^[a-zA-Z]{2,3}(?:_[a-zA-Z]{4})?(?:_(?:[a-zA-Z]{2}|[0-9]{3}))?$/D', $locale) !== 1) {
+            throw new \InvalidArgumentException((string)__('Theme 配置语言代码无效：%{1}', [$locale]));
+        }
+        $parts = explode('_', $locale);
+        $parts[0] = strtolower($parts[0]);
+        if (isset($parts[1])) {
+            $parts[1] = strlen($parts[1]) === 4
+                ? ucfirst(strtolower($parts[1]))
+                : strtoupper($parts[1]);
+        }
+        if (isset($parts[2])) {
+            $parts[2] = strtoupper($parts[2]);
+        }
+
+        return implode('_', $parts);
     }
 
     /** @return list<string> */
@@ -376,14 +441,16 @@ class ThemeData
         }
 
         $identities = [];
-        foreach (self::dualReadConfigKeys($configKey) as $candidateKey) {
-            $identities[] = new MetaConfigIdentity(
-                namespace: $namespace,
-                configKey: $candidateKey,
-                scope: $scope,
-                locale: $locale,
-                identifyId: $identifyId,
-            );
+        foreach (self::scopeReadChain($scope, (string)\substr($namespace, \strlen('theme.'))) as $candidateScope) {
+            foreach (self::dualReadConfigKeys($configKey) as $candidateKey) {
+                $identities[] = new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $candidateKey,
+                    scope: $candidateScope,
+                    locale: $locale,
+                    identifyId: $identifyId,
+                );
+            }
         }
 
         $records = self::metaConfigRepository()->resolveBatch($identities);
@@ -502,7 +569,7 @@ class ThemeData
 
     private static function translatedValue(string $translationKey, mixed $fallback = null): mixed
     {
-        $requestedLocale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        $requestedLocale = self::currentConfigLocale();
         $locales = array_values(array_unique([$requestedLocale, 'zh_Hans_CN'], SORT_STRING));
 
         try {
@@ -521,6 +588,38 @@ class ThemeData
         }
 
         return $fallback;
+    }
+
+    /** @return array{0:bool,1:string} */
+    private static function resolveScopedTranslation(
+        string $metaKey,
+        string $scope,
+        string $area,
+        ?string $locale = null,
+    ): array {
+        $locale = self::currentConfigLocale($locale);
+        $locales = array_values(array_unique([$locale, 'zh_Hans_CN'], SORT_STRING));
+
+        try {
+            $dictionary = self::dictionaryRepository();
+            foreach (self::scopeReadChain($scope, $area) as $candidateScope) {
+                $word = '@meta::' . $metaKey;
+                if ($candidateScope !== 'default') {
+                    $word .= '|scope:' . $candidateScope;
+                }
+                foreach ($locales as $candidateLocale) {
+                    $entry = $dictionary->getEntry($word, $candidateLocale);
+                    if ($entry !== null) {
+                        // The row itself is ownership. Empty text is therefore
+                        // a valid local value and must stop fallback.
+                        return [true, $entry->translation];
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return [false, ''];
     }
 
     private static function metadataFallbackValue(string $identify): mixed
@@ -790,7 +889,7 @@ class ThemeData
             if (count(explode('.', substr($translationKey, strlen('@meta::')))) < 5) {
                 return false;
             }
-            $locale = $locale ?? Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = self::currentConfigLocale($locale);
 
             try {
                 return self::dictionaryRepository()->upsert($translationKey, $locale, (string)$value);
@@ -960,15 +1059,17 @@ class ThemeData
                     continue;
                 }
                 [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}");
-                foreach (self::dualReadConfigKeys($configKey) as $candidateKey) {
-                    $candidateIndexes[$paramName][] = count($identities);
-                    $identities[] = new MetaConfigIdentity(
-                        namespace: $namespace,
-                        configKey: $candidateKey,
-                        scope: $effectiveScope,
-                        locale: $resolvedLocale,
-                        identifyId: (string)$themeId,
-                    );
+                foreach (self::scopeReadChain($effectiveScope, $identifyArea) as $candidateScope) {
+                    foreach (self::dualReadConfigKeys($configKey) as $candidateKey) {
+                        $candidateIndexes[$paramName][] = count($identities);
+                        $identities[] = new MetaConfigIdentity(
+                            namespace: $namespace,
+                            configKey: $candidateKey,
+                            scope: $candidateScope,
+                            locale: $resolvedLocale,
+                            identifyId: (string)$themeId,
+                        );
+                    }
                 }
             }
         }
@@ -1134,12 +1235,14 @@ class ThemeData
         $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
         $configIdentify = "{$identify}.param.{$paramName}.value";
 
-        return MetaTranslation::getTranslatedValueWithScope(
+        [$found, $translation] = self::resolveScopedTranslation(
             $configIdentify,
             $effectiveScope,
+            $identifyArea,
             $locale,
-            $default
         );
+
+        return $found ? $translation : ($default ?? '');
     }
 
     /**
@@ -1164,7 +1267,7 @@ class ThemeData
         $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
 
         if ($locale === null) {
-            $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = self::currentConfigLocale();
         }
 
         // 与 MetaTranslation::getTranslatedValueWithScope 保持相同的 key 约定
@@ -1189,7 +1292,7 @@ class ThemeData
         $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
 
         if ($locale === null) {
-            $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = self::currentConfigLocale();
         }
 
         $metaKey = "{$identify}.param.{$paramName}.value";
@@ -1309,13 +1412,22 @@ class ThemeData
 
             if ($themeId !== null && (string)$themeId !== '') {
                 try {
-                    $records = self::metaConfigRepository()->search(new MetaConfigSearch(
-                        namespace: $namespace,
-                        scope: $scope,
-                        allLocales: true,
-                        identifyId: (string)$themeId,
-                    ));
-                    $themeConfigs = self::resolveConfigMap($records, $locale);
+                    $themeConfigs = [];
+                    $readChain = self::scopeReadChain($scope, $state->currentArea ?? 'frontend');
+                    // Merge farthest to nearest so each child owns only the keys
+                    // it actually provides; empty/false/zero remain real values.
+                    foreach (array_reverse($readChain) as $candidateScope) {
+                        $records = self::metaConfigRepository()->search(new MetaConfigSearch(
+                            namespace: $namespace,
+                            scope: $candidateScope,
+                            allLocales: true,
+                            identifyId: (string)$themeId,
+                        ));
+                        $themeConfigs = array_replace(
+                            $themeConfigs,
+                            self::resolveConfigMap($records, $locale),
+                        );
+                    }
                     $state->performanceCache[$key] = $themeConfigs;
                     self::setRuntimeCache('performance:' . $key, $themeConfigs);
                 } catch (\Throwable) {
@@ -1346,6 +1458,18 @@ class ThemeData
         self::$runtimeCache = [];
         self::clearSharedRuntimeCache();
         self::resetCurrentState();
+    }
+
+    /** Clear only rebuildable process L1 state; never mutate the shared cache. */
+    public static function clearProcessMemoryCache(): void
+    {
+        self::$runtimeCache = [];
+        self::resetCurrentState();
+    }
+
+    public static function processCacheItemCount(): int
+    {
+        return count(self::$runtimeCache);
     }
 
     private static function clearSharedRuntimeCache(): void
@@ -1813,14 +1937,18 @@ class ThemeData
         
         try {
             $namespace = "theme.{$area}";
-            $records = self::metaConfigRepository()->search(new MetaConfigSearch(
-                namespace: $namespace,
-                scope: $effectiveScope,
-                configKeyPrefix: $type . '.',
-                allLocales: true,
-                identifyId: (string)$themeId,
-            ));
-            $result = self::filterThemeConfigsByType(self::resolveConfigMap($records, $locale), $type);
+            $configMap = [];
+            foreach (array_reverse(self::scopeReadChain($effectiveScope, $area)) as $candidateScope) {
+                $records = self::metaConfigRepository()->search(new MetaConfigSearch(
+                    namespace: $namespace,
+                    scope: $candidateScope,
+                    configKeyPrefix: $type . '.',
+                    allLocales: true,
+                    identifyId: (string)$themeId,
+                ));
+                $configMap = array_replace($configMap, self::resolveConfigMap($records, $locale));
+            }
+            $result = self::filterThemeConfigsByType($configMap, $type);
             
             $state->performanceCache[$cacheKey] = $result;
             self::setRuntimeCache($cacheKey, $result);
@@ -2309,13 +2437,14 @@ class ThemeData
         $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
         $configIdentify = "{$identify}.path.{$path}.value";
 
-        $result = MetaTranslation::getTranslatedValueWithScope(
+        [$found, $translation] = self::resolveScopedTranslation(
             $configIdentify,
             $effectiveScope,
+            $identifyArea,
             $locale,
-            $default
         );
-        return $result !== '' ? $result : $default;
+
+        return $found ? $translation : $default;
     }
 
     /**
@@ -2335,7 +2464,7 @@ class ThemeData
         $effectiveScope = self::resolveEffectiveScope($scope, $identifyArea);
 
         if ($locale === null) {
-            $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = self::currentConfigLocale();
         }
 
         $metaKey = "{$identify}.path.{$path}.value";
@@ -2362,7 +2491,7 @@ class ThemeData
         string $identify,
         ?string $locale = null
     ): array {
-        $effectiveLocale = $locale ?? (Cookie::getLangLocal() ?? \Weline\Framework\App\Env::default_LANGUAGE_CODE);
+        $effectiveLocale = self::currentConfigLocale($locale);
         if ($effectiveLocale === \Weline\Framework\App\Env::default_LANGUAGE_CODE) {
             return $baseConfig;
         }
@@ -2423,7 +2552,7 @@ class ThemeData
             }
         }
 
-        $resolvedLocale = $locale ?? \Weline\Framework\App\Env::default_LANGUAGE_CODE;
+        $resolvedLocale = self::currentConfigLocale($locale);
         foreach ($paths['top'] as $paramName) {
             if (array_key_exists($paramName, $normalConfig) && is_scalar($normalConfig[$paramName])) {
                 self::setParamTranslation($identify, $paramName, (string)$normalConfig[$paramName], 'default', $resolvedLocale);

@@ -367,6 +367,7 @@ class WidgetDefaultInjectionService
             'page_type' => trim($pageType),
             'layout_option' => $identity['layout_option'],
             'scope' => $identity['scope'],
+            'locale_code' => $identity['locale_code'],
             'target_type' => $identity['target_type'],
             'target_id' => $identity['target_id'],
             'identity' => $identity,
@@ -386,6 +387,7 @@ class WidgetDefaultInjectionService
             'page_type' => $item['page_type'],
             'layout_option' => $item['identity']['layout_option'],
             'scope' => $item['identity']['scope'],
+            'locale_code' => $item['identity']['locale_code'],
             'target_type' => $item['identity']['target_type'],
             'target_id' => $item['identity']['target_id'],
             'area' => $item['area'],
@@ -555,6 +557,7 @@ class WidgetDefaultInjectionService
                 ->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, $pageType)
                 ->where(ThemeWidgetDefaultInjection::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE, $identity['locale_code'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_WIDGET_MODULE, $module)
@@ -585,13 +588,14 @@ class WidgetDefaultInjectionService
                     ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
                     ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                     ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                    ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
                     ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
                     ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
                     ->where(ThemeLayout::schema_fields_STATUS, $status)
                     ->where(ThemeLayout::schema_fields_WIDGET_MODULE, self::NO_PLACEMENTS_WIDGET_MODULE)
                     ->where(ThemeLayout::schema_fields_WIDGET_TYPE, self::NO_PLACEMENTS_WIDGET_TYPE)
                     ->where(ThemeLayout::schema_fields_WIDGET_CODE, self::NO_PLACEMENTS_WIDGET_CODE)
-                    ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1)
+                    ->where(ThemeLayout::schema_fields_IS_ACTIVE, 0)
                     ->select()
                     ->fetchArray();
                 if (is_array($rows) && count($rows) > 0) {
@@ -619,6 +623,7 @@ class WidgetDefaultInjectionService
                 ->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, (string)($item['page_type'] ?? ''))
                 ->where(ThemeWidgetDefaultInjection::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE, $identity['locale_code'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
                 ->where(ThemeWidgetDefaultInjection::schema_fields_INJECTION_KEY, (string)$item['injection_key'])
@@ -663,6 +668,7 @@ class WidgetDefaultInjectionService
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, (string)($item['page_type'] ?? ''))
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_SCOPE, $identity['scope'])
+                ->setData(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE, $identity['locale_code'])
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_INJECTION_KEY, (string)$item['injection_key'])
@@ -726,11 +732,13 @@ class WidgetDefaultInjectionService
         $identitySource = [
             'layout_option' => $layoutOption,
             'scope' => $injection['scope'] ?? ($currentIdentity['scope'] ?? 'default'),
+            'locale_code' => $injection['locale_code'] ?? $injection['locale'] ?? ($currentIdentity['locale_code'] ?? ''),
             'target_type' => $injection['target_type'] ?? ($currentIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
             'target_id' => $injection['target_id'] ?? ($currentIdentity['target_id'] ?? 0),
         ];
         if ($currentPageType !== null && $currentIdentityProvided) {
             $identitySource['scope'] = $currentIdentity['scope'];
+            $identitySource['locale_code'] = $currentIdentity['locale_code'];
             $identitySource['target_type'] = $currentIdentity['target_type'];
             $identitySource['target_id'] = $currentIdentity['target_id'];
         }
@@ -763,6 +771,7 @@ class WidgetDefaultInjectionService
             'layout_type' => $pageType,
             'layout_option' => $identity['layout_option'],
             'scope' => $identity['scope'],
+            'locale_code' => $identity['locale_code'],
             'target_type' => $identity['target_type'],
             'target_id' => $identity['target_id'],
             'identity' => $identity,
@@ -837,6 +846,7 @@ class WidgetDefaultInjectionService
             $copy['identity'] = $layoutIdentity;
             $copy['layout_option'] = $layoutIdentity['layout_option'];
             $copy['scope'] = $layoutIdentity['scope'];
+            $copy['locale_code'] = $layoutIdentity['locale_code'];
             $copy['target_type'] = $layoutIdentity['target_type'];
             $copy['target_id'] = $layoutIdentity['target_id'];
             $copy['injection_key'] = $this->buildInjectionKey($copy);
@@ -929,6 +939,7 @@ class WidgetDefaultInjectionService
                 $dashboardIdentity = $this->normalizeIdentity([
                     'layout_option' => $identity['layout_option'],
                     'scope' => 'dashboard_view:' . $viewId,
+                    'locale_code' => $identity['locale_code'],
                     'target_type' => 'website',
                     'target_id' => $websiteId,
                 ]);
@@ -951,6 +962,7 @@ class WidgetDefaultInjectionService
             $identity = $this->normalizeIdentity([
                 'layout_option' => $row['layout_option'] ?? 'default',
                 'scope' => $row['scope'] ?? 'default',
+                'locale_code' => $row['locale_code'] ?? '',
                 'target_type' => $row['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL,
                 'target_id' => $row['target_id'] ?? 0,
             ]);
@@ -967,6 +979,7 @@ class WidgetDefaultInjectionService
         return implode('|', [
             $identity['layout_option'],
             $identity['scope'],
+            $identity['locale_code'],
             $identity['target_type'],
             (string)$identity['target_id'],
         ]);
@@ -980,6 +993,7 @@ class WidgetDefaultInjectionService
                 ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
                 ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                 ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
                 ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
                 ->where(ThemeLayout::schema_fields_STATUS, $status)
@@ -1023,6 +1037,7 @@ class WidgetDefaultInjectionService
             (string)$item['page_type'],
             (string)$item['layout_option'],
             (string)$item['scope'],
+            (string)($item['locale_code'] ?? ''),
             (string)$item['target_type'],
             (string)$item['target_id'],
             (string)$item['slot_id'],
@@ -1033,9 +1048,11 @@ class WidgetDefaultInjectionService
 
     private function identityMatches(array $left, array $right): bool
     {
+        $left = $this->normalizeIdentity($left);
         $right = $this->normalizeIdentity($right);
         return $left['layout_option'] === $right['layout_option']
             && $left['scope'] === $right['scope']
+            && $left['locale_code'] === $right['locale_code']
             && $left['target_type'] === $right['target_type']
             && (int)$left['target_id'] === (int)$right['target_id'];
     }
@@ -1061,11 +1078,13 @@ class WidgetDefaultInjectionService
     {
         $layoutOption = trim((string)($identity['layout_option'] ?? 'default'));
         $scope = trim((string)($identity['scope'] ?? 'default'));
+        $localeCode = trim((string)($identity['locale_code'] ?? $identity['locale'] ?? ''));
         $targetType = trim((string)($identity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL));
 
         return [
             'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
             'scope' => $scope !== '' ? $scope : 'default',
+            'locale_code' => $localeCode === 'default' ? '' : $localeCode,
             'target_type' => $targetType !== '' ? $targetType : ThemeVirtualLayout::TARGET_GLOBAL,
             'target_id' => max(0, (int)($identity['target_id'] ?? 0)),
         ];

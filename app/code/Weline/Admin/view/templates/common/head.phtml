@@ -1,6 +1,18 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
-$headTitle = trim((string)($this->getData('title') ?? '')) ?: (string)__('Weline 管理后台');
+$headTitle = trim((string)($this->getData('title') ?? ''));
+$meta = $this->getData('meta');
+if (is_array($meta)) {
+    $controllerTitle = trim((string)($meta['controller_title'] ?? ''));
+    $metaTitle = trim((string)($meta['title'] ?? $meta['meta_title'] ?? ''));
+    $preferred = $controllerTitle !== '' ? $controllerTitle : $metaTitle;
+    $moduleTitle = trim((string)$this->getRequest()->getModuleName());
+    // init()/ob_file 可能把 title 重置成模块名；优先用控制器写入的 meta 标题。
+    if ($preferred !== '' && ($headTitle === '' || ($moduleTitle !== '' && $headTitle === $moduleTitle))) {
+        $headTitle = $preferred;
+    }
+}
+$headTitle = $headTitle !== '' ? $headTitle : (string)__('Weline 管理后台');
 $headDescription = trim((string)($this->getData('description') ?? '')) ?: (string)__('Weline 管理后台');
 ?>
 <base href="@backend-url('/')">

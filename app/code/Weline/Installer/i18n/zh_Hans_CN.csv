@@ -39,10 +39,10 @@
 "在 php.ini 中添加 extension=%{ext}","在 php.ini 中添加 extension=%{ext}"
 "重启 Web 服务","重启 Web 服务"
 "Ubuntu/Debian: sudo apt install php-%{ext}","Ubuntu/Debian: sudo apt install php-%{ext}"
-"CentOS/RHEL: sudo yum install php-%{ext}","CentOS/RHEL: sudo yum install php-%{ext}"
-"macOS: brew install php && pecl install %{ext}","macOS: brew install php && pecl install %{ext}"
+"CentOS/RHEL: sudo yum install php-%{ext}","CentOS/RHEL： sudo yum install php-%{ext}"
+"macOS: brew install php && pecl install %{ext}","macOS：brew install php && pecl install %{ext}"
 "重启 PHP-FPM 或 Web 服务","重启 PHP-FPM 或 Web 服务"
-"Weline Framework","Weline Framework"
+"Weline Framework",微线框架
 系统安装向导,系统安装向导
 点击下方按钮开始检测环境...,点击下方按钮开始检测环境...
 检测结果,检测结果

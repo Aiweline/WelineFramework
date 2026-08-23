@@ -1,40 +1,63 @@
 <?php
-/** @var string $prefill_name */
+/** @var string $prefill_first_name */
+/** @var string $prefill_last_name */
 /** @var string $prefill_email */
-/** @var array $disabled_languages */
 /** @var int $max_locales */
+$h = static fn(string $value): string => \htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $form_id = (string)($form_id ?? ('weline-language-request-' . \bin2hex(\random_bytes(6))));
-$name_id = $form_id . '-name';
+$first_id = $form_id . '-first-name';
+$last_id = $form_id . '-last-name';
 $email_id = $form_id . '-email';
 $select_id = $form_id . '-locales-select';
 $select_input_id = $form_id . '-locales';
-$prefill_name = (string)($prefill_name ?? '');
+$prefill_first_name = (string)($prefill_first_name ?? '');
+$prefill_last_name = (string)($prefill_last_name ?? '');
 $prefill_email = (string)($prefill_email ?? '');
-$disabled_languages = \is_array($disabled_languages ?? null) ? $disabled_languages : [];
 $max_locales = (int)($max_locales ?? 20);
 ?>
-<div class="weline-language-request-form-shell">
-    <p class="weline-language-request-intro"><lang>没有找到需要的语言？可一次申请多种语言，我们会在语言资源准备完成后通知网站管理员。</lang></p>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-language-select.css)">
+<style>
+.weline-language-request-form .w-name-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--weline-space-4)}.weline-language-request-form .w-field--email{max-width:22rem}.weline-language-request-form .w-field--locales{max-width:100%}
+@media (max-width:22rem){.weline-language-request-form .w-name-row{grid-template-columns:1fr}}
+</style>
+<div
+    class="w-stack"
+    data-language-request-form-shell
+    data-max-locales="<?= $h((string)$max_locales) ?>"
+    data-msg-name-required="<?= $h((string)__('请填写名和姓')) ?>"
+    data-msg-locales-required="<?= $h((string)__('请选择 1 到 20 种语言')) ?>"
+    data-msg-submitting="<?= $h((string)__('正在提交...')) ?>"
+    data-msg-success="<?= $h((string)__('语言支持申请已提交')) ?>"
+    data-msg-fail="<?= $h((string)__('提交失败，请稍后重试')) ?>"
+    data-msg-captcha-fail="<?= $h((string)__('人机验证加载失败，请稍后重试')) ?>"
+>
+    <p class="w-text" data-tone="muted"><lang>没有找到需要的语言？可一次申请多种语言，我们会在语言资源准备完成后通知网站管理员。</lang></p>
     <w:form
         id="form_id"
         method="post"
         action=""
-        class="weline-language-request-form"
+        class="w-form weline-language-request-form"
         autocomplete="on"
         intent="i18n.language_support_request"
         csrf="auto"
         captcha="required"
     >
-        <div class="weline-language-request-fields">
-            <div>
-                <label class="w-field__label" for="<?= \htmlspecialchars($name_id, ENT_QUOTES, 'UTF-8') ?>"><lang>姓名</lang></label>
-                <input class="w-input" id="<?= \htmlspecialchars($name_id, ENT_QUOTES, 'UTF-8') ?>" name="name" type="text" required minlength="2" maxlength="120" autocomplete="name" value="<?= htmlspecialchars($prefill_name, ENT_QUOTES, 'UTF-8') ?>">
+        <div class="w-stack">
+            <div class="w-name-row">
+                <div class="w-field">
+                    <label class="w-field__label" for="<?= $h($first_id) ?>"><lang>名字</lang></label>
+                    <input class="w-input" id="<?= $h($first_id) ?>" name="first_name" type="text" required minlength="1" maxlength="60" autocomplete="given-name" value="<?= $h($prefill_first_name) ?>">
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="<?= $h($last_id) ?>"><lang>姓氏</lang></label>
+                    <input class="w-input" id="<?= $h($last_id) ?>" name="last_name" type="text" required minlength="1" maxlength="60" autocomplete="family-name" value="<?= $h($prefill_last_name) ?>">
+                </div>
             </div>
-            <div>
-                <label class="w-field__label" for="<?= \htmlspecialchars($email_id, ENT_QUOTES, 'UTF-8') ?>"><lang>邮箱</lang></label>
-                <input class="w-input" id="<?= \htmlspecialchars($email_id, ENT_QUOTES, 'UTF-8') ?>" name="email" type="email" required maxlength="190" autocomplete="email" value="<?= htmlspecialchars($prefill_email, ENT_QUOTES, 'UTF-8') ?>">
+            <div class="w-field w-field--email">
+                <label class="w-field__label" for="<?= $h($email_id) ?>"><lang>邮箱</lang></label>
+                <input class="w-input" id="<?= $h($email_id) ?>" name="email" type="email" required maxlength="190" autocomplete="email" value="<?= $h($prefill_email) ?>">
             </div>
-            <div>
+            <div class="w-field w-field--locales">
                 <label class="w-field__label"><lang>希望支持的语言</lang></label>
                 <w:i18n:language:select
                     id="select_id"
@@ -43,87 +66,18 @@ $max_locales = (int)($max_locales ?? 20);
                     multiple="true"
                     required="true"
                     catalog="global"
-                    disabled-values="disabled_languages"
+                    exclude-site-languages="true"
                     empty-text="请选择希望支持的语言（最多 20 种）"
                     search-placeholder="搜索国家、语言或 Locale..."
-                    inline-dropdown="true"
                     show-reference="true"
                 />
-                <small><lang>当前站点已支持的语言不可重复选择；每次最多申请 20 种。</lang></small>
+                <span class="w-field__hint"><lang>当前站点已支持的语言不可重复选择；每次最多申请 20 种。</lang></span>
             </div>
         </div>
-        <div class="weline-language-request-feedback" role="status" aria-live="polite"></div>
-        <div class="weline-language-request-actions">
+        <div data-weline-form-captcha-slot></div>
+        <div class="w-text" data-tone="muted" data-language-request-feedback role="status" aria-live="polite"></div>
+        <div class="w-cluster" data-justify="end">
             <button type="submit" class="w-button" data-tone="primary"><lang>提交语言申请</lang></button>
         </div>
     </w:form>
 </div>
-<style>
-.weline-language-request-form-shell{color:#1e293b}.weline-language-request-intro{margin:0 0 1rem;color:#475569;line-height:1.6}
-.weline-language-request-fields{display:grid;gap:1rem}.weline-language-request-fields .form-label{display:block;margin-bottom:.35rem;font-weight:600}
-.weline-language-request-fields .form-control{width:100%;min-height:44px;border:1px solid #cbd5e1;border-radius:.5rem;padding:.65rem .75rem}
-.weline-language-request-fields .form-control:focus-visible{outline:3px solid rgba(37,99,235,.22);border-color:#2563eb}
-.weline-language-request-actions{display:flex;justify-content:flex-end;margin-top:1rem}.weline-language-request-feedback{min-height:1.5rem;margin-top:.75rem}
-.weline-language-request-feedback.is-error{color:#b91c1c}.weline-language-request-feedback.is-success{color:#166534}
-@media(max-width:575px){.weline-language-request-actions .btn{width:100%}}
-</style>
-<script>
-(function(){
-    var form=document.getElementById(<?= \json_encode($form_id, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>);
-    if(!form||form.dataset.languageRequestBound==='1'){return;}
-    form.dataset.languageRequestBound='1';
-    var feedback=form.querySelector('.weline-language-request-feedback');
-    var submit=form.querySelector('[type=submit]');
-    var maxLocales=<?= $max_locales ?>;
-    function show(message,type){
-        if(!feedback){return;}
-        feedback.textContent=String(message||'');
-        feedback.className='weline-language-request-feedback'+(type?' is-'+type:'');
-    }
-    form.addEventListener('weline:form:verification-error',function(){
-        show('<?= addslashes((string)__('人机验证加载失败，请稍后重试')) ?>','error');
-        if(submit){submit.disabled=false;}
-    });
-    form.addEventListener('submit',function(event){
-        event.preventDefault();
-        if(event.defaultPrevented && form.dataset.welineCaptchaPending==='1'){return;}
-        var data=new FormData(form);
-        var locales=data.getAll('locales').map(function(value){return String(value||'').trim();}).filter(Boolean);
-        if(locales.length<1||locales.length>maxLocales){
-            show('<?= addslashes((string)__('请选择 1 到 20 种语言')) ?>','error');
-            return;
-        }
-        var payload={
-            name:String(data.get('name')||''),
-            email:String(data.get('email')||''),
-            locales:locales,
-            captcha_provider:String(data.get('captcha_provider')||''),
-            captcha_token:String(data.get('captcha_token')||''),
-            captcha_response:String(data.get('captcha_response')||''),
-            captcha_action:String(data.get('captcha_action')||'')
-        };
-        if(submit){submit.disabled=true;}
-        show('<?= addslashes((string)__('正在提交...')) ?>','');
-        Promise.resolve(window.Weline&&window.Weline.Api
-            ? window.Weline.Api.resource('i18n_language_requests')
-            : Promise.reject(new Error('Weline.Api unavailable')))
-            .then(function(api){return api.submitLanguageSupportRequest(payload);})
-            .then(function(result){
-                if(!result||result.success===false){throw new Error(result&&result.message?result.message:'<?= addslashes((string)__('提交失败，请稍后重试')) ?>');}
-                show(result.message||'<?= addslashes((string)__('语言支持申请已提交')) ?>','success');
-                form.dispatchEvent(new CustomEvent('weline:i18n-language-request:submitted',{bubbles:true,detail:result}));
-            })
-            .catch(function(error){
-                delete form.dataset.welineCaptchaVerified;
-                show(error&&error.message?error.message:'<?= addslashes((string)__('提交失败，请稍后重试')) ?>','error');
-                if(payload.captcha_provider==='local_image'){
-                    form.dispatchEvent(new CustomEvent('weline:captcha:refresh-requested',{
-                        bubbles:true,
-                        detail:{name:payload.name,email:payload.email,locales:payload.locales}
-                    }));
-                }
-            })
-            .finally(function(){if(submit){submit.disabled=false;}});
-    });
-})();
-</script>

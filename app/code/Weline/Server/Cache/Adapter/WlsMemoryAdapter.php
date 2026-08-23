@@ -89,11 +89,6 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
             return $this->localCache[$key];
         }
 
-        if ($this->isLocalMemoryUnderPressure()) {
-            $this->recordMiss();
-            return null;
-        }
-
         // 本地缓存未命中，查共享内存；服务不可用时快速降级为 miss，避免 WLS 请求反复等待超时。
         if ($this->isRemoteUnavailable()) {
             $this->recordMiss();
@@ -124,11 +119,6 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
     {
         $this->syncLocalEpoch();
         $this->relieveLocalMemoryPressure(true);
-
-        if ($this->isLocalMemoryUnderPressure()) {
-            unset($this->localCache[$key]);
-            return true;
-        }
 
         if ($this->isRemoteUnavailable()) {
             return false;
@@ -191,11 +181,6 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         $this->syncLocalEpoch();
         $this->relieveLocalMemoryPressure(true);
 
-        if ($this->isLocalMemoryUnderPressure()) {
-            unset($this->localCache[$key]);
-            return false;
-        }
-
         if ($this->isRemoteUnavailable()) {
             return false;
         }
@@ -225,7 +210,10 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
 
     public function isAvailable(): bool
     {
-        return !$this->isLocalMemoryUnderPressure() && !$this->isRemoteUnavailable();
+        // Worker-local memory pressure disables only the bounded L1 cache.
+        // Shared L2 remains authoritative for cross-Worker state such as
+        // preview tokens, locks and rate-limit counters.
+        return !$this->isRemoteUnavailable();
     }
 
     /**

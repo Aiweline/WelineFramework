@@ -12,7 +12,7 @@ use Weline\Framework\Acl\Acl;
 #[Acl(
     'Weline_DataTable::datatable_test_tag',
     '标签验证',
-    'mdi mdi-tag-check-outline',
+    'tag',
     'DataTable 标签验证页面',
     'Weline_DataTable::datatable_module'
 )]
@@ -28,7 +28,7 @@ class TagTest extends BaseController
     #[Acl(
         'Weline_DataTable::test_tag_test_index',
         '标签验证页',
-        'mdi mdi-check-decagram-outline',
+        'check-circle',
         'DataTable 标签验证结果页'
     )]
     public function index(): string
@@ -45,7 +45,7 @@ class TagTest extends BaseController
             'dashboardUrl' => $this->routeWithQuery('../index', ['layout' => $currentLayoutKey]),
             'comprehensiveUrl' => $this->routeWithQuery('../comprehensive/index', ['layout' => $currentLayoutKey]),
             'docUrl' => $this->routeWithQuery('../index/doc', ['layout' => $currentLayoutKey]),
-            'verifyUrl' => '../comprehensive/verify-tags',
+            'verifyUrl' => $this->_url->getBackendUrl('datatable/backend/test/comprehensive/verify-tags'),
             'focusSection' => $focus,
             'report' => $this->backendAdminPageService->getTagVerificationReport(),
         ]);

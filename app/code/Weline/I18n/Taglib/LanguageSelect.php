@@ -8,18 +8,15 @@ use Symfony\Component\Intl\Countries;
 use Symfony\Component\Intl\Locales;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locals;
-use Weline\Framework\Taglib\TaglibInterface;
 
 class LanguageSelect implements TaglibInterface
 {
     private static array $itemsCache = [];
 
-    /**
-     * Drop process-local catalog memo after install/activate/deactivate/uninstall.
-     */
     public static function clearProcessCaches(): void
     {
         self::$itemsCache = [];
@@ -53,12 +50,12 @@ class LanguageSelect implements TaglibInterface
             'value' => false,
             'multiple' => false,
             'class' => false,
-            'style' => false,
             'required' => false,
             'allow-empty' => false,
             'display-only' => false,
             'readonly-values' => false,
             'disabled-values' => false,
+            'exclude-site-languages' => false,
             'allowed-values' => false,
             'option-values' => false,
             'options-values' => false,
@@ -67,52 +64,32 @@ class LanguageSelect implements TaglibInterface
             'input-id' => false,
             'empty-text' => false,
             'search-placeholder' => false,
-            'on-change' => false,
-            'inline-dropdown' => false,
             'show-reference' => false,
             'catalog' => false,
+            'data-w-width' => false,
+            'auto-submit' => false,
         ];
     }
 
     public static function callback(): callable
     {
-        return function ($tag_key, $config, $tag_data, $attributes) {
+        return static function ($tagKey, $config, $tagData, $attributes): string {
             if (empty($attributes['id'])) {
-                throw new \Exception(__('id属性不能为空'));
+                throw new \InvalidArgumentException(__('id属性不能为空'));
             }
 
-            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
-
-            $html = [];
-            $html[] = '<?php ' . $code . ' ?>';
-$html[] = <<<'PHP'
+            $attributeCode = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
+            $html = ['<?php ' . $attributeCode . ' ?>'];
+            $html[] = <<<'PHP'
 <?php
-$__wls_display_locale = \trim((string)($Taglib__display_locale ?? ''));
-if ($__wls_display_locale === '') {
-    $__wls_display_locale = \Weline\Framework\App\State::getLang() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN';
-}
-$__wls_catalog = \strtolower(\trim((string)($Taglib__catalog ?? 'installed')));
-if (!\in_array($__wls_catalog, ['installed', 'global'], true)) {
-    $__wls_catalog = 'installed';
-}
-$__wls_allowed_values_early = $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? ($Taglib__locales ?? [])));
-$__wls_items_json = \Weline\I18n\Taglib\LanguageSelect::getLanguageItemsJson(
-    $__wls_display_locale,
-    $__wls_catalog,
-    $__wls_allowed_values_early
-);
-?>
-PHP;
-$html[] = <<<'PHP'
-<?php
-$__wls_normalize_bool = static function ($value, bool $default = false): bool {
+$__wls_bool = static function ($value, bool $default = false): bool {
     if (\is_bool($value)) {
         return $value;
     }
     if ($value === null || $value === '') {
         return $default;
     }
-    $value = \strtolower(\trim((string) $value));
+    $value = \strtolower(\trim((string)$value));
     if (\in_array($value, ['true', '1', 'yes', 'on'], true)) {
         return true;
     }
@@ -121,23 +98,17 @@ $__wls_normalize_bool = static function ($value, bool $default = false): bool {
     }
     return $default;
 };
-$__wls_parse_values = static function ($raw): array {
+$__wls_values = static function ($raw): array {
     if (\is_array($raw)) {
         $values = $raw;
     } elseif ($raw === null || $raw === '') {
         $values = [];
     } else {
-        $raw = \trim((string) $raw);
-        if ($raw !== '' && ($raw[0] === '[' || $raw[0] === '{')) {
-            $decoded = \json_decode($raw, true);
-            if (\json_last_error() === JSON_ERROR_NONE && \is_array($decoded)) {
-                $values = $decoded;
-            } else {
-                $values = \preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-            }
-        } else {
-            $values = \preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        }
+        $raw = \trim((string)$raw);
+        $decoded = ($raw !== '' && ($raw[0] === '[' || $raw[0] === '{')) ? \json_decode($raw, true) : null;
+        $values = \is_array($decoded)
+            ? $decoded
+            : (\preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
     }
     $result = [];
     foreach ($values as $value) {
@@ -147,1074 +118,182 @@ $__wls_parse_values = static function ($raw): array {
         if (!\is_scalar($value)) {
             continue;
         }
-        $value = (string) $value;
-        if ($value === '' || \in_array($value, $result, true)) {
-            continue;
+        $value = \trim((string)$value);
+        if ($value !== '' && !\in_array($value, $result, true)) {
+            $result[] = $value;
         }
-        $result[] = $value;
     }
     return $result;
 };
-$__wls_trim_text = static function ($value, string $default = ''): string {
-    if ($value === null) {
-        return $default;
-    }
-    $value = \trim((string) $value);
-    if ($value === '') {
-        return $default;
-    }
-    return \trim($value, "\"'");
+$__wls_text = static function ($value, string $default = ''): string {
+    $value = $value === null ? '' : \trim((string)$value);
+    $value = \trim($value, "\"'");
+    return $value !== '' ? $value : $default;
 };
-$__wls_is_multiple = $__wls_normalize_bool($Taglib__multiple ?? false, false);
-$__wls_display_only = $__wls_normalize_bool($Taglib__display_only ?? false, false);
-$__wls_required = $__wls_normalize_bool($Taglib__required ?? false, false);
-$__wls_allow_empty = $__wls_normalize_bool($Taglib__allow_empty ?? (!$__wls_required), !$__wls_required);
-$__wls_selected_values = $__wls_parse_values($Taglib__value ?? []);
-$__wls_readonly_values = $__wls_parse_values($Taglib__readonly_values ?? []);
-$__wls_disabled_values = $__wls_parse_values($Taglib__disabled_values ?? []);
-$__wls_allowed_values = $__wls_parse_values(
-    $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? ($Taglib__locales ?? [])))
-);
-foreach ($__wls_readonly_values as $__wls_readonly_value) {
-    if (!\in_array($__wls_readonly_value, $__wls_selected_values, true)) {
-        $__wls_selected_values[] = $__wls_readonly_value;
+$__wls_id = static function ($value, string $default): string {
+    $value = \preg_replace('/[^A-Za-z0-9_:-]+/', '-', $value === null ? '' : \trim((string)$value));
+    $value = \trim((string)$value, '-');
+    return $value !== '' ? $value : $default;
+};
+$__wls_multiple = $__wls_bool($Taglib__multiple ?? false);
+$__wls_display_only = $__wls_bool($Taglib__display_only ?? false);
+$__wls_required = $__wls_bool($Taglib__required ?? false);
+$__wls_allow_empty = $__wls_bool($Taglib__allow_empty ?? !$__wls_required, !$__wls_required);
+$__wls_show_reference = $__wls_bool($Taglib__show_reference ?? true, true);
+$__wls_selected = $__wls_values($Taglib__value ?? []);
+$__wls_readonly = $__wls_values($Taglib__readonly_values ?? []);
+$__wls_disabled = $__wls_values($Taglib__disabled_values ?? []);
+$__wls_exclude_site = $__wls_bool($Taglib__exclude_site_languages ?? false);
+$__wls_site_codes = $__wls_exclude_site
+    ? \Weline\I18n\Taglib\LanguageSelect::resolveSiteLanguageCodes()
+    : [];
+foreach ($__wls_site_codes as $__wls_site_code) {
+    if (!\in_array($__wls_site_code, $__wls_disabled, true)) {
+        $__wls_disabled[] = $__wls_site_code;
     }
 }
-if (!$__wls_is_multiple && \count($__wls_selected_values) > 1) {
-    $__wls_selected_values = [\reset($__wls_selected_values) ?: ''];
+$__wls_site_disabled = \array_fill_keys($__wls_site_codes, true);
+$__wls_allowed = $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? ($Taglib__locales ?? [])));
+foreach ($__wls_readonly as $__wls_code) {
+    if (!\in_array($__wls_code, $__wls_selected, true)) {
+        $__wls_selected[] = $__wls_code;
+    }
 }
-$__wls_component_id = $__wls_trim_text($Taglib__id ?? 'language_select', 'language_select');
-$__wls_field_id = $__wls_trim_text($Taglib__input_id ?? '', $__wls_component_id);
-$__wls_name = $__wls_trim_text($Taglib__name ?? '');
-$__wls_class = $__wls_trim_text($Taglib__class ?? '');
-$__wls_style = $__wls_trim_text($Taglib__style ?? '');
-$__wls_empty_text = $__wls_trim_text(
+if (!$__wls_multiple && \count($__wls_selected) > 1) {
+    $__wls_selected = [\reset($__wls_selected) ?: ''];
+}
+$__wls_component_id = $__wls_id($Taglib__id ?? null, 'language-select');
+$__wls_field_id = $__wls_id($Taglib__input_id ?? null, $__wls_component_id . '-field');
+$__wls_name = $__wls_text($Taglib__name ?? '');
+$__wls_display_locale = $__wls_text(
+    $Taglib__display_locale ?? '',
+    \Weline\Framework\App\State::getLang() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN'
+);
+$__wls_catalog = \strtolower($__wls_text($Taglib__catalog ?? '', 'installed'));
+if (!\in_array($__wls_catalog, ['installed', 'global'], true)) {
+    $__wls_catalog = 'installed';
+}
+$__wls_items = \Weline\I18n\Taglib\LanguageSelect::resolveLanguageItems(
+    $__wls_display_locale,
+    $__wls_catalog,
+    $__wls_allowed
+);
+$__wls_empty = $__wls_text(
     $Taglib__empty_text ?? '',
-    $__wls_is_multiple ? __('点击选择语言（可多选）') : __('点击选择语言')
+    $__wls_multiple ? __('点击选择语言（可多选）') : __('点击选择语言')
 );
-$__wls_search_placeholder = $__wls_trim_text(
-    $Taglib__search_placeholder ?? '',
-    __('搜索国家、语言或代码...')
-);
-$__wls_on_change = $__wls_trim_text($Taglib__on_change ?? '');
-$__wls_show_reference = $__wls_normalize_bool($Taglib__show_reference ?? true, true);
-$__wls_inline_dropdown = $__wls_normalize_bool($Taglib__inline_dropdown ?? false, false);
-$__wls_selected_json = \json_encode(
-    $__wls_selected_values,
-    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-);
-if ($__wls_selected_json === false) {
-    $__wls_selected_json = '[]';
+$__wls_search = $__wls_text($Taglib__search_placeholder ?? '', __('搜索国家、语言或代码...'));
+$__wls_classes = [];
+foreach (\preg_split('/\s+/', $__wls_text($Taglib__class ?? '')) ?: [] as $__wls_class) {
+    if (\preg_match('/^w-[a-z0-9_-]+$/', $__wls_class) === 1) {
+        $__wls_classes[] = $__wls_class;
+    }
 }
-$__wls_readonly_json = \json_encode(
-    $__wls_readonly_values,
-    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-);
-if ($__wls_readonly_json === false) {
-    $__wls_readonly_json = '[]';
-}
-$__wls_disabled_json = \json_encode(
-    $__wls_disabled_values,
-    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-);
-if ($__wls_disabled_json === false) {
-    $__wls_disabled_json = '[]';
-}
-$__wls_allowed_json = \json_encode(
-    $__wls_allowed_values,
-    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-);
-if ($__wls_allowed_json === false) {
-    $__wls_allowed_json = '[]';
-}
+$__wls_width = $__wls_text($Taglib__data_w_width ?? '');
+$__wls_width = \in_array($__wls_width, ['auto', 'full'], true) ? $__wls_width : '';
+$__wls_auto_submit = $__wls_bool($Taglib__auto_submit ?? false);
+$__wls_readonly_json = \json_encode($__wls_readonly, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]';
 ?>
 PHP;
             $html[] = <<<'HTML'
-<style>
-.weline-language-select {
-    position: relative;
-    display: inline-block;
-    max-width: 100%;
-    overflow: visible;
-    box-sizing: border-box;
-    isolation: isolate;
-}
-.weline-language-select,
-.weline-language-select * {
-    box-sizing: border-box;
-}
-.weline-language-select.is-open {
-    z-index: 4200;
-}
-.weline-language-select-trigger {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
-    width: 100%;
-    min-height: 42px;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--backend-color-border-default, #ced4da);
-    border-radius: var(--backend-border-radius-sm, 0.375rem);
-    background: var(--backend-color-card-bg, #fff);
-    color: var(--backend-color-text-primary, #212529);
-    text-align: left;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.weline-language-select-trigger:hover,
-.weline-language-select-trigger:focus {
-    border-color: var(--backend-color-primary, #556ee6);
-    box-shadow: 0 0 0 0.15rem rgba(85, 110, 230, 0.12);
-    outline: none;
-}
-.weline-language-select-trigger.is-display-only,
-.weline-language-select-trigger:disabled {
-    cursor: default;
-    box-shadow: none;
-}
-.weline-language-select-tags {
-    display: flex;
-    flex: 1;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    align-items: center;
-}
-.weline-language-select-placeholder {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.9rem;
-}
-.weline-language-select-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.2rem 0.45rem;
-    border-radius: 999px;
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.12));
-    color: var(--backend-color-primary, #556ee6);
-    font-size: 0.8rem;
-    line-height: 1.2;
-    border: 1px solid rgba(85, 110, 230, 0.12);
-}
-.weline-language-select-tag.is-readonly {
-    background: rgba(100, 116, 139, 0.12);
-    border-color: rgba(100, 116, 139, 0.18);
-    color: var(--backend-color-text-primary, #334155);
-}
-.weline-language-select-flag {
-    display: inline-flex;
-    align-items: center;
-}
-.weline-language-select-flag svg {
-    display: inline-block;
-    height: 1.1em;
-    width: auto;
-    max-width: 1.5em;
-}
-.weline-language-select-code {
-    color: var(--backend-color-text-secondary, #64748b);
-    font-size: 0.75rem;
-}
-.weline-language-select-state {
-    display: inline-flex;
-    align-items: center;
-    padding: 0 0.35rem;
-    border-radius: 999px;
-    background: rgba(100, 116, 139, 0.14);
-    color: var(--backend-color-text-secondary, #64748b);
-    font-size: 0.72rem;
-}
-.weline-language-select-tag-remove {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.1rem;
-    height: 1.1rem;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-    opacity: 0.72;
-}
-.weline-language-select-tag-remove:hover {
-    opacity: 1;
-}
-.weline-language-select-dropdown {
-    position: absolute;
-    top: calc(100% + 0.25rem);
-    left: 0;
-    right: auto;
-    width: 100%;
-    box-sizing: border-box;
-    z-index: 1080;
-    padding: 0.75rem;
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-md, 0.5rem);
-    background: var(--backend-color-card-bg, #fff);
-    box-shadow: var(--backend-shadow-lg, 0 0.75rem 2rem rgba(15, 23, 42, 0.14));
-}
-.weline-language-select-search {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    margin-bottom: 0.65rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--backend-color-border-default, #ced4da);
-    border-radius: var(--backend-border-radius-sm, 0.375rem);
-    background: var(--backend-color-card-bg, #fff);
-    color: var(--backend-color-text-primary, #212529);
-}
-.weline-language-select-search:focus {
-    border-color: var(--backend-color-primary, #556ee6);
-    outline: none;
-}
-.weline-language-select-list {
-    max-height: 320px;
-    overflow-y: auto;
-    border: 1px solid var(--backend-color-border-default, #e2e8f0);
-    border-radius: var(--backend-border-radius-sm, 0.375rem);
-    background: var(--backend-color-card-bg, #fff);
-}
-.weline-language-select-group-label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.55rem 0.75rem;
-    border-bottom: 1px solid var(--backend-color-border-light, #edf2f7);
-    background: var(--backend-color-bg-secondary, #f8fafc);
-    color: var(--backend-color-text-secondary, #64748b);
-    font-size: 0.76rem;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-.weline-language-select-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.65rem;
-    width: 100%;
-    padding: 0.65rem 0.75rem;
-    border: none;
-    border-bottom: 1px solid var(--backend-color-border-light, #edf2f7);
-    background: transparent;
-    color: var(--backend-color-text-primary, #0f172a);
-    text-align: left;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-}
-.weline-language-select-item:last-child {
-    border-bottom: none;
-}
-.weline-language-select-item:hover {
-    background: var(--backend-color-bg-secondary, #f8fafc);
-}
-.weline-language-select-item.is-selected {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.08));
-}
-.weline-language-select-item.is-readonly {
-    cursor: default;
-}
-.weline-language-select-indicator {
-    width: 1.1rem;
-    text-align: center;
-    color: var(--backend-color-primary, #556ee6);
-}
-.weline-language-select-item-copy {
-    display: grid;
-    gap: 0.1rem;
-    min-width: 0;
-    flex: 1;
-}
-.weline-language-select-item-copy strong {
-    color: inherit;
-    font-size: 0.9rem;
-}
-.weline-language-select-item-copy small {
-    color: var(--backend-color-text-secondary, #64748b);
-    font-size: 0.76rem;
-}
-.weline-language-select-empty {
-    padding: 1rem 0.9rem;
-    color: var(--backend-color-text-secondary, #64748b);
-    text-align: center;
-    font-size: 0.86rem;
-}
-</style>
-
 <div
-    class="weline-language-select <?= htmlspecialchars($__wls_class, ENT_QUOTES, 'UTF-8') ?>"
-    style="<?= htmlspecialchars($__wls_style, ENT_QUOTES, 'UTF-8') ?>"
+    class="w-language-select<?= $__wls_classes ? ' ' . htmlspecialchars(implode(' ', $__wls_classes), ENT_QUOTES, 'UTF-8') : '' ?>"
     id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_wrapper"
-    data-component-id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>"
-    data-field-id="<?= htmlspecialchars($__wls_field_id, ENT_QUOTES, 'UTF-8') ?>"
-    data-display-only="<?= $__wls_display_only ? 'true' : 'false' ?>"
-    data-multiple="<?= $__wls_is_multiple ? 'true' : 'false' ?>"
-    data-inline-dropdown="<?= $__wls_inline_dropdown ? 'true' : 'false' ?>"
+    data-w-component="language-select"
+    data-w-component-id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>"
+    data-w-multiple="<?= $__wls_multiple ? 'true' : 'false' ?>"
+    data-w-display-only="<?= $__wls_display_only ? 'true' : 'false' ?>"
+    data-w-allow-empty="<?= $__wls_allow_empty ? 'true' : 'false' ?>"
+    data-w-show-reference="<?= $__wls_show_reference ? 'true' : 'false' ?>"
+    data-w-readonly-values="<?= htmlspecialchars($__wls_readonly_json, ENT_QUOTES, 'UTF-8') ?>"
+    data-w-exclude-site-languages="<?= $__wls_exclude_site ? 'true' : 'false' ?>"
+    data-w-excluded-label="<?= htmlspecialchars((string)__('已支持'), ENT_QUOTES, 'UTF-8') ?>"
+    data-w-empty-text="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
+    data-w-width="<?= htmlspecialchars($__wls_width, ENT_QUOTES, 'UTF-8') ?>"
+    data-w-auto-submit="<?= $__wls_auto_submit ? 'true' : 'false' ?>"
 >
     <button
-        type="button"
-        class="weline-language-select-trigger<?= $__wls_display_only ? ' is-display-only' : '' ?>"
+        class="w-language-select__trigger"
         id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_trigger"
-        <?= $__wls_display_only ? 'disabled' : '' ?>
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded="false"
+        aria-controls="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
+        aria-label="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
+        <?= $__wls_display_only ? 'disabled aria-disabled="true"' : '' ?>
     >
-        <div class="weline-language-select-tags" id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_tags"></div>
+        <span class="w-language-select__tags" data-w-language-tags>
+            <span class="w-language-select__placeholder"><?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?></span>
+        </span>
         <?php if (!$__wls_display_only): ?>
-            <i class="mdi mdi-chevron-down"></i>
+            <w-icon name="chevron-down" size="sm"></w-icon>
         <?php endif; ?>
     </button>
 
-    <?php if ($__wls_is_multiple): ?>
-        <input
-            type="hidden"
-            id="<?= htmlspecialchars($__wls_field_id, ENT_QUOTES, 'UTF-8') ?>"
-            value="<?= htmlspecialchars(\implode(',', $__wls_selected_values), ENT_QUOTES, 'UTF-8') ?>"
-            data-name="<?= htmlspecialchars($__wls_name, ENT_QUOTES, 'UTF-8') ?>"
-        >
-        <div id="<?= htmlspecialchars($__wls_field_id, ENT_QUOTES, 'UTF-8') ?>_inputs"></div>
-    <?php else: ?>
-        <input
-            type="hidden"
-            id="<?= htmlspecialchars($__wls_field_id, ENT_QUOTES, 'UTF-8') ?>"
-            name="<?= htmlspecialchars($__wls_name, ENT_QUOTES, 'UTF-8') ?>"
-            value="<?= htmlspecialchars($__wls_selected_values[0] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-            <?= $__wls_required ? 'required' : '' ?>
-        >
-    <?php endif; ?>
+    <select
+        class="w-visually-hidden"
+        id="<?= htmlspecialchars($__wls_field_id, ENT_QUOTES, 'UTF-8') ?>"
+        name="<?= htmlspecialchars($__wls_name, ENT_QUOTES, 'UTF-8') ?>"
+        <?= $__wls_multiple ? 'multiple' : '' ?>
+        <?= $__wls_required ? 'required' : '' ?>
+        tabindex="-1"
+        aria-label="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
+        data-w-language-field
+    >
+        <?php if (!$__wls_multiple && $__wls_allow_empty): ?>
+            <option value="" <?= $__wls_selected === [] ? 'selected' : '' ?>><?= htmlspecialchars((string)__('清空选择'), ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endif; ?>
+        <?php foreach ($__wls_items as $__wls_item): ?>
+            <?php
+            $__wls_code = trim((string)($__wls_item['code'] ?? ''));
+            if ($__wls_code === '') {
+                continue;
+            }
+            $__wls_label = $__wls_show_reference
+                ? (string)($__wls_item['display_name'] ?? $__wls_item['tag_label'] ?? $__wls_item['name'] ?? $__wls_code)
+                : (string)($__wls_item['name'] ?? $__wls_item['reference_name'] ?? $__wls_code);
+            ?>
+            <option
+                value="<?= htmlspecialchars($__wls_code, ENT_QUOTES, 'UTF-8') ?>"
+                data-w-label="<?= htmlspecialchars($__wls_label, ENT_QUOTES, 'UTF-8') ?>"
+                data-w-tag-label="<?= htmlspecialchars((string)($__wls_item['tag_label'] ?? $__wls_label), ENT_QUOTES, 'UTF-8') ?>"
+                data-w-country-code="<?= htmlspecialchars((string)($__wls_item['country_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                data-w-country-name="<?= htmlspecialchars((string)($__wls_item['country_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                data-w-meta="<?= htmlspecialchars(trim($__wls_code . ' · ' . (string)($__wls_item['self_name'] ?? $__wls_item['reference_name'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                data-w-search="<?= htmlspecialchars((string)($__wls_item['search'] ?? $__wls_label . ' ' . $__wls_code), ENT_QUOTES, 'UTF-8') ?>"
+                <?= isset($__wls_site_disabled[$__wls_code]) ? 'data-w-site-language="true"' : '' ?>
+                <?= \in_array($__wls_code, $__wls_selected, true) ? 'selected' : '' ?>
+                <?= \in_array($__wls_code, $__wls_disabled, true) ? 'disabled' : '' ?>
+            ><?= htmlspecialchars($__wls_label, ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+    </select>
 
     <?php if (!$__wls_display_only): ?>
         <div
-            class="weline-language-select-dropdown"
-            id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_dropdown"
-            style="display:none;"
+            class="w-language-select__popover"
+            id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_popover"
+            data-w-placement="bottom-start"
+            hidden
         >
             <input
-                type="text"
-                class="weline-language-select-search"
-                id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_search"
-                placeholder="<?= htmlspecialchars($__wls_search_placeholder, ENT_QUOTES, 'UTF-8') ?>"
+                class="w-input w-language-select__search"
+                type="search"
+                placeholder="<?= htmlspecialchars($__wls_search, ENT_QUOTES, 'UTF-8') ?>"
                 autocomplete="off"
+                aria-controls="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
+                data-w-language-search
             >
-            <div class="weline-language-select-list" id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"></div>
+            <div
+                class="w-language-select__list"
+                id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
+                role="listbox"
+                aria-multiselectable="<?= $__wls_multiple ? 'true' : 'false' ?>"
+                data-w-language-list
+            ></div>
         </div>
     <?php endif; ?>
 </div>
 HTML;
-            $html[] = <<<'SCRIPT'
-<script>
-(function () {
-    'use strict';
-
-    var componentId = <?= json_encode($__wls_component_id, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var fieldId = <?= json_encode($__wls_field_id, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var fieldName = <?= json_encode($__wls_name, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var isMultiple = <?= $__wls_is_multiple ? 'true' : 'false' ?>;
-    var allowEmpty = <?= $__wls_allow_empty ? 'true' : 'false' ?>;
-    var displayOnly = <?= $__wls_display_only ? 'true' : 'false' ?>;
-    var items = <?= $__wls_items_json ?> || [];
-    var selectedValues = <?= $__wls_selected_json ?> || [];
-    var readonlyValues = <?= $__wls_readonly_json ?> || [];
-    var disabledValues = <?= $__wls_disabled_json ?> || [];
-    var allowedValues = <?= $__wls_allowed_json ?> || [];
-    var onChangeName = <?= json_encode($__wls_on_change, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var showReference = <?= $__wls_show_reference ? 'true' : 'false' ?>;
-    var inlineDropdown = <?= $__wls_inline_dropdown ? 'true' : 'false' ?>;
-    var emptyText = <?= json_encode($__wls_empty_text, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var displayOnlyText = <?= json_encode((string) __('仅展示'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var noMatchText = <?= json_encode((string) __('未找到匹配的语言'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var unknownCountryText = <?= json_encode((string) __('未分组国家'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var removeText = <?= json_encode((string) __('移除'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    var clearText = <?= json_encode((string) __('清空选择'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-
-    allowedValues = normalizeValues(allowedValues);
-    var allowedMap = {};
-    allowedValues.forEach(function (code) {
-        allowedMap[code] = true;
-    });
-    if (allowedValues.length) {
-        items = items.filter(function (item) {
-            return item && isAllowed(item.code);
-        });
-    }
-    selectedValues = filterAllowedValues(selectedValues);
-    readonlyValues = filterAllowedValues(readonlyValues);
-    disabledValues = filterAllowedValues(disabledValues);
-    var disabledMap = {};
-    disabledValues.forEach(function (code) {
-        disabledMap[code] = true;
-    });
-
-    var map = {};
-    items.forEach(function (item) {
-        map[item.code] = item;
-    });
-
-    var wrapper = document.getElementById(componentId + '_wrapper');
-    var trigger = document.getElementById(componentId + '_trigger');
-    var tags = document.getElementById(componentId + '_tags');
-    var dropdown = document.getElementById(componentId + '_dropdown');
-    var list = document.getElementById(componentId + '_list');
-    var searchInput = document.getElementById(componentId + '_search');
-    var fieldInput = document.getElementById(fieldId);
-    var inputsContainer = isMultiple ? document.getElementById(fieldId + '_inputs') : null;
-
-    if (!wrapper || !fieldInput || !tags) {
-        return;
-    }
-
-    function escapeHtml(text) {
-        return String(text || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function normalizeValues(values) {
-        var source = [];
-        if (Array.isArray(values)) {
-            source = values;
-        } else if (values === null || values === undefined || values === '') {
-            source = [];
-        } else {
-            source = String(values).split(',');
-        }
-
-        var normalized = [];
-        source.forEach(function (value) {
-            if (value && typeof value === 'object' && value.code) {
-                value = value.code;
-            }
-            value = String(value || '').trim();
-            if (!value || normalized.indexOf(value) !== -1) {
-                return;
-            }
-            normalized.push(value);
-        });
-        return normalized;
-    }
-
-    function isAllowed(code) {
-        code = String(code || '').trim();
-        return !allowedValues.length || !!allowedMap[code];
-    }
-
-    function filterAllowedValues(values) {
-        return normalizeValues(values).filter(function (code) {
-            return isAllowed(code);
-        });
-    }
-
-    function getLocale(code) {
-        if (map[code]) {
-            return map[code];
-        }
-        return {
-            code: code,
-            name: code,
-            self_name: code,
-            english_name: code,
-            display_name: code,
-            tag_label: code,
-            reference_name: code,
-            country_code: '',
-            country_name: unknownCountryText,
-            flag: ''
-        };
-    }
-
-    function ensureReadonlySelected() {
-        readonlyValues = filterAllowedValues(readonlyValues);
-        selectedValues = filterAllowedValues(selectedValues);
-        readonlyValues.forEach(function (code) {
-            if (selectedValues.indexOf(code) === -1) {
-                selectedValues.push(code);
-            }
-        });
-        if (!isMultiple && selectedValues.length > 1) {
-            selectedValues = selectedValues.slice(0, 1);
-        }
-    }
-
-    function renderFlag(locale) {
-        if (locale && locale.flag) {
-            return locale.flag;
-        }
-        var countryCode = String(locale && locale.country_code || '').toUpperCase();
-        if (/^[A-Z]{2}$/.test(countryCode)) {
-            return '<span aria-hidden="true">' + String.fromCodePoint(
-                countryCode.charCodeAt(0) + 127397,
-                countryCode.charCodeAt(1) + 127397
-            ) + '</span>';
-        }
-        return '<i class="mdi mdi-translate"></i>';
-    }
-
-    function buildTagHtml(code) {
-        var locale = getLocale(code);
-        var label = showReference
-            ? (locale.display_name || locale.tag_label || locale.name || code)
-            : (locale.name || locale.reference_name || code);
-        var locked = displayOnly || readonlyValues.indexOf(code) !== -1;
-        var html = '';
-        html += '<span class="weline-language-select-tag' + (locked ? ' is-readonly' : '') + '" data-code="' + escapeHtml(code) + '">';
-        html += '<span class="weline-language-select-flag">' + renderFlag(locale) + '</span>';
-        html += '<span class="weline-language-select-label">' + escapeHtml(label) + '</span>';
-        html += '<span class="weline-language-select-code">' + escapeHtml(locale.code) + '</span>';
-        if (locked) {
-            html += '<span class="weline-language-select-state">' + escapeHtml(displayOnlyText) + '</span>';
-        } else if (isMultiple) {
-            html += '<button type="button" class="weline-language-select-tag-remove" data-remove-code="' + escapeHtml(code) + '" aria-label="' + escapeHtml(removeText) + '"><i class="mdi mdi-close"></i></button>';
-        }
-        html += '</span>';
-        return html;
-    }
-
-    function renderTags() {
-        if (!selectedValues.length) {
-            tags.innerHTML = '<span class="weline-language-select-placeholder"><i class="mdi mdi-translate"></i>' + escapeHtml(emptyText) + '</span>';
-            return;
-        }
-
-        var html = '';
-        selectedValues.forEach(function (code) {
-            html += buildTagHtml(code);
-        });
-        tags.innerHTML = html;
-
-        if (isMultiple && !displayOnly) {
-            tags.querySelectorAll('[data-remove-code]').forEach(function (button) {
-                button.addEventListener('click', function (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    removeValue(button.getAttribute('data-remove-code'));
-                });
-            });
-        }
-    }
-
-    function groupItems(filteredItems) {
-        var groups = [];
-        var currentGroup = null;
-        var selectedCountryKeys = {};
-
-        selectedValues.forEach(function (code) {
-            filteredItems.forEach(function (item) {
-                if (String(item.code || '') === String(code || '')) {
-                    selectedCountryKeys[(item.country_name || '') + '|' + (item.country_code || '')] = true;
-                }
-            });
-        });
-
-        filteredItems.forEach(function (item) {
-            var countryKey = (item.country_name || '') + '|' + (item.country_code || '');
-            if (!currentGroup || currentGroup.key !== countryKey) {
-                currentGroup = {
-                    key: countryKey,
-                    country_name: item.country_name || unknownCountryText,
-                    country_code: item.country_code || '',
-                    items: []
-                };
-                groups.push(currentGroup);
-            }
-            currentGroup.items.push(item);
-        });
-
-        if (Object.keys(selectedCountryKeys).length) {
-            var pinned = [];
-            var rest = [];
-            groups.forEach(function (group) {
-                if (selectedCountryKeys[group.key]) {
-                    // Keep the currently selected locale(s) at the top of their country group.
-                    var selectedItems = [];
-                    var otherItems = [];
-                    group.items.forEach(function (item) {
-                        if (selectedValues.indexOf(item.code) !== -1) {
-                            selectedItems.push(item);
-                        } else {
-                            otherItems.push(item);
-                        }
-                    });
-                    group.items = selectedItems.concat(otherItems);
-                    pinned.push(group);
-                } else {
-                    rest.push(group);
-                }
-            });
-            groups = pinned.concat(rest);
-        }
-
-        return groups;
-    }
-
-    function renderList(keyword) {
-        if (!list) {
-            return;
-        }
-
-        keyword = String(keyword || '').trim().toLowerCase();
-        var filteredItems = items.filter(function (item) {
-            if (!keyword) {
-                return true;
-            }
-            return String(item.search || '').toLowerCase().indexOf(keyword) !== -1;
-        });
-
-        if (!filteredItems.length) {
-            list.innerHTML = '<div class="weline-language-select-empty">' + escapeHtml(noMatchText) + '</div>';
-            return;
-        }
-
-        var html = '';
-        if (!isMultiple && allowEmpty) {
-            html += '<button type="button" class="weline-language-select-item" data-code="__empty__">';
-            html += '<span class="weline-language-select-indicator"><i class="mdi mdi-close-circle-outline"></i></span>';
-            html += '<span class="weline-language-select-item-copy"><strong>' + escapeHtml(clearText) + '</strong><small></small></span>';
-            html += '</button>';
-        }
-        groupItems(filteredItems).forEach(function (group) {
-            html += '<div class="weline-language-select-group-label"><span>' + escapeHtml(group.country_name) + '</span><small>' + escapeHtml(group.country_code) + '</small></div>';
-            group.items.forEach(function (item) {
-                var label = showReference
-                    ? (item.display_name || item.tag_label || item.name || item.code)
-                    : (item.name || item.reference_name || item.code);
-                var selected = selectedValues.indexOf(item.code) !== -1;
-                var disabled = !!disabledMap[item.code];
-                var locked = (readonlyValues.indexOf(item.code) !== -1 && selected) || disabled;
-                var icon = isMultiple
-                    ? (selected ? 'check' : 'check')
-                    : (selected ? 'box' : 'box');
-                var metaParts = [item.code];
-                var selfName = String(item.self_name || '').trim();
-                var englishName = String(item.english_name || item.reference_name || '').trim();
-                var metaSecondary = selfName || englishName;
-                if (metaSecondary && metaSecondary !== label && metaParts.indexOf(metaSecondary) === -1) {
-                    metaParts.push(metaSecondary);
-                }
-                var countryName = String(item.country_name || '').trim();
-                if (countryName && metaParts.indexOf(countryName) === -1) {
-                    metaParts.push(countryName);
-                }
-
-                html += '<button type="button" class="weline-language-select-item' + (selected ? ' is-selected' : '') + (locked ? ' is-readonly' : '') + '" data-code="' + escapeHtml(item.code) + '"' + (disabled ? ' disabled aria-disabled="true"' : '') + '>';
-                html += '<span class="weline-language-select-indicator"><i class="mdi ' + icon + '"></i></span>';
-                html += '<span class="weline-language-select-flag">' + renderFlag(item) + '</span>';
-                html += '<span class="weline-language-select-item-copy">';
-                html += '<strong>' + escapeHtml(label) + '</strong>';
-                html += '<small>' + escapeHtml(metaParts.join(' | ')) + '</small>';
-                html += '</span>';
-                if (locked) {
-                    html += '<span class="weline-language-select-state">' + escapeHtml(displayOnlyText) + '</span>';
-                }
-                html += '</button>';
-            });
-        });
-
-        list.innerHTML = html;
-        list.querySelectorAll('.weline-language-select-item').forEach(function (button) {
-            button.addEventListener('click', function () {
-                if (displayOnly) {
-                    return;
-                }
-
-                var code = button.getAttribute('data-code') || '';
-                if (!code) {
-                    return;
-                }
-                if (code === '__empty__') {
-                    if (!isMultiple && allowEmpty) {
-                        setValues([]);
-                        closeDropdown();
-                    }
-                    return;
-                }
-
-                if (disabledMap[code] || (readonlyValues.indexOf(code) !== -1 && selectedValues.indexOf(code) !== -1)) {
-                    return;
-                }
-
-                if (isMultiple) {
-                    toggleValue(code);
-                    return;
-                }
-
-                setValues([code]);
-                closeDropdown();
-            });
-        });
-    }
-
-    function dispatchChange() {
-        try {
-            fieldInput.dispatchEvent(new Event('change', { bubbles: true }));
-        } catch (error) {
-        }
-
-        try {
-            wrapper.dispatchEvent(new CustomEvent('weline:language-select:change', {
-                bubbles: true,
-                detail: api.getDetail()
-            }));
-        } catch (error) {
-        }
-
-        if (onChangeName && typeof window[onChangeName] === 'function') {
-            window[onChangeName](api.getDetail());
-        }
-    }
-
-    function syncInputs() {
-        ensureReadonlySelected();
-
-        if (isMultiple) {
-            fieldInput.value = selectedValues.join(',');
-            if (inputsContainer) {
-                inputsContainer.innerHTML = '';
-                if (fieldName) {
-                    selectedValues.forEach(function (code) {
-                        var input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = fieldName;
-                        input.value = code;
-                        inputsContainer.appendChild(input);
-                    });
-                }
-            }
-        } else {
-            fieldInput.value = selectedValues[0] || '';
-        }
-
-        renderTags();
-        renderList(searchInput ? searchInput.value : '');
-        dispatchChange();
-    }
-
-    function setValues(values) {
-        selectedValues = filterAllowedValues(values);
-        ensureReadonlySelected();
-        syncInputs();
-    }
-
-    function setReadonlyValues(values) {
-        readonlyValues = filterAllowedValues(values);
-        ensureReadonlySelected();
-        syncInputs();
-    }
-
-    function addValue(code) {
-        code = String(code || '').trim();
-        if (!code || !isAllowed(code) || disabledMap[code] || selectedValues.indexOf(code) !== -1) {
-            return;
-        }
-        selectedValues.push(code);
-        syncInputs();
-    }
-
-    function removeValue(code) {
-        code = String(code || '').trim();
-        if (!code || readonlyValues.indexOf(code) !== -1) {
-            return;
-        }
-        selectedValues = selectedValues.filter(function (value) {
-            return value !== code;
-        });
-        syncInputs();
-    }
-
-    function toggleValue(code) {
-        if (selectedValues.indexOf(code) !== -1) {
-            removeValue(code);
-            return;
-        }
-        addValue(code);
-    }
-
-    function positionDropdown() {
-        if (!dropdown || !trigger) {
-            return;
-        }
-
-        var rect = trigger.getBoundingClientRect();
-        var width = Math.max(
-            1,
-            Math.round(
-                rect.width
-                || trigger.offsetWidth
-                || wrapper.getBoundingClientRect().width
-                || 0
-            )
-        );
-
-        if (!inlineDropdown && dropdown.parentNode !== document.body) {
-            document.body.appendChild(dropdown);
-        }
-
-        if (inlineDropdown) {
-            dropdown.style.position = 'absolute';
-            dropdown.style.left = '0px';
-            dropdown.style.right = 'auto';
-            dropdown.style.top = 'calc(100% + 0.25rem)';
-            dropdown.style.bottom = 'auto';
-            dropdown.style.width = width + 'px';
-            dropdown.style.minWidth = width + 'px';
-            dropdown.style.maxWidth = 'none';
-            dropdown.style.maxHeight = 'calc(100vh - 24px)';
-            dropdown.style.boxSizing = 'border-box';
-            dropdown.style.zIndex = '4200';
-            dropdown.setAttribute('data-placement', 'internal');
-            return;
-        }
-
-        var viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-        var viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
-        var viewportPadding = 8;
-        var availableWidth = Math.max(1, viewportWidth - viewportPadding * 2);
-        var dropdownWidth = Math.min(width, availableWidth);
-        var left = Math.min(
-            Math.max(viewportPadding, Math.round(rect.left)),
-            Math.max(viewportPadding, viewportWidth - dropdownWidth - viewportPadding)
-        );
-        var belowTop = Math.round(rect.bottom + 4);
-        var belowSpace = viewportHeight - belowTop - viewportPadding;
-        var aboveBottom = Math.round(viewportHeight - rect.top + 4);
-        var aboveSpace = rect.top - viewportPadding - 4;
-        var placeAbove = belowSpace < 220 && aboveSpace > belowSpace;
-        var maxHeight = Math.min(360, Math.max(96, placeAbove ? aboveSpace : belowSpace));
-        var listMaxHeight = Math.max(64, maxHeight - 86);
-        var list = dropdown.querySelector('.weline-language-select-list');
-
-        dropdown.style.position = 'fixed';
-        dropdown.style.left = left + 'px';
-        dropdown.style.right = 'auto';
-        dropdown.style.width = dropdownWidth + 'px';
-        dropdown.style.minWidth = dropdownWidth + 'px';
-        dropdown.style.maxWidth = availableWidth + 'px';
-        dropdown.style.maxHeight = maxHeight + 'px';
-        dropdown.style.boxSizing = 'border-box';
-        dropdown.style.zIndex = '200100';
-        if (placeAbove) {
-            dropdown.style.top = 'auto';
-            dropdown.style.bottom = aboveBottom + 'px';
-            dropdown.setAttribute('data-placement', 'body-above');
-        } else {
-            dropdown.style.top = belowTop + 'px';
-            dropdown.style.bottom = 'auto';
-            dropdown.setAttribute('data-placement', 'body-below');
-        }
-        if (list) {
-            list.style.maxHeight = listMaxHeight + 'px';
-        }
-    }
-
-    function openDropdown() {
-        if (displayOnly || !dropdown) {
-            return;
-        }
-        positionDropdown();
-        wrapper.classList.add('is-open');
-        dropdown.style.display = 'block';
-        renderList(searchInput ? searchInput.value : '');
-        if (searchInput) {
-            window.setTimeout(function () {
-                searchInput.focus();
-            }, 0);
-        }
-        document.addEventListener('click', handleOutsideClick);
-        document.addEventListener('keydown', handleEscape);
-        window.addEventListener('resize', handleViewportChange);
-        window.addEventListener('scroll', handleViewportChange, true);
-    }
-
-    function closeDropdown() {
-        if (!dropdown) {
-            return;
-        }
-        dropdown.style.display = 'none';
-        wrapper.classList.remove('is-open');
-        document.removeEventListener('click', handleOutsideClick);
-        document.removeEventListener('keydown', handleEscape);
-        window.removeEventListener('resize', handleViewportChange);
-        window.removeEventListener('scroll', handleViewportChange, true);
-    }
-
-    function handleOutsideClick(event) {
-        if (!wrapper.contains(event.target) && (!dropdown || !dropdown.contains(event.target))) {
-            closeDropdown();
-        }
-    }
-
-    function handleViewportChange() {
-        if (!dropdown || dropdown.style.display !== 'block') {
-            return;
-        }
-        positionDropdown();
-    }
-
-    function handleEscape(event) {
-        if (event.key === 'Escape') {
-            closeDropdown();
-        }
-    }
-
-    var api = {
-        getValue: function () {
-            return selectedValues[0] || '';
-        },
-        getValues: function () {
-            return selectedValues.slice();
-        },
-        getReadonlyValues: function () {
-            return readonlyValues.slice();
-        },
-        getDetail: function () {
-            return {
-                componentId: componentId,
-                fieldId: fieldId,
-                multiple: isMultiple,
-                displayOnly: displayOnly,
-                value: selectedValues[0] || '',
-                values: selectedValues.slice(),
-                readonlyValues: readonlyValues.slice()
-            };
-        },
-        setValue: function (value) {
-            setValues(value ? [value] : []);
-        },
-        setValues: function (values) {
-            setValues(values);
-        },
-        addValue: function (value) {
-            addValue(value);
-        },
-        removeValue: function (value) {
-            removeValue(value);
-        },
-        setReadonlyValues: function (values) {
-            setReadonlyValues(values);
-        },
-        setDisplayOnly: function (value) {
-            displayOnly = !!value;
-            wrapper.setAttribute('data-display-only', displayOnly ? 'true' : 'false');
-            if (trigger) {
-                trigger.disabled = displayOnly;
-                trigger.classList.toggle('is-display-only', displayOnly);
-            }
-            if (displayOnly) {
-                closeDropdown();
-            }
-            renderTags();
-            renderList(searchInput ? searchInput.value : '');
-        },
-        refresh: function () {
-            renderTags();
-            renderList(searchInput ? searchInput.value : '');
-        },
-        getFieldInput: function () {
-            return fieldInput;
-        }
-    };
-
-    if (trigger && !displayOnly) {
-        trigger.addEventListener('click', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            if (!dropdown || dropdown.style.display === 'block') {
-                closeDropdown();
-                return;
-            }
-            openDropdown();
-        });
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            renderList(searchInput.value);
-        });
-    }
-
-    if (!window.WelineLanguageSelect) {
-        window.WelineLanguageSelect = {};
-    }
-
-    if (!window.WelineLanguageSelectUtils) {
-        window.WelineLanguageSelectUtils = {
-            get: function (componentId) {
-                if (!window.WelineLanguageSelect) {
-                    return null;
-                }
-                return window.WelineLanguageSelect[componentId] || null;
-            },
-            bindDefaultToMultiple: function (config) {
-                config = config || {};
-
-                var single = this.get(config.singleId || '');
-                var multiple = this.get(config.multipleId || '');
-                if (!single || !multiple) {
-                    return null;
-                }
-
-                var syncing = false;
-
-                function unique(values) {
-                    var result = [];
-                    (Array.isArray(values) ? values : []).forEach(function (value) {
-                        value = String(value || '').trim();
-                        if (!value || result.indexOf(value) !== -1) {
-                            return;
-                        }
-                        result.push(value);
-                    });
-                    return result;
-                }
-
-                function sync() {
-                    if (syncing) {
-                        return;
-                    }
-                    syncing = true;
-
-                    try {
-                        var current = String(single.getValue() || '').trim();
-                        var values = unique(multiple.getValues());
-                        if (current && values.indexOf(current) === -1) {
-                            values.unshift(current);
-                        }
-
-                        multiple.setReadonlyValues(current ? [current] : []);
-                        multiple.setValues(values);
-                    } finally {
-                        syncing = false;
-                    }
-                }
-
-                var fieldInput = single.getFieldInput();
-                if (fieldInput && typeof fieldInput.addEventListener === 'function') {
-                    fieldInput.addEventListener('change', sync);
-                }
-
-                sync();
-
-                return {
-                    single: single,
-                    multiple: multiple,
-                    sync: sync
-                };
-            }
-        };
-    }
-
-    window.WelineLanguageSelect[componentId] = api;
-
-    selectedValues = filterAllowedValues(selectedValues);
-    readonlyValues = filterAllowedValues(readonlyValues);
-    ensureReadonlySelected();
-    syncInputs();
-})();
-</script>
-SCRIPT;
 
             return \implode("\n", $html);
         };
@@ -1237,17 +316,51 @@ SCRIPT;
 
     public static function document(): string
     {
-        $doc = <<<DOC
+        $doc = <<<'DOC'
 <h3><code>&lt;w:i18n:language:select&gt;</code> 使用文档</h3>
-<p>提供统一的后台语言选择组件，支持国家分组搜索、单选/多选、标签展示与只读标签。</p>
+<p>Weline UI 2.0 原生语言选择组件。支持国家分组搜索、单选、多选、只读值和标准表单提交；通过 <code>Weline.UI.get(element, 'language-select')</code> 访问实例。</p>
+<p><code>exclude-site-languages="true"</code> 会把当前站点已关联语言标为禁用（灰色不可选），适合「申请支持其他语言」等场景。</p>
 DOC;
 
         return \htmlspecialchars($doc, ENT_NOQUOTES);
     }
 
     /**
-     * Canonical country-grouped locale catalog shared by I18n selector Taglibs.
+     * Current website language codes via QueryProvider (no hard Websites class coupling).
      *
+     * @return list<string>
+     */
+    public static function resolveSiteLanguageCodes(): array
+    {
+        try {
+            $websiteId = (int)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteId();
+            $result = \w_query('websites', 'getWebsiteLanguageCodes', [
+                'website_id' => $websiteId,
+            ]);
+            $codes = \is_array($result) ? ($result['languages'] ?? $result['data'] ?? $result) : [];
+            if (!\is_array($codes)) {
+                return [];
+            }
+            $out = [];
+            foreach ($codes as $code) {
+                if (\is_array($code) && isset($code['code'])) {
+                    $code = $code['code'];
+                }
+                if (!\is_scalar($code)) {
+                    continue;
+                }
+                $code = \trim((string)$code);
+                if ($code !== '' && !\in_array($code, $out, true)) {
+                    $out[] = $code;
+                }
+            }
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * @return list<array<string, string>>
      */
     public static function getLanguageItems(string $displayLocale, string $catalog = 'installed'): array
@@ -1281,10 +394,9 @@ DOC;
         $rowsByCode = [];
         foreach ($localsRows as $row) {
             $code = (string)($row[Locals::schema_fields_CODE] ?? '');
-            if ($code === '') {
-                continue;
+            if ($code !== '') {
+                $rowsByCode[$code][] = $row;
             }
-            $rowsByCode[$code][] = $row;
         }
 
         $localeRows = $localeModel
@@ -1311,14 +423,12 @@ DOC;
             ->where(Locale::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetchArray();
-
         $localeMeta = [];
         foreach ($localeMetaRows as $row) {
             $code = (string)($row[Locale::schema_fields_CODE] ?? '');
-            if ($code === '') {
-                continue;
+            if ($code !== '') {
+                $localeMeta[$code] = $row;
             }
-            $localeMeta[$code] = $row;
         }
 
         $countryNames = [];
@@ -1340,7 +450,6 @@ DOC;
             if ($name === '' || (string)($preferred[Locals::schema_fields_TARGET_CODE] ?? '') !== $displayLocale) {
                 $name = $i18n->getLocaleName($code, $displayLocale);
             }
-
             $meta = $localeMeta[$code] ?? [];
             $countryCode = \strtoupper((string)($meta[Locale::schema_fields_COUNTRY_CODE] ?? self::extractCountryCode($code)));
             $countryName = $countryCode !== ''
@@ -1350,7 +459,6 @@ DOC;
             if ($flag === '' && $countryCode !== '') {
                 $flag = (string)$i18n->getCountryFlag($countryCode, 20, 15, true);
             }
-
             $shortCode = (string)($meta[Locale::schema_fields_SHORT_CODE] ?? Locale::extractShortCode($code));
             $iso2 = (string)($meta[Locale::schema_fields_ISO2] ?? '');
             $iso3 = (string)($meta[Locale::schema_fields_ISO3] ?? '');
@@ -1358,20 +466,6 @@ DOC;
             $referenceName = $i18n->getLocaleName($code, 'en');
             $displayName = self::buildDisplayName($name, $referenceName, $selfName, $code);
             $tagLabel = self::buildTagLabel($name, $selfName, $referenceName, $code);
-            $searchTerms = self::buildSearchTerms([
-                $code,
-                $name,
-                $selfName,
-                $referenceName,
-                $displayName,
-                $tagLabel,
-                $countryCode,
-                $countryName,
-                $shortCode,
-                $iso2,
-                $iso3,
-            ]);
-
             $items[] = [
                 'code' => $code,
                 'name' => $name,
@@ -1386,33 +480,23 @@ DOC;
                 'short_code' => $shortCode,
                 'iso2' => $iso2,
                 'iso3' => $iso3,
-                'search' => \implode(' ', $searchTerms),
+                'search' => \implode(' ', self::buildSearchTerms([
+                    $code, $name, $selfName, $referenceName, $displayName, $tagLabel,
+                    $countryCode, $countryName, $shortCode, $iso2, $iso3,
+                ])),
             ];
         }
 
         \usort($items, static function (array $a, array $b): int {
-            // Prefer ISO country code over localized country_name so zh display
-            // locale does not put 中国 ahead of every other country by Unicode order.
-            $countryCompare = \strnatcasecmp((string)($a['country_code'] ?? ''), (string)($b['country_code'] ?? ''));
-            if ($countryCompare !== 0) {
-                return $countryCompare;
+            $country = \strnatcasecmp((string)($a['country_code'] ?? ''), (string)($b['country_code'] ?? ''));
+            if ($country !== 0) {
+                return $country;
             }
-
-            $countryNameCompare = \strnatcasecmp((string)($a['country_name'] ?? ''), (string)($b['country_name'] ?? ''));
-            if ($countryNameCompare !== 0) {
-                return $countryNameCompare;
-            }
-
-            $nameCompare = \strnatcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
-            if ($nameCompare !== 0) {
-                return $nameCompare;
-            }
-
-            return \strnatcasecmp((string)($a['code'] ?? ''), (string)($b['code'] ?? ''));
+            $name = \strnatcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+            return $name !== 0 ? $name : \strnatcasecmp((string)($a['code'] ?? ''), (string)($b['code'] ?? ''));
         });
 
-        self::$itemsCache[$cacheKey] = $items;
-        return $items;
+        return self::$itemsCache[$cacheKey] = $items;
     }
 
     public static function getLanguageItemsJson(
@@ -1420,20 +504,17 @@ DOC;
         string $catalog = 'installed',
         mixed $allowedValues = null,
     ): string {
-        $displayLocale = trim($displayLocale) !== '' ? trim($displayLocale) : (State::getLang() ?: State::getLangLocal() ?: 'zh_Hans_CN');
-        $itemsJson = \json_encode(
+        $displayLocale = trim($displayLocale) !== ''
+            ? trim($displayLocale)
+            : (State::getLang() ?: State::getLangLocal() ?: 'zh_Hans_CN');
+        $json = \json_encode(
             self::resolveLanguageItems($displayLocale, $catalog, $allowedValues),
-            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT,
         );
-
-        return $itemsJson === false ? '[]' : $itemsJson;
+        return $json === false ? '[]' : $json;
     }
 
     /**
-     * Resolve selector options. When locales/allowed-values is non-empty, that
-     * list is authoritative (pre-website inject): labels come from the i18n
-     * catalog, missing codes still appear with a locale fallback label.
-     *
      * @return list<array<string, string>>
      */
     public static function resolveLanguageItems(
@@ -1446,49 +527,25 @@ DOC;
             return self::getLanguageItems($displayLocale, $catalog);
         }
 
-        $sourceCatalog = $catalog === 'installed' ? 'global' : $catalog;
-        $base = self::getLanguageItems($displayLocale, $sourceCatalog);
-        $installed = $catalog === 'installed'
-            ? self::getLanguageItems($displayLocale, 'installed')
-            : [];
+        $base = self::getLanguageItems($displayLocale, $catalog === 'installed' ? 'global' : $catalog);
+        $installed = $catalog === 'installed' ? self::getLanguageItems($displayLocale, 'installed') : [];
         $byCode = [];
-        foreach ($base as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
+        foreach ([...$base, ...$installed] as $item) {
             $code = \trim((string)($item['code'] ?? ''));
-            if ($code === '') {
-                continue;
+            if ($code !== '') {
+                $byCode[\strtolower(\str_replace('-', '_', $code))] = $item;
             }
-            $byCode[\strtolower(\str_replace('-', '_', $code))] = $item;
-        }
-        foreach ($installed as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-            $code = \trim((string)($item['code'] ?? ''));
-            if ($code === '') {
-                continue;
-            }
-            $byCode[\strtolower(\str_replace('-', '_', $code))] = $item;
         }
 
         $items = [];
         foreach ($allowedCodes as $code) {
             $key = \strtolower(\str_replace('-', '_', $code));
-            if (isset($byCode[$key])) {
-                $items[] = $byCode[$key];
-                continue;
-            }
-            $items[] = self::synthesizeLanguageItem($code, $displayLocale);
+            $items[] = $byCode[$key] ?? self::synthesizeLanguageItem($code, $displayLocale);
         }
-
         return $items;
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     private static function normalizeInjectCodes(mixed $raw): array
     {
         if (\is_array($raw)) {
@@ -1497,14 +554,10 @@ DOC;
             return [];
         } else {
             $raw = \trim((string)$raw);
-            if ($raw !== '' && ($raw[0] === '[' || $raw[0] === '{')) {
-                $decoded = \json_decode($raw, true);
-                $values = (\json_last_error() === \JSON_ERROR_NONE && \is_array($decoded))
-                    ? $decoded
-                    : (\preg_split('/[\s,]+/', $raw, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
-            } else {
-                $values = \preg_split('/[\s,]+/', $raw, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
-            }
+            $decoded = ($raw !== '' && ($raw[0] === '[' || $raw[0] === '{')) ? \json_decode($raw, true) : null;
+            $values = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[\s,]+/', $raw, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
         }
         $result = [];
         foreach ($values as $value) {
@@ -1515,41 +568,36 @@ DOC;
                 continue;
             }
             $value = \trim((string)$value);
-            if ($value === '' || \in_array($value, $result, true)) {
-                continue;
+            if ($value !== '' && !\in_array($value, $result, true)) {
+                $result[] = $value;
             }
-            $result[] = $value;
         }
-
         return $result;
     }
 
-    /**
-     * @return array<string, string>
-     */
+    /** @return array<string, string> */
     private static function synthesizeLanguageItem(string $code, string $displayLocale): array
     {
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
-        $name = '';
-        $selfName = '';
-        $referenceName = '';
         try {
             $name = \trim((string)$i18n->getLocaleName($code, $displayLocale));
         } catch (\Throwable) {
+            $name = '';
         }
         try {
             $selfName = \trim((string)$i18n->getLocaleName($code, $code));
         } catch (\Throwable) {
+            $selfName = '';
         }
         try {
             $referenceName = \trim((string)$i18n->getLocaleName($code, 'en'));
         } catch (\Throwable) {
+            $referenceName = '';
         }
         $countryCode = self::extractCountryCode($code);
         $displayName = self::buildDisplayName($name, $referenceName, $selfName, $code);
         $tagLabel = self::buildTagLabel($name, $selfName, $referenceName, $code);
-
         return [
             'code' => $code,
             'name' => $name !== '' ? $name : $code,
@@ -1565,37 +613,25 @@ DOC;
             'iso2' => '',
             'iso3' => '',
             'search' => \implode(' ', self::buildSearchTerms([
-                $code,
-                $name,
-                $selfName,
-                $referenceName,
-                $displayName,
-                $tagLabel,
-                $countryCode,
+                $code, $name, $selfName, $referenceName, $displayName, $tagLabel, $countryCode,
             ])),
         ];
     }
 
-    /**
-     * @return list<array<string, string>>
-     */
+    /** @return list<array<string, string>> */
     private static function buildGlobalLanguageItems(string $displayLocale): array
     {
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
-        $countryNames = [];
         try {
-            foreach (Countries::getNames(\extension_loaded('intl') ? $displayLocale : 'en') as $code => $name) {
-                $countryNames[\strtoupper((string)$code)] = (string)$name;
-            }
+            $countryNames = Countries::getNames(\extension_loaded('intl') ? $displayLocale : 'en');
         } catch (\Throwable) {
             $countryNames = [];
         }
-
         $items = [];
         foreach (Locales::getLocales() as $rawCode) {
             $code = \str_replace('-', '_', \trim((string)$rawCode));
-            if ($code === '' || \preg_match('/\A[A-Za-z]{2,3}(?:_[A-Za-z]{4})?(?:_[A-Z]{2}|\_[0-9]{3})?\z/D', $code) !== 1) {
+            if ($code === '' || \preg_match('/\A[A-Za-z]{2,3}(?:_[A-Za-z]{4})?(?:_[A-Z]{2}|_[0-9]{3})?\z/D', $code) !== 1) {
                 continue;
             }
             $name = \trim($i18n->getLocaleName($code, $displayLocale));
@@ -1617,34 +653,20 @@ DOC;
                 'tag_label' => $tagLabel,
                 'country_code' => $countryCode,
                 'country_name' => $countryName,
-                // Keep the global catalog compact enough for QueryBin's bounded
-                // response frame. The browser derives a Unicode country flag
-                // from country_code; installed locales may still use custom SVG.
                 'flag' => '',
                 'short_code' => Locale::extractShortCode($code),
                 'iso2' => '',
                 'iso3' => '',
                 'search' => \implode(' ', self::buildSearchTerms([
-                    $code,
-                    $name,
-                    $selfName,
-                    $referenceName,
-                    $displayName,
-                    $tagLabel,
-                    $countryCode,
-                    $countryName,
+                    $code, $name, $selfName, $referenceName, $displayName, $tagLabel, $countryCode, $countryName,
                 ])),
             ];
         }
         $items = \array_values($items);
         \usort($items, static function (array $left, array $right): int {
             $country = \strnatcasecmp((string)$left['country_code'], (string)$right['country_code']);
-            if ($country !== 0) {
-                return $country;
-            }
-            $countryName = \strnatcasecmp((string)$left['country_name'], (string)$right['country_name']);
-            return $countryName !== 0
-                ? $countryName
+            return $country !== 0
+                ? $country
                 : \strnatcasecmp((string)$left['display_name'], (string)$right['display_name']);
         });
         return $items;
@@ -1655,14 +677,9 @@ DOC;
         $localizedName = \trim($localizedName);
         $referenceName = \trim($referenceName);
         $selfName = \trim($selfName);
-
         if ($localizedName === '') {
             $localizedName = $selfName !== '' ? $selfName : ($referenceName !== '' ? $referenceName : $code);
         }
-
-        // Parentheses show the language's own endonym (e.g. 中文简体), not English.
-        // Current UI locale already owns the leading label (e.g. русский / китайский).
-        // When the row is the current locale, localized === self — do not fall back to English.
         $locatorName = '';
         if ($selfName !== '' && $selfName !== $localizedName) {
             $locatorName = $selfName;
@@ -1671,31 +688,23 @@ DOC;
         } elseif ($selfName === '' && $code !== $localizedName) {
             $locatorName = $code;
         }
-
         return $locatorName !== '' ? $localizedName . ' (' . $locatorName . ')' : $localizedName;
     }
 
     public static function buildTagLabel(string $localizedName, string $selfName, string $referenceName, string $code): string
     {
-        // Topbar / compact triggers: prefer endonym, then strip trailing region parenthetical.
         foreach ([$selfName, $localizedName, $referenceName] as $candidate) {
             $candidate = \trim((string)$candidate);
             if ($candidate === '') {
                 continue;
             }
-            $compact = \preg_replace('/\s*[\(（][^）\)]+[）\)]\s*$/u', '', $candidate);
-            $compact = \trim((string)$compact);
-
+            $compact = \trim((string)\preg_replace('/\s*[\(（][^）\)]+[）\)]\s*$/u', '', $candidate));
             return $compact !== '' ? $compact : $candidate;
         }
-
         return \trim($code) !== '' ? \trim($code) : $code;
     }
 
-    /**
-     * @param array<int, mixed> $values
-     * @return list<string>
-     */
+    /** @param array<int, mixed> $values @return list<string> */
     private static function buildSearchTerms(array $values): array
     {
         $terms = [];
@@ -1703,19 +712,13 @@ DOC;
             if (!\is_scalar($value)) {
                 continue;
             }
-
             $value = \trim((string)$value);
             if ($value === '') {
                 continue;
             }
-
             $normalized = \mb_strtolower($value, 'UTF-8');
-            if (isset($terms[$normalized])) {
-                continue;
-            }
-            $terms[$normalized] = $value;
+            $terms[$normalized] ??= $value;
         }
-
         return \array_values($terms);
     }
 
@@ -1723,9 +726,6 @@ DOC;
     {
         $parts = \explode('_', $localeCode);
         $last = \end($parts);
-        if (\is_string($last) && \strlen($last) === 2) {
-            return \strtoupper($last);
-        }
-        return '';
+        return \is_string($last) && \strlen($last) === 2 ? \strtoupper($last) : '';
     }
 }

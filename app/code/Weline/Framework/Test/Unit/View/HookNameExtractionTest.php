@@ -310,25 +310,25 @@ TPL;
         $content = '<w:hook>header-language-switcher<else/><button>Fallback</button></w:hook>';
         $parsed = $this->taglib->tagReplace($this->template, $content);
 
-        $fallback = (new HookRuntimeProbe(
+        $fallback = (new HookNameExtractionRuntimeProbe(
             new HookRenderResult(html: '', useFallback: true, fileCount: 1),
         ))->render($parsed);
         self::assertStringContainsString('<button>Fallback</button>', $fallback);
 
-        $custom = (new HookRuntimeProbe(
+        $custom = (new HookNameExtractionRuntimeProbe(
             new HookRenderResult(html: '<span>Custom</span>', fileCount: 1),
         ))->render($parsed);
         self::assertStringContainsString('<span>Custom</span>', $custom);
         self::assertStringNotContainsString('<button>Fallback</button>', $custom);
 
-        $handled = (new HookRuntimeProbe(
+        $handled = (new HookNameExtractionRuntimeProbe(
             new HookRenderResult(html: '', handledEmpty: true, useFallback: true, fileCount: 1),
         ))->render($parsed);
         self::assertStringNotContainsString('<button>Fallback</button>', $handled);
     }
 }
 
-final class HookRuntimeProbe
+final class HookNameExtractionRuntimeProbe
 {
     public function __construct(
         private readonly HookRenderResult $result,

@@ -282,33 +282,11 @@
             changefreqOptions: ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never'],
             loading: false,
         };
-        var offcanvas = null;
-        var Offcanvas = window.bootstrap && window.bootstrap.Offcanvas;
-        if (typeof Offcanvas === 'function') {
-            offcanvas = typeof Offcanvas.getOrCreateInstance === 'function'
-                ? Offcanvas.getOrCreateInstance(panel)
-                : new Offcanvas(panel);
-        }
-        function closeUrlManagerFallback() {
-            panel.classList.remove('show', 'showing', 'hiding');
-            panel.style.visibility = panelVisibilityBeforeOpen;
-            panel.setAttribute('aria-hidden', 'true');
-            panel.removeAttribute('aria-modal');
-            panel.removeAttribute('role');
-            document.body.style.overflow = bodyOverflowBeforeOpen;
-            document.body.style.paddingRight = bodyPaddingRightBeforeOpen;
-        }
+        var offcanvas = panel;
         if (dismissButton) {
             dismissButton.addEventListener('click', function (event) {
                 event.preventDefault();
-                if (offcanvas && typeof offcanvas.hide === 'function') {
-                    offcanvas.hide();
-                    window.setTimeout(function () {
-                        if (panel.classList.contains('show')) closeUrlManagerFallback();
-                    }, 350);
-                } else {
-                    closeUrlManagerFallback();
-                }
+                window.Weline.UI.drawer.close(offcanvas, 'dismiss');
                 if (activeOpener) activeOpener.focus();
             });
         }
@@ -393,7 +371,7 @@
                     '<td><button type="button" class="btn btn-sm ' + (Number(item.status) === 1 ? 'btn-success' : 'btn-secondary') + '" data-seo-url-toggle-status data-status="' + Number(item.status) + '">' + escapeHtml(statusLabel) + '</button></td>' +
                     '<td><div class="seo-url-table__actions">' +
                     '<button type="button" class="btn btn-sm btn-outline-primary" data-seo-url-save>' + escapeHtml(message(root, 'urlSave')) + '</button>' +
-                    '<button type="button" class="btn btn-sm btn-outline-danger" data-seo-url-delete>' + escapeHtml(message(root, 'urlDelete')) + '</button>' +
+                    '<button type="button" class="btn btn-sm w-button" data-seo-url-delete>' + escapeHtml(message(root, 'urlDelete')) + '</button>' +
                     '</div></td>';
                 tbody.appendChild(tr);
             });
@@ -466,15 +444,7 @@
                 bodyOverflowBeforeOpen = document.body.style.overflow;
                 bodyPaddingRightBeforeOpen = document.body.style.paddingRight;
             }
-            if (offcanvas) {
-                offcanvas.show();
-            } else {
-                panel.classList.add('show');
-                panel.removeAttribute('aria-hidden');
-                panel.setAttribute('aria-modal', 'true');
-                panel.setAttribute('role', 'dialog');
-                if (dismissButton) dismissButton.focus();
-            }
+            window.Weline.UI.drawer.open(offcanvas);
             loadUrls();
         }
 

@@ -25,10 +25,17 @@ final class PageLocaleSchemaContractTest extends TestCase
         foreach ([
             PageLocale::schema_fields_ID,
             PageLocale::schema_fields_PAGE_ID,
+            PageLocale::schema_fields_STORE_ID,
+            PageLocale::schema_fields_STORE_CODE,
             PageLocale::schema_fields_LOCALE_CODE,
             PageLocale::schema_fields_TITLE,
             PageLocale::schema_fields_ORIGIN,
             PageLocale::schema_fields_SOURCE_HASH,
+            PageLocale::schema_fields_VARIANT_STATUS,
+            PageLocale::schema_fields_TRANSLATION_STATE,
+            PageLocale::schema_fields_VALIDATION_STATE,
+            PageLocale::schema_fields_PUBLISHED_AT,
+            PageLocale::schema_fields_VARIANT_REVISION,
             PageLocale::schema_fields_CREATED_AT,
             PageLocale::schema_fields_UPDATED_AT,
         ] as $field) {
@@ -37,9 +44,16 @@ final class PageLocaleSchemaContractTest extends TestCase
 
         self::assertTrue($this->hasUniqueIndex(
             $schema->indexes,
-            'uk_cms_page_locale_page_code',
-            [PageLocale::schema_fields_PAGE_ID, PageLocale::schema_fields_LOCALE_CODE],
+            'uk_cms_page_locale_store_code',
+            [
+                PageLocale::schema_fields_PAGE_ID,
+                PageLocale::schema_fields_STORE_ID,
+                PageLocale::schema_fields_LOCALE_CODE,
+            ],
         ));
+
+        $module = require BP . 'app/code/Weline/Cms/etc/module.php';
+        self::assertTrue(version_compare((string)$module['version'], '1.1.1', '>='));
     }
 
     public function testPageKeepsLegacyTitleAndAddsSourceLocale(): void

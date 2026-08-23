@@ -1,28 +1,5 @@
 
-(function(g){
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['backend_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('backend_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(typeof window!=='undefined'?window:globalThis);
+
 /**
  * API认证测试工具
  */
@@ -37,7 +14,7 @@ class ApiAuthTest {
      */
     async login(username, password, expireTime = 0) {
         try {
-            const response = await bqAdmin['backend_admin'](this.baseUrl + 'auth/login', {
+            const response = await Weline.adminRequest('backend_admin', this.baseUrl + 'auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -75,7 +52,7 @@ class ApiAuthTest {
         }
 
         try {
-            const response = await bqAdmin['backend_admin'](this.baseUrl + 'auth/refresh', {
+            const response = await Weline.adminRequest('backend_admin', this.baseUrl + 'auth/refresh', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -112,7 +89,7 @@ class ApiAuthTest {
         }
 
         try {
-            const response = await bqAdmin['backend_admin'](this.baseUrl + 'auth/me', {
+            const response = await Weline.adminRequest('backend_admin', this.baseUrl + 'auth/me', {
                 method: 'GET',
                 headers: {
                     'Authorization': 'Bearer ' + this.token
@@ -143,7 +120,7 @@ class ApiAuthTest {
         }
 
         try {
-            const response = await bqAdmin['backend_admin'](this.baseUrl + 'auth/token-info', {
+            const response = await Weline.adminRequest('backend_admin', this.baseUrl + 'auth/token-info', {
                 method: 'GET',
                 headers: {
                     'Authorization': 'Bearer ' + this.token
@@ -175,7 +152,7 @@ class ApiAuthTest {
         }
 
         try {
-            const response = await bqAdmin['backend_admin'](this.baseUrl + 'auth/logout', {
+            const response = await Weline.adminRequest('backend_admin', this.baseUrl + 'auth/logout', {
                 method: 'POST',
                 headers: {
                     'Authorization': 'Bearer ' + this.token
@@ -220,7 +197,7 @@ class ApiAuthTest {
                 options.body = JSON.stringify(data);
             }
 
-            const response = await bqAdmin['backend_admin'](this.baseUrl + url, options);
+            const response = await Weline.adminRequest('backend_admin', this.baseUrl + url, options);
             const result = await response.json();
             
             console.log(`API请求 ${method} ${url}:`, result);

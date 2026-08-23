@@ -1,1183 +1,148 @@
 <?php
 /**
- * 队列表单 - 内容模板
+ * Native Weline UI Queue form.
+ *
  * @var \Weline\Framework\View\Template $this
  */
-$queueFormData = isset($queueData) && is_array($queueData) ? $queueData : [];
-$queueFormTypeId = (string)($queueFormData['type_id'] ?? '');
-$queueFormActiveName = (string)($queueFormData['progress'] ?? 'progress-select-queueData');
-if (!in_array($queueFormActiveName, ['progress-select-queueData', 'progress-params'], true)) {
-    $queueFormActiveName = $queueFormTypeId !== '' ? 'progress-params' : 'progress-select-queueData';
-}
-$queueFormBoot = [
-    'dir' => (string)($dir ?? ''),
-    'module' => (string)($module ?? ''),
-    'params' => [
-        'queue_id' => (string)($queueFormData['queue_id'] ?? ''),
-        'type_id' => $queueFormTypeId,
-        'attributes' => [],
-        'name' => (string)($queueFormData['name'] ?? ''),
-        'biz_key' => (string)($queueFormData['biz_key'] ?? ''),
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$queue = is_array($queueData ?? null) ? $queueData : [];
+$typeId = max(0, (int)($queue['type_id'] ?? 0));
+$config = [
+    'boot' => [
+        'dir' => (string)($dir ?? ''),
+        'module' => (string)($module ?? ''),
+        'queueId' => max(0, (int)($queue['queue_id'] ?? 0)),
+        'typeId' => $typeId,
+        'name' => (string)($queue['name'] ?? ''),
+        'bizKey' => (string)($queue['biz_key'] ?? ''),
+        'types' => is_array($queue_types ?? null) ? array_values($queue_types) : [],
     ],
-    'active_name' => $queueFormActiveName,
-    'queue_types' => isset($queue_types) && is_array($queue_types) ? array_values($queue_types) : [],
+    'resultUrl' => '@backend-url("component/offcanvas/success")',
+    'messages' => [
+        'apiUnavailable' => (string)__('队列服务暂时不可用，请稍后重试。'),
+        'selectType' => (string)__('请选择队列类型后再继续。'),
+        'loadingTypes' => (string)__('正在加载队列类型...'),
+        'loadingAttributes' => (string)__('正在加载队列参数...'),
+        'noTypes' => (string)__('没有可用的队列类型。'),
+        'noAttributes' => (string)__('该队列类型没有额外参数。'),
+        'dependenceLoading' => (string)__('正在更新依赖参数...'),
+        'dependenceFailed' => (string)__('部分依赖参数更新失败，请重试。'),
+        'retry' => (string)__('重试'),
+        'required' => (string)__('请完整填写所有必填项。'),
+        'saveFailed' => (string)__('队列保存失败'),
+        'saving' => (string)__('正在保存队列...'),
+        'saved' => (string)__('队列保存成功'),
+        'confirm' => (string)__('确定'),
+        'cancel' => (string)__('取消'),
+        'none' => (string)__('无'),
+        'yes' => (string)__('是'),
+        'no' => (string)__('否'),
+        'typeLabel' => (string)__('队列类型'),
+        'nameLabel' => (string)__('队列名称'),
+        'bizKeyLabel' => (string)__('业务幂等键'),
+    ],
 ];
-$queueFormBootJson = json_encode(
-    $queueFormBoot,
-    JSON_HEX_TAG
-    | JSON_HEX_AMP
-    | JSON_HEX_APOS
-    | JSON_HEX_QUOT
-    | JSON_UNESCAPED_UNICODE
-    | JSON_UNESCAPED_SLASHES
-    | JSON_INVALID_UTF8_SUBSTITUTE,
-);
-if (!is_string($queueFormBootJson)) {
-    $queueFormBootJson = '{"dir":"","module":"","params":{"queue_id":"","type_id":"","attributes":[],"name":"","biz_key":""},"active_name":"progress-select-queueData","queue_types":[]}';
-}
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
-<w:js>Weline_Backend::/backend/lib/vue/vue2.6.11.js</w:js>
-<w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
-<style>
-.weline-queue-form {
-    background: var(--backend-color-card-bg, #fff);
-}
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-form.css)">
 
-.weline-queue-input-group-addon {
-    display: inline-block;
-    width: 40px;
-    height: 38px;
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius, 6px);
-}
+<main class="w-queue-form w-stack" data-w-component="queue-form">
+    <header class="w-queue-form__header w-stack" data-gap="sm">
+        <h1><w:icon name="clock" size="sm" /> <?= $escape($typeId > 0 ? __('编辑队列') : __('新建队列')) ?></h1>
+        <p class="w-text" data-tone="muted"><?= $escape(__('选择消费者类型、配置参数并确认提交。')) ?></p>
+    </header>
 
-span.required {
-    color: var(--backend-color-danger, #f46a6a);
-}
-
-.weline-queue-wizard-nav {
-    display: flex;
-    justify-content: space-between;
-    list-style: none;
-    padding: 0;
-    margin: 0 0 var(--backend-spacing-lg, 24px) 0;
-}
-
-.weline-queue-wizard-step {
-    flex: 1;
-    text-align: center;
-    padding: var(--backend-spacing-md, 16px);
-    cursor: pointer;
-    border-bottom: 3px solid var(--backend-color-border-light, #e9ecef);
-    transition: all 0.3s ease;
-}
-
-.weline-queue-wizard-step:hover {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-}
-
-.weline-queue-wizard-step.active {
-    border-bottom-color: var(--backend-color-primary, #556ee6);
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.05));
-}
-
-.weline-queue-wizard-step .step-number {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-weight: 600;
-    margin-right: 8px;
-    transition: all 0.3s ease;
-}
-
-.weline-queue-wizard-step.active .step-number {
-    background: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-queue-wizard-step .step-title {
-    font-weight: 500;
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.weline-queue-wizard-step .help-block {
-    display: block;
-    font-size: 0.8125rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-    margin-top: 4px;
-}
-
-.weline-queue-type-select {
-    width: 100%;
-    min-height: 300px;
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-md, 8px);
-    background: var(--backend-color-input-bg, #fff);
-}
-
-.weline-queue-type-select option {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-queue-type-select option:hover {
-    background: var(--backend-color-table-bg-hover, #f8f9fa);
-}
-
-.weline-queue-type-tip {
-    padding: var(--backend-spacing-md, 16px);
-    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
-    border-radius: var(--backend-border-radius-md, 8px);
-    border-left: 4px solid var(--backend-color-info, #50a5f1);
-    min-height: 200px;
-}
-
-.weline-queue-confirm-section {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    padding: var(--backend-spacing-lg, 24px);
-    border-radius: var(--backend-border-radius-md, 8px);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-queue-confirm-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-    margin-bottom: var(--backend-spacing-md, 16px);
-    padding-bottom: var(--backend-spacing-sm, 12px);
-    border-bottom: 2px solid var(--backend-color-primary, #556ee6);
-}
-
-.weline-queue-confirm-item {
-    display: flex;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-queue-confirm-item:last-child {
-    border-bottom: none;
-}
-
-.weline-queue-confirm-label {
-    flex: 0 0 120px;
-    font-weight: 500;
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-.weline-queue-confirm-value {
-    flex: 1;
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.weline-queue-btn-group {
-    display: flex;
-    justify-content: space-between;
-    margin-top: var(--backend-spacing-lg, 24px);
-    padding-top: var(--backend-spacing-md, 16px);
-    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-queue-params-empty {
-    text-align: center;
-    padding: var(--backend-spacing-xl, 40px);
-    color: var(--backend-color-text-tertiary, #adb5bd);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-radius: var(--backend-border-radius-md, 8px);
-}
-
-.weline-queue-params-empty i {
-    font-size: 2.5rem;
-    margin-bottom: var(--backend-spacing-sm, 12px);
-    display: block;
-}
-
-.weline-queue-form button:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
-}
-
-.weline-queue-form [aria-busy="true"] {
-    cursor: progress;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .weline-queue-wizard-step,
-    .weline-queue-wizard-step .step-number,
-    .weline-queue-form .mdi-spin,
-    .weline-queue-form .progress-bar {
-        animation: none !important;
-        transition: none !important;
-    }
-}
-</style>
-
-<div class="weline-queue-form" id="QueuePage">
-    <div class="w-card">
-        <div class="w-card__body" data-w-overflow="hidden">
-            <div id='progress-wizard' class='twitter-bs-wizard'>
-                <ul class='twitter-bs-wizard-nav nav-justified'>
-                    <li :class="{active:activeName=='progress-select-queueData'}" scope="queue" name="progress" value="progress-select-queueData">
-                        <span class='step-number'>01</span>
-                        <span class='step-title'>
-                                <lang>选择队列类型</lang>
-                            </span>
-                        <span class='help-block' v-if="params.type_id !== ''">
-                                <lang>你选择了</lang>
-                                <span class="w-text" v-text="'('+ findLabel(queue_types,params.type_id,'type_id','name')+')'" data-tone="primary"></span>
-                            </span>
-                    </li>
-                    <li :class="{active:activeName=='progress-params'}" scope="queue" name="progress" value="progress-params">
-                        <span class='step-number'>02</span>
-                        <span class='step-title'>
-                                <lang>设置队列参数</lang>
-                            </span>
-                        <span class='help-block' v-if="params.type_id!==''">
-                                <lang>请设置队列属性</lang>
-                            </span>
-                    </li>
-                    <li :class="{active:activeName=='progress-confirm'}" value="progress-confirm">
-                        <span class='step-number'>03</span>
-                        <span class='step-title'>
-                                <lang>确认队列</lang>
-                            </span>
-                        <span class='help-block' v-if="params.group_id!==''">
-                                <lang>你即将确认创建队列，请确认队列信息。</lang>
-                            </span>
-                    </li>
-                </ul>
-
-                <div id='bar' class="w-progress" style="--w-mt:var(--weline-space-12);">
-                    <div class="w-progress__bar progress-bar-striped progress-bar-animated" role='progressbar' :aria-valuenow='progressPercent' aria-valuemin='0' aria-valuemax='100' :style="{width: progressPercent + '%'}" data-w-background="success"></div>
-                </div>
-                <div class="w-tabs__content twitter-bs-wizard-tab-content">
-                    <div class="w-tabs__panel" :class="{active:activeName=='progress-select-queueData'}" role="tabpanel" hidden>
-                        <input type='hidden' name='progress' value='progress-select-queueData'>
-                        <input type='hidden' name='next_progress' value='progress-params'>
-                        <div class="w-grid">
-                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
-                                <div class="w-field__control">
-                                    <input type='search' class="w-input" id='search-queueData' placeholder='@lang{请输入要查找的队列类型名或者队列类型代码}' aria-label='@lang{请输入要查找的队列类型名或者队列类型代码}' v-model="QueueTypesSearchVal" aria-describedby='search-addon' data-w-radius="md" />
-                                    <button type='button' class="w-button" :disabled='isSearchingTypes' :aria-busy="isSearchingTypes ? 'true' : 'false'" data-tone="primary" data-variant="outline">
-                                        <w:icon name="circle" size="sm"></w:icon>
-                                        <lang>搜索队列类型</lang>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="w-grid">
-                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
-                                <div class="w-field__control">
-                                    <p class="w-text" data-w-text-wrap="break" data-tone="info" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                                        <if condition='module or dir'>
-                                            <b>
-                                                <lang>来源:</lang>
-                                            </b>
-                                            {{name}}
-                                            <b>
-                                                <lang>参数：</lang>
-                                            </b>
-                                            <lang>【</lang>
-                                            <lang>module：</lang>
-                                            {{module}}
-                                            <lang>
-                                                <lang>,</lang>
-                                                <lang>dir：</lang>
-                                                {{dir}}
-                                                <lang>】</lang>
-                                            </lang>
-                                        </if>
-                                    </p>
-                                </div>
-                                <b>
-                                    <lang>请选择任务类型：</lang>
-                                </b>
-                                <div class="w-field__control">
-                                    <select id='search-queueData-result' scope='queue' class="w-select w-input" size='30' name='type_id' data-style='btn-primary' data-width='fit' aria-label='@lang{搜索【队列类型】结果}' v-model='params.type_id' aria-describedby='search-addon' required data-w-radius="md">
-                                        <option v-for='v in queue_types' :value='v.type_id' :label='v.name' :tip='v.tip'
-                                                v-bind:selected='v.type_id == params.type_id'
-                                                @click="changeTypeTip(v)">
-                                        </option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
-                                <b>
-                                    <lang>队列类型提醒：</lang>
-                                </b>
-                                <div class="w-field__control">
-                                    <p v-html="tip"></p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="w-grid">
-                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
-                                <button type='button' class="w-button" :disabled="params.type_id === '' || isLoadingAttributes" data-tone="primary" data-variant="outline">
-                                    <lang>下一步</lang>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="w-tabs__panel" :class="{active:activeName=='progress-params'}" role="tabpanel" hidden>
-                        <div class="w-grid">
-                            <div style="--w-ms:auto;--w-me:auto;--w-span-md:4;--w-mb:var(--weline-space-4);">
-                                <div class="w-field__control required" style="--w-gap:var(--weline-space-2);">
-                                    <label for='queueName' class='control-label'><span class="w-text" data-tone="danger">*</span>
-                                        <lang>队列名称</lang>
-                                    </label>
-                                    <input type='text' v-model='params.name' class="w-input" id='queueName' required scope='queue' name='name' data-w-width="full">
-                                </div>
-                            </div>
-                        </div>
-                        <div v-if='isLoadingAttributes' class="w-text" aria-live='polite' data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
-                            <w:icon name="circle" size="sm"></w:icon>
-                            <lang>正在执行...</lang>
-                        </div>
-                        <div v-if='unresolvedDependenceCodes.length > 0' class="w-alert w-cluster" role='alert' aria-live='assertive' data-align="center" data-justify="between" data-tone="danger" style="--w-gap:var(--weline-space-2);">
-                            <span><lang>部分依赖属性更新失败，请重试后再继续。</lang></span>
-                            <button type='button' class="w-button" :disabled='isLoadingAttributes || pendingDependenceRequests > 0' data-tone="danger" data-variant="outline" data-size="sm">
-                                <lang>重试</lang>
-                            </button>
-                        </div>
-                        <div class="w-grid" id="queueParamsForm" :aria-busy="isLoadingAttributes ? 'true' : 'false'">
-                        </div>
-                        <div class="w-grid">
-                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
-                                <button type='button' class="w-button" data-tone="primary" data-variant="outline">
-                                    <lang>上一步</lang>
-                                </button>
-                                <button type='button' class="w-button" :disabled='isLoadingAttributes || pendingDependenceRequests > 0 || unresolvedDependenceCodes.length > 0 || !clickedParamsProcess' data-tone="primary" data-variant="outline">
-                                    <lang>下一步</lang>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="w-tabs__panel" :class="{active:activeName=='progress-confirm'}" role="tabpanel" hidden>
-                        <div class="w-grid">
-                            <b>
-                                <h2>
-                                    <lang>队列信息总览：</lang>
-                                </h2>
-                                <hr>
-                            </b>
-                            <p>
-                                <label>
-                                    <lang>队列名称：</lang>
-                                </label>
-                                <span v-text="params.name"></span>
-                            </p>
-                            <p>
-                                <label>
-                                    <lang>队列类型：</lang>
-                                </label>
-                                <span v-text="'('+ findLabel(queue_types,params.type_id,'type_id','name')+')'"></span>
-                            </p>
-                            <p>
-                                <label>
-                                    <lang>执行类：</lang>
-                                </label>
-                                <span class="w-text" v-text="findLabel(queue_types,params.type_id,'type_id','class')" data-tone="primary"></span>
-                            </p>
-                            <hr>
-                            <p>
-                                <b class="w-text" style="--w-font-size:1.125rem;">
-                                    <lang>参数信息：</lang>
-                                </b>
-                                <br>
-                            <div v-for='attribute in params.attributes'>
-                                <label v-text='attribute.name+":"'></label>
-                                <span v-text='attribute.value_alias'></span>
-                            </div>
-                            </p>
-                        </div>
-                        <div class="w-grid">
-                            <div style="--w-ms:auto;--w-me:auto;--w-span-lg:6;--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-6);">
-                                <button type='button' class="w-button" data-tone="primary" data-variant="outline">
-                                    <lang>上一步</lang>
-                                </button>
-                                <div v-if="(activeName=='progress-confirm')">
-                                    <button type='button' class="w-button" :disabled='!canSubmitQueue' :aria-busy="isSubmitting ? 'true' : 'false'" data-tone="primary">
-                                        <w:icon name="circle" size="sm"></w:icon>
-                                        <lang>提交</lang>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="w-progress" aria-hidden="true">
+        <div class="w-progress__bar" data-w-queue-progress></div>
     </div>
-</div>
 
-<w:js>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.js</w:js>
-<js:part name="debounce"/>
-<script>
-(function() {
-    'use strict';
+    <nav class="w-queue-form__steps" aria-label="<?= $escape(__('队列表单步骤')) ?>">
+        <button class="w-queue-form__step" type="button" data-w-queue-step="0" aria-current="step">
+            <span class="w-queue-form__step-number">1</span>
+            <span><?= $escape(__('选择类型')) ?></span>
+        </button>
+        <button class="w-queue-form__step" type="button" data-w-queue-step="1">
+            <span class="w-queue-form__step-number">2</span>
+            <span><?= $escape(__('配置参数')) ?></span>
+        </button>
+        <button class="w-queue-form__step" type="button" data-w-queue-step="2">
+            <span class="w-queue-form__step-number">3</span>
+            <span><?= $escape(__('确认提交')) ?></span>
+        </button>
+    </nav>
 
-    var queueText = <?= json_encode([
-        'apiUnavailable' => (string)__('网络错误，请检查网络后重试'),
-        'warningTitle' => (string)__('错误！'),
-        'confirmText' => (string)__('好的'),
-        'saveFailed' => (string)__('队列创建失败!'),
-        'typeRequiredTitle' => (string)__('请先选择队列类型再操作！'),
-        'typeRequiredText' => (string)__('当前队列类型为空！无法创建属性！'),
-        'noAttributes' => (string)__('队列无属性，可以直接进行下一步提交。'),
-        'requiredField' => (string)__('设置队列属性失败！请修改重试。%{1}'),
-        'dependenceLoading' => (string)__('正在更新依赖属性...'),
-        'dependenceFailed' => (string)__('更新队列属性依赖失败，请重试。'),
-        'dependenceUnresolved' => (string)__('部分依赖属性更新失败，请重试后再继续。')
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    var queueBoot = <?= $queueFormBootJson ?>;
-    var queueAdminPromise = null;
+    <form class="w-card w-queue-form__surface" data-w-queue-form novalidate>
+        <section class="w-card__body w-stack" data-w-queue-panel="0">
+            <header class="w-stack" data-gap="sm">
+                <h2><?= $escape(__('选择队列类型')) ?></h2>
+                <p class="w-text" data-tone="muted"><?= $escape(__('只显示已启用且当前账号有权使用的消费者。')) ?></p>
+            </header>
+            <label class="w-field">
+                <span class="w-field__label"><?= $escape(__('搜索类型')) ?></span>
+                <span class="w-field__control">
+                    <span class="w-field__addon" aria-hidden="true"><w:icon name="search" size="sm" /></span>
+                    <input class="w-input" type="search" data-w-queue-type-search autocomplete="off" placeholder="<?= $escape(__('按名称搜索...')) ?>">
+                </span>
+            </label>
+            <div class="w-queue-form__types" role="radiogroup" aria-label="<?= $escape(__('队列类型')) ?>" data-w-queue-types aria-busy="false"></div>
+            <aside class="w-alert w-queue-form__type-tip" data-tone="info" data-w-queue-type-tip hidden>
+                <w:icon name="info" size="sm" />
+                <div class="w-alert__content">
+                    <strong data-w-queue-type-name></strong>
+                    <span data-w-queue-type-description></span>
+                    <code data-w-queue-type-class></code>
+                </div>
+            </aside>
+        </section>
 
-    function getQueueApiHost() {
-        if (window.parent === window) {
-            return window;
-        }
-        try {
-            if (
-                window.parent.location.origin === window.location.origin
-                && window.parent.Weline
-                && typeof window.parent.Weline.load === 'function'
-            ) {
-                return window.parent;
-            }
-        } catch (error) {
-            // Cross-origin parents must never receive or proxy backend authority.
-        }
-        throw new Error(queueText.apiUnavailable);
-    }
+        <section class="w-card__body w-stack" data-w-queue-panel="1" hidden>
+            <header class="w-stack" data-gap="sm">
+                <h2><?= $escape(__('配置队列参数')) ?></h2>
+                <p class="w-text" data-tone="muted"><?= $escape(__('参数由所选消费者定义，依赖参数会自动更新。')) ?></p>
+            </header>
+            <div class="w-grid">
+                <label class="w-field w-queue-form__main-field">
+                    <span class="w-field__label"><?= $escape(__('队列名称')) ?></span>
+                    <input class="w-input" type="text" name="name" data-w-queue-name value="<?= $escape($queue['name'] ?? '') ?>" maxlength="255" required>
+                </label>
+                <label class="w-field w-queue-form__main-field">
+                    <span class="w-field__label"><?= $escape(__('业务幂等键')) ?></span>
+                    <input class="w-input" type="text" name="biz_key" data-w-queue-biz-key value="<?= $escape($queue['biz_key'] ?? '') ?>" maxlength="191">
+                    <small class="w-field__hint"><?= $escape(__('可选；用于业务侧识别同一任务。')) ?></small>
+                </label>
+            </div>
+            <div class="w-queue-form__attributes" data-w-queue-attributes aria-live="polite"></div>
+            <div class="w-alert" data-tone="warning" data-w-queue-dependence-error hidden>
+                <w:icon name="warning" size="sm" />
+                <div class="w-alert__content"><?= $escape(__('部分依赖参数尚未解析，不能继续提交。')) ?></div>
+                <button class="w-button" type="button" data-size="sm" data-w-queue-retry-dependence>
+                    <w:icon name="refresh" size="sm" /> <?= $escape(__('重试')) ?>
+                </button>
+            </div>
+        </section>
 
-    async function getQueueAdmin() {
-        if (!queueAdminPromise) {
-            queueAdminPromise = (async function() {
-                var apiHost = getQueueApiHost();
-                if (!apiHost.Weline || typeof apiHost.Weline.load !== 'function') {
-                    throw new Error(queueText.apiUnavailable);
-                }
-                var api = await apiHost.Weline.load('api');
-                return api.resource('queue_admin');
-            })().catch(function(error) {
-                queueAdminPromise = null;
-                throw error;
-            });
-        }
-        return queueAdminPromise;
-    }
+        <section class="w-card__body w-stack" data-w-queue-panel="2" hidden>
+            <header class="w-stack" data-gap="sm">
+                <h2><?= $escape(__('确认队列配置')) ?></h2>
+                <p class="w-text" data-tone="muted"><?= $escape(__('提交后任务将进入待处理状态。')) ?></p>
+            </header>
+            <dl class="w-queue-form__summary" data-w-queue-summary></dl>
+        </section>
 
-    async function queueAdminCall(operation, params) {
-        var api = await getQueueAdmin();
-        if (!api || typeof api[operation] !== 'function') {
-            throw new Error(queueText.apiUnavailable);
-        }
-        return api[operation](params || {}, { keepBusinessResult: true, silent: true });
-    }
+        <footer class="w-card__footer w-toolbar w-queue-form__actions">
+            <button class="w-button" type="button" data-tone="neutral" data-w-queue-previous hidden>
+                <w:icon name="arrow-left" size="sm" /> <?= $escape(__('上一步')) ?>
+            </button>
+            <span class="w-queue-form__action-spacer"></span>
+            <button class="w-button" type="button" data-tone="primary" data-w-queue-next>
+                <?= $escape(__('下一步')) ?> <w:icon name="arrow-right" size="sm" />
+            </button>
+            <button class="w-button" type="submit" data-tone="primary" data-w-queue-submit hidden>
+                <w:icon name="save" size="sm" /> <?= $escape(__('提交队列')) ?>
+            </button>
+        </footer>
+    </form>
+</main>
 
-    function notifyError(message) {
-        var text = String(message || queueText.apiUnavailable);
-        if (typeof Weline.UI.toast !== 'undefined') {
-            Weline.UI.toast.error(text);
-            return;
-        }
-        Weline.UI.dialog.request({
-            title: queueText.warningTitle,
-            message: text,
-            tone: 'danger',
-            confirmLabel: queueText.confirmText
-        });
-    }
-
-    function sanitizeAttributeHtml(html) {
-        var template = document.createElement('template');
-        template.innerHTML = String(html || '');
-        template.content.querySelectorAll(
-            'script, style, iframe, object, embed, link, meta, base'
-        ).forEach(function(element) {
-            element.remove();
-        });
-        template.content.querySelectorAll('*').forEach(function(element) {
-            Array.prototype.slice.call(element.attributes || []).forEach(function(attribute) {
-                var name = String(attribute.name || '').toLowerCase();
-                var value = String(attribute.value || '');
-                var compactValue = value.replace(/[\u0000-\u0020]+/g, '').toLowerCase();
-                var isUrlAttribute = [
-                    'href', 'src', 'xlink:href', 'action', 'formaction', 'poster', 'background'
-                ].indexOf(name) !== -1;
-                var hasExecutableUrl = /^(?:javascript:|vbscript:|data:text\/html)/i.test(compactValue);
-                if (name.indexOf('on') === 0
-                    || name === 'srcdoc'
-                    || name === 'style'
-                    || name === 'srcset'
-                    || (isUrlAttribute && hasExecutableUrl)) {
-                    element.removeAttribute(attribute.name);
-                }
-            });
-        });
-
-        return template.content;
-    }
-
-    function findAttributeElement(root, code) {
-        var elements = root.querySelectorAll('[code]');
-        for (var i = 0; i < elements.length; i++) {
-            if (String(elements[i].getAttribute('code') || '') === String(code || '')) {
-                return elements[i];
-            }
-        }
-        return null;
-    }
-
-    function readAttributeValue(element) {
-        if (!element) {
-            return '';
-        }
-        if (element.tagName === 'SELECT' && element.multiple) {
-            return Array.prototype.slice.call(element.selectedOptions || []).map(function(option) {
-                return option.value;
-            });
-        }
-        if (element.tagName === 'INPUT'
-            && (element.type === 'checkbox' || element.type === 'radio')
-            && !element.checked) {
-            return '';
-        }
-        return element.value === undefined || element.value === null ? '' : element.value;
-    }
-
-    function hasAttributeValue(value) {
-        if (Array.isArray(value)) {
-            return value.length > 0;
-        }
-        return value !== null && value !== undefined && String(value) !== '';
-    }
-
-    function attributeValueAlias(elements, value) {
-        var first = elements[0];
-        if (!first) {
-            return '';
-        }
-        if (first.tagName === 'SELECT') {
-            return Array.prototype.slice.call(first.selectedOptions || []).map(function(option) {
-                return option.textContent || option.value;
-            }).join(',');
-        }
-        var labels = {};
-        var raw = first.getAttribute('model_class_data') || '';
-        if (raw) {
-            try {
-                var decoded = JSON.parse(raw);
-                labels = decoded && typeof decoded === 'object' ? decoded : {};
-            } catch (error) {
-                labels = {};
-            }
-        }
-        var values = Array.isArray(value) ? value : [value];
-        return values.map(function(item) {
-            var key = String(item === undefined || item === null ? '' : item);
-            return Object.prototype.hasOwnProperty.call(labels, key) ? String(labels[key]) : key;
-        }).join(',');
-    }
-
-    function collectQueueAttributes(root) {
-        var groups = new Map();
-        Array.prototype.slice.call(root.querySelectorAll('*[scope="queue"]')).forEach(function(element) {
-            if (element.disabled) {
-                return;
-            }
-            var code = String(element.getAttribute('code') || element.getAttribute('name') || '').trim();
-            if (!code) {
-                return;
-            }
-            if (!groups.has(code)) {
-                groups.set(code, []);
-            }
-            groups.get(code).push(element);
-        });
-
-        var attributes = [];
-        var invalidElement = null;
-        groups.forEach(function(elements, code) {
-            if (invalidElement) {
-                return;
-            }
-            var first = elements[0];
-            var type = first && first.tagName === 'INPUT' ? String(first.type || '').toLowerCase() : '';
-            var value;
-            if (type === 'checkbox') {
-                value = elements.filter(function(element) {
-                    return element.checked;
-                }).map(readAttributeValue);
-            } else if (type === 'radio') {
-                var selected = elements.find(function(element) {
-                    return element.checked;
-                });
-                value = selected ? readAttributeValue(selected) : '';
-            } else if (elements.length === 1) {
-                value = readAttributeValue(first);
-            } else {
-                value = elements.map(readAttributeValue).filter(hasAttributeValue);
-            }
-
-            var required = elements.some(function(element) {
-                return element.hasAttribute('required');
-            });
-            if (required && !hasAttributeValue(value)) {
-                invalidElement = first;
-                return;
-            }
-            attributes.push({
-                name: String(first.getAttribute('title') || ''),
-                code: code,
-                value: value,
-                value_alias: attributeValueAlias(elements, value)
-            });
-        });
-
-        return {attributes: attributes, invalidElement: invalidElement};
-    }
-
-    function rememberAttributeDisabledState(element) {
-        if (!element || element.dataset.queueOriginalDisabled !== undefined) {
-            return;
-        }
-        element.dataset.queueOriginalDisabled = element.disabled ? '1' : '0';
-    }
-
-    function setAttributeAvailability(element, wrapper, available) {
-        rememberAttributeDisabledState(element);
-        wrapper.hidden = !available;
-        wrapper.setAttribute('aria-hidden', available ? 'false' : 'true');
-        element.disabled = !available || element.dataset.queueOriginalDisabled === '1';
-    }
-
-    function setDependenceLoading(element, wrapper, loading) {
-        rememberAttributeDisabledState(element);
-        if (loading) {
-            wrapper.setAttribute('aria-busy', 'true');
-            wrapper.setAttribute('aria-label', queueText.dependenceLoading);
-            element.disabled = true;
-            return;
-        }
-        wrapper.removeAttribute('aria-busy');
-        wrapper.removeAttribute('aria-label');
-        element.disabled = element.dataset.queueOriginalDisabled === '1';
-    }
-
-    function applyDependenceOptions(element, items) {
-        var optionMap = items && typeof items === 'object' ? items : {};
-        var keys = Object.keys(optionMap);
-        if (element.tagName === 'SELECT') {
-            var previous = readAttributeValue(element);
-            var previousValues = Array.isArray(previous) ? previous.map(String) : [String(previous)];
-            element.replaceChildren();
-            keys.forEach(function(key) {
-                var option = document.createElement('option');
-                option.value = key;
-                option.textContent = String(optionMap[key]);
-                option.selected = previousValues.indexOf(String(key)) !== -1;
-                element.appendChild(option);
-            });
-            return;
-        }
-        if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
-            element.value = keys.map(function(key) {
-                return String(optionMap[key]);
-            }).join(',');
-        }
-    }
-
-    function bindAttributeDependences(vm, root, items, dependenceGeneration) {
-        items.forEach(function(item) {
-            var dependenceCodes = Array.isArray(item && item.dependence) ? item.dependence : [];
-            if (!item || !item.code || dependenceCodes.length === 0) {
-                return;
-            }
-            var currentElement = findAttributeElement(root, item.code);
-            if (!currentElement) {
-                return;
-            }
-            var currentWrapper = currentElement.closest('.weline-queue-attribute-field');
-            if (!currentWrapper) {
-                return;
-            }
-            var dependenceElements = dependenceCodes.map(function(code) {
-                return {code: code, element: findAttributeElement(root, code)};
-            }).filter(function(entry) {
-                return !!entry.element;
-            });
-            if (dependenceElements.length !== dependenceCodes.length) {
-                setAttributeAvailability(currentElement, currentWrapper, false);
-                vm.setDependenceUnresolved(item.code, true, dependenceGeneration);
-                vm.registerDependenceRetry(item.code, function() {
-                    notifyError(queueText.dependenceFailed);
-                    return false;
-                }, dependenceGeneration);
-                return;
-            }
-
-            var requestVersion = 0;
-            var lastDependenceCode = dependenceElements[0].code;
-            var refresh = async function(changedDependenceCode) {
-                if (dependenceGeneration !== vm.dependenceGeneration || !currentWrapper.isConnected) {
-                    return;
-                }
-                var requestedDependence = dependenceElements.find(function(entry) {
-                    return entry.code === changedDependenceCode;
-                }) || dependenceElements[0];
-                lastDependenceCode = requestedDependence.code;
-                var emptyDependence = dependenceElements.some(function(entry) {
-                    return entry.element.disabled || !hasAttributeValue(readAttributeValue(entry.element));
-                });
-                if (emptyDependence) {
-                    requestVersion += 1;
-                    vm.setDependenceUnresolved(item.code, false, dependenceGeneration);
-                    setDependenceLoading(currentElement, currentWrapper, false);
-                    setAttributeAvailability(currentElement, currentWrapper, false);
-                    return;
-                }
-
-                var version = ++requestVersion;
-                var applied = false;
-                setAttributeAvailability(currentElement, currentWrapper, false);
-                setDependenceLoading(currentElement, currentWrapper, true);
-                vm.pendingDependenceRequests += 1;
-                try {
-                    var result = await queueAdminCall('resolveAttributeDependence', {
-                        type_id: parseInt(String(vm.params.type_id), 10),
-                        attribute: String(item.code),
-                        dependence_attribute: String(requestedDependence.code),
-                        dependence_value: readAttributeValue(requestedDependence.element),
-                        attribute_value: readAttributeValue(currentElement)
-                    });
-                    if (dependenceGeneration !== vm.dependenceGeneration
-                        || version !== requestVersion
-                        || !currentWrapper.isConnected) {
-                        return;
-                    }
-                    if (!result || !result.success) {
-                        throw new Error(String((result && result.msg) || queueText.dependenceFailed));
-                    }
-                    applyDependenceOptions(currentElement, result.data);
-                    vm.setDependenceUnresolved(item.code, false, dependenceGeneration);
-                    applied = true;
-                } catch (error) {
-                    if (dependenceGeneration === vm.dependenceGeneration
-                        && version === requestVersion) {
-                        vm.setDependenceUnresolved(item.code, true, dependenceGeneration);
-                        notifyError(error && error.message ? error.message : queueText.dependenceFailed);
-                    }
-                } finally {
-                    if (dependenceGeneration === vm.dependenceGeneration) {
-                        vm.pendingDependenceRequests = Math.max(0, vm.pendingDependenceRequests - 1);
-                    }
-                    if (dependenceGeneration === vm.dependenceGeneration
-                        && version === requestVersion
-                        && currentWrapper.isConnected) {
-                        setDependenceLoading(currentElement, currentWrapper, false);
-                        setAttributeAvailability(currentElement, currentWrapper, applied);
-                    }
-                }
-            };
-
-            vm.registerDependenceRetry(item.code, function() {
-                return refresh(lastDependenceCode);
-            }, dependenceGeneration);
-
-            dependenceElements.forEach(function(entry) {
-                var inputTimer = null;
-                entry.element.addEventListener('input', function() {
-                    window.clearTimeout(inputTimer);
-                    inputTimer = window.setTimeout(function() {
-                        refresh(entry.code);
-                    }, 250);
-                });
-                entry.element.addEventListener('change', function() {
-                    window.clearTimeout(inputTimer);
-                    refresh(entry.code);
-                });
-            });
-            refresh(dependenceElements[0].code);
-        });
-    }
-
-    window.QueuePage = new Vue({
-        el: '#QueuePage',
-        data: {
-            tip: '',
-            dir: queueBoot.dir,
-            module: queueBoot.module,
-            params: queueBoot.params,
-            activeName: queueBoot.active_name,
-            QueueTypesSearchVal: '',
-            queue_types: queueBoot.queue_types,
-            typeAttributeParams: [],
-            clickedParamsProcess: false,
-            isSearchingTypes: false,
-            isLoadingAttributes: false,
-            isSubmitting: false,
-            pendingDependenceRequests: 0,
-            unresolvedDependenceCodes: [],
-            dependenceRetryHandlers: {},
-            dependenceGeneration: 0,
-            attributeRequestVersion: 0
-        },
-        computed: {
-            progressPercent: function() {
-                var steps = ['progress-select-queueData', 'progress-params', 'progress-confirm'];
-                var index = steps.indexOf(this.activeName);
-                return index < 0 ? 0 : Math.round(((index + 1) / steps.length) * 100);
-            },
-            canSubmitQueue: function() {
-                return this.activeName === 'progress-confirm'
-                    && !this.isSubmitting
-                    && !this.isLoadingAttributes
-                    && this.clickedParamsProcess
-                    && this.pendingDependenceRequests === 0
-                    && this.unresolvedDependenceCodes.length === 0;
-            }
-        },
-        mounted: function() {
-            this.activeName = queueBoot.active_name;
-            if (this.params.type_id) {
-                this.renderSearchQueueTypeAttributes();
-                for (var i = 0; i < this.queue_types.length; i++) {
-                    if (this.queue_types[i].type_id == this.params.type_id) {
-                        this.changeTypeTip(this.queue_types[i]);
-                        break;
-                    }
-                }
-            }
-        },
-        methods: {
-            changeTypeTip: function(t) {
-                this.tip = t && t.tip ? t.tip : '';
-                this.clickedParamsProcess = false;
-            },
-            handleTypeSelection: function() {
-                this.attributeRequestVersion += 1;
-                this.invalidateDependenceState();
-                this.isLoadingAttributes = false;
-                this.typeAttributeParams = [];
-                this.clickedParamsProcess = false;
-                var queueParamsForm = document.getElementById('queueParamsForm');
-                if (queueParamsForm) {
-                    queueParamsForm.replaceChildren();
-                }
-                if (window.hideLoading) hideLoading();
-                for (var i = 0; i < this.queue_types.length; i++) {
-                    if (this.queue_types[i].type_id == this.params.type_id) {
-                        this.changeTypeTip(this.queue_types[i]);
-                        return;
-                    }
-                }
-                this.tip = '';
-                this.clickedParamsProcess = false;
-            },
-            submitQueue: async function() {
-                if (!this.canSubmitQueue) {
-                    return false;
-                }
-                if (!this.params.type_id) {
-                    Weline.UI.dialog.request({
-                        title: queueText.typeRequiredTitle,
-                        message: queueText.typeRequiredText,
-                        tone: 'warning',
-                        confirmLabel: queueText.confirmText
-                    });
-                    return false;
-                }
-                var payload = {
-                    type_id: parseInt(String(this.params.type_id), 10),
-                    name: String(this.params.name || ''),
-                    attributes: Array.isArray(this.params.attributes) ? this.params.attributes : []
-                };
-                var queueId = parseInt(String(this.params.queue_id || ''), 10);
-                if (Number.isFinite(queueId) && queueId > 0) {
-                    payload.queue_id = queueId;
-                }
-                if (this.params.biz_key) {
-                    payload.biz_key = String(this.params.biz_key);
-                }
-                this.isSubmitting = true;
-                var committed = false;
-                if (window.showLoading) showLoading();
-                try {
-                    var res = await queueAdminCall('save', payload);
-                    if (res && res.success) {
-                        committed = true;
-                        var savedQueueId = parseInt(String(res.queue_id || ''), 10);
-                        if (Number.isFinite(savedQueueId) && savedQueueId > 0) {
-                            this.params.queue_id = String(savedQueueId);
-                        }
-                        if (window.hideLoading) hideLoading();
-                        await Weline.UI.dialog.request({
-                            title: res.msg,
-                            message: Array.isArray(res.warnings) ? res.warnings.join(' ') : '',
-                            tone: 'success',
-                            confirmLabel: queueText.confirmText,
-                            dismissible: false,
-                            dismissible: false
-                        });
-                        if (window.showLoading) showLoading();
-                        window.parent.location.reload();
-                        return true;
-                    } else {
-                        Weline.UI.dialog.request({
-                            title: queueText.saveFailed,
-                            message: String((res && res.msg) || queueText.apiUnavailable),
-                            tone: 'danger',
-                            confirmLabel: queueText.confirmText
-                        });
-                    }
-                } catch (error) {
-                    if (committed) {
-                        if (window.showLoading) showLoading();
-                        window.parent.location.reload();
-                    } else {
-                        notifyError(error && error.message ? error.message : queueText.apiUnavailable);
-                    }
-                } finally {
-                    this.isSubmitting = committed;
-                    if (!committed && window.hideLoading) hideLoading();
-                }
-            },
-            renderSearchQueueTypes: debounce(async function() {
-                this.isSearchingTypes = true;
-                try {
-                    var res = await queueAdminCall('searchTypes', {
-                        q: String(this.QueueTypesSearchVal || ''),
-                        module: String(this.module || ''),
-                        dir: String(this.dir || '')
-                    });
-                    if (res && res.success) {
-                        this.queue_types = Array.isArray(res.data) ? res.data : [];
-                    } else {
-                        notifyError((res && res.msg) || queueText.apiUnavailable);
-                    }
-                } catch (error) {
-                    notifyError(error && error.message ? error.message : queueText.apiUnavailable);
-                } finally {
-                    this.isSearchingTypes = false;
-                }
-            }, 500),
-            renderSearchQueueTypeAttributes: async function() {
-                if (!this.params.type_id) {
-                    return false;
-                }
-                var typeId = parseInt(String(this.params.type_id), 10);
-                if (!Number.isFinite(typeId) || typeId <= 0) {
-                    Weline.UI.dialog.request({
-                        title: queueText.typeRequiredTitle,
-                        message: queueText.typeRequiredText,
-                        tone: 'warning',
-                        confirmLabel: queueText.confirmText
-                    });
-                    return false;
-                }
-                var requestVersion = ++this.attributeRequestVersion;
-                var dependenceGeneration = this.invalidateDependenceState();
-                var params = { type_id: typeId };
-                var queueId = parseInt(String(this.params.queue_id || ''), 10);
-                if (Number.isFinite(queueId) && queueId > 0) {
-                    params.queue_id = queueId;
-                }
-                this.isLoadingAttributes = true;
-                this.clickedParamsProcess = false;
-                if (window.showLoading) showLoading();
-                try {
-                    var res = await queueAdminCall('typeAttributes', params);
-                    if (requestVersion !== this.attributeRequestVersion
-                        || typeId !== parseInt(String(this.params.type_id || ''), 10)) {
-                        return false;
-                    }
-                    if (!res || !res.success) {
-                        this.clickedParamsProcess = false;
-                        Weline.UI.dialog.request({
-                            title: queueText.warningTitle,
-                            message: String((res && res.msg) || queueText.apiUnavailable),
-                            tone: 'danger',
-                            confirmLabel: queueText.confirmText
-                        });
-                        return false;
-                    }
-                    var items = Array.isArray(res.data) ? res.data : [];
-                    var queueParamsForm = document.getElementById('queueParamsForm');
-                    if (!queueParamsForm) {
-                        throw new Error(queueText.apiUnavailable);
-                    }
-                    queueParamsForm.replaceChildren();
-                    items.forEach(function(item) {
-                        var wrapper = document.createElement('div');
-                        wrapper.className = 'weline-queue-attribute-field gap-2 col-lg-4 col-md-6 col-sm-12';
-                        wrapper.appendChild(sanitizeAttributeHtml(item && item.html ? item.html : ''));
-                        queueParamsForm.appendChild(wrapper);
-                    });
-                    if (items.length === 0) {
-                        var empty = document.createElement('div');
-                        empty.className = 'weline-queue-params-empty col-12';
-                        var emptyIcon = document.createElement('i');
-                        emptyIcon.className = 'mdi mdi-information-outline';
-                        emptyIcon.setAttribute('aria-hidden', 'true');
-                        var emptyText = document.createElement('p');
-                        emptyText.className = 'mb-0';
-                        emptyText.textContent = queueText.noAttributes;
-                        empty.appendChild(emptyIcon);
-                        empty.appendChild(emptyText);
-                        queueParamsForm.appendChild(empty);
-                    }
-                    bindAttributeDependences(this, queueParamsForm, items, dependenceGeneration);
-                    this.typeAttributeParams = items;
-                    this.clickedParamsProcess = true;
-                    return true;
-                } catch (error) {
-                    if (requestVersion === this.attributeRequestVersion
-                        && typeId === parseInt(String(this.params.type_id || ''), 10)) {
-                        this.clickedParamsProcess = false;
-                        notifyError(error && error.message ? error.message : queueText.apiUnavailable);
-                    }
-                    return false;
-                } finally {
-                    if (requestVersion === this.attributeRequestVersion
-                        && typeId === parseInt(String(this.params.type_id || ''), 10)) {
-                        this.isLoadingAttributes = false;
-                        if (window.hideLoading) hideLoading();
-                    }
-                }
-            },
-            findLabel: function(arr, id, key, name) {
-                var label = '';
-                arr.forEach(function(item) {
-                    if (item[key] == id) {
-                        label = item[name];
-                    }
-                });
-                return label;
-            },
-            focusInvalidElement: function(element) {
-                if (!element) {
-                    return;
-                }
-                var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
-                element.focus();
-                element.style.border = '1px solid var(--backend-color-danger, #f46a6a)';
-            },
-            invalidateDependenceState: function() {
-                this.dependenceGeneration += 1;
-                this.pendingDependenceRequests = 0;
-                this.unresolvedDependenceCodes = [];
-                this.dependenceRetryHandlers = {};
-                return this.dependenceGeneration;
-            },
-            setDependenceUnresolved: function(code, unresolved, generation) {
-                if (generation !== this.dependenceGeneration) {
-                    return;
-                }
-                var normalizedCode = String(code || '');
-                if (!normalizedCode) {
-                    return;
-                }
-                var codes = this.unresolvedDependenceCodes.slice();
-                var index = codes.indexOf(normalizedCode);
-                if (unresolved && index === -1) {
-                    codes.push(normalizedCode);
-                } else if (!unresolved && index !== -1) {
-                    codes.splice(index, 1);
-                }
-                this.unresolvedDependenceCodes = codes;
-            },
-            registerDependenceRetry: function(code, handler, generation) {
-                if (generation !== this.dependenceGeneration || typeof handler !== 'function') {
-                    return;
-                }
-                var normalizedCode = String(code || '');
-                if (!normalizedCode) {
-                    return;
-                }
-                this.dependenceRetryHandlers[normalizedCode] = handler;
-            },
-            retryDependenceResolution: function() {
-                if (this.isLoadingAttributes || this.pendingDependenceRequests > 0) {
-                    return false;
-                }
-                var handlers = this.dependenceRetryHandlers;
-                var started = false;
-                this.unresolvedDependenceCodes.slice().forEach(function(code) {
-                    if (typeof handlers[code] === 'function') {
-                        started = true;
-                        handlers[code]();
-                    }
-                });
-                if (!started) {
-                    notifyError(queueText.dependenceFailed);
-                }
-                return started;
-            },
-            changeNav: function(name, reload) {
-                if (name !== 'progress-select-queueData' && !this.params.type_id) {
-                    Weline.UI.dialog.request({
-                        title: queueText.typeRequiredTitle,
-                        message: queueText.typeRequiredText,
-                        tone: 'warning',
-                        confirmLabel: queueText.confirmText
-                    });
-                    this.activeName = 'progress-select-queueData';
-                    return false;
-                }
-                if (name === 'progress-confirm'
-                    && (this.isLoadingAttributes
-                        || this.pendingDependenceRequests > 0
-                        || this.unresolvedDependenceCodes.length > 0
-                        || !this.clickedParamsProcess)) {
-                    this.activeName = 'progress-params';
-                    return false;
-                }
-                if (reload === undefined) reload = true;
-                if (this.clickedParamsProcess) {
-                    reload = false;
-                }
-                this.activeName = name;
-                if (name === 'progress-params' && this.params.type_id !== '' && reload) {
-                    this.renderSearchQueueTypeAttributes();
-                }
-                if (name === 'progress-confirm') {
-                    if (!this.params.name) {
-                        var queueName = document.getElementById('queueName');
-                        this.changeNav('progress-params');
-                        this.focusInvalidElement(queueName);
-                        return false;
-                    }
-                    var queueParamsForm = document.getElementById('queueParamsForm');
-                    if (!queueParamsForm) {
-                        return false;
-                    }
-                    var collected = collectQueueAttributes(queueParamsForm);
-                    if (collected.invalidElement) {
-                        this.changeNav('progress-params', false);
-                        this.focusInvalidElement(collected.invalidElement);
-                        Weline.UI.dialog.request({
-                            title: queueText.warningTitle,
-                            message: queueText.requiredField.replace(
-                                '%{1}',
-                                collected.invalidElement.getAttribute('title') || ''
-                            ),
-                            tone: 'danger',
-                            confirmLabel: queueText.confirmText
-                        });
-                        return false;
-                    }
-                    this.params.attributes = collected.attributes;
-                }
-                return true;
-            }
-        }
-    });
-})();
-</script>
-<w:scope url="@backend-url('system/user-data')" container-id="QueuePage" event="input change click"/>
+<script type="application/json" data-w-queue-form-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-queue-form.js)"></script>

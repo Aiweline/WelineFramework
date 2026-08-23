@@ -43,67 +43,14 @@ class TemplateCompile implements ObserverInterface
         
         // 解析这些模块的 JS 文件，提取翻译词（用于合并到i18n词库）
         $jsWords = JsTranslationsExtractor::extractWordsFromModules($declaredModules, $area);
-        // 直接从当前编译字典解析该页面已声明模块的词，避免中间 map 文件。
-        $moduleTranslations = $this->resolveTranslations($jsWords);
-        
         // 将收集到的JS翻译词合并到i18n词库中
         if (!empty($jsWords)) {
             $this->mergeJsWordsToI18n($jsWords, $tplFile);
             JsWordsRegistry::addWords(array_keys($jsWords));
         }
         
-        // 将模块信息和翻译词注入到编译后的模板中
-        $modulesJson = json_encode($declaredModules);
-        $wordsJson = json_encode(array_values($jsWords)); // 转换为索引数组
-        
-        // 生成设置 i18n 词典的 JavaScript 代码
-        $i18nDictionaryCode = '';
-        if (!empty($moduleTranslations)) {
-            $dictionaryJson = json_encode($moduleTranslations, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $i18nDictionaryCode = "\n<script>\n" .
-                "// 加载当前页面已声明模块的编译翻译词\n" .
-                "(function() {\n" .
-                "    if (window.Weline && window.Weline.i18n && window.Weline.i18n.setDictionary) {\n" .
-                "        var moduleTranslations = {$dictionaryJson};\n" .
-                "        window.Weline.i18n.setDictionary(moduleTranslations);\n" .
-                "    }\n" .
-                "})();\n" .
-                "</script>";
-        }
-        
-        // 在 </body> 标签前注入（如果存在）
-        $jsModulesCode = "<?php\n// JS模块声明和翻译词（编译时提取）\n\$__weline_js_modules = {$modulesJson};\n\$__weline_js_words = {$wordsJson};\n?>" . $i18nDictionaryCode;
-        
-        if (preg_match('/(<\/body>)/i', $content)) {
-            $content = preg_replace('/(<\/body>)/i', $jsModulesCode . "\n$1", $content, 1);
-        } else {
-            // 如果没有 </body> 标签，在文件末尾添加
-            $content .= "\n" . $jsModulesCode;
-        }
-        
-        // 更新内容
-        $event->setData('content', $content);
-    }
-
-    /**
-     * @param array<string,string> $words
-     * @return array<string,string>
-     */
-    private function resolveTranslations(array $words): array
-    {
-        $translations = [];
-        try {
-            $dictionary = \Weline\Framework\Phrase\Parser::getWords();
-            foreach ($words as $word => $_original) {
-                $translations[$word] = (string)($dictionary[$word] ?? $word);
-            }
-        } catch (\Throwable) {
-            foreach ($words as $word => $_original) {
-                $translations[$word] = $word;
-            }
-        }
-
-        return $translations;
+        // Runtime dictionaries are emitted once by the frontend/backend runtime
+        // config blocks. Template compilation never injects UI scripts.
     }
     
     /**

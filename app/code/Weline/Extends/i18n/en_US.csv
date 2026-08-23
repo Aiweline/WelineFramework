@@ -6,12 +6,12 @@
 循环依赖检测,"Circular dependency detection"
 扩展注册表刷新成功,"Extension registry refresh succeeded"
 扩展注册表刷新失败,"Extension registry refresh failed"
-"刷新失败: %1","刷新失败: %1"
+"刷新失败: %1","Refresh failed: %1"
 "Sticker 扩展统计","Sticker extension statistics"
-"加载 Sticker 统计失败: %1","加载 Sticker 统计失败: %1"
-"加载模块详情失败: %1","加载模块详情失败: %1"
+"加载 Sticker 统计失败: %1","Failed to load Sticker statistics: %1"
+"加载模块详情失败: %1","Failed to load module details: %1"
 扩展搜索,"Extension search"
-"搜索失败: %1","搜索失败: %1"
+"搜索失败: %1","Search failed: %1"
 提供扩展点,"Provides extension points"
 "被 Sticker 扩展","Extended by Sticker"
 被模块扩展,"Extended by Module"
@@ -88,3 +88,4 @@
 "Sticker 快捷入口",Sticker
 文档路径,"Document path"
 确定,Confirm
+扩展列表,"Extension list"

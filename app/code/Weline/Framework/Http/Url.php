@@ -788,8 +788,10 @@ class Url implements UrlInterface
     {
         $prefix = '';
 
-        $currency = self::normalizeCurrency(w_env('user.currency'));
-        $language = self::normalizeLanguage(w_env('user.lang'));
+        // Prefer State (URL path > preference > website default) so getUrl() keeps
+        // the same non-default currency/lang the switchers and runtime already show.
+        $currency = self::normalizeCurrency(State::getCurrency() ?: w_env('user.currency'));
+        $language = self::normalizeLanguage(State::getLang() ?: w_env('user.lang'));
         $websiteCurrency = self::normalizeCurrency(w_env('website.currency')) ?: self::getFrameworkDefaultCurrency();
         $websiteLanguage = self::normalizeLanguage(w_env('website.language')) ?: self::getFrameworkDefaultLanguage();
         $frameworkCurrency = self::getFrameworkDefaultCurrency();
@@ -798,10 +800,6 @@ class Url implements UrlInterface
         if (Env::isAreaRoutePathSegment($currency)) {
             $currency = '';
         }
-        if ('' !== $currency && !State::isAllowedCurrencyCode($currency)) {
-            $currency = '';
-        }
-
         if (Env::isAreaRoutePathSegment($language)) {
             $language = '';
         }

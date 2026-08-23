@@ -11,14 +11,14 @@
 .session-device-manager {
     --sdm-surface: var(--weline-theme-surface, #fff);
     --sdm-surface-subtle: var(--weline-theme-surface-subtle, rgba(50, 108, 229, .06));
-    --sdm-border: var(--weline-theme-border-color, #d9dee8);
+    --sdm-border: var(--weline-theme-border, #d9dee8);
     --sdm-text: var(--weline-theme-text, #172033);
     --sdm-text-muted: var(--weline-theme-text-muted, #697386);
     --sdm-primary: var(--weline-theme-primary, #326ce5);
-    --sdm-primary-text: var(--weline-theme-primary-text-emphasis, var(--sdm-primary));
-    --sdm-primary-subtle: var(--weline-theme-primary-subtle, rgba(50, 108, 229, .1));
+    --sdm-primary-text: var(--weline-theme-primary-emphasis, var(--sdm-primary));
+    --sdm-primary-subtle: var(--weline-theme-primary-surface, rgba(50, 108, 229, .1));
     --sdm-danger: var(--weline-theme-danger-color, #b42323);
-    --sdm-danger-border: var(--weline-theme-danger-border-subtle, #d94b4b);
+    --sdm-danger-border: var(--weline-theme-danger-border, #d94b4b);
     --sdm-radius: var(--weline-theme-radius-lg, 1rem);
     --sdm-radius-sm: var(--weline-theme-radius-md, .85rem);
 

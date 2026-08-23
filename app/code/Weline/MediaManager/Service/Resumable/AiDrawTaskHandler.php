@@ -16,7 +16,9 @@ use Weline\Framework\Runtime\Resumable\TaskResult;
 use Weline\Framework\Runtime\Resumable\TaskStartRequest;
 use Weline\Framework\Runtime\Resumable\TaskStopRequestedException;
 use Weline\MediaManager\Service\AiDrawService;
+use Weline\MediaManager\Service\MediaFileAccessContextFactory;
 use Weline\MediaManager\Service\AiDrawSessionStore;
+use Weline\Storage\Api\Data\StorageDiskCode;
 
 /**
  * Detached AI-draw task handler.
@@ -39,6 +41,7 @@ final class AiDrawTaskHandler implements ResumableTaskStartHandlerInterface
     public function __construct(
         private readonly AiDrawService $aiDrawService,
         private readonly AiDrawSessionStore $sessionStore,
+        private readonly MediaFileAccessContextFactory $fileAccessContexts,
     ) {
     }
 
@@ -50,6 +53,7 @@ final class AiDrawTaskHandler implements ResumableTaskStartHandlerInterface
     public function prepareStart(TaskOwner $owner, array $input): TaskStartRequest
     {
         $adminId = $this->backendAdminId($owner);
+        $input = $this->fileAccessContexts->freeze($input, $adminId);
         $requestId = $this->requiredIdentifier($input, 'request_id');
         $mode = $this->mode($input);
         $sessionId = $this->optionalSessionId($input) ?? $this->sessionStore->createSessionId();
@@ -80,6 +84,9 @@ final class AiDrawTaskHandler implements ResumableTaskStartHandlerInterface
                 'prompts' => $prompts,
                 'batch_count' => $batchCount,
                 'target' => $this->optionalText($input, 'target', self::MAX_SHORT_VALUE_BYTES),
+                'disk_code' => $this->requiredDiskCode($input),
+                'locale_code' => (string)$input['locale_code'],
+                MediaFileAccessContextFactory::INPUT_KEY => $input[MediaFileAccessContextFactory::INPUT_KEY],
                 'source_file_hash' => $sourceFileHash,
                 'parent_generation_id' => $parentGenerationId,
                 'size' => $this->size($input),
@@ -90,6 +97,15 @@ final class AiDrawTaskHandler implements ResumableTaskStartHandlerInterface
             businessKey: 'media.ai_draw:' . $owner->principal . ':' . $requestId,
             policy: TaskPolicy::defaults(),
         );
+    }
+
+    /** @param array<string,mixed> $input */
+    private function requiredDiskCode(array $input): string
+    {
+        $diskCode = trim((string)($input['disk_code'] ?? $input['storage'] ?? ''));
+        StorageDiskCode::parse($diskCode);
+
+        return $diskCode;
     }
 
     public function execute(

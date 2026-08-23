@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\DataTable\Test\Unit;
 
-use PHPUnit\Framework\TestCase;
 use Weline\DataTable\Service\BackendAdminPageService;
+use Weline\Framework\Test\TestCore;
 
-class BackendAdminPageServiceTest extends TestCase
+class BackendAdminPageServiceTest extends TestCore
 {
     public function testDashboardDataContainsScenarioModelAndDocSummaries(): void
     {
@@ -46,6 +46,12 @@ class BackendAdminPageServiceTest extends TestCase
         self::assertArrayHasKey('attribute_inheritance', $report['sections']);
         self::assertArrayHasKey('auto_generation', $report['sections']);
         self::assertGreaterThan(0, $report['summary']['total_checks']);
+        self::assertSame(
+            $report['summary']['total_checks'],
+            $report['summary']['passed_checks'],
+            json_encode($report['sections'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: 'Invalid report'
+        );
+        self::assertSame('success', $report['summary']['status']);
     }
 
     public function testBackendLayoutCatalogAndFallbackResolutionAreStable(): void

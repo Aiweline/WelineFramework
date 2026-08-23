@@ -358,6 +358,9 @@ trait TraitTemplate
             $data = rtrim($data, '?&');
             
             $version = $this->getStaticResourceVersion();
+            if (!$version && defined('DEV') && DEV) {
+                $version = $this->getDevelopmentStaticResourceVersion($source, $data);
+            }
             if ($version) {
                 $data .= (str_contains($data, '?') ? '&' : '?') . 'v=' . $version;
             } elseif (Env::dev('static_rand_version')) {
@@ -400,6 +403,53 @@ trait TraitTemplate
         }
         
         return null;
+    }
+
+    /**
+     * 开发环境使用资源内容指纹，避免固定 URL 在浏览器短缓存期内继续执行旧 UI。
+     *
+     * 生产环境仍由 theme.static_version 或发布清单统一控制，不在请求期计算文件哈希。
+     */
+    private function getDevelopmentStaticResourceVersion(string $source, string $url): ?string
+    {
+        $moduleName = '';
+        if (str_contains($source, '::')) {
+            $moduleName = trim((string)strtok($source, ':'));
+        }
+        if ($moduleName === '') {
+            $moduleName = $this->getRequest()->getModuleName();
+        }
+        if ($moduleName === '') {
+            return null;
+        }
+
+        $module = Env::getInstance()->getModuleList()[$moduleName] ?? null;
+        $basePath = is_array($module) ? rtrim((string)($module['base_path'] ?? ''), '/\\') : '';
+        if ($basePath === '') {
+            return null;
+        }
+
+        $urlPath = (string)(parse_url($url, PHP_URL_PATH) ?: '');
+        $moduleUrlPrefix = '/' . str_replace('_', '/', $moduleName) . '/';
+        if (!str_starts_with($urlPath, $moduleUrlPrefix)) {
+            return null;
+        }
+        $relativePath = ltrim(substr($urlPath, strlen($moduleUrlPrefix)), '/');
+        if ($relativePath === '' || str_contains($relativePath, '..')) {
+            return null;
+        }
+
+        $filename = $basePath . DS . str_replace('/', DS, $relativePath);
+        if (!is_file($filename)) {
+            return null;
+        }
+        $algorithm = in_array('xxh3', hash_algos(), true) ? 'xxh3' : 'sha256';
+        $fingerprint = hash_file($algorithm, $filename);
+        if (!is_string($fingerprint) || $fingerprint === '') {
+            return null;
+        }
+
+        return 'dev_' . substr($fingerprint, 0, 12);
     }
 
     private function resolveThemeAssetUrlByEvent(string $moduleName, string $area, string $relativePath): string

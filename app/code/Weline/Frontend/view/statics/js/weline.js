@@ -312,9 +312,10 @@
         },
 
         /**
-         * Api 模块代理
+         * Api 模块代理（stub；weline-api.js 加载后会替换为同步 ApiModule）
          */
         Api: {
+            __fallback: true,
             call: async (provider, operation, params, options) => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.call(provider, operation, params, options);
@@ -359,6 +360,12 @@
                 return ApiModule.getClient();
             },
         },
+
+        /**
+         * 按需加载模块（返回真实模块，如 WelineApiModule）。
+         * 用法：Weline.load('api').then(api => api.resource('consent').status({}))
+         */
+        load: (moduleName, modulePath = null) => moduleLoader.loadModule(moduleName, modulePath),
 
         /**
          * i18n 国际化对象

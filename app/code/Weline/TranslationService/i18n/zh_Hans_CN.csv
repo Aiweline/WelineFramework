@@ -16,19 +16,19 @@
 批量翻译后事件，在批量翻译完成后触发，允许其他模块修改翻译结果或执行后处理操作。,批量翻译后事件，在批量翻译完成后触发，允许其他模块修改翻译结果或执行后处理操作。
 批量翻译错误,批量翻译错误
 批量翻译错误事件，在批量翻译失败时触发，允许其他模块处理错误、实现降级方案等。,批量翻译错误事件，在批量翻译失败时触发，允许其他模块处理错误、实现降级方案等。
-"Unsupported translation operation: %{1}","Unsupported translation operation: %{1}"
+"Unsupported translation operation: %{1}",不支持的翻译操作：%{1}
 渠道ID不能为空,渠道ID不能为空
 渠道不存在,渠道不存在
 未找到渠道适配器,未找到渠道适配器
 连接测试成功,连接测试成功
 连接测试失败,连接测试失败
 测试失败：%{1},测试失败：%{1}
-"Text cannot be empty.","Text cannot be empty."
-"Texts cannot be empty.","Texts cannot be empty."
-"Translation service query provider","Translation service query provider"
-"Provides frontend worker translation operations.","Provides frontend worker translation operations."
-"Translate text through configured translation service.","Translate text through configured translation service."
-"Translate multiple texts through configured translation service.","Translate multiple texts through configured translation service."
+"Text cannot be empty.",文本不能为空。
+"Texts cannot be empty.",文本不能为空。
+"Translation service query provider",翻译服务查询提供商
+"Provides frontend worker translation operations.",提供前端工作者翻译操作。
+"Translate text through configured translation service.",通过配置的翻译服务翻译文本。
+"Translate multiple texts through configured translation service.",通过配置的翻译服务翻译多个文本。
 Google翻译API密钥未配置,Google翻译API密钥未配置
 Google翻译响应格式错误,Google翻译响应格式错误
 Google翻译语言检测失败,Google翻译语言检测失败
@@ -165,11 +165,13 @@ API接口地址，留空使用默认地址,API接口地址，留空使用默认�
 AI翻译,AI翻译
 未找到目标输入框：%{1},未找到目标输入框：%{1}
 输入框内容为空，无法翻译,输入框内容为空，无法翻译
-Translating...,Translating...
-"Translation success","Translation success"
-"Translation failed","Translation failed"
-"Translation request failed, please try again later.","Translation request failed, please try again later."
+Translating...,翻译...
+"Translation success",翻译成功
+"Translation failed",翻译失败
+"Translation request failed, please try again later.",翻译请求失败，请稍后重试。
 未找到可用的翻译渠道,未找到可用的翻译渠道
 未找到渠道适配器：%{1},未找到渠道适配器：%{1}
 适配器类不存在：%{1},适配器类不存在：%{1}
 适配器类必须实现ProviderInterface接口：%{1},适配器类必须实现ProviderInterface接口：%{1}
+渠道配置,渠道配置
+翻译服务,翻译服务

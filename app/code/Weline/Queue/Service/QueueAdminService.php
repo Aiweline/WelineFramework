@@ -71,20 +71,12 @@ final class QueueAdminService
                 continue;
             }
             $class = (string)($row[Type::schema_fields_class] ?? '');
-            $tip = \htmlspecialchars(
-                (string)($row[Type::schema_fields_tip] ?? ''),
-                \ENT_QUOTES | \ENT_SUBSTITUTE,
-                'UTF-8',
-            );
             $items[] = [
                 'type_id' => (int)($row[Type::schema_fields_ID] ?? 0),
                 'name' => (string)($row[Type::schema_fields_name] ?? ''),
                 'module_name' => (string)($row[Type::schema_fields_module_name] ?? ''),
                 'class' => $class,
-                'tip' => \nl2br($tip) . '<hr><br><span class="w-text" data-tone="primary">'
-                    . \htmlspecialchars((string)__('执行类：'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                    . \htmlspecialchars($class, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
-                    . '</span>',
+                'tip' => (string)($row[Type::schema_fields_tip] ?? ''),
             ];
         }
 
@@ -97,6 +89,9 @@ final class QueueAdminService
      */
     public function typeAttributes(array $params): array
     {
+        // The public EAV model is a runtime class_alias; resolve it before
+        // validating instances returned by the legacy ORM collection.
+        \class_exists(EavAttribute::class);
         $queueId = (int)($params['queue_id'] ?? 0);
         $typeId = (int)($params['type_id'] ?? 0);
         if ($typeId <= 0) {
@@ -115,15 +110,9 @@ final class QueueAdminService
             }
         }
         $userData = $this->currentUserData()->getScope('queue');
+        $userData = \is_array($userData) ? $userData : [];
         $options = [
-            'label_class' => 'control-label',
-            'attrs' => [
-                'class' => 'form-control w-100',
-                'scope' => 'queue',
-                'file-ext' => '*',
-                'file-size' => '102400000',
-            ],
-            'need_array' => 1,
+            'no_html' => 1,
             'values' => $userData,
         ];
         if ((int)$queue->getId() > 0) {
@@ -134,28 +123,38 @@ final class QueueAdminService
         $attributes = $type->getAttributes($options);
         $attributeCodes = [];
         foreach ($attributes as $attribute) {
-            if (!\is_array($attribute)) {
+            if (!$attribute instanceof EavAttribute) {
                 continue;
             }
-            $code = \trim((string)($attribute['code'] ?? ''));
+            $code = \trim($attribute->getCode());
             if ($code !== '') {
                 $attributeCodes[$code] = true;
             }
         }
         $items = [];
         foreach ($attributes as $attribute) {
-            if (!\is_array($attribute)) {
+            if (!$attribute instanceof EavAttribute) {
                 continue;
             }
-            $code = \trim((string)($attribute['code'] ?? ''));
+            $code = \trim($attribute->getCode());
+            $value = \array_key_exists($code, $userData)
+                ? $userData[$code]
+                : $attribute->getDefaultValue();
+            if ((int)$queue->getId() > 0) {
+                try {
+                    $value = $attribute->getValue();
+                } catch (\Throwable) {
+                    // A missing optional EAV value falls back to the declared default.
+                }
+            }
             $items[] = [
                 'code' => $code,
-                'name' => (string)($attribute['name'] ?? ''),
-                'required' => !empty($attribute['required']) || !empty($attribute['is_required']),
-                'html' => $this->stripAttributeScripts((string)($attribute['html'] ?? '')),
-                'value' => $attribute['value'] ?? null,
+                'name' => $attribute->getName(),
+                'required' => $attribute->getTypeModel()->getRequired(),
+                'value' => $value,
+                'control' => $this->attributeControl($attribute),
                 'dependence' => $this->normalizeDependenceCodes(
-                    $attribute[EavAttribute::schema_fields_dependence] ?? '',
+                    $attribute->getDependence(),
                     $attributeCodes,
                 ),
             ];
@@ -610,22 +609,80 @@ final class QueueAdminService
         return \array_keys($codes);
     }
 
-    private function stripAttributeScripts(string $html): string
+    /**
+     * @return array{
+     *   kind:string,
+     *   multiple:bool,
+     *   placeholder:string,
+     *   options:list<array{value:string,label:string}>
+     * }
+     */
+    private function attributeControl(EavAttribute $attribute): array
     {
-        if ($html === '') {
-            return '';
-        }
-        $withoutBlocks = \preg_replace(
-            '~<script\b[^>]*>[\s\S]*?</script\s*>~i',
-            '',
-            $html,
-        );
-        if (!\is_string($withoutBlocks)) {
-            return '';
-        }
-        $withoutTags = \preg_replace('~<script\b[^>]*/?\s*>~i', '', $withoutBlocks);
+        $type = $attribute->getTypeModel();
+        $element = \strtolower($type->getElement());
+        $fieldType = \strtolower($type->getFieldType());
+        $options = [];
 
-        return \is_string($withoutTags) ? $withoutTags : '';
+        $modelClass = \trim($type->getModelClass());
+        if ($modelClass !== '' && \class_exists($modelClass)) {
+            try {
+                $model = ObjectManager::getInstance($modelClass);
+                if (\method_exists($model, 'getModelData')) {
+                    $modelOptions = $model->getModelData();
+                    if (\is_array($modelOptions)) {
+                        foreach ($modelOptions as $value => $label) {
+                            if (\is_scalar($label) || $label instanceof \Stringable) {
+                                $options[(string)$value] = (string)$label;
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                // Unsupported custom renderers fall back to their scalar EAV value.
+            }
+        }
+
+        $modelData = \json_decode($type->getModelClassData(), true);
+        if (\is_array($modelData)) {
+            foreach ($modelData as $value => $label) {
+                if (\is_scalar($label) || $label instanceof \Stringable) {
+                    $options[(string)$value] = (string)$label;
+                }
+            }
+        }
+
+        foreach ($attribute->getOptions() as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            $value = (string)($option['option_id'] ?? $option['code'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+            $options[$value] = (string)($option['value'] ?? $option['code'] ?? $value);
+        }
+
+        $kind = match (true) {
+            $element === 'select' || $options !== [] => 'select',
+            $element === 'textarea' => 'textarea',
+            \in_array($fieldType, ['bool', 'boolean', 'checkbox'], true) => 'checkbox',
+            \in_array($fieldType, ['int', 'integer', 'float', 'smallint', 'bigint', 'number'], true) => 'number',
+            $fieldType === 'swatch_color' || $fieldType === 'color' => 'color',
+            \in_array($fieldType, ['date', 'datetime-local', 'time', 'email', 'url', 'tel'], true) => $fieldType,
+            default => 'text',
+        };
+
+        return [
+            'kind' => $kind,
+            'multiple' => $attribute->getMultipleValued(),
+            'placeholder' => (string)__('请输入 %{1}', $attribute->getName()),
+            'options' => \array_map(
+                static fn(string $value, string $label): array => ['value' => $value, 'label' => $label],
+                \array_keys($options),
+                \array_values($options),
+            ),
+        ];
     }
 
     /** @return array<string,true> */

@@ -8,6 +8,8 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Session\Session;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Theme\Model\WelineTheme;
 
 final class PreviewContextService
@@ -34,6 +36,7 @@ final class PreviewContextService
         private readonly PreviewTokenService $previewTokenService,
         private readonly WelineTheme $welineTheme,
         private readonly ?PreviewRequestInspector $previewRequestInspector = null,
+        private readonly ?AuthenticatedSessionInterface $backendAuthSession = null,
     ) {
     }
 
@@ -51,6 +54,7 @@ final class PreviewContextService
             'store_mode' => ScopeIdentity::MODE_NORMAL,
             'target_type' => self::TARGET_TYPE_PATH,
             'target_value' => '/',
+            'layout_option' => 'default',
             'preview_token' => '',
             'locale' => '',
         ];
@@ -82,24 +86,44 @@ final class PreviewContextService
     {
         $context = $this->getDefaultContext();
         $shouldUseStoredContext = $this->shouldUseStoredContext();
+        $tokenContext = null;
+        $tokenData = $shouldUseStoredContext
+            ? $this->previewTokenService->getCurrentPreviewData()
+            : null;
+        $authorized = \is_array($tokenData) || $this->isBackendUserLoggedIn();
 
-        if ($shouldUseStoredContext) {
+        if ($shouldUseStoredContext && $authorized) {
             $storedContext = $this->session->getData(self::SESSION_KEY);
             if (\is_array($storedContext)) {
                 $context = \array_replace($context, $storedContext);
             }
 
-            $tokenData = $this->previewTokenService->getCurrentPreviewData();
             if (\is_array($tokenData)) {
-                $context = \array_replace($context, $this->extractContextFromTokenData($tokenData));
+                $tokenContext = $this->extractContextFromTokenData($tokenData);
             }
         }
 
-        if ($mergeRequest) {
+        if ($mergeRequest && $authorized) {
             $context = \array_replace($context, $this->extractContextFromRequest());
+        }
+        // A valid preview token is the immutable server-side authority for
+        // Theme/Scope/Store/Locale/target identity. URL fields remain useful
+        // for a logged-in tokenless editor, but cannot override a token.
+        if (\is_array($tokenContext)) {
+            $context = \array_replace($context, $tokenContext);
         }
 
         return $this->normalizeContext($context);
+    }
+
+    public function hasAuthoritativePreviewContext(): bool
+    {
+        if (!$this->shouldUseStoredContext()) {
+            return false;
+        }
+
+        return \is_array($this->previewTokenService->getCurrentPreviewData())
+            || $this->isBackendUserLoggedIn();
     }
 
     public function buildContext(array $context, bool $mergeCurrent = true): array
@@ -134,7 +158,8 @@ final class PreviewContextService
 
     public function clearContext(bool $clearLegacy = true): void
     {
-        $this->session->unsetData(self::SESSION_KEY);
+        // Session API is delete()/setData()/getData()
+        $this->session->delete(self::SESSION_KEY);
 
         if ($clearLegacy) {
             foreach ([
@@ -145,7 +170,7 @@ final class PreviewContextService
                 'preview_editor_area',
                 'preview_shell',
             ] as $key) {
-                $this->session->unsetData($key);
+                $this->session->delete($key);
             }
         }
     }
@@ -203,6 +228,7 @@ final class PreviewContextService
             'scope' => $context['scope'],
             'target_type' => $context['target_type'],
             'target_value' => (string)$context['target_value'],
+            'layout_option' => (string)$context['layout_option'],
         ];
 
         if (!empty($context['locale'])) {
@@ -284,10 +310,16 @@ final class PreviewContextService
         }
         $normalized['target_value'] = $targetValue;
 
-        $previewToken = \trim((string)($normalized['preview_token'] ?? ''));
-        if ($previewToken === '') {
-            $previewToken = (string)($this->previewTokenService->getTokenFromRequest() ?? '');
+        $layoutOption = \trim((string)($normalized['layout_option'] ?? ''));
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
         }
+        if (!\preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/', $layoutOption)) {
+            throw new \InvalidArgumentException((string)__('Theme 预览布局选项无效。'));
+        }
+        $normalized['layout_option'] = $layoutOption;
+
+        $previewToken = \trim((string)($normalized['preview_token'] ?? ''));
         $normalized['preview_token'] = $previewToken;
 
         return $normalized;
@@ -335,6 +367,7 @@ final class PreviewContextService
             'locale',
             'target_type',
             'target_value',
+            'layout_option',
         ] as $key) {
             $value = $this->request->getParam($key);
             if ($value !== null && $value !== '') {
@@ -731,5 +764,18 @@ final class PreviewContextService
     private function getLayoutScopeNormalizer(): ThemeLayoutScopeNormalizer
     {
         return new ThemeLayoutScopeNormalizer(new \Weline\SystemConfig\Service\SystemConfigScopeResolver());
+    }
+
+    private function isBackendUserLoggedIn(): bool
+    {
+        try {
+            if ($this->backendAuthSession instanceof AuthenticatedSessionInterface) {
+                return $this->backendAuthSession->isLoggedIn();
+            }
+
+            return SessionFactory::getInstance()->createBackendSession()->isLoggedIn();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

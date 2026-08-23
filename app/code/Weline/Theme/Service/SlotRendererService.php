@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\KeyBuilder;
-use Weline\Framework\App\Env;
-use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -17,6 +16,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
 use Weline\Theme\Dto\ThemeComponentDefinition;
+use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
@@ -55,6 +55,8 @@ class SlotRendererService
     private array $layoutCache = [];
     private const PUBLISHED_LAYOUT_CACHE_TTL = 120.0;
     private const WIDGET_OUTPUT_CACHE_TTL = 120.0;
+    private const MAX_PUBLISHED_LAYOUT_CACHE_ENTRIES = 128;
+    private const MAX_WIDGET_OUTPUT_CACHE_ENTRIES = 128;
     private const CACHEABLE_WIDGET_OUTPUTS = [];
     private static array $publishedLayoutDataCache = [];
     private static array $widgetOutputCache = [];
@@ -79,6 +81,7 @@ class SlotRendererService
     private array $renderThemeCache = [];
 
     private RuntimeTemplateRendererInterface $runtimeTemplateRenderer;
+    private LayoutValueHydrationRegistry $layoutValueHydrators;
 
     public function __construct(
         ThemeLayoutService $layoutService,
@@ -87,6 +90,7 @@ class SlotRendererService
         ThemeComponentRenderer $componentRenderer,
         Template $template,
         RuntimeTemplateRendererInterface $runtimeTemplateRenderer,
+        ?LayoutValueHydrationRegistry $layoutValueHydrators = null,
     ) {
         $this->layoutService = $layoutService;
         $this->widgetRegistry = $widgetRegistry;
@@ -94,6 +98,8 @@ class SlotRendererService
         $this->componentRenderer = $componentRenderer;
         $this->template = $template;
         $this->runtimeTemplateRenderer = $runtimeTemplateRenderer;
+        $this->layoutValueHydrators = $layoutValueHydrators
+            ?? ObjectManager::getInstance(LayoutValueHydrationRegistry::class);
     }
 
     /**
@@ -169,7 +175,7 @@ class SlotRendererService
         // 获取该主题和页面类型的布局配置
         $layoutData = $this->traceCall(
             'slot_renderer::getLayoutData',
-            fn() => $this->getLayoutData($themeId, $pageType, $status)
+            fn() => $this->getLayoutData($themeId, $pageType, $status, $area)
         );
 
         // 按插槽 ID 组织部件
@@ -781,6 +787,7 @@ class SlotRendererService
         $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
         $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, $renderArea);
         $config = $this->mergeTranslatedWidgetConfig($widget, $config, $definition);
+        $config = $this->hydrateTypedLayoutValues($config, $renderArea, $widget);
         $widgetOutputCacheKey = $this->buildWidgetOutputCacheKey($widget, $config);
         if ($widgetOutputCacheKey !== null) {
             $cachedWidget = self::$widgetOutputCache[$widgetOutputCacheKey] ?? null;
@@ -788,14 +795,17 @@ class SlotRendererService
                 && isset($cachedWidget['expires_at'], $cachedWidget['html'])
                 && (float)$cachedWidget['expires_at'] >= \microtime(true)
                 && \is_string($cachedWidget['html'])) {
+                unset(self::$widgetOutputCache[$widgetOutputCacheKey]);
+                self::$widgetOutputCache[$widgetOutputCacheKey] = $cachedWidget;
                 return $cachedWidget['html'];
             }
+            unset(self::$widgetOutputCache[$widgetOutputCacheKey]);
             $runtimeCachedWidget = $this->runtimeCacheGet($widgetOutputCacheKey);
             if (\is_string($runtimeCachedWidget)) {
-                self::$widgetOutputCache[$widgetOutputCacheKey] = [
+                $this->rememberProcessWidgetOutput($widgetOutputCacheKey, [
                     'expires_at' => \microtime(true) + $this->widgetOutputCacheTtl(),
                     'html' => $runtimeCachedWidget,
-                ];
+                ]);
                 return $runtimeCachedWidget;
             }
         }
@@ -1075,34 +1085,122 @@ class SlotRendererService
     {
         $locale = '';
         try {
-            $locale = trim((string)$this->template->getRequest()->getParam('locale', ''));
+            $locale = trim((string)(RequestContext::locale() ?: ''));
         } catch (\Throwable) {
             $locale = '';
         }
-
         if ($locale === '') {
-            try {
-                $locale = trim((string)(RequestContext::locale() ?: ''));
-            } catch (\Throwable) {
-                $locale = '';
-            }
-        }
-
-        if ($locale === '') {
-            try {
-                $locale = trim((string)State::getLangLocal());
-            } catch (\Throwable) {
-                $locale = '';
-            }
-        }
-
-        if ($locale === '' || $locale === Env::default_LANGUAGE_CODE) {
-            return $locale === Env::default_LANGUAGE_CODE ? $locale : null;
+            return null;
         }
 
         return preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale)
             ? $locale
             : null;
+    }
+
+    /** @param array<string,mixed> $config */
+    private function hydrateTypedLayoutValues(array $config, string $renderArea, array $widget): array
+    {
+        $locale = trim((string)($widget['locale_code'] ?? ''));
+        if ($locale === '') {
+            $locale = $this->resolveRenderLocale() ?? '';
+        }
+        if ($locale === '') {
+            throw new \RuntimeException((string)__('类型化布局值解析缺少冻结的 locale_code。'));
+        }
+        $scope = null;
+        $encodedScope = trim((string)($widget['scope'] ?? ''));
+        if ($encodedScope !== '' && !str_contains($encodedScope, ':')) {
+            try {
+                $scope = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class)
+                    ->identityFromEncodedScope($encodedScope);
+            } catch (\Throwable) {
+                $scope = null;
+            }
+        }
+        $scope ??= RequestContext::scopeIdentity();
+        if ($scope === null) {
+            // Ordinary backend chrome intentionally does not freeze ScopeIdentity.
+            // Resolve a local Global identity for hydration only — never install it.
+            if ($renderArea === 'backend') {
+                $scope = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class)
+                    ->identityFromEncodedScope(ThemeContextService::DEFAULT_SCOPE);
+            } else {
+                throw new \RuntimeException((string)__('类型化布局值解析缺少冻结的 ScopeIdentity。'));
+            }
+        }
+
+        $isAuthorizedPreview = false;
+        try {
+            $previewContexts = ObjectManager::getInstance(PreviewContextService::class);
+            $isAuthorizedPreview = $previewContexts->hasAuthoritativePreviewContext();
+        } catch (\Throwable) {
+            $previewContexts = null;
+            $isAuthorizedPreview = false;
+        }
+
+        [$actorId, $roles, $policyRevision] = $this->authoritativeFileAccessClaims(
+            $renderArea,
+            $isAuthorizedPreview,
+        );
+
+        return $this->layoutValueHydrators->hydrate($config, [
+            'scope_identity' => $scope,
+            'locale_code' => $locale,
+            'actor_id' => $actorId,
+            'roles' => $roles,
+            'purpose' => ($renderArea === 'backend' || $isAuthorizedPreview) ? 'preview' : 'render',
+            'policy_revision' => $policyRevision,
+        ]);
+    }
+
+    /** @return array{0:?int,1:list<string>,2:int} */
+    private function authoritativeFileAccessClaims(string $renderArea, bool $authorizedPreview): array
+    {
+        if ($renderArea !== 'backend' && !$authorizedPreview) {
+            return [null, [], 1];
+        }
+
+        // A token is an opaque server-side capability. Only claims loaded from
+        // its protected cache payload are trusted; URL/request parameters are
+        // never considered FileAccessContext facts.
+        try {
+            $tokenData = ObjectManager::getInstance(PreviewTokenService::class)->getCurrentPreviewData();
+            $tokenContext = is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
+            $actorId = (int)($tokenContext['file_access_actor_id'] ?? 0);
+            if ($actorId > 0) {
+                // The token retains identity, not an authorization result.
+                // Re-load enabled state and the current role for every request
+                // so a disabled user or changed role takes effect immediately.
+                $user = ObjectManager::getInstance(BackendUserContextProviderInterface::class)->find($actorId);
+                if ($user === null || !$user->getIsEnabled() || $user->getId() !== $actorId) {
+                    return [null, [], 1];
+                }
+                return [
+                    $actorId,
+                    $user->getRoleId() > 0 ? ['backend_role:' . $user->getRoleId()] : [],
+                    max(1, (int)($tokenContext['file_access_policy_revision'] ?? 1)),
+                ];
+            }
+        } catch (\Throwable) {
+            // Fall through to the current request's authenticated backend user.
+        }
+
+        try {
+            $user = ObjectManager::getInstance(BackendUserContextProviderInterface::class)->current();
+            if ($user !== null && $user->getIsEnabled() && $user->getId() > 0) {
+                return [
+                    $user->getId(),
+                    $user->getRoleId() > 0 ? ['backend_role:' . $user->getRoleId()] : [],
+                    1,
+                ];
+            }
+        } catch (\Throwable) {
+            // A missing authenticated actor is deliberately represented as null;
+            // private FileAsset policy will then fail closed.
+        }
+
+        return [null, [], 1];
     }
 
     private function resolveWidgetInstanceIdentify(array $config, string $area): string
@@ -1186,13 +1284,10 @@ class SlotRendererService
             return $html;
         }
 
-        if (\count(self::$widgetOutputCache) > 128) {
-            self::$widgetOutputCache = [];
-        }
-        self::$widgetOutputCache[$cacheKey] = [
+        $this->rememberProcessWidgetOutput($cacheKey, [
             'expires_at' => \microtime(true) + $this->widgetOutputCacheTtl(),
             'html' => $html,
-        ];
+        ]);
         $this->runtimeCacheSet($cacheKey, $html, $this->widgetOutputCacheTtl());
 
         return $html;
@@ -1237,62 +1332,57 @@ class SlotRendererService
      * 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据
      */
     /**
-     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string}
      */
-    private function currentLayoutIdentity(): array
+    private function currentLayoutIdentity(string $area = 'frontend'): array
     {
-        $request = null;
-        try {
-            $request = $this->template->getRequest();
-        } catch (\Throwable) {
-            $request = null;
+        $installed = RequestContext::get(LayoutIdentity::REQUEST_CONTEXT_KEY);
+        if ($installed instanceof LayoutIdentity) {
+            return $installed->toArray();
         }
-        $getParam = static function (string $key, mixed $default = null) use ($request): mixed {
-            if ($request && method_exists($request, 'getParam')) {
-                return $request->getParam($key, $default);
+
+        $area = $area === 'backend' || $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $scope = RequestContext::scopeIdentity();
+        $normalizer = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class);
+        if ($scope === null) {
+            // Match ControllerFetchFileBefore / ThemeContextService: ordinary backend
+            // uses explicit Global layout scope without installing a synthetic request identity.
+            if ($area !== 'backend') {
+                throw new \RuntimeException((string)__('Theme 布局渲染缺少冻结的 ScopeIdentity。'));
             }
-            return $default;
-        };
-
-        $layoutOption = trim((string)$getParam('layout_option', 'default'));
-        $scope = trim((string)$getParam('scope', 'default'));
-        $legacyTargetType = trim((string)$getParam('target_type', ''));
-        // PreviewContext 的 layout 是 UI 上下文，不是 Theme 数据目标。
-        if ($legacyTargetType === 'layout') {
-            $legacyTargetType = '';
+            $normalized = $normalizer->normalize([
+                'scope' => ThemeContextService::DEFAULT_SCOPE,
+                'locale_code' => (string)(RequestContext::locale() ?? ''),
+            ]);
+        } else {
+            $normalized = $normalizer->normalize([
+                'scope_identity' => $scope,
+                'locale_code' => (string)(RequestContext::locale() ?? ''),
+            ]);
         }
-        /** @var ThemeTargetIdentityResolver $identityResolver */
-        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
-        [$targetType, $targetId] = $identityResolver->resolveFirst([
-            [
-                'target_type' => $getParam('theme_layout_source_target_type', null),
-                'target_id' => $getParam('theme_layout_source_target_id', null),
-            ],
-            [
-                'target_type' => $getParam('theme_layout_target_type', null),
-                'target_id' => $getParam('theme_layout_target_id', null),
-            ],
-            [
-                'target_type' => $legacyTargetType,
-                'target_id' => $getParam('target_id', null),
-            ],
-        ]);
 
-        return [
-            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
-            'scope' => $scope !== '' ? $scope : 'default',
-            'target_type' => $targetType !== '' ? $targetType : 'global',
-            'target_id' => $targetType !== '' ? $targetId : 0,
-        ];
+        return (new LayoutIdentity(
+            'default',
+            $normalized['scope'],
+            'global',
+            0,
+            $normalized['locale_code'],
+        ))->toArray();
     }
 
-    private function getLayoutData(int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): array
+    private function getLayoutData(
+        int $themeId,
+        string $pageType,
+        string $status = ThemeLayout::STATUS_PUBLISHED,
+        string $area = 'frontend'
+    ): array
     {
-        $identity = $this->currentLayoutIdentity();
+        $identity = $this->currentLayoutIdentity($area);
         $hasTargetIdentity = $this->hasTargetIdentity($identity);
         $cacheKey = "{$themeId}:{$pageType}:{$status}:"
             . $identity['layout_option'] . ':'
             . $identity['scope'] . ':'
+            . $identity['locale_code'] . ':'
             . $identity['target_type'] . ':'
             . $identity['target_id'];
         $isDraft = ($status === ThemeLayout::STATUS_DRAFT);
@@ -1308,16 +1398,16 @@ class SlotRendererService
                 && isset($cached['expires_at'], $cached['data'])
                 && (float)$cached['expires_at'] >= \microtime(true)
                 && \is_array($cached['data'])) {
+                unset(self::$publishedLayoutDataCache[$cacheKey]);
+                self::$publishedLayoutDataCache[$cacheKey] = $cached;
                 $this->layoutCache[$cacheKey] = $cached['data'];
                 return $cached['data'];
             }
+            unset(self::$publishedLayoutDataCache[$cacheKey]);
             $runtimeCachedLayout = $this->runtimeCacheGet('layout.data.' . $cacheKey);
             if (\is_array($runtimeCachedLayout)) {
                 $this->layoutCache[$cacheKey] = $runtimeCachedLayout;
-                self::$publishedLayoutDataCache[$cacheKey] = [
-                    'expires_at' => \microtime(true) + $this->publishedLayoutCacheTtl(),
-                    'data' => $runtimeCachedLayout,
-                ];
+                $this->rememberPublishedLayoutData($cacheKey, $runtimeCachedLayout);
                 return $runtimeCachedLayout;
             }
         }
@@ -1329,17 +1419,8 @@ class SlotRendererService
         $hasWidgets = $this->hasWidgetsInLayout($layout);
         $hasNoWidgetPlacements = $this->layoutService->hasNoWidgetPlacements($themeId, $pageType, $status, $identity);
         
-        // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据。
-        // 页面级 target（如 cms_page）必须保持预览/发布隔离，不能在公开访问时读取或静默发布草稿。
-        if (!$hasWidgets && !$hasNoWidgetPlacements && $status === ThemeLayout::STATUS_PUBLISHED && !$hasTargetIdentity) {
-            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
-            if ($this->hasWidgetsInLayout($draftLayout)) {
-                // 使用草稿数据，并自动发布（后台静默发布）
-                $this->autoPublishDraft($themeId, $pageType, $draftLayout);
-                $layout = $draftLayout;
-                $hasWidgets = true;
-            }
-        }
+        // Published runtime must never read or auto-publish a draft. Empty
+        // published layouts remain empty until an immutable Release is created.
         
         // Default widgets are suggestions only. Do not auto-seed an empty
         // published layout; the user can restore suggestions from the editor.
@@ -1350,13 +1431,6 @@ class SlotRendererService
             $defaultLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $status);
             if ($this->hasWidgetsInLayout($defaultLayout)) {
                 $layout = $defaultLayout;
-            } else if ($status === ThemeLayout::STATUS_PUBLISHED) {
-                // 尝试默认页面类型的草稿
-                $defaultDraftLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, ThemeLayout::STATUS_DRAFT);
-                if ($this->hasWidgetsInLayout($defaultDraftLayout)) {
-                    $this->autoPublishDraft($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $defaultDraftLayout);
-                    $layout = $defaultDraftLayout;
-                }
             }
         }
 
@@ -1366,14 +1440,26 @@ class SlotRendererService
         // 仅普通已发布布局写入缓存；草稿和页面级 target 不缓存，避免页面级 Meta/Layout 串页或发布后读旧值。
         if ($cacheablePublished) {
             $this->layoutCache[$cacheKey] = $layout;
-            self::$publishedLayoutDataCache[$cacheKey] = [
-                'expires_at' => \microtime(true) + $this->publishedLayoutCacheTtl(),
-                'data' => $layout,
-            ];
+            $this->rememberPublishedLayoutData($cacheKey, $layout);
             $this->runtimeCacheSet('layout.data.' . $cacheKey, $layout, $this->publishedLayoutCacheTtl());
         }
 
         return $layout;
+    }
+
+    /** @param array<string,mixed> $layout */
+    private function rememberPublishedLayoutData(string $cacheKey, array $layout): void
+    {
+        if (count(self::$publishedLayoutDataCache) >= self::MAX_PUBLISHED_LAYOUT_CACHE_ENTRIES
+            && !isset(self::$publishedLayoutDataCache[$cacheKey])
+        ) {
+            array_shift(self::$publishedLayoutDataCache);
+        }
+        unset(self::$publishedLayoutDataCache[$cacheKey]);
+        self::$publishedLayoutDataCache[$cacheKey] = [
+            'expires_at' => microtime(true) + $this->publishedLayoutCacheTtl(),
+            'data' => $layout,
+        ];
     }
     
     /**
@@ -1400,26 +1486,6 @@ class SlotRendererService
         return false;
     }
     
-    /**
-     * 自动发布草稿数据（前端访问时的静默发布）
-     * 
-     * 当前端访问发现没有已发布数据但有草稿数据时，自动将草稿发布
-     */
-    private function autoPublishDraft(int $themeId, string $pageType, array $draftLayout): void
-    {
-        try {
-            if (!$this->hasWidgetsInLayout($draftLayout)) {
-                return;
-            }
-
-            // 与后台发布一致：先删后插全量替换，禁止向 published 追加行（否则会出现重复部件）
-            $this->layoutService->publishLayout($themeId, $pageType);
-            $this->clearCache();
-        } catch (\Exception $e) {
-            // 静默失败，不影响前端渲染
-        }
-    }
-
     /**
      * 按插槽 ID 组织部件
      */
@@ -1481,6 +1547,32 @@ class SlotRendererService
         $this->purgeRuntimeCacheNamespace();
         self::$runtimeCache = null;
         self::$runtimeCacheResolved = false;
+    }
+
+    /** Clear process L1 arrays only; the shared runtime namespace remains intact. */
+    public static function clearProcessMemoryCache(): void
+    {
+        self::$publishedLayoutDataCache = [];
+        self::$widgetOutputCache = [];
+    }
+
+    public static function processCacheItemCount(): int
+    {
+        return count(self::$publishedLayoutDataCache) + count(self::$widgetOutputCache);
+    }
+
+    /** @param array{expires_at:float,html:string} $entry */
+    private function rememberProcessWidgetOutput(string $cacheKey, array $entry): void
+    {
+        unset(self::$widgetOutputCache[$cacheKey]);
+        while (count(self::$widgetOutputCache) >= self::MAX_WIDGET_OUTPUT_CACHE_ENTRIES) {
+            $oldest = array_key_first(self::$widgetOutputCache);
+            if ($oldest === null) {
+                break;
+            }
+            unset(self::$widgetOutputCache[$oldest]);
+        }
+        self::$widgetOutputCache[$cacheKey] = $entry;
     }
 
     /**

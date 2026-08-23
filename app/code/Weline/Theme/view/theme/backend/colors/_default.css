@@ -1,6 +1,9 @@
 /**
  * Backend Theme - default palette
- */
+  * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
+ * @meta.palette_role {default="brand",name="palette_role",description="palette_role"}
+*/
 
 :root,
 [data-theme="default"] {

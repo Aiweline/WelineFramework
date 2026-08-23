@@ -266,8 +266,8 @@ const CustomerServiceConsole = (function() {
             </div>
             <div class="chat-input-area">
                 <div class="chat-input-wrapper">
-                    <textarea class="chat-input" id="message-input" placeholder="${__('输入消息...')}"></textarea>
-                    <button class="btn-send" id="send-button">${__('发送')}</button>
+                    <textarea class="w-textarea chat-input" id="message-input" placeholder="${__('输入消息...')}"></textarea>
+                    <button type="button" class="w-button btn-send" id="send-button">${__('发送')}</button>
                 </div>
             </div>
         `;

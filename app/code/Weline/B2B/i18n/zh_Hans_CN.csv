@@ -4,61 +4,69 @@
 数据暂时无法加载。参考编号：%{1},数据暂时无法加载。参考编号：%{1}
 状态暂时无法读取。参考编号：%{1},状态暂时无法读取。参考编号：%{1}
 "B2B 管理","B2B 管理"
+globe,地球
 "B2B 客户组、价目表与报价审批管理","B2B 客户组、价目表与报价审批管理"
 客户组,客户组
+users,用户
 "查看 B2B 客户组","查看 B2B 客户组"
 价目表,价目表
+tag,标签
 "查看 B2B 价目表","查看 B2B 价目表"
 报价令牌,报价令牌
+file,文件
 "查看 B2B 报价令牌","查看 B2B 报价令牌"
 订单价格快照,订单价格快照
+camera,相机
 "查看 B2B 订单价格快照","查看 B2B 订单价格快照"
 迁移状态,迁移状态
+eye,眼睛
 "只读查看 B2B 迁移状态","只读查看 B2B 迁移状态"
 创建客户组,创建客户组
 "创建 B2B 客户组","创建 B2B 客户组"
 创建价目表,创建价目表
+plus,加
 "创建 B2B 价目表","创建 B2B 价目表"
 审批报价,审批报价
+check,查看
 签发报价、重新校验并生成不可变订单价格快照,签发报价、重新校验并生成不可变订单价格快照
 "B2B price list header 数据非法","B2B price list header 数据非法"
 "B2B group_id 必填且不能超过 64 字符","B2B group_id 必填且不能超过 64 字符"
 "B2B website_id 不能为负数：%{1}","B2B website_id 不能为负数：%{1}"
 "B2B group code 必填且不能超过 64 字符","B2B group code 必填且不能超过 64 字符"
-"B2B group status 非法：%{1}","B2B group status 非法：%{1}"
-"B2B group version 非法","B2B group version 非法"
+"B2B group status 非法：%{1}",B2B团体状态非法：%{1}
+"B2B group version 非法",B2B团体版非法
 "B2B price list item 数据非法","B2B price list item 数据非法"
-"B2B quote token_id 非法","B2B quote token_id 非法"
-"B2B quote customer_id 非法","B2B quote customer_id 非法"
+"B2B quote token_id 非法","B2B 报价 token_id 非法"
+"B2B quote customer_id 非法","B2B 报价 customer_id 非法"
 "B2B quote SKU 非法","B2B quote SKU 非法"
-"B2B quote Website/amount 非法","B2B quote Website/amount 非法"
-"B2B quote source 非法","B2B quote source 非法"
-"B2B quote group_id 非法","B2B quote group_id 非法"
-"B2B quote price_list_id 非法","B2B quote price_list_id 非法"
-"B2B quote channel_id 非法","B2B quote channel_id 非法"
-"B2B quote order_ref 非法","B2B quote order_ref 非法"
-"B2B quote version 非法","B2B quote version 非法"
-"B2B quote fingerprint 非法","B2B quote fingerprint 非法"
+"B2B quote Website/amount 非法","B2B 报价 网站/金额 非法"
+"B2B quote source 非法",B2B报价来源非法
+"B2B quote group_id 非法","B2B 报价 group_id 非法"
+"B2B quote price_list_id 非法","B2B报价 Price_list_id 非法"
+"B2B quote channel_id 非法","B2B报价channel_id 非法"
+"B2B quote order_ref 非法","B2B 报价 order_ref 非法"
+"B2B quote version 非法",B2B报价版非法
+"B2B quote fingerprint 非法","B2B 报价指纹 非法"
 "B2B quote 有效期非法","B2B quote 有效期非法"
-"B2B quote status 非法：%{1}","B2B quote status 非法：%{1}"
+"B2B quote status 非法：%{1}",B2B报价状态非法：%{1}
 "B2B quote 消费状态与 order_ref 不一致","B2B quote 消费状态与 order_ref 不一致"
-"B2B quote rule stack 非法","B2B quote rule stack 非法"
+"B2B quote rule stack 非法",B2B报价规则栈非法
 "B2B quote fingerprint 校验失败","B2B quote fingerprint 校验失败"
-"B2B Order snapshot identity 非法","B2B Order snapshot identity 非法"
-"B2B Order snapshot 可选 identity 非法","B2B Order snapshot 可选 identity 非法"
-"B2B Order snapshot Website/amount/time 非法","B2B Order snapshot Website/amount/time 非法"
-"B2B Order snapshot version 非法","B2B Order snapshot version 非法"
-"B2B Order snapshot hash 非法","B2B Order snapshot hash 非法"
-"B2B Order snapshot rule stack 非法","B2B Order snapshot rule stack 非法"
+"B2B Order snapshot identity 非法","B2B 订单快照身份 非法"
+"B2B Order snapshot 可选 identity 非法","B2B 订单快照 任选 身份 非法"
+"B2B Order snapshot Website/amount/time 非法","B2B 订单快照 网址/金额/时间 非法"
+"B2B Order snapshot version 非法","B2B 订单快照版 非法"
+"B2B Order snapshot hash 非法","B2B 订单快照哈希 非法"
+"B2B Order snapshot rule stack 非法",B2B订单快照规则栈非法
 "B2B Order snapshot hash 校验失败","B2B Order snapshot hash 校验失败"
 "B2B price list_id 必填且不能超过 64 字符","B2B price list_id 必填且不能超过 64 字符"
-"B2B price list group_id 非法","B2B price list group_id 非法"
+"B2B price list group_id 非法","B2B价目表 group_id 非法"
 "B2B price list website_id 不能为负数：%{1}","B2B price list website_id 不能为负数：%{1}"
 "B2B price list version 必须大于 0","B2B price list version 必须大于 0"
-"B2B price list channel_id 非法","B2B price list channel_id 非法"
+"B2B price list channel_id 非法","B2B价目表channel_id 非法"
 "B2B price list 至少包含一个 SKU","B2B price list 至少包含一个 SKU"
-"B2B price list SKU 非法","B2B price list SKU 非法"
-"B2B price list amount_minor 非法：%{1}","B2B price list amount_minor 非法：%{1}"
+"B2B price list SKU 非法","B2B 价目表 SKU 非法"
+"B2B price list amount_minor 非法：%{1}","B2B价目表 amount_minor 非法：%{1}"
 "B2B membership 数据非法","B2B membership 数据非法"
 是,是
 否,否
@@ -69,12 +77,12 @@
 签发并审批报价,签发并审批报价
 新增配置,新增配置
 "客户组 ID","客户组 ID"
-"网站 ID","网站 ID"
+网站,网站
 代码,代码
 状态,状态
 "价目表 ID","价目表 ID"
 版本,版本
-SKU,SKU
+SKU,存货单位
 金额（分）,金额（分）
 "渠道 ID（可选）","渠道 ID（可选）"
 "客户 ID","客户 ID"
@@ -89,19 +97,24 @@ SKU,SKU
 "B2B Order snapshot 不可覆盖：%{1}","B2B Order snapshot 不可覆盖：%{1}"
 "B2B quote TTL 非法","B2B quote TTL 非法"
 "B2B 浏览器测试夹具未启用","B2B 浏览器测试夹具未启用"
-"B2B price list 与 group Website 不一致","B2B price list 与 group Website 不一致"
+"B2B price list 与 group Website 不一致",B2B价目表与集团网站不一致
 "B2B candidate 请求缺少合法 Website/SKU/amount","B2B candidate 请求缺少合法 Website/SKU/amount"
 "B2B quote token 不可覆盖：%{1}","B2B quote token 不可覆盖：%{1}"
 "B2B price list revision 不可覆盖：%{1}@%{2}","B2B price list revision 不可覆盖：%{1}@%{2}"
 打印帮助,打印帮助
-"在 full clone 只读清点 group/membership/list/quote/snapshot","在 full clone 只读清点 group/membership/list/quote/snapshot"
+"在 full clone 只读清点 group/membership/list/quote/snapshot","在完整克隆 言语清点 group/membership/list/quote/snapshot"
 "写前 checkpoint，验证 version mapping 并保持 shadow","写前 checkpoint，验证 version mapping 并保持 shadow"
 "新进程重载 checkpoint，重算事实与 shadow report","新进程重载 checkpoint，重算事实与 shadow report"
 "fresh verify 后仅放量 checkpoint 冻结的 Website Checkout","fresh verify 后仅放量 checkpoint 冻结的 Website Checkout"
 "按 checkpoint mode off，保留 quote/order snapshot 与零售路径","按 checkpoint mode off，保留 quote/order snapshot 与零售路径"
-"migration registry 已登记的 full mig_clone_*","migration registry 已登记的 full mig_clone_*"
-"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）"
+"migration registry 已登记的 full mig_clone_*","迁移注册表已注册完整的 mig_clone_*"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）",apply输出的检查点ID（verify/allowlist/rollback必需）
 "目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
 显示本帮助,显示本帮助
-"""B2B 接口不支持该操作：%{1}""","B2B 接口不支持该操作：%{1}"
-"MIG-P4C：B2B shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4C：B2B shadow 到 allowlist（apply 必须 --database=mig_clone_*）"
+"""B2B 接口不支持该操作：%{1}""","""B2B 接口不支持该操作：%{1}"""
+"网站 ID","网站 ID"
+"MIG-P4C：B2B 版本映射与 Checkout allowlist（仅登记的 full clone）","MIG-P4C: B2B version mapping and Checkout allowlist (registered full clones only)"
+"MIG-P4C：B2B shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4C：B2B 影子到白名单（必须--database=mig_clone_*）"
+"B2B price candidate","B2B 候选价格"
+"Customer group",客户群体
+"Price list",价格表

@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\ThemeContextProviderInterface;
-use Weline\Framework\Session\Session;
-use Weline\Theme\Helper\PreviewManager;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\WelineTheme;
 
 class ThemeContextService implements ThemeContextProviderInterface
@@ -22,6 +23,9 @@ class ThemeContextService implements ThemeContextProviderInterface
     public function __construct(
         private readonly WelineTheme $welineTheme,
         private readonly ?PreviewContextService $previewContextService = null,
+        private readonly ?ThemeScopedWorkspaceInterface $scopedWorkspace = null,
+        private readonly ?ScopeHierarchyInterface $scopeHierarchy = null,
+        private readonly ?ThemeLayoutScopeNormalizer $layoutScopeNormalizer = null,
     ) {
     }
 
@@ -119,39 +123,62 @@ class ThemeContextService implements ThemeContextProviderInterface
     {
         $area = $this->normalizeArea($area);
 
-        if ($scopeParam !== null && \trim($scopeParam) !== '') {
-            return $this->extractScopeForArea($area, $scopeParam) ?? self::DEFAULT_SCOPE;
-        }
-
+        // Only a validated preview context may override the frozen request
+        // Scope. Ordinary runtime never accepts URL/body/session Scope claims.
         try {
-            $previewContext = $this->getPreviewContextService()->getCurrentContext();
-            $previewScope = $this->extractScopeForArea($area, (string)($previewContext['scope'] ?? ''));
-            if ($previewScope !== null && \trim($previewScope) !== '') {
-                return $previewScope;
+            $previewContextService = $this->getPreviewContextService();
+            if ($previewContextService->hasAuthoritativePreviewContext()) {
+                $previewContext = $previewContextService->getCurrentContext();
+                $previewThemeId = $previewContextService->getThemeIdForArea($area, $previewContext, false);
+                $previewScope = $this->extractScopeForArea($area, (string)($previewContext['scope'] ?? ''));
+                if ($previewThemeId > 0 && $previewScope !== null && \trim($previewScope) !== '') {
+                    return $previewScope;
+                }
             }
         } catch (\Throwable) {
         }
 
-        if (PreviewManager::isPreviewMode()) {
-            $previewScope = PreviewManager::getPreviewScope($area);
-            if ($previewScope !== null && \trim($previewScope) !== '') {
-                return $this->extractScopeForArea($area, $previewScope) ?? self::DEFAULT_SCOPE;
+        $identity = RequestContext::scopeIdentity();
+        if (!$identity instanceof ScopeIdentity) {
+            // Ordinary backend chrome (e.g. Media Manager) may render without a
+            // frozen storefront ScopeIdentity. Keep Theme Editor / frontend fail-closed:
+            // editor/preview must install preview context or freeze identity first.
+            if ($area === self::AREA_BACKEND) {
+                return self::DEFAULT_SCOPE;
             }
+            throw new \RuntimeException((string)__('Theme 运行时缺少冻结的 ScopeIdentity。'));
+        }
+        $context = $this->getScopeHierarchy()->contextFromIdentity($identity);
+
+        return $this->getLayoutScopeNormalizer()->encodeStorageScope(
+            $context->storageScope,
+            $context->storeMode,
+        );
+    }
+
+    /**
+     * Legacy Theme data read chain, nearest Scope first.
+     *
+     * @return list<string>
+     */
+    public function resolveCurrentScopeChain(string $area, ?string $scopeParam = null): array
+    {
+        return $this->resolveStorageScopeChain($this->resolveCurrentScope($area, $scopeParam));
+    }
+
+    /** @return list<string> */
+    public function resolveStorageScopeChain(string $scope): array
+    {
+        $scope = \trim($scope) !== '' ? \trim($scope) : 'default.default.default';
+        if (\str_starts_with($scope, PreviewThemeScopeService::PREFIX)) {
+            return [$scope];
         }
 
-        $request = $this->getRequest();
-        if ($request) {
-            $requestScope = $request->getParam('scope_' . $area) ?? $request->getParam('scope');
-            $resolvedScope = $this->extractScopeForArea(
-                $area,
-                \is_scalar($requestScope) ? (string)$requestScope : null
-            );
-            if ($resolvedScope !== null) {
-                return $resolvedScope;
-            }
+        try {
+            return $this->getLayoutScopeNormalizer()->readFallbackScopes($scope);
+        } catch (\Throwable) {
+            return [$scope];
         }
-
-        return self::DEFAULT_SCOPE;
     }
 
     public function formatScopePath(string $area, string $scope): string
@@ -206,6 +233,11 @@ class ThemeContextService implements ThemeContextProviderInterface
         }
 
         if ($normalizedArea !== null) {
+            $scopedTheme = $this->resolvePublishedScopedTheme($normalizedArea);
+            if ($scopedTheme && $scopedTheme->getId()) {
+                return $scopedTheme;
+            }
+
             $directTheme = $this->getDirectActiveTheme($normalizedArea);
             if ($directTheme && $directTheme->getId()) {
                 return $directTheme;
@@ -215,6 +247,34 @@ class ThemeContextService implements ThemeContextProviderInterface
             if ($defaultTheme->getId()) {
                 return $defaultTheme;
             }
+        }
+
+        $resolvedTheme = $this->newThemeModel();
+        $this->loadActiveTheme($resolvedTheme, $normalizedArea);
+
+        return $resolvedTheme->getId() ? $resolvedTheme : null;
+    }
+
+    /**
+     * Resolve a Theme for an explicit immutable Scope instead of borrowing the
+     * current request Scope. CMS/queue/CLI callers must use this boundary.
+     */
+    public function resolveThemeForScope(string $area, ScopeIdentity $identity): ?WelineTheme
+    {
+        $normalizedArea = $this->normalizeArea($area);
+        $scopedTheme = $this->resolvePublishedScopedTheme($normalizedArea, $identity);
+        if ($scopedTheme && $scopedTheme->getId()) {
+            return $scopedTheme;
+        }
+
+        $directTheme = $this->getDirectActiveTheme($normalizedArea);
+        if ($directTheme && $directTheme->getId()) {
+            return $directTheme;
+        }
+
+        $defaultTheme = $this->buildModuleDefaultTheme($normalizedArea);
+        if ($defaultTheme->getId()) {
+            return $defaultTheme;
         }
 
         $resolvedTheme = $this->newThemeModel();
@@ -373,61 +433,57 @@ class ThemeContextService implements ThemeContextProviderInterface
 
     private function resolvePreviewTheme(string $area): ?WelineTheme
     {
-        $previewThemeId = 0;
-
         try {
-            $previewThemeId = $this->getPreviewContextService()->getThemeIdForArea($area, null, false);
+            $previewContextService = $this->getPreviewContextService();
+            if (!$previewContextService->hasAuthoritativePreviewContext()) {
+                return null;
+            }
+            $previewThemeId = $previewContextService->getThemeIdForArea($area, null, false);
         } catch (\Throwable) {
-            $previewThemeId = 0;
+            return null;
         }
 
         if (!$previewThemeId) {
-            try {
-                if (!$this->getPreviewContextService()->shouldUseStoredContext()) {
-                    return null;
-                }
-            } catch (\Throwable) {
-            }
-
-            $previewThemeArea = '';
-            $previewThemeAreaFromRequest = '';
-
-            $request = $this->getRequest();
-            if ($request) {
-                $previewThemeId = (int)$request->getParam('preview_theme', 0);
-                $previewThemeAreaFromRequest = $this->normalizeArea(
-                    (string)$request->getParam('preview_area', $area),
-                    $area
-                );
-            }
-
-            $session = $this->getSession();
-            if (!$previewThemeId) {
-                if ($session) {
-                    $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
-                    $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
-                }
-            } else {
-                $previewThemeArea = $previewThemeAreaFromRequest;
-            }
-
-            if (!$previewThemeId) {
-                return null;
-            }
-
-            if ($previewThemeArea === '') {
-                $previewThemeArea = $area;
-            }
-
-            if ($previewThemeArea !== $area) {
-                return null;
-            }
+            return null;
         }
 
         $previewTheme = $this->newThemeModel();
         $previewTheme->load($previewThemeId);
 
         return $previewTheme->getId() ? $previewTheme : null;
+    }
+
+    /**
+     * Resolve the immutable published Theme binding for the authoritative request Scope.
+     *
+     * Request parameters and editor Session state are deliberately excluded here. During
+     * a rolling upgrade, missing scoped tables/services fall back to the legacy active
+     * Theme so the last known runtime remains available.
+     */
+    private function resolvePublishedScopedTheme(string $area, ?ScopeIdentity $identity = null): ?WelineTheme
+    {
+        try {
+            $identity ??= RequestContext::scopeIdentity();
+            if (!$identity instanceof ScopeIdentity) {
+                return null;
+            }
+            $scope = $this->getScopeHierarchy()->contextFromIdentity($identity);
+            $resolved = $this->getScopedWorkspace()->resolvePublishedTheme($scope, $area);
+            $themeId = (int)($resolved?->effectiveValue ?? 0);
+            if ($themeId <= 0) {
+                return null;
+            }
+
+            $theme = $this->newThemeModel();
+            $theme->load($themeId);
+            if (!$theme->getId() || !$this->themeSupportsArea($theme, $area)) {
+                return null;
+            }
+
+            return $theme;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -458,24 +514,6 @@ class ThemeContextService implements ThemeContextProviderInterface
         return $theme;
     }
 
-    private function getRequest(): ?Request
-    {
-        try {
-            return ObjectManager::getInstance(Request::class);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function getSession(): ?Session
-    {
-        try {
-            return ObjectManager::getInstance(Session::class);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     private function getPreviewContextService(): PreviewContextService
     {
         if ($this->previewContextService) {
@@ -485,6 +523,36 @@ class ThemeContextService implements ThemeContextProviderInterface
         /** @var PreviewContextService $service */
         $service = ObjectManager::getInstance(PreviewContextService::class);
         return $service;
+    }
+
+    private function getScopedWorkspace(): ThemeScopedWorkspaceInterface
+    {
+        if ($this->scopedWorkspace) {
+            return $this->scopedWorkspace;
+        }
+
+        /** @var ThemeScopedWorkspaceInterface $service */
+        $service = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+
+        return $service;
+    }
+
+    private function getScopeHierarchy(): ScopeHierarchyInterface
+    {
+        if ($this->scopeHierarchy) {
+            return $this->scopeHierarchy;
+        }
+
+        /** @var ScopeHierarchyInterface $service */
+        $service = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+
+        return $service;
+    }
+
+    private function getLayoutScopeNormalizer(): ThemeLayoutScopeNormalizer
+    {
+        return $this->layoutScopeNormalizer
+            ?? new ThemeLayoutScopeNormalizer($this->getScopeHierarchy());
     }
 
     private function loadActiveTheme(WelineTheme $theme, ?string $area = null): void

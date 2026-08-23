@@ -1,9 +1,9 @@
 ﻿"API 文档收集后","API 文档收集后"
-"DeveloperWorkspace 汇总 API 文档后触发，允许其他模块通过事件追加 SDK、协议或扩展 API 文档。","DeveloperWorkspace 汇总 API 文档后触发，允许其他模块通过事件追加 SDK、协议或扩展 API 文档。"
-异步事件验收台不支持操作：%{1},异步事件验收台不支持操作：%{1}
-"执行异步资源变更 WebUI 验收步骤","执行异步资源变更 WebUI 验收步骤"
-"异步资源变更 WebUI 验收台","异步资源变更 WebUI 验收台"
-"通过 w_changed() 实测 Outbox、Delivery、Queue 与异步 Observer。","通过 w_changed() 实测 Outbox、Delivery、Queue 与异步 Observer。"
+"DeveloperWorkspace 汇总 API 文档后触发，允许其他模块通过事件追加 SDK、协议或扩展 API 文档。","Triggered after DeveloperWorkspace aggregates API documentation, allowing other modules to append SDK, protocol or extension API documentation through events."
+异步事件验收台不支持操作：%{1},"Asynchronous event acceptance platform does not support operation: %{1}"
+"执行异步资源变更 WebUI 验收步骤","Execute asynchronous resource changes WebUI acceptance step"
+"异步资源变更 WebUI 验收台","Asynchronous resource change WebUI acceptance platform"
+"通过 w_changed() 实测 Outbox、Delivery、Queue 与异步 Observer。","Use w_changed() to measure Outbox, Delivery, Queue and asynchronous Observer."
 开发工具面板,"Developer Tools Panel"
 在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,"Show the developer tools panel on the page, including route inspection and API docs. Displayed only in developer mode."
 开发工具面板-扩展标签,"Developer Tools Panel - Extension Tabs"
@@ -28,8 +28,8 @@ WelineFramework插件功能,"WelineFramework Plugin Features"
 开发助手,"Development Assistant"
 关闭沙盒环境,"Close sandbox environment"
 沙盒启动Key,"Sandbox Startup Key"
-"异步验收探针只接受 ResourceChange v1","异步验收探针只接受 ResourceChange v1"
-异步验收探针标识不匹配,异步验收探针标识不匹配
+"异步验收探针只接受 ResourceChange v1","Asynchronous acceptance probe only accepts ResourceChange v1"
+异步验收探针标识不匹配,"Asynchronous acceptance probe identifier mismatch"
 "Weline_DeveloperWorkspace: before_schema_diff_commit — DocumentUniqueKeyHealer","Weline_DeveloperWorkspace: before_schema_diff_commit — DocumentUniqueKeyHealer"
 文档ID不能为空,"Document ID cannot be empty"
 文档不存在,"Document does not exist"
@@ -46,36 +46,36 @@ WelineFramework插件功能,"WelineFramework Plugin Features"
 文件上传失败！,"File uploadFailed!"
 未知,Unknown
 获取成功,"Get successful"
-开发文档管理,开发文档管理
+开发文档管理,"Development document management"
 list,list
 管理开发文档,"Manage developer documents"
-文档列表,文档列表
+文档列表,"Document list"
 language,language
-保存文档管理配置,保存文档管理配置
+保存文档管理配置,"Save document management configuration"
 save,save
-扫描文档翻译适配器,扫描文档翻译适配器
+扫描文档翻译适配器,"Scanned Document Translation Adapter"
 search,search
-执行文档翻译任务,执行文档翻译任务
+执行文档翻译任务,"Perform document translation tasks"
 play,play
-重试失败文档翻译任务,重试失败文档翻译任务
-测试文档翻译适配器,测试文档翻译适配器
+重试失败文档翻译任务,"Retry a failed document translation task"
+测试文档翻译适配器,"Test document translation adapter"
 circle,circle
-文档删除,文档删除
+文档删除,"Document deletion"
 trash,trash
-文档编辑,文档编辑
+文档编辑,"Document editing"
 edit,edit
-文档添加,文档添加
+文档添加,"Documentation added"
 plus,plus
-文档保存,文档保存
+文档保存,"Document saving"
 id,id
 content,content
-文档成功！ID:,文档成功！ID:
+文档成功！ID:,"Document successful! ID:"
 dev/tool/admin/document,dev/tool/admin/document
-文档上传,文档上传
+文档上传,"Document upload"
 upload,upload
-文档查看,文档查看
+文档查看,"Document view"
 eye,eye
-文档列表API,文档列表API
+文档列表API,"Document List API"
 分类ID不能为空,"Category ID cannot be empty"
 分类不存在,"Category does not exist"
 系统分类不允许删除,"System categories cannot be deleted"
@@ -93,20 +93,15 @@ eye,eye
 排序已保存,"Sort saved"
 保存失败：,"Save failed:"
 dev-document-catalog-manager,dev-document-catalog-manager
-"fa fa-book-o","fa fa-book-o"
-文档分类管理器,文档分类管理器
+文档分类管理器,"Document Category Manager"
 dev-document-manager,dev-document-manager
-"fa fa-list-alt","fa fa-list-alt"
-文档分类列表,文档分类列表
-文档分类树,文档分类树
-"fa fa-delete","fa fa-delete"
-文档分类删除,文档分类删除
-"fa fa-save","fa fa-save"
-文档分类保存,文档分类保存
-"fa fa-sort","fa fa-sort"
-文档分类排序,文档分类排序
-"fa fa-eye","fa fa-eye"
-文档分类查看,文档分类查看
+文档分类列表,"Document classification list"
+文档分类树,"document classification tree"
+文档分类删除,"Document category deletion"
+文档分类保存,"Document classification and storage"
+sort,sort
+文档分类排序,"Document classification sorting"
+文档分类查看,"View documents by category"
 无效的请求方法,"Invalid request method"
 启动Key错误,"Invalid startup key"
 沙盒环境已关闭！接下来操作的数据将影响正式线上数据库。,"Sandbox mode is off. Subsequent operations will affect the production database."
@@ -114,27 +109,28 @@ dev-document-manager,dev-document-manager
 沙盒启动Key不能为空,"Sandbox startup key cannot be empty"
 沙盒启动Key设置成功,"Sandbox startup key saved"
 沙盒环境已关闭,"Sandbox mode is off"
-沙盒管理,沙盒管理
+沙盒管理,"Sandbox management"
 database,database
 加载Debug配置失败：%{1},"Failed to load debug config: %{1}"
 保存成功,"Saved successfully"
 保存失败：%{1},"Save failed: %{1}"
 Debug配置,"Debug Config"
-查看Debug配置,查看Debug配置
-保存Debug配置,保存Debug配置
+查看Debug配置,"View Debug configuration"
+保存Debug配置,"Save Debug configuration"
 加载沙盒配置失败：%{1},"Failed to load sandbox config: %{1}"
 沙盒配置,"Sandbox Config"
 check,check
-查看沙盒配置,查看沙盒配置
-保存沙盒配置,保存沙盒配置
+查看沙盒配置,"View sandbox configuration"
+保存沙盒配置,"Save sandbox configuration"
 加载开发面板配置失败：%{1},"Failed to load developer panel config: %{1}"
 开发面板配置,"Developer Panel Config"
 grid,grid
-查看开发面板配置,查看开发面板配置
-保存开发面板配置,保存开发面板配置
+查看开发面板配置,"View the development panel configuration"
+保存开发面板配置,"Save development panel configuration"
 WelineFramework开发文档,"WelineFramework Developer Docs"
 搜索关键词不能为空,"Search keyword cannot be empty"
 API文档管理,"API Documentation"
+开发工作区,"development workspace"
 开发,Development
 Prompt,Prompt
 Completion,Completion
@@ -166,99 +162,78 @@ Completion,Completion
 分类,Category
 文章内容,"Article Content"
 文章内容不能为空,"Article content cannot be empty"
-开发文档分类管理,"Developer Document Category Management"
-左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click a category on the left to edit it on the right. Drag nodes to adjust order and hierarchy. Hold and drag blank space to pan horizontally."
-添加顶级分类,"Add Top-level Category"
-关闭,Close
-加载中...,Loading...
-正在加载分类树...,"Loading category tree..."
-"暂无分类，点击""添加顶级分类""开始创建","No categories yet. Click ""Add Top-level Category"" to create one."
-添加分类,"Add Category"
+系统,System
+"上移 %{1}","Move up %{1}"
+"下移 %{1}","Move down %{1}"
 添加子分类,"Add Child Category"
-编辑分类,"Edit Category"
-分类名称,"Category Name"
-分类描述,"Category Description"
-启用分类,"Enable Category"
-请输入分类名称,"Enter category name"
-请输入分类描述,"Enter category description"
-取消,Cancel
-删除,Delete
-编辑,Edit
+分类已保存,"Category saved"
+分类保存失败,"Category saving failed"
 删除分类,"Delete Category"
-系统分类不允许编辑,"System categories cannot be edited"
-系统分类,"System Category"
-保存成功！,"Saved successfully!"
-保存失败,"Save failed"
-删除失败,"Delete failed"
-分类名称不能为空,"Category name cannot be empty"
-分类树未初始化，请刷新页面重试,"Category tree is not initialized. Refresh the page and retry."
-jstree实例不可用，请刷新页面重试,"jstree instance is unavailable. Refresh the page and retry."
-节点不存在，ID:,"Node does not exist, ID:"
-节点数据格式错误，请刷新页面,"Node data format error. Refresh the page."
-节点数据格式错误,"Node data format error"
-编辑节点失败:,"Failed to edit node:"
-添加子分类失败:,"Failed to add child category:"
-删除节点失败:,"Failed to delete node:"
-无法找到对话框元素，请刷新页面重试,"Dialog element not found. Refresh the page and retry."
-无法打开添加分类对话框，请刷新页面重试,"Unable to open add category dialog. Refresh the page and retry."
-无法打开编辑分类对话框，请刷新页面重试,"Unable to open edit category dialog. Refresh the page and retry."
-加载分类树失败：,"Failed to load category tree:"
-目标位置已存在同名分类,"A category with the same name already exists at the target position"
-保存排序失败，已恢复原位置,"Failed to save order. Restored the original position."
-确定要删除该分类吗？此操作不可恢复！,"Are you sure you want to delete this category? This cannot be undone!"
-确定要删除分类,"Confirm category deletion"
-"⚠️ 警告：删除分类会同时删除其所有子分类！","⚠️ Warning: Deleting category will also delete all its subcategories!"
-此操作不可恢复，请谨慎操作！,"This action cannot be undone. Proceed carefully!"
-未命名分类,"Unnamed Category"
-确认,Confirm
-确认删除吗？,"Confirm deletion?"
-确认组件不可用，删除操作已取消，请刷新页面重试,确认组件不可用，删除操作已取消，请刷新页面重试
-删除请求失败,"Delete request failed"
+删除分类会同时删除其子分类，且无法恢复。确定继续吗？,"Deleting a category will also delete its subcategories and cannot be restored. Are you sure you want to continue?"
+分类已删除,"Category deleted"
+分类删除失败,"Category deletion failed"
+分类顺序已保存,"Category order saved"
+分类排序失败,"Category sorting failed"
+开发文档分类,"Development document classification"
+使用键盘可操作的树形列表维护层级，通过上移和下移按钮调整同级顺序,"Maintain hierarchy using keyboard-operated tree list and adjust sibling order with move up and move down buttons"
+分类管理操作,"Classification management operations"
+添加顶级分类,"Add Top-level Category"
+返回文档,"Return to document"
 分类树,"Category Tree"
+暂无分类,"No classification yet"
+添加分类,"Add Category"
+编辑分类,"Edit Category"
 分类信息,"Category Information"
-请从左侧选择一个分类进行编辑,"Select a category on the left to edit it"
+请从左侧选择分类，或添加一个新分类,"Please select a category from the left, or add a new category"
+分类名称,"Category Name"
+系统分类不能修改名称或父级,"System classification cannot modify the name or parent"
+分类描述,"Category Description"
 父分类,"Parent Category"
 顶级分类,"Top-level Category"
-层级,Level
-系统分类不允许修改名称,"System category names cannot be changed"
-这是系统分类，部分字段不允许修改,"This is a system category. Some fields cannot be changed."
+启用分类,"Enable Category"
+系统分类,"System Category"
+可修改描述和启用状态；名称、父级、排序及删除受保护。,"Description and enabled status can be modified; name, parent, sorting, and deletion are protected."
+删除,Delete
+取消,Cancel
+正在加载文档…,"Loading documents…"
+文档加载失败，请稍后重试,"Document loading failed, please try again later"
+删除文档,"Delete document"
+删除后无法恢复，确定继续吗？,"Deletion cannot be restored. Are you sure you want to continue?"
+文档已删除,"Document deleted"
+文档删除失败,"Document deletion failed"
+暂无内容,"No content"
+创建时间,"creation time"
+更新时间,"Update time"
+模块,module
 开发文档,"Developer Docs"
-编写和管理开发文档,"Write and manage developer documents"
-API文档,"API Docs"
+"使用 Weline UI 管理开发资料、分类和翻译状态","Use Weline UI to manage development materials, categories and translation status"
+文档管理操作,"Document management operations"
+"API 文档","API documentation"
+翻译配置,"Translation configuration"
 目录管理,"Catalog Management"
 新增文章,"New Article"
 文档分类,"Document Categories"
-暂无文章,"No articles"
-"点击""新增文章""按钮开始创建您的第一篇文档","Click ""New Article"" to create your first document"
-自动导入,"Auto Imported"
-作者:,Author:
-查看,View
-文档详情,"Document Details"
-正在加载文档...,"Loading document..."
-加载文档失败，请重试,"Failed to load document. Retry."
-加载文档失败，请刷新页面重试,"Failed to load document. Refresh the page and retry."
-分类:,Category:
-未分类,Uncategorized
-创建时间:,"Created At:"
-更新时间:,"Updated At:"
-模块:,Module:
-无标题,"No Title"
-暂无内容,"No content"
-错误,Error
-jstree库未加载，请刷新页面重试,"jstree library not loaded, please refresh page and retry"
 全部文档,"All Documents"
-该分类下暂无文档,"No documents in this category"
-你确定要操作么？,"Are you sure you want to proceed?"
-操作后你将无法恢复！,"You will not be able to recover after this operation!"
-是的，我确定要删除！,"Yes, delete it!"
-不要，取消吧！,"No, cancel!"
-已删除！,Deleted!
-文章已经被删除了！,"The article has been deleted!"
-好的,OK
-删除提示！,"Delete Notice!"
-文章删除失败，请重试！,"Failed to delete article. Retry!"
-沙盒环境配置,"Sandbox Environment Config"
-沙盒环境是一套数据隔离的测试环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,沙盒环境是一套数据隔离的测试环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。
+文章列表,"Article list"
+"共 %{1} 篇文档","Total %{1} documents"
+文档语言,"Document language"
+切换,switch
+无标题,"No Title"
+未分类,Uncategorized
+自动导入,"Auto Imported"
+暂无摘要,"No abstract yet"
+查看,View
+编辑,Edit
+暂无文章,"No articles"
+当前分类还没有文档,"There are no documents for the current category"
+文档分页,"Document paging"
+首页,"front page"
+上一页,"Previous page"
+下一页,"Next page"
+末页,"Last page"
+文档详情,"Document Details"
+关闭,Close
+沙盒环境是一套数据隔离的测试环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,"The sandbox environment is a data-isolated testing environment. During testing, the data will not be written to the formal database, but to the sandbox database."
 可配置参数：,"Configurable Parameters:"
 控制沙盒环境参数来达到测试系统环境。,"Control sandbox parameters to configure the test environment."
 当前沙盒状态：,"Current Sandbox Status:"
@@ -272,60 +247,38 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 开启沙盒,"Enable Sandbox"
 关闭沙盒,"Disable Sandbox"
 开发文档管理器,"Developer Document Manager"
-系统,System
 新建文档,"New Document"
 新建一篇开发文档,"Create a new developer document"
 提示,Notice
 开发面板配置功能正在开发中，敬请期待。,"Developer panel config is under development. Stay tuned."
 沙盒配置功能正在开发中，敬请期待。,"Sandbox config is under development. Stay tuned."
-异步资源变更验收台,异步资源变更验收台
-"真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。","真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。"
-"1. 发起资源变更","1. 发起资源变更"
-"2. 推进异步链路","2. 推进异步链路"
-刷新状态,刷新状态
-"点击“发起资源变更”创建一个仅用于验收的 async_probe 资源。","点击“发起资源变更”创建一个仅用于验收的 async_probe 资源。"
+异步资源变更验收台,"Asynchronous resource change acceptance platform"
+"真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。","Really call w_changed(), showing the complete evidence of Outbox → Delivery → Queue → Observer."
+"1. 发起资源变更","1. Initiate resource changes"
+"2. 推进异步链路","2. Promote asynchronous links"
+刷新状态,"refresh status"
+"点击“发起资源变更”创建一个仅用于验收的 async_probe 资源。","Click ""Initiate Resource Change"" to create an async_probe resource used only for acceptance."
 "HTTP / w_changed","HTTP / w_changed"
-"请求内构造 ResourceChange v1","请求内构造 ResourceChange v1"
+"请求内构造 ResourceChange v1","In-request construction ResourceChange v1"
 Outbox,Outbox
-与事务一起提交,与事务一起提交
+与事务一起提交,"Submit with transaction"
 "Delivery / Queue","Delivery / Queue"
-"Relay 展开并建立队列尝试","Relay 展开并建立队列尝试"
+"Relay 展开并建立队列尝试","Relay expands and creates queue attempts"
 "Async Observer","Async Observer"
-"Worker 执行探针并进入 succeeded","Worker 执行探针并进入 succeeded"
+"Worker 执行探针并进入 succeeded","Worker executes the probe and enters succeeded"
 "Event ID","Event ID"
 "Probe ID","Probe ID"
-"探针 Delivery","探针 Delivery"
-异步性证明,异步性证明
-"原始证据 JSON","原始证据 JSON"
+"探针 Delivery","Probe Delivery"
+异步性证明,"Proof of asynchronicity"
+"原始证据 JSON","Original evidence JSON"
 Debug配置功能正在开发中，敬请期待。,"Debug config is under development. Stay tuned."
 返回欢迎页,"Back to Welcome Page"
 返回上一页,"Back to Previous Page"
-"搜索 ...","Search ..."
-头部语言,"Header Language"
-中国,China
-头像,Avatar
-资料,Profile
-我的钱包,MyWallet
-设置,Settings
-锁定屏幕,LockScreen
-退出,Exit
-菜单布局,"Menu Layout"
-菜单明亮,"Light Menu"
-图标菜单,"Icon Menu"
-图文菜单,"Icon and Text Menu"
-主题布局,"Theme Layout"
-水平布局,"Horizontal Layout"
-水平顶黑,"Horizontal Dark Header"
-水平盒子,"Horizontal Boxed"
-主题颜色,"Theme Color"
-明亮模式,"Light Mode"
-暗黑模式,"Dark Mode"
-RTL模式,"RTL Mode"
 仅开发模式可用,"Available in developer mode only"
 "参数 sql 不能为空","The sql parameter cannot be empty"
 "仅支持对 SELECT 语句执行 EXPLAIN","EXPLAIN only supports SELECT statements"
-"Weline 面板 token 无效。","Weline 面板 token 无效。"
-"Weline 面板已授权。","Weline 面板已授权。"
+"Weline 面板 token 无效。","Weline panel token is invalid."
+"Weline 面板已授权。","Weline panel is authorized."
 正在清理旧的API文档...,"Cleaning old API documents..."
 清理完成,"Cleanup complete"
 正在生成API文档...,"Generating API documents..."
@@ -362,9 +315,9 @@ AI运行时提供器不可用。,"AI runtime provider is unavailable."
 "DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3} backup=%{4}","DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3} backup=%{4}"
 "DocumentUniqueKeyHealer: backup failed for %{1}: %{2}","DocumentUniqueKeyHealer: backup failed for %{1}: %{2}"
 "DocumentUniqueKeyHealer: backup table %{1} was not created","DocumentUniqueKeyHealer: backup table %{1} was not created"
-"异步事件 producer 未开启：event.async.producer_enabled=false","异步事件 producer 未开启：event.async.producer_enabled=false"
-"HTTP 请求返回时探针 Observer 尚未成功；Relay 可能已经并发创建 pending Delivery。","HTTP 请求返回时探针 Observer 尚未成功；Relay 可能已经并发创建 pending Delivery。"
-"event_id 格式无效","event_id 格式无效"
+"异步事件 producer 未开启：event.async.producer_enabled=false","The asynchronous event producer is not enabled: event.async.producer_enabled=false"
+"HTTP 请求返回时探针 Observer 尚未成功；Relay 可能已经并发创建 pending Delivery。","The probe Observer has not yet succeeded when the HTTP request returns; the Relay may have concurrently created pending Deliveries."
+"event_id 格式无效","event_id format is invalid"
 正在清理旧的自动导入文档和分类...,"Cleaning old auto-imported documents and categories..."
 "找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modules with doc directories. Starting scan..."
 "[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] Scanning module: %{name}"
@@ -390,7 +343,95 @@ AI运行时提供器不可用。,"AI runtime provider is unavailable."
 "📡 开始导入API文档...","📡 Start importing API documents..."
 "API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API document import complete: scanned %{scanned}, new %{new}, updated %{updated}"
 "API文档导入失败: %{error}","API document import failed: %{error}"
-"""API 文档收集后""","API 文档收集后"
+"""API 文档收集后""","""After API documentation collection"""
+沙盒环境配置,"Sandbox Environment Config"
+开发文档分类管理,"Developer Document Category Management"
+左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click a category on the left to edit it on the right. Drag nodes to adjust order and hierarchy. Hold and drag blank space to pan horizontally."
+加载中...,Loading...
+正在加载分类树...,"Loading category tree..."
+"暂无分类，点击""添加顶级分类""开始创建","No categories yet. Click ""Add Top-level Category"" to create one."
+请输入分类名称,"Enter category name"
+请输入分类描述,"Enter category description"
+系统分类不允许编辑,"System categories cannot be edited"
+保存成功！,"Saved successfully!"
+保存失败,"Save failed"
+删除失败,"Delete failed"
+分类名称不能为空,"Category name cannot be empty"
+分类树未初始化，请刷新页面重试,"Category tree is not initialized. Refresh the page and retry."
+节点不存在，ID:,"Node does not exist, ID:"
+节点数据格式错误，请刷新页面,"Node data format error. Refresh the page."
+节点数据格式错误,"Node data format error"
+编辑节点失败:,"Failed to edit node:"
+添加子分类失败:,"Failed to add child category:"
+删除节点失败:,"Failed to delete node:"
+无法找到对话框元素，请刷新页面重试,"Dialog element not found. Refresh the page and retry."
+无法打开添加分类对话框，请刷新页面重试,"Unable to open add category dialog. Refresh the page and retry."
+无法打开编辑分类对话框，请刷新页面重试,"Unable to open edit category dialog. Refresh the page and retry."
+加载分类树失败：,"Failed to load category tree:"
+目标位置已存在同名分类,"A category with the same name already exists at the target position"
+保存排序失败，已恢复原位置,"Failed to save order. Restored the original position."
+确定要删除该分类吗？此操作不可恢复！,"Are you sure you want to delete this category? This cannot be undone!"
+确定要删除分类,"Confirm category deletion"
+"⚠️ 警告：删除分类会同时删除其所有子分类！","⚠️ Warning: Deleting category will also delete all its subcategories!"
+此操作不可恢复，请谨慎操作！,"This action cannot be undone. Proceed carefully!"
+未命名分类,"Unnamed Category"
+确认,Confirm
+确认删除吗？,"Confirm deletion?"
+确认组件不可用，删除操作已取消，请刷新页面重试,"Confirm that the component is unavailable and the deletion operation has been cancelled. Please refresh the page and try again."
+删除请求失败,"Delete request failed"
+请从左侧选择一个分类进行编辑,"Select a category on the left to edit it"
+层级,Level
+系统分类不允许修改名称,"System category names cannot be changed"
+这是系统分类，部分字段不允许修改,"This is a system category. Some fields cannot be changed."
+编写和管理开发文档,"Write and manage developer documents"
+API文档,"API Docs"
+"点击""新增文章""按钮开始创建您的第一篇文档","Click ""New Article"" to create your first document"
+作者:,Author:
+正在加载文档...,"Loading document..."
+加载文档失败，请重试,"Failed to load document. Retry."
+加载文档失败，请刷新页面重试,"Failed to load document. Refresh the page and retry."
+分类:,Category:
+创建时间:,"Created At:"
+更新时间:,"Updated At:"
+模块:,Module:
+错误,Error
+该分类下暂无文档,"No documents in this category"
+你确定要操作么？,"Are you sure you want to proceed?"
+操作后你将无法恢复！,"You will not be able to recover after this operation!"
+是的，我确定要删除！,"Yes, delete it!"
+不要，取消吧！,"No, cancel!"
+已删除！,Deleted!
+文章已经被删除了！,"The article has been deleted!"
+好的,OK
+删除提示！,"Delete Notice!"
+文章删除失败，请重试！,"Failed to delete article. Retry!"
+"搜索 ...","Search ..."
+头部语言,"Header Language"
+中国,China
+头像,Avatar
+资料,Profile
+我的钱包,MyWallet
+设置,Settings
+锁定屏幕,LockScreen
+退出,Exit
+菜单布局,"Menu Layout"
+菜单明亮,"Light Menu"
+图标菜单,"Icon Menu"
+图文菜单,"Icon and Text Menu"
+主题布局,"Theme Layout"
+水平布局,"Horizontal Layout"
+水平顶黑,"Horizontal Dark Header"
+水平盒子,"Horizontal Boxed"
+主题颜色,"Theme Color"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
+RTL模式,"RTL Mode"
+"fa fa-book-o","fa fa-book-o"
+"fa fa-list-alt","fa fa-list-alt"
+"fa fa-delete","fa fa-delete"
+"fa fa-save","fa fa-save"
+"fa fa-sort","fa fa-sort"
+"fa fa-eye","fa fa-eye"
 "mdi mdi-translate","mdi mdi-translate"
 "mdi mdi-content-save","mdi mdi-content-save"
 "mdi mdi-magnify-scan","mdi mdi-magnify-scan"
@@ -409,3 +450,153 @@ AI运行时提供器不可用。,"AI runtime provider is unavailable."
 示例2,Example2
 表格样式,"Table Style"
 表格行1,"Table Row 1"
+"API 文档管理","API Documentation"
+"Weline Framework API 接口文档和完整调用测试工具","Weline Framework API documentation and full request testing toolkit"
+当前语言,"Current language"
+当前货币,"Current currency"
+默认语言,"Default language"
+默认货币,"Default currency"
+语言,Language
+货币,Currency
+主题,Theme
+跟随系统,"Follow system"
+亮色,Light
+暗色,Dark
+正式环境调试,"Production debugging"
+正式环境调试确认,"Enable production debugging?"
+开启后请求将直接发送到正式环境，可能修改业务数据并造成不可逆影响。请确认已了解风险。,"After enabling, requests are sent directly to production. This may change business data irreversibly. Confirm you understand the risk."
+继续开启,"Continue enabling"
+沙盒,Sandbox
+沙盒标识,"Sandbox key"
+登录,"Log in"
+退出登录,"Log out"
+已退出登录,"Logged out"
+接口列表,"API list"
+"前端 API","Frontend API"
+"后台 API","Backend API"
+搜索接口,"Search APIs"
+搜索名称、路径、方法、参数或说明…,"Search by name, path, method, parameter, or description…"
+从左侧选择一个接口查看详情并发起测试,"Select an API on the left to view details and send a test request"
+"没有匹配的 API 接口","No matching APIs"
+接口说明,"API description"
+请求参数,"Request parameters"
+字段,Field
+类型,Type
+必填,Required
+来源,Source
+说明,Description
+是,Yes
+否,No
+默认值,Default
+响应定义,"Response definitions"
+调用示例,"Call examples"
+复制路径,"Copy path"
+复制请求体,"Copy request body"
+复制响应体,"Copy response body"
+复制调用,"Copy call"
+复制,Copy
+已复制到剪贴板,"Copied to clipboard"
+复制失败,"Copy failed"
+格式化,Format
+"SDK 下载","SDK download"
+"SDK 信息","SDK info"
+使用指南,"User guide"
+包名,"Package name"
+下载位置,"Download location"
+安装命令,"Install command"
+文档,Docs
+协议,Protocol
+推导路径,"Derived path"
+凭据来源,"Credential source"
+凭据类型,"Credential type"
+凭据有效期,"Credential TTL"
+"Refresh Token 有效期","Refresh token TTL"
+外部操作数,"External operations"
+在线测试,"Online test"
+编辑请求参数并发送真实测试请求,"Edit request parameters and send a real test request"
+发送请求,"Send request"
+登录后发起请求,"Log in to send request"
+状态,Status
+状态码,"Status code"
+"响应 Code","Response code"
+响应消息,"Response message"
+请求时间,"Request time"
+响应大小,"Response size"
+响应信息,"Response info"
+响应头,"Response headers"
+响应体,"Response body"
+"个 WLS/内部诊断头已折叠","WLS/internal diagnostic headers collapsed"
+请求配置,"Request config"
+方法,Method
+"请求 URL","Request URL"
+查询参数,"Query parameters"
+导入示例,"Import example"
+添加参数,"Add parameter"
+参数名,"Parameter name"
+参数值,"Parameter value"
+请求头,"Request headers"
+添加请求头,"Add header"
+"Header 名称","Header name"
+"Header 值","Header value"
+请求体,"Request body"
+"请输入 JSON 格式的请求体","Enter a JSON request body"
+语言、货币和环境,"Language, currency, and environment"
+路径切换,"Path switch"
+参数切换,"Parameter switch"
+"Worker 目标","Worker target"
+结构化请求参数,"Structured request parameters"
+"原始 JSON","Raw JSON"
+调用预览,"Call preview"
+"该 Worker operation 没有请求参数","This Worker operation has no request parameters"
+"请求参数必须是有效的 JSON 对象","Request parameters must be a valid JSON object"
+参数必须是整数,"Parameter must be an integer"
+参数必须是数字,"Parameter must be a number"
+参数必须是布尔值,"Parameter must be a boolean"
+必填参数不能为空,"Required parameter cannot be empty"
+请求中…,Requesting…
+请求失败,"Request failed"
+"Weline API 运行时不可用，请刷新页面后重试","Weline API runtime is unavailable. Refresh the page and try again"
+"Worker operation 不可用","Worker operation unavailable"
+"前端 API 用户登录","Frontend API user login"
+"后台 API 用户登录","Backend API user login"
+用户名,Username
+密码,Password
+登录成功,"Login successful"
+登录失败,"Login failed"
+退出登录确认,"Confirm logout"
+"确定要退出当前 API 账户吗？","Log out of the current API account?"
+收起接口列表,"Collapse API list"
+展开接口列表,"Expand API list"
+调整接口列表宽度,"Resize API list"
+调整文档与测试面板宽度,"Resize documentation and test panels"
+正式环境调试模式已开启，请谨慎操作。,"Production debugging is enabled. Proceed with caution."
+已废弃,Deprecated
+"同一 Website 存在多个默认店铺","Multiple default stores exist for the same website"
+"店铺 ID","Store ID"
+"店铺 ID 不唯一","Store ID is not unique"
+同一店铺存在多个默认渠道,"Multiple default channels exist for the same store"
+"API 文档工具","API documentation tools"
+界面主题,Theme
+"WelineFramework 开发文档","WelineFramework Developer Docs"
+主题模式,"Theme mode"
+加载中…,Loading…
+请选择分类查看文档,"Select a category to view documents"
+没有找到匹配的文档,"No matching documents found"
+"按模块浏览 Weline Framework 的开发资料","Browse Weline Framework developer materials by module"
+文档工具,"Documentation tools"
+返回网站,"Back to site"
+搜索文档,"Search documents"
+搜索文档…,"Search documents…"
+返回列表,"Back to list"
+搜索,Search
+无匹配货币,"No matching currencies"
+人民币,"Chinese Yuan"
+欧元,Euro
+美元,"US Dollar"
+英镑,"British Pound"
+分类管理,"Category management"
+前端预览,"Frontend Preview"
+开发工具,"Developer tools"
+文档管理,"Document management"
+测试沙盒,"Test sandbox"
+面板配置,"Panel configuration"

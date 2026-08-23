@@ -1,0 +1,14 @@
+@layer reset, tokens, base, layout, components, utilities, page;
+
+@layer page {
+    .w-api-worker-smoke { padding-block: var(--weline-space-8); }
+    .w-api-worker-smoke__result {
+        max-block-size: min(40rem, calc(100dvh - 10rem));
+        margin: 0;
+        overflow: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    .w-api-worker-smoke__result[data-state="pass"] { color: var(--weline-theme-success); }
+    .w-api-worker-smoke__result[data-state="fail"] { color: var(--weline-theme-danger); }
+}

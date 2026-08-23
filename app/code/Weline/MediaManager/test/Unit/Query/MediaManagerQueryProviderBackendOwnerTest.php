@@ -11,8 +11,10 @@ use Weline\Framework\Service\Query\Value\FrontendWorkerBackendBinding;
 use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\FileManager\Api\FileAssetLibraryInterface;
 use Weline\MediaManager\Extends\Module\Weline_Framework\Query\MediaManagerQueryProvider;
 use Weline\MediaManager\Service\AiDrawService;
+use Weline\MediaManager\Service\MediaFileAccessContextFactory;
 
 final class MediaManagerQueryProviderBackendOwnerTest extends TestCase
 {
@@ -46,7 +48,7 @@ final class MediaManagerQueryProviderBackendOwnerTest extends TestCase
             ->method('getConfigStatus')
             ->willReturn(['ready' => true, 'model' => 'mock']);
 
-        $provider = new MediaManagerQueryProvider($aiDraw, $sessions);
+        $provider = new MediaManagerQueryProvider($aiDraw, $sessions, $this->accessContextFactory());
         $result = $provider->execute('config', []);
 
         self::assertSame(['ready' => true, 'model' => 'mock'], $result);
@@ -68,7 +70,7 @@ final class MediaManagerQueryProviderBackendOwnerTest extends TestCase
             ->method('getConfigStatus')
             ->willReturn(['ready' => true, 'model' => 'mock']);
 
-        $provider = new MediaManagerQueryProvider($aiDraw, $sessions);
+        $provider = new MediaManagerQueryProvider($aiDraw, $sessions, $this->accessContextFactory());
         $result = $provider->execute('config', []);
 
         self::assertSame(['ready' => true, 'model' => 'mock'], $result);
@@ -88,6 +90,7 @@ final class MediaManagerQueryProviderBackendOwnerTest extends TestCase
         $provider = new MediaManagerQueryProvider(
             $this->createMock(AiDrawService::class),
             $sessions,
+            $this->accessContextFactory(),
         );
 
         try {
@@ -112,6 +115,7 @@ final class MediaManagerQueryProviderBackendOwnerTest extends TestCase
         $provider = new MediaManagerQueryProvider(
             $this->createMock(AiDrawService::class),
             $sessions,
+            $this->accessContextFactory(),
         );
 
         try {
@@ -133,6 +137,13 @@ final class MediaManagerQueryProviderBackendOwnerTest extends TestCase
             '127.0.0.1:9555',
             $now,
             $now + 3600,
+        );
+    }
+
+    private function accessContextFactory(): MediaFileAccessContextFactory
+    {
+        return new MediaFileAccessContextFactory(
+            $this->createMock(FileAssetLibraryInterface::class),
         );
     }
 }

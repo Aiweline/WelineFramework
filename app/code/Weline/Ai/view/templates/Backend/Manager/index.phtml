@@ -46,7 +46,7 @@ $baseUrl = $this->getBackendUrl('ai/backend/manager');
         </div>
     </div>
 
-    <ul class="nav w-tabs__list weline-ai-manager-tabs" role="tablist" data-w-component="tabs">
+    <ul class="w-nav w-tabs__list weline-ai-manager-tabs" role="tablist" data-w-component="tabs">
         <li>
             <a class="<?= $activeTab === 'model' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=model" data-tab="model" data-url="<?= htmlspecialchars($modelUrl) ?>">
                 <w:icon name="robot" size="sm"></w:icon><lang>模型</lang>

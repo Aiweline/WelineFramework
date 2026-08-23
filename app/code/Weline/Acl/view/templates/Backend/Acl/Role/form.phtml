@@ -1,83 +1,29 @@
 <?php
-/**
- * 内容模板
- * @var \Weline\Framework\View\Template $this
- */
+/** @var \Weline\Framework\View\Template $this */
+$role = $this->getData('edit_role');
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$value = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) return $item[$key] ?? $default;
+    if (is_object($item) && method_exists($item, 'getData')) return $item->getData($key) ?? $default;
+    return $default;
+};
+$roleId = max(0, (int)$value($role, 'role_id'));
+$action = (string)($this->getData('action') ?: $this->getBackendUrl('*/backend/acl/role/add'));
 ?>
-<!-- start page title -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;">
-                <lang>Acl权限管理</lang>
-            </h4>
-
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item">
-                        <span>
-                            <lang>系统配置</lang>
-                        </span>
-                    </li>
-                    <li class="w-breadcrumb__item">
-                        <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
-                    </li>
-                    <li class="w-breadcrumb__item">
-                        <a href="@backend-url('*/backend/acl/role')"><lang>Acl角色管理</lang></a>
-                    </li>
-                    <li class="w-breadcrumb__item" data-state="active">
-                        <lang>Acl角色添加</lang>
-                    </li>
-                </ol>
-            </div>
-
+<main class="w-backend-page w-stack">
+    <header class="w-backend-page__heading">
+        <div class="w-stack"><h1><w:icon name="<?= $roleId > 0 ? 'edit' : 'plus' ?>" size="md"></w:icon><?= $escape($roleId > 0 ? __('编辑角色') : __('添加角色')) ?></h1><p class="w-text" data-tone="muted"><?= $escape(__('角色只描述职责，具体能力在权限配置页中授予。')) ?></p></div>
+        <a class="w-button" data-tone="neutral" href="@backend-url('*/backend/acl/role')"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回列表')) ?></a>
+    </header>
+    <section class="w-card">
+        <div class="w-card__body">
+            <form class="w-form w-stack" action="<?= $escape($action) ?>" method="post">
+                <input type="hidden" name="form_key" value="<?= $escape($this->getFormKeyValue()) ?>">
+                <?php if ($roleId > 0): ?><input type="hidden" name="role_id" value="<?= $roleId ?>"><?php endif; ?>
+                <label class="w-field"><span class="w-field__label"><?= $escape(__('角色名')) ?></span><input class="w-input" type="text" name="role_name" value="<?= $escape($value($role, 'role_name')) ?>" required maxlength="120" autocomplete="off"><span class="w-field__error"><?= $escape(__('请输入角色名称')) ?></span></label>
+                <label class="w-field"><span class="w-field__label"><?= $escape(__('角色描述')) ?></span><textarea class="w-textarea" name="role_description" rows="5" required maxlength="500"><?= $escape($value($role, 'role_description')) ?></textarea><span class="w-field__error"><?= $escape(__('请输入角色描述')) ?></span></label>
+                <div><button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存角色')) ?></button></div>
+            </form>
         </div>
-    </div>
-</div>
-<!-- end page title -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-card">
-            <div class="w-card__body">
-                <h4 class="w-card__title">
-                    <lang>Acl权限管理</lang>
-                </h4>
-                <p class="w-text" data-tone="muted">
-                    <lang>支持角色权限管理</lang>
-                </p>
-                <w:form class="w-form" action="{{action}}" method="post" novalidate>
-                    <div class="w-grid">
-                        <div style="--w-span-md:6;">
-                            <div style="--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for='role_name'><lang>角色名</lang></label>
-                                <if condition="edit_role.role_id">
-                                    <input type='hidden' name="role_id" value='{{edit_role.role_id}}'>
-                                </if>
-                                <input type='text' class="w-input" name="role_name" id='role_name' placeholder='@lang{请输入角色名}' value='{{edit_role.role_name}}' required>
-                                <div class="w-field__hint">
-                                    <lang>角色名称验证成功</lang>
-                                </div>
-                                <div class="w-field__error">
-                                    <lang>请输入角色名称</lang>
-                                </div>
-                            </div>
-                        </div>
-                        <div style="--w-span-md:6;">
-                            <div style="--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for='role_description'><lang>角色描述</lang></label>
-                                <textarea type='text' class="w-textarea" name="role_description" id='role_description' placeholder='@lang{请输入角色描述}' required>{{edit_role.role_description}}</textarea>
-                                <div class="w-field__hint">
-                                    <lang>角色描述验证成功</lang>
-                                </div>
-                                <div class="w-field__error">
-                                    <lang>请输入角色描述</lang>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button type='submit' class="w-button" data-tone="primary"><lang>提交</lang></button>
-                </w:form>
-            </div>
-        </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
+    </section>
+</main>

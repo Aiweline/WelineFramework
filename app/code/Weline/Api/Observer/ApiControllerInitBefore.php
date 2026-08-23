@@ -211,7 +211,7 @@ class ApiControllerInitBefore implements ObserverInterface
                     'request_path' => $currentUrl
                 ]);
 
-                $this->returnError(400, __('闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie'));
+                $this->returnError(400, __('公开 API 请求不允许携带 Cookie'));
                 return;
             }
             // 闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Ч濞撳墎鎲版担鐣岀濞戞挴鍋撴慨婵勫劦閻涙瑧鎷犳笟濠勭闁烩晛鐡ㄧ敮瀛樻交閺傛寧绀€

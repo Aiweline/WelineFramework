@@ -18,7 +18,9 @@
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
         window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
     </script>
-    <theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+    <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
     {weline:taglib name="Weline_Visitor::taglib/pixel" /}
     <style>
         body {
@@ -565,4 +567,3 @@
     </script>
 </body>
 </html>
-

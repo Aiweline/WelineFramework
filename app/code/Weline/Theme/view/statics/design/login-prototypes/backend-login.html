@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>原型 · 后台登录</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#0b1220;--ink-soft:#162033;--paper:#f3eee4;--card:#fbf7f0;--line:rgba(11,18,32,.12);
+  --text:#152033;--muted:#5c677a;--copper:#c46b2f;--copper-deep:#9a4f1c;--warn:#8a6a1f;--radius:10px;
+  --font-ui:"IBM Plex Sans",system-ui,sans-serif;--font-display:"Fraunces",Georgia,serif;
+}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{font-family:var(--font-ui);color:var(--text);background:var(--ink);min-height:100dvh}
+.bar{position:fixed;inset:0 0 auto 0;z-index:20;display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;padding:.55rem 1rem;background:rgba(11,18,32,.92);color:#e8e2d6;border-bottom:1px solid rgba(255,255,255,.08);font-size:.78rem}
+.bar a{color:#f0c9a0;text-decoration:none}.bar a:hover{text-decoration:underline}.bar strong{color:#fff}
+.shell{min-width:1100px;display:grid;grid-template-columns:minmax(18rem,.95fr) minmax(22rem,1.05fr);min-height:100dvh;padding-top:2.4rem}
+.brand{position:relative;padding:clamp(2rem,5vw,4rem);color:#f4efe6;background:radial-gradient(ellipse 80% 60% at 20% 15%,rgba(196,107,47,.22),transparent 55%),linear-gradient(160deg,var(--ink),var(--ink-soft) 55%,#0a101a);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.brand:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(#0008,transparent 85%);pointer-events:none}
+.brand>*{position:relative;z-index:1}
+.eyebrow{display:inline-flex;align-items:center;gap:.45rem;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:#d7b089;margin:0 0 1rem}
+.eyebrow:before{content:"";width:1.4rem;height:1px;background:var(--copper)}
+.brand h1{font-family:var(--font-display);font-size:clamp(2.4rem,4.5vw,3.6rem);line-height:1.05;margin:0 0 1rem;letter-spacing:-.02em}
+.brand p{max-width:28ch;margin:0;color:#f4efe6b8;line-height:1.55}
+.meta{display:grid;gap:.35rem;font-size:.78rem;color:#f4efe68c}.meta span{color:#e8c6a0}
+.panel{background:var(--paper);display:flex;align-items:center;justify-content:center;padding:clamp(1.25rem,3vw,2.5rem)}
+.card{width:min(100%,26.5rem);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.35rem 1.45rem 1.15rem}
+.top{display:flex;justify-content:space-between;gap:1rem;margin-bottom:1.25rem}
+.logo{width:2.35rem;height:2.35rem;border-radius:8px;background:var(--ink);color:#f4efe6;display:grid;place-items:center;font-family:var(--font-display);font-weight:700}
+.lang{border:1px solid var(--line);background:#fff;border-radius:999px;padding:.35rem .7rem;font-size:.75rem;color:var(--muted);cursor:pointer}
+.card h2{font-family:var(--font-display);font-size:1.55rem;margin:0 0 .25rem}
+.sub{margin:0 0 1.15rem;color:var(--muted);font-size:.88rem;line-height:1.45}
+.alert{display:flex;gap:.55rem;padding:.7rem .8rem;border-radius:8px;font-size:.82rem;margin-bottom:.85rem;border:1px solid #e4d39a;background:#f8f1d8;color:var(--warn)}
+.providers{display:grid;gap:.45rem;margin-bottom:1rem}
+.provider{min-height:2.5rem;border:1px solid var(--line);border-radius:var(--radius);background:#fff;font:inherit;font-size:.84rem;font-weight:500;cursor:pointer}
+.provider:hover{border-color:#0b122048}
+.div{display:grid;grid-template-columns:1fr auto 1fr;gap:.65rem;align-items:center;margin:0 0 1rem;color:var(--muted);font-size:.72rem}
+.div:before,.div:after{content:"";height:1px;background:var(--line)}
+.field{margin-bottom:.85rem}
+.field label{display:block;margin-bottom:.35rem;font-size:.78rem;font-weight:600}
+.wrap{position:relative}
+.wrap input{width:100%;min-height:2.65rem;padding:.55rem .8rem;border:1px solid var(--line);border-radius:var(--radius);background:#fff;font:inherit;font-size:.92rem}
+.wrap input:focus{outline:2px solid #c46b2f59;outline-offset:1px;border-color:var(--copper)}
+.toggle{position:absolute;right:.35rem;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--muted);padding:.35rem .45rem;border-radius:6px;cursor:pointer;font-size:.72rem;font-weight:600}
+.captcha{display:grid;grid-template-columns:1fr auto;gap:.55rem}
+.captcha input{min-height:2.65rem;padding:.55rem .8rem;border:1px solid var(--line);border-radius:var(--radius);background:#fff;font:inherit}
+.capimg{width:7.5rem;border-radius:8px;border:1px solid var(--line);background:#e8e2d6;display:grid;place-items:center;font-family:var(--font-display);letter-spacing:.2em;cursor:pointer;user-select:none}
+.row{margin:.35rem 0 1rem;font-size:.82rem}
+.check{display:inline-flex;align-items:center;gap:.45rem;color:var(--muted);cursor:pointer}
+.btn{width:100%;min-height:2.85rem;border:0;border-radius:var(--radius);background:var(--ink);color:#f4efe6;font:inherit;font-weight:600;font-size:.95rem;cursor:pointer}
+.btn:hover{background:#152033}.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.busy .idle,.btn:not(.busy) .busy{display:none}
+.foot{display:flex;justify-content:space-between;gap:1rem;margin-top:1.15rem;padding-top:.9rem;border-top:1px solid var(--line);font-size:.72rem;color:var(--muted)}
+.foot a{color:var(--copper-deep);text-decoration:none}
+@media(max-width:720px){.shell{grid-template-columns:1fr}.brand{min-height:12rem;padding:1.5rem}.brand p{max-width:none}}
+</style>
+</head>
+<body>
+<div class="bar"><strong>原型 A · 后台登录</strong><span>保留：语言 / 告警 / SSO Hook / 账号密码 / 验证码 / 记住我 / 加载态</span><a href="./frontend-login.html">前台原型 →</a><a href="./index.html">总览</a></div>
+<div class="shell">
+  <aside class="brand">
+    <div>
+      <p class="eyebrow">Secure Admin</p>
+      <h1>Weline<br>管理入口</h1>
+      <p>为运营与研发准备的受控登录面。品牌在左，操作在右——减少干扰，突出安全与效率。</p>
+    </div>
+    <div class="meta"><div>站点 · <span>演示站点</span></div><div>区域 · <span>Backend · ACL 受保护</span></div></div>
+  </aside>
+  <section class="panel">
+    <div class="card">
+      <div class="top"><div class="logo">W</div><button class="lang" type="button">中文 / EN</button></div>
+      <h2>登录管理面板</h2>
+      <p class="sub">使用管理员账号进入后台。验证码在风控触发后出现。</p>
+      <div class="alert" role="status"><span>⚠</span><span>示例：无访问权限提示（no_access_message）</span></div>
+      <div class="providers"><button class="provider" type="button">使用企业 SSO 继续</button></div>
+      <div class="div">或账号密码</div>
+      <form onsubmit="event.preventDefault();const b=this.querySelector('.btn');b.classList.add('busy');b.disabled=true;setTimeout(()=>{b.classList.remove('busy');b.disabled=false},1200)">
+        <div class="field"><label for="u">管理员</label><div class="wrap"><input id="u" name="username" autocomplete="username" placeholder="请输入管理员账号" required></div></div>
+        <div class="field"><label for="p">密码</label><div class="wrap"><input id="p" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required><button class="toggle" type="button" onclick="const i=document.getElementById('p');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'显示':'隐藏'">显示</button></div></div>
+        <div class="field"><label for="c">验证码</label><div class="captcha"><input id="c" name="code" autocomplete="one-time-code" placeholder="请输入验证码"><button class="capimg" type="button" onclick="this.textContent=['K7PM','A9QX','3HWD'][Math.floor(Math.random()*3)]">K7PM</button></div></div>
+        <div class="row"><label class="check"><input type="checkbox" name="remember"> 在受信任设备上记住我</label></div>
+        <button class="btn" type="submit"><span class="idle">登录</span><span class="busy">登录中…</span></button>
+      </form>
+      <footer class="foot"><small>© 2026 Weline</small><a href="https://www.aiweline.com/">aiweline.com</a></footer>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -7,67 +7,54 @@ namespace Weline\Captcha\Service;
 /**
  * Renders a local challenge without embedding the plaintext answer in markup.
  *
- * GD produces a raster PNG when available. The portable SVG fallback consists
- * only of anonymous segment rectangles, never a text node containing the code.
+ * Prefer GD + TrueType when available (PNG data URI consumers). The inline SVG
+ * path uses anonymous stroke glyphs only — never a <text> node with the code —
+ * so the answer cannot be scraped from the DOM under strict CSP.
  */
 final class LocalChallengeImage
 {
-    /** @var array<string, list<string>> */
-    private const BITMAP_GLYPHS = [
-        '2' => ['11110', '00001', '00001', '01110', '10000', '10000', '11111'],
-        '3' => ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
-        '4' => ['10010', '10010', '10010', '11111', '00010', '00010', '00010'],
-        '5' => ['11111', '10000', '10000', '11110', '00001', '00001', '11110'],
-        '6' => ['01110', '10000', '10000', '11110', '10001', '10001', '01110'],
-        '7' => ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
-        '8' => ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
-        '9' => ['01110', '10001', '10001', '01111', '00001', '00001', '01110'],
-        'A' => ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
-        'B' => ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
-        'C' => ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
-        'D' => ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
-        'E' => ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
-        'F' => ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
-        'G' => ['01111', '10000', '10000', '10111', '10001', '10001', '01111'],
-        'H' => ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
-        'J' => ['00111', '00010', '00010', '00010', '10010', '10010', '01100'],
-        'K' => ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
-        'L' => ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
-        'M' => ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
-        'N' => ['10001', '11001', '11001', '10101', '10011', '10011', '10001'],
-        'P' => ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
-        'Q' => ['01110', '10001', '10001', '10001', '10101', '10010', '01101'],
-        'R' => ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
-        'S' => ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
-        'T' => ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
-        'U' => ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
-        'V' => ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
-        'W' => ['10001', '10001', '10001', '10101', '10101', '11011', '10001'],
-        'X' => ['10001', '10001', '01010', '00100', '01010', '10001', '10001'],
-        'Y' => ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
-        'Z' => ['11111', '00001', '00010', '00100', '01000', '10000', '11111'],
-    ];
-    /** @var array<string, list<string>> */
-    private const SEGMENTS = [
-        '2' => ['a', 'b', 'g', 'e', 'd'],
-        '3' => ['a', 'b', 'g', 'c', 'd'],
-        '4' => ['f', 'g', 'b', 'c'],
-        '5' => ['a', 'f', 'g', 'c', 'd'],
-        '6' => ['a', 'f', 'g', 'e', 'c', 'd'],
-        '7' => ['a', 'b', 'c'],
-        '8' => ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
-        '9' => ['a', 'b', 'c', 'd', 'f', 'g'],
-    ];
+    private const WIDTH = 168;
+    private const HEIGHT = 40;
+    private const FONT_SIZE = 18;
+    private const MAX_ANGLE = 5;
 
-    /** @var array<string, array{int,int,int,int}> */
-    private const RECTS = [
-        'a' => [4, 2, 15, 5],
-        'b' => [17, 5, 20, 22],
-        'c' => [17, 26, 20, 43],
-        'd' => [4, 41, 15, 44],
-        'e' => [1, 26, 4, 43],
-        'f' => [1, 5, 4, 22],
-        'g' => [4, 21, 15, 25],
+    /** @var array<string, list<string>> Stroke paths in a 24x36 glyph box. */
+    private const STROKE_GLYPHS = [
+        '2' => ['M3 9 C3 3 21 3 21 10 C21 16 5 22 5 30 H21'],
+        '3' => ['M4 7 C4 3 20 3 20 9 C20 14 10 16 10 18 C10 20 21 21 21 28 C21 34 4 34 4 29'],
+        '4' => ['M16 4 V32', 'M16 4 L4 22 H21'],
+        '5' => ['M19 5 H6 V17 H15 C21 17 21 31 12 31 C6 31 4 27 4 27'],
+        '6' => ['M18 8 C16 3 5 5 5 18 V24 C5 33 19 34 19 24 C19 16 5 16 5 22'],
+        '7' => ['M4 6 H20 L10 32'],
+        '8' => [
+            'M12 4 C5 4 5 17 12 17 C19 17 19 4 12 4 Z',
+            'M12 17 C4 17 4 34 12 34 C20 34 20 17 12 17 Z',
+        ],
+        '9' => ['M6 28 C8 33 19 31 19 18 V12 C19 3 5 2 5 12 C5 20 19 20 19 14'],
+        'A' => ['M3 34 L12 4 L21 34', 'M7 22 H17'],
+        'B' => ['M5 4 V32', 'M5 4 H14 C20 4 20 17 14 17 H5', 'M5 17 H15 C21 17 21 32 15 32 H5'],
+        'C' => ['M19 9 C17 3 5 3 5 18 C5 33 17 33 19 27'],
+        'D' => ['M5 4 V32', 'M5 4 H13 C20 4 21 18 13 32 H5'],
+        'E' => ['M19 5 H6 V31 H19', 'M6 18 H16'],
+        'F' => ['M19 5 H6 V31', 'M6 18 H15'],
+        'G' => ['M19 10 C17 3 5 3 5 18 C5 33 17 33 19 26 V20 H12'],
+        'H' => ['M5 4 V32', 'M19 4 V32', 'M5 18 H19'],
+        'J' => ['M18 5 V24 C18 32 6 33 6 25'],
+        'K' => ['M5 4 V32', 'M19 5 L5 18 L19 32'],
+        'L' => ['M6 4 V31 H19'],
+        'M' => ['M4 32 V5 L12 20 L20 5 V32'],
+        'N' => ['M5 32 V5 L19 32 V5'],
+        'P' => ['M5 32 V5 H14 C20 5 20 18 14 18 H5'],
+        'Q' => ['M12 4 C5 4 4 18 12 32 C20 32 21 18 12 4 Z', 'M13 24 L20 33'],
+        'R' => ['M5 32 V5 H14 C20 5 20 18 14 18 H5', 'M12 18 L19 32'],
+        'S' => ['M19 9 C17 3 5 4 5 11 C5 17 19 17 19 25 C19 33 5 33 5 27'],
+        'T' => ['M4 6 H20', 'M12 6 V32'],
+        'U' => ['M5 5 V22 C5 32 19 32 19 22 V5'],
+        'V' => ['M4 5 L12 32 L20 5'],
+        'W' => ['M3 5 L7 32 L12 14 L17 32 L21 5'],
+        'X' => ['M5 5 L19 32', 'M19 5 L5 32'],
+        'Y' => ['M5 5 L12 18 L19 5', 'M12 18 V32'],
+        'Z' => ['M4 6 H20 L4 32 H20'],
     ];
 
     public static function inlineSvg(string $answer, string $label): string
@@ -77,6 +64,27 @@ final class LocalChallengeImage
             . \htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             . '" focusable="false"';
         return \preg_replace('/\A<svg\b/', '<svg' . $attributes, $svg, 1) ?? $svg;
+    }
+
+    /**
+     * Preferred markup for form injection: TrueType PNG when GD+font exist,
+     * otherwise the CSP-safe stroke SVG.
+     */
+    public static function markup(string $answer, string $label): string
+    {
+        $labelEsc = \htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        if (\function_exists('imagecreatetruecolor') && \function_exists('imagepng')) {
+            $png = self::png($answer);
+            if ($png !== '') {
+                return '<img class="weline-captcha-image" width="' . self::WIDTH . '" height="' . self::HEIGHT . '" alt="" role="img" aria-label="'
+                    . $labelEsc
+                    . '" src="data:image/png;base64,'
+                    . \base64_encode($png)
+                    . '">';
+            }
+        }
+
+        return self::inlineSvg($answer, $label);
     }
 
     public static function dataUri(string $answer): string
@@ -93,55 +101,82 @@ final class LocalChallengeImage
 
     private static function png(string $answer): string
     {
-        $image = \imagecreatetruecolor(168, 52);
+        $width = self::WIDTH;
+        $height = self::HEIGHT;
+        $image = \imagecreatetruecolor($width, $height);
         if ($image === false) {
             return '';
         }
-        $background = \imagecolorallocate($image, 248, 250, 252);
+
+        \imagealphablending($image, true);
+        \imagesavealpha($image, true);
+        $background = \imagecolorallocate($image, 247, 250, 252);
         \imagefill($image, 0, 0, $background);
 
-        // Low-contrast texture reduces pixel/template matching while keeping
-        // the six-character answer readable for a person.
-        for ($point = 0; $point < 420; $point++) {
+        for ($point = 0; $point < 48; $point++) {
             $noise = \imagecolorallocate(
                 $image,
-                \random_int(205, 235),
-                \random_int(210, 240),
-                \random_int(220, 245),
+                \random_int(210, 226),
+                \random_int(216, 230),
+                \random_int(224, 236),
             );
-            \imagesetpixel($image, \random_int(1, 166), \random_int(1, 50), $noise);
+            \imagesetpixel($image, \random_int(1, $width - 2), \random_int(1, $height - 2), $noise);
         }
 
-        $line = \imagecolorallocate($image, 194, 207, 221);
-        for ($index = 0; $index < 2; $index++) {
-            $lastX = 0;
-            $lastY = \random_int(8, 44);
-            for ($step = 1; $step <= 12; $step++) {
-                $x = (int)\round(167 * $step / 12);
-                $y = \max(2, \min(50, $lastY + \random_int(-5, 5)));
-                \imageline($image, $lastX, $lastY, $x, $y, $line);
-                $lastX = $x;
-                $lastY = $y;
+        $line = \imagecolorallocate($image, 198, 210, 222);
+        \imagesetthickness($image, 1);
+        $lastX = 0;
+        $lastY = (int)\round($height / 2);
+        for ($step = 1; $step <= 8; $step++) {
+            $x = (int)\round(($width - 1) * $step / 8);
+            $y = \max(6, \min($height - 6, $lastY + \random_int(-3, 3)));
+            \imageline($image, $lastX, $lastY, $x, $y, $line);
+            $lastX = $x;
+            $lastY = $y;
+        }
+
+        $font = self::fontPath();
+        $chars = \str_split($answer);
+        $count = \max(1, \count($chars));
+        $paddingX = 10;
+        $slot = ($width - ($paddingX * 2)) / $count;
+        $ink = \imagecolorallocate($image, 36, 48, 72);
+        foreach ($chars as $index => $digit) {
+            $slotCenter = $paddingX + ($index * $slot) + ($slot / 2);
+            $angle = \random_int(-self::MAX_ANGLE, self::MAX_ANGLE);
+            if ($font !== null && \function_exists('imagettftext') && \function_exists('imagettfbbox')) {
+                $box = \imagettfbbox(self::FONT_SIZE, $angle, $font, $digit);
+                if ($box === false) {
+                    self::drawStrokeGlyphRaster($image, $digit, (int)\round($slotCenter - 10), 6, $ink);
+                    continue;
+                }
+                $glyphWidth = \max($box[2], $box[4]) - \min($box[0], $box[6]);
+                $glyphHeight = \max($box[1], $box[3]) - \min($box[5], $box[7]);
+                $x = (int)\round($slotCenter - ($glyphWidth / 2) - \min($box[0], $box[6]));
+                $y = (int)\round(($height + $glyphHeight) / 2 - \max($box[1], $box[3]));
+                \imagettftext($image, self::FONT_SIZE, $angle, $x, $y, $ink, $font, $digit);
+            } else {
+                self::drawStrokeGlyphRaster(
+                    $image,
+                    $digit,
+                    (int)\round($slotCenter - 11),
+                    (int)\round(($height - 28) / 2),
+                    $ink,
+                );
             }
         }
 
-        foreach (\str_split($answer) as $index => $digit) {
-            self::drawRotatedGlyph($image, $digit, $index);
-        }
-
-        $arc = \imagecolorallocate($image, 202, 214, 227);
-        for ($index = 0; $index < 2; $index++) {
-            \imagearc(
-                $image,
-                \random_int(0, 168),
-                \random_int(0, 52),
-                \random_int(60, 140),
-                \random_int(26, 70),
-                \random_int(0, 160),
-                \random_int(200, 360),
-                $arc,
-            );
-        }
+        $arc = \imagecolorallocate($image, 180, 196, 214);
+        \imagearc(
+            $image,
+            (int)\round($width / 2 + \random_int(-12, 12)),
+            (int)\round($height / 2 + \random_int(-4, 4)),
+            \random_int(90, 140),
+            \random_int(18, 28),
+            \random_int(10, 60),
+            \random_int(200, 340),
+            $arc,
+        );
 
         \ob_start();
         \imagepng($image);
@@ -150,104 +185,168 @@ final class LocalChallengeImage
         return \is_string($png) ? $png : '';
     }
 
-    private static function drawRotatedGlyph(object $image, string $digit, int $index): void
+    /** @param \GdImage|resource $image */
+    private static function drawStrokeGlyphRaster(mixed $image, string $digit, int $originX, int $originY, int $color): void
     {
-        $glyph = \imagecreatetruecolor(25, 48);
-        if ($glyph === false) {
+        $paths = self::STROKE_GLYPHS[$digit] ?? [];
+        if ($paths === []) {
             return;
         }
-
-        \imagealphablending($glyph, false);
-        \imagesavealpha($glyph, true);
-        $transparent = \imagecolorallocatealpha($glyph, 0, 0, 0, 127);
-        \imagefill($glyph, 0, 0, $transparent);
-        $foreground = \imagecolorallocate(
-            $glyph,
-            \random_int(24, 47),
-            \random_int(35, 61),
-            \random_int(55, 86),
-        );
-
-        foreach (self::SEGMENTS[$digit] ?? [] as $segment) {
-            [$x1, $y1, $x2, $y2] = self::RECTS[$segment];
-            \imagefilledrectangle(
-                $glyph,
-                $x1 + \random_int(-1, 1),
-                $y1 + \random_int(-1, 1),
-                $x2 + \random_int(-1, 1),
-                $y2 + \random_int(-1, 1),
-                $foreground,
-            );
+        // Lightweight fallback when FreeType is missing: sample polyline points.
+        foreach ($paths as $path) {
+            if (!\preg_match_all('/[MLHVCSQTAZ][^MLHVCSQTAZ]*/i', $path, $commands)) {
+                continue;
+            }
+            $cursorX = 0.0;
+            $cursorY = 0.0;
+            $startX = 0.0;
+            $startY = 0.0;
+            $scale = 1.0;
+            foreach ($commands[0] as $command) {
+                $type = \strtoupper($command[0]);
+                $nums = [];
+                if (\preg_match_all('/-?\d+(?:\.\d+)?/', \substr($command, 1), $matches)) {
+                    $nums = \array_map('floatval', $matches[0]);
+                }
+                if ($type === 'M' && \count($nums) >= 2) {
+                    $cursorX = $nums[0];
+                    $cursorY = $nums[1];
+                    $startX = $cursorX;
+                    $startY = $cursorY;
+                    continue;
+                }
+                if ($type === 'L' && \count($nums) >= 2) {
+                    $nx = $nums[0];
+                    $ny = $nums[1];
+                    \imageline(
+                        $image,
+                        (int)\round($originX + $cursorX * $scale),
+                        (int)\round($originY + $cursorY * $scale),
+                        (int)\round($originX + $nx * $scale),
+                        (int)\round($originY + $ny * $scale),
+                        $color,
+                    );
+                    $cursorX = $nx;
+                    $cursorY = $ny;
+                    continue;
+                }
+                if ($type === 'H' && \count($nums) >= 1) {
+                    $nx = $nums[0];
+                    \imageline(
+                        $image,
+                        (int)\round($originX + $cursorX * $scale),
+                        (int)\round($originY + $cursorY * $scale),
+                        (int)\round($originX + $nx * $scale),
+                        (int)\round($originY + $cursorY * $scale),
+                        $color,
+                    );
+                    $cursorX = $nx;
+                    continue;
+                }
+                if ($type === 'V' && \count($nums) >= 1) {
+                    $ny = $nums[0];
+                    \imageline(
+                        $image,
+                        (int)\round($originX + $cursorX * $scale),
+                        (int)\round($originY + $cursorY * $scale),
+                        (int)\round($originX + $cursorX * $scale),
+                        (int)\round($originY + $ny * $scale),
+                        $color,
+                    );
+                    $cursorY = $ny;
+                    continue;
+                }
+                if ($type === 'Z') {
+                    \imageline(
+                        $image,
+                        (int)\round($originX + $cursorX * $scale),
+                        (int)\round($originY + $cursorY * $scale),
+                        (int)\round($originX + $startX * $scale),
+                        (int)\round($originY + $startY * $scale),
+                        $color,
+                    );
+                    $cursorX = $startX;
+                    $cursorY = $startY;
+                }
+            }
         }
-
-        \imagealphablending($glyph, true);
-        $rotated = \imagerotate($glyph, \random_int(-6, 6), $transparent);
-        \imagedestroy($glyph);
-        if ($rotated === false) {
-            return;
-        }
-
-        \imagecopy(
-            $image,
-            $rotated,
-            2 + ($index * 26) + \random_int(-1, 1),
-            \random_int(-1, 2),
-            0,
-            0,
-            \imagesx($rotated),
-            \imagesy($rotated),
-        );
-        \imagedestroy($rotated);
     }
 
     private static function svg(string $answer): string
     {
+        $width = self::WIDTH;
+        $height = self::HEIGHT;
         $parts = [
-            '<svg xmlns="http://www.w3.org/2000/svg" width="168" height="52" viewBox="0 0 168 52">',
-            '<rect width="168" height="52" rx="8" fill="#f8fafc"/>',
+            '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height
+            . '" viewBox="0 0 ' . $width . ' ' . $height . '">',
+            '<rect width="' . $width . '" height="' . $height . '" rx="8" fill="#f7fafc"/>',
         ];
-        for ($index = 0; $index < 3; $index++) {
-            $points = [];
-            $lastY = \random_int(8, 44);
-            for ($step = 0; $step <= 12; $step++) {
-                $x = (int)\round(168 * $step / 12);
-                $y = \max(2, \min(50, $lastY + \random_int(-8, 8)));
-                $points[] = $x . ',' . $y;
-                $lastY = $y;
+
+        $lastY = (int)\round($height / 2);
+        $points = [];
+        for ($step = 0; $step <= 8; $step++) {
+            $x = (int)\round($width * $step / 8);
+            $y = \max(6, \min($height - 6, $lastY + \random_int(-3, 3)));
+            $points[] = $x . ',' . $y;
+            $lastY = $y;
+        }
+        $parts[] = '<polyline points="' . \implode(' ', $points)
+            . '" fill="none" stroke="#94a3b8" stroke-width="1" opacity=".35"/>';
+        for ($index = 0; $index < 16; $index++) {
+            $parts[] = '<circle cx="' . \random_int(4, $width - 4) . '" cy="' . \random_int(4, $height - 4)
+                . '" r="0.8" fill="#94a3b8" opacity=".22"/>';
+        }
+
+        $chars = \str_split($answer);
+        $count = \max(1, \count($chars));
+        $paddingX = 8;
+        $slot = ($width - ($paddingX * 2)) / $count;
+        $originY = (int)\round(($height - 28) / 2);
+        foreach ($chars as $index => $digit) {
+            $paths = self::STROKE_GLYPHS[$digit] ?? [];
+            if ($paths === []) {
+                continue;
             }
-            $parts[] = '<polyline points="' . \implode(' ', $points) . '" fill="none" stroke="#718096" stroke-width="' . (\random_int(8, 14) / 10) . '" opacity=".72"/>';
-        }
-        for ($index = 0; $index < 110; $index++) {
-            $parts[] = '<circle cx="' . \random_int(1, 166) . '" cy="' . \random_int(1, 50)
-                . '" r="' . (\random_int(1, 6) / 4) . '" fill="#64748b" opacity=".48"/>';
-        }
-        foreach (\str_split($answer) as $index => $digit) {
-            $offsetX = 2 + ($index * 27) + \random_int(-3, 3);
-            $offsetY = \random_int(-3, 4);
-            $scale = \random_int(90, 112) / 100;
-            $angle = \random_int(-16, 16);
-            $glyph = [];
-            foreach (self::BITMAP_GLYPHS[$digit] ?? [] as $row => $pattern) {
-                foreach (\str_split($pattern) as $column => $pixel) {
-                    if ($pixel !== '1') {
-                        continue;
-                    }
-                    $x = $offsetX + (int)\round($column * 4.1 * $scale);
-                    $y = $offsetY + (int)\round($row * 5.3 * $scale);
-                    $glyph[] = '<rect x="' . $x . '" y="' . $y . '" width="' . \random_int(4, 6)
-                        . '" height="' . \random_int(5, 7) . '" rx="' . (\random_int(0, 2) / 2)
-                        . '" fill="#172033" opacity=".94"/>';
-                }
+            $originX = $paddingX + ($index * $slot) + (($slot - 22) / 2);
+            $angle = \random_int(-self::MAX_ANGLE, self::MAX_ANGLE);
+            $pivotX = $originX + 11;
+            $pivotY = $originY + 14;
+            $parts[] = '<g transform="rotate(' . $angle . ' ' . $pivotX . ' ' . $pivotY
+                . ') translate(' . $originX . ' ' . $originY . ') scale(0.78)"'
+                . ' fill="none" stroke="#243048" stroke-width="2.2"'
+                . ' stroke-linecap="round" stroke-linejoin="round">';
+            foreach ($paths as $path) {
+                $parts[] = '<path d="' . $path . '"/>';
             }
-            $parts[] = '<g transform="rotate(' . $angle . ' ' . ($offsetX + 10) . ' 26)">' . \implode('', $glyph) . '</g>';
+            $parts[] = '</g>';
         }
-        for ($index = 0; $index < 4; $index++) {
-            $parts[] = '<path d="M' . \random_int(-10, 120) . ' ' . \random_int(5, 46)
-                . ' Q' . \random_int(45, 125) . ' ' . \random_int(0, 52) . ' 178 ' . \random_int(5, 48)
-                . '" fill="none" stroke="#475569" stroke-width="' . (\random_int(7, 14) / 10)
-                . '" opacity=".62"/>';
-        }
+
+        $parts[] = '<path d="M' . \random_int(-4, 20) . ' ' . \random_int(10, $height - 10)
+            . ' Q' . \random_int(50, 110) . ' ' . \random_int(4, $height - 4) . ' '
+            . ($width + 6) . ' ' . \random_int(10, $height - 10)
+            . '" fill="none" stroke="#64748b" stroke-width="1" opacity=".28"/>';
+
         $parts[] = '</svg>';
         return \implode('', $parts);
+    }
+
+    private static function fontPath(): ?string
+    {
+        $candidates = [
+            '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+            '/System/Library/Fonts/Supplemental/Arial.ttf',
+            '/System/Library/Fonts/Supplemental/Helvetica.ttc',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+            '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
+        ];
+        foreach ($candidates as $path) {
+            if (\is_readable($path)) {
+                return $path;
+            }
+        }
+        return null;
     }
 }

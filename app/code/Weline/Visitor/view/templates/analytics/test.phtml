@@ -1,4 +1,18 @@
-﻿<!DOCTYPE html>
+﻿<?php
+$websiteSelectValue = '';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+?>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -17,7 +31,9 @@
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
         window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
     </script>
-    <theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+    <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
     <style>
         * {
             margin: 0;
@@ -144,7 +160,21 @@
         <div class="test-section">
             <h2>1. 商业价值分析</h2>
             <div class="test-form">
-                <input type="text" id="business-websiteId" placeholder="站点ID (可选)" value="">
+                <div>
+                    <label class="label" for="business-websiteId_trigger">站点</label>
+                    <w:websites:website:select
+                        id="business-websiteId"
+                        name="business-websiteId"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <select id="business-period">
                     <option value="daily">每天</option>
                     <option value="weekly">每周</option>
@@ -163,7 +193,21 @@
         <div class="test-section">
             <h2>2. 大屏展示数据（实时）</h2>
             <div class="test-form">
-                <input type="text" id="dashboard-websiteId" placeholder="站点ID (可选)" value="">
+                <div>
+                    <label class="label" for="dashboard-websiteId_trigger">站点</label>
+                    <w:websites:website:select
+                        id="dashboard-websiteId"
+                        name="dashboard-websiteId"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <select id="dashboard-interval">
                     <option value="10">10分钟</option>
                     <option value="30">30分钟</option>
@@ -178,7 +222,21 @@
         <div class="test-section">
             <h2>3. 数据变化百分比</h2>
             <div class="test-form">
-                <input type="text" id="change-websiteId" placeholder="站点ID (可选)" value="">
+                <div>
+                    <label class="label" for="change-websiteId_trigger">站点</label>
+                    <w:websites:website:select
+                        id="change-websiteId"
+                        name="change-websiteId"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <select id="change-interval">
                     <option value="10">10分钟</option>
                     <option value="30">30分钟</option>
@@ -193,7 +251,21 @@
         <div class="test-section">
             <h2>4. 每日对比分析（相比昨天）</h2>
             <div class="test-form">
-                <input type="text" id="daily-websiteId" placeholder="站点ID (可选)" value="">
+                <div>
+                    <label class="label" for="daily-websiteId_trigger">站点</label>
+                    <w:websites:website:select
+                        id="daily-websiteId"
+                        name="daily-websiteId"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <input type="number" id="daily-days" placeholder="最近N天" value="7" min="1" max="30">
                 <button class="w-button" data-visitor-test-action="test-daily-comparison">测试</button>
             </div>
@@ -204,7 +276,21 @@
         <div class="test-section">
             <h2>5. A/B测试数据</h2>
             <div class="test-form">
-                <input type="text" id="abtest-websiteId" placeholder="站点ID (可选)" value="">
+                <div>
+                    <label class="label" for="abtest-websiteId_trigger">站点</label>
+                    <w:websites:website:select
+                        id="abtest-websiteId"
+                        name="abtest-websiteId"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
                 <input type="text" id="abtest-testId" placeholder="测试ID (必填)" value="test_001" required>
                 <select id="abtest-variant">
                     <option value="">所有变体</option>
@@ -324,7 +410,7 @@
 
         // 测试商业价值分析
         async function testBusinessValue() {
-            const websiteId = document.getElementById('business-websiteId').value;
+            const websiteId = document.getElementById('business-websiteId_value').value;
             const period = document.getElementById('business-period').value;
             const startDate = document.getElementById('business-startDate').value;
             const endDate = document.getElementById('business-endDate').value;
@@ -348,7 +434,7 @@
 
         // 测试大屏展示数据
         async function testDashboard() {
-            const websiteId = document.getElementById('dashboard-websiteId').value;
+            const websiteId = document.getElementById('dashboard-websiteId_value').value;
             const interval = document.getElementById('dashboard-interval').value;
             const hours = document.getElementById('dashboard-hours').value;
 
@@ -370,7 +456,7 @@
 
         // 测试数据变化百分比
         async function testChangePercentage() {
-            const websiteId = document.getElementById('change-websiteId').value;
+            const websiteId = document.getElementById('change-websiteId_value').value;
             const interval = document.getElementById('change-interval').value;
             const hours = document.getElementById('change-hours').value;
 
@@ -392,7 +478,7 @@
 
         // 测试每日对比分析
         async function testDailyComparison() {
-            const websiteId = document.getElementById('daily-websiteId').value;
+            const websiteId = document.getElementById('daily-websiteId_value').value;
             const days = document.getElementById('daily-days').value;
 
             showLoading('daily-result');
@@ -412,7 +498,7 @@
 
         // 测试A/B测试
         async function testAbTest() {
-            const websiteId = document.getElementById('abtest-websiteId').value;
+            const websiteId = document.getElementById('abtest-websiteId_value').value;
             const testId = document.getElementById('abtest-testId').value;
             const variant = document.getElementById('abtest-variant').value;
 
@@ -454,4 +540,3 @@
     </script>
 </body>
 </html>
-

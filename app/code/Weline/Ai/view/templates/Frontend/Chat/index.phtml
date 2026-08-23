@@ -13,27 +13,15 @@ $adapters = $this->adapters ?? [];
 $is_logged_in = $this->is_logged_in ?? false;
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script>
-        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
-            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
-            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
-            api: {
-                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
-                endpoint: '/api/framework/query-bin',
-                queryBinUrl: '/api/framework/query-bin'
-            }
-        });
-        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
-        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
-    </script>
-    <theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+    <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
+    <css>Weline_Theme::ui/weline-foundation.css</css>
+    <css>Weline_Theme::ui/weline-frontend.css</css>
+    <js type="module">Weline_Theme::ui/weline-ui.js</js>
     <title><?= __('AI聊天') ?> - AI助手平台</title>
-    <css>Weline_Frontend::assets/css/bootstrap.min.css</css>
-    <css>Weline_Frontend::assets/css/icons.min.css</css>
     <style>
         * {
             margin: 0;
@@ -156,7 +144,7 @@ $is_logged_in = $this->is_logged_in ?? false;
             box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
         }
         
-        .btn-send {
+        .weline-btn-send {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             color: white;
@@ -166,7 +154,7 @@ $is_logged_in = $this->is_logged_in ?? false;
             box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
         }
         
-        .btn-send:hover {
+        .weline-btn-send:hover {
             transform: translateY(-3px);
             box-shadow: 0 0 40px rgba(102, 126, 234, 0.8);
         }
@@ -272,17 +260,15 @@ $is_logged_in = $this->is_logged_in ?? false;
 
         <div class="chat-input-container">
             <w:form id="chatForm">
-                <div class="w-field__control">
-                    <textarea class="w-textarea" id="messageInput" placeholder="<?= __('请输入您的消息...') ?>" rows="1"></textarea>
-                    <div class="input-group-append">
-                        <button class="w-button" type="button" id="cancelButton" disabled title="<?= __('取消生成') ?>" aria-label="<?= __('取消生成') ?>" data-tone="neutral" data-variant="outline">
-                            <w:icon name="stop" size="sm"></w:icon>
-                            <span class="sr-only"><?= __('取消生成') ?></span>
-                        </button>
-                        <button class="w-button" type="submit" id="sendButton" data-tone="primary">
-                            <w:icon name="arrow-right" size="sm"></w:icon>
-                        </button>
-                    </div>
+                <div class="w-field__control w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
+                    <textarea class="w-textarea" id="messageInput" placeholder="<?= __('请输入您的消息...') ?>" rows="1" data-grow="true"></textarea>
+                    <button class="w-button" type="button" id="cancelButton" disabled title="<?= __('取消生成') ?>" aria-label="<?= __('取消生成') ?>" data-tone="neutral" data-variant="outline">
+                        <w:icon name="stop" size="sm"></w:icon>
+                        <span class="w-visually-hidden"><?= __('取消生成') ?></span>
+                    </button>
+                    <button class="w-button" type="submit" id="sendButton" data-tone="primary">
+                        <w:icon name="arrow-right" size="sm"></w:icon>
+                    </button>
                 </div>
             </w:form>
         </div>
@@ -433,8 +419,11 @@ function createWelcomeMessage() {
     const wrapper = document.createElement('div');
     wrapper.className = 'welcome-message';
 
-    const icon = document.createElement('i');
-    icon.className = 'mdi mdi-robot mdi-48px';
+    const icon = document.createElement('span');
+    icon.className = 'w-text';
+    icon.dataset.tone = 'primary';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = 'AI';
 
     const title = document.createElement('h4');
     title.textContent = '<?= addslashes(__('欢迎使用AI聊天助手！')) ?>';

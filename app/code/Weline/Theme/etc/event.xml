@@ -154,6 +154,11 @@
                   disabled="false"
                   shared="true"
                   sort="120"/>
+        <observer name="Weline_Theme::setup_upgrade_theme_disk_compile"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfterThemeDiskCompile"
+                  disabled="false"
+                  shared="true"
+                  sort="125"/>
         <observer name="Weline_Theme::setup_upgrade_deploy_static"
                   instance="Weline\Theme\Observer\SetupUpgradeAfterDeployStatic"
                   disabled="false"

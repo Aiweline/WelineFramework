@@ -88,6 +88,7 @@
 - `app/code/Weline/Order/doc/payable-resolver.md`
 - `app/code/Weline/Order/doc/refund.md`
 - `app/code/Weline/Order/doc/warehouse-fulfillment.md`
+- `app/code/Weline/Order/doc/功能现状.md`
 - `app/code/Weline/Order/doc/开发日志.md`
 - `app/code/Weline/Order/doc/订单状态机说明.md`
 - `app/code/Weline/Order/doc/订单状态翻译功能说明.md`

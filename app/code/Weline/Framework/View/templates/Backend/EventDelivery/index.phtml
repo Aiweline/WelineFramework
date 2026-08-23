@@ -2,6 +2,30 @@
 /** @var \Weline\Framework\View\Template $this */
 $currentWebsiteId = isset($current_website_id) ? (int)$current_website_id : null;
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$websiteSelectValue = $currentWebsiteId === null ? '' : (string)$currentWebsiteId;
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
 <style>
     .event-delivery-shell {
@@ -254,8 +278,19 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     </select>
                 </div>
                 <div>
-                    <label class="w-field__label" for="ed-website"><lang>网站 ID</lang></label>
-                    <input class="w-input" id="ed-website" type="number" min="0" step="1" value="<?= $currentWebsiteId === null ? '' : $escape($currentWebsiteId) ?>">
+                    <label class="w-field__label" for="ed-website_trigger"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="ed-website"
+                        name="ed-website"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
                 </div>
                 <button type="button" class="w-button" id="ed-apply" data-tone="primary">
                     <w:icon name="filter" size="sm"></w:icon><lang>应用筛选</lang>
@@ -327,4 +362,4 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     </div>
 </div>
 
-<script src="@static(Weline_Framework::js/event-delivery.js)?v=20260722-r5" defer></script>
+<script src="@static(Weline_Framework::js/event-delivery.js)?v=20260822-website-select" defer></script>

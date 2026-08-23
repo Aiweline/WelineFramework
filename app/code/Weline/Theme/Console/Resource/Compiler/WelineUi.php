@@ -53,6 +53,8 @@ final class WelineUi implements CompilerInterface
             ];
         }
 
+        $artifacts = $this->versionModuleDependencies($artifacts);
+
         $compiled = [];
         foreach ($artifacts as $name => $artifact) {
             $output = $artifact['output'];
@@ -91,6 +93,121 @@ final class WelineUi implements CompilerInterface
         $this->writeIfChanged($outputRoot . 'manifest.json', $manifestJson);
 
         return $buildManifest;
+    }
+
+    /**
+     * Add content-derived versions to relative ES module dependencies.
+     *
+     * Static assets are cached for a week by WLS. Versioning only the route
+     * entry is insufficient because browsers cache its relative imports under
+     * their unversioned URL. Resolve the compiled dependency graph from the
+     * leaves upward so a transitive change also changes every importing URL.
+     *
+     * @param array<string,array{output:string,type:string,content:string}> $artifacts
+     * @return array<string,array{output:string,type:string,content:string}>
+     */
+    private function versionModuleDependencies(array $artifacts): array
+    {
+        $outputIndex = [];
+        foreach ($artifacts as $name => $artifact) {
+            $outputIndex[$artifact['output']] = $name;
+        }
+
+        $resolved = [];
+        $resolving = [];
+        foreach (array_keys($artifacts) as $name) {
+            $this->resolveModuleArtifact($name, $artifacts, $outputIndex, $resolved, $resolving);
+        }
+
+        foreach ($resolved as $name => $content) {
+            $artifacts[$name]['content'] = $content;
+        }
+
+        return $artifacts;
+    }
+
+    /**
+     * @param array<string,array{output:string,type:string,content:string}> $artifacts
+     * @param array<string,string> $outputIndex
+     * @param array<string,string> $resolved
+     * @param array<string,true> $resolving
+     */
+    private function resolveModuleArtifact(
+        string $name,
+        array $artifacts,
+        array $outputIndex,
+        array &$resolved,
+        array &$resolving,
+    ): string {
+        if (isset($resolved[$name])) {
+            return $resolved[$name];
+        }
+        if (isset($resolving[$name])) {
+            throw new \RuntimeException(__('Weline UI ES Module 依赖存在循环：%{1}', [$name]));
+        }
+
+        $artifact = $artifacts[$name] ?? null;
+        if (!is_array($artifact)) {
+            throw new \RuntimeException(__('Weline UI bundle 不存在：%{1}', [$name]));
+        }
+        $resolving[$name] = true;
+        $content = $artifact['content'];
+
+        if ($artifact['type'] === 'js') {
+            $content = preg_replace_callback(
+                '~(?<prefix>\b(?:from|import)\s*(?:\(\s*)?)(?<quote>["\'])(?<specifier>\.{1,2}/[^"\']+?\.js)(?:\?[^"\']*)?\k<quote>~',
+                function (array $match) use ($artifact, $artifacts, $outputIndex, &$resolved, &$resolving): string {
+                    $dependencyOutput = $this->resolveRelativeOutput(
+                        $artifact['output'],
+                        (string)$match['specifier'],
+                    );
+                    $dependencyName = $outputIndex[$dependencyOutput] ?? null;
+                    if (!is_string($dependencyName)) {
+                        return (string)$match[0];
+                    }
+
+                    $dependencyContent = $this->resolveModuleArtifact(
+                        $dependencyName,
+                        $artifacts,
+                        $outputIndex,
+                        $resolved,
+                        $resolving,
+                    );
+                    $version = substr(hash('sha256', $dependencyContent), 0, 12);
+
+                    return (string)$match['prefix']
+                        . (string)$match['quote']
+                        . (string)$match['specifier']
+                        . '?v=' . $version
+                        . (string)$match['quote'];
+                },
+                $content,
+            );
+            if (!is_string($content)) {
+                throw new \RuntimeException(__('Weline UI ES Module 依赖版本化失败：%{1}', [$name]));
+            }
+        }
+
+        unset($resolving[$name]);
+        return $resolved[$name] = $content;
+    }
+
+    private function resolveRelativeOutput(string $fromOutput, string $specifier): string
+    {
+        $segments = explode('/', dirname($fromOutput) . '/' . $specifier);
+        $normalized = [];
+        foreach ($segments as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+            if ($segment === '..') {
+                array_pop($normalized);
+                continue;
+            }
+            $normalized[] = $segment;
+        }
+
+        return implode('/', $normalized);
     }
 
     private function compileSources(string $bundleName, string $type, mixed $sources, string $sourceRoot): string

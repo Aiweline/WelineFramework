@@ -7,7 +7,6 @@ namespace Weline\I18n\Test\Unit\Taglib;
 use PHPUnit\Framework\TestCase;
 use Weline\I18n\Taglib\LanguageSelect;
 use Weline\I18n\Taglib\LanguageSwitcher;
-use Weline\I18n\Taglib\LanguageSwitcherLegacyAlias;
 
 final class LanguageSwitcherTagNameContractTest extends TestCase
 {
@@ -17,16 +16,10 @@ final class LanguageSwitcherTagNameContractTest extends TestCase
         self::assertSame('i18n:switcher', LanguageSwitcher::TAG_NAME);
     }
 
-    public function testLegacyAliasMapsToSameCallback(): void
+    public function testLegacyAliasIsRemoved(): void
     {
-        self::assertSame('i18n:language:switcher', LanguageSwitcherLegacyAlias::name());
-        self::assertSame(LanguageSwitcher::LEGACY_TAG_NAME, LanguageSwitcherLegacyAlias::name());
-        self::assertSame(
-            LanguageSwitcher::attr(),
-            LanguageSwitcherLegacyAlias::attr(),
-        );
-        self::assertTrue(LanguageSwitcherLegacyAlias::tag_self_close());
-        self::assertTrue(LanguageSwitcherLegacyAlias::tag_self_close_with_attrs());
+        self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/Taglib/LanguageSwitcherLegacyAlias.php');
+        self::assertFalse(defined(LanguageSwitcher::class . '::LEGACY_TAG_NAME'));
     }
 }
 

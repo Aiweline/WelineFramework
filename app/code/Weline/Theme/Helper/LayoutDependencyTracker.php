@@ -24,8 +24,14 @@ use Weline\Theme\Model\WelineTheme;
  */
 class LayoutDependencyTracker
 {
+    private const MAX_DEPENDENCY_CACHE_ENTRIES = 512;
     /** @var array 依赖关系缓存 [layoutFile => [dependencies => [], lastCheck => timestamp]] */
     private static array $dependencyCache = [];
+
+    public static function processCacheItemCount(): int
+    {
+        return count(self::$dependencyCache);
+    }
     
     /**
      * 解析布局文件，提取partials依赖
@@ -41,6 +47,8 @@ class LayoutDependencyTracker
             $cache = self::$dependencyCache[$cacheKey];
             // 如果文件未更新，直接返回缓存
             if (file_exists($layoutFile) && filemtime($layoutFile) <= $cache['lastCheck']) {
+                unset(self::$dependencyCache[$cacheKey]);
+                self::$dependencyCache[$cacheKey] = $cache;
                 return $cache['dependencies'];
             }
         }
@@ -93,6 +101,14 @@ class LayoutDependencyTracker
         $dependencies = array_unique($dependencies);
         
         // 更新缓存
+        unset(self::$dependencyCache[$cacheKey]);
+        while (count(self::$dependencyCache) >= self::MAX_DEPENDENCY_CACHE_ENTRIES) {
+            $oldest = array_key_first(self::$dependencyCache);
+            if ($oldest === null) {
+                break;
+            }
+            unset(self::$dependencyCache[$oldest]);
+        }
         self::$dependencyCache[$cacheKey] = [
             'dependencies' => $dependencies,
             'lastCheck' => time()

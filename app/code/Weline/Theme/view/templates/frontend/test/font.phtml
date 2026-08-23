@@ -1,0 +1,101 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$h = static function (string $s): string {
+    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
+$pageTitle = (string)($this->getData('title') ?: 'theme:font 字符子集测试');
+$charsDemo = '抽字测ABC';
+$charsExtra = '未收录汉字XYZ';
+$sampleLine = $charsDemo . ' · ' . $charsExtra;
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $h($pageTitle) ?></title>
+    <w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC Chars" chars="抽字测ABC" weight="400" display="swap"/>
+    <w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC Lang" weight="400" display="swap"/>
+    <style>
+        body { margin: 0; padding: 24px; font-family: system-ui, sans-serif; background: #f4f5f7; color: #1f2937; }
+        .wrap { max-width: 920px; margin: 0 auto; }
+        h1 { margin: 0 0 8px; font-size: 24px; }
+        .lead { margin: 0 0 20px; color: #4b5563; }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
+        .card h2 { margin: 0 0 10px; font-size: 16px; }
+        .sample { font-size: 28px; line-height: 1.5; word-break: break-all; }
+        .sample-chars { font-family: "Noto Sans SC Chars", system-ui, sans-serif; font-weight: 400; }
+        .sample-lang { font-family: "Noto Sans SC Lang", system-ui, sans-serif; font-weight: 400; }
+        code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+        pre { margin: 0; white-space: pre-wrap; word-break: break-all; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 6px; }
+        .meta { color: #6b7280; font-size: 13px; margin-top: 8px; }
+        .ok { color: #047857; }
+        .bad { color: #b91c1c; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1><?= $h($pageTitle) ?></h1>
+    <p class="lead">属性 <code>chars</code> 只抽指定字符；未写 <code>chars</code> 则按当前语言子集。</p>
+
+    <div class="card">
+        <h2>chars 子集（仅「<?= $h($charsDemo) ?>」）</h2>
+        <div class="sample sample-chars"><?= $h($sampleLine) ?></div>
+        <p class="meta">左侧 <?= $h($charsDemo) ?> 应走子集字体；右侧 <?= $h($charsExtra) ?> 可能回退系统字体或缺字。</p>
+    </div>
+
+    <div class="card">
+        <h2>语言子集对照（无 lang，跟站点语言）</h2>
+        <div class="sample sample-lang"><?= $h($sampleLine) ?></div>
+    </div>
+
+    <div class="card">
+        <h2>标签写法</h2>
+        <pre>&lt;w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC Chars" chars="抽字测ABC" weight="400" display="swap"/&gt;
+&lt;w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC Lang" weight="400" display="swap"/&gt;</pre>
+    </div>
+
+    <div class="card">
+        <h2>页面生成的 @font-face URL</h2>
+        <pre id="font-url-dump">读取中…</pre>
+        <p class="meta" id="font-url-check"></p>
+        <p class="meta">说明：chars / 语言子集都在<strong>本次请求渲染时同步生成</strong>（无则读缓存）。首次慢一点是正常的；若两条 URL 都带 <code>.chars.</code>，是同页标签变量串扰，不是没提取。</p>
+    </div>
+</div>
+<script>
+(() => {
+  const dump = document.getElementById('font-url-dump');
+  const check = document.getElementById('font-url-check');
+  const styles = Array.prototype.slice.call(document.querySelectorAll('style[data-weline-font]'));
+  const rows = styles.map(function (el, i) {
+    const css = el.textContent || '';
+    const familyMatch = css.match(/font-family:([^;]+)/);
+    const urlMatch = css.match(/url\(['"]?([^'")\s]+)/);
+    return {
+      i: i + 1,
+      family: familyMatch ? familyMatch[1].trim() : '',
+      url: urlMatch ? urlMatch[1] : ''
+    };
+  });
+  dump.textContent = rows.length
+    ? rows.map(function (r) { return '#' + r.i + ' ' + r.family + '\n  ' + r.url; }).join('\n\n')
+    : '(无 data-weline-font — 可能提取失败或标签未编译)';
+  const charsRow = rows.filter(function (r) { return r.family.indexOf('Noto Sans SC Chars') !== -1; })[0];
+  const langRow = rows.filter(function (r) { return r.family.indexOf('Noto Sans SC Lang') !== -1; })[0];
+  const charsOk = !!(charsRow && charsRow.url.indexOf('.chars.') !== -1);
+  const langOk = !!(langRow && langRow.url.indexOf('font-subset/') !== -1 && langRow.url.indexOf('.chars.') === -1);
+  const leaked = !!(langRow && langRow.url.indexOf('.chars.') !== -1);
+  check.className = 'meta ' + (charsOk && langOk ? 'ok' : 'bad');
+  if (charsOk && langOk) {
+    check.textContent = '检查通过：chars 子集含 .chars.；语言子集为语言指纹（实时提取或缓存命中）。';
+  } else if (leaked) {
+    check.textContent = '检查未通过：语言子集 URL 误带 .chars.（同页 chars 属性串扰）。请硬刷新或清 FPC 后再看；服务端已按「本标签是否写了 chars」隔离。';
+  } else if (!charsRow || !charsOk) {
+    check.textContent = '检查未通过：未看到 chars 子集 URL（.chars.）。若无 style[data-weline-font]，请看是否提取异常。';
+  } else {
+    check.textContent = '检查未通过：语言子集 URL 异常。';
+  }
+})();
+</script>
+</body>
+</html>

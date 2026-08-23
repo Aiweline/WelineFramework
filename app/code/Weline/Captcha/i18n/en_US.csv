@@ -5,7 +5,7 @@
 "Google Captcha 查询器不支持的操作：%{1}","Google CAPTCHA query does not support operation: %{1}"
 "Google reCAPTCHA Enterprise 授权","Google reCAPTCHA Enterprise authorization"
 "选择授权账户可访问的 Project，并为当前网站域名创建 Enterprise Key。","Select a Project accessible to the authorized account and create an Enterprise Key for the current website domains."
-请先登录后台,请先登录后台
+请先登录后台,"Please log in to the backend first"
 "Google 授权已撤销","Google authorization was revoked"
 后台登录验证码,"Backend Login CAPTCHA"
 在后台登录页面显示验证码，允许其他模块自定义验证码显示方式。,"Displays a CAPTCHA on the backend login page, allowing other modules to customize the CAPTCHA display method."
@@ -16,26 +16,24 @@
 "无法初始化 Google 验证请求","Unable to initialize the Google verification request"
 需要验证码验证,"CAPTCHA Verification Required"
 验证码错误,"Incorrect verification code"
-人机验证配置,人机验证配置
+人机验证配置,"Human-machine authentication configuration"
 check,check
-系统配置,系统配置
+系统配置,"System configuration"
 "Google 授权成功","Google authorization succeeded"
 "Google 连接测试成功","Google connection test succeeded"
-"mdi mdi-shield-check","mdi mdi-shield-check"
-"授权 Google reCAPTCHA Enterprise","授权 Google reCAPTCHA Enterprise"
-"mdi mdi-google","mdi mdi-google"
-"处理 Google reCAPTCHA Enterprise 回调","处理 Google reCAPTCHA Enterprise 回调"
-"mdi mdi-login-variant","mdi mdi-login-variant"
+"授权 Google reCAPTCHA Enterprise","Authorize Google reCAPTCHA Enterprise"
+circle,circle
+"处理 Google reCAPTCHA Enterprise 回调","Handling Google reCAPTCHA Enterprise callbacks"
+login,login
 "选择 Google Cloud Project","Select a Google Cloud Project"
-"mdi mdi-cloud-outline","mdi mdi-cloud-outline"
-"测试 Google reCAPTCHA Enterprise 连接","测试 Google reCAPTCHA Enterprise 连接"
-"mdi mdi-connection","mdi mdi-connection"
-"撤销 Google reCAPTCHA Enterprise 授权","撤销 Google reCAPTCHA Enterprise 授权"
-"mdi mdi-link-off","mdi mdi-link-off"
+cloud,cloud
+"测试 Google reCAPTCHA Enterprise 连接","Test Google reCAPTCHA Enterprise connection"
+link,link
+"撤销 Google reCAPTCHA Enterprise 授权","Revoke Google reCAPTCHA Enterprise authorization"
 "撤销 Google 授权","Revoke Google authorization"
 "此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。","This revokes the remote token and deletes local access and refresh tokens; existing Projects and Site Keys are not deleted."
 确认撤销授权,"Confirm authorization revocation"
-取消,取消
+取消,Cancel
 "正在撤销 Google 授权…","Revoking Google authorization…"
 "选择后将为当前配置范围的网站域名创建并绑定 reCAPTCHA Enterprise Key。","A reCAPTCHA Enterprise Key will be created and bound to the website domains in the current configuration scope."
 返回人机验证配置,"Back to CAPTCHA settings"
@@ -63,7 +61,14 @@ check,check
 "Google OAuth 请求失败：HTTP %{1} %{2}","Google OAuth request failed: HTTP %{1} %{2}"
 验证码提供者未注册：%{1},"CAPTCHA provider is not registered: %{1}"
 "不支持的验证码类型: %{1}","Unsupported verification code type: %{1}"
+"mdi mdi-shield-check","mdi mdi-shield-check"
+"mdi mdi-google","mdi mdi-google"
+"mdi mdi-login-variant","mdi mdi-login-variant"
+"mdi mdi-cloud-outline","mdi mdi-cloud-outline"
+"mdi mdi-connection","mdi mdi-connection"
+"mdi mdi-link-off","mdi mdi-link-off"
 当前表单要求人机验证，但验证码模块已关闭,"This form requires human verification, but CAPTCHA is disabled"
 "Google reCAPTCHA Enterprise 已启用但配置不完整","Google reCAPTCHA Enterprise is enabled but not fully configured"
 "人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。","Human verification is always enabled; an expiring local image challenge is used when Google is not fully configured."
 未启用或配置不完整时使用本地图形验证码；完整启用后远端失败会拒绝提交，不会静默降级。,"A local image challenge is used while Google is disabled or incomplete; after full activation, remote failures reject submission without silent fallback."
+验证码配置,"Captcha configuration"

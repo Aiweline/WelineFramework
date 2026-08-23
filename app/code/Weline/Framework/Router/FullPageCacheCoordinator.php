@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Router;
 
+use Weline\Framework\Cache\SharedResponseCachePolicy;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -501,6 +502,12 @@ final class FullPageCacheCoordinator
         }
 
         if ($response->getStatusCode() !== 200 || $response->getBody() === '') {
+            return false;
+        }
+
+        if (SharedResponseCachePolicy::isForbidden()) {
+            $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+            $response->setHeader('Pragma', 'no-cache');
             return false;
         }
 
@@ -1704,6 +1711,10 @@ final class FullPageCacheCoordinator
 
     private function responseAllowsSharedPageCache(Response $response): bool
     {
+        if (SharedResponseCachePolicy::isForbidden()) {
+            return false;
+        }
+
         $contentType = $response->getHeader('Content-Type');
         if (is_array($contentType)) {
             $contentType = implode(',', array_map('strval', $contentType));

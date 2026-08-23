@@ -386,34 +386,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 </style>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_meta) return;
-  g.__bqAdmin_meta=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['meta']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('meta').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function() {
     const app = document.getElementById('meta-config-app');
@@ -496,7 +469,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             document.body.appendChild(this.backdrop);
 
             // 绑定关闭按钮事件
-            const closeButtons = this.element.querySelectorAll('[data-bs-dismiss="modal"]');
+            const closeButtons = this.element.querySelectorAll('[data-w-close]');
             closeButtons.forEach(btn => {
                 btn.addEventListener('click', () => this.hide());
             });
@@ -724,7 +697,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         treeCount.textContent = '';
 
         const params = new URLSearchParams(filters);
-        bqAdmin['meta'](endpoints.tree + '?' + params.toString(), { credentials: 'same-origin' })
+        Weline.adminRequest('meta', endpoints.tree + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -766,11 +739,11 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             label.dataset.metaIdentify = node.meta_identify;
             label.dataset.nodeArea = node.area || '';
             const icon = document.createElement('i');
-            icon.className = 'mdi mdi-file-document-outline text-primary';
+            icon.className = 'mdi weline-icon--file-text text-primary';
             label.prepend(icon);
         } else {
             const icon = document.createElement('i');
-            icon.className = 'mdi mdi-folder-outline text-warning';
+            icon.className = 'mdi weline-icon--folder w-text';
             label.prepend(icon);
         }
 
@@ -799,7 +772,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             identity_id: lastFilters.identity_id || '',
         });
 
-        bqAdmin['meta'](endpoints.file + '?' + params.toString(), { credentials: 'same-origin' })
+        Weline.adminRequest('meta', endpoints.file + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -858,7 +831,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 const value = item.value ?? '';
                 html += '<div class="w-list-group__item">';
                 html += '<div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-1);">';
-                html += '<div><strong>' + escapeHtml(item.label || item.name) + '</strong> <code class="w-text ms-1" style="font-size: 11px;" data-tone="muted">' + escapeHtml(item.name) + '</code> <button type="button" class="w-button param-translate-btn ms-1" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-param="' + escapeAttr(item.name) + '" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="language" size="sm"></w:icon></button></div>';
+                html += '<div><strong>' + escapeHtml(item.label || item.name) + '</strong> <code class="w-text" style="font-size: 11px;" data-tone="muted">' + escapeHtml(item.name) + '</code> <button type="button" class="w-button param-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-param="' + escapeAttr(item.name) + '" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="language" size="sm"></w:icon></button></div>';
                 html += '</div>';
                 if (item.description) {
                     html += '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">' + escapeHtml(item.description) + '</div>';
@@ -907,7 +880,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             activeNode.classList.add('saving');
         }
 
-        bqAdmin['meta'](endpoints.save, {
+        Weline.adminRequest('meta', endpoints.save, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',
@@ -965,7 +938,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 
         translationModalBody.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载翻译...') ?></p></div>';
 
-        bqAdmin['meta'](endpoints.translation + '?' + params.toString(), { credentials: 'same-origin' })
+        Weline.adminRequest('meta', endpoints.translation + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -1029,7 +1002,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         }
 
         const formData = new FormData(form);
-        bqAdmin['meta'](endpoints.translationSave, {
+        Weline.adminRequest('meta', endpoints.translationSave, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',
@@ -1116,7 +1089,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 
         metaNameDescTranslationModalBody.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载翻译...') ?></p></div>';
 
-        bqAdmin['meta'](endpoints.metaNameDescTranslation + '?' + params.toString(), { credentials: 'same-origin' })
+        Weline.adminRequest('meta', endpoints.metaNameDescTranslation + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -1178,7 +1151,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         }
 
         const formData = new FormData(form);
-        bqAdmin['meta'](endpoints.metaNameDescTranslationSave, {
+        Weline.adminRequest('meta', endpoints.metaNameDescTranslationSave, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',

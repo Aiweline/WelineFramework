@@ -2,17 +2,19 @@
 "构建预览 URL 事件","Build preview URL event"
 "Theme editor result after","Theme editor result after"
 "Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.","Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result."
-字体子集预热收集,字体子集预热收集
-"系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。","系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。"
+字体子集预热收集,"Font subset warm-up collection"
+"系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。","Triggered before system upgrade warm-up. Each module view/fonts is automatically scanned by default; additional paths or languages ​​can be appended to fonts / languages. Existing language subsets will skip rebuilding."
 "Theme 查询器不支持的操作：%{1}","Operations not supported by Theme queryer: %{1}"
-当前没有可用于预览的前台主题。,当前没有可用于预览的前台主题。
-"缺少预览 token。","缺少预览 token。"
-"预览 token 无效或已过期。","预览 token 无效或已过期。"
-主题模式无效。,主题模式无效。
+当前没有可用于预览的前台主题。,"There are currently no frontend themes available for preview."
+生成预览凭据需要有效的后台用户上下文。,"Generating preview credentials requires a valid backend user context."
+"缺少预览 token。","Missing preview token."
+"预览 token 无效或已过期。","The preview token is invalid or expired."
+主题模式无效。,"Theme mode is invalid."
 主题模式无效：%{1},"Invalid theme mode: %{1}"
 同步成功,"Sync succeeded"
-"Theme target 布局复制参数不完整。","Theme target layout copy parameters are incomplete."
-"复制 Theme target 布局选择","Copy Theme target layout selection"
+"Theme target 布局复制必须分别指定源和目标的 Scope、语言与 target 身份。","Theme target layout copy must specify separate source and target scopes, locales, and target identities."
+"Theme target 布局复制身份无效。","Theme target layout copy identity is invalid."
+"Theme target 布局复制失败。","Failed to copy the Theme target layout."
 主题查询,"Topic query"
 提供当前主题、配置值、模板路径等查询能力,"Provides current theme, configuration values, template path, and other query capabilities"
 获取当前激活的主题信息,"Get currently active theme info"
@@ -21,52 +23,52 @@
 获取主题配置的模板路径,"Get template path for theme configuration"
 扫描当前主题中指定类型的布局选项,"Scan layout options of the specified type in the current theme"
 "默认 frontend","Default frontend"
-"列出 Theme 虚拟布局选项","列出 Theme 虚拟布局选项"
-"检查 Theme 虚拟布局是否存在","检查 Theme 虚拟布局是否存在"
-"读取 Theme 虚拟布局当前可编辑源码","读取 Theme 虚拟布局当前可编辑源码"
-"列出 Theme 虚拟布局源码/发布版本","列出 Theme 虚拟布局源码/发布版本"
-"保存 Theme 虚拟布局源码版本","保存 Theme 虚拟布局源码版本"
+"列出 Theme 虚拟布局选项","List Theme virtual layout options"
+"检查 Theme 虚拟布局是否存在","Check if Theme virtual layout exists"
+"读取 Theme 虚拟布局当前可编辑源码","Read the current editable source code of Theme virtual layout"
+"列出 Theme 虚拟布局源码/发布版本","List Theme virtual layout source code/release version"
+"保存 Theme 虚拟布局源码版本","Save Theme virtual layout source code version"
 "复制 Theme target 的布局选择、可视化布局和虚拟布局数据","Copy Theme target layout selection, visual layout, and virtual layout data"
-"回滚 Theme 虚拟布局发布版本","回滚 Theme 虚拟布局发布版本"
-"解析当前有效 Theme 虚拟布局运行时信息","解析当前有效 Theme 虚拟布局运行时信息"
-"清理 Theme 运行时布局缓存","清理 Theme 运行时布局缓存"
-"保存 Theme 布局选择","保存 Theme 布局选择"
-"删除 Theme 布局选择并恢复继承","删除 Theme 布局选择并恢复继承"
-"解析 Theme 布局选择及来源","解析 Theme 布局选择及来源"
-列出产品/分类布局选择版本,列出产品/分类布局选择版本
-预检产品/分类布局选择版本是否可回滚,预检产品/分类布局选择版本是否可回滚
-回滚产品/分类布局选择版本,回滚产品/分类布局选择版本
-"生成 Theme 前台预览 token","生成 Theme 前台预览 token"
-"校验 Theme 前台预览 token","校验 Theme 前台预览 token"
+"回滚 Theme 虚拟布局发布版本","Rollback the theme virtual layout release version"
+"解析当前有效 Theme 虚拟布局运行时信息","Parse the currently valid Theme virtual layout runtime information"
+"清理 Theme 运行时布局缓存","Clean Theme runtime layout cache"
+"保存 Theme 布局选择","Save Theme layout selection"
+"删除 Theme 布局选择并恢复继承","Remove Theme layout selection and restore inheritance"
+"解析 Theme 布局选择及来源","Analyze Theme layout selection and source"
+列出产品/分类布局选择版本,"List products/category layout select version"
+预检产品/分类布局选择版本是否可回滚,"Pre-check whether the product/category layout selection version can be rolled back"
+回滚产品/分类布局选择版本,"Rollback product/category layout selection version"
+"生成 Theme 前台预览 token","Generate Theme front-end preview token"
+"校验 Theme 前台预览 token","Verify Theme front-end preview token"
 "Theme editor signed backend request bridge","Theme editor signed backend request bridge"
-同步后台跟随系统、亮色或暗色模式,同步后台跟随系统、亮色或暗色模式
-"system、light 或 dark","system、light 或 dark"
-按区域激活主题,按区域激活主题
-"frontend 或 backend","frontend 或 backend"
+同步后台跟随系统、亮色或暗色模式,"Sync in the background to follow the system, light or dark mode"
+"system、light 或 dark","system, light or dark"
+按区域激活主题,"Activate themes by region"
+"frontend 或 backend","frontend or backend"
 "Theme 虚拟部件智能体","Theme virtual component agent"
 "用于生成、微调和验证 Weline Theme 的虚拟部件 JSON 与模板内容。","Used to generate, fine-tune, and validate the virtual component JSON and template content of the Weline Theme"
-"AI 查询入口不可用。","AI 查询入口不可用。"
+"AI 查询入口不可用。","The AI ​​query portal is unavailable."
 "AI 调用失败：%{1}","AI call failed: %{1}"
 准备进入下一轮智能体调用,"Preparing to enter the next round of agent calls"
 "智能体未能生成最终 JSON 输出","Agent failed to generate final JSON output"
-"主题 AI 适配器","主题 AI 适配器"
-用于主题可视化编辑器的配置翻译、虚拟主题布局源码生成、文案生成和主题图片生成。,用于主题可视化编辑器的配置翻译、虚拟主题布局源码生成、文案生成和主题图片生成。
-缺少布局类型。,缺少布局类型。
-缺少布局选项。,缺少布局选项。
-缺少源语言。,缺少源语言。
-缺少目标语言。,缺少目标语言。
+"主题 AI 适配器","Topic AI Adapter"
+用于主题可视化编辑器的配置翻译、虚拟主题布局源码生成、文案生成和主题图片生成。,"Used for configuration translation of theme visual editor, virtual theme layout source code generation, copywriting generation and theme image generation."
+缺少布局类型。,"Missing layout type."
+缺少布局选项。,"Missing layout options."
+缺少源语言。,"Source language missing."
+缺少目标语言。,"Target language is missing."
 "Weline 主题库","Weline Theme Library"
 "从 Weline 主题库中选择主题方案，支持多种布局风格。","Select a theme from the Weline Theme Library, supporting multiple layout styles."
-首页,"Home Page"
+首页,"front page"
 关于我们,"About Us"
-联系我们,"Contact Us"
+联系我们,"Contact us"
 隐私政策,"Privacy Policy"
 服务条款,"Terms of Service"
 退款政策,"Refund Policy"
 "Cookie 政策","Cookie Policy"
 博客列表,"Blog List"
 博客分类,"Blog Category"
-博客文章,"Blog Post"
+博客文章,"Blog Article"
 自定义页面,"Custom Page"
 网站主页，展示品牌和核心内容,"Site homepage showcasing brand and core content"
 介绍品牌故事、团队和价值观,"Introduce brand story"
@@ -82,19 +84,19 @@
 任务进度,"Task progress"
 等待中,Waiting
 执行中,Executing
-成功,Success
-失败,Failed
-已跳过,Skipped
+成功,success
+失败,fail
+已跳过,skipped
 正在连接...,Connecting...
 已连接,Connected
 已断开,Disconnected
 就绪,Ready
-复制,Copy
+复制,copy
 清空,Clear
 已复制,Copied
 请选择,"Please select"
-暂无数据,"No data"
-加载中...,Loading...
+暂无数据,"No data yet"
+加载中...,loading...
 搜索...,Searching...
 终端输出,"Terminal output"
 连接错误,"Connection Error"
@@ -107,8 +109,8 @@
 思考,Think
 连接重试中...,Reconnecting...
 【输出过长，已省略前部】,"[The output is too long, the front part has been omitted]"
-开始日期,"Start date"
-结束日期,"End date"
+开始日期,"start date"
+结束日期,"end date"
 至,To
 今天,Today
 昨天,Yesterday
@@ -123,8 +125,10 @@
 标签已存在,"Tag already exists"
 标签太短,"Tag too short"
 标签太长,"Tag too long"
-"w:slot wrapper=""section"" 必须配置 weline-code 属性（用于事件溯源）","w:slot wrapper=""section"" 必须配置 weline-code 属性（用于事件溯源）"
-"w:slot wrapper=""section"" 的 weline-code 不能为空","w:slot wrapper=""section"" 的 weline-code 不能为空"
+展开,Expand
+折叠,Collapse
+"w:slot wrapper=""section"" 必须配置 weline-code 属性（用于事件溯源）","w:slot wrapper=""section"" must be configured with the weline-code attribute (for event sourcing)"
+"w:slot wrapper=""section"" 的 weline-code 不能为空","The weline-code of w:slot wrapper=""section"" cannot be empty"
 "w:slot 标签缺少必填属性 id","w:slot tag missing required attribute id"
 "w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符","w:slot tag id format invalid: ""%{id}"", must start with letter, contains letters, numbers, underscore, hyphen"
 "w:slot 标签 id 重复: ""%{id}""","w:slot tag id duplicate: ""%{id}"""
@@ -143,19 +147,19 @@
 "文件: %{file}","File: %{file}"
 "行数: %{line}","Line: %{line}"
 "示例: %{example}","Example: %{example}"
-警告,Warning
+警告,warn
 选择图标,"Select Icon"
-搜索图标,搜索图标
-可用图标,可用图标
-没有匹配的图标,没有匹配的图标
+搜索图标,"search icon"
+可用图标,"Available icons"
+没有匹配的图标,"No matching icon"
 预设颜色,"Preset Colors"
 请选择或搜索...,"Select or search..."
 没有找到匹配的结果,"No matching results found"
 搜索中...,Searching...
-加载失败,"Failed to load"
+加载失败,"Loading failed"
 输入关键词搜索,"Enter keywords to search"
 复制失败,"Copy failed"
-关闭,Close
+关闭,closure
 页脚之前,"Before Footer"
 在渲染页脚组件之前触发，允许其他模块在页脚开始处注入内容。,"Triggered before rendering the footer component, allowing other modules to inject content at the beginning of the footer."
 页脚内容之前,"Before Footer Content"
@@ -166,8 +170,8 @@
 在渲染页脚区块之后触发，允许其他模块在页脚区块结束处注入内容。,"Triggered after rendering the footer block, allowing other modules to inject content at the end of the footer block."
 页脚内容之后,"After Footer Content"
 在渲染页脚主要内容之后触发，允许其他模块在页脚内容结束处注入内容。,"Triggered after rendering the main footer content, allowing other modules to inject content at the end of the footer content."
-页脚品牌内容,页脚品牌内容
-覆盖默认页脚品牌区域，允许站点或业务模块替换页脚品牌名称、标识和说明。,覆盖默认页脚品牌区域，允许站点或业务模块替换页脚品牌名称、标识和说明。
+页脚品牌内容,"Footer brand content"
+覆盖默认页脚品牌区域，允许站点或业务模块替换页脚品牌名称、标识和说明。,"Overrides the default footer branding area, allowing a site or business module to replace the footer brand name, logo, and description."
 页脚链接内容,"Footer link content"
 覆盖页脚链接内容，允许其他模块完全替换页脚的链接区域。,"Override the footer link content, allowing other modules to completely replace the link area in the footer."
 页脚社交媒体内容,"Footer social media content"
@@ -182,8 +186,8 @@
 在渲染页脚社交媒体链接之后触发，允许其他模块在社交媒体区域结束处注入内容。,"Triggered after rendering the footer social media links, allowing other modules to inject content at the end of the social media area."
 页脚版权信息之前,"Before footer copyright info"
 在渲染页脚版权信息之前触发，允许其他模块在版权信息开始处注入内容。,"Triggered before rendering the footer copyright information, allowing other modules to inject content at the beginning of the copyright area."
-页脚版权信息,页脚版权信息
-覆盖默认页脚版权信息，允许站点或业务模块输出自定义版权文本。,覆盖默认页脚版权信息，允许站点或业务模块输出自定义版权文本。
+页脚版权信息,"Footer copyright information"
+覆盖默认页脚版权信息，允许站点或业务模块输出自定义版权文本。,"Overrides the default footer copyright information, allowing the site or business module to output custom copyright text."
 页脚版权信息之后,"After footer copyright info"
 在渲染页脚版权信息之后触发，允许其他模块在版权信息结束处注入内容。,"Triggered after rendering the footer copyright information, allowing other modules to inject content at the end of the copyright area."
 页脚之后,"After Footer"
@@ -192,36 +196,36 @@
 在渲染页头组件之前触发，允许其他模块在页头开始处注入内容。,"Triggered before rendering the header component, allowing other modules to inject content at the beginning of the header."
 "页头 Logo 之前","Before Header Logo"
 "在渲染页头 Logo 之前触发，允许其他模块在 Logo 开始处注入内容。","Triggered before the header logo, allowing other modules to inject content at the beginning of the logo."
-"页头 Logo 内容","页头 Logo 内容"
-"覆盖默认页头 Logo 区域，允许站点或业务模块替换品牌标识和首页链接。","覆盖默认页头 Logo 区域，允许站点或业务模块替换品牌标识和首页链接。"
+"页头 Logo 内容","Header Logo Content"
+"覆盖默认页头 Logo 区域，允许站点或业务模块替换品牌标识和首页链接。","Override the default header Logo area, allowing the site or business module to replace the brand logo and homepage link."
 "页头 Logo 之后","After Header Logo"
 "在渲染页头 Logo 之后触发，允许其他模块在 Logo 结束处注入内容。","Triggered after the header logo, allowing other modules to inject content at the end of the logo."
-页头公告内容,页头公告内容
-覆盖或注入页头公告区域，允许业务模块提供全站促销、配送或运营提示。,覆盖或注入页头公告区域，允许业务模块提供全站促销、配送或运营提示。
+页头公告内容,"Header announcement content"
+覆盖或注入页头公告区域，允许业务模块提供全站促销、配送或运营提示。,"Cover or inject the header announcement area to allow business modules to provide site-wide promotions, distribution or operation tips."
 页头分类菜单之前,"Before Header Category Menu"
 在渲染页头分类菜单之前触发，允许其他模块在分类菜单开始处注入内容。,"Triggered before the header category menu, allowing other modules to inject content at the beginning of the category menu."
 页头分类菜单之后,"After Header Category Menu"
 在渲染页头分类菜单之后触发，允许其他模块在分类菜单结束处注入内容。,"Triggered after the header category menu, allowing other modules to inject content at the end of the category menu."
 页头导航之前,"Before Header Navigation"
 在渲染页头导航菜单之前触发，允许其他模块在导航菜单开始处注入内容。,"Triggered before the header navigation menu, allowing other modules to inject content at the beginning of the navigation menu."
-页头导航内容,页头导航内容
-覆盖默认页头导航列表，允许站点或业务模块提供业务导航。,覆盖默认页头导航列表，允许站点或业务模块提供业务导航。
+页头导航内容,"Header navigation content"
+覆盖默认页头导航列表，允许站点或业务模块提供业务导航。,"Override the default header navigation list and allow the site or business module to provide business navigation."
 页头导航之后,"After Header Navigation"
 在渲染页头导航菜单之后触发，允许其他模块在导航菜单结束处注入内容。,"Triggered after the header navigation menu, allowing other modules to inject content at the end of the navigation menu."
 页头搜索之前,"Before Header Search"
 在渲染页头搜索框之前触发，允许其他模块在搜索框开始处注入内容。,"Triggered before the header search box, allowing other modules to inject content at the beginning of the search box."
-页头搜索内容,页头搜索内容
-覆盖默认页头搜索表单，允许站点或业务模块提供自己的搜索目标和占位文案。,覆盖默认页头搜索表单，允许站点或业务模块提供自己的搜索目标和占位文案。
+页头搜索内容,"Header search content"
+覆盖默认页头搜索表单，允许站点或业务模块提供自己的搜索目标和占位文案。,"Override the default header search form and allow the site or business module to provide its own search targets and placeholder copy."
 页头搜索表单之前,"Before Header Search Form"
 在渲染页头搜索表单之前触发，允许其他模块在搜索表单开始处注入内容（如分类下拉菜单等）。,"Triggered before rendering the header search form, allowing other modules to inject content at the beginning of the search form (e.g., category dropdown menus)."
 页头搜索之后,"After Header Search"
 在渲染页头搜索框之后触发，允许其他模块在搜索框结束处注入内容。,"Triggered after rendering the header search box, allowing other modules to inject content at the end of the search box."
 页头操作按钮之前,"Before Header Action Button"
 在渲染页头操作按钮（如购物车、用户菜单等）之前触发，允许其他模块在操作按钮区域开始处注入内容。,"Triggered before rendering the header action buttons (e.g., cart, user menu), allowing other modules to inject content at the beginning of the action button area."
-页头账户操作,页头账户操作
-覆盖默认页头账户入口，允许客户、会员或站点模块接入自己的账户中心地址。,覆盖默认页头账户入口，允许客户、会员或站点模块接入自己的账户中心地址。
-页头购物车入口,页头购物车入口
-覆盖默认页头购物车入口，允许购物车模块提供数量、金额、迷你购物车或结账入口。,覆盖默认页头购物车入口，允许购物车模块提供数量、金额、迷你购物车或结账入口。
+页头账户操作,"Header account operations"
+覆盖默认页头账户入口，允许客户、会员或站点模块接入自己的账户中心地址。,"Override the default account entry in the page header and allow customers, members or site modules to access their own account center address."
+页头购物车入口,"Header shopping cart entry"
+覆盖默认页头购物车入口，允许购物车模块提供数量、金额、迷你购物车或结账入口。,"Overrides the default header shopping cart entry, allowing the shopping cart module to provide quantity, amount, mini-cart or checkout entries."
 页头操作按钮之后,"After Header Action Button"
 在渲染页头操作按钮（如购物车、用户菜单等）之后触发，允许其他模块在操作按钮区域结束处注入内容。,"Triggered after rendering the header action buttons (e.g., cart, user menu), allowing other modules to inject content at the end of the action button area."
 页头之后,"After Header"
@@ -246,10 +250,10 @@
 "在渲染基础布局的页头之后触发，允许其他模块在页头结束处注入内容。此 hook 适用于所有使用基础布局的页面。","Triggered after the header of the base layout, allowing other modules to inject content at the end of the header. This hook applies to all pages using the base layout."
 基础布局内容之前,"Before Base Layout Content"
 "在渲染基础布局的主要内容之前触发，允许其他模块在内容开始处注入内容。此 hook 适用于所有使用基础布局的页面。","Triggered before the main content of the base layout, allowing other modules to inject content at the beginning of the content. This hook applies to all pages using the base layout."
-基础布局面包屑之前,基础布局面包屑之前
-在基础布局面包屑之前触发，允许模块注入导航辅助内容。,在基础布局面包屑之前触发，允许模块注入导航辅助内容。
-基础布局面包屑之后,基础布局面包屑之后
-在基础布局面包屑之后触发，允许模块注入导航辅助内容。,在基础布局面包屑之后触发，允许模块注入导航辅助内容。
+基础布局面包屑之前,"Before basic layout breadcrumbs"
+在基础布局面包屑之前触发，允许模块注入导航辅助内容。,"Fires before the base layout breadcrumb, allowing modules to inject navigation aids."
+基础布局面包屑之后,"After basic layout breadcrumbs"
+在基础布局面包屑之后触发，允许模块注入导航辅助内容。,"Fires after the base layout breadcrumb, allowing modules to inject navigation aids."
 基础布局内容之后,"After Base Layout Content"
 "在渲染基础布局的主要内容之后触发，允许其他模块在内容结束处注入内容。此 hook 适用于所有使用基础布局的页面。","Triggered after the main content of the base layout, allowing other modules to inject content at the end of the content. This hook applies to all pages using the base layout."
 基础布局页脚之前,"Before Base Layout Footer"
@@ -268,8 +272,8 @@
 在渲染首页布局的页头之后触发，允许其他模块在页头结束处注入内容。,"Triggered after rendering the header of the homepage layout, allowing other modules to inject content at the end of the header."
 首页内容之前,"Before Homepage Content"
 在渲染首页布局的主要内容之前触发，允许其他模块在内容开始处注入内容。,"Triggered before the main content of the homepage layout, allowing other modules to inject content at the beginning of the content."
-首页布局内容,首页布局内容
-覆盖首页布局的主内容区域，允许站点或业务模块在保留默认页头、页脚和布局资源的同时提供完整首页内容。,覆盖首页布局的主内容区域，允许站点或业务模块在保留默认页头、页脚和布局资源的同时提供完整首页内容。
+首页布局内容,"Home page layout content"
+覆盖首页布局的主内容区域，允许站点或业务模块在保留默认页头、页脚和布局资源的同时提供完整首页内容。,"Covers the main content area of ​​the homepage layout, allowing the site or business module to provide complete homepage content while retaining the default header, footer, and layout resources."
 首页内容之后,"After Homepage Content"
 在渲染首页布局的主要内容之后触发，允许其他模块在内容结束处注入内容。,"Triggered after the main content of the homepage layout, allowing other modules to inject content at the end of the content."
 首页页脚之前,"Before homepage footer"
@@ -320,8 +324,8 @@
 "在渲染默认布局的 <body> 标签开始处触发，允许其他模块在 body 开始处注入内容。","Triggered at the start of the <body> tag in the default layout, allowing other modules to inject content at the beginning of the body."
 默认布局内容之前,"Default Layout Before Content"
 在渲染默认布局的主要内容之前触发，允许其他模块在内容开始处注入内容。,"Triggered before the main content of the default layout, allowing other modules to inject content at the beginning of the content area."
-默认布局内容,默认布局内容
-覆盖默认布局的主内容插槽，允许模块在保留默认布局壳的同时提供完整页面内容。,覆盖默认布局的主内容插槽，允许模块在保留默认布局壳的同时提供完整页面内容。
+默认布局内容,"Default layout content"
+覆盖默认布局的主内容插槽，允许模块在保留默认布局壳的同时提供完整页面内容。,"Overrides the default layout's main content slot, allowing the module to serve full page content while retaining the default layout shell."
 默认布局内容之后,"Default Layout After Content"
 在渲染默认布局的主要内容之后触发，允许其他模块在内容结束处注入内容。,"Triggered after the main content of the default layout, allowing other modules to inject content at the end of the content area."
 "默认布局 Body 结束","Default Layout Body End"
@@ -362,46 +366,46 @@
 "在渲染产品列表布局的 <body> 标签开始处触发，允许其他模块在 body 开始处注入内容。","Triggered at the start of the <body> tag in the product list layout rendering, allowing other modules to inject content at the beginning of the body."
 产品列表布局内容之前,"Before Product List Layout Content"
 在渲染产品列表布局的主要内容之前触发，允许其他模块在内容开始处注入内容。,"Triggered before the main content in the product list layout rendering, allowing other modules to inject content at the beginning of the content."
-产品列表布局内容,产品列表布局内容
-覆盖产品列表布局的主内容区域，允许商品模块提供列表、筛选、分页或空状态。,覆盖产品列表布局的主内容区域，允许商品模块提供列表、筛选、分页或空状态。
-产品列表布局页头之前,产品列表布局页头之前
-在产品列表布局页头之前触发，允许模块注入公告、导航辅助或埋点。,在产品列表布局页头之前触发，允许模块注入公告、导航辅助或埋点。
-产品列表布局页头之后,产品列表布局页头之后
-在产品列表布局页头之后触发，允许模块注入横幅、提示或布局辅助内容。,在产品列表布局页头之后触发，允许模块注入横幅、提示或布局辅助内容。
-产品列表面包屑之前,产品列表面包屑之前
-在产品列表布局面包屑之前触发。,在产品列表布局面包屑之前触发。
-产品列表面包屑之后,产品列表面包屑之后
-在产品列表布局面包屑之后触发。,在产品列表布局面包屑之后触发。
-产品列表筛选之前,产品列表筛选之前
-在产品列表筛选区域之前触发。,在产品列表筛选区域之前触发。
-产品列表筛选之后,产品列表筛选之后
-在产品列表筛选区域之后触发。,在产品列表筛选区域之后触发。
-产品列表工具栏之前,产品列表工具栏之前
-在产品列表工具栏之前触发。,在产品列表工具栏之前触发。
-产品列表工具栏内容,产品列表工具栏内容
-覆盖或补充产品列表排序、视图切换、分页大小等工具栏内容。,覆盖或补充产品列表排序、视图切换、分页大小等工具栏内容。
-产品列表工具栏之后,产品列表工具栏之后
-在产品列表工具栏之后触发。,在产品列表工具栏之后触发。
-产品列表网格之前,产品列表网格之前
-在产品列表网格之前触发。,在产品列表网格之前触发。
-产品列表网格内容,产品列表网格内容
-覆盖或补充产品列表网格内容。,覆盖或补充产品列表网格内容。
-产品列表网格之后,产品列表网格之后
-在产品列表网格之后触发。,在产品列表网格之后触发。
-产品列表分页之前,产品列表分页之前
-在产品列表分页之前触发。,在产品列表分页之前触发。
-产品列表分页内容,产品列表分页内容
-覆盖或补充产品列表分页内容。,覆盖或补充产品列表分页内容。
-产品列表分页之后,产品列表分页之后
-在产品列表分页之后触发。,在产品列表分页之后触发。
-产品列表推荐之前,产品列表推荐之前
-在产品列表推荐区域之前触发。,在产品列表推荐区域之前触发。
-产品列表推荐之后,产品列表推荐之后
-在产品列表推荐区域之后触发。,在产品列表推荐区域之后触发。
-产品列表页脚之前,产品列表页脚之前
-在产品列表布局页脚之前触发。,在产品列表布局页脚之前触发。
-产品列表页脚之后,产品列表页脚之后
-在产品列表布局页脚之后触发。,在产品列表布局页脚之后触发。
+产品列表布局内容,"Product list layout content"
+覆盖产品列表布局的主内容区域，允许商品模块提供列表、筛选、分页或空状态。,"Overrides the main content area of ​​the product list layout, allowing product modules to provide list, filter, pagination or empty states."
+产品列表布局页头之前,"Before product list layout header"
+在产品列表布局页头之前触发，允许模块注入公告、导航辅助或埋点。,"Triggered before the product list layout header, allowing the module to inject announcements, navigation aids or hidden points."
+产品列表布局页头之后,"After product list layout header"
+在产品列表布局页头之后触发，允许模块注入横幅、提示或布局辅助内容。,"Fires after the product list layout header, allowing the module to inject banners, tips, or layout assistance content."
+产品列表面包屑之前,"Product List Breadcrumbs Before"
+在产品列表布局面包屑之前触发。,"Fires before the product list layout breadcrumbs."
+产品列表面包屑之后,"Product List Breadcrumbs After"
+在产品列表布局面包屑之后触发。,"Fired after the product list layout breadcrumbs."
+产品列表筛选之前,"Before product list filtering"
+在产品列表筛选区域之前触发。,"Fires before the product list filter area."
+产品列表筛选之后,"After filtering the product list"
+在产品列表筛选区域之后触发。,"Fires after the product list filter area."
+产品列表工具栏之前,"Before product list toolbar"
+在产品列表工具栏之前触发。,"Fires before the product list toolbar."
+产品列表工具栏内容,"Product list toolbar content"
+覆盖或补充产品列表排序、视图切换、分页大小等工具栏内容。,"Cover or supplement toolbar content such as product list sorting, view switching, paging size, etc."
+产品列表工具栏之后,"After product list toolbar"
+在产品列表工具栏之后触发。,"Fires after the product list toolbar."
+产品列表网格之前,"Product list grid before"
+在产品列表网格之前触发。,"Fires before the product list grid."
+产品列表网格内容,"Product List Grid Content"
+覆盖或补充产品列表网格内容。,"Overlay or supplement product listing grid content."
+产品列表网格之后,"After product list grid"
+在产品列表网格之后触发。,"Fires after the product list grid."
+产品列表分页之前,"Before product list pagination"
+在产品列表分页之前触发。,"Fires before the product list is paginated."
+产品列表分页内容,"Product list pagination content"
+覆盖或补充产品列表分页内容。,"Cover or supplement product list pagination content."
+产品列表分页之后,"After pagination of product list"
+在产品列表分页之后触发。,"Fires after the product list is paginated."
+产品列表推荐之前,"Product list before recommendation"
+在产品列表推荐区域之前触发。,"Triggered before product list recommendation area."
+产品列表推荐之后,"After product list recommendation"
+在产品列表推荐区域之后触发。,"Fires after the product list recommendation area."
+产品列表页脚之前,"before product list footer"
+在产品列表布局页脚之前触发。,"Fires before the product list layout footer."
+产品列表页脚之后,"After product list footer"
+在产品列表布局页脚之后触发。,"Fires after the product list layout footer."
 产品列表布局内容之后,"After Product List Layout Content"
 在渲染产品列表布局的主要内容之后触发，允许其他模块在内容结束处注入内容。,"Triggered after rendering the main content of the product list layout, allowing other modules to inject content at the end of the content."
 "产品列表布局 Body 结束","Product List Layout Body End"
@@ -414,80 +418,80 @@
 "在渲染产品通用布局的 <body> 标签开始处触发，允许其他模块在 body 开始处注入内容。适用于所有产品相关页面。","Triggered at the start of the <body> tag when rendering the general product layout, allowing other modules to inject content at the beginning of the body. Applies to all product-related pages."
 产品通用布局内容之前,"Before Product General Layout Content"
 在渲染产品通用布局的主要内容之前触发，允许其他模块在内容开始处注入内容。适用于所有产品相关页面。,"Triggered before the main content of the general product layout, allowing other modules to inject content at the beginning of the content. Applies to all product-related pages."
-产品布局页头之前,产品布局页头之前
-在产品布局页头之前触发。,在产品布局页头之前触发。
-产品布局页头之后,产品布局页头之后
-在产品布局页头之后触发。,在产品布局页头之后触发。
-产品布局面包屑之前,产品布局面包屑之前
-在产品布局面包屑之前触发。,在产品布局面包屑之前触发。
-产品布局面包屑之后,产品布局面包屑之后
-在产品布局面包屑之后触发。,在产品布局面包屑之后触发。
-产品主内容之前,产品主内容之前
-在产品主内容区域之前触发。,在产品主内容区域之前触发。
-产品主内容,产品主内容
-覆盖或补充产品主内容区域。,覆盖或补充产品主内容区域。
-产品主内容之后,产品主内容之后
-在产品主内容区域之后触发。,在产品主内容区域之后触发。
-产品侧栏之前,产品侧栏之前
-在产品侧栏区域之前触发。,在产品侧栏区域之前触发。
-产品侧栏之后,产品侧栏之后
-在产品侧栏区域之后触发。,在产品侧栏区域之后触发。
-产品标签之前,产品标签之前
-在产品标签区域之前触发。,在产品标签区域之前触发。
-产品标签内容,产品标签内容
-覆盖或补充产品描述、规格、评价、问答等标签内容。,覆盖或补充产品描述、规格、评价、问答等标签内容。
-产品标签插槽内容,产品标签插槽内容
-在产品标签插槽中触发，允许模块补充可视化部件内容。,在产品标签插槽中触发，允许模块补充可视化部件内容。
-产品标签之后,产品标签之后
-在产品标签区域之后触发。,在产品标签区域之后触发。
-产品推荐之前,产品推荐之前
-在产品推荐区域之前触发。,在产品推荐区域之前触发。
-产品推荐内容,产品推荐内容
-覆盖或补充产品推荐、搭配、继续浏览等推荐内容。,覆盖或补充产品推荐、搭配、继续浏览等推荐内容。
-相关产品,相关产品
-在产品推荐区渲染相关产品内容。,在产品推荐区渲染相关产品内容。
-热销产品,热销产品
-在产品推荐区渲染热销产品内容。,在产品推荐区渲染热销产品内容。
-最近浏览,最近浏览
-在产品推荐区渲染最近浏览内容。,在产品推荐区渲染最近浏览内容。
-交叉销售,交叉销售
-在产品推荐区渲染搭配或交叉销售内容。,在产品推荐区渲染搭配或交叉销售内容。
-产品推荐之后,产品推荐之后
-在产品推荐区域之后触发。,在产品推荐区域之后触发。
-产品布局页脚之前,产品布局页脚之前
-在产品布局页脚之前触发。,在产品布局页脚之前触发。
-产品布局页脚之后,产品布局页脚之后
-在产品布局页脚之后触发。,在产品布局页脚之后触发。
+产品布局页头之前,"Before product layout header"
+在产品布局页头之前触发。,"Fires before the product layout header."
+产品布局页头之后,"After product layout header"
+在产品布局页头之后触发。,"Fires after the product layout header."
+产品布局面包屑之前,"Product layout before breadcrumbs"
+在产品布局面包屑之前触发。,"Fires before the product layout breadcrumbs."
+产品布局面包屑之后,"After product layout breadcrumbs"
+在产品布局面包屑之后触发。,"Fires after the product layout breadcrumbs."
+产品主内容之前,"Before product main content"
+在产品主内容区域之前触发。,"Fires before the main product content area."
+产品主内容,"Product main content"
+覆盖或补充产品主内容区域。,"Cover or supplement the main product content area."
+产品主内容之后,"After the product main content"
+在产品主内容区域之后触发。,"Fires after the main product content area."
+产品侧栏之前,"before product sidebar"
+在产品侧栏区域之前触发。,"Fires before the product sidebar area."
+产品侧栏之后,"After the product sidebar"
+在产品侧栏区域之后触发。,"Fires after the product sidebar area."
+产品标签之前,"before product label"
+在产品标签区域之前触发。,"Fires before the product label area."
+产品标签内容,"Product label content"
+覆盖或补充产品描述、规格、评价、问答等标签内容。,"Cover or supplement label content such as product description, specifications, reviews, Q&A, etc."
+产品标签插槽内容,"Product tag slot content"
+在产品标签插槽中触发，允许模块补充可视化部件内容。,"Fires on a product label slot, allowing modules to supplement visual widget content."
+产品标签之后,"after product label"
+在产品标签区域之后触发。,"Fires after the product label area."
+产品推荐之前,"Before product recommendation"
+在产品推荐区域之前触发。,"Triggered before the product recommendation area."
+产品推荐内容,"Product recommendations"
+覆盖或补充产品推荐、搭配、继续浏览等推荐内容。,"Cover or supplement recommended content such as product recommendations, matching, and continued browsing."
+相关产品,"Related products"
+在产品推荐区渲染相关产品内容。,"Render relevant product content in the product recommendation area."
+热销产品,"Hot products"
+在产品推荐区渲染热销产品内容。,"Render popular product content in the product recommendation area."
+最近浏览,"Recently viewed"
+在产品推荐区渲染最近浏览内容。,"Render recently viewed content in the product recommendation area."
+交叉销售,cross-sell
+在产品推荐区渲染搭配或交叉销售内容。,"Render tie-in or cross-sell content in the product recommendation area."
+产品推荐之后,"After product recommendation"
+在产品推荐区域之后触发。,"Triggered after the product recommendation area."
+产品布局页脚之前,"Before product layout footer"
+在产品布局页脚之前触发。,"Fires before the product layout footer."
+产品布局页脚之后,"After product layout footer"
+在产品布局页脚之后触发。,"Fires after the product layout footer."
 产品通用布局内容之后,"After Product General Layout Content"
 在渲染产品通用布局的主要内容之后触发，允许其他模块在内容结束处注入内容。适用于所有产品相关页面。,"Triggered after the main content of the general product layout, allowing other modules to inject content at the end of the content. Applies to all product-related pages."
 "产品通用布局 Body 结束","Product General Layout Body End"
 "在渲染产品通用布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。适用于所有产品相关页面。","Triggered at the end of the <body> tag when rendering the general product layout, allowing other modules to inject content at the end of the body. Applies to all product-related pages."
-购物车布局头部之后,购物车布局头部之后
-"在购物车布局 <head> 结束前触发。","在购物车布局 <head> 结束前触发。"
-"购物车布局 Body 开始","购物车布局 Body 开始"
-"在购物车布局 <body> 开始处触发。","在购物车布局 <body> 开始处触发。"
-购物车页头之前,购物车页头之前
-在购物车页头之前触发。,在购物车页头之前触发。
-购物车页头之后,购物车页头之后
-在购物车页头之后触发。,在购物车页头之后触发。
-购物车内容之前,购物车内容之前
-在购物车内容区域之前触发。,在购物车内容区域之前触发。
-购物车内容之后,购物车内容之后
-在购物车内容区域之后触发。,在购物车内容区域之后触发。
-购物车主体之前,购物车主体之前
-在购物车主体区域之前触发。,在购物车主体区域之前触发。
-购物车主体之后,购物车主体之后
-在购物车主体区域之后触发。,在购物车主体区域之后触发。
-购物车推荐内容,购物车推荐内容
-在购物车推荐区域触发。,在购物车推荐区域触发。
-购物车页脚之前,购物车页脚之前
-在购物车页脚之前触发。,在购物车页脚之前触发。
-购物车页脚之后,购物车页脚之后
-在购物车页脚之后触发。,在购物车页脚之后触发。
-"购物车布局 Body 结束","购物车布局 Body 结束"
-"在购物车布局 <body> 结束处触发。","在购物车布局 <body> 结束处触发。"
-空购物车推荐内容,空购物车推荐内容
-在空购物车推荐区域触发。,在空购物车推荐区域触发。
+购物车布局头部之后,"After the shopping cart layout header"
+"在购物车布局 <head> 结束前触发。","Fires before the end of the shopping cart layout <head>."
+"购物车布局 Body 开始","Shopping Cart Layout Body Start"
+"在购物车布局 <body> 开始处触发。","Fires at the beginning of the shopping cart layout <body>."
+购物车页头之前,"Before shopping cart header"
+在购物车页头之前触发。,"Fires before the shopping cart header."
+购物车页头之后,"After the shopping cart header"
+在购物车页头之后触发。,"Fires after the shopping cart header."
+购物车内容之前,"Before shopping cart contents"
+在购物车内容区域之前触发。,"Fires before the shopping cart content area."
+购物车内容之后,"After shopping cart contents"
+在购物车内容区域之后触发。,"Fires after the shopping cart content area."
+购物车主体之前,"Before shopping cart body"
+在购物车主体区域之前触发。,"Triggered before the main area of ​​the shopping cart."
+购物车主体之后,"After the shopping cart body"
+在购物车主体区域之后触发。,"Triggered after the main area of ​​the shopping cart."
+购物车推荐内容,"Shopping cart recommendations"
+在购物车推荐区域触发。,"Triggered in the shopping cart recommendation area."
+购物车页脚之前,"Before shopping cart footer"
+在购物车页脚之前触发。,"Fires before the cart footer."
+购物车页脚之后,"After shopping cart footer"
+在购物车页脚之后触发。,"Fires after the cart footer."
+"购物车布局 Body 结束","Shopping Cart Layout Body End"
+"在购物车布局 <body> 结束处触发。","Fires at the end of the shopping cart layout <body>."
+空购物车推荐内容,"Recommended content for empty shopping cart"
+在空购物车推荐区域触发。,"Triggered in the empty shopping cart recommendation area."
 分类页子分类筛选,"Category page subcategory filter"
 在分类页左侧筛选栏中渲染子分类筛选区域，支持显示上级分类返回入口和当前分类的直接子分类列表。,"Render the subcategory filter area in the left filter bar of the category page, supporting a return entry to the parent category and a list of direct subcategories of the current category."
 分类页筛选侧栏,"Category page filter sidebar"
@@ -528,41 +532,62 @@
 在账户页面的侧边栏内容区域注入内容，允许其他模块添加自定义内容。,"Inject content into the sidebar content area of the account page, allowing other modules to add custom content."
 "后台 Topbar Logo","Background Topbar Logo"
 "覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。","Override the Logo area in the backend top bar, which can be implemented by modules such as Weline_Backend to read logo_dark/logo_light/logo_sm from their own configuration. If not implemented, the Admin default static Logo will be used."
-站点,站点
-"Weline UI 2.0 语义图标迁移失败：%{1}","Weline UI 2.0 语义图标迁移失败：%{1}"
-"主题布局迁移失败（bestsellers 侧栏归位）：%{1}","主题布局迁移失败（bestsellers 侧栏归位）：%{1}"
-"默认主题区域激活回填失败：主题 #%{1} 在探测后无法重新加载","默认主题区域激活回填失败：主题 #%{1} 在探测后无法重新加载"
-默认主题区域激活回填失败：%{1},默认主题区域激活回填失败：%{1}
+站点,site
+"Theme 2.1.1 Scope 继承迁移失败：%{1}","Theme 2.1.1 scope-inheritance migration failed: %{1}"
+"Weline UI 2.0 语义图标迁移失败：%{1}","Weline UI 2.0 semantic icon migration failed: %{1}"
+"主题布局迁移失败（bestsellers 侧栏归位）：%{1}","Theme layout migration failed (bestsellers sidebar returned): %{1}"
+"默认主题区域激活回填失败：主题 #%{1} 在探测后无法重新加载","Default topic area activation backfill failed: Topic #%{1} failed to reload after probing"
+默认主题区域激活回填失败：%{1},"Default theme area activation backfill failed: %{1}"
+"Theme 旧布局数据无效，升级已停止。","Legacy Theme layout data is invalid; the upgrade was stopped."
+"Theme 旧布局身份哈希无效，升级已停止。","A legacy Theme layout identity hash is invalid; the upgrade was stopped."
+"Theme 旧布局数据映射后发生身份冲突，升级已停止。","Legacy Theme layout mapping produced an identity conflict; the upgrade was stopped."
+"Theme 单表旧布局数据超过安全升级上限。","Legacy Theme layout data in one table exceeds the safe upgrade limit."
+"Theme 旧布局升级预检无数据进展。","The legacy Theme layout upgrade preflight made no progress."
+"Theme 布局旧数据身份无效，升级已停止。","A legacy Theme layout identity is invalid; the upgrade was stopped."
+"Theme 布局旧数据的 node_uid 无效，升级已停止。","Legacy Theme layout data contains an invalid node_uid; the upgrade was stopped."
+"Theme 布局版本旧数据身份无效，升级已停止。","A legacy Theme layout-version identity is invalid; the upgrade was stopped."
+"Theme 虚拟布局旧数据身份无效，升级已停止。","A legacy Theme virtual-layout identity is invalid; the upgrade was stopped."
+"Theme 默认组件注入旧数据身份无效，升级已停止。","A legacy Theme default-widget-injection identity is invalid; the upgrade was stopped."
+"Theme 布局身份哈希回填结果无效。","The Theme layout identity-hash backfill result is invalid."
+"Theme 布局身份哈希回填无数据进展。","The Theme layout identity-hash backfill made no progress."
 主题异常：,"Theme exception:"
-"Theme ResourceChange Observer 只接受 v1 契约","Theme ResourceChange Observer 只接受 v1 契约"
-"Theme 资源变更缓存刷新未全部成功","Theme 资源变更缓存刷新未全部成功"
-生产静态资源发布（含压缩）开始…,生产静态资源发布（含压缩）开始…
-生产静态资源发布异常：%{msg},生产静态资源发布异常：%{msg}
+"Theme ResourceChange Observer 只接受 v1 契约","Theme ResourceChange Observer only accepts v1 contracts"
+"Theme 资源变更缓存刷新未全部成功","Theme resource change cache refresh was not successful"
+生产静态资源发布（含压缩）开始…,"Production static resource publishing (including compression) begins..."
+生产静态资源发布异常：%{msg},"Production static resource publishing exception: %{msg}"
+主题整盘合编开始…,"Thematic compilation begins..."
+"主题整盘合编失败：theme=%{id} area=%{area} — %{msg}","Theme disk compile failed: theme=%{id} area=%{area} — %{msg}"
+"主题整盘合编完成：成功 %{ok}，跳过 %{skip}，失败 %{fail}","Compilation of the whole theme is completed: success %{ok}, skip %{skip}, failure %{fail}"
+主题整盘合编异常：%{msg},"Theme compilation exception: %{msg}"
 退出预览失败,"Exit Preview Failed"
-发布失败,"Publish failed"
+发布失败,"Publishing failed"
 网络错误，请重试,"Network error, please try again"
-确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。,确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。
-确认发布,确认发布
+确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。,"Confirm to publish the current preview content and exit? Once published, all visitors will see the latest changes."
+确认发布,"Confirm release"
 取消,Cancel
-发布预览,发布预览
+发布预览,"Release Preview"
+"Theme 预览需要有效 Token 或后台登录状态。","Theme preview requires a valid token or an authenticated backend session."
+"Theme 预览缺少冻结的 ScopeIdentity。","Theme preview requires a frozen ScopeIdentity."
+主题预览需要有效的后台登录状态。,"Theme preview requires an authenticated backend session."
 "No available frontend theme. Please activate or select one first.","No available frontend theme. Please activate or select one first."
 "Selected backend theme is unavailable, fallback to the active backend theme.","Selected backend theme is unavailable, fallback to the active backend theme."
-未注册的主题目标类型：%{1},未注册的主题目标类型：%{1}
+Default,Default
+未注册的主题目标类型：%{1},"Unregistered topic target type: %{1}"
 请选择主题,"Please select a theme"
 "主题 ID %{1} 不存在","Topic ID %{1} does not exist"
 参数不完整,"Incomplete parameters"
 该推荐部件已在所有布局身份中,"This recommended widget already exists in all layout identities"
-该推荐部件已在当前布局中,该推荐部件已在当前布局中
+该推荐部件已在当前布局中,"The recommended widget is already in the current layout"
 已应用到所有布局身份,"Applied to all layout identities"
-已应用推荐部件,已应用推荐部件
+已应用推荐部件,"Recommended parts applied"
 "缺少 slot_id 参数","Missing slot_id parameter"
 该部件不能放置在此区域,"This widget cannot be placed in this area"
 保存成功,"Saved successfully"
 缺少布局ID,"Missing layout ID"
 部件不存在,"Component does not exist"
-配置已保存,"Configuration saved"
-保存失败,"Save Failed"
-删除成功,"Deleted successfully"
+配置已保存,"Config saved"
+保存失败,"Save failed"
+删除成功,"Deletion successful"
 删除失败,"Deletion failed"
 "已删除 %{count} 个孤儿部件","Deleted %{count} orphan widget(s)"
 未找到需要删除的孤儿部件（可能已被删除）,"Orphan component to delete not found (may have already been deleted)"
@@ -574,70 +599,70 @@
 位置已交换,"Position Swapped"
 交换失败,"Exchange failed"
 布局已保存,"Layout saved"
-发布布局失败,"Publish layout failed"
 主题已发布,"Theme published"
 生成缓存失败，但布局已发布,"Cache generation failed, but layout has been published"
-"（已清理 %{count} 个无效部件）","(Cleaned up %{count} invalid components)"
 草稿已撤销,"Draft revoked"
-撤销失败,"Revocation failed"
+撤销失败,"Undo failed"
 缺少部件模块或代码,"Missing widget module or code"
 缺少部件参数,"Missing widget parameter"
 该部件没有配置项,"This component has no configuration items"
 "Selected layout option is unavailable.","Selected layout option is unavailable."
-"Layout option saved.","Layout option saved."
+"Layout option draft validated.","Layout option draft validated."
 "No configurable layout fields.","No configurable layout fields."
 "Save layout config","Save layout config"
-"Layout config saved.","Layout config saved."
-缺少源文案。,缺少源文案。
-AI翻译已回填,AI翻译已回填
-"主题配置 AI 翻译失败：%{1}","主题配置 AI 翻译失败：%{1}"
+"Layout config draft validated.","Layout config draft validated."
+缺少源文案。,"Source copy missing."
+AI翻译已回填,"AI translation has been backfilled"
+"主题配置 AI 翻译失败：%{1}","Topic configuration AI translation failed: %{1}"
 配置数据格式错误,"Configuration data format error"
-"已保存 %{locale} 语言的配置","Saved configuration for %{locale} languages"
+"已校验 %{locale} 语言的 Scope 草稿","The scope draft for locale %{locale} has been validated."
+"Scope 草稿已校验","The scope draft has been validated."
 保存失败：%{error},"Save failed: %{error}"
 "Missing theme ID","Missing theme ID"
 "Theme not found","Theme not found"
-系统提示,系统提示
-这是一条状态提示信息。,这是一条状态提示信息。
-已启用,已启用
-主要操作,主要操作
-数据卡片,数据卡片
-用于组织内容,用于组织内容
-这里展示核心信息、摘要或操作入口。,这里展示核心信息、摘要或操作入口。
-更新于刚刚,更新于刚刚
-选择操作,选择操作
-查看详情,"View Details"
-复制视图,复制视图
-归档,归档
-字段名称,字段名称
-管理员,管理员
-请输入内容,请输入内容
-正在同步数据,正在同步数据
-操作完成,操作完成
-数据已保存，可以继续编辑。,数据已保存，可以继续编辑。
-公开后同站点后台用户可见。,公开后同站点后台用户可见。
-确认,确认
+"主题预览缺少冻结的 ScopeIdentity。","Theme preview requires a frozen ScopeIdentity."
+系统提示,"System prompt"
+这是一条状态提示信息。,"This is a status message."
+已启用,Enabled
+主要操作,"Main operations"
+数据卡片,"data card"
+用于组织内容,"used to organize content"
+这里展示核心信息、摘要或操作入口。,"The core information, summary or operation entry is displayed here."
+更新于刚刚,"Updated just now"
+选择操作,"Select action"
+查看详情,"check the details"
+复制视图,"Duplicate view"
+归档,Archive
+字段名称,"Field name"
+管理员,administrator
+请输入内容,"Please enter content"
+正在同步数据,"Synchronizing data"
+操作完成,"Operation completed"
+数据已保存，可以继续编辑。,"The data has been saved and can be edited further."
+公开后同站点后台用户可见。,"After being made public, it will be visible to backend users of the same site."
+确认,confirm
 上一页,"Previous page"
 下一页,"Next page"
-指标,指标
-状态,状态
-趋势,趋势
-订单,订单
-正常,正常
-支付,支付
-稳定,稳定
-库存,库存
-关注,关注
-概览,概览
+指标,index
+状态,state
+趋势,trend
+订单,Order
+正常,normal
+支付,pay
+稳定,Stablize
+库存,"in stock"
+关注,"focus on"
+概览,Overview
 设置,Settings
-后台,Backend
-次要,次要
-分页,分页
+后台,Backstage
+次要,secondary
+分页,Pagination
 缺少主题ID,"Missing topic ID"
-后台仪表盘预览,后台仪表盘预览
-Default,Default
-"主题目标类型或 ID 无效。","主题目标类型或 ID 无效。"
-"AI 翻译未返回有效 JSON。","AI 翻译未返回有效 JSON。"
-"AI 翻译未返回目标语言结果。","AI 翻译未返回目标语言结果。"
+"Scope 草稿已编译预览，发布产物由 Release 生成","The scope draft preview has been compiled; release artifacts are generated by the release workflow."
+后台仪表盘预览,"Backstage dashboard preview"
+"主题目标类型或 ID 无效。","Invalid topic target type or ID."
+"AI 翻译未返回有效 JSON。","AI Translate did not return valid JSON."
+"AI 翻译未返回目标语言结果。","AI Translate did not return target language results."
 "Version saved: %{name}","Version saved: %{name}"
 "Missing required parameters","Missing required parameters"
 "Switch version failed","Switch version failed"
@@ -650,12 +675,12 @@ Default,Default
 "Cannot delete current or published version","Cannot delete current or published version"
 "Version renamed","Version renamed"
 "Rename failed","Rename failed"
-布局不存在,布局不存在
-请求的布局模板文件未找到，请选择其他布局类型。,请求的布局模板文件未找到，请选择其他布局类型。
-布局类型,布局类型
-布局选项,布局选项
-请在主题编辑器中选择有效的布局。,请在主题编辑器中选择有效的布局。
-"Weline UI 资源路径无效","Weline UI 资源路径无效"
+布局不存在,"layout does not exist"
+请求的布局模板文件未找到，请选择其他布局类型。,"The requested layout template file was not found, please choose a different layout type."
+布局类型,"layout type"
+布局选项,"layout options"
+请在主题编辑器中选择有效的布局。,"Please select a valid layout in the theme editor."
+"Weline UI 资源路径无效","Weline UI resource path is invalid"
 "已保存为 %{name}","Saved as %{name}"
 已切换到选定版本,"Switched to selected version"
 切换版本失败,"Switch Version Failed"
@@ -667,18 +692,33 @@ Default,Default
 无法删除当前版本或已发布版本,"Unable to delete current version or published version"
 版本已重命名,"Version Renamed"
 重命名失败,"Rename failed"
-缂哄皯鍓嶇涓婚ID,"Missing frontend topic ID"
+缺少前端主题ID,"Missing frontend theme ID"
 "Preview started","Preview started"
 "Missing navigation target","Missing navigation target"
-"Missing preview token","Missing preview token"
 "Preview exited","Preview exited"
 "Failed to exit preview","Failed to exit preview"
+"Missing preview token","Missing preview token"
 "Preview token is invalid or expired","Preview token is invalid or expired"
 "Preview token is missing theme information","Preview token is missing theme information"
-"Failed to publish layout","Failed to publish layout"
 "Theme published","Theme published"
 已释放编辑锁定,"Edit lock released"
 释放锁定失败,"Failed to release lock"
+"色盘 Scope 草稿已校验","The palette scope draft has been validated."
+"删除 Scope 草稿已校验","The scope draft deletion has been validated."
+"另存 Scope 草稿已校验","The Save As scope draft has been validated."
+"主题盘 Scope 草稿已校验","The theme-disk scope draft has been validated."
+可视化编辑,"Visual Editor"
+palette,palette
+编辑网站、店铺与渠道主题,"Edit website, store, and channel themes"
+"查看主题 Scope 工作区","View the theme scope workspace"
+eye,eye
+"读取主题 Scope 草稿、继承来源与冲突","Read theme scope drafts, inheritance sources, and conflicts"
+"编辑主题 Scope 草稿","Edit theme scope drafts"
+edit,edit
+"写入主题 Scope 逐路径覆盖或恢复继承","Write per-path theme scope overrides or restore inheritance"
+"发布主题 Scope","Publish theme scopes"
+upload,upload
+"发布主题 Scope 并重算后代有效版本","Publish a theme scope and recompute effective descendant versions"
 主题管理,"Theme management"
 主题不存在,"Theme does not exist"
 主题激活成功,"Theme activated successfully"
@@ -687,7 +727,7 @@ Default,Default
 预览图生成成功,"Preview image generated successfully"
 预览图生成失败,"Preview image generation failed"
 生成预览图失败：%{1},"Generation preview image failed: %{1}"
-生成失败：%{1},"Generation failed: %{1}"
+生成失败：%{1},"Generate failed: %{1}"
 开始并发批量生成预览图（并发数：%{1}）...,"Generating preview images in batch concurrently (concurrency: %{1})..."
 部分预览图生成失败,"Some preview images failed to generate"
 所有预览图生成成功,"All preview images generated successfully"
@@ -733,7 +773,7 @@ Default,Default
 "上传出错: %{error}","Upload error: %{error}"
 目录路径不能为空,"Directory path cannot be empty"
 目录配置保存成功,"Directory configuration saved successfully"
-获取成功,"Successfully got"
+获取成功,"Loaded successfully"
 色系文件不存在：%{file},"Color scheme file does not exist: %{file}"
 无法读取色系文件,"Unable to read the color scheme file"
 变量格式错误,"Variable Format Error"
@@ -761,31 +801,33 @@ CSS变量配置无效,"Invalid CSS variable configuration"
 "Partial option is not available: {type}/{option}","Partial option is not available: {type}/{option}"
 "Partials saved","Partials saved"
 "Invalid theme or partial type","Invalid theme or partial type"
-布局已保存并发布,"Layout saved and published"
-缺少主题或布局身份,缺少主题或布局身份
-未找到默认布局源码,未找到默认布局源码
-"不支持的 AI block 操作","不支持的 AI block 操作"
-只能重新生成虚拟主题拥有的图片资源,只能重新生成虚拟主题拥有的图片资源
-保存虚拟布局源码草稿,保存虚拟布局源码草稿
+"旧 Theme Builder 不再支持直接发布，请使用 Theme 编辑器的发布流程。","The legacy Theme Builder no longer supports direct publication. Use the Theme editor publication flow."
+"旧 Theme Builder 只允许保存草稿。","The legacy Theme Builder can save drafts only."
+"Theme 布局草稿保存失败。","Failed to save the Theme layout draft."
+缺少主题或布局身份,"Missing theme or layout identity"
+未找到默认布局源码,"Default layout source code not found"
+"不支持的 AI block 操作","Unsupported AI block operations"
+只能重新生成虚拟主题拥有的图片资源,"Only image resources owned by the virtual theme can be regenerated"
+保存虚拟布局源码草稿,"Save draft of virtual layout source code"
 "缺少 version_id","Missing version_id"
-虚拟布局版本已发布,虚拟布局版本已发布
-虚拟布局版本发布失败,虚拟布局版本发布失败
-回滚虚拟主题布局版本,回滚虚拟主题布局版本
-未找到默认布局源码，无法创建虚拟主题草稿,未找到默认布局源码，无法创建虚拟主题草稿
-虚拟主题草稿已生成，发布前不会影响前台渲染,虚拟主题草稿已生成，发布前不会影响前台渲染
-缺少参照主题,缺少参照主题
-参照主题没有可生成的默认布局类型,参照主题没有可生成的默认布局类型
-"AI 虚拟主题全类型草稿","AI 虚拟主题全类型草稿"
-生成失败,"Generation failed"
-虚拟主题部分布局类型生成失败,虚拟主题部分布局类型生成失败
+虚拟布局版本已发布,"Virtual layout version released"
+虚拟布局版本发布失败,"Virtual layout version release failed"
+回滚虚拟主题布局版本,"Rollback virtual theme layout version"
+未找到默认布局源码，无法创建虚拟主题草稿,"The default layout source code was not found and the virtual theme draft could not be created."
+虚拟主题草稿已生成，发布前不会影响前台渲染,"A virtual theme draft has been generated and will not affect front-end rendering before publishing."
+缺少参照主题,"Missing reference topic"
+参照主题没有可生成的默认布局类型,"The reference theme has no default layout type to generate"
+"AI 虚拟主题全类型草稿","Drafts of all types of AI virtual themes"
+生成失败,Failed
+虚拟主题部分布局类型生成失败,"Virtual theme partial layout type generation failed"
 虚拟主题全部布局草稿已生成，发布前不会影响前台渲染,"Virtual theme drafts for all layouts have been generated. They will not affect frontend rendering before publishing."
-"AI 虚拟主题布局草稿","AI 虚拟主题布局草稿"
-"AI 返回内容缺少 source_code 字段。","AI 返回内容缺少 source_code 字段。"
-"AI 未返回虚拟主题源码。","AI 未返回虚拟主题源码。"
-"AI 编辑 block 后生成虚拟主题草稿","AI 编辑 block 后生成虚拟主题草稿"
-"AI 重建 block 后生成虚拟主题草稿","AI 重建 block 后生成虚拟主题草稿"
-"AI 重新生成 block 图片资源后生成虚拟主题草稿","AI 重新生成 block 图片资源后生成虚拟主题草稿"
-"AI 生成虚拟主题草稿","AI 生成虚拟主题草稿"
+"AI 虚拟主题布局草稿","AI virtual theme layout draft"
+"AI 返回内容缺少 source_code 字段。","AI return content is missing the source_code field."
+"AI 未返回虚拟主题源码。","AI did not return the virtual theme source code."
+"AI 编辑 block 后生成虚拟主题草稿","AI generates a virtual topic draft after editing the block"
+"AI 重建 block 后生成虚拟主题草稿","AI reconstructs the block and generates a virtual topic draft"
+"AI 重新生成 block 图片资源后生成虚拟主题草稿","AI regenerates block image resources and generates a virtual theme draft"
+"AI 生成虚拟主题草稿","AI generates virtual topic drafts"
 "缺少 draft_version_id","Missing draft_version_id"
 草稿已发布,"Draft published"
 已基于历史版本生成新的草稿,"New draft generated based on historical version"
@@ -797,10 +839,13 @@ CSS变量配置无效,"Invalid CSS variable configuration"
 更新,Update
 主题注册失败！,"Topic registration failed!"
 布局收集失败:,"Layout collection failed:"
+"Theme 虚拟布局身份无效。","The Theme virtual-layout identity is invalid."
 手动保存,"Manual save"
 自动备份,"Auto Backup"
 恢复原始,"Restore Original"
 发布快照,"Publish snapshot"
+"Theme 布局版本身份无效。","The Theme layout-version identity is invalid."
+"Theme 默认组件注入身份无效。","The Theme default-component injection identity is invalid."
 分类页,"Category Page"
 产品页,"Product Page"
 产品列表页,"Product List Page"
@@ -817,10 +862,11 @@ Dashboard,Dashboard
 内容区域,"Content Area"
 右侧栏,"Right Sidebar"
 底部区域,"Footer Area"
-草稿,Draft
+草稿,draft
 已发布,Published
+"Theme 布局节点身份无效。","The Theme layout-node identity is invalid."
 暂无可用布局,"No available layouts"
-配置参数,"Configuration Parameters"
+配置参数,"Configuration parameters"
 暂无可用色系,"No available color schemes"
 暂无可用部件,"No available partials"
 暂无可用变量,"No available variables"
@@ -829,142 +875,142 @@ Dashboard,Dashboard
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-卡片内容,卡片内容
-拖入表单、表格、文本或按钮,拖入表单、表格、文本或按钮
+卡片内容,"Card content"
+拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
 卡片底部,"Card Bottom"
-拖入按钮或操作区,拖入按钮或操作区
-拖入标签页内容,拖入标签页内容
-图片,图片
-添加图片地址,添加图片地址
-弹窗内容,弹窗内容
-拖入弹窗内容,拖入弹窗内容
-弹窗底部,弹窗底部
-拖入按钮,拖入按钮
-这里展示提示信息。,这里展示提示信息。
-提示,Prompt
-清晰表达你的页面主张,清晰表达你的页面主张
-在这里添加一段说明文字，介绍产品、服务、活动或页面内容。,在这里添加一段说明文字，介绍产品、服务、活动或页面内容。
-了解更多,了解更多
-操作按钮,操作按钮
-标签,标签
-区块标题,区块标题
-区块内容,区块内容
-拖入内容组件,拖入内容组件
-字段分组,字段分组
-拖入字段,拖入字段
-表单字段,表单字段
-拖入字段或字段分组,拖入字段或字段分组
-表单操作,表单操作
-栅格内容,栅格内容
+拖入按钮或操作区,"Drag into button or action area"
+拖入标签页内容,"Drag into tab content"
+图片,picture
+添加图片地址,"Add image address"
+弹窗内容,"Pop-up content"
+拖入弹窗内容,"Drag into the pop-up window content"
+弹窗底部,"Bottom of pop-up window"
+拖入按钮,"drag button"
+这里展示提示信息。,"Prompt information is displayed here."
+提示,Tip
+清晰表达你的页面主张,"Clearly express what your page stands for"
+在这里添加一段说明文字，介绍产品、服务、活动或页面内容。,"Add a description here to describe your product, service, event, or page content."
+了解更多,"learn more"
+操作按钮,"Action button"
+标签,Label
+区块标题,"block title"
+区块内容,"Block content"
+拖入内容组件,"Drag in content component"
+字段分组,"Field grouping"
+拖入字段,"Drag into fields"
+表单字段,"form fields"
+拖入字段或字段分组,"Drag in fields or field groupings"
+表单操作,"Form operations"
+栅格内容,"Raster content"
 末页,"Last page"
 个人资料,"Personal information"
-这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。
-告诉我们你需要什么，支持团队会将请求分派给合适的处理人。,告诉我们你需要什么，支持团队会将请求分派给合适的处理人。
-"周一至周五，9:00 - 18:00","周一至周五，9:00 - 18:00"
-客户支持,客户支持
-发送邮件,发送邮件
-查看我的账户,查看我的账户
-需要订单支持？,需要订单支持？
-请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。,请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。
-进入支持中心,进入支持中心
-联系方式,联系方式
-邮箱,邮箱
-电话,电话
-服务时间,服务时间
-提交前请确认,提交前请确认
-订单问题,订单问题
-请提供订单号和下单时使用的邮箱。,请提供订单号和下单时使用的邮箱。
-退换货,退换货
-商品照片和物流信息可以帮助团队更快处理退换货请求。,商品照片和物流信息可以帮助团队更快处理退换货请求。
-发送消息,发送消息
-请尽量提供完整背景，减少客服再次确认基础信息的等待时间。,请尽量提供完整背景，减少客服再次确认基础信息的等待时间。
-姓名,姓名
-消息内容,消息内容
-提交请求,提交请求
+这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,"This is the default placeholder for personal information. After the membership module is accessed, it will be replaced with the real information form, account security and address entry."
+告诉我们你需要什么，支持团队会将请求分派给合适的处理人。,"Tell us what you need and the support team will route the request to the appropriate handler."
+"周一至周五，9:00 - 18:00","Monday to Friday, 9:00 - 18:00"
+客户支持,"customer support"
+发送邮件,"Send email"
+查看我的账户,"View my account"
+需要订单支持？,"Need order support?"
+请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。,"Please include your order number, email address and brief problem description to facilitate quick dispatch by the team."
+进入支持中心,"Enter the support center"
+联系方式,"Contact information"
+邮箱,Mail
+电话,Telephone
+服务时间,"Service time"
+提交前请确认,"Please confirm before submitting"
+订单问题,"Order issues"
+请提供订单号和下单时使用的邮箱。,"Please provide the order number and the email address used when placing the order."
+退换货,"Return or exchange"
+商品照片和物流信息可以帮助团队更快处理退换货请求。,"Product photos and logistics information help the team process return and exchange requests faster."
+发送消息,"Send message"
+请尽量提供完整背景，减少客服再次确认基础信息的等待时间。,"Please try to provide a complete background to reduce the waiting time for customer service to reconfirm basic information."
+姓名,Name
+消息内容,"Message content"
+提交请求,"Submit a request"
 登录,"Log in"
 订单确认,"Order Confirmation"
 订单提交成功！,"Order submitted successfully!"
 订单号：,"Order number:"
 查看订单,"View Orders"
-继续购物,"Continue Shopping"
+继续购物,"continue shopping"
 拖拽部件或容器到此处,"Drag a component or container here"
-"空白布局不会渲染 header、footer 或面包屑","空白布局不会渲染 header、footer 或面包屑"
+"空白布局不会渲染 header、footer 或面包屑","Empty layout will not render header, footer or breadcrumbs"
 支持富文本、Banner、图片、视频等部件,"Supports rich text, banners, images, video, and other components"
-"Weline 默认主题","Weline 默认主题"
-搭建清晰的店铺首页,搭建清晰的店铺首页
-这是一个可直接浏览的默认首页，适用于店铺、内容站点和模块驱动页面。,这是一个可直接浏览的默认首页，适用于店铺、内容站点和模块驱动页面。
-浏览商品,浏览商品
-重点展示,重点展示
-首页首屏、促销和活动内容,首页首屏、促销和活动内容
-灵活组合,灵活组合
-商品、文章、分类或服务内容,商品、文章、分类或服务内容
-默认可用,默认可用
-真实数据接入前仍保持完整展示,真实数据接入前仍保持完整展示
-精选内容,精选内容
-这里可以承载商品、文章、服务卡片或季节性优惠。,这里可以承载商品、文章、服务卡片或季节性优惠。
-查看全部,查看全部
-入门套装,入门套装
-现代组合,现代组合
-增长礼包,增长礼包
-工作室套件,工作室套件
-这里会在接入真实商品或内容数据后被替换。,这里会在接入真实商品或内容数据后被替换。
-浏览分区,浏览分区
-即使分类模块尚未接入，默认卡片也能保持页面可读。,即使分类模块尚未接入，默认卡片也能保持页面可读。
-集合,集合
-用于商品、文章或落地页内容的精选分组。,用于商品、文章或落地页内容的精选分组。
-促销,促销
-用于季节横幅、优惠或公告内容。,用于季节横幅、优惠或公告内容。
-服务,服务
-用于支持区块、指南和联系入口。,用于支持区块、指南和联系入口。
-默认即可发布,默认即可发布
-先拥有一个干净页面，再让模块逐步用真实数据替换各个区域。,先拥有一个干净页面，再让模块逐步用真实数据替换各个区域。
-开始配置,开始配置
-最新动态,最新动态
-这里适合展示新品、文章、发布内容或活动。,这里适合展示新品、文章、发布内容或活动。
-新内容,新内容
-模块输出可以替换这个默认占位。,模块输出可以替换这个默认占位。
-精选故事,精选故事
-"适合 CMS、博客或落地页内容。","适合 CMS、博客或落地页内容。"
-活动中,活动中
-可以拖入横幅或促销部件。,可以拖入横幅或促销部件。
-当前热门,当前热门
-用于排行、推荐内容或重点亮点的中性区域。,用于排行、推荐内容或重点亮点的中性区域。
-榜首项目,榜首项目
-可由排行部件接管。,可由排行部件接管。
-用户选择,用户选择
-可由评价或推荐模块接管。,可由评价或推荐模块接管。
-编辑精选,编辑精选
-可由人工精选内容接管。,可由人工精选内容接管。
-可信生态,可信生态
-品牌、合作伙伴、认证或渠道部件可以放在这里。,品牌、合作伙伴、认证或渠道部件可以放在这里。
-可靠,可靠
-没有可选电商依赖时也能渲染默认页面。,没有可选电商依赖时也能渲染默认页面。
-可组合,可组合
-关键区域都保留名称，便于替换和扩展。,关键区域都保留名称，便于替换和扩展。
-可替换,可替换
-真实模块输出可以干净替换默认内容。,真实模块输出可以干净替换默认内容。
-"Weline 首页","Weline 首页"
-"干净的 Weline 首页","干净的 Weline 首页"
-一个克制、清晰的默认首页，适用于店铺、内容站点和模块驱动体验。,一个克制、清晰的默认首页，适用于店铺、内容站点和模块驱动体验。
-浏览,浏览
-联系,联系
-最新上架,最新上架
-用于精选商品或文章的区域。,用于精选商品或文章的区域。
+"Weline 默认主题","Weline default theme"
+搭建清晰的店铺首页,"Build a clear store homepage"
+这是一个可直接浏览的默认首页，适用于店铺、内容站点和模块驱动页面。,"This is a directly browsable default homepage, suitable for stores, content sites, and module-driven pages."
+浏览商品,"Browse products"
+重点展示,Highlights
+首页首屏、促销和活动内容,"Home page above the fold, promotions and event content"
+灵活组合,"Flexible combination"
+商品、文章、分类或服务内容,"Product, article, category or service content"
+默认可用,"Available by default"
+真实数据接入前仍保持完整展示,"Complete display is maintained before real data is accessed"
+精选内容,"Featured content"
+这里可以承载商品、文章、服务卡片或季节性优惠。,"This can host products, articles, service cards or seasonal offers."
+查看全部,"View all"
+入门套装,"Starter Kit"
+现代组合,"modern combination"
+增长礼包,"Growth package"
+工作室套件,"studio kit"
+这里会在接入真实商品或内容数据后被替换。,"This will be replaced after accessing real product or content data."
+浏览分区,"Browse partitions"
+即使分类模块尚未接入，默认卡片也能保持页面可读。,"Even if the classification module is not connected, the default cards will keep the page readable."
+集合,gather
+用于商品、文章或落地页内容的精选分组。,"Used for curated grouping of products, articles, or landing page content."
+促销,Promotion
+用于季节横幅、优惠或公告内容。,"Use for seasonal banners, offers or announcement content."
+服务,Serve
+用于支持区块、指南和联系入口。,"Used to support blocks, guides and contact portals."
+默认即可发布,"Publish by default"
+先拥有一个干净页面，再让模块逐步用真实数据替换各个区域。,"Start by having a clean page, then let the module gradually replace various areas with real data."
+开始配置,"Start configuration"
+最新动态,"Latest news"
+这里适合展示新品、文章、发布内容或活动。,"This is a good place to showcase new products, articles, releases or events."
+新内容,"new content"
+模块输出可以替换这个默认占位。,"Module outputs can replace this default placeholder."
+精选故事,"Featured stories"
+"适合 CMS、博客或落地页内容。","Perfect for CMS, blog or landing page content."
+活动中,Active
+可以拖入横幅或促销部件。,"Banner or promotional widgets can be dragged in."
+当前热门,"Currently popular"
+用于排行、推荐内容或重点亮点的中性区域。,"Neutral area used for rankings, recommendations, or highlights."
+榜首项目,"Top items"
+可由排行部件接管。,"Can be taken over by the ranking component."
+用户选择,"User selection"
+可由评价或推荐模块接管。,"Can be taken over by the evaluation or recommendation module."
+编辑精选,"Editor's Picks"
+可由人工精选内容接管。,"Can be taken over by human curated content."
+可信生态,"Trusted Ecology"
+品牌、合作伙伴、认证或渠道部件可以放在这里。,"Brand, partner, certification or channel widgets can be placed here."
+可靠,reliable
+没有可选电商依赖时也能渲染默认页面。,"The default page can also be rendered without optional e-commerce dependencies."
+可组合,"Can be combined"
+关键区域都保留名称，便于替换和扩展。,"Key areas retain names for easy replacement and expansion."
+可替换,Replaceable
+真实模块输出可以干净替换默认内容。,"Real module output can cleanly replace the default content."
+"Weline 首页","Weline Home Page"
+"干净的 Weline 首页","Clean Weline Home Page"
+一个克制、清晰的默认首页，适用于店铺、内容站点和模块驱动体验。,"A restrained, clear default homepage suitable for stores, content sites, and module-driven experiences."
+浏览,Browse
+联系,connect
+最新上架,"Latest arrival"
+用于精选商品或文章的区域。,"An area for featured products or articles."
 客户服务,"Customer Service"
-用于服务链接和支持内容的区域。,用于服务链接和支持内容的区域。
-社区,社区
-用于社交渠道和品牌故事的区域。,用于社交渠道和品牌故事的区域。
-重点,重点
-突出页面上最重要的优惠或故事。,突出页面上最重要的优惠或故事。
-灵活,灵活
-这里可以放集合、活动或编辑内容区块。,这里可以放集合、活动或编辑内容区块。
-可用,可用
-可选模块提供真实数据前，页面仍然保持完整。,可选模块提供真实数据前，页面仍然保持完整。
+用于服务链接和支持内容的区域。,"Area for service links and supporting content."
+社区,Community
+用于社交渠道和品牌故事的区域。,"Area for social channels and brand story."
+重点,focus
+突出页面上最重要的优惠或故事。,"Highlight the most important offers or stories on the page."
+灵活,flexible
+这里可以放集合、活动或编辑内容区块。,"This is where you can place collections, activities, or editorial content blocks."
+可用,Available
+可选模块提供真实数据前，页面仍然保持完整。,"The page remains intact until the optional module provides real data."
 Category,Category
 "Custom category layout","Custom category layout"
-筛选,Filter
+筛选,filter
 "分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
-筛选条件,"Filter Conditions"
+筛选条件,"Screening criteria"
 关闭筛选,"Close filter"
 分类,Classification
 Pagination,Pagination
@@ -972,18 +1018,18 @@ Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
 "Scheduled category layout","Scheduled category layout"
-"分类导航 slot，可由分类模块或导航部件接管。","分类导航 slot，可由分类模块或导航部件接管。"
-"筛选 slot，可由筛选模块或筛选部件接管。","筛选 slot，可由筛选模块或筛选部件接管。"
-"这里是分类列表的默认展示区域。接入真实分类或商品模块后，会通过 hook 或部件替换为真实列表。","这里是分类列表的默认展示区域。接入真实分类或商品模块后，会通过 hook 或部件替换为真实列表。"
+"分类导航 slot，可由分类模块或导航部件接管。","Classification navigation slot can be taken over by classification module or navigation component."
+"筛选 slot，可由筛选模块或筛选部件接管。","Filter slot, which can be taken over by a filter module or filter component."
+"这里是分类列表的默认展示区域。接入真实分类或商品模块后，会通过 hook 或部件替换为真实列表。","This is the default display area for category lists. After connecting to the real category or product module, it will be replaced with a real list through hooks or components."
 精彩活动进行中,"Exciting events are ongoing"
-这里是活动专题默认页面。,这里是活动专题默认页面。
+这里是活动专题默认页面。,"This is the default page for event topics."
 活动亮点示例,"Event Highlight Example"
 在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。,"Display the core selling points of the promotion here, such as spend-and-save, discounts, flash sales, member exclusives, etc."
 活动商品示例,"Event Product Example"
 在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。,"Display the product list or product recommendation component participating in the promotion here, providing users with a quick purchase entry."
-"Weline 默认页面","Weline 默认页面"
-该页面尚未提供内容。,该页面尚未提供内容。
-返回首页,返回首页
+"Weline 默认页面","Weline default page"
+该页面尚未提供内容。,"Content is not yet available for this page."
+返回首页,"Return to home page"
 Product,Product
 "Custom product layout","Custom product layout"
 "产品主内容区域 - 控制器渲染产品信息","Product main content area - Controller renders product information"
@@ -991,24 +1037,24 @@ Product,Product
 "产品详情标签区域 - 拖拽详情/评价/问答部件到此处","Product Details Tab Area - Drag Details/Reviews/Q&A widgets here"
 "Scheduled product layout","Scheduled product layout"
 结账,Checkout
-这里是单页结账的表单区域。接入结账模块后，会替换为真实地址、配送、支付和确认步骤。,这里是单页结账的表单区域。接入结账模块后，会替换为真实地址、配送、支付和确认步骤。
-联系信息与收货地址,联系信息与收货地址
-配送方式,"Shipping method"
-支付与订单确认,支付与订单确认
-订单摘要,订单摘要
-"摘要 slot，可由结账模块写入真实商品行与金额。","摘要 slot，可由结账模块写入真实商品行与金额。"
-商品,Product
-配送,配送
-合计,合计
-您已退出登录,您已退出登录
-当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。,当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。
-重新登录,重新登录
+这里是单页结账的表单区域。接入结账模块后，会替换为真实地址、配送、支付和确认步骤。,"This is the form area for the single-page checkout. After accessing the checkout module, the real address, delivery, payment and confirmation steps will be replaced."
+联系信息与收货地址,"Contact information and shipping address"
+配送方式,"Shipping Method"
+支付与订单确认,"Payment and order confirmation"
+订单摘要,"Order summary"
+"摘要 slot，可由结账模块写入真实商品行与金额。","Summary slot, the real product line and amount can be written by the checkout module."
+商品,commodity
+配送,Delivery
+合计,total
+您已退出登录,"You are logged out"
+当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。,"The current session has ended. You can return to the home page to continue browsing, or log in again to enter the account center."
+重新登录,"Log in again"
 订单提交失败,"Order submission failed"
 很抱歉，您的订单提交失败，请稍后重试。,"We're sorry, your order submission failed. Please try again later."
 错误代码：,"Error code:"
 重试提交,"Retry Commit"
-返回购物车,"Return to Shopping Cart"
-联系客服,"Contact customer service"
+返回购物车,"Return to cart"
+联系客服,"Contact Customer Service"
 温馨提示：,"Friendly reminder:"
 请检查您的网络连接是否正常,"Please check if your network connection is normal"
 请确认您的支付信息是否正确,"Please confirm that your payment information is correct"
@@ -1018,13 +1064,13 @@ Product,Product
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
 "分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
 "推荐产品区域 - 拖拽推荐部件到此处","Recommended product area - Drag recommended widgets here"
-购物车是空的,"Cart is empty"
+购物车是空的,"Shopping cart is empty"
 您的购物车是空的,"Your shopping cart is empty"
-个人中心,个人中心
+个人中心,"Personal center"
 登录页工具,"Login page tools"
-"这里预留账户导航 slot，可由会员模块接入真实菜单。","这里预留账户导航 slot，可由会员模块接入真实菜单。"
-我的订单,"My orders"
-这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。,这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。
+"这里预留账户导航 slot，可由会员模块接入真实菜单。","An account navigation slot is reserved here, and the real menu can be accessed by the membership module."
+我的订单,"My Orders"
+这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。,"This is the default placeholder for the order list. After the order module is connected, it will be replaced with the real order form, status and operation entry."
 我们非常重视您的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本政策，以了解我们对您个人信息的处理方式。,"We take your privacy very seriously. This Privacy Policy explains how we collect, use, store, and protect your personal information. Please read this policy carefully to understand how we handle your personal information."
 一、信息收集,"1. Information collection"
 "1.1 我们会在合法、正当、必要的前提下收集您的个人信息。我们可能收集的信息包括：","1.1 We will collect your personal information under the premise of legal, proper and necessary. The information we may collect includes:"
@@ -1272,41 +1318,43 @@ Product,Product
 "六、Cookie 政策的更新","6. Updates to the Cookie Policy"
 "我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。","We may update this Cookie Policy due to changes in laws and regulations or business needs. The updated content will be posted on this page and will take effect from the date of publication."
 分页导航,"Pagination navigation"
-页脚导航,页脚导航
-返回顶部,返回顶部
+页脚导航,"Footer navigation"
+返回顶部,"Back to top"
 NEW,NEW
 SALE,SALE
 缺货,"Out of Stock"
 加入收藏,"Add to Favorites"
-加入购物车,"Add to Cart"
+加入购物车,"add to the cart"
 暂时缺货,"Temporarily out of stock"
 已添加,Added
-面包屑,面包屑
-跳转到主要内容,跳转到主要内容
-主导航,主导航
-搜索,Search
-搜索…,搜索…
-打开导航,打开导航
-移动导航,移动导航
+面包屑,"bread crumbs"
+跳转到主要内容,"Skip to main content"
+主导航,"Main navigation"
+搜索,search
+搜索…,search…
+打开导航,"Open navigation"
+导航,Navigation
+关闭导航,"Close navigation"
+移动导航,"mobile navigation"
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
-切换语言,"Change language"
-语言,Language
-切换货币,"Change currency"
+切换语言,"Switch Language"
+语言,language
+切换货币,"Switch Currency"
 导航菜单,"Navigation menu"
 我的账户,"My Account"
 我的收藏,"My Favorites"
 浏览历史,"Browsing History"
 地址管理,"Address Management"
-账户安全,"Account Security"
+账户安全,"Account security"
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
 去购物,"Go Shopping"
-删除,Delete
+删除,delete
 小计,Subtotal
-查看购物车,"View Shopping Cart"
+查看购物车,"View cart"
 去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
@@ -1332,12 +1380,12 @@ Weline,Weline
 广告,Advertisement
 订阅我们,"Subscribe to Us"
 订阅获取最新优惠信息,"Subscribe for the Latest Deals"
-订阅,Subscribe
+订阅,subscription
 请输入邮箱地址,"Please enter the email address"
 我们不会分享您的邮箱地址,"We will not share your email address"
 第一页,"First Page"
 最后一页,"Last page"
-支付方式,"Payment method"
+支付方式,"Payment Method"
 公司简介,"Company Profile"
 加入我们,"Join Us"
 新闻中心,"News Center"
@@ -1353,7 +1401,7 @@ Weline,Weline
 Cookie政策,"Cookie Policy"
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 视频加载中...,"Video loading..."
-商品分类,"Product Category"
+商品分类,"Product classification"
 电子产品,Electronics
 服装鞋帽,"Clothing, Shoes & Hats"
 男装,"Men's clothing"
@@ -1383,14 +1431,14 @@ Cookie政策,"Cookie Policy"
 新品上架,"New Product Listing"
 热销商品,"Hot Selling Items"
 特价促销,"Special Promotion"
-全部分类,"All categories"
+全部分类,"All Categories"
 配件,Accessories
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
 天,Day(s)
 时,Hour
 分,Minute
-秒,second
+秒,Second
 安全支付,"Secure payment"
 SSL加密保护,"SSL encryption protection"
 无忧退款,"Worry-Free Refund"
@@ -1413,12 +1461,12 @@ SSL安全,"SSL security"
 猜你喜欢,"Recommended for You"
 根据您的浏览记录推荐,"Recommended based on your browsing history"
 "推荐产品 %d","Recommended product %d"
-匹配,Match
+匹配,Matches
 上一组,"Previous group"
 下一组,"Next group"
-已加入收藏,已加入收藏
-加入收藏失败，请稍后重试,加入收藏失败，请稍后重试
-请先登录,请先登录
+已加入收藏,"Added to favorites"
+加入收藏失败，请稍后重试,"Failed to add to favorites, please try again later"
+请先登录,"Please log in first"
 经常一起购买,"Frequently bought together"
 "搭配产品 %d","Matching product %d"
 总价,"Total Price"
@@ -1459,16 +1507,16 @@ VIP会员,"VIP Member"
 "0 - 99 元","0 - 99 yuan"
 "300 元以上","More than 300 yuan"
 "Prime 极速达",Prime
-免运费,"Free Shipping Fee"
+免运费,"Free Shipping"
 当日/次日达,"Same-day/next-day delivery"
 品牌,Brand
-颜色,Color
+颜色,color
 黑色,Black
 白色,White
 蓝色,Blue
 用户评分,"User rating"
 及以上,"And above"
-面包屑导航,"Breadcrumb Navigation"
+面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
 示例商品名称,"Example Product Name"
@@ -1476,7 +1524,7 @@ VIP会员,"VIP Member"
 订单跟踪,"Order Tracking"
 账户,Account
 收藏,Favorite
-菜单,Menu
+菜单,menu
 热门分类,"Popular Categories"
 美妆护肤,"Skincare & Cosmetics"
 特色推荐,"Featured Recommendations"
@@ -1484,8 +1532,8 @@ VIP会员,"VIP Member"
 品牌精选,"Brand selection"
 热卖,"Hot selling."
 新品,"New Product"
-促销活动,"Promotional Campaign"
-退出登录,"Sign out"
+促销活动,promotions
+退出登录,"Log out"
 欢迎回来,"Welcome back"
 注册,Register
 2026春季新品上市,"2026 spring new product launch"
@@ -1500,270 +1548,573 @@ VIP会员,"VIP Member"
 第%d张,"Slide %d"
 限时特惠！全场满300减50,"Limited Time Offer! Spend $300 and save $50 on your entire order"
 打印,Print
-仪表盘部件区域,仪表盘部件区域
-指标区,指标区
-"关键数值、KPI 与状态概览。","关键数值、KPI 与状态概览。"
-"最多 4 个","最多 4 个"
-"选择 KPI 或统计数字部件","选择 KPI 或统计数字部件"
-主分析区,主分析区
-趋势、图表与主要观察。,趋势、图表与主要观察。
-选择图表或趋势部件,选择图表或趋势部件
-侧栏洞察,侧栏洞察
-状态、短列表与异常提醒。,状态、短列表与异常提醒。
-选择状态或列表部件,选择状态或列表部件
-明细区,明细区
-表格、排行与可展开列表。,表格、排行与可展开列表。
-默认明细,默认明细
-视图,视图
-默认概览,默认概览
-系统共享视图,系统共享视图
+仪表盘部件区域,"Dashboard widget area"
+指标区,"indicator area"
+"关键数值、KPI 与状态概览。","Overview of key figures, KPIs and status."
+"最多 4 个","up to 4"
+"选择 KPI 或统计数字部件","Select KPI or Statistics widget"
+主分析区,"Main analysis area"
+趋势、图表与主要观察。,"Trends, charts and key observations."
+选择图表或趋势部件,"Select a chart or trend widget"
+侧栏洞察,"Sidebar Insights"
+状态、短列表与异常提醒。,"Status, short list and exception reminder."
+选择状态或列表部件,"Select status or list widget"
+明细区,"Detail area"
+表格、排行与可展开列表。,"Tables, rankings and expandable lists."
+默认明细,"Default details"
+视图,view
+默认概览,"Default overview"
+系统共享视图,"System shared view"
 布局,Layout
-"4 个固定区域","4 个固定区域"
-指标、分析、侧栏、明细,指标、分析、侧栏、明细
+"4 个固定区域","4 fixed areas"
+指标、分析、侧栏、明细,"Metrics, Analysis, Sidebar, Details"
 部件,Component
-后台专用,后台专用
-由后台统计部件提供,由后台统计部件提供
-确认操作,"Confirm Action"
-确定,Confirm
-输入,Input
+后台专用,"Backend only"
+由后台统计部件提供,"Provided by background statistics component"
+发送通知失败,"Failed to send notification"
+立即重试,"Retry now"
+"将在 %{seconds} 秒后自动重试...","Will automatically retry in %{seconds} seconds..."
+服务器错误,"Server Error"
+服务器内部错误，请稍后重试。,"Internal server error. Please try again later."
+网络错误,"Network error"
+无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
+"Weline Admin","Weline Admin"
+管理后台,"Admin Panel"
+后台Logo,"Background Logo"
+保存,save
+提交中...,Submitting...
+已选择,Selected
+项,Item
+取消选择,"Cancel Selection"
+请配置列信息,"Please configure the column information."
+数据列表,"Data List"
+"共 %{1} 条","Total %{1} items"
+"您好, %{1}","Hello, %{1}"
+您好,Hello
+"您好, 登录","Hello, login"
+账户及心愿单,"Accounts and Wishlists"
+"登录 / 注册",Login/Register
+CSS变量配置,"CSS variable configuration"
+选择色盘：,"Select Color Palette:"
+不使用色盘,"No color palette"
+应用色盘,"Apply Color Palette"
+保存配置,"Save configuration"
+未知错误,"Unknown error"
+确定,Sure
+应用失败,"Application Failed"
+未选择主题,"No theme selected"
+主题可视化编辑器,"Theme visual editor"
+前端,Frontend
+后端,Backend
+配置当前主题色盘,"Configure the current theme color palette"
+色盘,"color wheel"
+Desktop,Desktop
+Tablet,Tablet
+Mobile,Mobile
+主题模式,"Theme mode"
+跟随系统,"Follow system"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
+"Simplified Chinese","Simplified Chinese"
+"Traditional Chinese","Traditional Chinese"
+"Select language","Select language"
+Exit,Exit
+"Discard preview","Discard preview"
+"Publish to formal","Publish to formal"
+结构视图,"Structure view"
+收起,Minimize
+页面布局,"Page layout"
+搜索布局...,"Search Layout..."
+页面结构,"Page structure"
+Header,Header
+"Left Sidebar","Left Sidebar"
+Body,Body
+"Right Sidebar","Right Sidebar"
+Footer,Footer
+全局设置,"Global Settings"
+全局配色,"Global Color Scheme"
+全局变量,"Global Variable"
+预览,Preview
+Properties,Properties
+Collapse,Collapse
+"Please select a region on the left to configure it","Please select a region on the left to configure it"
+"Apply changes","Apply changes"
+Loading...,Loading...
+"Saved successfully","Saved successfully"
+"Save failed","Save failed"
+Publishing...,Publishing...
+"Discard failed","Discard failed"
+Discarding...,Discarding...
+"Discard current preview configuration changes?","Discard current preview configuration changes?"
+"Reset to default","Reset to default"
+"Reset failed","Reset failed"
+"Reset error","Reset error"
+Saving...,Saving...
+"Select layout","Select layout"
+"Please select a layout before saving parameters","Please select a layout before saving parameters"
+"Recent colors","Recent colors"
+Copied,Copied
+"Copy color value","Copy color value"
+"No color settings available","No color settings available"
+"Switching language...","Switching language..."
+"Initialization failed","Initialization failed"
+目录路径,"Directory path"
+当前配置的目录路径,"Directory path of the current configuration"
+选择布局,"Select Layout"
+选择部件,"Select Widget"
+选择色系,"Select Color Scheme"
+选择组件,"Select Component"
+配置变量,"Configuration Variables"
+选择配置,"Select Configuration"
+配置色系,"Configure color scheme"
+点击色盘选择色系，选中的色系将应用到当前主题,"Click the color wheel to select a color scheme; the selected scheme will be applied to the current theme."
+已选中,Selected
+点击卡片选择布局文件，选中的布局将应用到当前主题,"Click a card to select a layout file; the selected layout will be applied to the current theme."
+点击卡片选择部件文件，选中的部件将应用到当前主题,"Click a card to select a widget file; the selected widget will be applied to the current theme."
+点击卡片选择组件文件，选中的组件将应用到当前主题,"Click a card to select a component file; the selected component will be applied to the current theme."
+点击卡片选择文件，选中的文件将应用到当前主题,"Click a card to select a file; the selected file will be applied to the current theme."
+请输入变量值,"Enter variable value"
+输入变量值，这些值将应用到当前主题,"Enter variable values, these will be applied to the current topic"
+该目录下没有可用的布局文件,"No layout files available in this directory"
+该目录下没有可用的部件文件,"No widget files available in this directory"
+该目录下没有可用的色系文件,"No color scheme files available in this directory"
+该目录下没有可用的组件文件,"No component files available in this directory"
+该目录下没有可用的变量文件,"No variable files available in this directory"
+该目录下没有可用的配置项,"No configuration items available in this directory"
+正在读取颜色变量...,"Reading color variables..."
+未找到颜色变量,"Color variable not found"
+保存中...,Saving...
+请重试,"Please try again"
+描述,describe
+输入目录描述信息（可选）,"Enter directory description (optional)"
+变量文件配置,"Variable File Configuration"
+扫描变量文件,"Scan variable files"
+变量数量：,"Number of Variables:"
+已配置：,Configured:
+确认操作,"Confirm action"
+确定要扫描变量文件吗？这将更新Meta数据库中的变量信息。,"Are you sure you want to scan variable files? This will update the variable information in the Meta database."
+开始扫描,"Start scanning"
+确认组件不可用，请刷新页面后重试,"Confirm that the component is unavailable, please refresh the page and try again"
+扫描完成,"Scan complete"
+扫描失败,"Scan failed"
+"主题 Meta 配置","Theme Meta configuration"
+色系,"Color Scheme"
+变量,Variable
+组件,Component
+"主题 Partials 配置","Theme Partials configuration"
+主题：%{name},"Theme: %{name}"
+"前端 Partials","Frontend Partials"
+"该主题暂无前端 partials 选项","This theme currently has no frontend partials options."
+"后端 Partials","Backend Partials"
+"该主题暂无后端 partials 选项","This theme currently has no backend partials options."
+返回,Back
+主题：,Theme:
+区域：,Region:
+作用域：,Scope:
+搜索变量名...,"Search variable name..."
+所有分类,"All Categories"
+重置为默认值,"Reset to Default"
+默认：,Default:
+保存所有配置,"Save all configurations"
+保存并预览,"Save and preview"
+保存成功，预览已更新,"Saved successfully, preview updated"
+配置进度,"Configuration Progress"
+"点击""配置变量""按钮编辑变量文件中的变量值","Click the ""Configure Variables"" button to edit the variable values in the variable file"
+请先选择主题,"Please select a theme first"
+配置变量文件,"Configuration Variable File"
+正在加载变量数据...,"Loading variable data..."
+点击色盘选择色系，点击齿轮图标配置色系变量,"Click the color wheel to select a color scheme, then click the gear icon to configure color scheme variables."
+加载弹窗失败,"Failed to load popup"
+配置色系变量,"Configure color scheme variables"
+正在加载色盘变量...,"Loading palette variables..."
+参数,parameter
+"点击""配置参数""按钮编辑组件的参数值","Click the ""Configure Parameters"" button to edit the parameter values of the component"
+配置组件参数,"Configure component parameters"
+正在加载组件参数...,"Loading component parameters..."
+该色盘没有可配置的变量,"This color palette has no configurable variables"
+默认值,"default value"
+重置,reset
+该变量文件没有可配置的变量,"This variable file has no configurable variables."
+该组件没有可配置的参数,"This component has no configurable parameters"
+是,yes
+否,no
+"JSON格式，例如：[""item1"", ""item2""]","JSON format, for example: [""item1"", ""item2""]"
+"JSON格式，例如：[""item1"", ""item2""] 或 {""key"": ""value""}","JSON format, for example: [""item1"", ""item2""] or {""key"": ""value""}"
+主题布局配置,"Theme layout configuration"
+前端配置,"Frontend Configuration"
+布局配置,"Layout configuration"
+该主题暂无前端布局选项,"This theme currently has no frontend layout options."
+后端配置,"Backend Configuration"
+该主题暂无后端布局选项,"This theme currently has no backend layout options."
+主题配置编辑,"Theme Configuration Edit"
+系统,system
+主题配置,"Theme Settings"
+主题,Theme
+Scope,Scope
+加载,Loading
+暂无可用色盘,"No color palettes available"
+暂无可用变量文件,"No variable files available"
+展开/收缩预览,"Expand/Collapse preview"
+主题预览,"Theme Preview"
+自动登录,Auto-login
+亮色,"bright color"
+暗色,"dark color"
+刷新,refresh
+全屏,Fullscreen
+正在加载预览...,"Loading preview..."
+请先选择一个主题以开始配置。,"Please select a theme to start configuration."
+组件预览,"Component Preview"
+区域,area
+名称,name
+组件参数,"Component Parameters"
+必填,Required
+默认值：%{value},"Default Value: %{value}"
+保存参数,"Save Parameters"
+保存失败，请重试,"Save failed. Please try again"
+这是一个成功提示信息示例,"This is an example success notification message"
+按钮,Button
+卡片标题,"Card Title"
+这是卡片内容示例,"This is a sample card content"
 该部件暂无可配置参数,"No configurable parameters for this widget"
-显示,显示
-是,Yes
-隐藏,隐藏
-否,No
+显示,show
+隐藏,hide
 "-- 请选择 --","-- Please Select --"
-图片URL或点击选择,"Image URL or click to select"
+选择,选择
+清除图片,清除图片
 JSON格式数组,"JSON format array"
 请使用JSON格式输入,"Please use JSON format"
-默认,默认
-主题列表,主题列表
+返回主题列表,"Back to theme list"
 主题编辑器,"Theme Editor"
-使用当前主题与布局上下文预览、检查并发布页面。,使用当前主题与布局上下文预览、检查并发布页面。
-刷新预览,"Refresh Preview"
-新窗口预览,新窗口预览
-版本,版本
-发布,Publish
-当前布局由上游上下文锁定,当前布局由上游上下文锁定
-可浏览预览与版本；需要在拥有该布局的入口中进行变更。,可浏览预览与版本；需要在拥有该布局的入口中进行变更。
-主题,Topic
-"-- 选择主题 --","-- Select Theme --"
-区域,Region
-前台,Frontend
-默认语言,默认语言
-部件目录,部件目录
-按当前区域和布局显示可用部件。,按当前区域和布局显示可用部件。
-搜索部件,搜索部件
-搜索部件…,搜索部件…
+作用范围,Scope
+编辑区域,"Edit area"
+前端/后端主题,"Frontend/Backend Theme"
+继承上一级,"Inherit from previous level"
+恢复继承,"Restore inheritance"
+选择布局类型,"Select layout type"
+选择布局选项,"Select layout options"
+配置语言,"Configuration language"
+更多,More
+版本历史,"Version History"
+关闭版本面板,"Close version panel"
+保存新版本,"Save new version"
+"点击""切换""可恢复到历史版本继续编辑","Click ""Switch"" to revert to a historical version and continue editing"
+后台预览,"Backend Preview"
+在真实前端页面中预览，可查看完整效果,"Preview in a real frontend page to see the full effect."
+前端预览,"Frontend Preview"
+保存当前布局为新版本,"Save current layout as new version"
+保存版本,"Save version"
+主题级颜色与变量盘,"Theme-level colors and variable disks"
+全局外观,"global appearance"
+发布当前版本到前台,"Publish current version to frontend"
+发布,release
+当前旧作用域只能兼容读取，不能产生新写入。请先完成作用域迁移：,"This legacy Scope is available for compatibility reads only and cannot accept new writes. Migrate it first:"
+"当前 Scope 与上级发布版本存在结构冲突","The current Scope conflicts structurally with its parent release"
+前台继续使用最后一个有效版本。请重置、本级重新基线化或重新定位冲突节点后再发布。,"The storefront continues using the last valid release. Reset, rebaseline, or reposition the conflicting node before publishing again."
 实时预览,"Real-Time Preview"
-已发布版本,已发布版本
-草稿版本,草稿版本
-加载中,加载中
-主题布局预览,主题布局预览
-当前上下文,当前上下文
-"主题 ID","主题 ID"
-作用域,作用域
-目标,目标
-布局版本,布局版本
-新版本名称,新版本名称
-保存当前版本,保存当前版本
-编辑,Edit
+恢复到主题模板原始布局（自动创建备份）,"Restore theme template to original layout (auto-create backup)"
+恢复原始布局,"Restore Original Layout"
+刷新预览,"Refresh Preview"
+全屏预览,"Fullscreen Preview"
+编辑面板,"Edit panel"
+配置,Configuration
+部件库,"Widget Library"
+部件配置,"Widget Configuration"
+关闭配置,"Close configuration"
+点击预览区域中的部件进行配置,"Click widget in preview area to configure"
+页面插槽,"Page slot"
+关闭插槽面板,"Close slot panel"
+拖入头部部件（Logo、导航、搜索等）,"Drag in header components (Logo, navigation, search, etc.)"
+Content,Content
+拖入任意部件或容器,"Drag into any widget or container"
+拖入底部部件（链接、版权、社交等）,"Drag in footer components (links, copyright, social, etc.)"
+搜索部件...,"Search widgets..."
+关闭部件库,"Close the widget library"
+通用部件,"Common parts"
+基础组件,"Basic components"
+应用,application
+预览设备,"Preview device"
+响应式,Responsive
+宽度,Width
+加载预览...,"Loading preview..."
+面板,panel
+"原生盘只读选用；修改先进入 Scope 草稿，发布后写入兼容投影并合编 CSS","Native disks are read-only; changes first enter a scope draft, then publish to the compatibility projection and compiled CSS."
+盘子列表,"plate list"
+编辑区,"Editing area"
+当前面板尚未选用盘子；选用后将自动展开编辑，也可点「继承编辑」或「编辑」,当前面板尚未选用盘子；选用后将自动展开编辑，也可点「继承编辑」或「编辑」
+编辑我的盘,"Edit my disk"
+另存为我的盘,"Save as my disk"
+保存当前我的盘,"Save current my disk"
+编辑,edit
 点击配置此部件,"Click to configure this widget"
 无模板,"No template"
-系统,System
+前台主题,"Frontend Theme"
+后台主题,"Backend Theme"
+已选,Selected
+"前端 %{1} 个，后端 %{2} 个","Frontend: %{1}, Backend: %{2}"
+选择前台与后台各自激活的主题。,"Select the themes to be activated in the foreground and backend respectively."
 暂无主题,"No Theme"
 系统中还没有安装任何主题,"No themes are installed in the system."
 请使用命令行安装主题：,"Please install the theme using the command line:"
-前台主题,"Frontend Theme"
-已选,Selected
-后台主题,"Backend Theme"
-AI创建虚拟主题,AI创建虚拟主题
+主题区域,"subject area"
+AI创建虚拟主题,"AI creates virtual themes"
 批量生成预览图,"Batch generate preview images"
-"前端 %{1} 个，后端 %{2} 个","Frontend: %{1}, Backend: %{2}"
 当前没有可用于该区域的主题,"No themes available for this region."
-主题预览,"Theme Preview"
-暂无预览图,"No preview image"
-已激活,Activated
 刷新预览图,"Refresh Preview Image"
 生成预览图,"Generation preview image"
-继承自,"Inherited from"
+已激活,Activated
 激活,Activate
+暂无预览图,"No preview image"
+继承自,"Inherited from"
 预览主题,"Preview theme"
-预览,Preview
-可视化编辑,"Visual Editor"
 选择用于网站前台的主题，访客将看到该主题的样式。,"Select the theme for the storefront. Visitors will see this theme."
 选择用于管理后台的主题，仅影响后台界面样式。,"Select the theme for the admin panel. It only affects the backend UI."
-参照主题,参照主题
+参照主题,"Reference topic"
 "固定调用 Theme AI 适配器","Always use the Theme AI adapter"
 自动对标参照主题全部默认布局类型生成虚拟主题草稿，不需要选择页面类型。,"Automatically generate virtual theme drafts for all default layout types from the reference theme. No page type selection is needed."
-生成方向,生成方向
-例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。,例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。
-技能,技能
-正在加载...,正在加载...
-方向,方向
-自动匹配,自动匹配
-"由 Theme AI 根据当前指令选择方向","由 Theme AI 根据当前指令选择方向"
-"AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。","AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。"
-创建虚拟主题,创建虚拟主题
+生成方向,"Generate direction"
+例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。,"For example: keep all the structure and slots of the default theme and change it to a visual direction more suitable for holiday events."
+技能,Skill
+正在加载...,Loading...
+方向,direction
+自动匹配,"automatic matching"
+"由 Theme AI 根据当前指令选择方向","The theme AI selects the direction based on the current command"
+"AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。","AI will fully refer to the default layout source code of the default theme to generate a virtual theme draft, which will not affect the front-end rendering before release."
+创建虚拟主题,"Create a virtual theme"
 准备生成...,"Preparing to generate..."
-取消任务,取消任务
+取消任务,"Cancel task"
 正在生成预览图，请稍候...,"Generating preview image, please wait..."
-后台任务启动响应无效。,后台任务启动响应无效。
-用户明确取消,用户明确取消
-虚拟主题任务已断开,虚拟主题任务已断开
-虚拟主题任务失败,虚拟主题任务失败
-暂无可选技能,暂无可选技能
-正在创建,正在创建
-AI目录加载失败,AI目录加载失败
-请选择参照主题,请选择参照主题
+后台任务启动响应无效。,"The background task startup response is invalid."
+用户明确取消,"User explicitly cancels"
+虚拟主题任务已断开,"Virtual theme task has been disconnected"
+虚拟主题任务失败,"Virtual theme task failed"
+暂无可选技能,"No optional skills yet"
+正在创建,Creating
+AI目录加载失败,"AI directory loading failed"
+请选择参照主题,"Please select a reference topic"
 正在按参照主题全部布局类型创建虚拟主题草稿...,"Creating virtual theme drafts for all layout types in the reference theme..."
-正在创建虚拟主题草稿,正在创建虚拟主题草稿
-正在创建虚拟主题草稿...,正在创建虚拟主题草稿...
-虚拟主题草稿已创建,虚拟主题草稿已创建
-已创建虚拟主题草稿,已创建虚拟主题草稿
-已覆盖布局类型,已覆盖布局类型
-打开可视化编辑,打开可视化编辑
-虚拟主题创建失败,虚拟主题创建失败
+正在创建虚拟主题草稿,"Creating a virtual topic draft"
+正在创建虚拟主题草稿...,"Creating a virtual topic draft..."
+虚拟主题草稿已创建,"Virtual topic draft created"
+已创建虚拟主题草稿,"Created virtual topic draft"
+已覆盖布局类型,"Layout type covered"
+打开可视化编辑,"Open visual editing"
+虚拟主题创建失败,"Virtual topic creation failed"
 预览图已更新,"Preview image updated"
 正在生成,Generating
-未找到预览图任务结果,未找到预览图任务结果
-预览图生成已取消,预览图生成已取消
-客户端失联超时，预览图任务已停止,客户端失联超时，预览图任务已停止
-无法启动预览图任务,无法启动预览图任务
+未找到预览图任务结果,"No preview image task results found"
+预览图生成已取消,"Preview generation has been canceled"
+客户端失联超时，预览图任务已停止,"The client lost connection and timed out, and the preview task has been stopped."
+无法启动预览图任务,"Unable to start preview task"
 自动生成中,Generating
+前台,"front desk"
 自动生成失败,"Generation failed"
 正在批量生成预览图，请稍候...,"Batch generating preview images, please wait..."
 批量生成已完成，但存在失败项,"Batch generation completed, but there are failures"
 批量生成完成,"Batch generation completed"
 自动生成完成,"Generation complete"
-批量预览图生成已取消,批量预览图生成已取消
-客户端失联超时，批量预览图任务已停止,客户端失联超时，批量预览图任务已停止
-批量预览图生成失败,批量预览图生成失败
-无法启动批量预览图任务,无法启动批量预览图任务
-用户取消批量预览图任务,用户取消批量预览图任务
-取消任务失败,取消任务失败
-用户取消预览图任务,用户取消预览图任务
+批量预览图生成已取消,"Batch preview generation has been cancelled"
+客户端失联超时，批量预览图任务已停止,"The client lost connection and timed out, and the batch preview task has been stopped."
+批量预览图生成失败,"Batch preview image generation failed"
+无法启动批量预览图任务,"Unable to start batch preview task"
+用户取消批量预览图任务,"User cancels batch preview task"
+取消任务失败,"Failed to cancel task"
+用户取消预览图任务,"User cancels preview task"
 "主题已设置为 %{1} 主题","Theme has been set to %{1} theme"
-刷新,Refresh
 生成,Generate
 预览图,"Preview image"
 中...,middle...
 预览图已刷新,"Preview image refreshed"
 刷新失败,"Refresh Failed"
-字体子集预热开始…,字体子集预热开始…
-"字体子集预热完成：新建 %{built}，跳过 %{skipped}，失败 %{failed}","字体子集预热完成：新建 %{built}，跳过 %{skipped}，失败 %{failed}"
-"字体子集失败：%{font} [%{lang}] — %{error}","字体子集失败：%{font} [%{lang}] — %{error}"
-字体子集预热异常：%{msg},字体子集预热异常：%{msg}
+"Theme 布局身份无效。","The Theme layout identity is invalid."
+布局语言代码无效：%{1},"Invalid layout language code: %{1}"
+字体子集预热开始…,"Font subset warm-up begins..."
+"字体子集预热完成：新建 %{built}，跳过 %{skipped}，失败 %{failed}","Font subset warm-up completed: new %{built}, skipped %{skipped}, failed %{failed}"
+"字体子集失败：%{font} [%{lang}] — %{error}","Font subsetting failed: %{font} [%{lang}] — %{error}"
+字体子集预热异常：%{msg},"Font subset warm-up exception: %{msg}"
+"Theme 布局读取失败。","The Theme layout could not be read."
+"Theme 布局节点不存在。","The Theme layout node does not exist."
+"Theme 布局节点不属于当前编辑上下文。","The Theme layout node does not belong to the current editor context."
+"Theme 布局写入必须位于写意图事务内。","Theme layout writes must run inside a write-intent transaction."
 结算成功页,"Payment Success Page"
 结算失败页,"Payment failure page"
 账户认证,"Account Authentication"
-订单列表,"Order list"
+订单列表,"order list"
 政策页面,"Policy Page"
 活动页,"Event Page"
 测试页,"Test Page"
-"无法读取 Weline UI 资源清单：%{1}","无法读取 Weline UI 资源清单：%{1}"
-"Weline UI 资源清单不是有效 JSON：%{1}","Weline UI 资源清单不是有效 JSON：%{1}"
-"Weline UI 资源清单版本无效","Weline UI 资源清单版本无效"
-"Weline UI 资源清单未声明 bundle","Weline UI 资源清单未声明 bundle"
-"Weline UI bundle 声明无效：%{1}","Weline UI bundle 声明无效：%{1}"
-"Weline UI bundle 源目录越过模块边界：%{1}","Weline UI bundle 源目录越过模块边界：%{1}"
-"Weline UI 区域资源声明无效：%{1}","Weline UI 区域资源声明无效：%{1}"
-"Weline UI 区域引用了未定义 bundle：%{1}","Weline UI 区域引用了未定义 bundle：%{1}"
-"Weline UI 懒加载组件声明无效：%{1}","Weline UI 懒加载组件声明无效：%{1}"
-"Weline UI 懒加载组件名无效：%{1}","Weline UI 懒加载组件名无效：%{1}"
-"Weline UI 组件资源声明无效：%{1}","Weline UI 组件资源声明无效：%{1}"
-"Weline UI 组件资源缺少 owner、bundles 或 components：%{1}","Weline UI 组件资源缺少 owner、bundles 或 components：%{1}"
-"Weline UI 组件资源引用了未定义 bundle：%{1}","Weline UI 组件资源引用了未定义 bundle：%{1}"
-"Weline UI 组件 bundle 不属于声明模块：%{1}","Weline UI 组件 bundle 不属于声明模块：%{1}"
-"Weline UI 组件资源名无效：%{1}","Weline UI 组件资源名无效：%{1}"
-"Weline UI 专用引擎声明无效：%{1}","Weline UI 专用引擎声明无效：%{1}"
-"Weline UI 专用引擎缺少 owner、paths 或 consumers：%{1}","Weline UI 专用引擎缺少 owner、paths 或 consumers：%{1}"
-"Weline UI 专用引擎越过模块归属边界：%{1}","Weline UI 专用引擎越过模块归属边界：%{1}"
-"Weline UI 路由资源声明无效：%{1}","Weline UI 路由资源声明无效：%{1}"
-"Weline UI 路由引用了未定义专用引擎：%{1}","Weline UI 路由引用了未定义专用引擎：%{1}"
-"Weline UI 路由引用了未定义 bundle：%{1}","Weline UI 路由引用了未定义 bundle：%{1}"
-"Weline UI 路由模板路径无效：%{1}","Weline UI 路由模板路径无效：%{1}"
-"Weline UI 审计目录不存在：%{1}","Weline UI 审计目录不存在：%{1}"
+"-- 选择主题 --","-- Select Theme --"
+（已启用）,(enabled)
+默认（全语言）,"Default (all languages)"
+部件库加载中...,"Loading widgets..."
+未命名部件,"Unnamed part"
+可拖拽到页面插槽的基础组件,"Basic components that can be dragged into page slots"
+容器部件,"Container Parts"
+独占部件,"Exclusive Component"
+添加到当前插槽,"Add to selected slot"
+"无法读取 Weline UI 资源清单：%{1}","Unable to read Weline UI resource list: %{1}"
+"Weline UI 资源清单不是有效 JSON：%{1}","Weline UI resource manifest is not valid JSON: %{1}"
+"Weline UI 资源清单版本无效","Weline UI resource manifest version is invalid"
+"Weline UI 资源清单未声明 bundle","Weline UI resource manifest does not declare bundle"
+"Weline UI bundle 声明无效：%{1}","Invalid Weline UI bundle declaration: %{1}"
+"Weline UI bundle 源目录越过模块边界：%{1}","Weline UI bundle source directory crosses module boundary: %{1}"
+"Weline UI 区域资源声明无效：%{1}","Weline UI zone resource declaration is invalid: %{1}"
+"Weline UI 区域引用了未定义 bundle：%{1}","Weline UI area references undefined bundle: %{1}"
+"Weline UI 懒加载组件声明无效：%{1}","Weline UI lazy loading component declaration is invalid: %{1}"
+"Weline UI 懒加载组件名无效：%{1}","Weline UI lazy loading component name is invalid: %{1}"
+"Weline UI 组件资源声明无效：%{1}","Weline UI component resource declaration is invalid: %{1}"
+"Weline UI 组件资源缺少 owner、bundles 或 components：%{1}","Weline UI component resource is missing owner, bundles or components: %{1}"
+"Weline UI 组件资源引用了未定义 bundle：%{1}","Weline UI component resource references undefined bundle: %{1}"
+"Weline UI 组件 bundle 不属于声明模块：%{1}","Weline UI component bundle does not belong to declared module: %{1}"
+"Weline UI 组件资源名无效：%{1}","Weline UI component resource name is invalid: %{1}"
+"Weline UI 专用引擎声明无效：%{1}","Weline UI dedicated engine declaration is invalid: %{1}"
+"Weline UI 专用引擎缺少 owner、paths 或 consumers：%{1}","Weline UI dedicated engine is missing owner, paths or consumers: %{1}"
+"Weline UI 专用引擎越过模块归属边界：%{1}","Weline UI dedicated engine crosses module ownership boundary: %{1}"
+"Weline UI 路由资源声明无效：%{1}","Weline UI routing resource declaration is invalid: %{1}"
+"Weline UI 路由引用了未定义专用引擎：%{1}","Weline UI route references undefined private engine: %{1}"
+"Weline UI 路由引用了未定义 bundle：%{1}","Weline UI route references undefined bundle: %{1}"
+"Weline UI 路由模板路径无效：%{1}","Weline UI routing template path is invalid: %{1}"
+"Weline UI 审计目录不存在：%{1}","Weline UI audit directory does not exist: %{1}"
+主题布局包含缺少身份的部件，禁止保存或发布。,"A Theme layout contains a widget without an identity and cannot be saved or published."
+"主题部件 %{1} 未注册，禁止保存或发布。","Theme widget %{1} is not registered and cannot be saved or published."
+"图片字段 %{1} 仍是旧 URL；请从媒体库重新选择资源后再发布。","Image field %{1} still uses a legacy URL; reselect the asset from the media library before publishing."
+"图片字段 %{1} 缺少可用的 file-image 运行时适配器。","Image field %{1} is missing an available file-image runtime adapter."
+"file-image 节点缺少类型化 usage。","file-image 节点缺少类型化 usage。"
+"file-image 节点缺少可用的运行时适配器。","The file-image node has no available runtime adapter."
+布局内容不得持久化运行时图片伴生字段：%{1},"Layout content must not persist the runtime image companion field: %{1}"
+"动态 <img src> 内容禁止保存，请改用 file-image 类型节点。","Dynamic <img src> content cannot be saved; use a typed file-image node instead."
+主题布局图片内容超过校验上限。,"Theme layout image content exceeds the validation limit."
 模板文件不存在：%{1},"Template file does not exist: %{1}"
 读取模板文件失败：%{1},"Failed to read the template file: %{1}"
 只能发布草稿或已发布版本,"Only draft or published versions can be published"
 部件不存在：%{1},"Component does not exist: %{1}"
 版本不存在：%{1},"Version does not exist: %{1}"
 主题不存在：%{1},"Theme does not exist: %{1}"
+"Theme 预览主题标识无效。","The Theme preview theme identifier is invalid."
+"Theme 预览页面类型无效。","The Theme preview page type is invalid."
+"Theme 预览版本标识无效。","The Theme preview revision identifier is invalid."
+"Theme 预览 Token 无法写入共享缓存。","The Theme preview token could not be written to shared cache."
+"Theme 预览 token 无效。","The Theme preview token is invalid."
+"Theme 预览上下文超过上限。","The Theme preview context exceeds the limit."
+"Theme 预览上下文字段无效。","A Theme preview context field is invalid."
+"Theme 预览上下文值无效。","A Theme preview context value is invalid."
+"Theme 预览上下文值超过上限。","A Theme preview context value exceeds the limit."
+"Theme 预览上下文超过大小上限。","The Theme preview context exceeds the size limit."
 "主题 %{1} 的 %{2} 页面已成功发布","The %{2} page of topic %{1} was successfully published"
 "主题 %{1} 的 %{2} 页面发布失败：%{3}","The %{2} page of topic %{1} failed to publish: %{3}"
 "CDN 缓存刷新失败（域名：%{1}）：%{2}","CDN cache refresh failed (domain name: %{1}): %{2}"
+"Theme 运行时缺少冻结的 ScopeIdentity。","Theme runtime requires a frozen ScopeIdentity."
 激活失败：%{1},"Activation failed: %{1}"
-目标类型不能为空,目标类型不能为空
-全局,全局
-分类商品默认,分类商品默认
-开始生成虚拟主题草稿,开始生成虚拟主题草稿
-虚拟主题布局草稿已保存,虚拟主题布局草稿已保存
-正在生成虚拟主题布局草稿,正在生成虚拟主题布局草稿
-"虚拟主题 AI 外部副作用在确认前中断，无法安全恢复。","虚拟主题 AI 外部副作用在确认前中断，无法安全恢复。"
-"AI 运行时不可用。","AI 运行时不可用。"
-虚拟主题草稿保存失败,虚拟主题草稿保存失败
-虚拟布局草稿已保存,虚拟布局草稿已保存
-开始生成主题预览图,开始生成主题预览图
-主题预览图已保存,主题预览图已保存
-主题预览图生成失败,主题预览图生成失败
-主题预览图生成在确认保存前中断，无法安全恢复。,主题预览图生成在确认保存前中断，无法安全恢复。
-开始翻译主题配置文案,开始翻译主题配置文案
-"主题配置 AI 翻译已生成","主题配置 AI 翻译已生成"
-源语言无效。,源语言无效。
-"主题配置 AI 翻译在确认前中断，无法安全恢复。","主题配置 AI 翻译在确认前中断，无法安全恢复。"
-"主题配置 AI 翻译失败。","主题配置 AI 翻译失败。"
-"AI 输出不是有效 JSON","AI 输出不是有效 JSON"
-虚拟部件校验未通过,虚拟部件校验未通过
-开始微调虚拟部件草稿,开始微调虚拟部件草稿
-开始生成虚拟部件草稿,开始生成虚拟部件草稿
-智能体进入新一轮思考,智能体进入新一轮思考
-智能体执行失败,智能体执行失败
-智能体响应为空或超过可恢复任务限制,智能体响应为空或超过可恢复任务限制
-"主题 AI 副作用在确认结果前中断，无法安全恢复。","主题 AI 副作用在确认结果前中断，无法安全恢复。"
+"Theme Scope 无法解析为 ScopeIdentity。","Theme scope cannot be resolved to a ScopeIdentity."
+"Theme Store Mode 无效：%{1}","Invalid Theme Store Mode: %{1}"
+"类型化布局值解析缺少冻结的 locale_code。","Typed layout value resolution requires a frozen locale_code."
+"类型化布局值解析缺少冻结的 ScopeIdentity。","Typed layout value resolution requires a frozen ScopeIdentity."
+"Theme 布局渲染缺少冻结的 ScopeIdentity。","Theme layout rendering requires a frozen ScopeIdentity."
+目标类型不能为空,"Target type cannot be empty"
+全局,"overall situation"
+分类商品默认,"Category product default"
+开始生成虚拟主题草稿,"Start generating a virtual topic draft"
+虚拟主题布局草稿已保存,"Virtual theme layout draft saved"
+正在生成虚拟主题布局草稿,"Generating a draft virtual theme layout"
+"虚拟主题 AI 外部副作用在确认前中断，无法安全恢复。","Virtual topic AI external side effects interrupted before confirmation and cannot be safely resumed."
+"AI 运行时不可用。","Not available during AI runtime."
+虚拟主题草稿保存失败,"Virtual topic draft saving failed"
+虚拟布局草稿已保存,"Virtual layout draft saved"
+开始生成主题预览图,"Start generating theme preview"
+主题预览图已保存,"Theme preview saved"
+主题预览图生成失败,"Theme preview failed to generate"
+主题预览图生成在确认保存前中断，无法安全恢复。,"Theme preview generation was interrupted before saving was confirmed and cannot be safely restored."
+开始翻译主题配置文案,"Start translating theme configuration copy"
+"主题配置 AI 翻译已生成","Topic configuration AI translation generated"
+源语言无效。,"The source language is invalid."
+"主题配置 AI 翻译在确认前中断，无法安全恢复。","Topic configuration AI translation interrupted before confirmation and cannot be safely restored."
+"主题配置 AI 翻译失败。","Topic configuration AI translation failed."
+"AI 输出不是有效 JSON","AI output is not valid JSON"
+虚拟部件校验未通过,"Virtual component verification failed"
+开始微调虚拟部件草稿,"Start fine-tuning your virtual part draft"
+开始生成虚拟部件草稿,"Start generating a virtual part draft"
+智能体进入新一轮思考,"Intelligent agents enter a new round of thinking"
+智能体执行失败,"Agent execution failed"
+智能体响应为空或超过可恢复任务限制,"Agent response is empty or exceeds resumeable task limit"
+"主题 AI 副作用在确认结果前中断，无法安全恢复。","Topic AI Side Effects interrupted before results were confirmed and cannot be safely resumed."
+编辑锁活动时间更新失败,"The edit-lock activity timestamp could not be updated."
 继续编辑,"Continue Editing"
 "%{1} 正在编辑此页面","%{1} is editing this page"
 其他用户,"Other users"
+编辑锁写入失败,"The edit lock could not be written."
 已锁定编辑,"Edit locked"
+编辑锁释放失败,"The edit lock could not be released."
 您已持有编辑锁定,"You already hold an editing lock"
+已有其他用户发起接管请求,"Another user has already requested takeover."
+接管请求已在等待处理,"The takeover request is already awaiting resolution."
+编辑锁接管请求写入失败,"The edit-lock takeover request could not be written."
 "已发送接管请求，等待 %{1} 响应","Takeover request sent, waiting for %{1} response(s)"
 当前用户,"Current user"
 请先发送接管请求,"Please send the takeover request first"
 您不是接管请求者,"You are not the takeover requester"
 "当前用户仍在活跃，请等待 %{1} 秒后重试","Current user is still active. Please retry after %{1} seconds."
+编辑锁接管写入失败,"The edit-lock takeover could not be committed."
 已成功接管编辑,"Successfully took over editing"
+编辑锁服务正忙，请稍后重试,"The edit-lock service is busy. Try again shortly."
+编辑锁资源身份无效,"The edit-lock resource identity is invalid."
+编辑锁缺少明确操作人,"The edit lock requires an explicit actor."
+"Theme 预览布局选项无效。","The Theme preview layout option is invalid."
 头部部件,"Header Widget"
 底部部件,"Bottom Widget"
 内容部件,"Content widget"
 横幅部件,"Banner widget"
 轮播部件,"Carousel widget"
-容器部件,"Container Parts"
-统计部件,统计部件
-图表部件,图表部件
-表格部件,表格部件
-"基础组件 / HTML 搭建","基础组件 / HTML 搭建"
+统计部件,"Statistics widget"
+图表部件,"Chart widget"
+表格部件,"table widget"
+"基础组件 / HTML 搭建","Basic components/HTML construction"
 主题旧部件,"Theme old parts"
-布局选项不存在或不允许用于当前对象,布局选项不存在或不允许用于当前对象
-保存布局选择,保存布局选择
-删除布局选择并恢复继承,删除布局选择并恢复继承
-回滚布局选择版本,回滚布局选择版本
-主题布局目标无效,主题布局目标无效
-布局源码不能为空,布局源码不能为空
-默认布局不能作为虚拟布局覆盖,默认布局不能作为虚拟布局覆盖
-"布局模板只能保存页面骨架、slot、hook 和样式，不能包含前端业务交互脚本或直接请求","布局模板只能保存页面骨架、slot、hook 和样式，不能包含前端业务交互脚本或直接请求"
-虚拟布局版本保存成功，但发布失败，当前已发布版本保持不变,虚拟布局版本保存成功，但发布失败，当前已发布版本保持不变
-"复制 CMS 页面发布布局版本","Copy CMS page published layout version"
+布局选项不存在或不允许用于当前对象,"Layout option does not exist or is not allowed for the current object"
+保存布局选择,"Save layout selection"
+删除布局选择并恢复继承,"Remove layout selection and restore inheritance"
+回滚布局选择版本,"Rollback layout selection version"
+主题布局目标无效,"Theme layout target is invalid"
+布局源码不能为空,"Layout source code cannot be empty"
+默认布局不能作为虚拟布局覆盖,"Default layout cannot be overridden as a virtual layout"
+"布局模板只能保存页面骨架、slot、hook 和样式，不能包含前端业务交互脚本或直接请求","Layout templates can only save page skeletons, slots, hooks and styles, and cannot contain front-end business interaction scripts or direct requests."
+虚拟布局版本保存成功，但发布失败，当前已发布版本保持不变,"The virtual layout version is saved successfully, but publishing fails. The currently published version remains unchanged."
 "复制 CMS 页面草稿布局版本","Copy CMS page draft layout version"
-回滚虚拟布局版本,回滚虚拟布局版本
-备份,Backup
+"复制 CMS 页面发布布局版本","Copy CMS page published layout version"
+回滚虚拟布局版本,"Rollback a virtual layout version"
+备份,backup
 恢复原始布局前的自动备份,"Auto-backup before restoring original layout"
 来自版本,"From version"
 原始布局,"Original Layout"
 恢复到主题模板的原始状态,"Restore theme template to original state"
+"待发布的 Theme 布局版本不存在。","The Theme layout version to publish does not exist."
+"Theme 旧版本发布校验或投影失败。","Legacy Theme version validation or projection failed."
+"Theme 旧版本发布必须位于写意图事务内。","Legacy Theme version publication must run in a write-intent transaction."
 发布时自动创建,"Auto-create when publishing"
 初始版本,"Initial version"
-"Weline UI 预览资源路径无效","Weline UI 预览资源路径无效"
+"Theme 布局保存失败。","Failed to save the Theme layout."
+"Theme 布局发布失败。","Failed to publish the Theme layout."
+主题布局变体身份无效。,"The theme layout variant identity is invalid."
+"CMS 布局必须指定页面 ID 和精确语言。","CMS layouts must specify the page ID and precise language."
+"Theme 布局变体发布失败。","Failed to publish the Theme layout variant."
+"复制 Theme target 布局选择","Copy Theme target layout selection"
+"Theme 布局选择复制失败。","Failed to copy the Theme layout selection."
+"Theme 布局数据复制失败。","Failed to copy the Theme layout data."
+"Theme 虚拟布局数据复制失败。","Failed to copy the Theme virtual layout data."
+当前网站没有可用的前台主题。,"There is no front-end theme available for the current website."
+布局身份语言与发布上下文不一致。,"The layout identity locale does not match the publication context."
+"CMS 布局身份与发布变体上下文不一致。","The CMS layout identity does not match the publication variant context."
+"CMS 图片引用索引身份与发布变体不一致。","The CMS image-reference index identity does not match the publication variant."
+"布局身份 Scope 与显式 ScopeIdentity 不一致。","The layout identity scope does not match the explicit ScopeIdentity."
+"布局发布必须显式指定 ScopeIdentity。","Layout publishing must specify ScopeIdentity explicitly."
+"保存主题盘失败：Meta 写入被拒绝（请检查 config_value 长度与主题上下文）","Failed to save theme disk: Meta write refused (check config_value length with theme context)"
+选用主题盘失败,"Failed to select theme disk"
+无效的盘引用,"Invalid disk reference"
+主题盘不存在,"The theme disk does not exist."
+"保存主题盘失败：配置值过长（%{len}/%{max}），请减少变更 Token 或缩短取值","Failed to save theme disk: configuration value is too long (%{len}/%{max}), please reduce the change token or shorten the value"
+"Theme 布局类型化值超过运行时解析上限。","Theme layout typed value exceeds the runtime resolution limit."
+"file-image 运行时适配器不可用。","The file-image runtime adapter is unavailable."
+"Weline UI 预览资源路径无效","Weline UI preview resource path is invalid"
 预览模式,"Preview Mode"
-当前页面处于主题预览中，普通导航和提交已暂停。,当前页面处于主题预览中，普通导航和提交已暂停。
+当前页面处于主题预览中，普通导航和提交已暂停。,"The current page is in theme preview and normal navigation and submissions are paused."
 退出预览,"Exit Preview"
 "Theme does not support %{1} area.","Theme does not support %{1} area."
 生成主题预览图失败：%{1},"Failed to generate theme preview image: %{1}"
@@ -1772,7 +2123,7 @@ AI目录加载失败,AI目录加载失败
 "Failed to start screenshot process.","Failed to start screenshot process."
 启动失败：%{1},"Start failed: %{1}"
 "Process was terminated.","Process was terminated."
-主题预览地址不可用：%{1},主题预览地址不可用：%{1}
+主题预览地址不可用：%{1},"Theme preview address is unavailable: %{1}"
 "✓ %{1} [%{2}] 生成成功","✓ %{1} [%{2}] generated successfully"
 进程退出码：%{1},"Process exit code: %{1}"
 "✗ %{1} [%{2}] 生成失败","✗ %{1} [%{2}] generation failed"
@@ -1785,21 +2136,23 @@ AI目录加载失败,AI目录加载失败
 "Unable to start the Chrome screenshot process.","Unable to start the Chrome screenshot process."
 "© %{1} Weline Framework. %{2}","© %{1} Weline Framework. %{2}"
 保留所有权利,"All rights reserved"
-模板编译文件生成失败：%{1},模板编译文件生成失败：%{1}
-"Weline UI 审计：扫描 %{1} 个文件","Weline UI 审计：扫描 %{1} 个文件"
-"Weline UI 审计通过","Weline UI 审计通过"
-"Weline UI 审计失败：%{1} 项违规","Weline UI 审计失败：%{1} 项违规"
-"审计 Weline UI 2.0 旧依赖、资源归属和性能预算","审计 Weline UI 2.0 旧依赖、资源归属和性能预算"
-"输出机器可读 JSON","输出机器可读 JSON"
-完整审计,完整审计
-"JSON 审计","JSON 审计"
-"恢复会写回迁移前的字体图标值；请显式使用 --yes 确认。","恢复会写回迁移前的字体图标值；请显式使用 --yes 确认。"
-"已从快照恢复 %{1} 个图标值，跳过 %{2} 个已被后续修改的值。","已从快照恢复 %{1} 个图标值，跳过 %{2} 个已被后续修改的值。"
-快照：%{1},快照：%{1}
-"按 Weline UI 2.0 图标迁移快照恢复数据","按 Weline UI 2.0 图标迁移快照恢复数据"
-"可选快照路径；默认使用 var/migration/weline-ui-2.0-icons.json","可选快照路径；默认使用 var/migration/weline-ui-2.0-icons.json"
-确认执行数据恢复,确认执行数据恢复
-恢复默认快照,恢复默认快照
+"Theme 配置读取缺少冻结的 locale。","Theme configuration reads require a frozen locale."
+"Theme 配置语言代码无效：%{1}","Invalid Theme configuration locale code: %{1}"
+模板编译文件生成失败：%{1},"Template compilation file generation failed: %{1}"
+"Weline UI 审计：扫描 %{1} 个文件","Weline UI Audit: Scan %{1} files"
+"Weline UI 审计通过","Weline UI audit passed"
+"Weline UI 审计失败：%{1} 项违规","Weline UI audit failed: %{1} violations"
+"审计 Weline UI 2.0 旧依赖、资源归属和性能预算","Audit Weline UI 2.0 legacy dependencies, resource ownership and performance budgets"
+"输出机器可读 JSON","Output machine-readable JSON"
+完整审计,"Complete audit"
+"JSON 审计","JSON audit"
+"恢复会写回迁移前的字体图标值；请显式使用 --yes 确认。","Restoration will write back the pre-migration font icon values; please confirm explicitly with --yes."
+"已从快照恢复 %{1} 个图标值，跳过 %{2} 个已被后续修改的值。","%{1} icon values ​​were restored from the snapshot, skipping %{2} values ​​that were subsequently modified."
+快照：%{1},"Snapshot: %{1}"
+"按 Weline UI 2.0 图标迁移快照恢复数据","Press Weline UI 2.0 icon to migrate snapshot recovery data"
+"可选快照路径；默认使用 var/migration/weline-ui-2.0-icons.json","Optional snapshot path; defaults to var/migration/weline-ui-2.0-icons.json"
+确认执行数据恢复,"Confirm to perform data recovery"
+恢复默认快照,"Restore default snapshot"
 "设置了 -t/--theme 参数，但没有提供主题名称！","The -t/--theme parameter was set, but no theme name was provided!"
 已取消操作,"Operation canceled"
 "=== 主题安装 ===","=== Theme Installation ==="
@@ -2074,7 +2427,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 主题备份成功,"Theme backup was successful"
 备份路径：%{1},"Backup path: %{1}"
 主题备份失败：%{1},"Theme backup failed: %{1}"
-未知错误,"Unknown error"
 "步骤 2/2：正在卸载主题：%{1}","Step 2/2: Uninstalling theme: %{1}"
 "主题 %{1} 卸载成功！","Topic %{1} uninstalled successfully!"
 主题文件仍然保留在：%{1},"Theme files remain at: %{1}"
@@ -2109,11 +2461,11 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 主题文件...,"Theme files..."
 开始搬迁文件...,"Start moving files..."
 "设置了 -t 参数，但却没有-t参数值！","The -t parameter was set, but no -t parameter value was provided!"
-无法创建主题静态资源目录：,无法创建主题静态资源目录：
-无法发布主题静态资源：,无法发布主题静态资源：
+无法创建主题静态资源目录：,"Unable to create theme static resource directory:"
+无法发布主题静态资源：,"Unable to publish theme static resources:"
 更新主题文件！,"Update theme file!"
-无法解析主题静态资源命名空间。,无法解析主题静态资源命名空间。
-主题文件不在允许的主题目录内：,主题文件不在允许的主题目录内：
+无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
+主题文件不在允许的主题目录内：,"The theme file is not in the allowed theme directory:"
 "=== 批量生成主题预览图 ===","=== Generate theme previews in batches ==="
 "并发数量: %{1}","Concurrency Count: %{1}"
 系统中没有已安装的主题,"There are no installed themes in the system"
@@ -2133,6 +2485,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 正在压缩备份文件...,"Compressing backup file..."
 当前主题未安装：卸载失败！,"Current theme not installed: uninstall failed!"
 卸载主题,"Uninstall Theme"
+"已合编 theme=%{id} area=%{area} hash=%{hash} empty=%{empty}","Compiled theme=%{id} area=%{area} hash=%{hash} empty=%{empty}"
+"主题整盘合编结束，共 %{n} 次","The theme compilation is completed, a total of %{n} times"
 当前主题未安装：激活失败！,"Current theme not installed: activation failed!"
 "theme:active 区域参数无效，可选 frontend、backend、global","Invalid area for theme:active; use frontend"
 无需再次激活,"No need to activate again"
@@ -2141,23 +2495,119 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "theme:active 前台：%{1}","theme:active frontend: %{1}"
 "theme:active 后台：%{1}","theme:active backend: %{1}"
 "theme:active 全局 is_active：%{1}","theme:active global is_active: %{1}"
-"Weline UI bundle 声明无效","Weline UI bundle 声明无效"
-"Weline UI bundle 输出路径无效或重复：%{1}","Weline UI bundle 输出路径无效或重复：%{1}"
-"Weline UI bundle %{1} 缺少有效源文件","Weline UI bundle %{1} 缺少有效源文件"
-"Weline UI bundle %{1} 包含无效或重复源文件","Weline UI bundle %{1} 包含无效或重复源文件"
-"Weline UI 源文件不存在：%{1}","Weline UI 源文件不存在：%{1}"
-"无法创建 Weline UI 输出目录：%{1}","无法创建 Weline UI 输出目录：%{1}"
-"无法写入 Weline UI 编译产物：%{1}","无法写入 Weline UI 编译产物：%{1}"
+"Weline UI bundle 声明无效","Weline UI bundle declaration is invalid"
+"Weline UI bundle 输出路径无效或重复：%{1}","Weline UI bundle output path is invalid or duplicate: %{1}"
+"Weline UI ES Module 依赖存在循环：%{1}","Weline UI ES Module dependency exists in a cycle: %{1}"
+"Weline UI bundle 不存在：%{1}","Weline UI bundle does not exist: %{1}"
+"Weline UI ES Module 依赖版本化失败：%{1}","Weline UI ES Module dependency versioning failed: %{1}"
+"Weline UI bundle %{1} 缺少有效源文件","Weline UI bundle %{1} is missing a valid source file"
+"Weline UI bundle %{1} 包含无效或重复源文件","Weline UI bundle %{1} contains invalid or duplicate source files"
+"Weline UI 源文件不存在：%{1}","Weline UI source file does not exist: %{1}"
+"无法创建 Weline UI 输出目录：%{1}","Unable to create Weline UI output directory: %{1}"
+"无法写入 Weline UI 编译产物：%{1}","Unable to write Weline UI compilation product: %{1}"
 不存在的编译资源类型：%{1}，支持的资源类型：%{2},"Non-existent compiled resource type: %{1}, supported resource type: %{2}"
 开始编译器工作。,"Start compiler work."
 编译中...,Compiling...
 编译器工作已完成。,"Compiler Work Completed."
 编译less静态资源！,"Compile Less Static Resources!"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
+"编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"在左侧点「继承编辑」或「编辑」开始改 Token","Click ""Inherit Edit"" or ""Edit"" on the left to start changing Token"
+"Theme target 布局复制参数不完整。","Theme target layout copy parameters are incomplete."
+布局已保存并发布,"Layout saved and published"
+图片URL或点击选择,"Image URL or click to select"
+"动态 <img src> 内容禁止发布，请改用 file-image 类型节点。","Dynamic <img src> content cannot be published; use a file-image node instead."
+"Theme 2.1.0 Scope 继承迁移失败：%{1}","Theme 2.1.0 scope inheritance migration failed: %{1}"
+发布布局失败,"Publish layout failed"
+"（已清理 %{count} 个无效部件）","(Cleaned up %{count} invalid components)"
+"Failed to publish layout","Failed to publish layout"
+已删除我的盘,"My disk has been deleted"
+已另存为我的盘,"Saved as my disk"
+主题盘已保存,"Theme disk has been saved"
+"原生盘只读选用；另存为我的盘后写入 Meta 并合编 CSS","Native disk read-only selection; save as my disk and then write Meta and compile CSS"
+"Layout option saved.","Layout option saved."
+"Layout config saved.","Layout config saved."
+"已保存 %{locale} 语言的配置","Saved configuration for %{locale} languages"
+"Scope 层级","Scope level"
+Global,Global
+Website,Website
+Store,Store
+Channel,Channel
+未修改的主题与配置会直接继承上一级；只拥有实际修改的值。,"Unmodified themes and configurations will be directly inherited from the previous level; only the actual modified values ​​will be held."
+Global（全部网站、店铺和渠道）,"Global (all websites, stores and channels)"
+网站：%{1},"Website: %{1}"
+店铺：%{1},"Store: %{1}"
+"店铺：%{1} / %{2}","Store: %{1} / %{2}"
+渠道：%{1},"Channel: %{1}"
+"渠道：%{1} / %{2} / %{3}","Channel: %{1} / %{2} / %{3}"
+选择网站、店铺或渠道作用域,"Select a website, store, or channel scope"
+搜索网站、店铺或渠道,"Search websites, stores, or channels"
+本级修改,"Owned at this level"
+主题包默认值,"Theme package default"
+主题草稿保存失败,"Failed to save theme draft"
+主题已恢复继承（发布后生效）,"Theme inheritance restored (effective after publishing)"
+恢复主题继承失败,"Failed to restore theme inheritance"
+已恢复继承（发布后生效）,"Inheritance restored (effective after publishing)"
+恢复继承失败,"Failed to restore inheritance"
+"当前修改仍在保存，请稍后再切换 Scope","Changes are still saving. Try switching Scope again shortly."
+"Scope 修改保存失败，已停留在当前 Scope","Scope changes failed to save; the current Scope remains selected."
+"Scope 切换失败","Failed to switch Scope"
+"旧 Scope 编辑锁释放失败，已停留在当前 Scope","Failed to release the previous Scope lock; the current Scope remains selected."
+当前修改仍在保存，请稍后再切换编辑区域,"Changes are still saving. Try switching the edit area again shortly."
+当前修改保存失败，已停留在原编辑区域,"Changes failed to save; the previous edit area remains selected."
+旧编辑区域锁释放失败，已停留在原编辑区域,"Failed to release the previous edit-area lock; the previous area remains selected."
+重置为继承,"Reset to inherited"
+重新定位,Reposition
+重新基线化,Rebaseline
+选择新锚点,"Choose a new anchor"
+冲突路径已恢复继承,"Conflict path reset to inherited"
+冲突节点已重新定位,"Conflicting node repositioned"
+节点已转为本级新增，请确认位置后发布,"Node converted to a local addition; verify its position before publishing."
+冲突重置失败,"Failed to reset conflict"
+重新定位失败,"Failed to reposition"
+重新基线化失败,"Failed to rebaseline"
+"布局节点缺少稳定 UID，未写入 Scope 草稿","Layout node has no stable UID; the Scope draft was not changed."
+"布局节点缺少稳定 UID，未写入位置 Scope 草稿","Layout node has no stable UID; its position was not written to the Scope draft."
+"布局节点缺少稳定 UID，未写入删除墓碑","Layout node has no stable UID; no deletion tombstone was written."
+"布局节点缺少稳定 UID，未写入配置 Scope 草稿","Layout node has no stable UID; its configuration was not written to the Scope draft."
+"w:slot 标签 id 重复: ""%{id}","w:slot tag id duplicate: ""%{id}"""
+"w:slot 标签 position 属性值无效: ""%{value}","w:slot tag position attribute value invalid: ""%{value}"""
+"w:slot 标签 max 属性必须是 >= -1 的整数，当前值: ""%{value}","w:slot tag max attribute must be integer >= -1, current value: ""%{value}"""
+"w:slot 标签 min 属性必须是 >= 0 的整数，当前值: ""%{value}","w:slot tag min attribute must be integer >= 0, current value: ""%{value}"""
+作用域,Scope
+选择网站或店铺作用域,"Select a website or store scope"
+Global（全部网站和店铺）,"Global (all websites and stores)"
+当前作用域：%{1},"Current scope: %{1}"
+输入,Input
+默认,default
+主题列表,"Topic list"
+使用当前主题与布局上下文预览、检查并发布页面。,"Preview, inspect, and publish pages using the current theme and layout context."
+新窗口预览,"New window preview"
+版本,Version
+当前布局由上游上下文锁定,"The current layout is locked by the upstream context"
+可浏览预览与版本；需要在拥有该布局的入口中进行变更。,"Can browse previews and versions; changes need to be made in the portal that owns the layout."
+默认语言,"Default language"
+部件目录,"Parts catalog"
+按当前区域和布局显示可用部件。,"Shows available parts by current region and layout."
+搜索部件,"Search widgets"
+搜索部件…,"Search for parts…"
+已发布版本,"Published version"
+草稿版本,"draft version"
+加载中,loading
+主题布局预览,"Theme layout preview"
+当前上下文,"current context"
+"主题 ID","Topic ID"
+目标,Target
+布局版本,"layout version"
+新版本名称,"New version name"
+保存当前版本,"Save current version"
+"主题级颜色与变量盘。原生盘只读选用；另存为我的盘后写入 Meta 并合编 CSS。","Theme-level color and variable disks. The native disk is read-only; save it as my disk and then write Meta and compile CSS."
+我的盘名称,"My disk name"
+保存主题盘失败,"Failed to save theme disk"
 搜索图标...,"Search icon..."
 没有找到匹配的图标,"No matching icon found"
-全部,All
+全部,all
 "LayoutAssetsGenerator: 开始执行","LayoutAssetsGenerator: Start execution"
 "LayoutAssetsGenerator: eventData不是DataObject实例，跳过处理","LayoutAssetsGenerator: eventData is not a DataObject instance, skip processing"
 "LayoutAssetsGenerator: layoutType为空，跳过处理","LayoutAssetsGenerator: layoutType is empty, skip processing"
@@ -2193,445 +2643,211 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 已退出预览模式,"Exited preview mode"
 "预览 Token 已过期或无效","Preview token expired or invalid"
 "Token 中缺少主题信息","Topic information is missing in Token"
-这个页面已经预留模块内容、可视化布局部件和控制器输出的接入位置。,这个页面已经预留模块内容、可视化布局部件和控制器输出的接入位置。
-立即重试,"Retry now"
-"将在 %{seconds} 秒后自动重试...","Will automatically retry in %{seconds} seconds..."
-服务器错误,"Server Error"
-服务器内部错误，请稍后重试。,"Server internal error, please try again later."
-网络错误,"Network error"
-无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
-了解我们,了解我们
-职业机会,职业机会
-投资者关系,投资者关系
-设备与服务,设备与服务
-赚钱,赚钱
-在网站上销售,在网站上销售
-销售您的应用,销售您的应用
-成为合作伙伴,成为合作伙伴
-自助出版,自助出版
-付款产品,付款产品
-商店卡,商店卡
-购物积分,购物积分
-货币转换器,货币转换器
-礼品卡,礼品卡
-需要帮助？,需要帮助？
-COVID-19和网站,COVID-19和网站
-您的账户,您的账户
-配送率和政策,配送率和政策
-退货和换货,退货和换货
-管理您的内容和设备,管理您的内容和设备
-帮助,帮助
-法律与政策,法律与政策
-微信公众号,微信公众号
-微博,微博
-抖音,抖音
-B站,B站
-小红书,小红书
+这个页面已经预留模块内容、可视化布局部件和控制器输出的接入位置。,"This page has reserved access locations for module content, visual layout components, and controller output."
+了解我们,"Get to know us"
+职业机会,"career opportunities"
+投资者关系,"investor relations"
+设备与服务,"Equipment and services"
+赚钱,"make money"
+在网站上销售,"sell on website"
+销售您的应用,"Sell ​​your app"
+成为合作伙伴,"Become a partner"
+自助出版,self-publishing
+付款产品,"Payment products"
+商店卡,"store card"
+购物积分,"Shopping points"
+货币转换器,"currency converter"
+礼品卡,"gift card"
+需要帮助？,"Need help?"
+COVID-19和网站,"COVID-19 and website"
+您的账户,"your account"
+配送率和政策,"Shipping rates and policies"
+退货和换货,"Returns and exchanges"
+管理您的内容和设备,"Manage your content and devices"
+帮助,help
+法律与政策,"Law and Policy"
+微信公众号,"WeChat public account"
+微博,Weibo
+抖音,"Tik Tok"
+B站,"Station B"
+小红书,"little red book"
 "Weline Framework","Weline Framework"
 示例分类,"Example Category"
 当前页面,"Current page"
-选择配送地址,选择配送地址
-配送至,配送至
-中国大陆,中国大陆
-搜索建议,搜索建议
-展开搜索,展开搜索
-我的,我的
-我的菜单,我的菜单
-账户及心愿单,账户及心愿单
-账户设置,账户设置
-简体中文,简体中文
-繁體中文,繁體中文
-货币,货币
+选择配送地址,"Select shipping address"
+配送至,"Ship to"
+中国大陆,"Chinese mainland"
+搜索建议,"Search suggestions"
+展开搜索,"Expand search"
+我的,mine
+我的菜单,"my menu"
+账户设置,"Account settings"
+简体中文,"Simplified Chinese"
+繁體中文,"Traditional Chinese"
+货币,currency
 ZH,ZH
-语言选项,语言选项
+语言选项,"Language options"
 English,English
 CNY,CNY
-货币选项,货币选项
-账户菜单,账户菜单
-"您好, 登录","您好, 登录"
-退货,退货
-与我的订单,与我的订单
-打开购物车,打开购物车
-关闭购物车,关闭购物车
-总计,总计
-打开所有类别菜单,打开所有类别菜单
-关闭菜单,关闭菜单
-手机通讯,手机通讯
-智能手机,智能手机
-功能手机,功能手机
-5G手机,5G手机
-折叠手机,折叠手机
-手机壳,手机壳
-屏幕保护膜,屏幕保护膜
-移动电源,移动电源
-手机耳机,手机耳机
-电脑办公,电脑办公
-笔记本,笔记本
-游戏本,游戏本
-超极本,超极本
-台式机,台式机
-一体机,一体机
-平板电脑,平板电脑
-摄像头,摄像头
-存储设备,存储设备
-智能设备,智能设备
-运动手环,运动手环
-智能音箱,智能音箱
-智能照明,智能照明
-智能门锁,智能门锁
-智能摄像头,智能摄像头
-智能家居套装,智能家居套装
-可穿戴设备,可穿戴设备
-影音娱乐,影音娱乐
-无线耳机,无线耳机
-有线耳机,有线耳机
-入耳式耳机,入耳式耳机
-蓝牙音响,蓝牙音响
+货币选项,"Currency options"
+账户菜单,"Account menu"
+退货,"return the goods"
+与我的订单,"with my order"
+打开购物车,"Open shopping cart"
+关闭购物车,"Close shopping cart"
+总计,total
+打开所有类别菜单,"Open all categories menu"
+关闭菜单,"Close menu"
+手机通讯,"Cell phone communication"
+智能手机,Smartphone
+功能手机,"feature phone"
+5G手机,"5G mobile phone"
+折叠手机,"foldable phone"
+手机壳,"mobile phone case"
+屏幕保护膜,"screen protector"
+移动电源,"power bank"
+手机耳机,"mobile phone earphones"
+电脑办公,"computer office"
+笔记本,notebook
+游戏本,"Game notebook"
+超极本,Ultrabook
+台式机,Desktop
+一体机,"All-in-one machine"
+平板电脑,Tablet
+摄像头,Camera
+存储设备,"storage device"
+智能设备,"smart device"
+运动手环,"Sports bracelet"
+智能音箱,"smart speaker"
+智能照明,"Smart lighting"
+智能门锁,"Smart door lock"
+智能摄像头,"smart camera"
+智能家居套装,"Smart home package"
+可穿戴设备,"wearable devices"
+影音娱乐,"Audiovisual entertainment"
+无线耳机,"wireless headphones"
+有线耳机,"wired headphones"
+入耳式耳机,"In-ear headphones"
+蓝牙音响,"bluetooth speaker"
 Soundbar,Soundbar
-单反相机,单反相机
-微单相机,微单相机
-运动相机,运动相机
-游戏主机,游戏主机
-游戏配件,游戏配件
-服装服饰,服装服饰
-衬衫,衬衫
-T恤,T恤
-Polo衫,Polo衫
-长裤,长裤
-短裤,短裤
-外套,外套
-毛衣,毛衣
-皮鞋,皮鞋
-运动鞋,运动鞋
-皮带,皮带
-手表,手表
-包袋,包袋
-连衣裙,连衣裙
-上装,上装
-下装,下装
-半身裙,半身裙
-大衣,大衣
-高跟鞋,高跟鞋
-平底鞋,平底鞋
-靴子,靴子
-手提包,手提包
-斜挎包,斜挎包
-首饰,首饰
-男童装,男童装
-女童装,女童装
-婴儿装,婴儿装
-童鞋,童鞋
-童装配饰,童装配饰
-校服,校服
-泳装,泳装
-运动服饰,运动服饰
-运动装,运动装
-跑步装备,跑步装备
-健身服,健身服
-跑鞋,跑鞋
-篮球鞋,篮球鞋
-户外装备,户外装备
-露营装备,露营装备
-家居用品,家居用品
-沙发,沙发
-沙发床,沙发床
-餐桌,餐桌
-茶几,茶几
-椅子,椅子
-办公椅,办公椅
-床具,床具
-衣柜,衣柜
-书柜,书柜
-床上用品,床上用品
-床单被套,床单被套
-枕头,枕头
-被子,被子
-窗帘,窗帘
-毛巾,毛巾
-地毯,地毯
-靠垫,靠垫
-厨房用品,厨房用品
-锅具,锅具
-刀具,刀具
-餐具,餐具
-杯具,杯具
-厨房工具,厨房工具
-小家电,小家电
-装饰用品,装饰用品
-墙饰,墙饰
-花瓶,花瓶
-灯具,灯具
-镜子,镜子
-绿植,绿植
-图书音像,图书音像
-食品饮料,食品饮料
-只放关键数值、KPI、状态数字。,只放关键数值、KPI、状态数字。
-"拖入 KPI / 统计数字部件","拖入 KPI / 统计数字部件"
-用于趋势图、核心图表和主要观察。,用于趋势图、核心图表和主要观察。
-"拖入图表 / 趋势部件","拖入图表 / 趋势部件"
-放状态、短列表、异常提醒。,放状态、短列表、异常提醒。
-"拖入状态 / 列表部件","拖入状态 / 列表部件"
-放表格、排行和可展开列表。,放表格、排行和可展开列表。
-发送通知失败,"Failed to send notification"
-"Weline Admin","Weline Admin"
+单反相机,"SLR camera"
+微单相机,"mirrorless camera"
+运动相机,"action camera"
+游戏主机,"game console"
+游戏配件,"gaming accessories"
+服装服饰,"clothing apparel"
+衬衫,shirt
+T恤,t-shirt
+Polo衫,"Polo shirt"
+长裤,trousers
+短裤,shorts
+外套,coat
+毛衣,sweater
+皮鞋,"leather shoes"
+运动鞋,sneakers
+皮带,belt
+手表,watch
+包袋,bag
+连衣裙,dress
+上装,Tops
+下装,Bottoms
+半身裙,skirt
+大衣,coat
+高跟鞋,"High heel"
+平底鞋,"flat shoes"
+靴子,boots
+手提包,handbag
+斜挎包,"crossbody bag"
+首饰,jewelry
+男童装,"boys clothing"
+女童装,"girls clothing"
+婴儿装,"baby clothes"
+童鞋,"children's shoes"
+童装配饰,"Children's clothing accessories"
+校服,"school uniform"
+泳装,swimsuit
+运动服饰,sportswear
+运动装,sportswear
+跑步装备,"running equipment"
+健身服,"fitness clothes"
+跑鞋,"running shoes"
+篮球鞋,"basketball shoes"
+户外装备,"outdoor equipment"
+露营装备,"camping equipment"
+家居用品,"Household items"
+沙发,sofa
+沙发床,"Sofa bed"
+餐桌,"dining table"
+茶几,"coffee table"
+椅子,Chair
+办公椅,"office chair"
+床具,bedding
+衣柜,Wardrobe
+书柜,bookcase
+床上用品,bedding
+床单被套,"bed sheet quilt cover"
+枕头,Pillow
+被子,Quilt
+窗帘,curtain
+毛巾,towel
+地毯,carpet
+靠垫,cushion
+厨房用品,"kitchen supplies"
+锅具,pots
+刀具,Knives
+餐具,tableware
+杯具,cups
+厨房工具,"kitchen tools"
+小家电,"small appliances"
+装饰用品,"Decorative supplies"
+墙饰,"wall decoration"
+花瓶,vase
+灯具,lamps
+镜子,Mirror
+绿植,"green plants"
+图书音像,"Books and audiovisuals"
+食品饮料,"Food and Beverage"
+只放关键数值、KPI、状态数字。,"Only put key values, KPIs, and status numbers."
+"拖入 KPI / 统计数字部件","Drag in the KPI/Statistics widget"
+用于趋势图、核心图表和主要观察。,"Used for trend charts, core charts, and key observations."
+"拖入图表 / 趋势部件","Drag into Chart/Trend widget"
+放状态、短列表、异常提醒。,"Put status, short list, exception reminder."
+"拖入状态 / 列表部件","Drag into status/list widget"
+放表格、排行和可展开列表。,"Place tables, rankings and expandable lists."
 "Weline Admin 管理面板","Weline Admin Management Panel"
 "Weline Framework - 后台管理系统","Weline Framework - Backend Management System"
 "Weline, Framework, Admin, PHP","Weline, Framework, Admin, PHP"
-管理后台,"Admin Panel"
-后台Logo,"Background Logo"
-保存,Save
-提交中...,Submitting...
-已选择,Chosen
-项,Item
-取消选择,"Cancel Selection"
-请配置列信息,"Please configure the column information."
-数据列表,"Data List"
-"共 %{1} 条","Total %{1} Entries"
-CSS变量配置,"CSS variable configuration"
-选择色盘：,"Select Color Palette:"
-不使用色盘,"No color palette"
-应用色盘,"Apply Color Palette"
-保存配置,"Save Configuration"
-应用失败,"Application Failed"
-未选择主题,"No theme selected"
-主题可视化编辑器,"Theme visual editor"
-前端,Frontend
-后端,Backend
-配置当前主题色盘,配置当前主题色盘
-色盘,色盘
-Desktop,Desktop
-Tablet,Tablet
-Mobile,Mobile
-主题模式,"Theme mode"
-跟随系统,"Follow system"
-明亮模式,"Light mode"
-暗黑模式,"Dark mode"
-"Simplified Chinese","Simplified Chinese"
-"Traditional Chinese","Traditional Chinese"
-"Select language","Select language"
-Exit,Exit
-"Discard preview","Discard preview"
-"Publish to formal","Publish to formal"
-结构视图,"Structure view"
-收起,Collapse
-页面布局,"Page layout"
-搜索布局...,"Search Layout..."
-页面结构,"Page structure"
-Header,Header
-"Left Sidebar","Left Sidebar"
-Body,Body
-"Right Sidebar","Right Sidebar"
-Footer,Footer
-全局设置,"Global Settings"
-全局配色,"Global Color Scheme"
-全局变量,"Global Variable"
-Properties,Properties
-Collapse,Collapse
-"Please select a region on the left to configure it","Please select a region on the left to configure it"
-"Apply changes","Apply changes"
-Loading...,Loading...
-"Saved successfully","Saved successfully"
-"Save failed","Save failed"
-Publishing...,Publishing...
-"Discard failed","Discard failed"
-Discarding...,Discarding...
-"Discard current preview configuration changes?","Discard current preview configuration changes?"
-"Reset to default","Reset to default"
-"Reset failed","Reset failed"
-"Reset error","Reset error"
-Saving...,Saving...
-"Select layout","Select layout"
-"Please select a layout before saving parameters","Please select a layout before saving parameters"
-"Recent colors","Recent colors"
-Copied,Copied
-"Copy color value","Copy color value"
-"No color settings available","No color settings available"
-"Switching language...","Switching language..."
-"Initialization failed","Initialization failed"
-目录路径,"Directory path"
-当前配置的目录路径,"Directory path of the current configuration"
-选择布局,"Select Layout"
-选择部件,"Select Widget"
-选择色系,"Select Color Scheme"
-选择组件,"Select Component"
-配置变量,"Configuration Variables"
-选择配置,"Select Configuration"
-配置色系,"Configure color scheme"
-点击色盘选择色系，选中的色系将应用到当前主题,"Click the color wheel to select a color scheme; the selected scheme will be applied to the current theme."
-已选中,Selected
-点击卡片选择布局文件，选中的布局将应用到当前主题,"Click a card to select a layout file; the selected layout will be applied to the current theme."
-点击卡片选择部件文件，选中的部件将应用到当前主题,"Click a card to select a widget file; the selected widget will be applied to the current theme."
-点击卡片选择组件文件，选中的组件将应用到当前主题,"Click a card to select a component file; the selected component will be applied to the current theme."
-点击卡片选择文件，选中的文件将应用到当前主题,"Click a card to select a file; the selected file will be applied to the current theme."
-请输入变量值,"Enter variable value"
-输入变量值，这些值将应用到当前主题,"Enter variable values, these will be applied to the current topic"
-该目录下没有可用的布局文件,"No layout files available in this directory"
-该目录下没有可用的部件文件,"No widget files available in this directory"
-该目录下没有可用的色系文件,"No color scheme files available in this directory"
-该目录下没有可用的组件文件,"No component files available in this directory"
-该目录下没有可用的变量文件,"No variable files available in this directory"
-该目录下没有可用的配置项,"No configuration items available in this directory"
-正在读取颜色变量...,"Reading color variables..."
-未找到颜色变量,"Color variable not found"
-保存中...,Saving...
-请重试,"Please try again."
-描述,Description
-输入目录描述信息（可选）,"Enter directory description (optional)"
-变量文件配置,"Variable File Configuration"
-扫描变量文件,"Scan variable files"
-变量数量：,"Number of Variables:"
-已配置：,Configured:
-确定要扫描变量文件吗？这将更新Meta数据库中的变量信息。,确定要扫描变量文件吗？这将更新Meta数据库中的变量信息。
-开始扫描,开始扫描
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
-扫描完成,"Scan complete"
-扫描失败,"Scan failed"
-"主题 Meta 配置","Theme Meta configuration"
-色系,"Color Scheme"
-变量,Variable
-组件,Component
-"主题 Partials 配置","Theme Partials configuration"
-主题：%{name},"Theme: %{name}"
-"前端 Partials","Frontend Partials"
-"该主题暂无前端 partials 选项","This theme currently has no frontend partials options."
-"后端 Partials","Backend Partials"
-"该主题暂无后端 partials 选项","This theme currently has no backend partials options."
-返回,Back
-主题：,Theme:
-区域：,Region:
-作用域：,Scope:
-搜索变量名...,"Search variable name..."
-所有分类,"All Categories"
-重置为默认值,"Reset to Default"
-默认：,Default:
-保存所有配置,"Save all configurations"
-保存并预览,"Save and preview"
-保存成功，预览已更新,"Saved successfully, preview updated"
-配置进度,"Configuration Progress"
-"点击""配置变量""按钮编辑变量文件中的变量值","Click the ""Configure Variables"" button to edit the variable values in the variable file"
-请先选择主题,"Please select a theme first"
-配置变量文件,"Configuration Variable File"
-正在加载变量数据...,"Loading variable data..."
-点击色盘选择色系，点击齿轮图标配置色系变量,"Click the color wheel to select a color scheme, then click the gear icon to configure color scheme variables."
-加载弹窗失败,"Failed to load popup"
-配置色系变量,"Configure color scheme variables"
-正在加载色盘变量...,"Loading palette variables..."
-参数,Parameters
-"点击""配置参数""按钮编辑组件的参数值","Click the ""Configure Parameters"" button to edit the parameter values of the component"
-配置组件参数,"Configure component parameters"
-正在加载组件参数...,"Loading component parameters..."
-该色盘没有可配置的变量,"This color palette has no configurable variables"
-默认值,"Default Value"
-重置,Reset
-该变量文件没有可配置的变量,"This variable file has no configurable variables."
-该组件没有可配置的参数,"This component has no configurable parameters"
-"JSON格式，例如：[""item1"", ""item2""]","JSON format, for example: [""item1"", ""item2""]"
-"JSON格式，例如：[""item1"", ""item2""] 或 {""key"": ""value""}","JSON format, for example: [""item1"", ""item2""] or {""key"": ""value""}"
-主题布局配置,"Theme layout configuration"
-前端配置,"Frontend Configuration"
-布局配置,"Layout configuration"
-该主题暂无前端布局选项,"This theme currently has no frontend layout options."
-后端配置,"Backend Configuration"
-该主题暂无后端布局选项,"This theme currently has no backend layout options."
-主题配置编辑,"Theme Configuration Edit"
-主题配置,"Theme Configuration"
-Scope,Scope
-加载,Loading
-暂无可用色盘,"No color palettes available"
-暂无可用变量文件,"No variable files available"
-展开/收缩预览,"Expand/Collapse preview"
-自动登录,Auto-login
-亮色,Light
-暗色,Dark
-全屏,Fullscreen
-正在加载预览...,"Loading preview..."
-请先选择一个主题以开始配置。,"Please select a theme to start configuration."
-组件预览,"Component Preview"
-名称,Name
-组件参数,"Component Parameters"
-必填,Required
-默认值：%{value},"Default Value: %{value}"
-保存参数,"Save Parameters"
-保存失败，请重试,"Save failed. Please try again"
-这是一个成功提示信息示例,"This is an example success notification message"
-按钮,Button
-卡片标题,"Card Title"
-这是卡片内容示例,"This is a sample card content"
 请选择一个主题,"Select a theme"
 在左上角选择要编辑的主题，开始可视化编辑,"Select the theme to edit in the top-left corner to start visual editing."
-返回主题列表,"Back to theme list"
-选择布局类型,选择布局类型
-选择布局选项,选择布局选项
-编辑区域,编辑区域
-前端/后端主题,"Frontend/Backend Theme"
-配置语言,配置语言
-默认（全语言）,默认（全语言）
-版本历史,"Version History"
-保存新版本,"Save new version"
-"点击""切换""可恢复到历史版本继续编辑","Click ""Switch"" to revert to a historical version and continue editing"
-后台预览,"Backend Preview"
-在真实前端页面中预览，可查看完整效果,"Preview in a real frontend page to see the full effect."
-前端预览,"Frontend Preview"
-保存当前布局为新版本,"Save current layout as new version"
-保存版本,"Save version"
-发布当前版本到前台,"Publish current version to frontend"
-恢复到主题模板原始布局（自动创建备份）,"Restore theme template to original layout (auto-create backup)"
-恢复原始布局,"Restore Original Layout"
-全屏预览,"Fullscreen Preview"
-编辑面板,编辑面板
-配置,配置
-部件库,"Widget Library"
-部件配置,"Widget Configuration"
-关闭配置,关闭配置
-点击预览区域中的部件进行配置,"Click widget in preview area to configure"
-页面插槽,"Page slot"
-拖入头部部件（Logo、导航、搜索等）,"Drag in header components (Logo, navigation, search, etc.)"
 拖入头部部件,"Drag into header widget"
 Logo,Logo
-导航,Navigation
-Content,Content
-拖入任意部件或容器,"Drag into any widget or container"
 行布局,"Row Layout"
 列布局,"Column Layout"
 Banner,Banner
 轮播,Carousel
 产品,Product
-拖入底部部件（链接、版权、社交等）,"Drag in footer components (links, copyright, social, etc.)"
 拖入底部部件,"Drag in footer components"
 链接,Link
 社交,Social
 版权,Copyright
-搜索部件...,"Search widgets..."
-关闭部件库,关闭部件库
-通用部件,通用部件
-基础组件,基础组件
-应用,应用
-部件库加载中...,"Loading widgets..."
-未命名部件,未命名部件
-可拖拽到页面插槽的基础组件,可拖拽到页面插槽的基础组件
-独占部件,"Exclusive Component"
-添加到当前插槽,"Add to selected slot"
-响应式,Responsive
-宽度,Width
-加载预览...,"Loading preview..."
-精选区块,精选区块
+精选区块,"Featured block"
 Section,Section
-拖入卡片、文本、图片或表单组件,拖入卡片、文本、图片或表单组件
-栅格项,栅格项
-用标题和段落快速搭建页面内容。,用标题和段落快速搭建页面内容。
-图片媒体,图片媒体
-内容分隔,内容分隔
-留白间距,留白间距
+拖入卡片、文本、图片或表单组件,"Drag in cards, text, images, or form components"
+栅格项,"raster items"
+用标题和段落快速搭建页面内容。,"Quickly build page content with titles and paragraphs."
+图片媒体,"Picture media"
+内容分隔,"content separation"
+留白间距,"White space"
 "严重错误：在 after_render 事件中检测到PHP代码\n\n位置信息：\n  源文件: %{1}\n  来源标识: %{2}\n\n错误说明：\n  在 after_render 事件中，PHP代码应该已经执行，渲染后的HTML中不应该再包含PHP标签。\n  如果仍然看到PHP代码，说明提取的内容来自编译后的模板文件，而不是渲染后的HTML。\n\n解决方案：\n  1. 确保在 after_render 事件中只处理渲染后的HTML内容\n  2. 不要从文件系统读取编译后的模板文件\n  3. 如果 script 标签包含PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Serious error: PHP code detected in the after_render event\n\nLocation information:\n Source file: %{1}\n Source identifier: %{2}\n\nError description:\n In the after_render event, the PHP code should have been executed, and the rendered HTML should no longer contain PHP tags. \n If you still see PHP code, it means that the extracted content comes from the compiled template file, not the rendered HTML. \n\nSolution:\n 1. Make sure to process only the rendered HTML content in the after_render event\n 2. Do not read the compiled template file from the file system\n 3. If the script tag contains PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
 "严重错误：发现内联样式或脚本残留\n\n位置信息：\n  源文件: %{1}\n  标签类型: <%{2}>\n  行号: 第 %{3} 行，第 %{4} 列\n  字符位置: %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  所有内联样式和脚本都应该被提取到外部文件中。\n  如果某些脚本需要保留在HTML中，请添加 data-no-extract=""true"" 属性。\n\n解决方案：\n  1. 检查为什么该标签没有被提取（可能是提取逻辑问题）\n  2. 如果确实需要保留在HTML中，添加 data-no-extract=""true"" 属性\n  3. 确保标签格式正确，可以被正则表达式匹配","Serious error: Found inline style or script residue\n\nPosition information:\n Source file: %{1}\n Tag type: <%{2}>\n Line number: Line %{3}, Column %{4}\n Character position: %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n All inline styles and scripts should be extracted into external files. \n If some script needs to remain in the HTML, add the data-no-extract=""true"" attribute. \n\nSolution:\n 1. Check why the tag is not extracted (maybe an extraction logic problem)\n 2. If it really needs to be retained in the HTML, add the data-no-extract=""true"" attribute\n 3. Make sure the tag is in the correct format and can be matched by the regular expression"
 "严重错误：编译后的%{1}文件中检测到PHP代码，这是不允许的\n\n位置信息：\n  源文件: %{2}\n  来源标识: %{3}\n  %{1}内容中的行号: 第 %{4} 行\n  PHP代码位置: 字符位置 %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  主题布局内不允许存在编译后还有PHP代码。\n  编译后的%{1}文件必须是纯%{1}，不能包含任何PHP代码。\n\n正确的做法：\n  1. 使用CSS变量：在模板中定义CSS变量，然后在CSS中使用 var()\n  2. 使用data属性：在HTML元素上设置data属性，然后在JS中读取\n  3. 使用window对象：在模板中设置 window.config = {...}，然后在JS中使用\n  4. 使用标签系统：使用框架提供的标签系统传递数据\n  5. 如果确实需要PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Fatal error: PHP code was detected in the compiled %{1} file, which is not allowed\n\nLocation information:\n Source file: %{2}\n Source identifier: %{3}\n %{1} Line number in content: Line %{4}\n PHP code position: Character position %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n Compiled PHP code is not allowed in the theme layout. \n The compiled %{1} file must be pure %{1} and cannot contain any PHP code. \n\nCorrect approach:\n 1. Use CSS variables: define CSS variables in the template, and then use var() in CSS\n 2. Use data attributes: set the data attribute on the HTML element, and then read it in JS\n 3. Use window objects: set window.config = {...} in the template, and then use it in JS\n 4. Use the tag system: use the tag system provided by the framework to pass data\n 5. If you really need PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
 "Invalid backend theme mode: %{1}","Invalid backend theme mode: %{1}"
-同步后台亮色/暗色模式,同步后台亮色/暗色模式
-"light 或 dark","light 或 dark"
+同步后台亮色/暗色模式,"Sync background light/dark mode"
+"light 或 dark","light or dark"
 "Invalid mode","Invalid mode"
 "Sync failed:","Sync failed:"
 "Toggle light/dark mode","Toggle light/dark mode"
-"摘要 slot，可由结账模块写入真实金额、优惠和配送信息。","摘要 slot，可由结账模块写入真实金额、优惠和配送信息。"
+"摘要 slot，可由结账模块写入真实金额、优惠和配送信息。","Summary slot, the real amount, discount and delivery information can be written by the checkout module."
 Theme,Theme
 Home,Home
 Products,Products
@@ -2663,10 +2879,35 @@ Search,Search
 Account,Account
 Cart,Cart
 "Toggle navigation","Toggle navigation"
-"可恢复任务 API 不可用。","可恢复任务 API 不可用。"
-预览图任务无法安全恢复,预览图任务无法安全恢复
-预览图任务事件达到资源上限,预览图任务事件达到资源上限
-连接暂时中断，正在重连…,连接暂时中断，正在重连…
-已恢复预览图任务订阅,已恢复预览图任务订阅
-批量预览图任务无法安全恢复,批量预览图任务无法安全恢复
-批量预览图任务事件达到资源上限,批量预览图任务事件达到资源上限
+"可恢复任务 API 不可用。","Resumable task API is not available."
+预览图任务无法安全恢复,"The preview task cannot be safely restored"
+预览图任务事件达到资源上限,"The preview task event reaches the resource limit"
+连接暂时中断，正在重连…,"The connection is temporarily interrupted, reconnecting..."
+已恢复预览图任务订阅,"Preview image task subscription restored"
+批量预览图任务无法安全恢复,"The batch preview task cannot be safely restored"
+批量预览图任务事件达到资源上限,"The batch preview task event reaches the resource limit"
+无匹配货币,"No matching currencies"
+当前修改保存失败，已停留在原主题,"Changes failed to save; the previous theme remains selected."
+当前修改保存失败，已停留在原布局类型,"Changes failed to save; the previous layout type remains selected."
+布局类型切换失败，已恢复原布局,"The layout type could not be changed; the previous layout was restored."
+当前修改保存失败，已停留在原布局选项,"Changes failed to save; the previous layout option remains selected."
+布局选项切换失败，已恢复原布局,"The layout option could not be changed; the previous layout was restored."
+布局配置保存失败,"Failed to save the layout configuration."
+布局配置自动保存失败,"Failed to auto-save the layout configuration."
+当前修改保存失败，已停留在原语言,"Changes failed to save; the previous language remains selected."
+语言切换失败，已恢复原语言,"The language could not be changed; the previous language was restored."
+加载配置失败,"Failed to load the configuration."
+已切换到,"Switched to"
+已切换到默认语言,"Switched to the default language."
+当前修改保存失败，无法打开预览,"Changes failed to save; the preview could not be opened."
+旧图片地址仅兼容显示，请从媒体库重新选择,"The legacy image URL is shown for compatibility only. Select the asset again from the media library"
+正在确认编辑权限,"Confirming edit access"
+无法确认编辑权限,"Unable to confirm edit access"
+当前页面正在被编辑,"This page is currently being edited"
+正在获取当前页面的编辑锁，请稍候。,"Acquiring the edit lock for this page. Please wait."
+编辑锁服务暂时不可用，为避免覆盖其他管理员的修改，当前页面保持只读。,"The edit-lock service is temporarily unavailable. This page remains read-only to prevent overwriting another administrator's changes."
+正在编辑当前主题页面。为了避免互相覆盖，当前会话已被锁定为只读等待状态。,"is editing this Theme page. This session is read-only to prevent conflicting changes."
+锁定成功后将自动进入编辑。,"Editing will begin automatically after the lock is acquired."
+确认锁已释放或服务恢复后，刷新页面重试。,"Refresh after the lock is released or the service recovers."
+编辑锁服务不可用,"The edit-lock service is unavailable"
+编辑锁服务暂时不可用,"The edit-lock service is temporarily unavailable"

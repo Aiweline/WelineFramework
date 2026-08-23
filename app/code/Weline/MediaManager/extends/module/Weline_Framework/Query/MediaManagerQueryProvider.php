@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Extends\Module\Weline_Framework\Query;
 
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Service\Query\FrontendQueryException;
@@ -14,8 +13,9 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\MediaManager\Helper\MimeTypes;
 use Weline\MediaManager\Service\AiDrawService;
 use Weline\MediaManager\Service\CollectingSseWriter;
-use Weline\MediaManager\Service\ConnectorOptionsBuilder;
 use Weline\MediaManager\Service\ConnectorService;
+use Weline\MediaManager\Service\MediaAssetUploadService;
+use Weline\MediaManager\Service\MediaFileAccessContextFactory;
 use Weline\MediaManager\Service\MediaUploadBase64Hydrator;
 
 /**
@@ -28,6 +28,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly AiDrawService $aiDrawService,
         private readonly SessionFactory $sessions,
+        private readonly MediaFileAccessContextFactory $fileAccessContexts,
     ) {
     }
 
@@ -85,11 +86,17 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
                     'params' => [
                         ['name' => 'session_id', 'type' => 'string', 'required' => true, 'max_length' => 64],
                         ['name' => 'save_mode', 'type' => 'string', 'required' => false, 'max_length' => 32],
-                        ['name' => 'target', 'type' => 'string', 'required' => false, 'max_length' => 512],
-                        ['name' => 'source_file_hash', 'type' => 'string', 'required' => false, 'max_length' => 512],
+                        ['name' => 'target', 'type' => 'string', 'required' => false, 'max_length' => 2048],
+                        ['name' => 'disk_code', 'type' => 'string', 'required' => true, 'max_length' => 190],
+                        ['name' => 'locale_code', 'type' => 'string', 'required' => true, 'max_length' => 16],
+                        ['name' => 'source_file_hash', 'type' => 'string', 'required' => false, 'max_length' => 2048],
                         ['name' => 'filename', 'type' => 'string', 'required' => false, 'max_length' => 512],
                         ['name' => 'generation_id', 'type' => 'string', 'required' => false, 'max_length' => 64],
                         ['name' => 'generation_ids', 'type' => 'array', 'required' => false],
+                        ['name' => 'display_name', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                        ['name' => 'default_alt', 'type' => 'string', 'required' => true, 'max_length' => 512],
+                        ['name' => 'description', 'type' => 'string', 'required' => true, 'max_length' => 8000],
+                        ['name' => 'default_caption', 'type' => 'string', 'required' => false, 'max_length' => 2000],
                         ['name' => 'crop', 'type' => 'object', 'required' => false],
                         ['name' => 'crops', 'type' => 'object', 'required' => false],
                     ],
@@ -107,18 +114,28 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
                     ],
                     'params' => [
                         ['name' => 'cmd', 'type' => 'string', 'required' => false, 'max_length' => 32],
-                        ['name' => 'target', 'type' => 'string', 'required' => false, 'max_length' => 512],
-                        ['name' => 'targets', 'type' => 'array', 'required' => false],
+                        ['name' => 'target', 'type' => 'string', 'required' => false, 'max_length' => 2048],
+                        ['name' => 'targets', 'type' => 'array', 'required' => false, 'max_items' => MediaAssetUploadService::MAX_UPLOAD_FILES],
                         ['name' => 'name', 'type' => 'string', 'required' => false, 'max_length' => 512],
                         ['name' => 'ext', 'type' => 'string', 'required' => false, 'max_length' => 128],
+                        ['name' => 'size', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => MediaUploadBase64Hydrator::MAX_BYTES],
                         ['name' => 'startPath', 'type' => 'string', 'required' => false, 'max_length' => 1024],
                         // FE open(init) sends path=START_PATH; ConnectorService.handleOpen reads src.path.
                         ['name' => 'path', 'type' => 'string', 'required' => false, 'max_length' => 1024],
-                        ['name' => 'storage', 'type' => 'string', 'required' => false, 'max_length' => 128],
+                        ['name' => 'storage', 'type' => 'string', 'required' => false, 'max_length' => 190],
                         ['name' => 'init', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'tree', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'reload', 'type' => 'string', 'required' => false, 'max_length' => 16],
-                        ['name' => 'upload_base64', 'type' => 'array', 'required' => false],
+                        ['name' => 'locale_code', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        ['name' => 'asset_id', 'type' => 'string', 'required' => false, 'max_length' => 36],
+                        ['name' => 'asset_revision', 'type' => 'int', 'required' => false, 'min' => 1],
+                        ['name' => 'display_name', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                        ['name' => 'default_alt', 'type' => 'string', 'required' => false, 'max_length' => 512],
+                        ['name' => 'description', 'type' => 'string', 'required' => false, 'max_length' => 8000],
+                        ['name' => 'default_caption', 'type' => 'string', 'required' => false, 'max_length' => 2000],
+                        ['name' => 'visibility', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        ['name' => 'upload_base64', 'type' => 'array', 'required' => false, 'max_items' => MediaAssetUploadService::MAX_UPLOAD_FILES],
+                        ['name' => 'upload_metadata', 'type' => 'array', 'required' => false, 'max_items' => MediaAssetUploadService::MAX_UPLOAD_FILES],
                     ],
                 ],
                 [
@@ -137,7 +154,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
                         ['name' => 'prompts', 'type' => 'array', 'required' => false],
                         ['name' => 'mode', 'type' => 'string', 'required' => false, 'max_length' => 64],
                         ['name' => 'session_id', 'type' => 'string', 'required' => false, 'max_length' => 64],
-                        ['name' => 'target', 'type' => 'string', 'required' => false, 'max_length' => 512],
+                        ['name' => 'target', 'type' => 'string', 'required' => false, 'max_length' => 2048],
                         ['name' => 'model', 'type' => 'string', 'required' => false, 'max_length' => 128],
                         ['name' => 'width', 'type' => 'int', 'required' => false],
                         ['name' => 'height', 'type' => 'int', 'required' => false],
@@ -145,7 +162,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
                         ['name' => 'output_format', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'aspect_ratio', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'negative_prompt', 'type' => 'string', 'required' => false, 'max_length' => 4000],
-                        ['name' => 'source_file_hash', 'type' => 'string', 'required' => false, 'max_length' => 512],
+                        ['name' => 'source_file_hash', 'type' => 'string', 'required' => false, 'max_length' => 2048],
                         ['name' => 'parent_generation_id', 'type' => 'string', 'required' => false, 'max_length' => 64],
                         ['name' => 'batch_count', 'type' => 'int', 'required' => false],
                     ],
@@ -192,7 +209,11 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
      */
     private function save(array $params): array
     {
-        return $this->aiDrawService->save($this->backendUserId(), $params);
+        $backendUserId = $this->backendUserId();
+        return $this->aiDrawService->save(
+            $backendUserId,
+            $this->fileAccessContexts->freeze($params, $backendUserId),
+        );
     }
 
     /**
@@ -201,45 +222,34 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
      */
     private function connector(array $params): array
     {
-        $this->backendUserId();
-        /** @var \Weline\Framework\Http\Request $request */
-        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        $backendUserId = $this->backendUserId();
         /** @var MediaUploadBase64Hydrator $hydrator */
         $hydrator = ObjectManager::getInstance(MediaUploadBase64Hydrator::class);
-        $tmpFiles = $hydrator->hydrate($params);
+        $hydrated = $hydrator->hydrate($params);
         try {
-            foreach ($params as $key => $value) {
-                if ($key === '_files' || $key === 'upload_base64') {
-                    continue;
-                }
-                $request->setGet((string)$key, $value);
-                $request->setPost((string)$key, $value);
-            }
-            $request->setData('params', $params);
-            if ($tmpFiles !== []) {
-                $request->setServer('REQUEST_METHOD', 'POST');
-            }
-
-            /** @var ConnectorOptionsBuilder $optionsBuilder */
-            $optionsBuilder = ObjectManager::getInstance(ConnectorOptionsBuilder::class);
             /** @var ConnectorService $connectorService */
             $connectorService = ObjectManager::getInstance(ConnectorService::class);
 
             $ext = $params['ext'] ?? '';
             $mimes = MimeTypes::collectMimes($ext);
-            $rootPath = \rtrim(PUB, '/\\') . \DIRECTORY_SEPARATOR . 'media' . \DIRECTORY_SEPARATOR;
-            $rootUrl = '/pub/media';
-            $startPath = $params['startPath'] ?? null;
-            $local = Cookie::getLangLocal();
-            $opts = $optionsBuilder->build($rootPath, $rootUrl, $mimes, $startPath, $local);
-            $result = $connectorService->execute($request, $opts);
+            $opts = [
+                'locale' => (string)($params['locale_code'] ?? ''),
+                'actor_id' => $backendUserId,
+                'allowed_mimes' => $mimes,
+                'allowed_extensions' => MimeTypes::collectExtensions((string)$ext),
+                'max_upload_bytes' => max(1, min(
+                    MediaUploadBase64Hydrator::MAX_BYTES,
+                    (int)($params['size'] ?? MediaUploadBase64Hydrator::MAX_BYTES),
+                )),
+            ];
+            $result = $connectorService->execute($params, $opts, $hydrated['files']);
             if (!\is_array($result)) {
                 return ['success' => true, 'data' => $result];
             }
             unset($result['header']);
             return $result;
         } finally {
-            $hydrator->cleanup($tmpFiles);
+            $hydrator->cleanup($hydrated['temporary_resources']);
         }
     }
 
@@ -252,6 +262,7 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
     private function generate(array $params): array
     {
         $backendUserId = $this->backendUserId();
+        $params = $this->fileAccessContexts->freeze($params, $backendUserId);
         $collector = new CollectingSseWriter();
         try {
             $this->aiDrawService->streamGenerate($collector, $backendUserId, $params);

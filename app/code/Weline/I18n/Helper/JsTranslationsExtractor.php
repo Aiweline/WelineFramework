@@ -205,7 +205,7 @@ class JsTranslationsExtractor
     /**
      * 将模块路径转换为实际文件路径
      * 
-     * @param string $modulePath 模块路径，如 "Weline_Frontend::libs/vue/vue2.6.11.js" 或 "/static/..."
+     * @param string $modulePath 模块路径，如 "Weline_Theme::ui/weline-ui.js" 或 "/static/..."
      * @return string|null 实际文件路径，如果无法解析则返回 null
      */
     public static function resolveModulePath(string $modulePath): ?string

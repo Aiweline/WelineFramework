@@ -18,7 +18,7 @@ final class ThemeStaticNamespaceService
 
     public function usesPreviewNamespace(?array $context = null): bool
     {
-        if (!$this->previewContextService->shouldUseStoredContext()) {
+        if (!$this->previewContextService->hasAuthoritativePreviewContext()) {
             return false;
         }
 

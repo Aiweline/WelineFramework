@@ -36,13 +36,12 @@
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：5
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2
+- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：6
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 识别到 QueryProvider 相关 PHP 文件：Service/ApiDocService.php；前端/跨模块读数据先查 query 帮助。
 
@@ -52,7 +51,10 @@
 - `app/code/Weline/Api/doc/IP白名单和用户代理限制实现方案.md`
 - `app/code/Weline/Api/doc/README.md`
 - `app/code/Weline/Api/doc/framework-api-and-auth-contract.md`
+- `app/code/Weline/Api/doc/功能现状.md`
+- `app/code/Weline/Api/doc/开发日志.md`
 - `app/code/Weline/Api/doc/沙盒数据库实现方案.md`
+- `app/code/Weline/Api/doc/需求.md`
 - `app/code/Weline/Api/doc/需求文档-完整版.md`
 - `app/code/Weline/Api/doc/需求文档.md`
 - `app/code/Weline/Api/doc/需求文档隐患分析.md`

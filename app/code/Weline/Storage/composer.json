@@ -4,7 +4,8 @@
     "type": "weline-module",
     "license": "MIT",
     "require": {
-        "php": "^8.4"
+        "php": "^8.4",
+        "weline/framework": "^2.5"
     },
     "autoload": {
         "psr-4": {

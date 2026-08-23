@@ -7,18 +7,20 @@ use Weline\Cms\Model\Page;
 use Weline\Cms\Model\PathGroup;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\CacheManager;
-use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\WlsRuntimeAdapterInterface;
 use Weline\Seo\Api\Url\UrlChangeNotifierInterface;
+use Weline\Theme\Api\Layout\LayoutWorkspaceInterface;
+use Weline\Websites\Api\Catalog\Data\StoreSummary;
+use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
 class PageService
 {
@@ -59,6 +61,10 @@ class PageService
         private readonly ?EventsManager $eventsManager = null,
         private ?PageLocaleService $pageLocaleService = null,
         private ?PageSlugService $pageSlugService = null,
+        private ?CmsEditorContextResolver $cmsContextResolver = null,
+        private ?CmsPageVariantService $variantService = null,
+        private ?LayoutWorkspaceInterface $layoutWorkspace = null,
+        private ?StoreCatalogInterface $storeCatalog = null,
     ) {
     }
 
@@ -104,6 +110,28 @@ class PageService
         }
 
         return $status;
+    }
+
+    public function assertPagePublishable(Page $page): void
+    {
+        if ($page->getPageId() <= 0 || $page->isDeleted()) {
+            throw new \InvalidArgumentException((string)__('CMS 页面不存在或已删除，不能发布。'));
+        }
+        $this->assertRouteAvailableForPublish($page->getIdentifier());
+    }
+
+    /** @param array<string,mixed> $variantContext */
+    public function notifyVariantPublished(Page $page, array $variantContext): void
+    {
+        $reason = 'cms_page_variant_publish_' . $page->getPageId()
+            . '_' . (int)($variantContext['store_id'] ?? 0)
+            . '_' . (string)($variantContext['locale_code'] ?? '');
+        $this->schedulePostCommitSideEffects(
+            $page,
+            'publish',
+            [],
+            $reason,
+        );
     }
 
     public function normalizePathGroup(string $pathGroup): string
@@ -178,12 +206,15 @@ class PageService
      */
     public function savePage(array $data): Page
     {
-        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
         if (!$transactions->isActive($this->pageModel->getConnection())) {
-            return $transactions->run(
+            return $transactions->runWrite(
                 $this->pageModel->getConnection(),
                 fn(): Page => $this->savePage($data),
             );
+        }
+        if (!$transactions->isWriteIntent($this->pageModel->getConnection())) {
+            throw new \LogicException((string)__('CMS 页面保存必须位于写意图事务内。'));
         }
         $pageId = (int)($data['page_id'] ?? $data['id'] ?? 0);
         $group = $this->resolvePathGroupInput($data);
@@ -199,7 +230,7 @@ class PageService
         $pathParts = $this->normalizePathParts($data);
         $identifier = $pathParts['identifier'];
         $scope = $this->normalizeScope(isset($data['scope']) ? (string)$data['scope'] : null);
-        $status = $this->normalizeStatus(isset($data['status']) ? (string)$data['status'] : Page::STATUS_DRAFT);
+        $requestedStatus = $this->normalizeStatus(isset($data['status']) ? (string)$data['status'] : Page::STATUS_DRAFT);
         $title = trim((string)($data['title'] ?? ''));
         if ($title === '') {
             throw new \InvalidArgumentException((string)__('页面标题不能为空。'));
@@ -216,11 +247,16 @@ class PageService
         $page = clone $this->pageModel;
         $previousData = [];
         if ($pageId > 0) {
-            $page->load($pageId);
-            if ($page->getPageId() <= 0) {
+            $page = $this->getPageModelForUpdate($pageId);
+            if (!$page instanceof Page) {
                 throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
             }
             $previousData = $page->getData();
+            if ($page->getWebsiteId() !== (int)$website['website_id']) {
+                throw new \InvalidArgumentException((string)__(
+                    'CMS 页面所属网站不可直接变更，请使用跨网站复制。',
+                ));
+            }
         }
 
         $page->setData(Page::schema_fields_WEBSITE_ID, (int)$website['website_id']);
@@ -233,6 +269,7 @@ class PageService
             $page,
             (string)($data['locale_code'] ?? $data['locale'] ?? ''),
             (string)($data['source_locale'] ?? ''),
+            isset($data['store_id']) ? (int)$data['store_id'] : null,
         );
         $localeTitles = $localeService->normalizeSubmittedTitles(
             $data['locale_titles'] ?? $data['locale_titles_json'] ?? [],
@@ -240,10 +277,21 @@ class PageService
         );
         $localeTitles[$localeContext['locale_code']] = $title;
         $submittedSourceTitle = trim((string)($localeTitles[$localeContext['source_locale']] ?? ''));
-        if ($submittedSourceTitle !== '') {
+        $isDefaultStore = false;
+        try {
+            $isDefaultStore = ($this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class))
+                ->resolve($page, (int)$localeContext['store_id'], $localeContext['source_locale'])
+                ->defaultStore;
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException((string)__('无法解析 CMS 页面店铺上下文。'), 0, $exception);
+        }
+        if ($pageId <= 0 && !$isDefaultStore) {
+            throw new \InvalidArgumentException((string)__('新建 CMS 页面必须先在网站默认店铺保存源语言变体。'));
+        }
+        if ($isDefaultStore && $submittedSourceTitle !== '') {
             $page->setData(Page::schema_fields_TITLE, $submittedSourceTitle);
         }
-        if ($localeContext['locale_code'] === $localeContext['source_locale']) {
+        if ($isDefaultStore && $localeContext['locale_code'] === $localeContext['source_locale']) {
             $page->setData(Page::schema_fields_TITLE, $title);
         } elseif ($pageId <= 0) {
             throw new \InvalidArgumentException((string)__('新建 CMS 页面时必须先保存源语言标题。'));
@@ -257,7 +305,7 @@ class PageService
             (string)($data['slug'] ?? $pathParts['slug']),
             $pathParts['path_group'],
             (int)$website['website_id'],
-            $status,
+            $requestedStatus,
             (string)($data['slug_mode'] ?? ''),
         );
         $identifier = $slugDecision['identifier'];
@@ -267,11 +315,10 @@ class PageService
         $page->setSlugSourceHash($slugDecision['source_hash']);
 
         $this->assertUniqueIdentifier($identifier, (int)$website['website_id'], $pageId);
-        if ($status === Page::STATUS_PUBLISHED) {
-            $this->assertRouteAvailableForPublish($identifier);
-        }
-
-        $page->setData(Page::schema_fields_STATUS, $status);
+        $page->setData(
+            Page::schema_fields_STATUS,
+            $requestedStatus === Page::STATUS_DISABLED ? Page::STATUS_DISABLED : Page::STATUS_DRAFT,
+        );
         $page->setData(Page::schema_fields_SCOPE, $scope);
         if (array_key_exists('deleted_at', $data)) {
             $page->setData(Page::schema_fields_DELETED_AT, $data['deleted_at'] ?: null);
@@ -297,36 +344,73 @@ class PageService
         foreach ($localeTitles as $locale => $localizedTitle) {
             $isCurrentLocale = $locale === $localeContext['locale_code'];
             $isSourceLocale = $locale === $localeContext['source_locale'];
+            $existingVariant = $localeService->findVariant(
+                $page->getPageId(),
+                (int)$localeContext['store_id'],
+                $locale,
+            );
+            if (!$isCurrentLocale
+                && $existingVariant instanceof \Weline\Cms\Model\PageLocale
+                && hash_equals($existingVariant->getTitle(), $localizedTitle)
+            ) {
+                continue;
+            }
+            $origin = $isCurrentLocale
+                ? $titleOrigin
+                : ($isSourceLocale
+                    ? \Weline\Cms\Model\PageLocale::ORIGIN_SOURCE
+                    : \Weline\Cms\Model\PageLocale::ORIGIN_MANUAL);
+            $translationState = \Weline\Cms\Model\PageLocale::TRANSLATION_STATE_REVIEWED;
+            if ($existingVariant instanceof \Weline\Cms\Model\PageLocale
+                && $existingVariant->getOrigin() === \Weline\Cms\Model\PageLocale::ORIGIN_AI
+                && hash_equals($existingVariant->getTitle(), $localizedTitle)
+            ) {
+                $origin = \Weline\Cms\Model\PageLocale::ORIGIN_AI;
+                $translationState = $isCurrentLocale && !empty($data['translation_reviewed'])
+                    ? \Weline\Cms\Model\PageLocale::TRANSLATION_STATE_REVIEWED
+                    : \Weline\Cms\Model\PageLocale::TRANSLATION_STATE_DRAFT;
+            }
             $localeService->upsertTitle(
                 $page,
                 $locale,
                 $localizedTitle,
-                $isCurrentLocale
-                    ? $titleOrigin
-                    : ($isSourceLocale
-                        ? \Weline\Cms\Model\PageLocale::ORIGIN_SOURCE
-                        : \Weline\Cms\Model\PageLocale::ORIGIN_MANUAL),
+                $origin,
                 $isCurrentLocale && trim((string)($data['source_hash'] ?? '')) !== ''
                     ? trim((string)$data['source_hash'])
                     : ($isSourceLocale ? hash('sha256', $localizedTitle) : $sourceTitleHash),
                 $localeContext['supported_locales'],
+                (int)$localeContext['store_id'],
+                $translationState,
+                \Weline\Cms\Model\PageLocale::VALIDATION_STATE_PENDING,
+                $requestedStatus === Page::STATUS_DISABLED
+                    ? \Weline\Cms\Model\PageLocale::VARIANT_STATUS_DISABLED
+                    : \Weline\Cms\Model\PageLocale::VARIANT_STATUS_DRAFT,
             );
         }
 
-        $this->clearThemeRuntimeCaches('cms_page_save_' . $page->getPageId());
-        $this->dispatchPageChanged(
-            $page,
-            $this->resolvePageChangeAction($page, $previousData, $pageId <= 0),
-            $previousData
-        );
+        $variants = $this->variantService ??= ObjectManager::getInstance(CmsPageVariantService::class);
+        if ($requestedStatus === Page::STATUS_DISABLED) {
+            $variants->disableAll($page);
+            $page->setData(Page::schema_fields_STATUS, Page::STATUS_DISABLED)->save();
+        } else {
+            $variants->aggregatePageStatus($page, false);
+        }
+
+        $changeAction = $this->resolvePageChangeAction($page, $previousData, $pageId <= 0);
         $previous = clone $this->pageModel;
         $previous->clearData()->setData($previousData);
         ObjectManager::getInstance(CmsPageResourceChangePublisher::class)->publish(
             $page,
-            $this->resolvePageChangeAction($page, $previousData, $pageId <= 0),
+            $changeAction,
             $previousData,
             $this->buildPublicUrl($page),
             $previousData !== [] && $previous->getIdentifier() !== '' ? $this->buildPublicUrl($previous) : '',
+        );
+        $this->schedulePostCommitSideEffects(
+            $page,
+            $changeAction,
+            $previousData,
+            'cms_page_save_' . $page->getPageId(),
         );
 
         return $page;
@@ -375,6 +459,17 @@ class PageService
      */
     public function copyPage(int $sourcePageId, array $data): array
     {
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        $connection = $this->pageModel->getConnection();
+        if (!$transactions->isActive($connection)) {
+            return $transactions->runWrite(
+                $connection,
+                fn (): array => $this->copyPage($sourcePageId, $data),
+            );
+        }
+        if (!$transactions->isWriteIntent($connection)) {
+            throw new \LogicException((string)__('CMS 页面复制必须位于写意图事务内。'));
+        }
         $sourcePage = $this->getPageModel($sourcePageId, false);
         if ($sourcePage === null) {
             throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
@@ -397,6 +492,17 @@ class PageService
      */
     public function copyPathGroup(array $data): array
     {
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        $connection = $this->pageModel->getConnection();
+        if (!$transactions->isActive($connection)) {
+            return $transactions->runWrite(
+                $connection,
+                fn (): array => $this->copyPathGroup($data),
+            );
+        }
+        if (!$transactions->isWriteIntent($connection)) {
+            throw new \LogicException((string)__('CMS 页面组复制必须位于写意图事务内。'));
+        }
         $sourceGroup = $this->resolveCopySourcePathGroup($data);
         $targetWebsite = $this->resolveCopyTargetWebsite($data);
         if ($this->isSameWebsite($sourceGroup->getWebsiteId(), $sourceGroup->getWebsiteCode(), $targetWebsite)) {
@@ -445,14 +551,17 @@ class PageService
 
     public function softDeletePage(int $pageId): Page
     {
-        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
         if (!$transactions->isActive($this->pageModel->getConnection())) {
-            return $transactions->run(
+            return $transactions->runWrite(
                 $this->pageModel->getConnection(),
                 fn(): Page => $this->softDeletePage($pageId),
             );
         }
-        $page = $this->getPageModel($pageId, true);
+        if (!$transactions->isWriteIntent($this->pageModel->getConnection())) {
+            throw new \LogicException((string)__('CMS 页面删除必须位于写意图事务内。'));
+        }
+        $page = $this->getPageModelForUpdate($pageId);
         if ($page === null) {
             throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
         }
@@ -461,8 +570,7 @@ class PageService
         $page->setData(Page::schema_fields_STATUS, Page::STATUS_DISABLED);
         $page->setData(Page::schema_fields_DELETED_AT, date('Y-m-d H:i:s'));
         $page->save();
-        $this->clearThemeRuntimeCaches('cms_page_delete_' . $page->getPageId());
-        $this->dispatchPageChanged($page, 'delete', is_array($previousData) ? $previousData : []);
+        ($this->variantService ??= ObjectManager::getInstance(CmsPageVariantService::class))->disableAll($page);
         $previous = clone $this->pageModel;
         $previous->clearData()->setData(is_array($previousData) ? $previousData : []);
         ObjectManager::getInstance(CmsPageResourceChangePublisher::class)->publish(
@@ -471,6 +579,12 @@ class PageService
             is_array($previousData) ? $previousData : [],
             '',
             $previous->getIdentifier() !== '' ? $this->buildPublicUrl($previous) : '',
+        );
+        $this->schedulePostCommitSideEffects(
+            $page,
+            'delete',
+            is_array($previousData) ? $previousData : [],
+            'cms_page_delete_' . $page->getPageId(),
         );
 
         return $page;
@@ -481,6 +595,16 @@ class PageService
      */
     public function restorePageFromTrashRow(array $row): Page
     {
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        if (!$transactions->isActive($this->pageModel->getConnection())) {
+            return $transactions->runWrite(
+                $this->pageModel->getConnection(),
+                fn (): Page => $this->restorePageFromTrashRow($row),
+            );
+        }
+        if (!$transactions->isWriteIntent($this->pageModel->getConnection())) {
+            throw new \LogicException((string)__('CMS 页面恢复必须位于写意图事务内。'));
+        }
         $pageId = (int)($row[Page::schema_fields_ID] ?? $row['page_id'] ?? 0);
         if ($pageId <= 0) {
             throw new \InvalidArgumentException((string)__('回收站快照中缺少 CMS 页面ID，无法恢复。'));
@@ -508,6 +632,8 @@ class PageService
         if ($restored === null || $restored->isDeleted()) {
             throw new \RuntimeException((string)__('CMS 页面恢复后仍处于删除状态，请检查数据库 soft delete 字段写入。'));
         }
+        ($this->variantService ??= ObjectManager::getInstance(CmsPageVariantService::class))
+            ->restoreAllAsDraft($restored);
 
         return $restored;
     }
@@ -592,7 +718,6 @@ class PageService
             ->where(Page::schema_fields_ID, $pageId)
             ->update([Page::schema_fields_DELETED_AT => null], Page::schema_fields_ID)
             ->fetch();
-        $this->clearThemeRuntimeCaches('cms_page_restore_' . $pageId);
     }
 
     private function clearPathGroupDeletedAt(int $groupId): void
@@ -644,12 +769,13 @@ class PageService
     public function listPathGroups(array $params): array
     {
         $websiteId = $this->resolveWebsiteIdForRead($params, false);
+        $filterWebsite = $this->hasWebsiteSelector($params);
         $search = trim((string)($params['q'] ?? $params['search'] ?? ''));
         $pathGroup = trim((string)($params['path_group'] ?? ''));
 
         $model = clone $this->pathGroupModel;
         $query = $model->clearData()->reset();
-        if ($websiteId > 0) {
+        if ($filterWebsite) {
             $query->where(PathGroup::schema_fields_WEBSITE_ID, $websiteId);
         }
         if ($pathGroup !== '') {
@@ -705,6 +831,29 @@ class PageService
         return $page;
     }
 
+    private function getPageModelForUpdate(int $pageId): ?Page
+    {
+        if ($pageId <= 0) {
+            return null;
+        }
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        $connection = $this->pageModel->getConnection();
+        if (!$transactions->isActive($connection) || !$transactions->isWriteIntent($connection)) {
+            throw new \LogicException((string)__('CMS 页面锁定读取必须位于写意图事务内。'));
+        }
+        $page = clone $this->pageModel;
+        $page->clearData()->reset()
+            ->where(Page::schema_fields_ID, $pageId)
+            ->limit(1);
+        $type = strtolower((string)$connection->getConnector()->getConfigProvider()->getDbType());
+        if (in_array($type, ['mysql', 'mariadb', 'pgsql', 'postgres', 'postgresql'], true)) {
+            $page->additional('FOR UPDATE');
+        }
+        $items = array_values($page->select()->fetch()->getItems());
+        $current = $items[0] ?? null;
+        return $current instanceof Page ? $current : null;
+    }
+
     public function getPageByIdentifier(
         string $identifier,
         ?string $scope = null,
@@ -719,9 +868,7 @@ class PageService
         $page = clone $this->pageModel;
         $query = $page->clearData()->reset()
             ->where(Page::schema_fields_IDENTIFIER, $identifier);
-        if ($websiteId > 0) {
-            $query->where(Page::schema_fields_WEBSITE_ID, $websiteId);
-        }
+        $query->where(Page::schema_fields_WEBSITE_ID, $websiteId);
         if ($scope !== '') {
             $query->where(Page::schema_fields_SCOPE, $scope);
         }
@@ -775,11 +922,12 @@ class PageService
         $scope = trim((string)($params['scope'] ?? ''));
         $search = trim((string)($params['q'] ?? $params['search'] ?? ''));
         $websiteId = $this->resolveWebsiteIdForRead($params, false);
+        $filterWebsite = $this->hasWebsiteSelector($params);
         $pathGroup = trim((string)($params['path_group'] ?? ''));
 
         $model = clone $this->pageModel;
         $query = $model->clearData()->reset();
-        if ($websiteId > 0) {
+        if ($filterWebsite) {
             $query->where(Page::schema_fields_WEBSITE_ID, $websiteId);
         }
         if ($status !== '') {
@@ -865,32 +1013,44 @@ class PageService
             'path_group_alias' => $page->getPathGroupAlias(),
             'slug' => $page->getSlug(),
             'public_url' => $this->buildPublicUrl($page),
-            'preview_url' => $this->buildPreviewUrl($page),
+            'preview_url' => '',
             'cache_tags' => ['cms_page_' . $page->getPageId(), 'cms_page'],
         ];
     }
 
-    public function saveLayoutSelection(int $pageId, string $layoutOption, ?string $scope = null): array
+    public function saveLayoutSelection(
+        int $pageId,
+        string $layoutOption,
+        ?string $scope = null,
+        string $localeCode = '',
+        ?int $storeId = null,
+    ): array
     {
         $page = $this->getPageModel($pageId, true);
         if ($page === null) {
             throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
         }
 
-        $result = w_query('theme', 'saveLayoutSelection', [
-            'target_type' => Page::TARGET_TYPE,
-            'target_id' => $page->getPageId(),
-            'layout_type' => Page::LAYOUT_TYPE,
-            'layout_option' => $this->normalizeLayoutOption($layoutOption),
-            'scope' => $this->normalizeScope($scope ?: $page->getScope()),
-            'options' => [
+        $context = ($this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class))
+            ->resolve($page, $storeId, $localeCode);
+        $result = ($this->layoutWorkspace ??= ObjectManager::getInstance(LayoutWorkspaceInterface::class))
+            ->saveLayoutSelection(
+                Page::TARGET_TYPE,
+                $page->getPageId(),
+                Page::LAYOUT_TYPE,
+                $this->normalizeLayoutOption($layoutOption),
+                $context->canonicalScope,
+                $context->localeCode,
+                [
                 'reason' => (string)__('保存 CMS 页面布局选择'),
                 'metadata' => [
                     'module' => 'Weline_Cms',
                     'page_id' => $page->getPageId(),
+                    'store_id' => $context->storeId,
+                    'locale_code' => $context->localeCode,
                 ],
-            ],
-        ]);
+                ],
+            );
 
         return is_array($result) ? $result : ['success' => false, 'status' => 'invalid_theme_response'];
     }
@@ -898,14 +1058,22 @@ class PageService
     /**
      * @return array<string,mixed>
      */
-    public function resolveLayoutSelectionForPage(Page $page): array
+    public function resolveLayoutSelectionForPage(
+        Page $page,
+        ?int $storeId = null,
+        string $localeCode = '',
+    ): array
     {
-        $selection = w_query('theme', 'resolveLayoutSelection', [
-            'target_type' => Page::TARGET_TYPE,
-            'target_id' => $page->getPageId(),
-            'layout_type' => Page::LAYOUT_TYPE,
-            'scope' => $page->getScope(),
-        ]);
+        $context = ($this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class))
+            ->resolve($page, $storeId, $localeCode);
+        $selection = ($this->layoutWorkspace ??= ObjectManager::getInstance(LayoutWorkspaceInterface::class))
+            ->resolveLayoutSelection(
+                Page::TARGET_TYPE,
+                $page->getPageId(),
+                Page::LAYOUT_TYPE,
+                $context->canonicalScope,
+                $context->localeCode,
+            );
 
         $layoutOption = 'default';
         if (is_array($selection)) {
@@ -918,7 +1086,11 @@ class PageService
                 'layout_option' => $layoutOption,
                 'layout_code' => $layoutOption,
                 'source' => 'default',
-                'source_scope' => $page->getScope(),
+                'source_scope' => $context->canonicalScope,
+                'locale_code' => $context->localeCode,
+                'store_id' => $context->storeId,
+                'store_code' => $context->storeCode,
+                'store_mode' => $context->storeMode,
                 'version' => 0,
             ],
             is_array($selection) ? $selection : [],
@@ -926,6 +1098,8 @@ class PageService
                 'layout_type' => Page::LAYOUT_TYPE,
                 'layout_option' => $layoutOption,
                 'layout_code' => $layoutOption,
+                'scope' => $context->canonicalScope,
+                'locale_code' => $context->localeCode,
             ]
         );
     }
@@ -937,8 +1111,14 @@ class PageService
     public function renderPagePayload(array $params): ?array
     {
         $preview = !empty($params['preview']);
-        $scope = isset($params['scope']) ? (string)$params['scope'] : null;
-        $websiteId = $this->resolveWebsiteIdForRead($params);
+        $scope = $preview && isset($params['scope']) ? (string)$params['scope'] : null;
+        $requestIdentity = RequestContext::scopeIdentity();
+        if (!$preview && $requestIdentity === null) {
+            return null;
+        }
+        $websiteId = !$preview && $requestIdentity !== null
+            ? (int)($requestIdentity->websiteId ?? 0)
+            : $this->resolveWebsiteIdForRead($params);
         $page = null;
 
         if ((int)($params['page_id'] ?? 0) > 0) {
@@ -963,20 +1143,64 @@ class PageService
         if ($page === null) {
             return null;
         }
-        if (!$preview && (!$page->isPublished() || $page->isDeleted())) {
+        if ($page->isDeleted() || (!$preview && !$page->isPublished())) {
+            return null;
+        }
+        if (!$preview && $requestIdentity !== null
+            && ((int)($requestIdentity->websiteId ?? 0) !== $page->getWebsiteId()
+                || !hash_equals((string)($requestIdentity->websiteCode ?? ''), $page->getWebsiteCode()))
+        ) {
             return null;
         }
 
-        $layoutSelection = $this->resolveLayoutSelectionForPage($page);
+        $storeId = $preview
+            ? (int)($params['store_id'] ?? 0)
+            : RequestContext::getWelineStoreId();
+        $localeCode = $preview
+            ? (string)($params['locale_code'] ?? $params['locale'] ?? RequestContext::locale())
+            : (string)RequestContext::locale();
+        try {
+            $context = ($this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class))
+                ->resolve($page, $storeId > 0 ? $storeId : null, $localeCode);
+            $variant = ($this->variantService ??= ObjectManager::getInstance(CmsPageVariantService::class))
+                ->resolveForRead($page, $context->storeId, $context->localeCode, $preview);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!$variant instanceof \Weline\Cms\Model\PageLocale) {
+            return null;
+        }
+
+        $layoutSelection = $this->resolveLayoutSelectionForPage(
+            $page,
+            $context->storeId,
+            $context->localeCode,
+        );
+        $pageData = $this->toPageApiArray($page);
+        $pageData['title'] = $variant->getTitle();
+        $pageData['store_id'] = $context->storeId;
+        $pageData['store_code'] = $context->storeCode;
+        $pageData['store_mode'] = $context->storeMode;
+        $pageData['locale_code'] = $context->localeCode;
+        $pageData['scope'] = $context->canonicalScope;
+        $pageData['variant_status'] = $variant->getVariantStatus();
+        $pageData['translation_state'] = $variant->getTranslationState();
+        $pageData['validation_state'] = $variant->getValidationState();
 
         return [
-            'page' => $this->toPageApiArray($page),
+            'page' => $pageData,
             'target' => $this->resolveThemeTarget($page->getPageId()),
             'layout' => $layoutSelection,
             'content' => [
-                'title' => $page->getTitle(),
+                'title' => $variant->getTitle(),
             ],
-            'cache_tags' => ['cms_page_' . $page->getPageId(), 'cms_page'],
+            'editor_context' => $context->toArray(),
+            'cache_tags' => [
+                'cms_page_' . $page->getPageId(),
+                'cms_page_store_' . $context->storeId,
+                'cms_page_locale_' . $context->localeCode,
+                'cms_page',
+            ],
         ];
     }
 
@@ -985,32 +1209,41 @@ class PageService
         return $this->buildFrontendPathUrl($page->getIdentifier(), [], $page);
     }
 
-    public function buildPreviewUrl(Page $page, ?string $previewVersion = null): string
+    public function buildPreviewUrl(
+        Page $page,
+        ?string $previewVersion = null,
+        ?int $storeId = null,
+        string $localeCode = '',
+    ): string
     {
         $previewVersion = $this->normalizePreviewVersion($previewVersion ?: self::DEFAULT_PREVIEW_VERSION);
+        $context = ($this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class))
+            ->resolve($page, $storeId, $localeCode);
         $params = [
             self::PREVIEW_QUERY_FLAG => 1,
             'preview' => 1,
             'preview_version' => $previewVersion,
             '_t' => time(),
+            'store_id' => $context->storeId,
+            'locale_code' => $context->localeCode,
         ];
-        if ($page->getWebsiteId() > 0) {
-            $params['website_id'] = $page->getWebsiteId();
-        }
+        $params['website_id'] = $page->getWebsiteId();
         if ($page->getWebsiteCode() !== '') {
             $params['website_code'] = $page->getWebsiteCode();
         }
-        $previewToken = $this->generatePreviewTokenForPage($page, $previewVersion);
+        $previewToken = $this->generatePreviewTokenForPage($page, $previewVersion, $context);
         $token = trim((string)($previewToken['token'] ?? ''));
-        if ($token !== '') {
-            $tokenKey = trim((string)($previewToken['token_key'] ?? self::PREVIEW_TOKEN_QUERY_KEY));
-            $params[$tokenKey !== '' ? $tokenKey : self::PREVIEW_TOKEN_QUERY_KEY] = $token;
+        if ($token === '') {
+            throw new \RuntimeException((string)__('CMS 预览凭据生成失败。'));
         }
+        $tokenKey = trim((string)($previewToken['token_key'] ?? self::PREVIEW_TOKEN_QUERY_KEY));
+        $params[$tokenKey !== '' ? $tokenKey : self::PREVIEW_TOKEN_QUERY_KEY] = $token;
 
         return $this->buildFrontendPathUrl(
             $page->getIdentifier(),
             $params,
-            $page
+            $page,
+            $this->resolveStorePreviewBaseUrl($page, $context->storeId),
         );
     }
 
@@ -1199,6 +1432,28 @@ class PageService
         }
     }
 
+    /** @param array<string,mixed> $previousData */
+    private function schedulePostCommitSideEffects(
+        Page $page,
+        string $action,
+        array $previousData,
+        string $reason,
+    ): void {
+        $pageData = $page->getData();
+        $pageId = $page->getPageId();
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        $transactions->afterCommit(
+            $page->getConnection(),
+            'cms_page_side_effects_' . $pageId . '_' . hash('sha256', $action . "\0" . $reason),
+            function () use ($pageData, $previousData, $action, $reason): void {
+                $committedPage = clone $this->pageModel;
+                $committedPage->clearData()->setData($pageData);
+                $this->clearThemeRuntimeCaches($reason);
+                $this->dispatchPageChanged($committedPage, $action, $previousData);
+            },
+        );
+    }
+
     /**
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
@@ -1272,25 +1527,39 @@ class PageService
      */
     private function resolveWebsiteForSave(array $data): array
     {
+        $hasWebsiteId = array_key_exists('website_id', $data) || array_key_exists('site_id', $data);
         $websiteId = (int)($data['website_id'] ?? $data['site_id'] ?? 0);
         $websiteCode = trim((string)($data['website_code'] ?? $data['site'] ?? ''));
 
-        if ($websiteId <= 0 && $websiteCode !== '') {
+        if ($hasWebsiteId) {
+            if ($websiteId < 0) {
+                throw new \InvalidArgumentException((string)__('选择的站点不存在。'));
+            }
+            $website = $this->getWebsiteById($websiteId);
+            if ($website === null) {
+                throw new \InvalidArgumentException((string)__('选择的站点不存在。'));
+            }
+            if ($websiteCode !== '' && !hash_equals((string)$website['website_code'], $websiteCode)) {
+                throw new \InvalidArgumentException((string)__('站点 ID 与站点代码不匹配。'));
+            }
+            return $website;
+        }
+
+        if ($websiteCode !== '') {
             $website = $this->getWebsiteByCode($websiteCode);
             if ($website !== null) {
                 return $website;
             }
+            throw new \InvalidArgumentException((string)__('选择的站点不存在。'));
         }
 
-        if ($websiteId <= 0) {
-            $websiteId = $this->resolveCurrentWebsiteId();
-        }
-        if ($websiteId > 0) {
-            $website = $this->getWebsiteById($websiteId);
+        $identity = RequestContext::scopeIdentity();
+        if ($identity !== null && !$identity->isGlobal() && $identity->websiteId !== null) {
+            $website = $this->getWebsiteById($identity->websiteId);
             if ($website !== null) {
                 return $website;
             }
-            throw new \InvalidArgumentException((string)__('选择的站点不存在。'));
+            throw new \InvalidArgumentException((string)__('当前请求的站点不存在。'));
         }
 
         $website = $this->getDefaultWebsite();
@@ -1311,42 +1580,45 @@ class PageService
      */
     private function resolveWebsiteIdForRead(array $params, bool $useCurrent = true): int
     {
-        $websiteId = (int)($params['website_id'] ?? $params['site_id'] ?? 0);
-        if ($websiteId > 0) {
+        foreach (['website_id', 'site_id'] as $idKey) {
+            if (!array_key_exists($idKey, $params) || $params[$idKey] === '' || $params[$idKey] === null) {
+                continue;
+            }
+            $websiteId = filter_var($params[$idKey], FILTER_VALIDATE_INT);
+            if ($websiteId === false || $websiteId < 0) {
+                throw new \InvalidArgumentException((string)__('站点 ID 无效。'));
+            }
             return $websiteId;
         }
 
         $websiteCode = trim((string)($params['website_code'] ?? $params['site'] ?? ''));
         if ($websiteCode !== '') {
             $website = $this->getWebsiteByCode($websiteCode);
-            return $website !== null ? (int)$website['website_id'] : 0;
+            if ($website === null) {
+                throw new \InvalidArgumentException((string)__('选择的站点不存在。'));
+            }
+            return (int)$website['website_id'];
         }
 
         return $useCurrent ? $this->resolveCurrentWebsiteId() : 0;
     }
 
+    /** @param array<string,mixed> $params */
+    private function hasWebsiteSelector(array $params): bool
+    {
+        foreach (['website_id', 'site_id'] as $idKey) {
+            if (array_key_exists($idKey, $params) && $params[$idKey] !== '' && $params[$idKey] !== null) {
+                return true;
+            }
+        }
+        return trim((string)($params['website_code'] ?? $params['site'] ?? '')) !== '';
+    }
+
     private function resolveCurrentWebsiteId(): int
     {
-        $websiteId = (int)(WelineEnv::getWebsiteId() ?? 0);
-        if ($websiteId > 0) {
-            return $websiteId;
-        }
-
-        $websiteId = (int)WelineEnv::server('WELINE_WEBSITE_ID', 0);
-        if ($websiteId > 0) {
-            return $websiteId;
-        }
-
-        $websiteId = (int)w_env('website_id', 0);
-        if ($websiteId > 0) {
-            return $websiteId;
-        }
-
-        if (class_exists(RequestContext::class, false)) {
-            $websiteId = RequestContext::getWelineWebsiteId();
-            if ($websiteId > 0) {
-                return $websiteId;
-            }
+        $identity = RequestContext::scopeIdentity();
+        if ($identity !== null && !$identity->isGlobal() && $identity->websiteId !== null) {
+            return $identity->websiteId;
         }
 
         return 0;
@@ -1357,7 +1629,7 @@ class PageService
      */
     private function getWebsiteById(int $websiteId): ?array
     {
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             return null;
         }
 
@@ -1477,28 +1749,39 @@ class PageService
     private function resolveCopyTargetWebsite(array $data): array
     {
         $target = trim((string)($data['target_website'] ?? ''));
+        $hasTargetWebsiteId = array_key_exists('target_website_id', $data)
+            || array_key_exists('target_site_id', $data);
         $targetWebsiteId = (int)($data['target_website_id'] ?? $data['target_site_id'] ?? 0);
         $targetWebsiteCode = trim((string)($data['target_website_code'] ?? $data['target_site'] ?? ''));
         if ($target !== '') {
             if (str_contains($target, '|')) {
                 [$idPart, $codePart] = array_pad(explode('|', $target, 2), 2, '');
+                if ($idPart === '' || !ctype_digit($idPart)) {
+                    throw new \InvalidArgumentException((string)__('目标站点 ID 无效。'));
+                }
                 $targetWebsiteId = (int)$idPart;
                 $targetWebsiteCode = trim($codePart);
+                $hasTargetWebsiteId = true;
             } elseif (ctype_digit($target)) {
                 $targetWebsiteId = (int)$target;
+                $hasTargetWebsiteId = true;
             } else {
                 $targetWebsiteCode = $target;
             }
         }
 
-        if ($targetWebsiteId <= 0 && $targetWebsiteCode === '') {
+        if (!$hasTargetWebsiteId && $targetWebsiteCode === '') {
             throw new \InvalidArgumentException((string)__('请选择目标站点。'));
         }
 
-        return $this->resolveWebsiteForSave([
-            'website_id' => $targetWebsiteId,
-            'website_code' => $targetWebsiteCode,
-        ]);
+        $selector = [];
+        if ($hasTargetWebsiteId) {
+            $selector['website_id'] = $targetWebsiteId;
+        }
+        if ($targetWebsiteCode !== '') {
+            $selector['website_code'] = $targetWebsiteCode;
+        }
+        return $this->resolveWebsiteForSave($selector);
     }
 
     /**
@@ -1547,12 +1830,28 @@ class PageService
             'path_group_alias' => $targetGroup->getAlias(),
             'slug' => $sourcePage->getSlug(),
             'scope' => $sourcePage->getScope(),
-            'status' => $sourcePage->getStatus(),
+            'status' => Page::STATUS_DRAFT,
         ]);
+
+        $variantCopy = ($this->variantService ??= ObjectManager::getInstance(CmsPageVariantService::class))
+            ->copyVariants($sourcePage, $targetPage, true);
+        $themeSuccess = true;
+        foreach ($variantCopy['theme_results'] as $themeResult) {
+            if (is_array($themeResult) && empty($themeResult['success'])) {
+                $themeSuccess = false;
+                break;
+            }
+        }
 
         return [
             'page' => $targetPage,
-            'theme' => $this->copyThemeTargetData($sourcePage, $targetPage),
+            'theme' => [
+                'success' => $themeSuccess,
+                'status' => $themeSuccess ? 'copied' : 'partial_failed',
+                'variant_results' => $variantCopy['theme_results'],
+                'skipped' => $variantCopy['skipped'],
+                'copied_variants' => $variantCopy['copied'],
+            ],
         ];
     }
 
@@ -1585,48 +1884,12 @@ class PageService
     }
 
     /**
-     * @return array<string,mixed>
-     */
-    private function copyThemeTargetData(Page $sourcePage, Page $targetPage): array
-    {
-        try {
-            $layoutSelection = $this->resolveLayoutSelectionForPage($sourcePage);
-            $layoutOption = $this->normalizeLayoutOption((string)($layoutSelection['layout_option'] ?? 'default'));
-            $result = w_query('theme', 'copyTargetLayoutData', [
-                'source_target_type' => Page::TARGET_TYPE,
-                'source_target_id' => $sourcePage->getPageId(),
-                'target_target_type' => Page::TARGET_TYPE,
-                'target_target_id' => $targetPage->getPageId(),
-                'layout_type' => Page::LAYOUT_TYPE,
-                'layout_option' => $layoutOption,
-                'scope' => $sourcePage->getScope(),
-                'area' => 'frontend',
-            ]);
-
-            return is_array($result) ? $result : ['success' => false, 'status' => 'invalid_theme_response'];
-        } catch (\Throwable $e) {
-            if (function_exists('w_log_warning')) {
-                w_log_warning(
-                    (string)__('CMS 拷贝 Theme target 数据失败：%{1}', $e->getMessage()),
-                    ['source_page_id' => $sourcePage->getPageId(), 'target_page_id' => $targetPage->getPageId()],
-                    'cms'
-                );
-            }
-            return [
-                'success' => false,
-                'status' => 'exception',
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
      * @param array{website_id:int,website_code:string,name:string,url:string} $website
      */
     private function isSameWebsite(int $websiteId, string $websiteCode, array $website): bool
     {
         $targetId = (int)$website['website_id'];
-        if ($websiteId > 0 && $targetId > 0) {
+        if ($websiteId >= 0 && $targetId >= 0) {
             return $websiteId === $targetId;
         }
 
@@ -1712,17 +1975,28 @@ class PageService
     {
         return array_merge($page->toApiArray(), [
             'public_url' => $this->buildPublicUrl($page),
-            'preview_url' => $this->buildPreviewUrl($page),
+            // Preview credentials are created only by an explicit backend
+            // preview/editor action. Generic DTOs and frontend payloads must
+            // never mint or expose them as a side effect of reading a page.
+            'preview_url' => '',
         ]);
     }
 
     /**
      * @return array{success?:bool,token?:string,token_key?:string,context?:array<string,mixed>}
      */
-    private function generatePreviewTokenForPage(Page $page, string $previewVersion): array
+    private function generatePreviewTokenForPage(
+        Page $page,
+        string $previewVersion,
+        \Weline\Cms\Api\Data\CmsEditorContext $cmsContext,
+    ): array
     {
         try {
-            $layoutSelection = $this->resolveLayoutSelectionForPage($page);
+            $layoutSelection = $this->resolveLayoutSelectionForPage(
+                $page,
+                $cmsContext->storeId,
+                $cmsContext->localeCode,
+            );
             $layoutOption = (string)($layoutSelection['layout_option'] ?? 'default');
 
             $result = w_query('theme', 'generatePreviewToken', [
@@ -1733,7 +2007,9 @@ class PageService
                 'theme_layout_target_id' => $page->getPageId(),
                 'theme_layout_source_target_type' => Page::TARGET_TYPE,
                 'theme_layout_source_target_id' => $page->getPageId(),
-                'scope' => $page->getScope(),
+                'scope' => $cmsContext->canonicalScope,
+                'store_mode' => $cmsContext->storeMode,
+                'locale' => $cmsContext->localeCode,
                 'status' => 'draft',
                 'preview_version' => $this->normalizePreviewVersion($previewVersion),
                 'target_value' => Page::TARGET_TYPE . ':' . $page->getPageId(),
@@ -1742,8 +2018,16 @@ class PageService
                     'cms_identifier' => $page->getIdentifier(),
                     'cms_website_id' => $page->getWebsiteId(),
                     'cms_website_code' => $page->getWebsiteCode(),
+                    'cms_store_id' => $cmsContext->storeId,
+                    'cms_store_code' => $cmsContext->storeCode,
+                    'cms_store_mode' => $cmsContext->storeMode,
+                    'cms_locale_code' => $cmsContext->localeCode,
+                    'cms_canonical_scope' => $cmsContext->canonicalScope,
                     'cms_path_group' => $page->getPathGroup(),
                     'cms_slug' => $page->getSlug(),
+                    'scope' => $cmsContext->canonicalScope,
+                    'store_mode' => $cmsContext->storeMode,
+                    'locale' => $cmsContext->localeCode,
                 ],
             ]);
             return is_array($result) ? $result : [];
@@ -1888,9 +2172,14 @@ class PageService
      *
      * @param array<string,mixed> $params
      */
-    private function buildFrontendPathUrl(string $path, array $params = [], ?Page $page = null): string
+    private function buildFrontendPathUrl(
+        string $path,
+        array $params = [],
+        ?Page $page = null,
+        ?string $baseOverride = null,
+    ): string
     {
-        $base = $this->resolveFrontendBaseUrl($page);
+        $base = $baseOverride !== null ? rtrim($baseOverride, '/') : $this->resolveFrontendBaseUrl($page);
         $path = trim($path, '/');
         $url = $base . ($path !== '' ? '/' . $path : '/');
         if ($params !== []) {
@@ -1900,10 +2189,39 @@ class PageService
         return $url;
     }
 
+    private function resolveStorePreviewBaseUrl(Page $page, int $storeId): ?string
+    {
+        $catalog = $this->storeCatalog ??= ObjectManager::getInstance(StoreCatalogInterface::class);
+        $store = $catalog->byId($storeId);
+        if (!$store instanceof StoreSummary || $store->websiteId !== $page->getWebsiteId()) {
+            throw new \RuntimeException((string)__('CMS 预览店铺与页面网站不匹配。'));
+        }
+
+        $url = trim((string)$store->url);
+        if ($url === '') {
+            return null;
+        }
+        $parts = parse_url($url);
+        if (
+            !is_array($parts)
+            || !in_array(strtolower((string)($parts['scheme'] ?? '')), ['http', 'https'], true)
+            || trim((string)($parts['host'] ?? '')) === ''
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])
+            || preg_match('/[\x00-\x20\x7F\\\\]/', $url) === 1
+        ) {
+            throw new \RuntimeException((string)__('CMS 预览店铺入口 URL 无效。'));
+        }
+
+        return rtrim($url, '/');
+    }
+
     private function resolveFrontendBaseUrl(?Page $page = null): string
     {
         $requestBase = $this->resolveRequestBaseUrl();
-        if ($page !== null && $page->getWebsiteId() > 0) {
+        if ($page !== null) {
             $website = $this->getWebsiteById($page->getWebsiteId());
             $siteUrl = trim((string)($website['url'] ?? ''));
             if (preg_match('~^https?://[^/]+(?:/[^?#]*)?~i', $siteUrl, $matches)) {

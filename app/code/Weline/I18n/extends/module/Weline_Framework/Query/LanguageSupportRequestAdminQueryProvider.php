@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Framework\Session\SessionFactory;
 use Weline\I18n\Api\LanguageRequest\LanguageSupportRequestDirectoryInterface;
 use Weline\I18n\Api\LanguageRequest\LanguageSupportRequestWorkflowInterface;
@@ -116,12 +119,51 @@ final class LanguageSupportRequestAdminQueryProvider implements QueryProviderInt
 
     private function backendUserId(): int
     {
+        $fromWorker = $this->backendUserIdFromWorkerContext();
+        if ($fromWorker !== null) {
+            return $fromWorker;
+        }
+
         $session = $this->sessions->createBackendSession();
-        $session->start();
+        if (!$session->isStarted()) {
+            $session->start();
+        }
         $userId = $session->isLoggedIn() ? (int)($session->getUserId() ?? 0) : 0;
         if ($userId <= 0) {
-            throw new \RuntimeException((string)__('请先登录后台'));
+            $this->denyBackendLogin();
         }
+
         return $userId;
+    }
+
+    /**
+     * QueryBin already restored and ACL-checked the attested backend binding.
+     * Re-starting a PHP Session from the API cookie would create a different
+     * empty identity and fail closed as "please log in".
+     */
+    private function backendUserIdFromWorkerContext(): ?int
+    {
+        if (!RequestContext::has(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY)) {
+            return null;
+        }
+
+        $execution = RequestContext::get(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY);
+        if (!$execution instanceof FrontendWorkerExecutionContext
+            || $execution->area !== FrontendWorkerExecutionContext::AREA_BACKEND
+            || $execution->backendBinding === null
+            || $execution->backendBinding->backendUserId <= 0) {
+            $this->denyBackendLogin();
+        }
+
+        return $execution->backendBinding->backendUserId;
+    }
+
+    private function denyBackendLogin(): never
+    {
+        throw new FrontendQueryException(
+            'auth_error',
+            (string)__('请先登录后台'),
+            401,
+        );
     }
 }

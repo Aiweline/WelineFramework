@@ -65,6 +65,7 @@ class Notification extends BackendController
 
         if (!$notification) {
             $this->assign('error', __('通知不存在或无权查看'));
+            $this->assignDetailPageTitle();
             return $this->fetch('Weline_Backend::templates/Backend/Notification/error.phtml');
         }
 
@@ -76,9 +77,16 @@ class Notification extends BackendController
         $this->assign('prev_title', $adjacent['prev_title']);
         $this->assign('next_id', $adjacent['next_id']);
         $this->assign('next_title', $adjacent['next_title']);
-        $this->assign('page_title', $notification['title'] ?? __('通知详情'));
+        $this->assignDetailPageTitle();
 
         return $this->fetch();
+    }
+
+    private function assignDetailPageTitle(): void
+    {
+        $title = __('通知详情');
+        $this->assign('title', $title);
+        $this->assign('page_title', $title);
     }
 
     /**

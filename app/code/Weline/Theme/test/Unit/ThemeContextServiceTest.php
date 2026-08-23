@@ -57,7 +57,7 @@ class ThemeContextServiceTest extends TestCase
                 return $this;
             }
 
-            public function getActiveTheme(): static
+            public function getActiveTheme(?string $area = null): static
             {
                 $this->setData('id', 0);
                 return $this;

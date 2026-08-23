@@ -400,20 +400,10 @@ class Admin extends BackendPageController
             }
         }
 
-        $rawBody = $this->request->getParameterBag()->getRawBody();
-        $contentType = $this->request->getContentType();
-        if ($rawBody === '' || !str_contains(strtolower($contentType), 'multipart/form-data')) {
-            return null;
-        }
-
-        $parsed = \Weline\Framework\Http\WlsRequest::parseMultipartFormData($rawBody, $contentType);
-        $files = is_array($parsed['files'] ?? null) ? $parsed['files'] : [];
-        foreach (['sql_file', 'file'] as $key) {
-            if (isset($files[$key]) && is_array($files[$key])) {
-                return $files[$key];
-            }
-        }
-
+        // Multipart ownership belongs to the transport boundary. Native PHP
+        // populates $_FILES and WLS exposes the same entries through Request;
+        // reparsing the raw body here would create an untracked temporary file
+        // in a persistent Worker.
         return null;
     }
 

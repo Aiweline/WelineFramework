@@ -126,7 +126,7 @@ function updateStats(data) {
 }
 
 async function fetchData() {
-    const websiteId = document.getElementById('website-id').value;
+    const websiteId = document.getElementById('website-id_value').value;
     const params = {
         interval: document.getElementById('interval').value,
         hours: document.getElementById('hours').value,

@@ -323,9 +323,6 @@ class MessageManager
     /** 本请求是否已 render（用于 flushRequestSessions 前决定是否清除所有 Session 的消息键） */
     private static bool $messagesRenderedThisRequest = false;
 
-    /** 本请求是否已输出 flash 关闭按钮代理脚本 */
-    private static bool $flashDismissScriptRenderedThisRequest = false;
-
     /** 供 Session::flushRequestSessions 调用，避免耦合 */
     public static function shouldClearMessagesBeforeFlush(): bool
     {
@@ -336,7 +333,6 @@ class MessageManager
     public static function resetRequestState(): void
     {
         self::$messagesRenderedThisRequest = false;
-        self::$flashDismissScriptRenderedThisRequest = false;
     }
 
     /**
@@ -354,11 +350,11 @@ class MessageManager
         }
         self::$messagesRenderedThisRequest = true;
         $this->clear();
-        return "<div class='system message'>{$content}</div>";
+        return "<div class='w-messages__content'>{$content}</div>";
     }
 
     /**
-     * Flash 展示用 modifier（仅允许 [a-z0-9_-]+），与 storefront `.wflash--{modifier}` 对应；非 Bootstrap / 第三方 UI 库类名。
+     * Flash tone is constrained to the Weline alert contract.
      */
     private static function normalizeFlashModifier(string $html_class): string
     {
@@ -366,8 +362,10 @@ class MessageManager
         if ($c === 'error') {
             $c = 'danger';
         }
-        $slug = preg_replace('/[^a-z0-9_-]+/', '', $c) ?? '';
-        return $slug !== '' ? $slug : 'info';
+        if ($c === 'notes') {
+            $c = 'info';
+        }
+        return in_array($c, ['success', 'warning', 'danger', 'info', 'neutral'], true) ? $c : 'info';
     }
 
     /**
@@ -385,27 +383,18 @@ class MessageManager
     public static function process_message(string $msg, string $title, string $html_class = 'error'): string
     {
         $mod = self::normalizeFlashModifier($html_class);
-        $closeLabel = htmlspecialchars(__('Close'), ENT_QUOTES, 'UTF-8');
+        $closeLabel = htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8');
         $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
         $safeMsg = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
 
-        return self::flashDismissScript()
-            . '<div class="wflash wflash--' . $mod . ' wflash--dismissible" role="alert">'
-            . '<button type="button" class="wflash__close" aria-label="' . $closeLabel . '" data-wflash-dismiss="1"></button>'
-            . '<strong class="wflash__title">' . $safeTitle . '</strong> '
-            . '<span class="wflash__body">' . $safeMsg . '</span>'
+        // Close button must stay empty: login/plain consumers strip_tags and would
+        // otherwise leave a literal × glued to the message text.
+        return '<div class="w-alert" data-tone="' . $mod . '" role="alert" data-w-removable>'
+            . '<div class="w-alert__content"><strong class="w-alert__title">' . $safeTitle . '</strong> '
+            . '<span>' . $safeMsg . '</span></div>'
+            . '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-w-close'
+            . ' aria-label="' . $closeLabel . '" data-w-action="element.remove"></button>'
             . '</div>';
-    }
-
-    private static function flashDismissScript(): string
-    {
-        if (self::$flashDismissScriptRenderedThisRequest) {
-            return '';
-        }
-
-        self::$flashDismissScriptRenderedThisRequest = true;
-
-        return '<script data-wflash-dismiss-proxy="1">(function(){var root=document.documentElement;if(root.dataset.wflashDismissProxyBound==="1")return;root.dataset.wflashDismissProxyBound="1";document.addEventListener("click",function(event){var target=event.target;if(!(target instanceof Element))return;var trigger=target.closest("[data-wflash-dismiss]");if(!trigger)return;var alert=trigger.closest("[role=alert]");if(alert)alert.remove();});})();</script>';
     }
 
     /**
@@ -425,12 +414,23 @@ class MessageManager
     }
 
     /**
-     * Cookie Flash 中 historically 存的是 `.wflash` / 旧版 alert HTML；供控制器/模板当作纯文案展示时须去掉全部标签，避免 htmlspecialchars 后用户看到原始标签串。
+     * Cookie Flash contains rendered alert HTML; plain-text consumers strip tags.
      */
     private static function flashContentToPlainText(string $html): string
     {
-        $text = strip_tags($html);
+        return self::htmlToPlainText($html);
+    }
+
+    /**
+     * Strip alert chrome (close buttons, tags) for templates that only show text.
+     */
+    public static function htmlToPlainText(string $html): string
+    {
+        $withoutControls = preg_replace('/<button\b[^>]*>.*?<\/button>/is', '', $html) ?? $html;
+        $text = strip_tags($withoutControls);
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/[\x{00d7}\x{2715}\x{2716}x×]+$/u', '', $text) ?? $text;
+
         return trim(preg_replace('/\s+/u', ' ', $text) ?? '');
     }
 }

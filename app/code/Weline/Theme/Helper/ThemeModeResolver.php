@@ -31,7 +31,7 @@ class ThemeModeResolver
         $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
 
         try {
-            if ($this->previewContextService->shouldUseStoredContext()) {
+            if ($this->previewContextService->hasAuthoritativePreviewContext()) {
                 $context = $this->previewContextService->getCurrentContext();
                 $previewThemeId = $this->previewContextService->getThemeIdForArea($area, $context, false);
                 if ($previewThemeId > 0) {

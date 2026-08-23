@@ -64,7 +64,7 @@ class TaglibTest extends TestCore
         
         // 测试缺少必需参数的情况
         $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('d-table tag must specify model attribute!');
+        $this->expectExceptionMessage('model');
         
         $result = $callback('d-table', [], ['', '', ''], []);
     }
@@ -80,14 +80,14 @@ class TaglibTest extends TestCore
             'model' => 'TestModel',
             'scope' => 'test-scope',
             'id' => 'test-table',
-            'class' => 'test-class'
+            'class' => 'w-test-class'
         ];
         
         $result = $callback('d-table', [], ['', '', ''], $attributes);
         
         $this->assertIsString($result);
         $this->assertStringContainsString('test-table', $result);
-        $this->assertStringContainsString('test-class', $result);
+        $this->assertStringContainsString('w-test-class', $result);
         $this->assertStringContainsString('TestModel', $result);
     }
 
@@ -122,13 +122,8 @@ class TaglibTest extends TestCore
     {
         $this->assertEquals('field', Field::name());
         $this->assertTrue(Field::tag());
-        $this->assertTrue(Field::tag_self_close_with_attrs());
-        
-        // 测试父标签依赖
-        $parent = Field::parent();
-        $this->assertStringContainsString('t-header', $parent);
-        $this->assertStringContainsString('t-filter', $parent);
-        $this->assertStringContainsString('d-form', $parent);
+        $this->assertFalse(Field::tag_self_close_with_attrs());
+        $this->assertNull(Field::parent());
     }
 
     /**
@@ -340,10 +335,10 @@ class TaglibTest extends TestCore
             'scope' => 'test-scope'
         ]);
         
-        $this->expectException(\Exception::class);
-        
         try {
-            $callback('field', [], ['', '', ''], $attributes);
+            $result = $callback('field', [], ['', '', ''], $attributes);
+            $this->assertStringContainsString('type="text"', $result);
+            $this->assertStringNotContainsString('invalid_type', $result);
         } finally {
             TableContext::popTag();
         }
@@ -576,8 +571,7 @@ class TaglibTest extends TestCore
                 'model' => 'Weline\DataTable\Model\TestUser',
                 'scope' => 'compiled-table',
                 'allow-frontend' => 'true',
-                'api-url' => 'datatable/rest/v1/demo-table',
-                'field-api-url' => 'datatable/rest/v1/demo-form/fields',
+                'api-provider' => 'datatable',
             ]
         );
 

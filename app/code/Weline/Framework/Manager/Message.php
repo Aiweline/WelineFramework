@@ -219,7 +219,7 @@ class Message
 
     public function render(): string
     {
-        $html = "<div class='system message'>{$this->session->getData('system-message')}</div>";
+        $html = "<div class='w-messages__content'>{$this->session->getData('system-message')}</div>";
         $this->clear();
         return $html;
     }
@@ -233,18 +233,30 @@ class Message
      */
     public function processMessage(string $msg, string $title, string $html_class = 'error'): string
     {
-        return '<div class="alert alert-' . $html_class . ' alert-dismissible fade show" role="alert">
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            <strong>' . $title . '</strong> ' . $msg . '
-        </div>';
+        return self::renderMessage($msg, $title, $html_class);
     }
 
     public static function process_message(string $msg, string $title, string $html_class = 'error'): string
     {
-        return '<div class="alert alert-' . $html_class . ' alert-dismissible fade show" role="alert">
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            <strong>' . $title . '</strong> ' . $msg . '
-        </div>';
+        return self::renderMessage($msg, $title, $html_class);
+    }
+
+    private static function renderMessage(string $msg, string $title, string $tone): string
+    {
+        $tone = strtolower(trim($tone));
+        $tone = $tone === 'error' ? 'danger' : ($tone === 'notes' ? 'info' : $tone);
+        if (!in_array($tone, ['success', 'warning', 'danger', 'info', 'neutral'], true)) {
+            $tone = 'info';
+        }
+        $safeTitle = htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeMessage = htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $close = htmlspecialchars((string)__('关闭'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return '<div class="w-alert" data-tone="' . $tone . '" role="alert" data-w-removable>'
+            . '<div class="w-alert__content"><strong class="w-alert__title">' . $safeTitle . '</strong>'
+            . '<span>' . $safeMessage . '</span></div>'
+            . '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-w-close'
+            . ' data-w-action="element.remove" aria-label="' . $close . '"></button>'
+            . '</div>';
     }
 
     public function clear()

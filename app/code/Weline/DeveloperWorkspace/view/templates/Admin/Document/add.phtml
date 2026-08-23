@@ -18,7 +18,8 @@
                 <p class="w-text" data-tone="muted">
                     <lang>开发文档编辑器 有新的开发文档时可以随时编辑</lang>
                 </p>
-                <w:form class="w-form" method="post" action="@admin-url('dev/tool/admin/document/post')">
+                <form class="w-form" method="post" action="@admin-url('dev/tool/admin/document/post')">
+                    <input type="hidden" name="form_key" value="<?=htmlspecialchars($this->getFormKeyValue(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')?>">
                     <label>
                         <input type="text" class="w-visually-hidden" name="id" value="@var{$document['id']}">
                     </label>
@@ -147,10 +148,10 @@
                     <button class="w-button" type='submit' data-tone="primary">
                         <lang>保存</lang>
                     </button>
-                </w:form>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
-<script type="module" src="@static(Weline_DeveloperWorkspace::js/document-editor.js)"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-developer-document-editor.js)"></script>

@@ -154,13 +154,11 @@ class TableContext
         // 默认继承的属性
         $defaultInheritKeys = [
             'model',
-            'scope',
             'searchable',
             'sortable',
             'editable',
             'allow-frontend',
-            'api-url',
-            'field-api-url',
+            'api-provider',
             'dependencies',
             'transaction',
             'isolate'

@@ -47,14 +47,14 @@
 删除失败：%{1},"Failed to delete: %{1}"
 获取成功,"Successfully got"
 获取统计数据失败：%{1},"Failed to fetch statistical data: %{1}"
-客服人员,客服人员
+客服人员,"customer service staff"
 user,user
-查看客服人员,查看客服人员
-保存客服人员,保存客服人员
+查看客服人员,"View customer service staff"
+保存客服人员,"Save customer service personnel"
 save,save
-删除客服人员,删除客服人员
+删除客服人员,"Delete customer service personnel"
 trash,trash
-查看客服统计,查看客服统计
+查看客服统计,"View customer service statistics"
 chart,chart
 会话管理,"Session Management"
 加载会话失败：%{1},"Failed to load sessions: %{1}"
@@ -64,17 +64,17 @@ chart,chart
 会话已关闭,"Session closed"
 关闭会话失败：%{1},"Failed to close session: %{1}"
 message,message
-查看会话,查看会话
-查看会话详情,查看会话详情
+查看会话,"View session"
+查看会话详情,"View session details"
 eye,eye
 关闭会话,"Close Session"
 close,close
 客服配置,"Service Configuration"
 加载配置失败：%{1},"Failed to load configuration: %{1}"
 settings,settings
-客服配置管理,客服配置管理
-查看客服配置,查看客服配置
-保存客服配置,保存客服配置
+客服配置管理,"Customer service configuration management"
+查看客服配置,"View customer service configuration"
+保存客服配置,"Save customer service configuration"
 您不是客服人员，无法使用工作台,"You are not a customer service agent and cannot use the workspace"
 客服工作台,"Customer Service Console"
 加载工作台失败：%{1},"Failed to load workspace: %{1}"
@@ -88,9 +88,9 @@ settings,settings
 分配会话失败：%{1},"Failed to assign session: %{1}"
 无权关闭此会话,"No permission to close this session"
 获取客服状态失败：%{1},"Failed to get agent status: %{1}"
-客服聊天工作台,客服聊天工作台
-查看工作台,查看工作台
-查看客服工作台,查看客服工作台
+客服聊天工作台,"Customer Service Chat Workbench"
+查看工作台,"View workbench"
+查看客服工作台,"View the customer service workbench"
 等待中,Waiting
 暂无消息,"No messages"
 接单,"Accept order"
@@ -101,12 +101,12 @@ settings,settings
 发送失败,"Failed to send"
 发送失败，请稍后重试,"Failed to send, please try again later"
 确定要接单此会话吗？,"Are you sure you want to accept this session?"
-确认接单,确认接单
+确认接单,"Confirm order"
 取消,Cancel
 分配失败,"Assignment failed"
 分配失败，请稍后重试,"Assignment failed, please try again later"
 确定要关闭此会话吗？,"Are you sure you want to close this session?"
-确认关闭,确认关闭
+确认关闭,"Confirm close"
 关闭,Close
 请选择一个会话开始聊天,"Select a conversation to start chatting"
 关闭失败,"Close failed"
@@ -122,7 +122,7 @@ settings,settings
 分钟,minutes
 最长,Longest
 秒,seconds
-欢迎使用客服服务,"Welcome to customer service"
+客服服务,"Customer Service"
 我的语言,"My Language"
 显示模式,"Display Mode"
 欢迎使用客服服务！,"Welcome to Customer Service!"
@@ -133,13 +133,13 @@ settings,settings
 原文+译文,"Original + Translation"
 仅显示原文,"Original Only"
 客服会话初始化失败，请稍后重试,"Customer Service Session Initialization Failed, Please Retry Later"
-鐎广垺婀囬崷銊у殠,"Menu Bar"
+欢迎使用客服服务,"Welcome to customer service"
+在线客服,"Online customer service"
 "AI 智能客服","AI Customer Service"
-鐎广垺婀囩粋鑽ゅ殠,Menu
+离线,Offline
 请输入有效的邮箱地址,"Please enter a valid email address"
 会话未初始化，请刷新页面重试,"Session not initialized, please refresh the page and try again"
 验证邮件已发送，请查收您的邮箱,"Verification email sent, please check your email"
-客服服务,"Customer Service"
 检测中...,Checking...
 接收客服回复与优惠通知,"Receive customer service replies and promotional notifications"
 留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,"After leaving your email, customer service can send the reply to this inquiry, quote progress, and available offers to your email."
@@ -247,3 +247,5 @@ ID,ID
 翻译：,Translation:
 "客服服务 - 邮箱绑定验证","Customer Service - Email Binding Verification"
 客服系统,"Customer Service System"
+鐎广垺婀囬崷銊у殠,"Menu Bar"
+鐎广垺婀囩粋鑽ゅ殠,Menu

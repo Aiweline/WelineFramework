@@ -104,17 +104,55 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->session->set('backend_login_referer', $returnUrl);
         }
         $this->assign('return_url', $returnUrl);
+
+        // 先处理锁定 Session：DB attempt_times 已恢复时清掉锁定标志，且必须在读 Flash 之前，
+        // 否则会把上一轮「已锁定」提示先赋给模板，清理无效。
+        $s = $this->session;
+        $backendDisable = $s->get('backend_disable_login');
+        if ($backendDisable) {
+            $lockedUsername = $s->get('backend_disable_login_username') ?? $this->request->getParam('username') ?? '';
+            $cleared = false;
+            if ($lockedUsername !== '') {
+                $user = $this->adminUser->findByUsername((string)$lockedUsername) ?? BackendLoginAccount::empty();
+                $uid = $user->getId();
+                $attemptTimes = $user->getAttemptTimes();
+                if ($uid && $attemptTimes <= 6) {
+                    $s->delete('backend_disable_login');
+                    $s->delete('backend_disable_login_username');
+                    ObjectManager::getInstance(MessageManager::class)->clear();
+                    $cleared = true;
+                }
+            } else {
+                $s->delete('backend_disable_login');
+                $s->delete('backend_disable_login_username');
+                ObjectManager::getInstance(MessageManager::class)->clear();
+                $cleared = true;
+            }
+            $afterClear = $s->get('backend_disable_login');
+            if (!$cleared && $afterClear) {
+                MessageManager::error(__('你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。'));
+            }
+        }
+
         // 无权限重定向原因：仅当次请求通过 GET 传入，显示一次即不再保留，刷新后不显示
         $noAccessReason = $this->request->getParam('no_access_reason');
         if ($noAccessReason !== null && $noAccessReason !== '') {
             w_auth_log('login_index_no_access_display', '登录页展示无权限原因', ['reason' => $noAccessReason, 'session' => $this->getSessionDataForLog()]);
             [$title, $msg] = $this->getNoAccessMessageByReason((string) $noAccessReason);
-            $this->assign('no_access_message', \Weline\Framework\Manager\MessageManager::process_message($msg, $title, 'warning'));
+            $this->assign(
+                'no_access_message',
+                \Weline\Framework\Manager\MessageManager::htmlToPlainText(
+                    \Weline\Framework\Manager\MessageManager::process_message($msg, $title, 'warning')
+                )
+            );
         } else {
             $this->assign('no_access_message', '');
         }
-        // 显式输出 MessageManager 的 Flash 消息（密码错误、验证码错误等），确保 302 后能展示
-        $this->assign('login_flash_message', (string) $this->messageManager);
+        // Flash 消息在登录页以纯文本展示（自绘 w-alert），需去掉关闭按钮等 HTML 壳
+        $this->assign(
+            'login_flash_message',
+            \Weline\Framework\Manager\MessageManager::htmlToPlainText((string) $this->messageManager)
+        );
         # 检测验证码
         if ($this->session->get(self::SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE)) {
             $this->session->delete(self::SESSION_KEY_BACKEND_VERIFICATION_CODE);
@@ -144,34 +182,6 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         $loginBgUrl = $loginBg !== '' ? '/pub/media/' . $loginBg : self::DEFAULT_LOGIN_BG_URL;
         $this->assign('login_bg_url', $loginBgUrl);
-        // 锁定提示以 Session 为准，但若数据库中该用户 attempt_times 已恢复（管理员改过），则清除 Session 标志避免一直提示
-        $s = $this->session;
-        $backendDisable = $s->get('backend_disable_login');
-        if ($backendDisable) {
-            $lockedUsername = $s->get('backend_disable_login_username') ?? $this->request->getParam('username') ?? '';
-            $cleared = false;
-            if ($lockedUsername !== '') {
-                $user = $this->adminUser->findByUsername((string)$lockedUsername) ?? BackendLoginAccount::empty();
-                $uid = $user->getId();
-                $attemptTimes = $user->getAttemptTimes();
-                if ($uid && $attemptTimes <= 6) {
-                    $s->delete('backend_disable_login');
-                    $s->delete('backend_disable_login_username');
-                    ObjectManager::getInstance(MessageManager::class)->clear();
-                    $cleared = true;
-                }
-            } else {
-                // 无用户名时视为老旧 session，清除锁定显示，让用户重试（POST 会重新校验）
-                $s->delete('backend_disable_login');
-                $s->delete('backend_disable_login_username');
-                ObjectManager::getInstance(MessageManager::class)->clear();
-                $cleared = true;
-            }
-            $afterClear = $s->get('backend_disable_login');
-            if (!$cleared && $afterClear) {
-                MessageManager::error(__('你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。'));
-            }
-        }
         // 登录页本身就是一个独立完整模板，不依赖通用布局包装。
         // 在 WLS 下直接返回 detached HTML Response，避免控制器 fetch 事件链
         // 或后续结果归一化把登录页 body 吞成空响应。

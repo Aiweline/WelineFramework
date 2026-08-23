@@ -18,6 +18,9 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
 {
     protected string $_template = 'Weline_Component::off-canvas.phtml';
 
+    /** Block 入参标题；避免 Template::init() 用模块名覆盖后丢失 */
+    private string $panelTitle = '';
+
     private const DEFAULT_DATA = [
         'cache' => 300,
         'target-tag' => 'button',
@@ -50,11 +53,16 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
 
     function __init(): void
     {
+        // 直接读构造入参，避免 parent::init() 把 title 写成模块名
+        $this->panelTitle = trim((string)($this->_data['title'] ?? ''));
         parent::__init();
         // 解析参数传参
         $action_params = $this->getParseVarsParams('action-params');
         $check_fields = ['action', 'id'];
         $data = $this->getData();
+        if ($this->panelTitle !== '') {
+            $data['title'] = $this->panelTitle;
+        }
         foreach ($check_fields as $check_field) {
             $field = $this->getData($check_field) ?: '';
             if (empty($field)) {
@@ -98,6 +106,7 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
         // $data['id']只留下字母和下划线
         $data['id'] = preg_replace('/[^\w]+/', '', $data['id']);
         $data['id'] = $data['id'] . md5(json_encode($data ?? []));
+        $data['drawer_title'] = $this->panelTitle !== '' ? $this->panelTitle : (string)($data['title'] ?? '');
         $this->setData($data);
         $this->assign($data);
     }

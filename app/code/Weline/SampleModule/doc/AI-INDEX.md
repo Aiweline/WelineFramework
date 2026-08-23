@@ -29,16 +29,17 @@
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：2
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：1
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 
 ## doc 目录
 
 - `app/code/Weline/SampleModule/doc/README.md`
+- `app/code/Weline/SampleModule/doc/功能现状.md`
+- `app/code/Weline/SampleModule/doc/开发日志.md`
+- `app/code/Weline/SampleModule/doc/需求.md`
 
 ## 开发前门禁
 

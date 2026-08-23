@@ -6,12 +6,6 @@
 
     // 一次性合并所有模块配置
     Object.assign(window.WelineModulesConfig.modules, {
-        i18n: {
-            origin_paths: ["app/code/Weline/I18n/view/statics/js/i18n.js"],
-            paths: ["/Weline/I18n/view/statics/js/i18n.js"],
-            globalVar: "WelineI18n",
-            description: "国际化（i18n）语言切换器模块"
-        },
         currency: {
             origin_paths: ["app/code/Weline/Currency/view/statics/js/currency.js"],
             paths: ["/Weline/Currency/view/statics/js/currency.js"],
@@ -40,8 +34,6 @@
 
     // 一次性合并所有模块别名
     Object.assign(window.WelineModulesConfig.moduleAliases, {
-        language: "i18n",
-        lang: "i18n",
         money: "currency",
         api: "weline-api",
         account: "weline-api-account",
