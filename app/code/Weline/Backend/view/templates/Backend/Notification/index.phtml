@@ -40,6 +40,7 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
     return $iconCache[$key];
 };
 ?>
+<link rel="stylesheet" href="@static(Weline_Backend::css/notification-center.css)">
 
 <section
     class="w-notification-center w-stack"
@@ -52,10 +53,7 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
     data-w-request-failure-message="<?= $escape(__('网络错误，请重试')) ?>"
 >
     <header class="w-notification-center__heading">
-        <div class="w-stack">
-            <h1 class="w-notification-center__title"><w:icon name="bell" size="md" /><lang>通知中心</lang></h1>
-            <p class="w-text" data-tone="muted"><lang>集中查看系统消息、告警与业务提醒。</lang></p>
-        </div>
+        <p class="w-text" data-tone="muted"><lang>集中查看系统消息、告警与业务提醒。</lang></p>
         <div class="w-notification-center__actions">
             <a href="<?= $escape($this->getBackendUrl('system/backend/notificationsubscription')) ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
                 <w:icon name="settings" size="sm" /><lang>管理订阅</lang>
@@ -127,6 +125,8 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
                 $detailHref = $escape($this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]));
                 $itemState = $isRead ? 'read' : 'unread';
                 $toneAttr = $escape($tone);
+                $rawTime = (string)($notification['notification_time'] ?? '');
+                $displayTime = preg_replace('/\.\d+$/', '', $rawTime) ?? $rawTime;
                 ?>
                 <a
                     href="<?= $detailHref ?>"
@@ -146,7 +146,7 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
                         </span>
                         <span class="w-notification-center__item-text"><?= $escape(mb_substr($content, 0, 120)) ?><?= mb_strlen($content) > 120 ? '…' : '' ?></span>
                         <span class="w-notification-center__item-footer">
-                            <span><w:icon name="clock" size="sm" /><?= $escape($notification['notification_time'] ?? '') ?></span>
+                            <span><w:icon name="clock" size="sm" /><?= $escape($displayTime) ?></span>
                             <?php if (!empty($notification['topic_code'])): ?>
                                 <span><w:icon name="tag" size="sm" /><?= $escape($notification['topic_name'] ?? $notification['topic_code']) ?></span>
                             <?php endif; ?>

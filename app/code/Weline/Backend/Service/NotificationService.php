@@ -89,7 +89,7 @@ class NotificationService
             ->fetch();
 
         $items = $this->statusModel->getItems();
-        $pagination = $this->statusModel->getPagination();
+        $pagination = $this->statusModel->getPaginationState();
 
         $notifications = [];
         foreach ($items as $item) {
@@ -125,7 +125,7 @@ class NotificationService
             'total'      => (int) ($pagination['totalSize'] ?? 0),
             'page'       => (int) ($pagination['page'] ?? $page),
             'limit'      => (int) ($pagination['pageSize'] ?? $limit),
-            'pages'      => (int) ($pagination['lastPage'] ?? 1),
+            'pages'      => max(1, (int) ($pagination['lastPage'] ?? 1)),
         ];
     }
 
