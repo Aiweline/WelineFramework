@@ -5,12 +5,18 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Theme\Api\Layout\LayoutCopyResult;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Layout\LayoutStatus;
 use Weline\Theme\Api\Layout\LayoutWorkspaceInterface;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
+use Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver;
+use Weline\Theme\Service\Scoped\ThemeScopedWorkspaceRequestService;
 
 final class LayoutWorkspace implements LayoutWorkspaceInterface
 {
@@ -266,7 +272,8 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
         if ($identity->targetType === 'cms_page' && ($identity->targetId < 1 || $identity->localeCode === '')) {
             throw new \InvalidArgumentException((string)__('CMS 布局必须指定页面 ID 和精确语言。'));
         }
-        $layoutData = $this->layoutService->getLayout(
+        $scopedDraft = $this->resolveScopedTargetDraft($themeId, $pageType, $identity, $context);
+        $layoutData = $scopedDraft['layout'] ?? $this->layoutService->getLayout(
             $themeId,
             $pageType,
             LayoutStatus::DRAFT->value,
@@ -300,6 +307,19 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
                     $identity,
                     $publicationContext,
                 );
+                $scopedPublication = $this->publishScopedTargetResources(
+                    $themeId,
+                    $pageType,
+                    $identity,
+                    $publicationContext,
+                );
+                if ($scopedPublication !== null) {
+                    return [
+                        'success' => true,
+                        'theme_id' => $themeId,
+                        'scoped_releases' => $scopedPublication,
+                    ];
+                }
                 if (!$this->layoutService->publishLayout(
                     $themeId,
                     $pageType,
@@ -312,6 +332,120 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
                 return ['success' => true, 'theme_id' => $themeId];
             },
         );
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     * @return array{editor_context:ThemeEditorContext,layout:array<string,mixed>}|null
+     */
+    private function resolveScopedTargetDraft(
+        int $themeId,
+        string $pageType,
+        LayoutIdentity $identity,
+        array $context,
+    ): ?array {
+        try {
+            $editorContext = $this->scopedTargetContext($themeId, $pageType, $identity, $context);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+        $state = $workspace->load($editorContext, true);
+        if (!$this->hasScopedTargetRevision($state)) {
+            return null;
+        }
+
+        return [
+            'editor_context' => $editorContext,
+            'layout' => ObjectManager::getInstance(ThemeScopedPreviewResolver::class)
+                ->resolveLayout($editorContext, ThemeLayout::STATUS_DRAFT),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     * @return array<string,array<string,mixed>>|null
+     */
+    private function publishScopedTargetResources(
+        int $themeId,
+        string $pageType,
+        LayoutIdentity $identity,
+        array $context,
+    ): ?array {
+        try {
+            $layoutContext = $this->scopedTargetContext($themeId, $pageType, $identity, $context);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+        $layoutState = $workspace->load($layoutContext, true);
+        if (!$this->hasScopedTargetRevision($layoutState)) {
+            return null;
+        }
+
+        $requestService = ObjectManager::getInstance(ThemeScopedWorkspaceRequestService::class);
+        $numericActorId = max(0, (int)($context['actor_id'] ?? 0));
+        $actorId = $numericActorId > 0
+            ? 'backend-user:' . $numericActorId
+            : 'system:cms-target-variant';
+        $releases = [];
+        foreach ([
+            ThemeEditorContext::RESOURCE_LAYOUT,
+            ThemeEditorContext::RESOURCE_META,
+            ThemeEditorContext::RESOURCE_I18N,
+        ] as $resourceType) {
+            $resourceContext = $layoutContext->withResource($resourceType);
+            $state = $resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+                ? $layoutState
+                : $workspace->load($resourceContext, true);
+            if (!$this->hasScopedTargetRevision($state)) {
+                continue;
+            }
+            $releases[$resourceType] = $requestService->publish(
+                [
+                    'editor_context' => $resourceContext->toArray(),
+                    'expected_revision' => (int)$state['revision'],
+                    'expected_parent_release_id' => $state['expected_parent_release_id'] ?? null,
+                    'reason' => 'cms_target_variant_publish',
+                ],
+                $actorId,
+                'CMS target variant publication',
+            );
+        }
+
+        return $releases;
+    }
+
+    /** @param array<string,mixed> $state */
+    private function hasScopedTargetRevision(array $state): bool
+    {
+        return (int)($state['revision'] ?? 0) > 0
+            && (int)($state['draft_revision_id'] ?? 0) > 0;
+    }
+
+    /** @param array<string,mixed> $context */
+    private function scopedTargetContext(
+        int $themeId,
+        string $pageType,
+        LayoutIdentity $identity,
+        array $context,
+    ): ThemeEditorContext {
+        $scopeIdentity = $this->scopeIdentityFromContext($context);
+        return ObjectManager::getInstance(ThemeEditorContextFactory::class)->fromInput([
+            'editor_context' => [
+                'scope' => $scopeIdentity->toArray(),
+                'area' => (string)($context['area'] ?? 'frontend'),
+                'resource_type' => ThemeEditorContext::RESOURCE_LAYOUT,
+                'theme_id' => $themeId,
+                'layout_type' => $pageType,
+                'layout_option' => $identity->layoutOption,
+                'locale' => $identity->localeCode !== '' ? $identity->localeCode : 'default',
+                'target_type' => $identity->targetType,
+                'target_id' => $identity->targetId,
+            ],
+        ]);
     }
 
     public function copyTargetLayoutData(
