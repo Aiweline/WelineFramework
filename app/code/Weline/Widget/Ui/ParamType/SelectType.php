@@ -24,7 +24,7 @@ class SelectType extends AbstractParamType
         $currentValue = $value ?? $this->getDefaultValue($param);
         $selectedValues = $multiple ? (array)$currentValue : [$currentValue];
         $selectAttrs = array_merge([
-            'class' => 'w-param-select',
+            'class' => 'w-select',
             'id' => $fieldId,
             'name' => $multiple ? $key . '[]' : $key,
         ], $attrs);

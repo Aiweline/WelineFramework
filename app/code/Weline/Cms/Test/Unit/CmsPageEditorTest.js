@@ -127,6 +127,7 @@ test('one-click translation uses runtime_task resource and reaches terminal stat
     const outcome = await runTranslationTask({
         api,
         pageId: 6,
+        storeId: 4,
         requestId: 'cms-translation-test',
         sleep: async () => {},
         now: (() => {
@@ -139,7 +140,7 @@ test('one-click translation uses runtime_task resource and reaches terminal stat
     assert.equal(outcome.data.results.zh_Hans_CN.title, '关于我们');
     assert.deepEqual(calls[1], ['start', {
         type_code: 'cms.page_translation',
-        input: { page_id: 6, request_id: 'cms-translation-test' },
+        input: { page_id: 6, store_id: 4, request_id: 'cms-translation-test' },
     }]);
     assert.equal(calls.filter(([name]) => name === 'status').length, 2);
     assert.equal(calls.filter(([name]) => name === 'touch').length, 1);

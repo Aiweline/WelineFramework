@@ -16,27 +16,27 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
     ?>
     <div class="stats-cards">
         <div class="w-card">
-            <div class="card-content">
+            <div class="weline-card-content">
                 <div class="w-card__title"><?= __('总组件数') ?></div>
-                <div class="card-value"><?= $stats['total'] ?? 0 ?></div>
+                <div class="weline-card-value"><?= $stats['total'] ?? 0 ?></div>
             </div>
         </div>
         <div class="w-card">
-            <div class="card-content">
+            <div class="weline-card-content">
                 <div class="w-card__title"><?= __('当前显示') ?></div>
-                <div class="card-value" style="color: var(--primary-color, #0bb197);"><?= $stats['filtered'] ?? 0 ?></div>
+                <div class="weline-card-value" style="color: var(--primary-color, #0bb197);"><?= $stats['filtered'] ?? 0 ?></div>
             </div>
         </div>
         <div class="w-card">
-            <div class="card-content">
+            <div class="weline-card-content">
                 <div class="w-card__title"><?= __('模块数') ?></div>
-                <div class="card-value" style="color: var(--info-color, #4aa3ff);"><?= $stats['modules'] ?? 0 ?></div>
+                <div class="weline-card-value" style="color: var(--info-color, #4aa3ff);"><?= $stats['modules'] ?? 0 ?></div>
             </div>
         </div>
         <div class="w-card">
-            <div class="card-content">
+            <div class="weline-card-content">
                 <div class="w-card__title"><?= __('分类数') ?></div>
-                <div class="card-value" style="color: var(--success-color, #0ac074);"><?= $stats['categories'] ?? 0 ?></div>
+                <div class="weline-card-value" style="color: var(--success-color, #0ac074);"><?= $stats['categories'] ?? 0 ?></div>
             </div>
         </div>
     </div>
@@ -103,7 +103,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
                 <p><?= __('系统中还没有找到任何实现了 ComponentInterface 的组件。') ?></p>
             </div>
         <?php else: ?>
-            <div class="table-container">
+            <div class="weline-table-container">
                 <table class="w-table">
                     <thead>
                         <tr>
@@ -139,7 +139,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
                                 </td>
                                 <td>
                                     <div class="actions">
-                                        <button type="button" class="w-button btn-view-detail" data-component-class="<?= htmlspecialchars($fullClass) ?>" style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);" title="<?= __('查看详情') ?>" data-size="sm">
+                                        <button type="button" class="w-button weline-btn-view-detail" data-component-class="<?= htmlspecialchars($fullClass) ?>" style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);" title="<?= __('查看详情') ?>" data-size="sm">
                                             <w:icon name="eye" size="sm"></w:icon> <?= __('详情') ?>
                                         </button>
                                     </div>
@@ -176,7 +176,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
     transform: translateY(-2px);
 }
 
-.stats-cards .card-content {
+.stats-cards .weline-card-content {
     display: flex;
     flex-direction: column;
 }
@@ -187,7 +187,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
     margin-bottom: 0.5rem;
 }
 
-.stats-cards .card-value {
+.stats-cards .weline-card-value {
     font-size: 1.75rem;
     font-weight: 600;
     color: var(--text-color, #212529);
@@ -287,7 +287,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 }
 
 /* 表格样式 */
-.table-container {
+.weline-table-container {
     overflow-x: auto;
 }
 
@@ -355,23 +355,23 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 }
 
 /* 滚动条样式 */
-.table-container::-webkit-scrollbar {
+.weline-table-container::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
-.table-container::-webkit-scrollbar-track {
+.weline-table-container::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
     border-radius: 3px;
 }
 
-.table-container::-webkit-scrollbar-thumb {
+.weline-table-container::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
     border-radius: 3px;
     transition: background 0.2s ease;
 }
 
-.table-container::-webkit-scrollbar-thumb:hover {
+.weline-table-container::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover);
 }
 
@@ -392,34 +392,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 </style>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_component_admin) return;
-  g.__bqAdmin_component_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['component_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('component_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 组件详情查看功能
@@ -434,8 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 使用 OffCanvas 或 Modal 显示详情
             // 这里可以使用框架的 OffCanvas 组件
-            bqAdmin['component_admin']('*/backend/components/detail?class=' + encodeURIComponent(componentClass), {
-                method: 'GET',
+            Weline.adminRequest('component_admin', '*/backend/components/detail?class='+ encodeURIComponent(componentClass), { method:'GET',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
                 }

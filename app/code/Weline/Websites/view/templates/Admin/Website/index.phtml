@@ -1,454 +1,134 @@
 <?php
-/**
- * 网站管理（内容模板）
- * 由布局系统自动包裹 HTML 框架
- *
- * @var \Weline\Framework\View\Template $this
- */
+/** * 网站管理（内容模板） * 由布局系统自动包裹 HTML 框架 * * @var \Weline\Framework\View\Template $this */
 $search = $this->getData('search') ?? '';
 ?>
 <style>
-/* ============================================
-   组件：Weline Websites 网站管理
-   前缀：weline-websites-admin-
-   ============================================ */
-.weline-websites-admin-badge {
-    font-size: 0.75rem;
-    padding: 0.25em 0.5em;
+/* ============================================ 组件：Weline Websites 网站管理 前缀：weline-websites-admin- ============================================ */
+.weline-websites-admin-badge { font-size: 0.75rem; padding: 0.25em 0.5em;
 }
 .weline-websites-admin-card .card,
-.weline-websites-admin-card .card-body {
-    background: var(--backend-color-card-bg, #fff);
-    border-color: var(--backend-color-border-default, #dee2e6);
-    color: var(--backend-color-text-primary, #212529);
+.weline-websites-admin-card .card-body { background: var(--backend-color-card-bg, #fff); border-color: var(--backend-color-border-default, #dee2e6); color: var(--backend-color-text-primary, #212529);
 }
-.weline-websites-admin-card .card-title {
-    color: var(--backend-color-text-primary, #212529);
+.weline-websites-admin-card .card-title { color: var(--backend-color-text-primary, #212529);
 }
-.weline-websites-table-wrap .table {
-    color: var(--backend-color-text-primary, #212529);
+.weline-websites-table-wrap .table { color: var(--backend-color-text-primary, #212529);
 }
-.weline-websites-table-wrap .table thead th {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #212529);
-    border-color: var(--backend-color-border-default, #dee2e6);
+.weline-websites-table-wrap .table thead th { background: var(--backend-color-bg-secondary, #f8f9fa); color: var(--backend-color-text-primary, #212529); border-color: var(--backend-color-border-default, #dee2e6);
 }
-.weline-websites-table-wrap .table tbody td {
-    border-color: var(--backend-color-border-light, #e9ecef);
+.weline-websites-table-wrap .table tbody td { border-color: var(--backend-color-border-light, #e9ecef);
 }
-.weline-websites-table-wrap .table-hover tbody tr:hover {
-    background: var(--backend-color-table-bg-hover, #f8f9fa);
+.weline-websites-table-wrap .table-hover tbody tr:hover { background: var(--backend-color-table-bg-hover, #f8f9fa);
 }
-.weline-websites-table-wrap .table code {
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-danger, #f46a6a);
-    padding: 2px 6px;
-    border-radius: var(--backend-border-radius-sm, 4px);
+.weline-websites-table-wrap .table code { background: var(--backend-color-bg-tertiary, #e9ecef); color: var(--backend-color-danger, #f46a6a); padding: 2px 6px; border-radius: var(--backend-border-radius-sm, 4px);
 }
-.weline-websites-url-link {
-    color: var(--backend-color-primary, #556ee6);
+.weline-websites-url-link { color: var(--backend-color-primary, #556ee6);
 }
-.weline-websites-url-link:hover {
-    color: var(--backend-color-primary-hover, #485ec4);
+.weline-websites-url-link:hover { color: var(--backend-color-primary-hover, #485ec4);
 }
-.weline-websites-domain-cell {
-    max-width: 220px;
+.weline-websites-domain-cell { max-width: 220px;
 }
-.weline-websites-domain-badge {
-    display: inline-flex;
-    align-items: center;
-    margin-bottom: 4px;
-    margin-right: 8px;
+.weline-websites-domain-badge { display: inline-flex; align-items: center; margin-bottom: 4px; margin-right: 8px;
 }
-.weline-websites-domain-badge:last-child {
-    margin-bottom: 0;
+.weline-websites-domain-badge:last-child { margin-bottom: 0;
 }
-.weline-websites-domain-link {
-    color: var(--backend-color-primary, #556ee6);
-    text-decoration: none;
-    font-size: 0.875rem;
+.weline-websites-domain-link { color: var(--backend-color-primary, #556ee6); text-decoration: none; font-size: 0.875rem;
 }
-.weline-websites-domain-link:hover {
-    text-decoration: underline;
-    color: var(--backend-color-primary-hover, #485ec4);
+.weline-websites-domain-link:hover { text-decoration: underline; color: var(--backend-color-primary-hover, #485ec4);
 }
-.weline-websites-admin-guide {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-left: 4px solid var(--backend-color-primary, #556ee6);
-    padding: 16px 20px;
-    border-radius: var(--backend-border-radius-md, 8px);
-    margin-bottom: 20px;
-    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+.weline-websites-admin-guide { background: var(--backend-color-card-bg, #fff); border: 1px solid var(--backend-color-border-default, #dee2e6); border-left: 4px solid var(--backend-color-primary, #556ee6); padding: 16px 20px; border-radius: var(--backend-border-radius-md, 8px); margin-bottom: 20px; box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
 }
-.weline-websites-admin-guide-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
-    width: 100%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    text-align: left;
-    color: inherit;
+.weline-websites-admin-guide-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; color: inherit;
 }
-.weline-websites-admin-guide-header:focus-visible {
-    outline: 3px solid var(--backend-color-primary, #556ee6);
-    outline-offset: 4px;
-    border-radius: var(--backend-border-radius-sm, 4px);
+.weline-websites-admin-guide-header:focus-visible { outline: 3px solid var(--backend-color-primary, #556ee6); outline-offset: 4px; border-radius: var(--backend-border-radius-sm, 4px);
 }
-.weline-websites-admin-guide-header h6 {
-    margin: 0;
-    color: var(--backend-color-text-primary, #212529);
-    font-weight: 600;
+.weline-websites-admin-guide-header h6 { margin: 0; color: var(--backend-color-text-primary, #212529); font-weight: 600;
 }
-.weline-websites-admin-guide-body {
-    margin-top: 12px;
-    display: none;
+.weline-websites-admin-guide-body { margin-top: 12px; display: none;
 }
-.weline-websites-admin-guide-body.show {
-    display: block;
+.weline-websites-admin-guide-body.show { display: block;
 }
-.weline-websites-admin-guide-body ul {
-    margin: 8px 0 0 0;
-    padding-left: 20px;
-    color: var(--backend-color-text-secondary, #6c757d);
+.weline-websites-admin-guide-body ul { margin: 8px 0 0 0; padding-left: 20px; color: var(--backend-color-text-secondary, #6c757d);
 }
-#search-form .form-control {
-    background: var(--backend-color-input-bg, #fff);
-    border-color: var(--backend-color-border-default, #dee2e6);
-    color: var(--backend-color-text-primary, #212529);
+#search-form .form-control { background: var(--backend-color-input-bg, #fff); border-color: var(--backend-color-border-default, #dee2e6); color: var(--backend-color-text-primary, #212529);
 }
-#search-form .form-control:focus {
-    border-color: var(--backend-color-primary, #556ee6);
+#search-form .form-control:focus { border-color: var(--backend-color-primary, #556ee6);
 }
-.weline-websites-compact-table {
-    min-width: 1180px;
-    margin-bottom: 0;
+.weline-websites-compact-table { min-width: 1180px; margin-bottom: 0;
 }
-.weline-websites-site-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    min-width: 14rem;
+.weline-websites-site-cell { display: flex; flex-direction: column; gap: 0.45rem; min-width: 14rem;
 }
-.weline-websites-site-name {
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
+.weline-websites-site-name { font-weight: 600; color: var(--backend-color-text-primary, #212529);
 }
-.weline-websites-site-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    align-items: center;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.78rem;
+.weline-websites-site-meta { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; color: var(--backend-color-text-secondary, #6c757d); font-size: 0.78rem;
 }
-.weline-websites-inline-code {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.45rem;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-danger, #f46a6a);
-    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-    font-size: 0.78rem;
+.weline-websites-inline-code { display: inline-flex; align-items: center; padding: 0.2rem 0.45rem; border-radius: var(--backend-border-radius-sm, 4px); background: var(--backend-color-bg-tertiary, #e9ecef); color: var(--backend-color-danger, #f46a6a); font-family: 'SF Mono', 'Monaco', 'Consolas', monospace; font-size: 0.78rem;
 }
-.weline-websites-meta-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--backend-border-radius-pill, 999px);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
+.weline-websites-meta-chip { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: var(--backend-border-radius-pill, 999px); background: var(--backend-color-bg-secondary, #f8f9fa);
 }
-.weline-websites-access-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    min-width: 18rem;
+.weline-websites-access-cell { display: flex; flex-direction: column; gap: 0.55rem; min-width: 18rem;
 }
-.weline-websites-url-row {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    max-width: 100%;
-    word-break: break-all;
+.weline-websites-url-row { display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; word-break: break-all;
 }
-.weline-websites-domain-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
+.weline-websites-domain-list { display: flex; flex-wrap: wrap; gap: 0.45rem;
 }
-.weline-websites-domain-badge {
-    background: var(--backend-color-bg-tertiary, #f1f3f5);
-    padding: 0.25rem 0.55rem;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    line-height: 1.2;
+.weline-websites-domain-badge { background: var(--backend-color-bg-tertiary, #f1f3f5); padding: 0.25rem 0.55rem; border-radius: var(--backend-border-radius-sm, 4px); line-height: 1.2;
 }
-.weline-websites-market-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    min-width: 15rem;
+.weline-websites-market-cell { display: flex; flex-direction: column; gap: 0.55rem; min-width: 15rem;
 }
-.weline-websites-market-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: flex-start;
+.weline-websites-market-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start;
 }
-.weline-websites-market-label {
-    min-width: 2.75rem;
-    color: var(--backend-color-text-tertiary, #9a9cae);
-    font-size: 0.78rem;
-    line-height: 1.8;
+.weline-websites-market-label { min-width: 2.75rem; color: var(--backend-color-text-tertiary, #9a9cae); font-size: 0.78rem; line-height: 1.8;
 }
-.weline-websites-chip-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    flex: 1;
+.weline-websites-chip-group { display: flex; flex-wrap: wrap; gap: 0.35rem; flex: 1;
 }
-.weline-websites-op-cell {
-    white-space: nowrap;
+.weline-websites-op-cell { white-space: nowrap;
 }
-.weline-websites-op-cell .btn {
-    white-space: nowrap;
+.weline-websites-op-cell .btn { white-space: nowrap;
 }
-.weline-websites-directory-cell {
-    min-width: 22rem;
-    max-width: 30rem;
-    vertical-align: top;
+.weline-websites-directory-cell { min-width: 22rem; max-width: 30rem; vertical-align: top;
 }
-.weline-websites-directory {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    max-height: 24rem;
-    overflow-y: auto;
-    padding-right: 0.25rem;
-    scrollbar-width: thin;
+.weline-websites-directory { display: flex; flex-direction: column; gap: 0.65rem; max-height: 24rem; overflow-y: auto; padding-right: 0.25rem; scrollbar-width: thin;
 }
 .weline-websites-directory-heading,
-.weline-websites-store-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.5rem;
+.weline-websites-store-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;
 }
-.weline-websites-directory-heading {
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.8rem;
-    font-weight: 600;
+.weline-websites-directory-heading { color: var(--backend-color-text-secondary, #6c757d); font-size: 0.8rem; font-weight: 600;
 }
 .weline-websites-directory-empty,
-.weline-websites-channel-empty {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.45rem;
-    padding: 0.65rem;
-    border: 1px dashed var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-sm, 4px);
-    color: var(--backend-color-text-secondary, #6c757d);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    font-size: 0.8rem;
+.weline-websites-channel-empty { display: flex; align-items: flex-start; gap: 0.45rem; padding: 0.65rem; border: 1px dashed var(--backend-color-border-default, #dee2e6); border-radius: var(--backend-border-radius-sm, 4px); color: var(--backend-color-text-secondary, #6c757d); background: var(--backend-color-bg-secondary, #f8f9fa); font-size: 0.8rem;
 }
 .weline-websites-store-list,
-.weline-websites-channel-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+.weline-websites-channel-list { list-style: none; margin: 0; padding: 0;
 }
-.weline-websites-store-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
+.weline-websites-store-list { display: flex; flex-direction: column; gap: 0.6rem;
 }
-.weline-websites-store-item {
-    padding: 0.65rem;
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-md, 8px);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
+.weline-websites-store-item { padding: 0.65rem; border: 1px solid var(--backend-color-border-light, #e9ecef); border-radius: var(--backend-border-radius-md, 8px); background: var(--backend-color-bg-secondary, #f8f9fa);
 }
 .weline-websites-store-header > div:first-child,
-.weline-websites-directory-badges {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem;
+.weline-websites-directory-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem;
 }
-.weline-websites-directory-badges {
-    justify-content: flex-end;
+.weline-websites-directory-badges { justify-content: flex-end;
 }
-.weline-websites-channel-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    margin-top: 0.55rem;
-    padding-left: 0.65rem;
-    border-left: 2px solid var(--backend-color-border-default, #dee2e6);
+.weline-websites-channel-list { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.55rem; padding-left: 0.65rem; border-left: 2px solid var(--backend-color-border-default, #dee2e6);
 }
-.weline-websites-channel-list li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.8rem;
+.weline-websites-channel-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; color: var(--backend-color-text-secondary, #6c757d); font-size: 0.8rem;
 }
-.weline-websites-channel-name {
-    color: var(--backend-color-text-primary, #212529);
-    font-weight: 500;
+.weline-websites-channel-name { color: var(--backend-color-text-primary, #212529); font-weight: 500;
 }
-.weline-websites-channel-empty {
-    margin-top: 0.55rem;
-    padding: 0.45rem 0.55rem;
+.weline-websites-channel-empty { margin-top: 0.55rem; padding: 0.45rem 0.55rem;
 }
-@media (max-width: 767.98px) {
-    .weline-websites-directory-cell {
-        min-width: 19rem;
-    }
+@media (max-width: 767.98px) { .weline-websites-directory-cell { min-width: 19rem; }
 }
-@media (prefers-reduced-motion: reduce) {
-    #weline-websites-guide-icon {
-        transition: none !important;
-    }
+@media (prefers-reduced-motion: reduce) { #weline-websites-guide-icon { transition: none !important; }
 }
-</style>
-
-<!-- 页面标题 -->
-<div class="w-grid" data-testid="website-management">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;">
-                <w:icon name="globe" size="sm"></w:icon>
-                <lang>网站管理</lang>
-            </h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><span><lang>后台</lang></span></li>
-                    <li class="w-breadcrumb__item" data-state="active"><lang>网站管理</lang></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 消息 -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <template>Weline_Component::message.phtml</template>
-    </div>
-</div>
-
-<!-- 使用说明（可折叠） -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="weline-websites-admin-guide">
-            <button type="button"
-                    class="weline-websites-admin-guide-header"
-                    id="weline-websites-guide-toggle"
-                    aria-expanded="false"
-                    aria-controls="weline-websites-guide-body">
-                <h6><w:icon name="help" size="sm"></w:icon><lang>使用说明</lang></h6>
-                <w:icon name="chevron-down" size="sm"></w:icon>
-            </button>
-            <div class="weline-websites-admin-guide-body" id="weline-websites-guide-body">
-                <ul>
-                    <li><strong><lang>网站</lang>：</strong><lang>代表一个独立站点，可配置多个域名、语言与货币</lang></li>
-                    <li><strong><lang>Store / SalesChannel</lang>：</strong><lang>列表只读展示站点下的店铺模式、生命周期与销售渠道，不在此处修改目录。</lang></li>
-                    <li><strong><lang>关联域名</lang>：</strong><lang>一个网站可绑定多个域名，主域名用于默认访问</lang></li>
-                    <li><strong><lang>编辑/删除</lang>：</strong><lang>在操作列中可编辑网站或删除（请谨慎操作）</lang></li>
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 网站列表 -->
-<div class="w-grid weline-websites-admin-card">
-    <div style="--w-span:12;">
-        <div class="w-card">
-            <div class="w-card__body">
-                <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
-                    <h4 class="w-card__title" style="--w-mb:0;"><lang>网站列表</lang></h4>
-                    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
-                        <w:form id="search-form" method="get" action="@var($this->getUrl('*/admin/website'))" class="w-cluster" style="--w-gap:var(--weline-space-2);">
-                            <label for="search-input" class="w-visually-hidden"><lang>搜索网站</lang></label>
-                            <input type="text" id="search-input" name="search" class="w-input" placeholder="<?= __('搜索名称、代码或URL') ?>" value="<?= htmlspecialchars($search) ?>" style="width: 250px;">
-                            <button type="submit" class="w-button" data-tone="primary" data-variant="outline">
-                                <w:icon name="search" size="sm"></w:icon> <lang>搜索</lang>
-                            </button>
-                            <?php if ($search !== ''): ?>
-                                <a href="<?= $this->getUrl('*/admin/website') ?>" class="w-button" id="clear-search" data-tone="neutral" data-variant="outline">
-                                    <w:icon name="close" size="sm"></w:icon> <lang>清除</lang>
-                                </a>
-                            <?php endif; ?>
-                        </w:form>
-                        <block class="Weline\Component\Block\OffCanvas"
-                               cache="0"
-                               id="websites_add_website"
-                               action="*/admin/website/add"
-                               title="添加网站"
-                               target-button-text="添加网站"
-                               icon="plus"
-                               target-tone="primary"
-                               save="1"
-                        />
-                    </div>
-                </div>
-
-                <div id="website-table-container">
-                    <?= $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml') ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Table Editable plugin -->
-<!-- Responsive Table js -->
-<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
-<!-- Sweet Alerts js -->
-<js:part name="w-delete"/>
-
-<script>
-(function() {
-    'use strict';
-
-    var guideToggle = document.getElementById('weline-websites-guide-toggle');
-    if (guideToggle) {
-        guideToggle.addEventListener('click', function() {
-            var body = document.getElementById('weline-websites-guide-body');
-            var icon = document.getElementById('weline-websites-guide-icon');
-            if (body && icon) {
-                body.classList.toggle('show');
-                var expanded = body.classList.contains('show');
-                guideToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-                icon.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
-            }
-        });
-    }
-
-    var searchForm = document.getElementById('search-form');
-    var searchInput = document.getElementById('search-input');
-    if (searchForm && searchInput) {
-        searchForm.addEventListener('submit', function(event) {
-            event.preventDefault();
-            var currentParams = new URLSearchParams(window.location.search);
-            var pageSize = currentParams.get('pageSize') || '10';
-            var params = new URLSearchParams();
-            params.append('page', '1');
-            params.append('pageSize', pageSize);
-            var searchValue = searchInput.value.trim();
-            if (searchValue) {
-                params.append('search', searchValue);
-            }
-            window.location.assign(searchForm.action + '?' + params.toString());
-        });
-    }
-
-})();
+</style> <!-- 页面标题 -->
+<div class="w-grid" data-testid="website-management"> <div style="--w-span:12;"> <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between"> <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"> <w:icon name="globe" size="sm"></w:icon> <lang>网站管理</lang> </h4> <div class="w-cluster"> <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;"> <li class="w-breadcrumb__item"><span><lang>后台</lang></span></li> <li class="w-breadcrumb__item" data-state="active"><lang>网站管理</lang></li> </ol> </div> </div> </div>
+</div> <!-- 消息 -->
+<div class="w-grid"> <div style="--w-span:12;"> <template>Weline_Component::message.phtml</template> </div>
+</div> <!-- 使用说明（可折叠） -->
+<div class="w-grid"> <div style="--w-span:12;"> <div class="weline-websites-admin-guide"> <button type="button" class="weline-websites-admin-guide-header" id="weline-websites-guide-toggle" aria-expanded="false" aria-controls="weline-websites-guide-body"> <h6><w:icon name="help" size="sm"></w:icon><lang>使用说明</lang></h6> <w:icon name="chevron-down" size="sm"></w:icon> </button> <div class="weline-websites-admin-guide-body" id="weline-websites-guide-body"> <ul> <li><strong><lang>网站</lang>：</strong><lang>代表一个独立站点，可配置多个域名、语言与货币</lang></li> <li><strong><lang>Store / SalesChannel</lang>：</strong><lang>列表只读展示站点下的店铺模式、生命周期与销售渠道，不在此处修改目录。</lang></li> <li><strong><lang>关联域名</lang>：</strong><lang>一个网站可绑定多个域名，主域名用于默认访问</lang></li> <li><strong><lang>编辑/删除</lang>：</strong><lang>在操作列中可编辑网站或删除（请谨慎操作）</lang></li> </ul> </div> </div> </div>
+</div> <!-- 网站列表 -->
+<div class="w-grid weline-websites-admin-card"> <div style="--w-span:12;"> <div class="w-card"> <div class="w-card__body"> <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);"> <h4 class="w-card__title" style="--w-mb:0;"><lang>网站列表</lang></h4> <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);"> <w:form id="search-form" method="get" action="@var($this->getUrl('*/admin/website'))" class="w-cluster" style="--w-gap:var(--weline-space-2);"> <label for="search-input" class="w-visually-hidden"><lang>搜索网站</lang></label> <input type="text" id="search-input" name="search" class="w-input" placeholder="<?= __('搜索名称、代码或URL') ?>" value="<?= htmlspecialchars($search) ?>" style="width: 250px;"> <button type="submit" class="w-button" data-tone="primary" data-variant="outline"> <w:icon name="search" size="sm"></w:icon> <lang>搜索</lang> </button> <?php if ($search !== ''): ?> <a href="<?= $this->getUrl('*/admin/website') ?>" class="w-button" id="clear-search" data-tone="neutral" data-variant="outline"> <w:icon name="close" size="sm"></w:icon> <lang>清除</lang> </a> <?php endif; ?> </w:form> <block class="Weline\Component\Block\OffCanvas" cache="0" id="websites_add_website" action="*/admin/website/add" title="添加网站" target-button-text="添加网站" icon="plus" target-tone="primary" save="1" /> </div> </div> <div id="website-weline-table-container"> <?= $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml') ?> </div> </div> </div> </div>
+</div> <js:part name="w-delete"/> <script>
+(function() { 'use strict'; var guideToggle = document.getElementById('weline-websites-guide-toggle'); if (guideToggle) { guideToggle.addEventListener('click', function() { var body = document.getElementById('weline-websites-guide-body'); var icon = document.getElementById('weline-websites-guide-icon'); if (body && icon) { body.classList.toggle('show'); var expanded = body.classList.contains('show'); guideToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false'); icon.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)'; } }); } var searchForm = document.getElementById('search-form'); var searchInput = document.getElementById('search-input'); if (searchForm && searchInput) { searchForm.addEventListener('submit', function(event) { event.preventDefault(); var currentParams = new URLSearchParams(window.location.search); var pageSize = currentParams.get('pageSize') || '10'; var params = new URLSearchParams(); params.append('page', '1'); params.append('pageSize', pageSize); var searchValue = searchInput.value.trim(); if (searchValue) { params.append('search', searchValue); } window.location.assign(searchForm.action + '?' + params.toString()); }); } })();
 </script>

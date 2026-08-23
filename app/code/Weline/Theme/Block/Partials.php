@@ -45,6 +45,8 @@ class Partials extends Block
     private const PARTIAL_OUTPUT_CACHE_TTL = 300.0;
     private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
     private const PARTIAL_OUTPUT_CACHE_MAX = 256;
+    private const PARTIAL_META_CACHE_MAX = 512;
+    private const CHROME_POLICY_CACHE_MAX = 512;
     private const PARTIAL_OUTPUT_STALE_TTL = 86400;
     private const PARTIAL_OUTPUT_REFRESH_LOCK_TTL = 10;
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
@@ -70,6 +72,27 @@ class Partials extends Block
     {
         self::clearMetaCache();
         self::clearOutputCache();
+    }
+
+    public static function processCacheItemCount(): int
+    {
+        return count(self::$partialsMetaCache)
+            + count(self::$partialOutputCache)
+            + count(self::$chromePolicyCache);
+    }
+
+    /** @param array<string,mixed> $cache */
+    private static function rememberBounded(array &$cache, string $key, mixed $value, int $maximum): void
+    {
+        if (array_key_exists($key, $cache)) {
+            unset($cache[$key]);
+        } elseif (count($cache) >= $maximum) {
+            $oldest = array_key_first($cache);
+            if ($oldest !== null) {
+                unset($cache[$oldest]);
+            }
+        }
+        $cache[$key] = $value;
     }
 
     /**
@@ -204,6 +227,8 @@ class Partials extends Block
         $cacheKey = $modulePath . "\0" . \strtolower(\trim($type));
         if (isset(self::$chromePolicyCache[$cacheKey])) {
             $cached = self::$chromePolicyCache[$cacheKey];
+            unset(self::$chromePolicyCache[$cacheKey]);
+            self::$chromePolicyCache[$cacheKey] = $cached;
             return $cached['mode'] === 'chrome' ? $cached : null;
         }
 
@@ -273,11 +298,11 @@ class Partials extends Block
         $type = \strtolower(\trim($type));
         if ($mode !== 'chrome') {
             if ($mode !== '') {
-                self::$chromePolicyCache[$cacheKey] = [
+                self::rememberBounded(self::$chromePolicyCache, $cacheKey, [
                     'mode' => 'off',
                     'auth' => 'role',
                     'ttl' => (int)self::PARTIAL_OUTPUT_CACHE_TTL,
-                ];
+                ], self::CHROME_POLICY_CACHE_MAX);
                 return null;
             }
             // Compatibility fallback for default backend shells while declarative marks propagate.
@@ -287,7 +312,12 @@ class Partials extends Block
                 default => null,
             };
             if ($fallbackAuth === null) {
-                self::$chromePolicyCache[$cacheKey] = ['mode' => 'off', 'auth' => 'role', 'ttl' => (int)self::PARTIAL_OUTPUT_CACHE_TTL];
+                self::rememberBounded(
+                    self::$chromePolicyCache,
+                    $cacheKey,
+                    ['mode' => 'off', 'auth' => 'role', 'ttl' => (int)self::PARTIAL_OUTPUT_CACHE_TTL],
+                    self::CHROME_POLICY_CACHE_MAX,
+                );
                 return null;
             }
             $mode = 'chrome';
@@ -307,7 +337,7 @@ class Partials extends Block
         $ttl = \max(1, \min($ttl, 86400));
 
         $policy = ['mode' => 'chrome', 'auth' => $auth, 'ttl' => $ttl];
-        self::$chromePolicyCache[$cacheKey] = $policy;
+        self::rememberBounded(self::$chromePolicyCache, $cacheKey, $policy, self::CHROME_POLICY_CACHE_MAX);
         return $policy;
     }
 
@@ -954,6 +984,8 @@ class Partials extends Block
             $cacheKey = $area . '|' . $type . '|' . $defaultOption . '|' . $scope . '|' . $path;
             if (array_key_exists($cacheKey, self::$partialsMetaCache)) {
                 $partialsMeta = self::$partialsMetaCache[$cacheKey];
+                unset(self::$partialsMetaCache[$cacheKey]);
+                self::$partialsMetaCache[$cacheKey] = $partialsMeta;
             } else {
                 $partialsMeta = $this->traceCall(
                     $tracePrefix . '::load_meta',
@@ -966,7 +998,12 @@ class Partials extends Block
                         fn() => $this->parsePartialsMetaFromFile($path, $area, $type, $defaultOption)
                     );
                 }
-                self::$partialsMetaCache[$cacheKey] = is_array($partialsMeta) ? $partialsMeta : [];
+                self::rememberBounded(
+                    self::$partialsMetaCache,
+                    $cacheKey,
+                    is_array($partialsMeta) ? $partialsMeta : [],
+                    self::PARTIAL_META_CACHE_MAX,
+                );
             }
 
             if (empty($partialsMeta)) {

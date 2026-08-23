@@ -39,82 +39,82 @@
 "map|fields; default map keeps compatibility.","map|fields; default map keeps compatibility."
 "Limit field metadata lookup to one template code when return_type=fields.","Limit field metadata lookup to one template code when return_type=fields."
 backend|frontend,backend|frontend
-"完整三段 scope；写操作与 target_scope 二选一","完整三段 scope；写操作与 target_scope 二选一"
-"显式写目标；禁止依赖 Session","显式写目标；禁止依赖 Session"
-预览/读取时返回的对象授权版本；提交前必须保持一致,预览/读取时返回的对象授权版本；提交前必须保持一致
-统一配置中心,统一配置中心
-跨站请求被拒绝，配置未写入。,跨站请求被拒绝，配置未写入。
-"TargetScope 无效，配置未写入。","TargetScope 无效，配置未写入。"
-配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
-配置回滚预检失败，当前配置未改变。,配置回滚预检失败，当前配置未改变。
-锁操作已完成：%{1},锁操作已完成：%{1}
-锁操作失败,锁操作失败
-配置已保存，版本批次：%{1},配置已保存，版本批次：%{1}
-版本冲突，请刷新后重试。,版本冲突，请刷新后重试。
-配置保存失败，当前配置未改变。,配置保存失败，当前配置未改变。
-保存敏感配置需要重新输入登录密码。,保存敏感配置需要重新输入登录密码。
-无法验证当前管理员身份。,无法验证当前管理员身份。
-密码验证失败，敏感配置未写入。,密码验证失败，敏感配置未写入。
+"完整三段 scope；写操作与 target_scope 二选一","Complete three-segment scope; choose one between write operation and target_scope"
+"显式写目标；禁止依赖 Session","Explicitly write target; disable reliance on Session"
+预览/读取时返回的对象授权版本；提交前必须保持一致,"The authorized version of the object returned when previewing/reading; must be consistent before submission"
+统一配置中心,"Unified configuration center"
+跨站请求被拒绝，配置未写入。,"Cross-site request rejected, configuration not written."
+"TargetScope 无效，配置未写入。","TargetScope is invalid, configuration was not written."
+配置已回滚，回滚批次：%{1},"Configuration has been rolled back, rollback batch: %{1}"
+配置回滚预检失败，当前配置未改变。,"The configuration rollback precheck failed and the current configuration has not changed."
+锁操作已完成：%{1},"Lock operation completed: %{1}"
+锁操作失败,"Lock operation failed"
+配置已保存，版本批次：%{1},"Configuration saved, version batch: %{1}"
+版本冲突，请刷新后重试。,"Version conflict, please refresh and try again."
+配置保存失败，当前配置未改变。,"The configuration failed to save and the current configuration has not changed."
+保存敏感配置需要重新输入登录密码。,"Saving sensitive configuration requires re-entering the login password."
+无法验证当前管理员身份。,"Unable to verify current administrator identity."
+密码验证失败，敏感配置未写入。,"Password verification failed and sensitive configuration was not written."
 circle,circle
-查看统一配置中心,查看统一配置中心
-保存统一配置,保存统一配置
+查看统一配置中心,"View the unified configuration center"
+保存统一配置,"Save unified configuration"
 save,save
-配置回滚预检,配置回滚预检
+配置回滚预检,"Configure rollback preflight"
 warning,warning
-保存配置失败，已回滚本次批次。%{1},保存配置失败，已回滚本次批次。%{1}
-"回滚配置版本 %{1}","回滚配置版本 %{1}"
-回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
-"当前 system_config 表尚未升级，不能保存非全局 scope 配置。","当前 system_config 表尚未升级，不能保存非全局 scope 配置。"
+保存配置失败，已回滚本次批次。%{1},"Failed to save configuration, this batch has been rolled back. %{1}"
+"回滚配置版本 %{1}","Rollback configuration version %{1}"
+回滚配置失败，已恢复本次回滚前状态。%{1},"The configuration rollback failed and the state before this rollback has been restored. %{1}"
+"当前 system_config 表尚未升级，不能保存非全局 scope 配置。","The current system_config table has not been upgraded and non-global scope configuration cannot be saved."
 定位当前项,"Locate current item"
 返回引导,"Back to guide"
-模块,模块
-区域,区域
-后台,后台
-前台,前台
+模块,module
+区域,area
+后台,Backstage
+前台,"front desk"
 Website,Website
 Store,Store
 Channel,Channel
 Locale,Locale
-搜索,搜索
-模板,模板
-字段,字段
-适配入口,适配入口
-没有找到配置模板,没有找到配置模板
-显式提交到,显式提交到
-当前值,当前值
-保存值,保存值
+搜索,search
+模板,template
+字段,Field
+适配入口,"Adaptation entrance"
+没有找到配置模板,"Configuration template not found"
+显式提交到,"Explicitly commit to"
+当前值,"current value"
+保存值,"Save value"
 Scope,Scope
-继承,继承
-覆盖,覆盖
-已锁定,已锁定
-已压制,已压制
-默认值,默认值
-保存配置,保存配置
-最近版本,最近版本
-操作,操作
-状态,状态
-时间,时间
-回滚,回滚
-不可回滚,不可回滚
+继承,inherit
+覆盖,cover
+已锁定,locked
+已压制,Suppressed
+默认值,"default value"
+保存配置,"Save configuration"
+最近版本,"latest version"
+操作,operate
+状态,state
+时间,time
+回滚,rollback
+不可回滚,"No rollback"
 引导定位,"Guide navigation"
 全部模块,"All modules"
 搜索模块名称,"Search module name"
-Global（全部站点）,Global（全部站点）
+Global（全部站点）,"Global (all sites)"
 搜索站点名称或编码,"Search site name or code"
-"Website 层","Website 层"
+"Website 层","Website level"
 "搜索 Store","Search Store"
-"Store 层","Store 层"
+"Store 层","Store level"
 "搜索 Channel","Search Channel"
 default,default
 搜索语言或代码...,"Search language or code..."
-打开,打开
+打开,Open
 "引导步骤 %{1}","Guide step %{1}"
 配置引导,"Configuration guide"
-配置或字段,配置或字段
+配置或字段,"configuration or field"
 当前定位,"Current target"
 引导目标,"Guide target"
-保存原因,保存原因
-敏感配置：重新输入登录密码,敏感配置：重新输入登录密码
+保存原因,"Reason for saving"
+敏感配置：重新输入登录密码,"Sensitive configuration: Re-enter login password"
 当前：%{1},"Current: %{1}"
 收起,Collapse
 定位,Locate
@@ -123,15 +123,21 @@ default,default
 同页,"Same page"
 跳转,Navigate
 展开,Expand
-存在未在配置模板声明的字段。,存在未在配置模板声明的字段。
-配置校验失败，当前配置未改变。,配置校验失败，当前配置未改变。
-没有需要保存的配置。,没有需要保存的配置。
-"配置模板不存在或未通过 Extends 注册。","配置模板不存在或未通过 Extends 注册。"
-"当前字段不允许保存到所选 scope。","当前字段不允许保存到所选 scope。"
-此字段不能为空。,此字段不能为空。
-字段值不在允许选项内。,字段值不在允许选项内。
-"用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
-"MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）"
-"当前 TargetScope","当前 TargetScope"
-"写操作只使用表单显式 TargetScope，不信任 Cookie。","写操作只使用表单显式 TargetScope，不信任 Cookie。"
-回落链,回落链
+Global（全部网站、店铺和渠道）,"Global (all websites, stores, and channels)"
+网站：%{1},"Website: %{1}"
+店铺：%{1},"Store: %{1}"
+"店铺：%{1} / %{2}","Store: %{1} / %{2}"
+渠道：%{1},"Channel: %{1}"
+"渠道：%{1} / %{2} / %{3}","Channel: %{1} / %{2} / %{3}"
+存在未在配置模板声明的字段。,"There are fields that are not declared in the configuration template."
+配置校验失败，当前配置未改变。,"Configuration verification failed and the current configuration has not changed."
+没有需要保存的配置。,"There are no configurations to save."
+"配置模板不存在或未通过 Extends 注册。","The configuration template does not exist or is not registered with Extends."
+"当前字段不允许保存到所选 scope。","The current field is not allowed to be saved to the selected scope."
+此字段不能为空。,"This field cannot be empty."
+字段值不在允许选项内。,"Field value is not among allowed options."
+"用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","Usage: scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
+"MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B configuration Scope migration: preflight/apply/verify/rollback (apply must --database=mig_clone_*)"
+"当前 TargetScope","Current TargetScope"
+"写操作只使用表单显式 TargetScope，不信任 Cookie。","Write operations only use form explicit TargetScope and do not trust cookies."
+回落链,"retracement chain"

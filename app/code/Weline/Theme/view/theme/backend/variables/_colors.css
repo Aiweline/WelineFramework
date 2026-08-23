@@ -6,6 +6,9 @@
  * @meta.name {default="Backend颜色变量",name="Backend颜色变量",description="Backend颜色变量，用于描述变量的名称"}
  * @meta.description {default="定义所有颜色相关的CSS变量和默认值，包括品牌色、文本色、背景色、功能色等",name="定义所有颜色相关的CSS变量和默认值",description="定义所有颜色相关的CSS变量和默认值，包括品牌色、文本色、背景色、功能色等，用于描述变量的用途"}
  * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
+ * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="variables",name="disk_kind",description="disk_kind"}
+ * @meta.editor_hidden {default="1",name="editor_hidden",description="editor_hidden"}
  */
 
 :root {

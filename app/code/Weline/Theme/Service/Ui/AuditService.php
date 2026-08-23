@@ -14,7 +14,10 @@ final class AuditService
         'third_party_reference' => '/(?:bootstrap(?:\.bundle)?(?:\.min)?\.(?:css|js)|jquery(?:\.min)?\.js|require(?:\.min)?\.js|metisMenu|simplebar|node-waves|sweetalert2|select2|parsley|inputmask|jquery\.dataTables|dataTables(?:\.min)?\.(?:css|js)|font-?awesome|remixicon|materialdesignicons|jqvmap|jstree|rwd-table|table-edits|assets\/libs\/(?:apexcharts|chart\.js))/i',
         'bootstrap_attribute' => '/\bdata-bs-[a-z0-9_-]+/i',
         'legacy_theme_attribute' => '/\bdata-(?:theme-mode|layout-mode|layout-width|layout-position|topbar|sidebar-size|sidebar-color|sidebar-image|preloader)\b/i',
-        'vendor_icon' => '/\b(?:mdi|fa[brs]?|ri)-[a-z0-9_-]+\b/i',
+        // The token must start at a class-like boundary. The extra lookbehind
+        // prevents hexadecimal ranges such as `[0-9a-fA-F]` from being
+        // misreported as a Font Awesome `fa-*` class.
+        'vendor_icon' => '/(?<![a-z0-9_\[\]-])(?:mdi|fa[brs]?|ri)-[a-z0-9_-]+\b/i',
         'legacy_global' => '/\b(?:BackendToast|AdminToast|BackendConfirm|AdminConfirm|WelineSmartDropdown|Swal)(?:\b|\.)|\bwindow\.(?:bootstrap|Swal|jQuery)\b|\bbootstrap\.(?:Modal|Offcanvas|Collapse|Dropdown|Toast|Tooltip|Popover|Tab|Alert|Carousel)\b/',
         'legacy_ajax_bridge' => '/\b(?:bqAdmin|__bqAdmin_[A-Za-z0-9_]+)\b/',
     ];
@@ -381,7 +384,9 @@ final class AuditService
 
     private function isExcluded(string $path): bool
     {
+        $runtimeView = str_contains('/' . str_replace('\\', '/', $path), '/view/');
         foreach ($this->manifest->auditExcludes() as $fragment) {
+            if ($runtimeView && in_array($fragment, ['/test/', '/Test/', '/tests/'], true)) continue;
             if ($fragment !== '' && str_contains('/' . $path, $fragment)) return true;
         }
         return false;

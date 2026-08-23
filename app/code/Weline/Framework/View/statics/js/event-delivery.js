@@ -12,7 +12,7 @@
             apply: document.getElementById('ed-apply'),
             status: document.getElementById('ed-status'),
             scope: document.getElementById('ed-scope'),
-            website: document.getElementById('ed-website'),
+            website: document.getElementById('ed-website_value'),
             message: document.getElementById('ed-message'),
             rows: document.getElementById('ed-rows'),
             tableWrap: document.getElementById('ed-table-wrap'),

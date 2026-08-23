@@ -1,91 +1,59 @@
-<style>
-    .dt-tag-page{display:grid;gap:20px}
-    .dt-tag-hero{padding:24px;border:1px solid #dbe4f0;border-radius:20px;background:linear-gradient(135deg,#f7fbff,#eef4ff)}
-    .dt-tag-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
-    .dt-tag-card{padding:18px;border:1px solid #e2e8f0;border-radius:18px;background:#fff}
-    .dt-tag-item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #eef2f7}
-    .dt-tag-item:last-child{border-bottom:none}
-    .dt-tag-icon-success{color:#15803d}
-    .dt-tag-icon-error{color:#dc2626}
-    .dt-tag-summary{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
-    .dt-tag-summary-pill{padding:6px 12px;border-radius:999px;background:#eef4ff;color:#274690}
-</style>
+<?php
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+$adminConfig = json_encode([
+    'verifyUrl' => (string) ($verifyUrl ?? ''),
+    'requestFailed' => (string) __('Verification request failed.'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-admin-js']) ?>
 
-<div class="dt-tag-page">
-    <section class="dt-tag-hero">
-        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+<main class="w-container w-datatable-demo__admin" data-w-datatable-verification>
+    <section class="w-card w-datatable-demo__hero">
+        <header class="w-card__header w-datatable-demo__heading">
             <div>
-                <h2><?= __('DataTable Tag Verification') ?></h2>
-                <p><?= __('This page exercises tag registration, render callbacks, context propagation, attribute inheritance, and auto-generated table markup without relying on the old broken backend templates.') ?></p>
+                <p class="w-datatable-demo__eyebrow"><?= __('DataTable') ?></p>
+                <h1 class="w-card__title"><?= __('DataTable Tag Verification') ?></h1>
+                <p><?= __('This page exercises tag registration, render callbacks, context propagation, attribute inheritance, and auto-generated table markup.') ?></p>
             </div>
-            <div class="d-flex gap-2">
-                <a class="btn btn-outline-secondary" href="<?= $dashboardUrl ?>"><?= __('Back To Dashboard') ?></a>
-                <a class="btn btn-outline-secondary" href="<?= $comprehensiveUrl ?>"><?= __('Open Comprehensive Test') ?></a>
-                <a class="btn btn-outline-secondary" href="<?= $docUrl ?>"><?= __('Open Docs') ?></a>
+            <div class="w-cluster" data-justify="end">
+                <a class="w-button" data-tone="neutral" href="<?= $escape($dashboardUrl ?? '') ?>"><w-icon name="arrow-left" size="sm"></w-icon><span><?= __('Back To Dashboard') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($comprehensiveUrl ?? '') ?>"><w-icon name="beaker" size="sm"></w-icon><span><?= __('Open Comprehensive Test') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($docUrl ?? '') ?>"><w-icon name="book" size="sm"></w-icon><span><?= __('Open Docs') ?></span></a>
             </div>
-        </div>
-        <div class="dt-tag-summary" data-testid="datatable-tag-summary">
-            <span class="dt-tag-summary-pill"><?= (int) ($report['summary']['passed_checks'] ?? 0) ?> / <?= (int) ($report['summary']['total_checks'] ?? 0) ?> <?= __('checks passing') ?></span>
-            <button type="button" class="btn btn-primary" data-testid="datatable-tag-refresh" data-datatable-test-action="reload-tag-verification"><?= __('Reload Verification') ?></button>
+        </header>
+        <div class="w-card__body w-cluster">
+            <span class="w-badge" data-tone="info" data-testid="datatable-tag-summary">
+                <?= (int) ($report['summary']['passed_checks'] ?? 0) ?> / <?= (int) ($report['summary']['total_checks'] ?? 0) ?> <?= __('checks passing') ?>
+            </span>
+            <button type="button" class="w-button" data-testid="datatable-tag-refresh" data-w-datatable-verify-reload><w-icon name="refresh" size="sm"></w-icon><span><?= __('Reload Verification') ?></span></button>
         </div>
     </section>
 
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
-    <section id="datatable-tag-sections" class="dt-tag-grid" data-focus="<?= htmlspecialchars((string) ($focusSection ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+    <section id="datatable-tag-sections"
+             class="w-grid w-datatable-demo__verification-grid"
+             data-w-tag-sections
+             data-focus="<?= $escape($focusSection ?? '') ?>"
+             aria-label="<?= $escape(__('Verification Sections')) ?>">
         <?php foreach (($report['sections'] ?? []) as $sectionKey => $sectionResults): ?>
-            <article class="dt-tag-card" id="section-<?= htmlspecialchars((string) $sectionKey, ENT_QUOTES, 'UTF-8') ?>" data-testid="datatable-tag-section-<?= htmlspecialchars((string) $sectionKey, ENT_QUOTES, 'UTF-8') ?>">
-                <h3><?= htmlspecialchars((string) $sectionKey, ENT_QUOTES, 'UTF-8') ?></h3>
-                <?php foreach ($sectionResults as $checkKey => $result): ?>
-                    <?php $success = (string) ($result['status'] ?? '') === 'success'; ?>
-                    <div class="dt-tag-item">
-                        <i class="mdi <?= $success ? 'mdi-check-circle dt-tag-icon-success' : 'mdi-alert-circle dt-tag-icon-error' ?>"></i>
-                        <div>
-                            <strong><?= htmlspecialchars((string) $checkKey, ENT_QUOTES, 'UTF-8') ?></strong>
-                            <div><?= htmlspecialchars((string) ($result['message'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+            <article class="w-card" id="section-<?= $escape($sectionKey) ?>" data-testid="datatable-tag-section-<?= $escape($sectionKey) ?>">
+                <header class="w-card__header"><h2 class="w-card__title"><?= $escape($sectionKey) ?></h2></header>
+                <div class="w-card__body w-stack">
+                    <?php foreach ($sectionResults as $checkKey => $result): ?>
+                        <?php $success = (string) ($result['status'] ?? '') === 'success'; ?>
+                        <div class="w-datatable-demo__verification-item" data-state="<?= $success ? 'success' : 'error' ?>">
+                            <w-icon name="<?= $success ? 'check-circle' : 'x-circle' ?>" size="sm" label="<?= $escape($success ? __('Passed') : __('Failed')) ?>"></w-icon>
+                            <div>
+                                <strong><?= $escape($checkKey) ?></strong>
+                                <p><?= $escape($result['message'] ?? '') ?></p>
+                            </div>
                         </div>
-                    </div>
-                <?php endforeach; ?>
+                    <?php endforeach; ?>
+                </div>
             </article>
         <?php endforeach; ?>
     </section>
-</div>
 
-<script>
-    async function reloadTagVerification() {
-        const response = await fetch('<?= $verifyUrl ?>', {
-            method: 'GET',
-            headers: {'X-Requested-With': 'XMLHttpRequest'}
-        });
-        const payload = await response.json();
-        if (payload && payload.success) {
-            window.location.reload();
-        }
-    }
-
-    document.addEventListener('click', function (event) {
-        const trigger = event.target.closest('[data-datatable-test-action="reload-tag-verification"]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-        reloadTagVerification();
-    });
-
-    (function () {
-        const host = document.getElementById('datatable-tag-sections');
-        if (!host) {
-            return;
-        }
-        const focus = String(host.dataset.focus || '').trim();
-        if (!focus) {
-            return;
-        }
-
-        const target = document.getElementById('section-' + focus);
-        if (target && typeof target.scrollIntoView === 'function') {
-            target.scrollIntoView({behavior: 'smooth', block: 'start'});
-        }
-    })();
-</script>
+    <script type="application/json" id="w-datatable-admin-config"><?= $adminConfig ?: '{}' ?></script>
+</main>

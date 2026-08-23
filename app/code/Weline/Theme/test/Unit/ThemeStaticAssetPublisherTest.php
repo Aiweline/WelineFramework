@@ -151,18 +151,18 @@ class ThemeStaticAssetPublisherTest extends TestCore
     {
         $theme = $this->buildTheme(990006, 'demo-theme', 'Codex/demo-theme');
         $publishedPath = $this->publisher->publishForRequestPath(
-            '/static/Codex/demo-theme/Weline/Admin/view/statics/assets/css/app-dark.min.css',
+            '/static/Codex/demo-theme/Weline/Theme/view/statics/ui/weline-foundation.css',
             $theme
         );
 
         $this->assertSame(
-            '/pub/static/Codex/demo-theme/Weline/Admin/view/statics/assets/css/app-dark.min.css',
+            '/pub/static/Codex/demo-theme/Weline/Theme/view/statics/ui/weline-foundation.css',
             $publishedPath
         );
 
         $basePath = rtrim(BP, '\\/') . DS;
-        $sourceFile = $basePath . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Admin' . DS . 'view' . DS . 'statics' . DS . 'assets' . DS . 'css' . DS . 'app-dark.min.css';
-        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'Codex' . DS . 'demo-theme' . DS . 'Weline' . DS . 'Admin' . DS . 'view' . DS . 'statics' . DS . 'assets' . DS . 'css' . DS . 'app-dark.min.css';
+        $sourceFile = $basePath . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'statics' . DS . 'ui' . DS . 'weline-foundation.css';
+        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'Codex' . DS . 'demo-theme' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'statics' . DS . 'ui' . DS . 'weline-foundation.css';
 
         $this->assertFileExists($publishedFile);
         $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));

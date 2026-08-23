@@ -23,18 +23,22 @@ class ColorType extends AbstractParamType
         $textValue = (string)$currentValue;
         $inputHtml = '<div class="w-param-color">';
         $inputHtml .= '<input type="color" class="w-param-form-control-color" id="' . htmlspecialchars($fieldId) . '_picker" value="' . htmlspecialchars($colorPickerValue) . '" data-target="' . htmlspecialchars($fieldId) . '">';
-        $inputHtml .= '<input type="text" class="w-param-input" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($textValue) . '" placeholder="#000000">';
+        $inputHtml .= '<input type="text" class="w-input" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($textValue) . '" placeholder="#000000">';
         if ($allowTransparent) {
             $isTransparent = strtolower($textValue) === 'transparent';
-            $btnClass = $isTransparent ? 'w-param-btn w-param-btn-sm w-param-btn-outline-secondary w-param-btn-transparent active' : 'w-param-btn w-param-btn-sm w-param-btn-outline-secondary w-param-btn-transparent';
-            $inputHtml .= '<button type="button" class="' . $btnClass . '" data-target="' . htmlspecialchars($fieldId) . '" title="' . __('设为透明') . '">□</button>';
+            $btnClass = 'w-button w-param-btn-transparent';
+            $inputHtml .= '<button type="button" class="' . $btnClass . '" data-tone="neutral" data-variant="outline" data-size="sm" data-state="' . ($isTransparent ? 'active' : 'idle') . '" data-target="' . htmlspecialchars($fieldId) . '" title="' . __('设为透明') . '">□</button>';
         }
         $inputHtml .= '</div>';
-        $presets = $param['presets'] ?? [];
-        if (!empty($presets)) {
+        $presets = array_values(array_filter(array_map(
+            fn (mixed $preset): ?string => $this->normalizeCssColorScalar($preset),
+            is_array($param['presets'] ?? null) ? $param['presets'] : []
+        ), static fn (?string $preset): bool => $preset !== null));
+        if ($presets !== []) {
             $inputHtml .= '<div class="w-param-color-presets">';
             foreach ($presets as $preset) {
-                $inputHtml .= '<button type="button" class="w-param-color-preset" style="background-color: ' . htmlspecialchars($preset) . ';" data-color="' . htmlspecialchars($preset) . '" data-target="' . htmlspecialchars($fieldId) . '" title="' . htmlspecialchars($preset) . '"></button>';
+                $safePreset = htmlspecialchars($preset, ENT_QUOTES, 'UTF-8');
+                $inputHtml .= '<button type="button" class="w-param-color-preset" style="--w-param-preset-color:' . $safePreset . '" data-color="' . $safePreset . '" data-target="' . htmlspecialchars($fieldId) . '" title="' . $safePreset . '"></button>';
             }
             $inputHtml .= '</div>';
         }

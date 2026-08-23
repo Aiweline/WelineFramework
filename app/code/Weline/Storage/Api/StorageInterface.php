@@ -125,7 +125,7 @@ interface StorageInterface
     public function copy(string $from, string $to): bool;
     
     /**
-     * 移动/重命名文件
+     * 移动/重命名文件或目录
      *
      * @param string $from 源路径
      * @param string $to 目标路径

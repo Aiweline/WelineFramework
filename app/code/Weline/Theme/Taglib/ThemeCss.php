@@ -7,8 +7,13 @@ namespace Weline\Theme\Taglib;
 use Weline\Framework\Taglib\TaglibInterface;
 
 /**
- * theme:css 标签：仅处理主题样式（THEME，如 Weline_Theme::theme/...）。
- * 与框架内置的 css 标签（STATICS，Module::statics/...）是不同标签，不可混用。
+ * theme:css — load CSS from a module's `view/theme/` (default module: Weline_Theme).
+ *
+ * Module statics stay on `@static(...)` / built-in `<css>`; do not convert those here.
+ *
+ * Examples:
+ * - `<theme:css>frontend/css/catalog-page.css</theme:css>`
+ * - `<theme:css>Vendor_Theme::frontend/css/catalog-page.css</theme:css>`
  */
 class ThemeCss implements TaglibInterface
 {
@@ -64,7 +69,7 @@ class ThemeCss implements TaglibInterface
             $raw1 = trim((string)($tag_data[1] ?? ''));
             $raw2 = trim((string)($tag_data[2] ?? ''));
             $looksLikePath = $raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'));
-            
+
             if ($tag_key === 'tag') {
                 $content = $raw2 !== '' ? $raw2 : $raw1;
                 $attrs = (!$looksLikePath && $raw1 !== '') ? $raw1 : '';
@@ -76,11 +81,11 @@ class ThemeCss implements TaglibInterface
                 $content = $raw2 !== '' ? $raw2 : $raw1;
                 $attrs = '';
             }
-            if (empty($content)) {
+            if ($content === '') {
                 return '';
             }
 
-            $contentPhp = self::buildRuntimeStringExpression($content);
+            $contentPhp = self::buildRuntimeSourceExpression($content);
             $attrsPhp = var_export($attrs ? ' ' . trim($attrs) : '', true);
 
             return "<?php \$__themeCssHref = \$this->fetchTagSource(\\Weline\\Framework\\View\\Data\\DataInterface::dir_type_THEME, {$contentPhp});"
@@ -88,6 +93,13 @@ class ThemeCss implements TaglibInterface
                 . " . htmlspecialchars((string)\$__themeCssHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')"
                 . " . '\\' rel=\"stylesheet\" type=\"text/css\"/>'; } ?>";
         };
+    }
+
+    private static function buildRuntimeSourceExpression(string $content): string
+    {
+        return '\\Weline\\Theme\\Taglib\\ThemeAssetSource::normalize('
+            . self::buildRuntimeStringExpression($content)
+            . ')';
     }
 
     private static function buildRuntimeStringExpression(string $content): string
@@ -150,6 +162,15 @@ class ThemeCss implements TaglibInterface
      */
     public static function document(): string
     {
-        return '主题CSS文件标签，用于加载theme目录下的CSS文件';
+        return <<<'DOC'
+加载模块 view/theme/ 下的 CSS（默认模块 Weline_Theme，可写 Vendor_Module::相对路径）。
+
+示例：
+<theme:css>frontend/css/catalog-page.css</theme:css>
+<theme:css>Vendor_Theme::frontend/css/catalog-page.css</theme:css>
+<theme:css>Weline_Other::frontend/css/custom.css</theme:css>
+
+模块 statics 请继续用 @static(...) 或内置 <css>，不要改写成 theme:css。
+DOC;
     }
 }

@@ -1,10 +1,10 @@
 ﻿"editor-manager 标签属性 container-id 不能为空！","editor-manager 标签属性 container-id 不能为空！"
 "配置的编辑器管理器不存在! 编辑器管理器名：%{1}","配置的编辑器管理器不存在! 编辑器管理器名：%{1}"
 编辑器管理器,编辑器管理器
-edit,edit
+edit,编辑
 内容管理,内容管理
 编辑器列表,编辑器列表
-list,list
+list,列表
 查看编辑器列表,查看编辑器列表
 管理系统中可用的富文本编辑器。编辑器管理器允许您在不同的编辑器之间切换。,管理系统中可用的富文本编辑器。编辑器管理器允许您在不同的编辑器之间切换。
 暂无已注册的编辑器管理器。,暂无已注册的编辑器管理器。
@@ -15,4 +15,5 @@ list,list
 "您可以通过 Composer 安装额外的编辑器管理器模块：","您可以通过 Composer 安装额外的编辑器管理器模块："
 """editor-manager 标签属性 container-id 不能为空！""","editor-manager 标签属性 container-id 不能为空！"
 "mdi mdi-content-save-edit","mdi mdi-content-save-edit"
-"mdi mdi-view-list","mdi mdi-view-list"
+"mdi mdi-view-list","MDI MDI 视图列表"
+编辑器管理,编辑器管理

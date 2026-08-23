@@ -86,23 +86,38 @@ class LanguageCharsetResolver
         return hash('sha256', $this->resolve($langCode, $extraChars));
     }
 
-    private function uniqueChars(string $text): string
+    /**
+     * Exact character set for chars= subsets (no LATIN_BASE / language table).
+     */
+    public function uniqueOnly(string $chars): string
     {
-        if ($text === '') {
-            return self::LATIN_BASE;
+        $chars = (string)$chars;
+        if ($chars === '') {
+            return '';
         }
 
         $seen = [];
         $out = '';
-        $len = mb_strlen($text, 'UTF-8');
+        $len = mb_strlen($chars, 'UTF-8');
         for ($i = 0; $i < $len; $i++) {
-            $ch = mb_substr($text, $i, 1, 'UTF-8');
+            $ch = mb_substr($chars, $i, 1, 'UTF-8');
             if ($ch === '' || isset($seen[$ch])) {
                 continue;
             }
             $seen[$ch] = true;
             $out .= $ch;
         }
+
+        return $out;
+    }
+
+    private function uniqueChars(string $text): string
+    {
+        if ($text === '') {
+            return self::LATIN_BASE;
+        }
+
+        $out = $this->uniqueOnly($text);
 
         return $out !== '' ? $out : self::LATIN_BASE;
     }

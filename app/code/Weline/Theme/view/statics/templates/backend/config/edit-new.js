@@ -594,8 +594,7 @@
             }
         }
 
-        const bsModal = new bootstrap.Modal(modal);
-        bsModal.show();
+        Weline.UI.dialog.open(modal);
     }
 
     // 保存参数配置
@@ -633,10 +632,7 @@
 
             if (result.code === 200) {
                 showToast(__('参数保存成功'), 'success');
-                const bsModal = bootstrap.Modal.getInstance(modal);
-                if (bsModal) {
-                    bsModal.hide();
-                }
+                Weline.UI.dialog.close(modal, 'saved');
                 refreshPreview();
             } else {
                 showToast(result.msg || __('参数保存失败'), 'error');
@@ -830,4 +826,3 @@
         init();
     }
 })();
-

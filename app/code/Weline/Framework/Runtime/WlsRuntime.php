@@ -4847,8 +4847,43 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return $staticEx->toHttpString();
             
         } catch (\Weline\Framework\Http\DownloadException $downloadEx) {
-            // 下载异常：转换为文件下载响应
-            return $downloadEx->toHttpString();
+            if (!$request instanceof WlsRequest) {
+                throw new \LogicException('WLS streamed download requires WlsRequest.');
+            }
+            $collector = \Weline\Framework\Http\HeaderCollector::getInstance();
+            $collector->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
+            try {
+                $marker = \Weline\Framework\Http\WlsStreamedResponse::streamDownload(
+                    $downloadEx,
+                    \strtoupper($request->getMethod()) === 'HEAD',
+                    $collector->getHeaders(),
+                    $collector->getCookies(),
+                );
+            } catch (\Throwable $streamFailure) {
+                $cleanupFailed = !\Weline\Framework\Http\WlsStreamedResponse::cleanupUnstartedDownload(
+                    $downloadEx,
+                );
+                if ($cleanupFailed) {
+                    $this->requestWorkerDrainAfterResponse(
+                        'streamed_download_start_cleanup_failure',
+                        new \RuntimeException((string)__('WLS 下载临时文件清理失败。')),
+                    );
+                }
+                throw $streamFailure;
+            }
+            // Store the hand-off on the request itself. The runtime finally
+            // may reset every static context or even fail and quarantine the
+            // Worker after bytes are already queued; the transport must still
+            // suppress any second HTTP response in both cases.
+            $request->setStreamedResponseMarker($marker);
+            $streamInfo = \Weline\Framework\Http\WlsStreamedResponse::parseMarker($marker);
+            if (($streamInfo['cleanup_failed'] ?? false) === true) {
+                $this->requestWorkerDrainAfterResponse(
+                    'streamed_download_cleanup_failure',
+                    new \RuntimeException((string)__('WLS 下载临时文件清理失败。')),
+                );
+            }
+            return $marker;
             
         } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
             // 重定向异常：转换为重定向响应
@@ -5045,6 +5080,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $this->reset();
             } catch (\Throwable $e) {
                 RequestResetException::append($finalizationFailures, 'runtime_reset', $e);
+            }
+            try {
+                if ($request instanceof WlsRequest) {
+                    $request->releaseMultipartTemporaryFiles();
+                }
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'multipart_temporary_files', $e);
             }
             try {
                 FiberOutputBuffer::ensureInstalled('request_end');

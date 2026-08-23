@@ -20,7 +20,7 @@ final class ThemePreviewModeProvider implements ThemePreviewModeProviderInterfac
 
     public function resolveBackendMode(): ?string
     {
-        if (!$this->previewContextService->shouldUseStoredContext()) {
+        if (!$this->previewContextService->hasAuthoritativePreviewContext()) {
             return null;
         }
         $context = $this->previewContextService->getCurrentContext();

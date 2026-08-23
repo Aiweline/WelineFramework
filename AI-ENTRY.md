@@ -22,6 +22,7 @@ Universal AI entry index for WelineFramework development. This file only routes 
 - **禁止 PHP 超全局**：业务代码不得直接读写 `$_GET`/`$_POST`/`$_REQUEST`/`$_COOKIE`/`$_FILES`/`$_SERVER`；用 `Request` / `WelineEnv`。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/no-php-superglobals.mdc`。
 - **跨模块 → Event 解耦**：禁止模块间强制引用对方具体类；通知/副作用用 Event/Observer，读取用 Interface 或 `w_query()`。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/cross-module-event-decoupling.mdc`。
 - **Framework 核心 → 抽象 + 事件**：`app/code/Weline/Framework/**` 只做平台抽象并提供中立事件/契约；禁止非框架业务语义进入核心；模块接入靠 Observer。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/framework-core-abstraction-events.mdc`。
+- **提交信息须用中文**：`git commit` subject/body 必须简体中文，禁止纯英文；可选 `feat`/`fix` 前缀后接中文摘要。权威：`global-constraints.md` §7；Cursor：`.cursor/rules/commit-message-chinese.mdc`。
 - **部署默认 pre**：用户说「部署」默认只部署预发 `/home/weline-test`；生产 `/home/weline` 须明示。权威：`global-constraints.md` §12；Cursor：`.cursor/rules/ssh-mcp-deploy.mdc`。
 
 ## Quick Commands

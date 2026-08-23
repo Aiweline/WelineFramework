@@ -1,55 +1,103 @@
 <?php
 /**
- * AI 管理顶部 Tab 栏（模型 | 适配器 | 智能体 | 技能 | 风格 | 供应商账户）
- * @var string $activeTab 当前 Tab：model | adapter | agent | skill | style | account
+ * AI 管理顶部 Tab 栏（页面级导航，官方 w-tabs soft 变体）
+ * @var string $activeTab 当前 Tab：model | adapter | agent | skill | style | custom_vendor | account
  * @var \Weline\Framework\View\Template $this
  */
 $activeTab = $activeTab ?? 'model';
-$modelUrl = $this->getBackendUrl('ai/backend/model');
-$adapterUrl = $this->getBackendUrl('ai/backend/adapter');
-$agentUrl = $this->getBackendUrl('ai/backend/agent');
-$skillUrl = $this->getBackendUrl('ai/backend/skill');
-$styleUrl = $this->getBackendUrl('ai/backend/style');
-$providerUrl = $this->getBackendUrl('ai/backend/provider');
+$h = static function ($s): string {
+    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+};
+
+$modelUrl = $h($this->getBackendUrl('ai/backend/model'));
+$adapterUrl = $h($this->getBackendUrl('ai/backend/adapter'));
+$agentUrl = $h($this->getBackendUrl('ai/backend/agent'));
+$skillUrl = $h($this->getBackendUrl('ai/backend/skill'));
+$styleUrl = $h($this->getBackendUrl('ai/backend/style'));
+$customVendorUrl = $h($this->getBackendUrl('ai/backend/customvendor'));
+$providerUrl = $h($this->getBackendUrl('ai/backend/provider'));
+
+$modelSelected = $activeTab === 'model' ? 'true' : 'false';
+$adapterSelected = $activeTab === 'adapter' ? 'true' : 'false';
+$agentSelected = $activeTab === 'agent' ? 'true' : 'false';
+$skillSelected = $activeTab === 'skill' ? 'true' : 'false';
+$styleSelected = $activeTab === 'style' ? 'true' : 'false';
+$customVendorSelected = $activeTab === 'custom_vendor' ? 'true' : 'false';
+$accountSelected = $activeTab === 'account' ? 'true' : 'false';
+
+$modelTabIndex = $activeTab === 'model' ? '0' : '-1';
+$adapterTabIndex = $activeTab === 'adapter' ? '0' : '-1';
+$agentTabIndex = $activeTab === 'agent' ? '0' : '-1';
+$skillTabIndex = $activeTab === 'skill' ? '0' : '-1';
+$styleTabIndex = $activeTab === 'style' ? '0' : '-1';
+$customVendorTabIndex = $activeTab === 'custom_vendor' ? '0' : '-1';
+$accountTabIndex = $activeTab === 'account' ? '0' : '-1';
+
+$tabsAriaLabel = $h(__('AI 管理'));
+$modelLabel = $h(__('模型'));
+$adapterLabel = $h(__('适配器'));
+$agentLabel = $h(__('智能体'));
+$skillLabel = $h(__('技能'));
+$styleLabel = $h(__('风格'));
+$customVendorLabel = $h(__('本地供应商'));
+$accountLabel = $h(__('供应商账户'));
 ?>
 <style>
-.weline-ai-manager-tabs-wrap { margin-bottom: 1rem; }
-.weline-ai-manager-tabs-wrap .nav-tabs { border-bottom: 1px solid var(--backend-color-border-default); background: var(--backend-color-card-bg); padding: 0 1rem; border-radius: 8px 8px 0 0; gap: 0.25rem; flex-wrap: nowrap; overflow-x: auto; }
-.weline-ai-manager-tabs-wrap .nav-tabs .nav-link { border: none; color: var(--backend-color-text-secondary); padding: 0.875rem 1rem; font-weight: 500; border-bottom: 3px solid transparent; text-decoration: none; white-space: nowrap; }
-.weline-ai-manager-tabs-wrap .nav-tabs .nav-link:hover { color: var(--backend-color-primary); }
-.weline-ai-manager-tabs-wrap .nav-tabs .nav-link.active { color: var(--backend-color-primary); border-bottom-color: var(--backend-color-primary); background: transparent; }
+/* AI 管理 Tab：强制图标+文案横排、垂直居中（不依赖外部 CSS 缓存） */
+.weline-ai-manager-tabs.w-tabs__list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--weline-space-1);
+    overflow-x: auto;
+}
+.weline-ai-manager-tabs .w-tabs__tab {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center;
+    gap: var(--weline-space-2);
+    white-space: nowrap;
+}
+.weline-ai-manager-tabs .w-tabs__tab > .w-icon,
+.weline-ai-manager-tabs .w-tabs__tab > svg {
+    display: block;
+    flex: 0 0 auto;
+}
+.weline-ai-manager-tabs .w-tabs__tab > span {
+    display: inline;
+    line-height: 1.2;
+}
 </style>
-<div class="weline-ai-manager-tabs-wrap">
-    <ul class="nav w-tabs__list" role="tablist" data-w-component="tabs">
-        <li>
-            <a class="<?= $activeTab === 'model' ? 'active' : '' ?>" href="<?= htmlspecialchars($modelUrl) ?>">
-                <w:icon name="robot" size="sm"></w:icon><lang>模型</lang>
-            </a>
-        </li>
-        <li>
-            <a class="<?= $activeTab === 'adapter' ? 'active' : '' ?>" href="<?= htmlspecialchars($adapterUrl) ?>">
-                <w:icon name="puzzle" size="sm"></w:icon><lang>适配器</lang>
-            </a>
-        </li>
-        <li>
-            <a class="<?= $activeTab === 'agent' ? 'active' : '' ?>" href="<?= htmlspecialchars($agentUrl) ?>">
-                <w:icon name="circle" size="sm"></w:icon><lang>智能体</lang>
-            </a>
-        </li>
-        <li>
-            <a class="<?= $activeTab === 'skill' ? 'active' : '' ?>" href="<?= htmlspecialchars($skillUrl) ?>">
-                <w:icon name="circle" size="sm"></w:icon><lang>技能</lang>
-            </a>
-        </li>
-        <li>
-            <a class="<?= $activeTab === 'style' ? 'active' : '' ?>" href="<?= htmlspecialchars($styleUrl) ?>">
-                <w:icon name="palette" size="sm"></w:icon><lang>风格</lang>
-            </a>
-        </li>
-        <li>
-            <a class="<?= $activeTab === 'account' ? 'active' : '' ?>" href="<?= htmlspecialchars($providerUrl) ?>">
-                <w:icon name="user" size="sm"></w:icon><lang>供应商账户</lang>
-            </a>
-        </li>
-    </ul>
-</div>
+<nav class="w-tabs__list weline-ai-manager-tabs" data-variant="soft" role="tablist" aria-label="<?= $tabsAriaLabel ?>" style="--w-mb:var(--weline-space-5);">
+    <a class="w-tabs__tab" href="<?= $modelUrl ?>" role="tab" aria-selected="<?= $modelSelected ?>" tabindex="<?= $modelTabIndex ?>">
+        <w:icon name="robot"></w:icon>
+        <span><?= $modelLabel ?></span>
+    </a>
+    <a class="w-tabs__tab" href="<?= $adapterUrl ?>" role="tab" aria-selected="<?= $adapterSelected ?>" tabindex="<?= $adapterTabIndex ?>">
+        <w:icon name="puzzle"></w:icon>
+        <span><?= $adapterLabel ?></span>
+    </a>
+    <a class="w-tabs__tab" href="<?= $agentUrl ?>" role="tab" aria-selected="<?= $agentSelected ?>" tabindex="<?= $agentTabIndex ?>">
+        <w:icon name="sparkles"></w:icon>
+        <span><?= $agentLabel ?></span>
+    </a>
+    <a class="w-tabs__tab" href="<?= $skillUrl ?>" role="tab" aria-selected="<?= $skillSelected ?>" tabindex="<?= $skillTabIndex ?>">
+        <w:icon name="bolt"></w:icon>
+        <span><?= $skillLabel ?></span>
+    </a>
+    <a class="w-tabs__tab" href="<?= $styleUrl ?>" role="tab" aria-selected="<?= $styleSelected ?>" tabindex="<?= $styleTabIndex ?>">
+        <w:icon name="palette"></w:icon>
+        <span><?= $styleLabel ?></span>
+    </a>
+    <a class="w-tabs__tab" href="<?= $customVendorUrl ?>" role="tab" aria-selected="<?= $customVendorSelected ?>" tabindex="<?= $customVendorTabIndex ?>">
+        <w:icon name="server"></w:icon>
+        <span><?= $customVendorLabel ?></span>
+    </a>
+    <a class="w-tabs__tab" href="<?= $providerUrl ?>" role="tab" aria-selected="<?= $accountSelected ?>" tabindex="<?= $accountTabIndex ?>">
+        <w:icon name="user"></w:icon>
+        <span><?= $accountLabel ?></span>
+    </a>
+</nav>

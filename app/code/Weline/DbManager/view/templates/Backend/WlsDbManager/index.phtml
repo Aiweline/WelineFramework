@@ -222,9 +222,9 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
     }
     body[data-theme="dark"]:has(.wls-db-manager-shell),
     body[data-sidebar="dark"]:has(.wls-db-manager-shell),
-    body[data-topbar="dark"]:has(.wls-db-manager-shell),
+    body[data-weline-topbar="dark"]:has(.wls-db-manager-shell),
     html[data-theme="dark"] body:has(.wls-db-manager-shell),
-    html[data-theme-mode="dark"] body:has(.wls-db-manager-shell),
+    html[data-theme="dark"] body:has(.wls-db-manager-shell),
     body:has(.wls-db-manager-shell[data-theme="dark"]) {
         background: #101922;
     }
@@ -234,9 +234,9 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
     }
     body[data-theme="dark"] .wls-db-manager-shell,
     body[data-sidebar="dark"] .wls-db-manager-shell,
-    body[data-topbar="dark"] .wls-db-manager-shell,
+    body[data-weline-topbar="dark"] .wls-db-manager-shell,
     html[data-theme="dark"] .wls-db-manager-shell,
-    html[data-theme-mode="dark"] .wls-db-manager-shell,
+    html[data-theme="dark"] .wls-db-manager-shell,
     .wls-db-manager-shell[data-theme="dark"] {
         --wdb-bg: #101922;
         --wdb-panel: #172331;
@@ -382,7 +382,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
         font-weight: 750;
         text-transform: uppercase;
     }
-    .wdb-card-value {
+    .wdb-weline-card-value {
         margin-top: 8px;
         color: var(--wdb-text);
         font-size: 24px;
@@ -983,7 +983,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
             <?php foreach ($capabilities as $capability): ?>
                 <article class="wdb-card">
                     <div class="wdb-card-label"><?= $escapeHtml($capability['label'] ?? '') ?></div>
-                    <div class="wdb-card-value"><?= $escapeHtml($capability['value'] ?? '') ?></div>
+                    <div class="wdb-weline-card-value"><?= $escapeHtml($capability['value'] ?? '') ?></div>
                 </article>
             <?php endforeach; ?>
         </section>
@@ -1007,15 +1007,15 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
             <div class="wdb-grid">
                 <article class="wdb-card">
                     <div class="wdb-card-label"><?= $escapeHtml(__('Ready')) ?></div>
-                    <div class="wdb-card-value"><?= $escapeHtml($healthPlan['ready'] ?? 0) ?></div>
+                    <div class="wdb-weline-card-value"><?= $escapeHtml($healthPlan['ready'] ?? 0) ?></div>
                 </article>
                 <article class="wdb-card">
                     <div class="wdb-card-label"><?= $escapeHtml(__('Attention')) ?></div>
-                    <div class="wdb-card-value"><?= $escapeHtml($healthPlan['attention'] ?? 0) ?></div>
+                    <div class="wdb-weline-card-value"><?= $escapeHtml($healthPlan['attention'] ?? 0) ?></div>
                 </article>
                 <article class="wdb-card">
                     <div class="wdb-card-label"><?= $escapeHtml(__('Blocked')) ?></div>
-                    <div class="wdb-card-value"><?= $escapeHtml($healthPlan['blocked'] ?? 0) ?></div>
+                    <div class="wdb-weline-card-value"><?= $escapeHtml($healthPlan['blocked'] ?? 0) ?></div>
                 </article>
             </div>
 

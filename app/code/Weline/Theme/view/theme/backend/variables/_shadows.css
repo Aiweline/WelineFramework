@@ -2,7 +2,9 @@
  * Backend Theme - 阴影变量
  * 
  * 后端管理界面的阴影系统
- */
+  * @meta.panel {default="shadows",name="panel",description="panel"}
+ * @meta.disk_kind {default="variables",name="disk_kind",description="disk_kind"}
+*/
 
 :root {
     /* ========================================

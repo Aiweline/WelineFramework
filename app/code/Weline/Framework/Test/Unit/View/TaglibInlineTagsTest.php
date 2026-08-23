@@ -60,7 +60,7 @@ class TaglibInlineTagsTest extends TestCore
      */
     public function testCssTagOutputFormat(): void
     {
-        $content = '<css>Weline_Admin::backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css</css>';
+        $content = '<css>Weline_Theme::ui/weline-foundation.css</css>';
         $result = $this->taglib->compile($this->template, $content, 'css-tag.phtml');
 
         $this->assertStringNotContainsString('<css>', $result, '原始 <css> 标签应被替换');
@@ -75,14 +75,14 @@ class TaglibInlineTagsTest extends TestCore
         $pathOnly = preg_replace('#\?v=.*$#', '', $href);
         if (defined('DEV') && DEV) {
             $this->assertEquals(
-                '/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css',
+                '/Weline/Theme/view/statics/ui/weline-foundation.css',
                 $pathOnly,
                 '开发环境 href 应为 /Weline/Admin/view/statics/...'
             );
         } else {
             $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
             $theme = str_replace('\\', '/', $theme);
-            $expected = '/static/' . $theme . '/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css';
+            $expected = '/static/' . $theme . '/Weline/Theme/view/statics/ui/weline-foundation.css';
             $this->assertEquals($expected, $pathOnly, '生产环境 href 应为 /static/{theme}/Weline/Admin/view/statics/...');
         }
     }
@@ -92,7 +92,7 @@ class TaglibInlineTagsTest extends TestCore
      */
     public function testJsTagOutputFormat(): void
     {
-        $content = '<js>Weline_Admin::backend/lib/jquery/3.6.0/jquery.js</js>';
+        $content = '<js>Weline_Frontend::js/cookie.js</js>';
         $result = $this->taglib->compile($this->template, $content, 'js-tag.phtml');
         $this->assertStringNotContainsString('<js>', $result, '原始 <js> 标签应被替换');
         $this->assertStringContainsString('<script', $result, '应输出 script 标签');
@@ -106,30 +106,30 @@ class TaglibInlineTagsTest extends TestCore
         $pathOnly = preg_replace('#\?v=.*$#', '', $src);
         if (defined('DEV') && DEV) {
             $this->assertEquals(
-                '/Weline/Admin/view/statics/backend/lib/jquery/3.6.0/jquery.js',
+                '/Weline/Frontend/view/statics/js/cookie.js',
                 $pathOnly,
                 '开发环境 src 应为 /Weline/Admin/view/statics/...'
             );
         } else {
             $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
             $theme = str_replace('\\', '/', $theme);
-            $expected = '/static/' . $theme . '/Weline/Admin/view/statics/backend/lib/jquery/3.6.0/jquery.js';
+            $expected = '/static/' . $theme . '/Weline/Frontend/view/statics/js/cookie.js';
             $this->assertEquals($expected, $pathOnly, '生产环境 src 应为 /static/{theme}/Weline/Admin/view/statics/...');
         }
     }
 
     /**
-     * <js>Weline_Backend::/backend/... 格式（与 head.phtml 一致）必须正确解析，不得输出空路径或错模块
+     * <js>Weline_Backend::js/... 格式必须正确解析，不得输出空路径或错模块。
      */
     public function testJsTagWelineBackendFormat(): void
     {
-        $content = '<js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>';
+        $content = '<js>Weline_Backend::js/runtime.js</js>';
         $result = $this->taglib->compile($this->template, $content, 'head-js.phtml');
         $this->assertStringNotContainsString('<js>', $result, '原始 <js> 标签应被替换');
         $this->assertMatchesRegularExpression("#src='([^']+)'#", $result, '应包含 src 属性');
         preg_match("#src='([^']+)'#", $result, $m);
         $pathOnly = preg_replace('#\?v=.*$#', '', $m[1] ?? '');
-        $this->assertStringContainsString('jquery.js', $pathOnly, '路径应包含文件名 jquery.js');
+        $this->assertStringContainsString('runtime.js', $pathOnly, '路径应包含文件名 runtime.js');
         $this->assertStringNotContainsString('/view/statics/\'</script>', $pathOnly, '路径不应以 statics/ 结尾无文件名');
         // 模块应为 Backend 而非 Admin
         $this->assertMatchesRegularExpression('#Weline/Backend/view/statics/#', $pathOnly, '应为 Weline_Backend 模块路径');
@@ -145,8 +145,48 @@ class TaglibInlineTagsTest extends TestCore
 
         $this->assertStringNotContainsString('<js', $result, '原始 <js> 标签应被替换');
         $this->assertStringContainsString('<script type="module"', $result, '应输出 type="module"');
-        $this->assertStringContainsString("src='/Weline/Theme/view/statics/ui/weline-ui.js'", $result);
+        $this->assertStringContainsString("src='/Weline/Theme/view/statics/ui/weline-ui.js", $result);
+        if (defined('DEV') && DEV) {
+            $this->assertMatchesRegularExpression(
+                "#src='/Weline/Theme/view/statics/ui/weline-ui\\.js\\?v=dev_[a-f0-9]{12}'#",
+                $result,
+                '开发环境静态资源必须带内容指纹，普通刷新不能继续命中旧 UI'
+            );
+        }
         $this->assertStringContainsString('</script>', $result);
+    }
+
+    public function testDevelopmentJsAndCssTagsCarryStableContentFingerprints(): void
+    {
+        if (!defined('DEV') || !DEV) {
+            $this->markTestSkipped('内容指纹只属于开发环境。');
+        }
+
+        $jsSource = '<js>Weline_Theme::ui/weline-ui.js</js>';
+        $cssSource = '<css>Weline_Theme::ui/weline-foundation.css</css>';
+        $js = $this->taglib->compile(
+            $this->template,
+            $jsSource,
+            'js-development-fingerprint.phtml'
+        );
+        $css = $this->taglib->compile(
+            $this->template,
+            $cssSource,
+            'css-development-fingerprint.phtml'
+        );
+
+        self::assertMatchesRegularExpression('/weline-ui\\.js\\?v=dev_[a-f0-9]{12}/', $js);
+        self::assertMatchesRegularExpression('/weline-foundation\\.css\\?v=dev_[a-f0-9]{12}/', $css);
+
+        $jsSourceAgain = '<js>Weline_Theme::ui/weline-ui.js</js>';
+        $jsAgain = $this->taglib->compile(
+            $this->template,
+            $jsSourceAgain,
+            'js-development-fingerprint-repeat.phtml'
+        );
+        preg_match('/weline-ui\\.js\\?v=([^\'\"]+)/', $js, $first);
+        preg_match('/weline-ui\\.js\\?v=([^\'\"]+)/', $jsAgain, $second);
+        self::assertSame($first[1] ?? null, $second[1] ?? null, '内容不变时版本指纹必须稳定');
     }
 
     /**

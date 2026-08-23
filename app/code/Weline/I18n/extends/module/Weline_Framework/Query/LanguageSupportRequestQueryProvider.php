@@ -22,9 +22,28 @@ final class LanguageSupportRequestQueryProvider implements QueryProviderInterfac
     {
         return match ($operation) {
             'getLanguageSupportRequestForm' => $this->service->renderForm(),
-            'submitLanguageSupportRequest' => $this->service->submit($params),
+            'submitLanguageSupportRequest' => $this->submitLanguageSupportRequest($params),
             default => throw new \InvalidArgumentException((string)__('语言申请查询器不支持的操作：%{1}', [$operation])),
         };
+    }
+
+    /** @param array<string, mixed> $params
+     *  @return array<string, mixed>
+     */
+    private function submitLanguageSupportRequest(array $params): array
+    {
+        try {
+            return $this->service->submit($params);
+        } catch (\InvalidArgumentException|\RuntimeException $exception) {
+            // Expected applicant-facing failures must stay async-friendly JSON,
+            // not QueryBin 500 "Internal server error."
+            return [
+                'success' => false,
+                'message' => $exception->getMessage() !== ''
+                    ? $exception->getMessage()
+                    : (string)__('提交失败，请稍后重试'),
+            ];
+        }
     }
 
     public function getDescriptor(): array
@@ -55,7 +74,9 @@ final class LanguageSupportRequestQueryProvider implements QueryProviderInterfac
                     'graph' => false,
                     'cost' => 5,
                     'params' => [
-                        ['name' => 'name', 'type' => 'string', 'required' => true, 'max_length' => 120],
+                        ['name' => 'first_name', 'type' => 'string', 'required' => true, 'max_length' => 60],
+                        ['name' => 'last_name', 'type' => 'string', 'required' => true, 'max_length' => 60],
+                        ['name' => 'name', 'type' => 'string', 'required' => false, 'max_length' => 120],
                         ['name' => 'email', 'type' => 'string', 'required' => true, 'max_length' => 190],
                         ['name' => 'locales', 'type' => 'list', 'required' => true, 'max_items' => 20],
                         ['name' => 'captcha_provider', 'type' => 'string', 'required' => true, 'max_length' => 64],

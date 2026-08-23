@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\CustomerService\Test\Unit\View;
+
+use PHPUnit\Framework\TestCase;
+
+final class CustomerServiceWidgetUiContractTest extends TestCase
+{
+    public function testFrontendWidgetUsesWelineFormControls(): void
+    {
+        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $this->assertFileExists($hookFile);
+        $content = (string) file_get_contents($hookFile);
+
+        $this->assertStringContainsString('class="w-textarea cs-message-input"', $content);
+        $this->assertStringContainsString('class="w-select"', $content);
+        $this->assertStringContainsString('class="w-input cs-form-input"', $content);
+        $this->assertStringContainsString('class="w-button cs-send-button"', $content);
+    }
+
+    public function testFrontendStylesPinSurfaceBackgroundForMessageInput(): void
+    {
+        $cssFile = dirname(__DIR__, 3) . '/view/statics/css/customer-service.css';
+        $this->assertFileExists($cssFile);
+        $content = (string) file_get_contents($cssFile);
+
+        $this->assertStringContainsString('@layer page', $content);
+        $this->assertStringContainsString('background: var(--weline-theme-surface)', $content);
+        $this->assertStringContainsString('color: var(--weline-theme-text)', $content);
+        $this->assertStringContainsString('.cs-message-input', $content);
+        $this->assertStringContainsString('color-scheme: inherit', $content);
+    }
+}

@@ -9,7 +9,7 @@ use Weline\Meta\Api\Data\MetaConfigIdentity;
 use Weline\Meta\Api\MetaConfigRepositoryInterface;
 use Weline\Meta\Api\Scope\MetaConfigScopeSource;
 use Weline\Meta\Api\Scope\MetaConfigScopeValue;
-use Weline\SystemConfig\Service\SystemConfigScopeResolver;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 
 /**
  * TASK-P1C-005-META：在精确 Repository 之上叠加 typed Scope 回落。
@@ -19,7 +19,7 @@ final class MetaConfigTypedScopeService
 {
     public function __construct(
         private readonly MetaConfigRepositoryInterface $repository,
-        private readonly SystemConfigScopeResolver $scopeResolver,
+        private readonly ScopeHierarchyInterface $scopeResolver,
     ) {
     }
 
@@ -43,53 +43,58 @@ final class MetaConfigTypedScopeService
         $chain = $this->scopeResolver->chainFromIdentity($identity);
         $exactStorage = $this->scopeResolver->toStorageScope($identity);
 
+        $localeChain = $locale === null || trim($locale) === ''
+            ? [null]
+            : [$locale, null];
         foreach ($chain as $storageScope) {
-            $record = $this->repository->resolve(new MetaConfigIdentity(
-                namespace: $namespace,
-                configKey: $configKey,
-                scope: $storageScope,
-                locale: $locale,
-                identifyId: $identifyId,
-                metaId: $metaId,
-                metaIdentify: $metaIdentify,
-            ));
-            if ($record === null) {
-                // 兼容历史短 scope（如 default）仅在 Website/Global 层尝试一次
-                $legacy = $this->legacyCompatScope($storageScope);
-                if ($legacy !== null && $legacy !== $storageScope) {
-                    $record = $this->repository->resolve(new MetaConfigIdentity(
-                        namespace: $namespace,
-                        configKey: $configKey,
-                        scope: $legacy,
-                        locale: $locale,
-                        identifyId: $identifyId,
-                        metaId: $metaId,
-                        metaIdentify: $metaIdentify,
-                    ));
+            foreach ($localeChain as $candidateLocale) {
+                $record = $this->repository->resolve(new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $configKey,
+                    scope: $storageScope,
+                    locale: $candidateLocale,
+                    identifyId: $identifyId,
+                    metaId: $metaId,
+                    metaIdentify: $metaIdentify,
+                ));
+                if ($record === null) {
+                    // 兼容历史短 scope（如 default）仅在 Website/Global 层尝试一次
+                    $legacy = $this->legacyCompatScope($storageScope);
+                    if ($legacy !== null && $legacy !== $storageScope) {
+                        $record = $this->repository->resolve(new MetaConfigIdentity(
+                            namespace: $namespace,
+                            configKey: $configKey,
+                            scope: $legacy,
+                            locale: $candidateLocale,
+                            identifyId: $identifyId,
+                            metaId: $metaId,
+                            metaIdentify: $metaIdentify,
+                        ));
+                    }
                 }
-            }
-            if ($record === null) {
-                continue;
-            }
-            $hitIdentity = $this->scopeResolver->fromStorageScope($storageScope);
-            $sourceKind = $storageScope === $exactStorage
-                ? MetaConfigScopeSource::KIND_EXACT
-                : MetaConfigScopeSource::KIND_FALLBACK;
+                if ($record === null) {
+                    continue;
+                }
+                $hitIdentity = $this->scopeResolver->fromStorageScope($storageScope);
+                $sourceKind = $storageScope === $exactStorage && $candidateLocale === $locale
+                    ? MetaConfigScopeSource::KIND_EXACT
+                    : MetaConfigScopeSource::KIND_FALLBACK;
 
-            return new MetaConfigScopeValue(
-                record: $record,
-                source: new MetaConfigScopeSource(
-                    sourceKind: $sourceKind,
-                    scopeKind: $hitIdentity?->scopeKind,
-                    storageScope: $storageScope,
-                    locale: $record->locale,
-                    version: null,
-                    metadata: [],
-                ),
-                requestedScope: $identity,
-                requestedLocale: $locale,
-                fallbackStorageScopes: $chain,
-            );
+                return new MetaConfigScopeValue(
+                    record: $record,
+                    source: new MetaConfigScopeSource(
+                        sourceKind: $sourceKind,
+                        scopeKind: $hitIdentity?->scopeKind,
+                        storageScope: $storageScope,
+                        locale: $record->locale,
+                        version: null,
+                        metadata: [],
+                    ),
+                    requestedScope: $identity,
+                    requestedLocale: $locale,
+                    fallbackStorageScopes: $chain,
+                );
+            }
         }
 
         return new MetaConfigScopeValue(
@@ -108,6 +113,9 @@ final class MetaConfigTypedScopeService
     {
         if ($scope instanceof ScopeIdentity) {
             return $this->scopeResolver->toStorageScope($scope);
+        }
+        if (trim($scope) === '') {
+            throw new \InvalidArgumentException('meta_config_write_scope_required');
         }
         $this->scopeResolver->assertWritableRawScope($scope);
 

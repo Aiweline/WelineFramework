@@ -6,6 +6,8 @@
  * @meta.name {default="边框变量",name="边框变量",description="边框变量，用于描述变量的名称"}
  * @meta.description {default="定义统一的边框系统，包括边框宽度、圆角、样式等",name="定义统一的边框系统，包括边框宽度、圆角、样式等",description="定义统一的边框系统，包括边框宽度、圆角、样式等，用于描述变量的用途"}
  * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
+ * @meta.panel {default="borders",name="panel",description="panel"}
+ * @meta.disk_kind {default="variables",name="disk_kind",description="disk_kind"}
  */
 
 :root {

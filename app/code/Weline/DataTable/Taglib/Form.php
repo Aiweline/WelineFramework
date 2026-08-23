@@ -9,10 +9,11 @@ use Weline\DataTable\Helper\TableContext;
 use Weline\DataTable\Helper\UiAssets;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Taglib\OwnsChildCompilationInterface;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Template;
 
-final class Form implements TaglibInterface
+final class Form implements TaglibInterface, OwnsChildCompilationInterface
 {
     public static function name(): string
     {
@@ -184,7 +185,7 @@ final class Form implements TaglibInterface
                 . '" size="sm"></w-icon><span>' . $buttonText . '</span></button>';
         }
 
-        return UiAssets::render($template) . $markup;
+        return UiAssets::render($template, ['data-table-form']) . $markup;
     }
 
     private static function renderMarkup(

@@ -31,6 +31,7 @@ use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\DnsProviderDetector;
 use Weline\Websites\Service\ProvisioningQueryHandler;
 use Weline\Websites\Service\AiWorkbench\SiteBuilderWorkbenchQueryHandler;
+use Weline\Websites\Service\WebsiteSelectOptions;
 
 class WebsitesQueryProvider implements QueryProviderInterface
 {
@@ -102,6 +103,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getWebsiteById'         => $this->getWebsiteById($params),
             'getWebsiteByCode'       => $this->getWebsiteByCode($params),
             'getWebsiteList'         => $this->getWebsiteList($params),
+            'getWebsiteSelectOptions' => WebsiteSelectOptions::fromRows($this->getWebsiteList($params)),
             'getActiveWebsiteDomains' => $this->getActiveWebsiteDomains($params),
             'getWebsiteDomains' => $this->getWebsiteDomains($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
@@ -388,6 +390,11 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 [
                     'name'        => 'getWebsiteList',
                     'description' => __('获取所有站点列表'),
+                    'params'      => [],
+                ],
+                [
+                    'name'        => 'getWebsiteSelectOptions',
+                    'description' => __('获取 WebsiteSelect 标签选项（value/label/meta）'),
                     'params'      => [],
                 ],
                 [

@@ -29,18 +29,33 @@ final class PageHeaderResolver
     {
         $menu = $this->findCurrentMenu($request);
         if ($menu->getId()) {
+            $exact = $this->isExactActionMatch($request, (string)$menu->getData(Menu::schema_fields_ACTION));
+            $title = $exact
+                ? $this->menuTitle($menu, $fallbackTitle)
+                : ($fallbackTitle !== '' ? $fallbackTitle : $this->menuTitle($menu));
+
             return [
-                'title' => $this->menuTitle($menu, $fallbackTitle),
-                'breadcrumbs' => $this->buildBreadcrumbs($request, $menu),
+                'title' => $title,
+                'breadcrumbs' => $this->buildBreadcrumbs($request, $menu, $exact ? '' : $title),
                 'has_menu' => true,
             ];
         }
 
         $configMenu = $this->findCurrentMenuConfig($request);
         if ($configMenu !== null) {
+            $exact = $this->isExactActionMatch($request, (string)($configMenu['item']['action'] ?? ''));
+            $title = $exact
+                ? $this->configTitle($configMenu['item'], $fallbackTitle)
+                : ($fallbackTitle !== '' ? $fallbackTitle : $this->configTitle($configMenu['item']));
+
             return [
-                'title' => $this->configTitle($configMenu['item'], $fallbackTitle),
-                'breadcrumbs' => $this->buildConfigBreadcrumbs($request, $configMenu['item'], $configMenu['lookup']),
+                'title' => $title,
+                'breadcrumbs' => $this->buildConfigBreadcrumbs(
+                    $request,
+                    $configMenu['item'],
+                    $configMenu['lookup'],
+                    $exact ? '' : $title
+                ),
                 'has_menu' => true,
             ];
         }
@@ -50,36 +65,25 @@ final class PageHeaderResolver
 
     private function findCurrentMenu(Request $request): Menu
     {
-        $routePath = trim($request->getRouteUrlPath(), '/');
-        $candidates = array_values(array_unique(array_filter([
-            $routePath,
-            '/' . $routePath,
-            strtolower($routePath),
-            '/' . strtolower($routePath),
-        ])));
-
         $menu = $this->newMenu();
-        foreach ($candidates as $candidate) {
-            $current = $menu->clear()->reset()
-                ->where(Menu::schema_fields_ACTION, $candidate)
-                ->find()
-                ->fetch();
-            if ($current->getId()) {
-                return $current;
+        foreach ($this->routeLookupPaths($request) as $path) {
+            foreach ($this->pathVariants($path) as $candidate) {
+                $current = $menu->clear()->reset()
+                    ->where(Menu::schema_fields_ACTION, $candidate)
+                    ->find()
+                    ->fetch();
+                if ($current->getId()) {
+                    return $current;
+                }
             }
         }
+
         return $menu->clear()->reset();
     }
 
     /** @return array{item:array<string,mixed>,lookup:array<string,array<string,mixed>>}|null */
     private function findCurrentMenuConfig(Request $request): ?array
     {
-        $routePath = trim($request->getRouteUrlPath(), '/');
-        $candidates = array_values(array_unique(array_filter([$routePath, strtolower($routePath)])));
-        if ($candidates === []) {
-            return null;
-        }
-
         try {
             $configs = $this->menuXmlReader->read();
         } catch (\Throwable) {
@@ -87,7 +91,7 @@ final class PageHeaderResolver
         }
 
         $lookup = [];
-        $current = null;
+        $byAction = [];
         foreach ($configs as $moduleConfig) {
             $items = $moduleConfig['data'] ?? [];
             if (!is_array($items)) {
@@ -101,26 +105,97 @@ final class PageHeaderResolver
                 if ($source !== '') {
                     $lookup[$source] = $item;
                 }
-                $action = trim((string)($item['action'] ?? ''), '/');
-                if ($action !== '' && in_array(strtolower($action), $candidates, true)) {
-                    $current = $item;
+                $action = strtolower(trim((string)($item['action'] ?? ''), '/'));
+                if ($action !== '') {
+                    $byAction[$action] = $item;
                 }
             }
         }
-        return $current === null ? null : ['item' => $current, 'lookup' => $lookup];
+
+        foreach ($this->routeLookupPaths($request) as $path) {
+            foreach ($this->pathVariants($path) as $candidate) {
+                $normalized = strtolower(trim($candidate, '/'));
+                if ($normalized !== '' && isset($byAction[$normalized])) {
+                    return ['item' => $byAction[$normalized], 'lookup' => $lookup];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Longest-first route prefixes for menu action lookup.
+     *
+     * @return list<string>
+     */
+    private function routeLookupPaths(Request $request): array
+    {
+        $routePath = trim($request->getRouteUrlPath(), '/');
+        if ($routePath === '') {
+            return [];
+        }
+
+        $segments = explode('/', $routePath);
+        $paths = [];
+        for ($length = count($segments); $length >= 1; $length--) {
+            $paths[] = implode('/', array_slice($segments, 0, $length));
+        }
+
+        return $paths;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function pathVariants(string $path): array
+    {
+        $trimmed = trim($path, '/');
+        if ($trimmed === '') {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter([
+            $trimmed,
+            '/' . $trimmed,
+            strtolower($trimmed),
+            '/' . strtolower($trimmed),
+        ])));
+    }
+
+    private function isExactActionMatch(Request $request, string $action): bool
+    {
+        $routePath = strtolower(trim($request->getRouteUrlPath(), '/'));
+        $normalizedAction = strtolower(trim($action, '/'));
+
+        return $routePath !== '' && $normalizedAction !== '' && $routePath === $normalizedAction;
     }
 
     /** @return list<array{title:string,url:string,active:bool}> */
-    private function buildBreadcrumbs(Request $request, Menu $menu): array
+    private function buildBreadcrumbs(Request $request, Menu $menu, string $leafTitle = ''): array
     {
         $items = [];
-        $lookup = $this->newMenu();
-        $menu->getParentPaths($lookup, Menu::schema_fields_ID, Menu::schema_fields_PID, Menu::schema_fields_ORDER, 'ASC');
+        // getParentPaths($subject): query runner is $this; parents are written onto $subject.
+        $this->newMenu()->getParentPaths(
+            $menu,
+            Menu::schema_fields_ID,
+            Menu::schema_fields_PID,
+            Menu::schema_fields_ORDER,
+            'ASC'
+        );
         $parent = $menu->getData('parents')[0] ?? null;
         if ($parent instanceof Menu) {
             $this->appendParentBreadcrumbs($request, $parent, $items);
         }
-        $items[] = $this->menuBreadcrumb($request, $menu, true);
+        $items[] = $this->menuBreadcrumb($request, $menu, $leafTitle === '');
+        if ($leafTitle !== '') {
+            $items[] = [
+                'title' => $leafTitle,
+                'url' => '',
+                'active' => true,
+            ];
+        }
+
         return $items;
     }
 
@@ -139,11 +214,23 @@ final class PageHeaderResolver
      * @param array<string,array<string,mixed>> $lookup
      * @return list<array{title:string,url:string,active:bool}>
      */
-    private function buildConfigBreadcrumbs(Request $request, array $menu, array $lookup): array
-    {
+    private function buildConfigBreadcrumbs(
+        Request $request,
+        array $menu,
+        array $lookup,
+        string $leafTitle = ''
+    ): array {
         $items = [];
         $this->appendConfigParentBreadcrumbs($request, $menu, $lookup, $items);
-        $items[] = $this->configBreadcrumb($request, $menu, true);
+        $items[] = $this->configBreadcrumb($request, $menu, $leafTitle === '');
+        if ($leafTitle !== '') {
+            $items[] = [
+                'title' => $leafTitle,
+                'url' => '',
+                'active' => true,
+            ];
+        }
+
         return $items;
     }
 

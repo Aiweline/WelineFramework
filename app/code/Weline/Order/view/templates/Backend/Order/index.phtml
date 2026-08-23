@@ -15,25 +15,11 @@ $filters = $this->getData('filters') ?? [];
 
 $backendBase = $this->getBackendUrl('weline_order/backend/order/index');
 ?>
-<div class="w-grid" data-testid="order-management">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;"><?= __('订单管理') ?></h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                    <li class="w-breadcrumb__item" data-state="active"><?= __('订单管理') ?></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="w-grid">
+<div class="w-grid" data-testid="order-management">
     <div style="--w-span:12;">
         <div class="w-card">
             <div class="w-card__header">

@@ -16,10 +16,33 @@ $display = static function (mixed $value) use ($escape): string {
     }
     return $escape($value);
 };
+$websiteSelectValue = '0';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
 <section class="commerce-control-center" data-testid="tax-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
-    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-        <h4 style="--w-mb-sm:0;"><?= $escape($title) ?></h4>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="end">
         <span class="w-badge <?= $readOnly ? 'bg-info text-dark' : 'bg-success' ?>"><?= $readOnly ? __('只读诊断') : __('可配置') ?></span>
     </div>
     <div class="w-alert <?= $readOnly ? 'alert-info' : 'alert-warning' ?>" role="status">
@@ -34,9 +57,18 @@ $display = static function (mixed $value) use ($escape): string {
             <div class="w-card__body">
                 <w:form method="post" action="@var($formActionUrl)">
                     <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                        <div style="--w-span-md:2;">
-                            <label class="w-field__label"><?= __('网站 ID') ?></label>
-                            <input class="w-input" type="number" min="0" name="website_id" value="0" required>
+                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                            <w:websites:website:select
+                                id="tax-cc-website"
+                                name="website_id"
+                                value="websiteSelectValue"
+                                display="websiteSelectDisplay"
+                                options="websiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择站点)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                            />
                         </div>
                         <div style="--w-span-md:3;">
                             <label class="w-field__label"><?= __('税类代码') ?></label>

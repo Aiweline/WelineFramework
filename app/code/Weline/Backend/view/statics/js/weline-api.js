@@ -41,6 +41,112 @@
         return !!(window.DEV || window.WELINE_ENV === 'DEV' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     }
 
+    function isDevConsoleEnabled() {
+        if (window.WELINE_DEV_CONSOLE === false) {
+            return false;
+        }
+        if (window.WELINE_DEV_CONSOLE === true) {
+            return true;
+        }
+        try {
+            if (window.localStorage && window.localStorage.getItem('weline_dev_console') === '1') {
+                return true;
+            }
+        } catch (error) {
+            /* ignore */
+        }
+        try {
+            if (new URLSearchParams(window.location.search || '').get('weline_dev_console') === '1') {
+                return true;
+            }
+        } catch (error) {
+            /* ignore */
+        }
+        return isDevMode();
+    }
+
+    function defaultDevConsoleUrl() {
+        var scriptUrl = currentScriptUrl();
+        if (scriptUrl) {
+            return scriptUrl.replace(/weline-api\.js(\?.*)?$/, 'weline-dev-console.js$1');
+        }
+        if (window.Weline && window.Weline.staticResourceResolver && typeof window.Weline.staticResourceResolver.resolve === 'function') {
+            try {
+                return window.Weline.staticResourceResolver.resolve('Weline_Backend::js/weline-dev-console.js');
+            } catch (error) {
+                /* fallback below */
+            }
+        }
+        return isDevMode()
+            ? '/Weline/Backend/view/statics/js/weline-dev-console.js'
+            : '/static/Weline/Backend/js/weline-dev-console.js';
+    }
+
+    var devConsoleLoadPromise = null;
+
+    function loadDevConsole() {
+        if (!isDevConsoleEnabled()) {
+            return Promise.resolve(null);
+        }
+        if (window.Weline && window.Weline.DevConsole && window.Weline.DevConsole.__welineDevConsole) {
+            return Promise.resolve(window.Weline.DevConsole);
+        }
+        if (devConsoleLoadPromise) {
+            return devConsoleLoadPromise;
+        }
+        devConsoleLoadPromise = new Promise(function (resolve) {
+            var url = defaultDevConsoleUrl();
+            if (isDevMode()) {
+                url += (url.indexOf('?') === -1 ? '?' : '&') + 'v=' + Date.now();
+            }
+            var script = document.createElement('script');
+            script.async = true;
+            script.src = url;
+            script.onload = function () {
+                resolve((window.Weline && window.Weline.DevConsole) || null);
+            };
+            script.onerror = function () {
+                resolve(null);
+            };
+            (document.head || document.documentElement).appendChild(script);
+        });
+        return devConsoleLoadPromise;
+    }
+
+    function withDevConsole(callback) {
+        if (!isDevConsoleEnabled() || typeof callback !== 'function') {
+            return;
+        }
+        loadDevConsole().then(function (devConsole) {
+            if (devConsole) {
+                callback(devConsole);
+            }
+        });
+    }
+
+    window.Weline = window.Weline || {};
+    window.Weline.enableDevConsole = function () {
+        window.WELINE_DEV_CONSOLE = true;
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem('weline_dev_console', '1');
+            }
+        } catch (error) {
+            /* ignore */
+        }
+        return loadDevConsole();
+    };
+    window.Weline.disableDevConsole = function () {
+        window.WELINE_DEV_CONSOLE = false;
+        try {
+            if (window.localStorage) {
+                window.localStorage.removeItem('weline_dev_console');
+            }
+        } catch (error) {
+            /* ignore */
+        }
+    };
+
     function summarizeBinQueryPayload(payload) {
         if (!payload || typeof payload !== 'object') {
             return 'unknown';
@@ -971,7 +1077,7 @@
     };
 
     BackendQueryBinClient.prototype.beginDevTrace = function (messageId, payload) {
-        if (!isDevMode() || !messageId) {
+        if (!isDevConsoleEnabled() || !messageId) {
             return;
         }
         this.devTraces[messageId] = {
@@ -981,7 +1087,7 @@
     };
 
     BackendQueryBinClient.prototype.finishDevTrace = function (messageId, responseMeta, requestPayloadOverride, startedAtOverride) {
-        if (!isDevMode()) {
+        if (!isDevConsoleEnabled()) {
             return;
         }
 
@@ -996,30 +1102,31 @@
         var durationMs = Math.max(0, Math.round(performance.now() - startedAt));
         var summary = summarizeBinQueryPayload(requestPayload);
         var ok = !!(responseMeta && responseMeta.ok === true);
-        var status = responseMeta && responseMeta.status ? (' ' + responseMeta.status) : '';
+        var status = responseMeta && responseMeta.status ? responseMeta.status : '';
         var endpoint = '';
         try {
             endpoint = buildQueryBinConfig().endpoint;
         } catch (error) {
             endpoint = '';
         }
-        var label = '[Weline.BinQuery] ' + (ok ? '✓' : '✗') + ' ' + summary + status + ' · ' + durationMs + 'ms';
         var requestLog = sanitizeBinQueryPayloadForLog(requestPayload);
         var responseLog = cloneDevLogValue(responseMeta || {});
 
-        if (typeof console.groupCollapsed === 'function') {
-            console.groupCollapsed(label);
-            console.log('endpoint:', endpoint);
-            console.log('request:', requestLog);
-            console.log('response:', responseLog);
-            console.groupEnd();
-            return;
-        }
-        console.log(label, {endpoint: endpoint, request: requestLog, response: responseLog});
+        withDevConsole(function (devConsole) {
+            devConsole.binQuery({
+                ok: ok,
+                summary: summary,
+                status: status,
+                durationMs: durationMs,
+                endpoint: endpoint,
+                request: requestLog,
+                response: responseLog
+            });
+        });
     };
 
     BackendQueryBinClient.prototype.reportDevError = function (error, detail) {
-        if (!isDevMode() || !error) {
+        if (!isDevConsoleEnabled() || !error) {
             return;
         }
         if (error._welineApiDevLogged) {
@@ -1029,21 +1136,10 @@
         if (detail && detail.skipConsole) {
             return;
         }
-        var label = '[Weline.BinQuery] request failed';
         var extra = detail && typeof detail === 'object' ? detail : {};
-        if (typeof console.groupCollapsed === 'function') {
-            console.groupCollapsed(label);
-            console.error(error);
-            if (error && error.response) {
-                console.log('response:', error.response);
-            }
-            if (Object.keys(extra).length > 0) {
-                console.log('detail:', extra);
-            }
-            console.groupEnd();
-            return;
-        }
-        console.error(label, error, extra);
+        withDevConsole(function (devConsole) {
+            devConsole.failed('request failed', error, extra);
+        });
     };
 
     BackendQueryBinClient.prototype.sendToWorker = function (payload, config) {

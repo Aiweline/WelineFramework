@@ -6,6 +6,9 @@
  * @meta.name {default="Backend亮色主题颜色",name="Backend亮色主题颜色",description="Backend亮色主题颜色，用于描述色系的名称"}
  * @meta.description {default="后端管理界面亮色主题的颜色覆盖，提供浅色背景和深色文本，通常与默认值一致",name="后端管理界面亮色主题的颜色覆盖",description="后端管理界面亮色主题的颜色覆盖，提供浅色背景和深色文本，通常与默认值一致，用于描述色系的用途"}
  * @meta.theme {default="light",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
+ * @meta.palette_role {default="mode",name="palette_role",description="palette_role"}
  */
 
 [data-theme="light"],

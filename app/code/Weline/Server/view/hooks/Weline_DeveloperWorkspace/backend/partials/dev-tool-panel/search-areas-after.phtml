@@ -396,12 +396,10 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
 
 <script>
 (function(g){
-  // Prefer the HTTP-aware bridge from panel.js; do not overwrite with adminRequest-only.
-  if(g.__bqAdmin_server_http) return;
-  g.__bqAdmin_server=true;
-  g.__bqAdmin_server_http=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['server']=function(url, options){
+  // Prefer the HTTP-aware helper from panel.js; do not overwrite.
+  if(g.__welineServerAdminRequestHttp) return;
+  var W = g.Weline = g.Weline || {};
+  W.serverAdminRequest = function(url, options){
     options=options||{};
     var urlStr=String(url||'');
     if(/\/_wls\//i.test(urlStr) || /\/server\/test\//i.test(urlStr)){
@@ -416,25 +414,12 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
       }
       return fetch(urlStr, fetchOpts);
     }
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('server').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
+    if(typeof W.adminRequest === 'function'){
+      return W.adminRequest('server', url, options);
+    }
+    return Promise.reject(new Error('Weline.adminRequest unavailable'));
   };
+  g.__welineServerAdminRequestHttp=true;
 })(window);
 </script>
 <script>
@@ -474,7 +459,7 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
     function requestWlsHealth() {
         var healthUrl = getWlsRuntimeConfig().healthUrl || '/_wls/health?detail=1';
         if (typeof fetch === 'function') {
-            return bqAdmin['server'](healthUrl, {
+            return Weline.adminRequest('server', healthUrl, {
                 method: 'GET',
                 cache: 'no-store',
                 credentials: 'same-origin',
@@ -1116,7 +1101,7 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
             request.headers['Content-Type'] = 'application/json';
             request.body = JSON.stringify(params || {});
         }
-        return bqAdmin['server'](url, request).then(function(response) {
+        return Weline.adminRequest('server', url, request).then(function(response) {
             return response.text().then(function(text) {
                 var payload = {};
                 if (text) {

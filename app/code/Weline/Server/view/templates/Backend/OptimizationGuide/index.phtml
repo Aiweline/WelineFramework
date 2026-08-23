@@ -88,34 +88,7 @@ $apiUrl = $this->getBackendUrl('*/backend/optimization-guide/api-data');
 </style>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_server) return;
-  g.__bqAdmin_server=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['server']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('server').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 const API_URL = '<?= $apiUrl ?>';
 
@@ -149,7 +122,7 @@ async function loadGuideData() {
     showLoading();
     
     try {
-        const response = await bqAdmin['server'](API_URL, {
+        const response = await Weline.adminRequest('server', API_URL, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -228,7 +201,7 @@ function renderContent(data) {
                             <th><?= __('PHP 可执行文件') ?></th>
                             <td>
                                 <code class="user-select-all">${escapeHtml(php_info.binary)}</code>
-                                <button class="w-button ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.binary || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
+                                <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.binary || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                                     <w:icon name="circle" size="sm"></w:icon>
                                 </button>
                             </td>
@@ -237,7 +210,7 @@ function renderContent(data) {
                             <th><?= __('php.ini 配置文件') ?></th>
                             <td>
                                 <code class="user-select-all">${escapeHtml(php_info.ini_path)}</code>
-                                <button class="w-button ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ini_path || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
+                                <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ini_path || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                                     <w:icon name="circle" size="sm"></w:icon>
                                 </button>
                             </td>
@@ -246,7 +219,7 @@ function renderContent(data) {
                             <th><?= __('扩展目录') ?></th>
                             <td>
                                 <code class="user-select-all">${escapeHtml(php_info.ext_dir)}</code>
-                                <button class="w-button ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ext_dir || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
+                                <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ext_dir || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                                     <w:icon name="circle" size="sm"></w:icon>
                                 </button>
                             </td>
@@ -255,8 +228,8 @@ function renderContent(data) {
                             <th><?= __('线程安全模式') ?></th>
                             <td>
                                 ${php_info.thread_safe 
-                                    ? '<span class="w-badge" data-w-background="info">Thread Safe (TS)</span> <span class="w-text ms-2" data-tone="muted"><?= __('下载扩展时选择 TS 版本') ?></span>'
-                                    : '<span class="w-badge" data-w-background="success">Non-Thread Safe (NTS)</span> <span class="w-text ms-2" data-tone="muted"><?= __('下载扩展时选择 NTS 版本') ?></span>'
+                                    ? '<span class="w-badge" data-w-background="info">Thread Safe (TS)</span> <span class="w-text" data-tone="muted"><?= __('下载扩展时选择 TS 版本') ?></span>'
+                                    : '<span class="w-badge" data-w-background="success">Non-Thread Safe (NTS)</span> <span class="w-text" data-tone="muted"><?= __('下载扩展时选择 NTS 版本') ?></span>'
                                 }
                             </td>
                         </tr>
@@ -418,9 +391,9 @@ function renderInstallSteps(steps, phpInfo) {
             for (const [os, cmd] of Object.entries(step.commands)) {
                 html += `
                     <div style="--w-mb:var(--weline-space-2);">
-                        <span class="w-badge me-2" data-w-background="info">${escapeHtml(os)}</span>
+                        <span class="w-badge" data-w-background="info">${escapeHtml(os)}</span>
                         <code class="user-select-all">${escapeHtml(cmd)}</code>
-                        <button class="w-button ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(cmd || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
+                        <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(cmd || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                             <w:icon name="circle" size="sm"></w:icon>
                         </button>
                     </div>

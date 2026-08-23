@@ -22,7 +22,7 @@ class BoolType extends AbstractParamType
         $checked = $this->isTruthy($currentValue);
         $inputAttrs = array_merge([
             'type' => 'checkbox',
-            'class' => 'w-param-input',
+            'class' => 'w-param-checkbox',
             'id' => $fieldId,
             'name' => $key,
             'value' => '1',
@@ -30,7 +30,7 @@ class BoolType extends AbstractParamType
         if ($checked) {
             $inputAttrs['checked'] = true;
         }
-        $inputHtml = '<div class="w-param-form-check">';
+        $inputHtml = '<div class="w-check w-param-form-check">';
         $inputHtml .= '<input ' . $this->buildAttrString($inputAttrs) . '>';
         $inputHtml .= '<label for="' . htmlspecialchars($fieldId) . '">' . htmlspecialchars($enableLabel) . '</label>';
         $inputHtml .= '</div>';

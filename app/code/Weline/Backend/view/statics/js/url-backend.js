@@ -20,11 +20,12 @@
 (function (window, document) {
     'use strict';
 
-    // 防止重复初始化
-    if (window.__WelineUrlBackendInitialized) {
+    // 防止重复初始化；版本 bump 用于覆盖「误把首段当 admin 前缀」的旧缓存脚本。
+    if (window.__WelineUrlBackendInitialized && window.__WelineUrlBackendRebuildVersion === 3) {
         return;
     }
     window.__WelineUrlBackendInitialized = true;
+    window.__WelineUrlBackendRebuildVersion = 3; // prefix only when first segment === adminArea
 
     /**
      * Cookie 操作函数（如果不存在则定义）
@@ -378,7 +379,10 @@
         const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
         const parts = (pathname || '/').split('/').filter(Boolean);
         const nonLocalizedParts = parts.filter(part => !isSupportedCurrencyCode(part, config) && !langPattern.test(part));
-        const prefix = nonLocalizedParts.length ? nonLocalizedParts[0] : '';
+        // 仅当首段确实是后台 area 前缀时才剥离；/dev/tool/... 等前端路径不得被误当成 admin。
+        const adminArea = String(config.adminArea || '').replace(/^\/+|\/+$/g, '');
+        const first = nonLocalizedParts.length ? String(nonLocalizedParts[0]) : '';
+        const prefix = adminArea && first && first.toLowerCase() === adminArea.toLowerCase() ? first : '';
         const remain = prefix ? nonLocalizedParts.slice(1) : nonLocalizedParts;
 
         let currentCurrency = '';
@@ -486,7 +490,8 @@
     window.urlWithCurrency = buildUrlWithCurrency;
 
     window.select_language = function (lang) {
-        setCookie('WELINE_USER_LANG', lang, 7, { path: '/' + config.adminArea, domain: window.location.host });
+        // Cookie 必须 path=/，否则前台文档页（无 admin 前缀）读不到，表现为「语言切不过去」。
+        setCookie('WELINE_USER_LANG', lang, 7, { path: '/', domain: window.location.host });
         window.location.href = buildUrlWithLang(window.location.pathname + window.location.search, lang);
     };
 

@@ -1,6 +1,6 @@
 ﻿"Multipass 模块安装完成","Multipass 模块安装完成"
 "安装失败: %{1}","安装失败: %{1}"
-"缺少 Multipass token","缺少 Multipass token"
+"缺少 Multipass token",缺少多通令牌
 缺少站点ID,缺少站点ID
 站点配置不存在,站点配置不存在
 该站点不支持前端登录,该站点不支持前端登录
@@ -39,10 +39,10 @@ Multipass账户管理,Multipass账户管理
 用户不存在,用户不存在
 Token生成成功,Token生成成功
 Token生成失败：%{1},Token生成失败：%{1}
-user,user
+user,用户
 生成和管理Multipass登录令牌,生成和管理Multipass登录令牌
 账户管理首页,账户管理首页
-grid,grid
+grid,网格
 查看Multipass账户管理首页,查看Multipass账户管理首页
 前端账户列表,前端账户列表
 查看前端账户列表,查看前端账户列表
@@ -50,17 +50,17 @@ grid,grid
 查看后端账户列表,查看后端账户列表
 获取用户列表,获取用户列表
 获取用户列表数据,获取用户列表数据
-生成Token,生成Token
+生成Token,生成代币
 为用户生成Multipass登录令牌,为用户生成Multipass登录令牌
 官网登录提供方,官网登录提供方
 官网登录提供方已保存,官网登录提供方已保存
 保存失败：%{1},保存失败：%{1}
 官网登录提供方已删除,官网登录提供方已删除
 官网登录提供方不存在,官网登录提供方不存在
-login,login
+login,登录
 配置本站通过官网授权登录,配置本站通过官网授权登录
 保存官网登录提供方,保存官网登录提供方
-save,save
+save,节省
 保存本站官网登录提供方配置,保存本站官网登录提供方配置
 删除官网登录提供方,删除官网登录提供方
 trash,trash
@@ -77,8 +77,8 @@ trash,trash
 站点ID不能为空,站点ID不能为空
 站点删除成功,站点删除成功
 删除失败:,删除失败:
-Multipass站点管理,Multipass站点管理
-server,server
+Multipass站点管理,多通道站点管理
+server,服务器
 管理Multipass认证站点配置,管理Multipass认证站点配置
 互通应用,互通应用
 互通应用已保存,互通应用已保存
@@ -86,12 +86,12 @@ server,server
 "应用 ID 不能为空","应用 ID 不能为空"
 "client_secret 已轮换，请立即保存","client_secret 已轮换，请立即保存"
 互通应用管理,互通应用管理
-settings,settings
+settings,设置
 管理可信互通应用,管理可信互通应用
 缺少密钥,缺少密钥
 用户名或邮箱至少需要提供一个,用户名或邮箱至少需要提供一个
 密钥验证失败,密钥验证失败
-缺少token,缺少token
+缺少token,短缺代币
 Token验证失败或已过期,Token验证失败或已过期
 Token验证成功,Token验证成功
 Token验证失败：%{1},Token验证失败：%{1}
@@ -181,7 +181,7 @@ Token验证失败：%{1},Token验证失败：%{1}
 撤销授权,撤销授权
 未知,未知
 首页,首页
-Multipass管理,Multipass管理
+Multipass管理,多通道管理
 审核策略,审核策略
 当前已开启自动通过：前台用户提交后会直接成为已通过并启用，仍可在本页管理或禁用。,当前已开启自动通过：前台用户提交后会直接成为已通过并启用，仍可在本页管理或禁用。
 当前为人工审核：前台用户提交后默认待审核并禁用，需管理员通过并启用。,当前为人工审核：前台用户提交后默认待审核并禁用，需管理员通过并启用。
@@ -193,7 +193,7 @@ Multipass管理,Multipass管理
 添加应用,添加应用
 "暂无互通应用，请先添加 App、Skill、商城或社区站点。","暂无互通应用，请先添加 App、Skill、商城或社区站点。"
 申请人,申请人
-"Client ID","Client ID"
+"Client ID",客户ID
 可信域名,可信域名
 已绑定账号,已绑定账号
 编辑,编辑
@@ -221,7 +221,7 @@ Multipass管理,Multipass管理
 官网授权地址,官网授权地址
 官网接口地址,官网接口地址
 "留空时默认使用官网授权地址 + /api123。","留空时默认使用官网授权地址 + /api123。"
-"Client Secret","Client Secret"
+"Client Secret",客户秘密
 本站回调地址,本站回调地址
 排序,排序
 已配置提供方,已配置提供方
@@ -268,7 +268,7 @@ Multipass管理,Multipass管理
 令牌生成成功,令牌生成成功
 站点,站点
 用户,用户
-Token,Token
+Token,代币
 复制Token,复制Token
 登录链接,登录链接
 复制链接,复制链接
@@ -312,13 +312,14 @@ Token已复制到剪贴板,Token已复制到剪贴板
 中风险,中风险
 以下授权范围不可用：%{1},以下授权范围不可用：%{1}
 "该回调地址已经提交过 Multipass 管理申请","该回调地址已经提交过 Multipass 管理申请"
-"""Multipass 模块安装完成""","Multipass 模块安装完成"
+"""Multipass 模块安装完成""","""Multipass 模块安装完成"""
 "mdi mdi-account-key","mdi mdi-account-key"
 "mdi mdi-view-dashboard","mdi mdi-view-dashboard"
 "mdi mdi-account","mdi mdi-account"
 "mdi mdi-account-cog","mdi mdi-account-cog"
-"mdi mdi-login-variant","mdi mdi-login-variant"
-"mdi mdi-content-save","mdi mdi-content-save"
-"mdi mdi-delete","mdi mdi-delete"
+"mdi mdi-login-variant","mdi mdi 登录变体"
+"mdi mdi-content-save","MDI MDI 内容保存"
+"mdi mdi-delete","mdi mdi-删除"
 "mdi mdi-server","mdi mdi-server"
 "mdi mdi-application-cog","mdi mdi-application-cog"
+账户管理,账户管理

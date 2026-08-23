@@ -24,8 +24,8 @@ final class Detail extends FrontendController
         }
 
         $name = trim((string)($offer['name'] ?? ''));
-        $this->layoutType = 'product_detail';
-        $this->request->setGet('page_type', 'product_detail');
+        $this->layoutType = 'product';
+        $this->request->setGet('page_type', 'product');
         $this->request->setGet('theme_public_route', 'product/' . $productId);
         $this->request->setGet('theme_page_title', $name !== '' ? $name : (string)__('商品详情'));
         $this->assign('page_title', $name !== '' ? $name : __('商品详情'));

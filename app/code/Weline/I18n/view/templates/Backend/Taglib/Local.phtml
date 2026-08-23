@@ -32,20 +32,16 @@
                             <input type='hidden' name='description[{{v.local_code}}][{{id_field}}]' value='{{id}}'>
                             <div style="--w-span-lg:12;">
                                 <div class="w-field__control" style="--w-mb:var(--weline-space-4);">
-                                    <div class="input-group-prepend">
-                                        <span class="w-field__addon" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
-                                            {{v.local.flag}}
-                                        </span>
-                                    </div>
+                                    <span class="w-field__addon" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
+                                        {{v.local.flag}}
+                                    </span>
                                     <input class="w-input" type='text' id='{{v.local_code}}-{{field}}-input' placeholder='{{v[$field]}}' aria-label='{{v[$field]}}' value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]' required='required' aria-describedby='{{v.local_code}}-{{field}}-input-addon'>
                                     <div class="w-field__hint">
                                         <lang>填写正确！</lang>
                                     </div>
-                                    <div class="input-group-append">
-                                        <span class="w-field__addon" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
-                                            {{v.local.name}}
-                                        </span>
-                                    </div>
+                                    <span class="w-field__addon" title='{{v.local.name}}'>
+                                        {{v.local.name}}
+                                    </span>
                                 </div>
                             </div>
                         </foreach>

@@ -1,3 +1,29 @@
+<?php
+$websiteSelectValue = '0';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+?>
 <!DOCTYPE html>
 <html lang="zh-CN" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
@@ -61,8 +87,19 @@
         
         <section class="w-visitor-dashboard__controls" aria-label="实时数据筛选">
             <div class="w-field w-visitor-dashboard__field">
-                <label class="w-field__label" for="website-id">站点ID</label>
-                <input class="w-input" type="number" id="website-id" value="0" min="0">
+                <label class="w-field__label" for="website-id_trigger">站点</label>
+                <w:websites:website:select
+                    id="website-id"
+                    name="website-id"
+                    value="websiteSelectValue"
+                    display="websiteSelectDisplay"
+                    options="websiteSelectOptionsJson"
+                    multiple="false"
+                    allow-empty="true"
+                    clearable="true"
+                    empty-label="@lang(全部站点)"
+                    placeholder="@lang(搜索站点名称或编码)"
+                />
             </div>
             <div class="w-field w-visitor-dashboard__field">
                 <label class="w-field__label" for="interval">时间间隔</label>

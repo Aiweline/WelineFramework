@@ -1,0 +1,175 @@
+/* Weline UI source: css/maintenance.css */
+@layer page {
+    .w-maintenance-page {
+        min-block-size: 100dvh;
+        margin: 0;
+        background:
+            radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--weline-theme-primary) 18%, transparent), transparent 42%),
+            radial-gradient(circle at 82% 88%, color-mix(in srgb, var(--weline-theme-info) 14%, transparent), transparent 38%),
+            var(--weline-theme-canvas);
+        color: var(--weline-theme-text);
+    }
+
+    .w-maintenance-page__toolbar {
+        position: fixed;
+        z-index: var(--weline-z-menu);
+        inset-block-start: max(var(--weline-space-4), env(safe-area-inset-top));
+        inset-inline-end: max(var(--weline-space-4), env(safe-area-inset-right));
+    }
+
+    .w-maintenance-page__main {
+        display: grid;
+        min-block-size: 100dvh;
+        align-content: center;
+        gap: var(--weline-space-6);
+        padding-block: clamp(5rem, 10dvh, 8rem) max(var(--weline-space-8), env(safe-area-inset-bottom));
+    }
+
+    .w-maintenance-page__hero {
+        inline-size: min(44rem, 100%);
+        margin-inline: auto;
+        text-align: center;
+        box-shadow: var(--weline-theme-shadow-lg);
+    }
+
+    .w-maintenance-page__hero .w-card__body {
+        display: grid;
+        justify-items: center;
+        gap: var(--weline-space-4);
+        padding: clamp(var(--weline-space-6), 5vw, var(--weline-space-12));
+    }
+
+    .w-maintenance-page__mark {
+        display: grid;
+        inline-size: 5rem;
+        block-size: 5rem;
+        place-items: center;
+        overflow: hidden;
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-primary);
+        color: var(--weline-theme-on-primary);
+        box-shadow: var(--weline-theme-shadow-md);
+        animation: w-maintenance-float 3s ease-in-out infinite;
+    }
+
+    .w-maintenance-page__logo {
+        inline-size: 100%;
+        block-size: 100%;
+        object-fit: contain;
+    }
+
+    .w-maintenance-page__eyebrow {
+        margin: 0;
+        color: var(--weline-theme-primary);
+        font-size: var(--weline-font-size-xs);
+        font-weight: 750;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .w-maintenance-page__hero h1,
+    .w-maintenance-page__card h2,
+    .w-maintenance-page__hero p,
+    .w-maintenance-page__card p {
+        margin: 0;
+    }
+
+    .w-maintenance-page__hero h1 {
+        font-size: clamp(1.75rem, 6vw, 2.75rem);
+        line-height: 1.15;
+    }
+
+    .w-maintenance-page__subtitle,
+    .w-maintenance-page__recovery,
+    .w-maintenance-page__card p {
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-maintenance-page__subtitle {
+        font-size: clamp(var(--weline-font-size-md), 3vw, var(--weline-font-size-lg));
+    }
+
+    .w-maintenance-page__progress {
+        inline-size: min(28rem, 100%);
+    }
+
+    .w-maintenance-page__progress .w-progress__bar {
+        inline-size: 32%;
+        animation: w-maintenance-progress 2s ease-in-out infinite;
+    }
+
+    .w-maintenance-page__recovery {
+        max-inline-size: 36rem;
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .w-maintenance-page__cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--weline-space-4);
+    }
+
+    .w-maintenance-page__card .w-card__body {
+        display: grid;
+        align-content: start;
+        gap: var(--weline-space-3);
+        block-size: 100%;
+    }
+
+    .w-maintenance-page__card .w-icon {
+        color: var(--weline-theme-primary);
+    }
+
+    .w-maintenance-page__card h2 {
+        font-size: var(--weline-font-size-md);
+    }
+
+    .w-maintenance-page__card p {
+        overflow-wrap: anywhere;
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .w-maintenance-page__actions {
+        display: flex;
+        justify-content: center;
+    }
+
+    @keyframes w-maintenance-float {
+        50% { translate: 0 calc(var(--weline-space-2) * -1); }
+    }
+
+    @keyframes w-maintenance-progress {
+        from { translate: -110% 0; }
+        to { translate: 330% 0; }
+    }
+}
+
+@media (max-width: 47.99rem) {
+    @layer page {
+        .w-maintenance-page__main {
+            align-content: start;
+            padding-inline: var(--weline-space-4);
+        }
+
+        .w-maintenance-page__cards {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .w-maintenance-page__toolbar {
+            inset-inline-end: max(var(--weline-space-3), env(safe-area-inset-right));
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    @layer page {
+        .w-maintenance-page__mark,
+        .w-maintenance-page__progress .w-progress__bar {
+            animation: none;
+        }
+
+        .w-maintenance-page__progress .w-progress__bar {
+            inline-size: 100%;
+        }
+    }
+}

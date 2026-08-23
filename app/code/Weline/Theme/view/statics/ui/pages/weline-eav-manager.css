@@ -1,0 +1,148 @@
+/* Weline UI source: css/eav-manager.css */
+@layer reset, tokens, base, layout, components, utilities, page;
+
+@layer page {
+    .w-eav-manager { min-width: 0; }
+
+    .w-eav-manager__layout {
+        display: grid;
+        grid-template-columns: minmax(17rem, 22rem) minmax(0, 1fr);
+        min-height: min(46rem, calc(100vh - 11rem));
+        gap: var(--weline-space-4);
+    }
+
+    .w-eav-manager__navigation,
+    .w-eav-manager__detail { min-width: 0; overflow: hidden; }
+
+    .w-eav-manager__navigation {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .w-eav-manager__tree-scroll,
+    .w-eav-manager__detail-body { min-height: 0; overflow: auto; }
+    .w-eav-manager__tree-scroll { padding: var(--weline-space-2); }
+    .w-eav-manager__create-trigger,
+    .w-eav-manager__create-menu { width: 100%; }
+    .w-eav-manager__create-menu { inset-inline: 0; }
+    .w-eav-manager__tree-item[hidden] { display: none; }
+    .w-eav-manager__tree-row { padding-inline: var(--weline-space-1); }
+
+    .w-eav-manager__tree-toggle {
+        display: inline-grid;
+        inline-size: var(--weline-control-height-sm);
+        block-size: var(--weline-control-height-sm);
+        flex: 0 0 auto;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: var(--weline-radius-sm);
+        background: transparent;
+        color: var(--weline-theme-text-muted);
+        cursor: pointer;
+    }
+
+    .w-eav-manager__tree-toggle:disabled { visibility: hidden; }
+    .w-eav-manager__tree-toggle .w-icon { transition: rotate var(--weline-motion-fast); }
+    [role="treeitem"][aria-expanded="true"] > .w-eav-manager__tree-row .w-eav-manager__tree-toggle .w-icon { rotate: 90deg; }
+
+    .w-eav-manager__tree-select {
+        display: flex;
+        min-width: 0;
+        min-height: var(--weline-control-height-sm);
+        flex: 1;
+        align-items: center;
+        gap: var(--weline-space-2);
+        padding: var(--weline-space-1) var(--weline-space-2);
+        border: 0;
+        border-radius: var(--weline-radius-sm);
+        background: transparent;
+        color: var(--weline-theme-text);
+        text-align: start;
+        cursor: pointer;
+    }
+
+    .w-eav-manager__tree-select[aria-current="true"] {
+        background: var(--weline-theme-info-surface);
+        color: var(--weline-theme-info);
+    }
+
+    .w-eav-manager__tree-name {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .w-eav-manager__tree-code {
+        overflow: hidden;
+        color: var(--weline-theme-text-subtle);
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-xs);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .w-eav-manager__status {
+        display: grid;
+        min-height: 10rem;
+        place-items: center;
+        gap: var(--weline-space-3);
+        color: var(--weline-theme-text-muted);
+        text-align: center;
+    }
+
+    .w-eav-manager__status[data-tone="danger"] { color: var(--weline-theme-danger); }
+
+    .w-eav-manager__detail {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .w-eav-manager__detail-header { align-items: center; }
+    .w-eav-manager__detail-header > :first-child { min-width: 0; }
+    .w-eav-manager__detail-header [data-w-eav-detail-subtitle] { margin: 0; overflow-wrap: anywhere; }
+
+    .w-eav-manager__form-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--weline-space-4);
+    }
+
+    .w-eav-manager__form-actions {
+        justify-content: flex-end;
+        padding-block-start: var(--weline-space-2);
+        border-block-start: 1px solid var(--weline-theme-border);
+    }
+
+    .w-eav-manager__switches {
+        display: grid;
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+        gap: var(--weline-space-3);
+        padding: var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+    }
+
+    .w-eav-manager__switch {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        cursor: pointer;
+    }
+
+    @media (max-width: 63.99rem) {
+        .w-eav-manager__layout { grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr); }
+    }
+
+    @media (max-width: 47.99rem) {
+        .w-eav-manager__layout { grid-template-columns: minmax(0, 1fr); min-height: auto; }
+        .w-eav-manager__navigation { min-height: 28rem; }
+        .w-eav-manager__detail { min-height: 32rem; }
+        .w-eav-manager__form-fields { grid-template-columns: minmax(0, 1fr); }
+    }
+}

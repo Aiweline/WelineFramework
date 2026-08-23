@@ -107,4 +107,99 @@ final class WlsRequestMultipartUploadTest extends TestCase
 
         self::assertSame([], $_FILES);
     }
+
+    public function testMultipartUploadPreservesTrailingNewlineBytes(): void
+    {
+        $boundary = '----wls-trailing-newline-boundary';
+        $fileBody = "payload\r\n\n";
+        $body = "--{$boundary}\r\n"
+            . "Content-Disposition: form-data; name=\"upload[]\"; filename=\"trailing.txt\"\r\n"
+            . "Content-Type: text/plain\r\n\r\n"
+            . $fileBody . "\r\n"
+            . "--{$boundary}--\r\n";
+
+        $request = WlsRequest::fromRaw(
+            "POST /media/backend/connector HTTP/1.1\r\n"
+            . "Host: 127.0.0.1\r\n"
+            . "Content-Type: multipart/form-data; boundary={$boundary}\r\n"
+            . "Content-Length: " . \strlen($body) . "\r\n\r\n"
+            . $body,
+        );
+
+        $tmpFile = $request->getFiles()['upload']['tmp_name'][0] ?? null;
+        self::assertIsString($tmpFile);
+        $this->tempFiles[] = $tmpFile;
+        self::assertSame($fileBody, \file_get_contents($tmpFile));
+        self::assertSame(\strlen($fileBody), $request->getFiles()['upload']['size'][0] ?? null);
+    }
+
+    public function testMultipartUploadPreservesBoundaryTextInsideFilePayload(): void
+    {
+        $boundary = '----wls-payload-boundary';
+        $fileBody = "binary-prefix\x00--{$boundary}-not-a-delimiter\r\nbinary-suffix";
+        $body = "--{$boundary}\r\n"
+            . "Content-Disposition: form-data; name=\"upload\"; filename=\"boundary.bin\"\r\n"
+            . "Content-Type: application/octet-stream\r\n\r\n"
+            . $fileBody . "\r\n"
+            . "--{$boundary}--\r\n";
+
+        $request = WlsRequest::fromRaw(
+            "POST /media/backend/connector HTTP/1.1\r\n"
+            . "Host: 127.0.0.1\r\n"
+            . "Content-Type: multipart/form-data; boundary={$boundary}\r\n"
+            . "Content-Length: " . \strlen($body) . "\r\n\r\n"
+            . $body,
+        );
+
+        $tmpFile = $request->getFiles()['upload']['tmp_name'] ?? null;
+        self::assertIsString($tmpFile);
+        $this->tempFiles[] = $tmpFile;
+        self::assertSame($fileBody, \file_get_contents($tmpFile));
+        self::assertSame(\strlen($fileBody), $request->getFiles()['upload']['size'] ?? null);
+    }
+
+    public function testMultipartParserIgnoresPreambleAndEpilogueFields(): void
+    {
+        $boundary = '----wls-envelope-boundary';
+        $body = "Content-Disposition: form-data; name=\"preamble\"\r\n\r\nuntrusted\r\n"
+            . "--{$boundary}\r\n"
+            . "Content-Disposition: form-data; name=\"accepted\"\r\n\r\n"
+            . "yes\r\n"
+            . "--{$boundary}--\r\n"
+            . "Content-Disposition: form-data; name=\"epilogue\"\r\n\r\nuntrusted";
+
+        $parsed = WlsRequest::parseMultipartFormData(
+            $body,
+            "multipart/form-data; boundary={$boundary}",
+        );
+
+        self::assertSame(['accepted' => 'yes'], $parsed['post']);
+        self::assertSame([], $parsed['files']);
+    }
+
+    public function testMultipartTemporaryFilesCanBeReleasedAtRequestEnd(): void
+    {
+        $boundary = '----wls-cleanup-boundary';
+        $body = "--{$boundary}\r\n"
+            . "Content-Disposition: form-data; name=\"upload\"; filename=\"cleanup.txt\"\r\n"
+            . "Content-Type: text/plain\r\n\r\n"
+            . "cleanup\r\n"
+            . "--{$boundary}--\r\n";
+
+        $request = WlsRequest::fromRaw(
+            "POST /media/backend/connector HTTP/1.1\r\n"
+            . "Host: 127.0.0.1\r\n"
+            . "Content-Type: multipart/form-data; boundary={$boundary}\r\n"
+            . "Content-Length: " . \strlen($body) . "\r\n\r\n"
+            . $body,
+        );
+
+        $tmpFile = $request->getFiles()['upload']['tmp_name'] ?? null;
+        self::assertIsString($tmpFile);
+        self::assertFileExists($tmpFile);
+
+        $request->releaseMultipartTemporaryFiles();
+        self::assertFileDoesNotExist($tmpFile);
+        $request->releaseMultipartTemporaryFiles();
+    }
 }

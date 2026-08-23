@@ -243,7 +243,7 @@ class AttributeFilterService
                 $group = $this->getAttributeGroup($groupId);
                 $grouped[$groupId] = [
                     'group_id' => $groupId,
-                    'group_name' => $group ? (string) $group->getData('name') : (string) __('鍏朵粬'),
+                    'group_name' => $group ? (string) $group->getData('name') : (string) __('其他'),
                     'group_code' => $group ? (string) $group->getData('code') : 'other',
                     'attributes' => [],
                 ];

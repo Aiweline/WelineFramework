@@ -9,6 +9,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Runtime\RequestContext;
 
 class ProcessCmsPageUriBefore implements ObserverInterface
 {
@@ -75,13 +76,19 @@ class ProcessCmsPageUriBefore implements ObserverInterface
 
         $page = null;
         try {
-            $websiteId = (int)$this->request->getParam('website_id', $this->request->getParam('site_id', 0));
+            $requestScope = RequestContext::scopeIdentity();
+            if (!$preview && $requestScope === null) {
+                return;
+            }
+            $websiteId = $requestScope !== null
+                ? (int)($requestScope->websiteId ?? 0)
+                : (int)$this->request->getParam('website_id', $this->request->getParam('site_id', 0));
             foreach ($identifierCandidates as $candidateIdentifier) {
                 $page = $this->pageService->getPageByIdentifier(
                     $candidateIdentifier,
                     null,
                     $preview,
-                    $websiteId > 0 ? $websiteId : null
+                    $websiteId,
                 );
                 if ($page !== null) {
                     $identifier = $candidateIdentifier;

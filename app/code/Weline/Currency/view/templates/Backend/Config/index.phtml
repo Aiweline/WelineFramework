@@ -9,28 +9,28 @@
  */
 ?>
 <style>
-    .weline-currency-config .alert-info {
+    .weline-currency-config .weline-alert-info {
         background-color: var(--backend-color-info-light, rgba(23, 162, 184, 0.15));
         border-color: var(--backend-color-info-border, rgba(23, 162, 184, 0.3));
         color: var(--backend-color-info-text, #a8d8e6);
     }
     
-    .weline-currency-config .alert-info strong {
+    .weline-currency-config .weline-alert-info strong {
         color: var(--backend-color-info-emphasis, #bee5eb);
     }
     
-    .weline-currency-config .alert-info code {
+    .weline-currency-config .weline-alert-info code {
         background-color: var(--backend-color-code-bg, rgba(0, 0, 0, 0.3));
         color: var(--backend-color-info-text, #a8d8e6);
         border-color: var(--backend-color-info-border, rgba(23, 162, 184, 0.3));
     }
     
-    .weline-currency-config .card-explain {
+    .weline-currency-config .weline-card-explain {
         background-color: var(--backend-color-card-bg, #f8f9fa);
         border-color: var(--backend-color-border, rgba(255, 255, 255, 0.1));
     }
     
-    .weline-currency-config .alert-warning {
+    .weline-currency-config .weline-alert-warning {
         background-color: var(--backend-color-warning-light, rgba(255, 193, 7, 0.15));
         border-color: var(--backend-color-warning-border, rgba(255, 193, 7, 0.3));
         color: var(--backend-color-warning-text, #ffd54f);
@@ -74,14 +74,14 @@
                         <label class="w-field__label"><lang>汇率模式</lang></label>
                         <div class="w-stack" style="--w-gap:var(--weline-space-2);">
                             <label class="w-check" data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);--w-mb:0;">
-                                <input class="me-2" type='radio' name='rate_mode' value='manual' <?= ($rate_mode ?? 'manual') === 'manual' ? 'checked' : '' ?>>
+                                <input class="" type='radio' name='rate_mode' value='manual' <?= ($rate_mode ?? 'manual') === 'manual' ? 'checked' : '' ?>>
                                 <span>
                                     <strong><lang>手动汇率</lang></strong><br>
                                     <small class="w-text" data-tone="muted"><lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang></small>
                                 </span>
                             </label>
                             <label class="w-check" data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);--w-mb:0;">
-                                <input class="me-2" type='radio' name='rate_mode' value='auto' <?= ($rate_mode ?? 'manual') === 'auto' ? 'checked' : '' ?>>
+                                <input class="" type='radio' name='rate_mode' value='auto' <?= ($rate_mode ?? 'manual') === 'auto' ? 'checked' : '' ?>>
                                 <span>
                                     <strong><lang>自动汇率</lang></strong><br>
                                     <small class="w-text" data-tone="muted"><lang>自动模式下，系统会以 CNY 为基准，通过 API / Cron / 手动导入更新汇率。</lang></small>
@@ -228,7 +228,7 @@
                     <div style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label">
                             <lang>基准货币</lang>
-                            <i class="mdi mdi-help-circle-outline w-text ms-1" title='<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>' data-w-placement='top' data-w-component="tooltip" data-w-tooltip="<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>" data-tone="muted"></i>
+                            <i class="mdi weline-icon--help-circle w-text" title='<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>' data-w-placement='top' data-w-component="tooltip" data-w-tooltip="<?= __('基准货币是汇率计算的基础货币，所有其他货币的汇率都是相对于基准货币计算的。例如：如果基准货币是CNY，USD汇率8.0表示1美元=8人民币。') ?>" data-tone="muted"></i>
                         </label>
                         
                         <!-- 货币选择下拉框 -->
@@ -269,7 +269,7 @@
                         </div>
                         
                         <!-- 说明卡片 -->
-                        <div class="w-card card-explain" data-w-border="border" style="--w-mt:var(--weline-space-2);">
+                        <div class="w-card weline-card-explain" data-w-border="border" style="--w-mt:var(--weline-space-2);">
                             <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
                                 <h6 class="w-card__title w-text" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                     <w:icon name="info" size="sm"></w:icon>
@@ -307,7 +307,7 @@
                         <button type='submit' class="w-button" data-testid="currency-config-submit" data-tone="primary">
                             <lang>保存配置</lang>
                         </button>
-                        <button type='button' class="w-button ms-2" data-rate-mode-section='auto' data-currency-config-action='manual-import' data-tone="success">
+                        <button type='button' class="w-button" data-rate-mode-section='auto' data-currency-config-action='manual-import' data-tone="success">
                             <lang>手动导入</lang>
                         </button>
                     </div>
@@ -419,34 +419,7 @@
 </div>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_currency) return;
-  g.__bqAdmin_currency=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['currency']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('currency').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function() {
     'use strict';
@@ -460,20 +433,8 @@
             var changeModal = document.getElementById('baseCurrencyChangeModal');
             var progressModal = document.getElementById('currencyUpdateProgressModal');
             
-            if (changeModal && typeof bootstrap !== 'undefined') {
-                this.changeModalInstance = new bootstrap.Modal(changeModal);
-            }
-            if (progressModal && typeof bootstrap !== 'undefined') {
-                this.progressModalInstance = new bootstrap.Modal(progressModal);
-            }
-            
-            // 初始化工具提示
-            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
-                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                tooltipTriggerList.map(function(tooltipTriggerEl) {
-                    return new bootstrap.Tooltip(tooltipTriggerEl);
-                });
-            }
+            this.changeModalInstance = changeModal;
+            this.progressModalInstance = progressModal;
             
             // 监听表单提交
             self.updateRateModeSections();
@@ -500,7 +461,7 @@
                             document.getElementById('modal_new_base_currency').textContent = newValue;
                             
                             if (self.changeModalInstance) {
-                                self.changeModalInstance.show();
+                                Weline.UI.dialog.open(self.changeModalInstance);
                             }
                         } else {
                             e.preventDefault();
@@ -520,7 +481,7 @@
                         form.dataset.baseCurrencyConfirmed = 'true';
                         
                         if (self.changeModalInstance) {
-                            self.changeModalInstance.hide();
+                            Weline.UI.dialog.close(self.changeModalInstance, 'confirmed');
                         }
                         
                         self.submitFormWithCurrencyUpdate(originalValue, newValue, form);
@@ -537,7 +498,7 @@
                         document.getElementById('modal_new_base_currency').textContent = newValue;
                         
                         if (self.changeModalInstance) {
-                            self.changeModalInstance.show();
+                            Weline.UI.dialog.open(self.changeModalInstance);
                         }
                     });
                 }
@@ -731,7 +692,7 @@
             var baseCurrencySelect = document.getElementById('base_currency');
             
             if (this.progressModalInstance) {
-                this.progressModalInstance.show();
+                Weline.UI.dialog.open(this.progressModalInstance);
             }
             
             this.resetProgress();
@@ -739,7 +700,7 @@
             var formData = new FormData(form);
             formData.append('isAjax', '1');
             
-            bqAdmin['currency'](form.action || window.location.href, {
+            Weline.adminRequest('currency', form.action || window.location.href, {
                 method: 'POST',
                 body: formData
             })
@@ -749,7 +710,7 @@
                     self.updateCurrencyRates(oldBaseCurrency, newBaseCurrency, form);
                 } else if (data.success) {
                     if (self.progressModalInstance) {
-                        self.progressModalInstance.hide();
+                        Weline.UI.dialog.close(self.progressModalInstance, 'complete');
                     }
                     Weline.UI.toast.success(data.message || '<?= __('配置保存成功！') ?>');
                     baseCurrencySelect.setAttribute('data-original-value', newBaseCurrency);
@@ -757,7 +718,7 @@
                     setTimeout(function() { window.location.reload(); }, 1000);
                 } else {
                     if (self.progressModalInstance) {
-                        self.progressModalInstance.hide();
+                        Weline.UI.dialog.close(self.progressModalInstance, 'error');
                     }
                     Weline.UI.toast.error(data.message || '<?= __('配置保存失败') ?>');
                     form.dataset.baseCurrencyConfirmed = '';
@@ -765,7 +726,7 @@
             })
             .catch(function(error) {
                 if (self.progressModalInstance) {
-                    self.progressModalInstance.hide();
+                    Weline.UI.dialog.close(self.progressModalInstance, 'error');
                 }
                 Weline.UI.toast.error('<?= __('请求失败') ?>');
                 form.dataset.baseCurrencyConfirmed = '';
@@ -777,7 +738,7 @@
             var baseCurrencySelect = document.getElementById('base_currency');
             var updateUrl = '<?= $this->getBackendUrl("currency/backend/config/post-update-rates") ?>';
             
-            bqAdmin['currency'](updateUrl, {
+            Weline.adminRequest('currency', updateUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
@@ -802,7 +763,7 @@
                     Weline.UI.toast.success(data.message || '<?= __('货币汇率更新完成') ?>');
                 } else {
                     if (self.progressModalInstance) {
-                        self.progressModalInstance.hide();
+                        Weline.UI.dialog.close(self.progressModalInstance, 'error');
                     }
                     Weline.UI.toast.error(data.message || '<?= __('货币汇率更新失败') ?>');
                     form.dataset.baseCurrencyConfirmed = '';
@@ -810,7 +771,7 @@
             })
             .catch(function(error) {
                 if (self.progressModalInstance) {
-                    self.progressModalInstance.hide();
+                    Weline.UI.dialog.close(self.progressModalInstance, 'error');
                 }
                 Weline.UI.toast.error('<?= __('更新失败') ?>');
                 form.dataset.baseCurrencyConfirmed = '';
@@ -860,7 +821,7 @@
             
             var testApiUrl = '<?= $this->getBackendUrl("currency/backend/config/testApi") ?>';
             var testApiOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'api_key=' + encodeURIComponent(apiKey) };
-            bqAdmin['currency'](testApiUrl, testApiOpts)
+            Weline.adminRequest('currency', testApiUrl, testApiOpts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
@@ -886,7 +847,7 @@
             
             var importUrl = '<?= $this->getBackendUrl("currency/backend/config/import") ?>';
             var importOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
-            bqAdmin['currency'](importUrl, importOpts)
+            Weline.adminRequest('currency', importUrl, importOpts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {

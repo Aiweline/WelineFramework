@@ -59,32 +59,34 @@ async function seedDemoData(page) {
 
 async function waitForTable(page, tableId) {
   await page.waitForFunction((id) => {
-    const instance = window.DataTableManager && window.DataTableManager.instances && window.DataTableManager.instances[id];
-    return !!instance && Array.isArray(instance.data);
+    const root = document.getElementById(`w-datatable-${id}`);
+    const instance = root && window.Weline?.UI?.get(root, 'data-table');
+    return !!instance && Array.isArray(instance.state?.data);
   }, tableId, { timeout: 30000 });
 }
 
 async function waitForForm(page, formId) {
   await page.waitForFunction((id) => {
-    return !!(window.DataTableFormManager && window.DataTableFormManager.instances && window.DataTableFormManager.instances[id]);
+    const form = document.getElementById(id);
+    const root = form?.closest('[data-w-component~="data-table-form"]');
+    return !!(root && window.Weline?.UI?.get(root, 'data-table-form'));
   }, formId, { timeout: 30000 });
 }
 
 async function readTableState(page, tableId) {
   return page.evaluate((id) => {
-    const instance = window.DataTableManager && window.DataTableManager.instances
-      ? window.DataTableManager.instances[id]
-      : null;
+    const root = document.getElementById(`w-datatable-${id}`);
+    const instance = root && window.Weline?.UI?.get(root, 'data-table');
 
     if (!instance) {
       return null;
     }
 
     return {
-      options: instance.options || {},
-      data: Array.isArray(instance.data) ? instance.data : [],
-      displayFields: Array.isArray(instance.displayFields) ? instance.displayFields : [],
-      allFields: Array.isArray(instance.allFields) ? instance.allFields : [],
+      options: JSON.parse(root.dataset.wConfig || '{}'),
+      data: Array.isArray(instance.state?.data) ? instance.state.data : [],
+      displayFields: Array.isArray(instance.state?.displayFields) ? instance.state.displayFields : [],
+      allFields: Array.isArray(instance.state?.allFields) ? instance.state.allFields : [],
     };
   }, tableId);
 }

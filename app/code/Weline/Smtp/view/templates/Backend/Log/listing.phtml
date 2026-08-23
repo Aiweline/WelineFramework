@@ -7,20 +7,6 @@
 
 <div class="w-grid">
     <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;"><?= __('邮件发送记录管理器') ?></h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
-                    <li class="w-breadcrumb__item" data-state="active"><?= __('邮件发送记录管理器') ?></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="w-grid">
-    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
@@ -36,7 +22,7 @@
                 </h4>
 
                 <div class="w-table-wrap">
-                    <table class="w-table table-editable table-edits" data-w-vertical="middle">
+                    <table class="w-table weline-editable-table" data-w-vertical="middle">
                         <thead>
                         <tr>
                             <th><lang>ID</lang></th>
@@ -110,6 +96,3 @@
         </div>
     </div>
 </div>
-
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>

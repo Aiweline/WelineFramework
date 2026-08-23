@@ -13,6 +13,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
@@ -20,6 +22,84 @@ use Weline\Theme\Observer\ControllerFetchFileBefore;
 
 final class ThemeRuntimeCacheCleaner
 {
+    /**
+     * Invalidate only the published Theme namespace for this Scope. Because
+     * storefront vectors include their parent paths, descendants are invalidated
+     * naturally while siblings retain their FPC generation.
+     *
+     * @return array{reason:string,theme_id:int|null,scope:string,steps:array<string,bool>,failures:array<string,string>}
+     */
+    public function clearScopedCaches(
+        ScopeContext $scope,
+        ?int $themeId = null,
+        string $reason = 'theme_scoped_publish',
+    ): array {
+        $result = [
+            'reason' => $reason,
+            'theme_id' => $themeId,
+            'scope' => $scope->storageScope,
+            'steps' => [],
+            'failures' => [],
+        ];
+
+        $this->runStep($result, 'storefront_scoped_theme_generation', function () use ($scope): void {
+            $namespacePath = ObjectManager::getInstance(NamespacePath::class);
+            ObjectManager::getInstance(NamespaceGenerationInterface::class)->bump(
+                $this->scopeThemeNamespace($namespacePath, $scope->identity),
+            );
+        });
+
+        $this->runStep($result, 'theme_model_active_keys', function () use ($themeId): void {
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            foreach (['theme', 'theme_frontend', 'theme_backend'] as $cacheKey) {
+                $theme->_cache->delete($cacheKey);
+            }
+            if ($themeId !== null && $themeId > 0) {
+                $theme->_cache->delete('theme_parent_' . $themeId);
+            }
+        });
+
+        if ($themeId !== null && $themeId > 0) {
+            $this->runStep($result, 'generated_theme_cache', function () use ($themeId): void {
+                ObjectManager::getInstance(ThemeCacheGenerator::class)->clearCache($themeId);
+            });
+        }
+
+        $this->runStep($result, 'theme_data_runtime', static function (): void {
+            ThemeData::clearCache();
+        });
+        $this->runStep($result, 'controller_fetch_file_runtime', static function (): void {
+            ControllerFetchFileBefore::clearRuntimeCache();
+        });
+        $this->runStep($result, 'partials_runtime', static function (): void {
+            Partials::clearAllCaches();
+        });
+        foreach ($this->themeCacheServices() as $step => $serviceClass) {
+            $this->runStep($result, $step, static function () use ($serviceClass): void {
+                $service = ObjectManager::getInstance($serviceClass);
+                if (\method_exists($service, 'clearCache')) {
+                    $service->clearCache();
+                }
+            });
+        }
+        $this->runStep($result, 'fpc_process_cache', static function (): void {
+            if (\class_exists(FullPageCacheCoordinator::class)) {
+                FullPageCacheCoordinator::clearProcessCache();
+            }
+        });
+        $this->runStep($result, 'shared_theme_runtime_memory', function (): void {
+            if ($this->currentRuntimeInstanceName() === null) {
+                return;
+            }
+            $state = $this->runtimeProvider(SharedCacheStateInterface::class);
+            if ($state instanceof SharedCacheStateInterface) {
+                $state->clearNamespace('theme_runtime');
+            }
+        });
+
+        return $result;
+    }
+
     /**
      * @return array{reason:string,theme_id:int|null,steps:array<string,bool>,failures:array<string,string>}
      */
@@ -125,6 +205,36 @@ final class ThemeRuntimeCacheCleaner
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function scopeThemeNamespace(NamespacePath $paths, ScopeIdentity $identity): string
+    {
+        if ($identity->isGlobal()) {
+            return $paths->global('storefront', ['theme']);
+        }
+        $websiteCode = (string)$identity->websiteCode;
+        if ($websiteCode === '') {
+            throw new \InvalidArgumentException('theme_cache_scope_website_required');
+        }
+        if ($identity->scopeKind === ScopeIdentity::KIND_WEBSITE) {
+            return $paths->website($websiteCode, ['theme']);
+        }
+        $storeCode = (string)$identity->storeCode;
+        $storeMode = (string)$identity->storeMode;
+        if ($storeCode === '' || $storeMode === '') {
+            throw new \InvalidArgumentException('theme_cache_scope_store_required');
+        }
+        $segments = ['theme', 'store', $storeCode, $storeMode];
+        if ($identity->scopeKind === ScopeIdentity::KIND_CHANNEL) {
+            $channelCode = (string)$identity->channelCode;
+            if ($channelCode === '') {
+                throw new \InvalidArgumentException('theme_cache_scope_channel_required');
+            }
+            $segments[] = 'channel';
+            $segments[] = $channelCode;
+        }
+
+        return $paths->website($websiteCode, $segments);
     }
 
     private function currentRuntimeInstanceName(): ?string

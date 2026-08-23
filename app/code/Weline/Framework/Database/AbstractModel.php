@@ -1740,6 +1740,47 @@ PAGINATION;
         return $this->pagination;
     }
 
+    /**
+     * Return transport-safe pagination state without rendering framework HTML.
+     *
+     * UI consumers own their markup and URLs. Keeping this method free of CSS
+     * classes lets Weline UI components consume pagination without inheriting a
+     * vendor-specific renderer.
+     *
+     * @return array{
+     *     page:int,
+     *     pageSize:int,
+     *     totalSize:int,
+     *     lastPage:int,
+     *     previousPage:int,
+     *     nextPage:int,
+     *     hasPreviousPage:bool,
+     *     hasNextPage:bool,
+     *     params:array<string,mixed>
+     * }
+     */
+    public function getPaginationState(): array
+    {
+        $page = max(1, (int)($this->pagination['page'] ?? 1));
+        $pageSize = max(1, (int)($this->pagination['pageSize'] ?? 20));
+        $totalSize = max(0, (int)($this->pagination['totalSize'] ?? 0));
+        $lastPage = max(0, (int)($this->pagination['lastPage'] ?? 0));
+
+        return [
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'totalSize' => $totalSize,
+            'lastPage' => $lastPage,
+            'previousPage' => max(1, $page - 1),
+            'nextPage' => $lastPage > 0 ? min($lastPage, $page + 1) : 1,
+            'hasPreviousPage' => $page > 1,
+            'hasNextPage' => $lastPage > 0 && $page < $lastPage,
+            'params' => is_array($this->pagination['params'] ?? null)
+                ? $this->pagination['params']
+                : [],
+        ];
+    }
+
     public function getPagination(string $pagination_style = 'pagination-rounded', string $url_path = '', bool $use_backend_url = false): string
     {
         return $this->getPaginationData($url_path, $pagination_style, $use_backend_url)['html'] ?? '';

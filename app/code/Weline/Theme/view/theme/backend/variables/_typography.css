@@ -6,6 +6,8 @@
  * @meta.name {default="Backend字体变量",name="Backend字体变量",description="Backend字体变量，用于描述变量的名称"}
  * @meta.description {default="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等",name="定义字体系统相关的变量",description="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等，用于描述变量的用途"}
  * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
+ * @meta.panel {default="typography",name="panel",description="panel"}
+ * @meta.disk_kind {default="variables",name="disk_kind",description="disk_kind"}
  */
 
 :root {

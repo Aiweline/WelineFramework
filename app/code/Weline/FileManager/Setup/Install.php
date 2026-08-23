@@ -28,13 +28,19 @@ class Install implements InstallInterface
      */
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
-        if (!$this->backendUserConfig->getDefaultConfig('file-manager')) {
-            $this->backendUserConfig->setDefaultConfig('file-manager', 'local', 'Weline_FileManager', '文件管理器配置');
+        // FileAsset、FileAssetLocale 与 FileAssetReference 由模型注解经 SchemaDiffStage 安装。
+        if (!$this->backendUserConfig->getDefaultConfig('file_manager')) {
+            $this->backendUserConfig->setDefaultConfig(
+                'file_manager',
+                'weline_media',
+                'Weline_FileManager',
+                '文件管理器配置',
+            );
         }
         $this->attributeTypes()->register(new AttributeTypeDefinition(
             fieldType: TableInterface::column_type_VARCHAR,
             code: 'select_file',
-            frontendAttributes: 'type="text" data-parsley-minlength="3" required',
+            frontendAttributes: 'type="text" minlength="3" required',
             fieldLength: 255,
             swatch: false,
             element: 'input',

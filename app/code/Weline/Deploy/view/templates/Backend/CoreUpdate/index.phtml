@@ -1,7 +1,5 @@
 <?php
-/**
- * @var \Weline\Deploy\Controller\Backend\CoreUpdate $this
- */
+/** * @var \Weline\Deploy\Controller\Backend\CoreUpdate $this */
 $pageContext = is_array($this->getData('pageContext')) ? $this->getData('pageContext') : [];
 $runOutput = (string)($this->getData('runOutput') ?: '');
 $defaultBranch = (string)($pageContext['default_branch'] ?? 'dev');
@@ -11,98 +9,9 @@ $protectedPaths = is_array($pageContext['protected_paths'] ?? null) ? $pageConte
 $runUrl = (string)($this->getData('runUrl') ?: '');
 $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 ?>
-<style>
-    .weline-core-update .wcu-alert {
-        background: var(--backend-color-bg-secondary, #1e293b);
-        border: 1px solid var(--backend-color-border, #334155);
-        color: var(--backend-color-text, #e2e8f0);
-    }
-    .weline-core-update .wcu-output {
-        background: var(--backend-color-bg-tertiary, #0f172a);
-        color: var(--backend-color-text, #e2e8f0);
-        border: 1px solid var(--backend-color-border, #334155);
-        border-radius: .375rem;
-        padding: 1rem;
-        max-height: 420px;
-        overflow: auto;
-        white-space: pre-wrap;
-        font-family: var(--bs-font-monospace, monospace);
-        font-size: .85rem;
-    }
-</style>
-
-<w:backend:card class="weline-core-update">
-    <w:slot:header>
-        <h5 style="--w-mb:0;"><?= __('核心更新') ?></h5>
-    </w:slot:header>
-    <w:slot:body>
-        <div class="w-alert wcu-alert" style="--w-mb:var(--weline-space-4);">
-            <?= __('等价于命令') ?> <code>php bin/w update:core -b &lt;branch&gt;</code>。
-            <?= __('不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。') ?>
-        </div>
-
-        <if condition="$isProduction">
-            <div class="w-alert wcu-alert" style="--w-mb:var(--weline-space-4);">
-                <?= __('正式站执行前将自动整站备份。') ?>
-            </div>
-        </if>
-
-        <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
-            <div style="--w-span-md:8;">
-                <label class="w-field__label"><?= __('核心仓库') ?></label>
-                <input type="text" class="w-input w-text" readonly value="<?= $attr($coreRepoUrl !== '' ? $coreRepoUrl : (string)__('未配置，将使用默认 GitHub/Gitee 仓库')) ?>" data-family="mono">
-            </div>
-            <div style="--w-span-md:4;">
-                <label class="w-field__label"><?= __('默认分支') ?></label>
-                <input type="text" class="w-input" readonly value="<?= $attr($defaultBranch) ?>">
-            </div>
-        </div>
-
-        <h6 style="--w-mb:var(--weline-space-2);"><?= __('受保护路径') ?></h6>
-        <ul class="w-text" data-tone="muted" data-size="sm">
-            <?php foreach ($protectedPaths as $path): ?>
-                <li><code><?= $attr((string)$path) ?></code></li>
-            <?php endforeach; ?>
-        </ul>
-
-        <w:form method="post" action="@var($runUrl)" id="wcu-form" style="--w-mt:var(--weline-space-4);">
-            <div class="w-grid" data-align="end" style="--w-gap:var(--weline-space-4);">
-                <div style="--w-span-md:4;">
-                    <label class="w-field__label" for="wcu-branch"><?= __('更新分支') ?></label>
-                    <input type="text" class="w-input" id="wcu-branch" name="branch" value="<?= $attr($defaultBranch) ?>" placeholder="dev">
-                </div>
-                <div style="--w-span-md:8;">
-                    <div class="w-check" style="--w-mb:var(--weline-space-2);">
-                        <input type="checkbox" name="confirm_core_update" value="1" id="wcu-confirm">
-                        <label for="wcu-confirm"><?= __('我确认要执行核心更新') ?></label>
-                    </div>
-                    <button type="submit" class="w-button" id="wcu-submit" disabled data-tone="danger"><?= __('开始核心更新') ?></button>
-                </div>
-            </div>
-        </w:form>
-
-        <notempty name="runOutput">
-            <h6 style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-2);"><?= __('执行日志') ?></h6>
-            <pre class="wcu-output" style="--w-mb:0;"><?= $attr($runOutput) ?></pre>
-        </notempty>
-    </w:slot:body>
-</w:backend:card>
-
-<script>
-(function () {
-    const confirmBox = document.getElementById('wcu-confirm');
-    const submitBtn = document.getElementById('wcu-submit');
-    const form = document.getElementById('wcu-form');
-    function syncState() {
-        if (submitBtn) submitBtn.disabled = !(confirmBox && confirmBox.checked);
-    }
-    confirmBox?.addEventListener('change', syncState);
-    form?.addEventListener('submit', () => {
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.textContent = '<?= $attr((string)__('执行中...')) ?>';
-        }
-    });
-    syncState();
+<style> .weline-core-update .wcu-alert { background: var(--backend-color-bg-secondary, #1e293b); border: 1px solid var(--backend-color-border, #334155); color: var(--backend-color-text, #e2e8f0); } .weline-core-update .wcu-output { background: var(--backend-color-bg-tertiary, #0f172a); color: var(--backend-color-text, #e2e8f0); border: 1px solid var(--backend-color-border, #334155); border-radius: .375rem; padding: 1rem; max-height: 420px; overflow: auto; white-space: pre-wrap; font-family: var(--bs-font-monospace, monospace); font-size: .85rem; }
+</style> <w:backend:card class="weline-core-update"> <w:slot:header> <h5 style="--w-mb:0;"><?= __('核心更新') ?></h5> </w:slot:header> <w:slot:body> <div class="w-alert wcu-alert" style="--w-mb:var(--weline-space-4);"> <?= __('等价于命令') ?> <code>php bin/w update:core -b &lt;branch&gt;</code>。 <?= __('不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。') ?> </div> <if condition="$isProduction"> <div class="w-alert wcu-alert" style="--w-mb:var(--weline-space-4);"> <?= __('正式站执行前将自动整站备份。') ?> </div> </if> <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);"> <div style="--w-span-md:8;"> <label class="w-field__label"><?= __('核心仓库') ?></label> <input type="text" class="w-input w-text" readonly value="<?= $attr($coreRepoUrl !== '' ? $coreRepoUrl : (string)__('未配置，将使用默认 GitHub/Gitee 仓库')) ?>" data-family="mono"> </div> <div style="--w-span-md:4;"> <label class="w-field__label"><?= __('默认分支') ?></label> <input type="text" class="w-input" readonly value="<?= $attr($defaultBranch) ?>"> </div> </div> <h6 style="--w-mb:var(--weline-space-2);"><?= __('受保护路径') ?></h6> <ul class="w-text" data-tone="muted" data-size="sm"> <?php foreach ($protectedPaths as $path): ?> <li><code><?= $attr((string)$path) ?></code></li> <?php endforeach; ?> </ul> <w:form method="post" action="@var($runUrl)" id="wcu-form" style="--w-mt:var(--weline-space-4);"> <div class="w-grid" data-align="end" style="--w-gap:var(--weline-space-4);"> <div style="--w-span-md:4;"> <label class="w-field__label" for="wcu-branch"><?= __('更新分支') ?></label> <input type="text" class="w-input" id="wcu-branch" name="branch" value="<?= $attr($defaultBranch) ?>" placeholder="dev"> </div> <div style="--w-span-md:8;"> <div class="w-check" style="--w-mb:var(--weline-space-2);"> <input type="checkbox" name="confirm_core_update" value="1" id="wcu-confirm"> <label for="wcu-confirm"><?= __('我确认要执行核心更新') ?></label> </div> <button type="submit" class="w-button" id="wcu-submit" disabled data-tone="danger"><?= __('开始核心更新') ?></button> </div> </div> </w:form> <notempty name="runOutput"> <h6 style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-2);"><?= __('执行日志') ?></h6> <pre class="wcu-output" style="--w-mb:0;"><?= $attr($runOutput) ?></pre> </notempty> </w:slot:body>
+</w:backend:card> <script>
+(function () { const confirmBox = document.getElementById('wcu-confirm'); const submitBtn = document.getElementById('wcu-submit'); const form = document.getElementById('wcu-form'); function syncState() { if (submitBtn) submitBtn.disabled = !(confirmBox && confirmBox.checked); } confirmBox?.addEventListener('change', syncState); form?.addEventListener('submit', () => { if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '<?= $attr((string)__('执行中...')) ?>'; } }); syncState();
 })();
 </script>

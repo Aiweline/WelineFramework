@@ -87,7 +87,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
      *   q: mixed,
      *   biz_key: string,
      *   stats: array{all:int,pending:int,running:int,done:int,error:int,stop:int},
-     *   pagination: mixed
+     *   pagination: array<string,mixed>
      * } $state
      */
     private function assignQueueListingState(array $state): void
@@ -146,9 +146,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
 
         $fallbackText = $normalized !== '' ? $normalized : (string)__('暂无内容数据');
         $escaped = \htmlspecialchars($fallbackText, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-        return '<div style="padding:16px;"><pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.6;">'
-            . $escaped .
-            '</pre></div>';
+        return '<main class="w-queue-content"><section class="w-card"><div class="w-card__body">'
+            . '<pre class="w-queue-content__body">' . $escaped . '</pre>'
+            . '</div></section></main>';
     }
 
     #[Acl('Weline_Queue::form', '编辑或者新增', 'box', '编辑或者新增')]
@@ -229,30 +229,38 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             MessageManager::warning(__('请选择要查看的队列'));
             $this->redirect('/component/offcanvas/error', ['msg' => __('请选择要查看的队列'), 'reload' => 1]);
         }
-        $res = $this->queue->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left')
+        $this->queue->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left')
             ->where('main_table.' . $this->queue::schema_fields_ID, $id)->find()->fetch();
         if (!$this->queue->getId()) {
             MessageManager::warning(__('队列不存在'));
             $this->redirect('/component/offcanvas/error', ['msg' => __('队列不存在'), 'reload' => 0]);
         }
-        # 加载属性数据
-        $type = $this->queue->getType();
-        $options_data = [
-            'label_class' => 'control-label',
-            'attrs' => ['class' => 'form-control w-100 readonly disabled', 'disabled' => 'disabled'],
-            'entity' => $this->queue
-        ];
-        $attrs = $type->getAttributes($options_data);
-        $this->queue->setData('data', $attrs);
+        $attributesResult = $this->queueAdminService->typeAttributes([
+            'type_id' => $this->queue->getTypeId(),
+            'queue_id' => (int)$this->queue->getId(),
+        ]);
+        $this->assign(
+            'queueAttributes',
+            !empty($attributesResult['success']) && \is_array($attributesResult['data'] ?? null)
+                ? $attributesResult['data']
+                : [],
+        );
         $this->assign('queue', $this->queue);
-        # 如果result结果大于1M，就下载
-        $result = $this->queue->getData('result');
-        if (!empty($result)) {
-            $resultSize = mb_strlen($result);
+        $this->assign('resultDownload', null);
+        // Large results stay downloadable without injecting an HTML link into
+        // the model value rendered by the detail template.
+        $result = (string)$this->queue->getData('result');
+        if ($result !== '') {
+            $resultSize = \strlen($result);
             if ($resultSize > 1024 * 1024) {
-                $dowloadUrl = $this->request->getUrlBuilder()->getBackendUrl('*/backend/queue/dowloadResult', ['id' => $id]);
-                $sieMb = round($resultSize / 1024 / 1024, 2);
-                $this->queue->setData('result', __('队列结果过大:%{1} Mb。 请<a href="%{2}">下载队列结果</a>查看。', [$sieMb, $dowloadUrl]));
+                $downloadUrl = $this->request->getUrlBuilder()->getBackendUrl(
+                    '*/backend/queue/dowloadResult',
+                    ['id' => $id],
+                );
+                $this->assign('resultDownload', [
+                    'url' => $downloadUrl,
+                    'size_mb' => \round($resultSize / 1024 / 1024, 2),
+                ]);
             }
         }
         return $this->fetch();

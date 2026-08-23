@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\MediaManager\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\MediaManager\Service\MediaFileAccessContextFactory;
 use Weline\MediaManager\Service\MediaStorageService;
 
 /**
@@ -26,6 +27,7 @@ final class MediaManagerAssetQueryProvider implements QueryProviderInterface
 
     public function __construct(
         private readonly MediaStorageService $mediaStorage,
+        private readonly MediaFileAccessContextFactory $fileAccessContexts,
     ) {
     }
 
@@ -65,6 +67,10 @@ final class MediaManagerAssetQueryProvider implements QueryProviderInterface
                     ],
                     'params' => [
                         ['name' => 'hash', 'type' => 'string', 'required' => true, 'max_length' => 4096],
+                        ['name' => 'disk_code', 'type' => 'string', 'required' => true, 'max_length' => 190],
+                        ['name' => 'locale_code', 'type' => 'string', 'required' => true, 'max_length' => 16],
+                        ['name' => 'actor_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                        ['name' => MediaFileAccessContextFactory::INPUT_KEY, 'type' => 'object', 'required' => true],
                     ],
                 ],
             ],
@@ -80,8 +86,13 @@ final class MediaManagerAssetQueryProvider implements QueryProviderInterface
         }
 
         try {
-            // MediaStorageService::readFileBytes() is single-arg; enforce size here.
-            $asset = $this->mediaStorage->readFileBytes($hash);
+            $actorId = (int)($params['actor_id'] ?? 0);
+            $asset = $this->mediaStorage->readFileBytes(
+                (string)($params['disk_code'] ?? ''),
+                $hash,
+                $this->fileAccessContexts->fromFrozen($params, $actorId),
+                self::MAX_IMAGE_BYTES,
+            );
         } catch (\Throwable $throwable) {
             throw new \RuntimeException('MEDIA_ASSET_READ_FAILED', 0, $throwable);
         }
@@ -109,18 +120,20 @@ final class MediaManagerAssetQueryProvider implements QueryProviderInterface
             throw new \RuntimeException('MEDIA_ASSET_UNSUPPORTED_TYPE');
         }
 
-        $relative = \trim(\str_replace('\\', '/', (string)($asset['relative'] ?? '')), '/');
-        if ($relative === '') {
+        $objectKey = \trim(\str_replace('\\', '/', (string)($asset['object_key'] ?? '')), '/');
+        if ($objectKey === '') {
             throw new \RuntimeException('MEDIA_ASSET_RESPONSE_INVALID');
         }
-        $publicPath = \implode('/', \array_map('rawurlencode', \explode('/', $relative)));
 
         return [
             'bytes' => $bytes,
             'mime_type' => $mime,
             'sha256' => \hash('sha256', $bytes),
             'size' => \strlen($bytes),
-            'public_url' => '/pub/media/' . $publicPath,
+            'resource_url' => (string)($asset['url'] ?? ''),
+            'public_url' => (string)($asset['url'] ?? ''),
+            'disk_code' => (string)($asset['disk_code'] ?? ''),
+            'object_key' => $objectKey,
             'hash' => $hash,
         ];
     }

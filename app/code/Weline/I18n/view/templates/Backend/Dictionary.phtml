@@ -49,25 +49,11 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
     return $default;
 };
 ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-language-select.css)">
 <link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
 <script src="@static(Weline_I18n::js/backend-admin.js)"></script>
 
 <div class="i18n-admin-page">
-    <div class="w-grid">
-        <div style="--w-span:12;">
-            <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-                <h4 style="--w-mb-sm:0;"><?= __('i18n国际化词典') ?></h4>
-                <div class="w-cluster">
-                    <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                        <li class="w-breadcrumb__item"><?= __('系统配置') ?></li>
-                        <li class="w-breadcrumb__item"><?= __('i18n国际化') ?></li>
-                        <li class="w-breadcrumb__item" data-state="active"><?= __('词典') ?></li>
-                    </ol>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="w-grid">
         <div style="--w-span:12;">
             <template>Weline_Component::message.phtml</template>
@@ -158,7 +144,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                             display-locale="localeCode"
                             allow-empty="false"
                             required="true"
-                            class="i18n-admin-language-select"
+                            class="w-i18n-admin-language-select"
                             empty-text="dictionaryLocaleEmptyText"
                             search-placeholder="dictionaryLocaleSearchPlaceholder"
                         />
@@ -171,7 +157,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                         </div>
                     </div>
                     <div style="--w-span-lg:3;--w-span-md:12;">
-                        <div class="justify-content-xl-end w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                        <div class="weline-justify-xl-end w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                             <button type="submit" class="w-button" data-tone="primary"><?= __('搜索') ?></button>
                             <a href="@backend-url('*/backend/dictionary')?locale_code=<?= urlencode($localeCode) ?>" class="w-button" data-tone="neutral" data-variant="outline"><?= __('重置') ?></a>
                         </div>
@@ -282,7 +268,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                                 display-locale="localeCode"
                                 allow-empty="false"
                                 required="true"
-                                class="i18n-admin-language-select"
+                                class="w-i18n-admin-language-select"
                                 empty-text="dictionaryLocaleEmptyText"
                                 search-placeholder="dictionaryLocaleSearchPlaceholder"
                             />
@@ -327,7 +313,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                                 allowed-values="availableLocaleCodes"
                                 display-locale="localeCode"
                                 display-only="true"
-                                class="i18n-admin-language-select i18n-admin-language-select-display"
+                                class="w-i18n-admin-language-select w-i18n-admin-language-select-display"
                                 empty-text="dictionaryLocaleEmptyText"
                                 search-placeholder="dictionaryLocaleSearchPlaceholder"
                             />
@@ -447,7 +433,10 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
             document.getElementById('dictionary-edit-word').value = button.dataset.word || '';
             document.getElementById('dictionary-edit-translate').value = button.dataset.translate === button.dataset.word ? '' : (button.dataset.translate || '');
             var editLocaleCode = button.dataset.localeCode || localeCode || '';
-            var editLanguageSelector = window.WelineLanguageSelect && window.WelineLanguageSelect.dictionary_edit_locale_selector;
+            var editLanguageRoot = document.getElementById('dictionary_edit_locale_selector_wrapper');
+            var editLanguageSelector = editLanguageRoot
+                ? Weline.UI.get(editLanguageRoot, 'language-select')
+                : null;
             if (editLanguageSelector && typeof editLanguageSelector.setValue === 'function') {
                 editLanguageSelector.setValue(editLocaleCode);
                 return;

@@ -8,10 +8,12 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Api\Layout\LayoutIdentityHasher;
 
 #[Table(comment: 'Theme 虚拟布局资产表')]
-#[Index(name: 'idx_theme_virtual_layout_unique', columns: ['theme_id', 'area', 'layout_type', 'layout_option', 'scope', 'target_type', 'target_id'], type: 'UNIQUE', comment: '虚拟布局身份唯一索引')]
-#[Index(name: 'idx_theme_virtual_layout_lookup', columns: ['theme_id', 'area', 'layout_type', 'layout_option', 'is_active'], type: 'KEY', comment: '虚拟布局运行时查询索引')]
+#[Index(name: 'idx_theme_virtual_layout_unique', columns: ['layout_identity_hash'], type: 'UNIQUE', comment: '虚拟布局身份唯一索引')]
+#[Index(name: 'idx_theme_virtual_layout_lookup', columns: ['theme_id', 'area', 'layout_type', 'layout_option', 'locale_code', 'is_active'], type: 'KEY', comment: '虚拟布局运行时查询索引')]
 #[Index(name: 'idx_theme_virtual_layout_target', columns: ['target_type', 'target_id'], type: 'KEY', comment: '目标身份索引')]
 class ThemeVirtualLayout extends Model
 {
@@ -34,6 +36,7 @@ class ThemeVirtualLayout extends Model
         self::schema_fields_LAYOUT_TYPE,
         self::schema_fields_LAYOUT_OPTION,
         self::schema_fields_SCOPE,
+        self::schema_fields_LOCALE_CODE,
         self::schema_fields_TARGET_TYPE,
         self::schema_fields_TARGET_ID,
     ];
@@ -48,12 +51,16 @@ class ThemeVirtualLayout extends Model
     public const schema_fields_LAYOUT_TYPE = 'layout_type';
     #[Col(type: 'varchar', length: 128, nullable: false, comment: '布局选项')]
     public const schema_fields_LAYOUT_OPTION = 'layout_option';
-    #[Col(type: 'varchar', length: 128, nullable: false, default: 'default.default.default', comment: 'scope')]
+    #[Col(type: 'varchar', length: 400, nullable: false, default: 'default.default.default', comment: 'scope')]
     public const schema_fields_SCOPE = 'scope';
+    #[Col(type: 'varchar', length: 16, nullable: false, default: '', comment: '独立布局语言；空值为历史语言中立资产')]
+    public const schema_fields_LOCALE_CODE = 'locale_code';
     #[Col(type: 'varchar', length: 64, nullable: false, default: self::TARGET_GLOBAL, comment: '目标类型')]
     public const schema_fields_TARGET_TYPE = 'target_type';
     #[Col(type: 'int', nullable: false, default: 0, comment: '目标ID')]
     public const schema_fields_TARGET_ID = 'target_id';
+    #[Col(type: 'char', length: 64, nullable: false, default: '', comment: '规范虚拟布局身份 SHA-256')]
+    public const schema_fields_IDENTITY_HASH = 'layout_identity_hash';
     #[Col(type: 'varchar', length: 32, nullable: false, default: self::SOURCE_TYPE_VIRTUAL, comment: '来源类型')]
     public const schema_fields_SOURCE_TYPE = 'source_type';
     #[Col(type: 'varchar', length: 255, nullable: false, default: '', comment: '名称')]
@@ -128,6 +135,16 @@ class ThemeVirtualLayout extends Model
     public function setScope(string $scope): static
     {
         return $this->setData(self::schema_fields_SCOPE, $scope);
+    }
+
+    public function getLocaleCode(): string
+    {
+        return (string)($this->getData(self::schema_fields_LOCALE_CODE) ?: '');
+    }
+
+    public function setLocaleCode(string $localeCode): static
+    {
+        return $this->setData(self::schema_fields_LOCALE_CODE, $localeCode);
     }
 
     public function getTargetType(): string
@@ -231,6 +248,41 @@ class ThemeVirtualLayout extends Model
     public function save_before(): void
     {
         parent::save_before();
+        $themeId = $this->getThemeId();
+        $area = trim($this->getArea());
+        $layoutType = trim($this->getLayoutType());
+        $layoutOption = trim($this->getLayoutOption());
+        $targetType = trim($this->getTargetType());
+        $sourceType = trim($this->getSourceType());
+        if (
+            $themeId < 1
+            || $area === '' || strlen($area) > 32 || preg_match('/[\x00-\x1F\x7F]/', $area) === 1
+            || $layoutType === '' || strlen($layoutType) > 64 || preg_match('/[\x00-\x1F\x7F]/', $layoutType) === 1
+            || $layoutOption === '' || strlen($layoutOption) > 128
+            || strlen($targetType) > 64
+            || !in_array($sourceType, [self::SOURCE_TYPE_VIRTUAL, self::SOURCE_TYPE_AI, self::SOURCE_TYPE_IMPORTED], true)
+        ) {
+            throw new \InvalidArgumentException((string)__('Theme 虚拟布局身份无效。'));
+        }
+        $identity = new LayoutIdentity(
+            $layoutOption,
+            $this->getScope(),
+            $targetType,
+            $this->getTargetId(),
+            $this->getLocaleCode(),
+        );
+        $this->setData(self::schema_fields_AREA, $area);
+        $this->setData(self::schema_fields_LAYOUT_TYPE, $layoutType);
+        $this->setData(self::schema_fields_LAYOUT_OPTION, $identity->layoutOption);
+        $this->setData(self::schema_fields_SCOPE, $identity->scope);
+        $this->setData(self::schema_fields_LOCALE_CODE, $identity->localeCode);
+        $this->setData(self::schema_fields_TARGET_TYPE, $identity->targetType);
+        $this->setData(self::schema_fields_TARGET_ID, $identity->targetId);
+        $this->setData(self::schema_fields_SOURCE_TYPE, $sourceType);
+        $this->setData(
+            self::schema_fields_IDENTITY_HASH,
+            LayoutIdentityHasher::virtual($themeId, $area, $layoutType, $identity),
+        );
         $now = date('Y-m-d H:i:s');
         if (!$this->getId()) {
             $this->setData(self::schema_fields_CREATE_TIME, $now);

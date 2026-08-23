@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Weline\FileManager\FileManager;
 
 use Weline\FileManager\FileManager;
@@ -13,10 +15,10 @@ class Local extends FileManager
 
     public function render(): string
     {
-        return '暂无文件管理器。推荐安装WelineFramework框架Elfinder文件管理器模块。composer require weline/module-el-finder-file-manager';
+        return (string)__('当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。');
     }
 
-    public function getConnector(array $params = []):string
+    public function getConnector(array $params = []): string
     {
         return '';
     }

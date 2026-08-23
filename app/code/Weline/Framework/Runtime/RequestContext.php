@@ -565,6 +565,48 @@ class RequestContext
         self::installScopeIdentity($replacement);
     }
 
+    /**
+     * Replace the navigation-derived Store only for a server-authorized frontend
+     * preview. The caller must first validate its opaque preview credential and
+     * rebuild the replacement from the authoritative Store catalog.
+     *
+     * CMS/Theme previews may switch between Stores that share a host and
+     * therefore cannot rely on navigation alone. Keep this exception narrower
+     * than a general scope setter: frontend only, Store identity only, and never
+     * across Websites.
+     */
+    public static function replaceScopeIdentityForAuthorizedPreview(
+        ScopeIdentity $replacement,
+        int $storeId,
+    ): void {
+        $context = self::ensureContext();
+        $existing = self::scopeIdentity();
+        if (!$existing instanceof ScopeIdentity
+            || $existing->isGlobal()
+            || $replacement->scopeKind !== ScopeIdentity::KIND_STORE
+            || self::getWelineArea() !== self::AREA_FRONTEND
+            || $existing->websiteId !== $replacement->websiteId
+            || !\hash_equals((string)$existing->websiteCode, (string)$replacement->websiteCode)
+            || $storeId < 1
+        ) {
+            throw new \LogicException('Authorized preview Scope replacement precondition failed.');
+        }
+        if ($existing->equals($replacement)) {
+            if (self::getWelineStoreId() !== $storeId) {
+                throw new \LogicException('Authorized preview Store identity is inconsistent.');
+            }
+            return;
+        }
+
+        $context->set(self::SCOPE_IDENTITY_PATH, null);
+        $context->set(self::SCOPE_STORE_ID_PATH, null);
+        $context->set(self::SCOPE_CHANNEL_ID_PATH, null);
+        $context->set(self::STOREFRONT_ROUTE_PATH, null);
+        $context->set(self::LEGACY_STOREFRONT_ROUTE_PATH, null);
+        self::setWelineStoreId($storeId);
+        self::installScopeIdentity($replacement);
+    }
+
     public static function scopeIdentity(): ?ScopeIdentity
     {
         $context = Context::getCurrent();

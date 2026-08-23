@@ -5,16 +5,18 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Api\Layout\LayoutIdentityHasher;
 /** 主题布局版本模型 - 存储主题布局的历史版本快照 */
 #[Table(comment: '主题布局版本表')]
 #[Index(name: 'idx_theme_page', columns: ['theme_id', 'page_type'])]
-#[Index(name: 'idx_theme_page_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id'])]
+#[Index(name: 'idx_theme_page_identity', columns: ['layout_identity_hash'])]
 #[Index(name: 'idx_version_number', columns: ['theme_id', 'page_type', 'version_number'])]
-#[Index(name: 'idx_version_identity_number', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'version_number'])]
+#[Index(name: 'idx_version_identity_number', columns: ['layout_identity_hash', 'version_number'])]
 #[Index(name: 'idx_current', columns: ['theme_id', 'page_type', 'is_current'])]
-#[Index(name: 'idx_current_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'is_current'])]
+#[Index(name: 'idx_current_identity', columns: ['layout_identity_hash', 'is_current'])]
 #[Index(name: 'idx_published', columns: ['theme_id', 'page_type', 'is_published'])]
-#[Index(name: 'idx_published_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'is_published'])]
+#[Index(name: 'idx_published_identity', columns: ['layout_identity_hash', 'is_published'])]
 #[Index(name: 'idx_type', columns: ['version_type'])]
 class ThemeLayoutVersion extends Model
 {
@@ -28,12 +30,16 @@ class ThemeLayoutVersion extends Model
     public const schema_fields_PAGE_TYPE = 'page_type';
     #[Col('varchar', 100, nullable: false, default: 'default', comment: 'Layout option')]
     public const schema_fields_LAYOUT_OPTION = 'layout_option';
-    #[Col('varchar', 120, nullable: false, default: 'default', comment: 'Scope path')]
+    #[Col('varchar', 400, nullable: false, default: 'default', comment: 'Scope path')]
     public const schema_fields_SCOPE = 'scope';
+    #[Col('varchar', 16, nullable: false, default: '', comment: '独立布局语言')]
+    public const schema_fields_LOCALE_CODE = 'locale_code';
     #[Col('varchar', 50, nullable: false, default: 'global', comment: 'Layout target type')]
     public const schema_fields_TARGET_TYPE = 'target_type';
     #[Col('int', 11, nullable: false, default: 0, comment: 'Layout target ID')]
     public const schema_fields_TARGET_ID = 'target_id';
+    #[Col('char', 64, nullable: false, default: '', comment: 'Canonical layout identity SHA-256')]
+    public const schema_fields_IDENTITY_HASH = 'layout_identity_hash';
     #[Col('int', 11, nullable: false, default: 1, comment: '版本号')]
     public const schema_fields_VERSION_NUMBER = 'version_number';
     #[Col('varchar', 100, comment: '版本名称')]
@@ -113,6 +119,14 @@ class ThemeLayoutVersion extends Model
     {
         $scope = trim($scope) !== '' ? trim($scope) : 'default';
         return $this->setData(self::schema_fields_SCOPE, $scope);
+    }
+    public function getLocaleCode(): string
+    {
+        return (string)($this->getData(self::schema_fields_LOCALE_CODE) ?: '');
+    }
+    public function setLocaleCode(string $localeCode): self
+    {
+        return $this->setData(self::schema_fields_LOCALE_CODE, trim($localeCode));
     }
     public function getTargetType(): string
     {
@@ -272,6 +286,7 @@ class ThemeLayoutVersion extends Model
             'page_type' => $this->getPageType(),
             'layout_option' => $this->getLayoutOption(),
             'scope' => $this->getScope(),
+            'locale_code' => $this->getLocaleCode(),
             'target_type' => $this->getTargetType(),
             'target_id' => $this->getTargetId(),
             'version_number' => $this->getVersionNumber(),
@@ -292,5 +307,46 @@ class ThemeLayoutVersion extends Model
         }
         
         return $data;
+    }
+
+    public function save_before(): void
+    {
+        parent::save_before();
+        $themeId = $this->getThemeId();
+        $pageType = trim($this->getPageType());
+        $layoutOption = trim($this->getLayoutOption());
+        $targetType = trim($this->getTargetType());
+        $versionType = trim($this->getVersionType());
+        if (
+            $themeId < 1
+            || $pageType === '' || strlen($pageType) > 50 || preg_match('/[\x00-\x1F\x7F]/', $pageType) === 1
+            || strlen($layoutOption) > 100
+            || strlen($targetType) > 50
+            || $this->getVersionNumber() < 1
+            || !in_array($versionType, [self::TYPE_MANUAL, self::TYPE_AUTO_BACKUP, self::TYPE_RESTORE, self::TYPE_PUBLISH], true)
+        ) {
+            throw new \InvalidArgumentException((string)__('Theme 布局版本身份无效。'));
+        }
+        $identity = new LayoutIdentity(
+            $layoutOption,
+            $this->getScope(),
+            $targetType,
+            $this->getTargetId(),
+            $this->getLocaleCode(),
+        );
+        $this->setData(self::schema_fields_PAGE_TYPE, $pageType);
+        $this->setData(self::schema_fields_LAYOUT_OPTION, $identity->layoutOption);
+        $this->setData(self::schema_fields_SCOPE, $identity->scope);
+        $this->setData(self::schema_fields_LOCALE_CODE, $identity->localeCode);
+        $this->setData(self::schema_fields_TARGET_TYPE, $identity->targetType);
+        $this->setData(self::schema_fields_TARGET_ID, $identity->targetId);
+        $this->setData(self::schema_fields_VERSION_TYPE, $versionType);
+        $this->setData(
+            self::schema_fields_IDENTITY_HASH,
+            LayoutIdentityHasher::base($themeId, $pageType, $identity),
+        );
+        if (!$this->getData(self::schema_fields_CREATE_TIME)) {
+            $this->setData(self::schema_fields_CREATE_TIME, date('Y-m-d H:i:s'));
+        }
     }
 }

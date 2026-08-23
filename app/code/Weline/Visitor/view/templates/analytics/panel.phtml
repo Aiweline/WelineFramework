@@ -1,3 +1,31 @@
+<?php
+$websiteSelectValue = '0';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$createWebsiteSelectValue = '0';
+$createWebsiteSelectDisplay = $websiteSelectDisplay;
+?>
 <!DOCTYPE html>
 <html lang="zh-CN" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
@@ -35,8 +63,19 @@
                 <h3>查询条件</h3>
                 <div class="w-visitor-grid" data-w-columns="4">
                     <div class="w-field">
-                        <label class="w-field__label" for="business-websiteId">站点ID</label>
-                        <input class="w-input" type="number" id="business-websiteId" value="0" min="0">
+                        <label class="w-field__label" for="business-websiteId_trigger">站点</label>
+                        <w:websites:website:select
+                            id="business-websiteId"
+                            name="business-websiteId"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
                     </div>
                     <div class="w-field">
                         <label class="w-field__label" for="business-period">时间维度</label>
@@ -109,8 +148,19 @@
                 <h3>查询条件</h3>
                 <div class="w-visitor-grid" data-w-columns="3">
                     <div class="w-field">
-                        <label class="w-field__label" for="dashboard-websiteId">站点ID</label>
-                        <input class="w-input" type="number" id="dashboard-websiteId" value="0" min="0">
+                        <label class="w-field__label" for="dashboard-websiteId_trigger">站点</label>
+                        <w:websites:website:select
+                            id="dashboard-websiteId"
+                            name="dashboard-websiteId"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
                     </div>
                     <div class="w-field">
                         <label class="w-field__label" for="dashboard-interval">时间间隔</label>
@@ -163,8 +213,19 @@
                 <h3>每日对比分析</h3>
                 <div class="w-visitor-grid" data-w-columns="2">
                     <div class="w-field">
-                        <label class="w-field__label" for="comparison-websiteId">站点ID</label>
-                        <input class="w-input" type="number" id="comparison-websiteId" value="0" min="0">
+                        <label class="w-field__label" for="comparison-websiteId_trigger">站点</label>
+                        <w:websites:website:select
+                            id="comparison-websiteId"
+                            name="comparison-websiteId"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
                     </div>
                     <div class="w-field">
                         <label class="w-field__label" for="comparison-days">天数</label>
@@ -208,8 +269,19 @@
                 <h3>A/B测试管理</h3>
                 <div class="w-visitor-grid" data-w-columns="2">
                     <div class="w-field">
-                        <label class="w-field__label" for="abtest-websiteId">站点ID</label>
-                        <input class="w-input" type="number" id="abtest-websiteId" value="0" min="0">
+                        <label class="w-field__label" for="abtest-websiteId_trigger">站点</label>
+                        <w:websites:website:select
+                            id="abtest-websiteId"
+                            name="abtest-websiteId"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
                     </div>
                     <div class="w-field">
                         <label class="w-field__label" for="abtest-status">状态筛选</label>
@@ -262,8 +334,19 @@
                 <h3>查询条件</h3>
                 <div class="w-visitor-grid" data-w-columns="3">
                     <div class="w-field">
-                        <label class="w-field__label" for="report-websiteId">站点ID</label>
-                        <input class="w-input" type="number" id="report-websiteId" value="0" min="0">
+                        <label class="w-field__label" for="report-websiteId_trigger">站点</label>
+                        <w:websites:website:select
+                            id="report-websiteId"
+                            name="report-websiteId"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
                     </div>
                     <div class="w-field">
                         <label class="w-field__label" for="report-startDate">开始日期</label>
@@ -328,6 +411,21 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="create-website-host" hidden>
+        <w:websites:website:select
+            id="create-website"
+            name="create-website"
+            value="createWebsiteSelectValue"
+            display="createWebsiteSelectDisplay"
+            options="websiteSelectOptionsJson"
+            multiple="false"
+            allow-empty="false"
+            clearable="false"
+            empty-label="@lang(请选择站点)"
+            placeholder="@lang(搜索站点名称或编码)"
+        />
     </div>
 
     <js type="module">Weline_Visitor::js/analytics-panel.js</js>

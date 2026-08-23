@@ -537,18 +537,16 @@ class BackendAdminPageService
                 'scope' => 'backend-verification-filter',
             ]);
 
-            try {
-                $callback('field', [], ['', '', ''], ['name' => 'test_field']);
-                $results['belong_required'] = [
-                    'status' => 'error',
-                    'message' => 'Missing belong attribute did not fail.',
-                ];
-            } catch (\Throwable) {
-                $results['belong_required'] = [
-                    'status' => 'success',
-                    'message' => 'Missing belong attribute is rejected.',
-                ];
-            }
+            $inferredField = $callback('field', [], ['', '', ''], ['name' => 'test_field']);
+            $belongInferred = is_string($inferredField)
+                && str_contains($inferredField, 'data-w-field=')
+                && str_contains($inferredField, 't-filter');
+            $results['belong_inference'] = [
+                'status' => $belongInferred ? 'success' : 'error',
+                'message' => $belongInferred
+                    ? 'Field ownership is inferred from the active render stack.'
+                    : 'Field ownership could not be inferred from the active render stack.',
+            ];
 
             $validField = $callback('field', [], ['', '', ''], [
                 'belong' => 't-filter',
@@ -628,18 +626,20 @@ class BackendAdminPageService
 
         try {
             TableContext::clearAll();
-            TableContext::pushChildTag('d-table', 'parent-scope', [
-                'type' => 'd-table',
+            TableContext::setTableContext('parent-scope', [
                 'scope' => 'parent-scope',
                 'model' => 'Weline\DataTable\Model\TestUser',
                 'sortable' => true,
                 'searchable' => true,
+                'api-provider' => 'datatable',
+                'dependencies' => 'u.id->o.user_id',
+                'transaction' => true,
             ]);
 
             $inherited = TableContext::inheritTableAttributes(
-                ['scope' => 'child-scope'],
-                'child-scope-header',
-                ['model', 'sortable', 'searchable']
+                [],
+                'parent-scope-header',
+                ['model', 'sortable', 'searchable', 'api-provider', 'dependencies', 'transaction']
             );
 
             $results['model_inheritance'] = [
@@ -655,10 +655,28 @@ class BackendAdminPageService
                     : 'Sortable attribute inheritance failed.',
             ];
             $results['scope_generation'] = [
-                'status' => str_contains((string) ($inherited['scope'] ?? ''), 'child-scope-header') ? 'success' : 'error',
-                'message' => str_contains((string) ($inherited['scope'] ?? ''), 'child-scope-header')
+                'status' => ($inherited['scope'] ?? '') === 'parent-scope-header' ? 'success' : 'error',
+                'message' => ($inherited['scope'] ?? '') === 'parent-scope-header'
                     ? 'Derived child scope was generated correctly.'
                     : 'Derived child scope was not generated correctly.',
+            ];
+            $results['api_provider_inheritance'] = [
+                'status' => ($inherited['api-provider'] ?? '') === 'datatable' ? 'success' : 'error',
+                'message' => ($inherited['api-provider'] ?? '') === 'datatable'
+                    ? 'Weline API provider inheritance is preserved.'
+                    : 'Weline API provider inheritance failed.',
+            ];
+            $results['dependency_inheritance'] = [
+                'status' => ($inherited['dependencies'] ?? '') === 'u.id->o.user_id' ? 'success' : 'error',
+                'message' => ($inherited['dependencies'] ?? '') === 'u.id->o.user_id'
+                    ? 'Multi-model dependency inheritance is preserved.'
+                    : 'Multi-model dependency inheritance failed.',
+            ];
+            $results['transaction_inheritance'] = [
+                'status' => ($inherited['transaction'] ?? false) === true ? 'success' : 'error',
+                'message' => ($inherited['transaction'] ?? false) === true
+                    ? 'Transaction inheritance is preserved.'
+                    : 'Transaction inheritance failed.',
             ];
         } catch (\Throwable $throwable) {
             $results['exception'] = [
@@ -695,11 +713,15 @@ class BackendAdminPageService
                     : 'Auto-generated filter/header tags are missing.',
             ];
 
-            $results['manager_bootstrap'] = [
-                'status' => is_string($result) && str_contains($result, 'DataTableManager') ? 'success' : 'error',
-                'message' => is_string($result) && str_contains($result, 'DataTableManager')
-                    ? 'DataTable manager bootstrap is present in the output.'
-                    : 'DataTable manager bootstrap is missing from the output.',
+            $componentContract = is_string($result)
+                && str_contains($result, 'data-w-component="data-table"')
+                && str_contains($result, 'data-w-config=')
+                && str_contains($result, 'apiProvider');
+            $results['component_mount_contract'] = [
+                'status' => $componentContract ? 'success' : 'error',
+                'message' => $componentContract
+                    ? 'Weline UI DataTable mount contract is present in the output.'
+                    : 'Weline UI DataTable mount contract is missing from the output.',
             ];
         } catch (\Throwable $throwable) {
             $results['exception'] = [

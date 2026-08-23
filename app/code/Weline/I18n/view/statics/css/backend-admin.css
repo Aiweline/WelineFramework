@@ -15,8 +15,8 @@
     color: var(--i18n-text);
 }
 
-[data-layout-mode="dark"] .i18n-admin-page,
-[data-topbar="dark"] .i18n-admin-page,
+[data-theme="dark"] .i18n-admin-page,
+[data-weline-topbar="dark"] .i18n-admin-page,
 [data-sidebar="dark"] .i18n-admin-page,
 body[data-theme="dark"] .i18n-admin-page,
 html[data-theme="dark"] .i18n-admin-page {

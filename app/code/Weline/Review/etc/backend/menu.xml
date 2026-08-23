@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Review::list"
+          name="commerce_catalog_reviews"
+          title="评论管理"
+          action="weline_review/backend/review"
+          parent="Weline_Backend::commerce:catalog:group"
+          icon="mdi mdi-comment-text-multiple-outline"
+          order="80"/>
+</menus>

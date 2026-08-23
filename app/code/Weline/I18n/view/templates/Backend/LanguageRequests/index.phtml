@@ -6,17 +6,31 @@ $requestData = \is_array($request_data ?? null) ? $request_data : ['items' => []
         <div><h1 class="h4" style="--w-mb:var(--weline-space-1);"><lang>语言申请</lang></h1><p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>审核用户希望站点支持的语言，并同步语言包就绪状态。</lang></p></div>
         <button type="button" class="w-button" data-action="recalculate" data-tone="primary" data-variant="outline"><w:icon name="refresh" size="sm"></w:icon> <lang>同步就绪状态</lang></button>
     </div>
-    <div class="w-grid" data-summary style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);"></div>
+    <div class="w-stat-tiles" data-summary style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"></div>
     <div class="w-card" style="--w-mb:var(--weline-space-4);">
         <div class="w-card__body">
-            <w:form class="w-grid" data-filters style="--w-gap:var(--weline-space-2);">
-                <div style="--w-span-md:2;"><select class="w-select" name="status"><option value=""><lang>全部状态</lang></option><option value="pending">pending</option><option value="accepted">accepted</option><option value="ready">ready</option><option value="rejected">rejected</option><option value="assigned">assigned</option></select></div>
-                <div style="--w-span-md:2;"><input class="w-input" type="number" min="0" name="website_id" placeholder="<?= htmlspecialchars((string)__('网站 ID'), ENT_QUOTES, 'UTF-8') ?>"></div>
-                <div style="--w-span-md:2;"><input class="w-input" name="country_code" maxlength="3" placeholder="<?= htmlspecialchars((string)__('国家代码'), ENT_QUOTES, 'UTF-8') ?>"></div>
-                <div style="--w-span-md:2;"><input class="w-input" name="locale_code" maxlength="32" placeholder="Locale"></div>
-                <div style="--w-span-md:2;"><input class="w-input" type="date" name="date_from" aria-label="<?= htmlspecialchars((string)__('开始日期'), ENT_QUOTES, 'UTF-8') ?>"></div>
-                <div style="--w-span-md:2;"><input class="w-input" type="date" name="date_to" aria-label="<?= htmlspecialchars((string)__('结束日期'), ENT_QUOTES, 'UTF-8') ?>"></div>
-                <div style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>筛选</lang></button></div>
+            <w:form class="w-auto-grid" data-filters style="--w-gap:var(--weline-space-2);--w-auto-grid-min:10rem;">
+                <select class="w-select" name="status" aria-label="<?= htmlspecialchars((string)__('状态'), ENT_QUOTES, 'UTF-8') ?>"><option value=""><lang>全部状态</lang></option><option value="pending">pending</option><option value="accepted">accepted</option><option value="ready">ready</option><option value="rejected">rejected</option><option value="assigned">assigned</option></select>
+                <div>
+                    <label class="w-visually-hidden" for="i18n-lr-website_trigger"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="i18n-lr-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                    />
+                </div>
+                <input class="w-input" name="country_code" maxlength="3" placeholder="<?= htmlspecialchars((string)__('国家代码'), ENT_QUOTES, 'UTF-8') ?>">
+                <input class="w-input" name="locale_code" maxlength="32" placeholder="Locale">
+                <input class="w-input" type="date" name="date_from" aria-label="<?= htmlspecialchars((string)__('开始日期'), ENT_QUOTES, 'UTF-8') ?>">
+                <input class="w-input" type="date" name="date_to" aria-label="<?= htmlspecialchars((string)__('结束日期'), ENT_QUOTES, 'UTF-8') ?>">
+                <button class="w-button" type="submit" data-tone="primary"><lang>筛选</lang></button>
             </w:form>
         </div>
     </div>
@@ -26,14 +40,16 @@ $requestData = \is_array($request_data ?? null) ? $request_data : ['items' => []
     </div>
     <div class="w-card">
         <div class="w-card__header w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
-            <button class="w-button" type="button" data-review="accepted" data-tone="success" data-size="sm"><lang>接受</lang></button>
-            <button class="w-button" type="button" data-review="rejected" data-tone="danger" data-size="sm"><lang>拒绝</lang></button>
-            <button class="w-button" type="button" data-review="pending" data-tone="neutral" data-variant="outline" data-size="sm"><lang>重新打开</lang></button>
-            <span class="ms-auto" data-feedback role="status" aria-live="polite"></span>
+            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                <button class="w-button" type="button" data-review="accepted" data-tone="success" data-size="sm"><lang>接受</lang></button>
+                <button class="w-button" type="button" data-review="rejected" data-tone="danger" data-size="sm"><lang>拒绝</lang></button>
+                <button class="w-button" type="button" data-review="pending" data-tone="neutral" data-variant="outline" data-size="sm"><lang>重新打开</lang></button>
+            </div>
+            <span data-feedback role="status" aria-live="polite"></span>
         </div>
         <div class="w-table-wrap">
             <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
-                <thead><tr><th><input type="checkbox" data-check-all aria-label="<?= htmlspecialchars((string)__('全选'), ENT_QUOTES, 'UTF-8') ?>"></th><th><lang>申请编号</lang></th><th><lang>网站</lang></th><th><lang>申请人</lang></th><th><lang>语言</lang></th><th><lang>状态</lang></th><th><lang>提交时间</lang></th></tr></thead>
+                <thead><tr><th><input type="checkbox" data-check-all aria-label="<?= htmlspecialchars((string)__('全选'), ENT_QUOTES, 'UTF-8') ?>"></th><th><lang>申请</lang></th><th><lang>申请人</lang></th><th><lang>语言</lang></th><th><lang>状态</lang></th></tr></thead>
                 <tbody data-items></tbody>
             </table>
         </div>
@@ -45,10 +61,11 @@ $requestData = \is_array($request_data ?? null) ? $request_data : ['items' => []
     var root=document.getElementById('i18n-language-request-admin');if(!root){return;}
     var data=JSON.parse(document.getElementById('i18n-language-request-initial').textContent||'{}');
     var itemsBody=root.querySelector('[data-items]'),aggregatesBody=root.querySelector('[data-aggregates]'),summary=root.querySelector('[data-summary]'),feedback=root.querySelector('[data-feedback]');
+    var websiteLabel=<?= json_encode((string)__('网站'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     function esc(value){var node=document.createElement('span');node.textContent=String(value==null?'':value);return node.innerHTML;}
-    function render(next){data=next||{};var stats=data.summary||{};summary.innerHTML=['pending','accepted','ready','rejected','assigned'].map(function(status){return '<div><div class="w-card" data-w-height="full"><div class="w-card__body"><small class="w-text" data-tone="muted">'+esc(status)+'</small><div class="h4" style="--w-mb:0;">'+esc(stats[status]||0)+'</div></div></div></div>';}).join('');
+    function render(next){data=next||{};var stats=data.summary||{};summary.innerHTML=['pending','accepted','ready','rejected','assigned'].map(function(status){return '<div class="w-card" data-w-height="full"><div class="w-card__body"><small class="w-text" data-tone="muted">'+esc(status)+'</small><div class="h4" style="--w-mb:0;">'+esc(stats[status]||0)+'</div></div></div>';}).join('');
         aggregatesBody.innerHTML=(data.aggregates||[]).map(function(row){return '<tr><td>'+esc(row.website_id)+'</td><td><strong>'+esc(row.locale_code)+'</strong><br><small>'+esc(row.country_code)+'</small></td><td>'+esc(row.applicant_count)+'</td><td>'+esc(row.request_count)+'</td><td>'+esc(row.latest_requested_at)+'</td></tr>';}).join('')||'<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= addslashes((string)__('暂无申请')) ?></td></tr>';
-        itemsBody.innerHTML=(data.items||[]).map(function(row){return '<tr><td><input type="checkbox" data-item-id value="'+esc(row.item_id)+'"></td><td>'+esc(row.public_id)+'</td><td>'+esc(row.website_id)+'</td><td><strong>'+esc(row.name)+'</strong><br><small>'+esc(row.email)+'</small></td><td><strong>'+esc(row.locale_code)+'</strong><br><small>'+esc(row.country_code)+'</small></td><td><span class="w-badge" data-w-background="muted">'+esc(row.status)+'</span></td><td>'+esc(row.created_at)+'</td></tr>';}).join('')||'<tr><td colspan="7" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= addslashes((string)__('暂无申请')) ?></td></tr>';
+        itemsBody.innerHTML=(data.items||[]).map(function(row){return '<tr><td><input type="checkbox" data-item-id value="'+esc(row.item_id)+'"></td><td><code style="word-break:break-all;">'+esc(row.public_id)+'</code><br><small class="w-text" data-tone="muted">'+esc(websiteLabel)+' #'+esc(row.website_id)+'</small></td><td><strong>'+esc(row.name)+'</strong><br><small>'+esc(row.email)+'</small></td><td><strong>'+esc(row.locale_code)+'</strong><br><small>'+esc(row.country_code)+'</small></td><td><span class="w-badge" data-w-background="muted">'+esc(row.status)+'</span><br><small class="w-text" data-tone="muted">'+esc(row.created_at)+'</small></td></tr>';}).join('')||'<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= addslashes((string)__('暂无申请')) ?></td></tr>';
     }
     function api(){return Promise.resolve(window.Weline.Api.resource('i18n_language_requests_admin'));}
     function load(){var payload={};new FormData(root.querySelector('[data-filters]')).forEach(function(value,key){if(String(value).trim()!==''){payload[key]=value;}});return api().then(function(client){return client.list(payload);}).then(render);}

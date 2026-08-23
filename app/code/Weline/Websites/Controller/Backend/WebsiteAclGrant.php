@@ -83,7 +83,7 @@ class WebsiteAclGrant extends BackendController
 
         /** @var ResourceTreeService $treeService */
         $treeService = ObjectManager::getInstance(ResourceTreeService::class);
-        // Force platform (default) context for full tree: observer skips filter when website_id=0
+        // Force platform (default) context for the complete native tree.
         $trees = $treeService->getAclAssignmentTree($probeRole);
 
         $selected = \array_fill_keys($this->grantService->getGrantedSourceIds($websiteId), true);
@@ -96,21 +96,10 @@ class WebsiteAclGrant extends BackendController
         $allRows = $aclModel->reset()->select()->fetchArray();
         $tagTree = AclResourcePresentation::buildTagTree($allRows, $selected);
 
-        $statistics = [];
-        $moduleSet = [];
-        $typeSet = [];
-        foreach ($trees as $tree) {
-            $sid = (string)$tree->getSourceId();
-            $stats = $this->countNodeStats($tree, $moduleSet, $typeSet);
-            $statistics[$sid] = [
-                'source_id' => $sid,
-                'source_name' => $tree->getSourceName(),
-                'module' => \explode('::', $sid)[0] ?? $sid,
-                'type' => $tree->getType(),
-                'total' => $stats['total'],
-                'selected' => $stats['selected'],
-            ];
-        }
+        $treeSummary = AclResourcePresentation::summarizeTrees($trees);
+        $statistics = $treeSummary['statistics'];
+        $moduleSet = \array_fill_keys($treeSummary['modules'], true);
+        $typeSet = \array_fill_keys($treeSummary['types'], true);
         foreach ($allRows as $row) {
             $rowType = (string)($row['type'] ?? '');
             if (\in_array($rowType, ['query', 'task', 'operation'], true)) {
@@ -137,7 +126,7 @@ class WebsiteAclGrant extends BackendController
     }
 
     /**
-     * Mark tree nodes selected according to website grant package (reuses role_id flag for jstree).
+     * Mark native tree nodes selected according to the website grant package.
      */
     private function applyGrantSelectionToTree(object $node, array $selected): void
     {
@@ -146,34 +135,6 @@ class WebsiteAclGrant extends BackendController
         foreach ($node->getSub() ?: [] as $sub) {
             $this->applyGrantSelectionToTree($sub, $selected);
         }
-    }
-
-    /**
-     * Recursively count nodes and collect module/type filters (same as Role::getAssign).
-     *
-     * @return array{total:int,selected:int}
-     */
-    private function countNodeStats(object $node, array &$moduleSet, array &$typeSet): array
-    {
-        $total = 1;
-        $selected = $node->getData('role_id') ? 1 : 0;
-
-        $module = $node->getModule();
-        $type = $node->getType();
-        if ($module !== '' && $module !== null) {
-            $moduleSet[$module] = true;
-        }
-        if ($type !== '' && $type !== null) {
-            $typeSet[$type] = true;
-        }
-
-        foreach ($node->getSub() ?: [] as $sub) {
-            $subStats = $this->countNodeStats($sub, $moduleSet, $typeSet);
-            $total += $subStats['total'];
-            $selected += $subStats['selected'];
-        }
-
-        return ['total' => $total, 'selected' => $selected];
     }
 
     #[AclAttr('Weline_Websites::website_acl_grant_save', '保存网站功能授权', 'save', '保存子站授权包')]

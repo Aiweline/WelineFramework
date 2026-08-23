@@ -232,9 +232,10 @@ class CmsPathGroupTrashProvider implements TrashProviderInterface
             return $pageService->getPathGroupModel($groupId, $includeDeleted);
         }
 
+        $hasWebsiteId = array_key_exists('website_id', $data) && $data['website_id'] !== '';
         $websiteId = (int)($data['website_id'] ?? 0);
         $pathGroup = trim((string)($data['path_group'] ?? $data['path'] ?? ''));
-        if ($websiteId > 0 && $pathGroup !== '') {
+        if ($hasWebsiteId && $websiteId >= 0 && $pathGroup !== '') {
             return $pageService->getPathGroupByPath($websiteId, $pathGroup, $includeDeleted);
         }
 

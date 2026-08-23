@@ -55,7 +55,7 @@
     }
 
     /**
-     * Normalize bqAdmin / fetch-style wrappers to the business body.
+     * Normalize legacy fetch-style wrappers to the business body.
      * New wrapAdminBridgeResult: body fields live on the response itself (success/code/data/...).
      * Legacy wrap: { ok, data: <business body> } without top-level success/code.
      */
@@ -105,11 +105,50 @@
         return resp;
     }
 
+    /**
+     * Shared admin resource request helper for Backend/Frontend pages.
+     * resource: QueryProvider resource name (e.g. admin, backend_admin, websites).
+     */
+    function adminRequest(resource, url, options) {
+        options = options || {};
+        var body = options.body;
+        if (body && typeof FormData !== 'undefined' && body instanceof FormData) {
+            var params = new URLSearchParams();
+            body.forEach(function (value, key) {
+                if (!(typeof File !== 'undefined' && value instanceof File)) {
+                    params.append(key, String(value));
+                }
+            });
+            body = params.toString();
+        } else if (body && typeof body !== 'string') {
+            try {
+                body = JSON.stringify(body);
+            } catch (error) {
+                body = '';
+            }
+        }
+        var method = options.method || 'POST';
+        var headers = options.headers || {};
+        var run = function (apiClient) {
+            return apiClient.resource(String(resource || '')).adminRequest({
+                url: url,
+                method: method,
+                headers: headers,
+                body: body || ''
+            });
+        };
+        var promise = (global.Weline && global.Weline.load)
+            ? global.Weline.load('api').then(run)
+            : Promise.resolve(run(global.Weline.Api));
+        return promise.then(wrapAdminBridgeResult);
+    }
+
     var api = {
         businessPayload: businessPayload,
         formatApiError: formatApiError,
         unwrapBusiness: unwrapBusiness,
-        wrapAdminBridgeResult: wrapAdminBridgeResult
+        wrapAdminBridgeResult: wrapAdminBridgeResult,
+        adminRequest: adminRequest
     };
 
     function attachToWeline() {
@@ -118,6 +157,7 @@
             global.Weline = {};
         }
         global.Weline.ApiBusiness = api;
+        global.Weline.adminRequest = adminRequest;
     }
 
     attachToWeline();

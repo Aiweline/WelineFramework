@@ -149,9 +149,9 @@ if ($totalPages <= 1) return; // 只有一页时不显示
     min-width: 40px;
     height: 40px;
     padding: 0 12px;
-    color: var(--weline-theme-text-secondary);
+    color: var(--weline-theme-text-muted);
     text-decoration: none;
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     background: var(--weline-theme-surface);
     transition: all var(--weline-theme-transition-base);
 }
@@ -173,7 +173,7 @@ if ($totalPages <= 1) return; // 只有一页时不显示
 }
 
 .widget-pagination .w-page-item.w-disabled .w-page-link:hover {
-    border-color: var(--weline-theme-border-color);
+    border-color: var(--weline-theme-border);
     color: var(--weline-theme-text-muted);
 }
 

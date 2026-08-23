@@ -55,6 +55,19 @@ final class FontDiscoveryAndFaceTest extends TestCase
         self::assertFileExists($found[0]['path']);
     }
 
+    public function testResolveSourceDefaultsBarePathToWelineTheme(): void
+    {
+        $discovery = new FontDiscovery();
+        $absolute = $discovery->resolveSource('brand/Demo.ttf', [
+            'Weline_Theme' => [
+                'status' => 1,
+                'base_path' => $this->moduleRoot . '/',
+            ],
+        ]);
+        self::assertNotNull($absolute);
+        self::assertFileExists($absolute);
+    }
+
     public function testResolveSourceAndRenderCss(): void
     {
         $discovery = new FontDiscovery();

@@ -1,10 +1,25 @@
 ﻿已选文件:,已选文件:
 点击下载,点击下载
+"file-image 节点缺少类型化 usage。","file-image 节点缺少类型化 usage。"
+"图片运行时解析缺少显式 ScopeIdentity。","图片运行时解析缺少显式 ScopeIdentity。"
+图片语境语言与当前布局语言不一致。,图片语境语言与当前布局语言不一致。
 "所指定的文件管理器不存在! 文件管理器名：%{1}","所指定的文件管理器不存在! 文件管理器名：%{1}"
 "使用：%{1} 文件管理器代替。","使用：%{1} 文件管理器代替。"
+未找到可用的文件管理器实现。,未找到可用的文件管理器实现。
 文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。,文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。
 缺少目标ID。文档：%{1},缺少目标ID。文档：%{1}
 "缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}","缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}"
+"FileAsset 哈希回填读取到无效数据。","FileAsset 哈希回填读取到无效数据。"
+"FileAsset 哈希回填无数据进展。","FileAsset 哈希回填无数据进展。"
+"FileAsset 旧数据无效，升级已停止。","FileAsset 旧数据无效，升级已停止。"
+"FileAsset 旧存储身份无效，升级已停止。","FileAsset 旧存储身份无效，升级已停止。"
+"FileAsset 旧数据存在重复存储对象身份，升级已停止。","FileAsset 旧数据存在重复存储对象身份，升级已停止。"
+"FileAsset 存储身份哈希回填校验失败。","FileAsset 存储身份哈希回填校验失败。"
+"FileAsset 旧数据超过安全升级上限。","FileAsset 旧数据超过安全升级上限。"
+"FileAsset 旧数据预检无数据进展。","FileAsset 旧数据预检无数据进展。"
+无法读取旧媒体文件：%{1},无法读取旧媒体文件：%{1}
+无法计算旧媒体文件校验值：%{1},无法计算旧媒体文件校验值：%{1}
+旧媒体文件校验连续无数据进展：%{1},旧媒体文件校验连续无数据进展：%{1}
 "WLS 文件管理器","WLS 文件管理器"
 "WLS 文件管理器源码回收：%{1}","WLS 文件管理器源码回收：%{1}"
 "WLS source archive: %{1}","WLS 源码归档：%{1}"
@@ -16,13 +31,13 @@
 "WLS 文件管理器回收：%{1}","WLS 文件管理器回收：%{1}"
 项目根目录,项目根目录
 "当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。","当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。"
-"Panel Instance Root","Panel Instance Root"
-"Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately.","Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately."
-"Current Weline project root; directory browsing is restricted to approved root cards.","Current Weline project root; directory browsing is restricted to approved root cards."
-"Child Project var","Child Project var"
-"Child project runtime files; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","Child project runtime files; controlled writes require ACL, confirmation, extension checks, and operation audit logs."
-"Child Project pub","Child Project pub"
-"Child project public assets root; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","Child project public assets root; controlled writes require ACL, confirmation, extension checks, and operation audit logs."
+"Panel Instance Root",面板实例根
+"Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately.","由 WLS 小组管理的项目注册表解决；根是只读的，子 var/pub 根是单独写门控的。"
+"Current Weline project root; directory browsing is restricted to approved root cards.",当前Weline项目根；目录浏览仅限于批准的根卡。
+"Child Project var",子项目变量
+"Child project runtime files; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","子项目运行时文件；受控写入需要 ACL、确认、扩展检查和操作审核日志。"
+"Child Project pub",儿童项目酒吧
+"Child project public assets root; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","子项目公共资产根；受控写入需要 ACL、确认、扩展检查和操作审核日志。"
 模块目录,模块目录
 框架模块源码目录，仅作为只读路径上下文展示。,框架模块源码目录，仅作为只读路径上下文展示。
 运行时目录,运行时目录
@@ -67,9 +82,9 @@
 "Source selection requires existing readable entries.",源码多选归档需要已存在且可读的条目。
 "Source archive only allows source files smaller than 128 KB.","源码归档仅允许小于 128 KB 的源码文件。"
 "文本内容超过 128 KB 或包含二进制空字节。","文本内容超过 128 KB 或包含二进制空字节。"
-"No writable root is available.","No writable root is available."
-"Selected root is read-only.","Selected root is read-only."
-"File path is invalid or outside the selected root.","File path is invalid or outside the selected root."
+"No writable root is available.",没有可写的根可用。
+"Selected root is read-only.",选定的根目录是只读的。
+"File path is invalid or outside the selected root.",文件路径无效或位于所选根目录之外。
 "Target parent directory is not writable.",目标父目录不可写。
 "File uploaded.",文件已上传。
 "Entry renamed.",条目已重命名。
@@ -181,7 +196,7 @@
 "Source selection archive accepts up to 20 entries.","源码多选归档最多接受 20 个条目。"
 "Source directory archive exceeds the 10 MB source queue limit.","源码目录归档超过 10 MB 队列限制。"
 "Queued source trash move",队列回收源码文件
-"Queue operation","Queue operation"
+"Queue operation",队列操作
 Pending,等待中
 Running,运行中
 Done,已完成
@@ -200,70 +215,88 @@ Stopped,已停止
 文件浏览,文件浏览
 已启用,已启用
 "目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。","目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。"
-"Change Operations","Change Operations"
-Guarded,受控
+"Change Operations",变更操作
+Guarded,守卫
 "Directory creation, small text saves, guarded uploads, same-folder rename, file, empty-directory, bounded recursive directory delete, bounded ZIP compression, and queued large ZIP compression require ACL, confirmation, and operation logs.","目录创建、小文本保存、受控上传、同目录重命名、文件、空目录、受限递归目录删除、受限 ZIP 压缩和队列化大型 ZIP 压缩都需要 ACL、确认和操作日志。"
+settings,设置
 "WLS 面板文件管理器入口","WLS 面板文件管理器入口"
 "查看 WLS 文件管理器","查看 WLS 文件管理器"
+folder,文件夹
 "查看 WLS 面板文件管理器","查看 WLS 面板文件管理器"
-"View WLS File Roots","View WLS File Roots"
-"mdi mdi-folder-outline","mdi mdi-folder-outline"
-"View WLS Panel file roots","View WLS Panel file roots"
-"View WLS File Browser","View WLS File Browser"
-"mdi mdi-file-tree-outline","mdi mdi-file-tree-outline"
-"View WLS Panel file browser","View WLS Panel file browser"
-"View WLS File Policy","View WLS File Policy"
-"mdi mdi-shield-edit-outline","mdi mdi-shield-edit-outline"
-"View WLS Panel file path policy","View WLS Panel file path policy"
-"View WLS File Write Operations","View WLS File Write Operations"
-"mdi mdi-file-edit-outline","mdi mdi-file-edit-outline"
-"View WLS Panel file write operations","View WLS Panel file write operations"
-"View WLS File Queue","View WLS File Queue"
-"mdi mdi-progress-clock","mdi mdi-progress-clock"
-"View WLS Panel file queue operations","View WLS Panel file queue operations"
-"View WLS File Operation Log","View WLS File Operation Log"
-"mdi mdi-clipboard-text-clock-outline","mdi mdi-clipboard-text-clock-outline"
-"View WLS Panel file operation log","View WLS Panel file operation log"
-"View WLS File Capabilities","View WLS File Capabilities"
-"mdi mdi-puzzle-outline","mdi mdi-puzzle-outline"
-"View WLS Panel file capabilities","View WLS Panel file capabilities"
+"View WLS File Roots","查看 WLS 文件根目录"
+"View WLS Panel file roots","查看 WLS 面板文件根"
+"View WLS File Browser","查看 WLS 文件浏览器"
+tree,树
+"View WLS Panel file browser",查看WLS面板文件浏览器
+"View WLS File Policy","查看 WLS 文件策略"
+edit,编辑
+"View WLS Panel file path policy","查看 WLS 面板文件路径策略"
+"View WLS File Write Operations","查看 WLS 文件写入操作"
+"View WLS Panel file write operations","查看WLS Panel文件写入操作"
+"View WLS File Queue","查看 WLS 文件队列"
+clock,钟
+"View WLS Panel file queue operations",查看WLS面板文件队列操作
+"View WLS File Operation Log",查看WLS文件操作日志
+"View WLS Panel file operation log","查看WLS Panel文件操作日志"
+"View WLS File Capabilities","查看 WLS 文件功能"
+puzzle,谜
+"View WLS Panel file capabilities","查看 WLS 面板文件功能"
 "受控写入 WLS 文件","受控写入 WLS 文件"
 创建目录和保存小文本文件,创建目录和保存小文本文件
+plus,加
 创建受控源码文件,创建受控源码文件
 重命名受控源码文件,重命名受控源码文件
 "受控回收 WLS 源码文件","受控回收 WLS 源码文件"
+trash,trash
 将受控源码文件移动到可恢复回收站,将受控源码文件移动到可恢复回收站
 "队列回收 WLS 源码文件","队列回收 WLS 源码文件"
 将受控源码文件通过队列移动到可恢复回收站,将受控源码文件通过队列移动到可恢复回收站
-"Queue WLS source file archive","Queue WLS source file archive"
-"Archive one controlled source file through queue","Archive one controlled source file through queue"
-"Queue WLS source directory archive","Queue WLS source directory archive"
-"Archive one controlled source directory through queue","Archive one controlled source directory through queue"
-"Queue WLS source selection archive","Queue WLS source selection archive"
-"Archive selected controlled source entries through queue","Archive selected controlled source entries through queue"
+"Queue WLS source file archive",队列WLS源文件存档
+arrow-down,向下箭头
+"Archive one controlled source file through queue",通过队列归档一个受控源文件
+"Queue WLS source directory archive","队列 WLS 源目录存档"
+"Archive one controlled source directory through queue",通过队列归档一个受控源目录
+"Queue WLS source selection archive","队列 WLS 源选择存档"
+check,查看
+"Archive selected controlled source entries through queue",通过队列归档选定的受控源条目
 "下载 WLS 文件","下载 WLS 文件"
+download,下载
 "下载 WLS 面板文件管理器文件","下载 WLS 面板文件管理器文件"
-"Controlled WLS file write","Controlled WLS file write"
-"Upload controlled WLS files","Upload controlled WLS files"
-"Rename controlled WLS files","Rename controlled WLS files"
-"Delete controlled WLS files","Delete controlled WLS files"
-"Create guarded WLS ZIP archives","Create guarded WLS ZIP archives"
-"Queue WLS large ZIP archive","Queue WLS large ZIP archive"
-"Create queued WLS file archives","Create queued WLS file archives"
-"Queue recoverable WLS trash move","Queue recoverable WLS trash move"
-"Move controlled WLS files to recoverable trash through queue","Move controlled WLS files to recoverable trash through queue"
-"Restore WLS trash queue entry","Restore WLS trash queue entry"
-"Restore a recoverable WLS file queue entry","Restore a recoverable WLS file queue entry"
-"Purge WLS trash queue entry","Purge WLS trash queue entry"
-"Permanently purge a queue-created WLS trash entry","Permanently purge a queue-created WLS trash entry"
+"Controlled WLS file write",受控WLS文件写入
+upload,上传
+"Upload controlled WLS files","上传受控 WLS 文件"
+box,盒子
+"Rename controlled WLS files","重命名受控 WLS 文件"
+"Delete controlled WLS files","删除受控 WLS 文件"
+"Create guarded WLS ZIP archives","创建受保护的 WLS ZIP 存档"
+"Queue WLS large ZIP archive","队列 WLS 大型 ZIP 存档"
+"Create queued WLS file archives","创建排队的 WLS 文件存档"
+"Queue recoverable WLS trash move","队列可恢复 WLS 垃圾移动"
+"Move controlled WLS files to recoverable trash through queue","通过队列将受控 WLS 文件移至可恢复垃圾"
+"Restore WLS trash queue entry","恢复 WLS 垃圾队列条目"
+history,历史
+"Restore a recoverable WLS file queue entry","恢复可恢复的 WLS 文件队列条目"
+"Purge WLS trash queue entry","清除 WLS 垃圾队列条目"
+"Permanently purge a queue-created WLS trash entry","永久清除队列创建的 WLS 垃圾条目"
 "保存 WLS 文件路径策略","保存 WLS 文件路径策略"
 "保存 WLS 面板文件管理器的项目级路径策略","保存 WLS 面板文件管理器的项目级路径策略"
 "恢复 WLS 文件路径默认策略","恢复 WLS 文件路径默认策略"
+refresh,刷新
 "恢复 WLS 面板文件管理器的项目级路径默认继承策略","恢复 WLS 面板文件管理器的项目级路径默认继承策略"
+"当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。","当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。"
+文件资源引用数据无效。,文件资源引用数据无效。
+文件资源基础元数据无效。,文件资源基础元数据无效。
+文件资源可见性无效。,文件资源可见性无效。
+文件资源生命周期无效。,文件资源生命周期无效。
+文件资源扩展元数据超过长度限制。,文件资源扩展元数据超过长度限制。
+"文件资源扩展元数据 JSON 无效。","文件资源扩展元数据 JSON 无效。"
+资源语言元数据无效。,资源语言元数据无效。
+资源翻译状态无效。,资源翻译状态无效。
+资源翻译来源无效。,资源翻译来源无效。
+"审核通过的资源语言必须填写名称、默认 alt 和描述。","审核通过的资源语言必须填写名称、默认 alt 和描述。"
 预览,预览
-允许的文件类型：,允许的文件类型：
-允许的文件大小：,允许的文件大小：
 暂无缩略图,暂无缩略图
+关闭,关闭
 "子项目 var/pub 受控写入","子项目 var/pub 受控写入"
 子项目路径待校验,子项目路径待校验
 "当前实例 var/pub 受控写入","当前实例 var/pub 受控写入"
@@ -281,7 +314,7 @@ Failed,失败
 "All roots",全部根目录
 Policy,策略
 "WLS 文件管理器导航","WLS 文件管理器导航"
-"WLS Panel Plugin","WLS Panel Plugin"
+"WLS Panel Plugin","WLS 面板插件"
 文件管理器,文件管理器
 "WLS 面板","WLS 面板"
 路径,路径
@@ -433,7 +466,7 @@ Async,异步
 "Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes.","队列限制：2000 个条目、源数据 512 MB。Worker 会拒绝符号链接和路径逃逸。"
 "I confirm this queued archive should be written into the same allowlisted folder.",我确认此队列归档应写入同一个白名单目录。
 "Create queue",创建队列
-"Source policy","Source policy"
+"Source policy",来源政策
 "Source file name",源码文件名
 "Creates one new file in the current source-policy root. Directories, uploads, renames, deletes, and queue operations stay disabled for source roots.",在当前源码策略根目录内创建一个新文件。目录、上传、重命名、删除和队列操作仍对源码根目录禁用。
 "Initial content",初始内容
@@ -523,6 +556,87 @@ Latest,最新
 "WLS 文件管理器队列回收开始：%{1}","WLS 文件管理器队列回收开始：%{1}"
 "WLS 文件管理器队列回收失败：%{1}","WLS 文件管理器队列回收失败：%{1}"
 "WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。","WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。"
+已解析图片结果无效。,已解析图片结果无效。
+图片使用数据版本或身份无效。,图片使用数据版本或身份无效。
+"图片 alt 状态无效。","图片 alt 状态无效。"
+图片加载策略无效。,图片加载策略无效。
+图片响应式宽度数量或唯一性无效。,图片响应式宽度数量或唯一性无效。
+图片响应式宽度无效。,图片响应式宽度无效。
+"图片文本或响应式 sizes 超过长度限制。","图片文本或响应式 sizes 超过长度限制。"
+"装饰图片的 alt 必须为空。","装饰图片的 alt 必须为空。"
+图片语境语言与发布语言不一致。,图片语境语言与发布语言不一致。
+"图片 alt 尚未审核确认。","图片 alt 尚未审核确认。"
+"信息图片必须填写 alt。","信息图片必须填写 alt。"
+图片使用数据布尔字段无效：%{1},图片使用数据布尔字段无效：%{1}
+文件访问上下文无效。,文件访问上下文无效。
+文件访问上下文角色无效。,文件访问上下文角色无效。
+上传源必须是流。,上传源必须是流。
+目标文件已存在，禁止覆盖。,目标文件已存在，禁止覆盖。
+文件资源上传必须从根边界使用写意图事务。,文件资源上传必须从根边界使用写意图事务。
+存储对象删除失败。,存储对象删除失败。
+文件资源写入结果无效。,文件资源写入结果无效。
+文件资源写入失败，且存储对象无法自动回收，请立即人工清理。,文件资源写入失败，且存储对象无法自动回收，请立即人工清理。
+机器翻译的资源元数据必须先保存为待审核草稿。,机器翻译的资源元数据必须先保存为待审核草稿。
+目标文件资源状态已变化，请刷新后重试。,目标文件资源状态已变化，请刷新后重试。
+读取上传流失败。,读取上传流失败。
+读取上传流时连续无数据进展。,读取上传流时连续无数据进展。
+存储磁盘可见性配置无效。,存储磁盘可见性配置无效。
+文件资源可见性必须与所选磁盘可见性一致。,文件资源可见性必须与所选磁盘可见性一致。
+"私有存储 URL 适配器未提供不可缓存的临时 URL。","私有存储 URL 适配器未提供不可缓存的临时 URL。"
+私有文件必须配置有效访问策略。,私有文件必须配置有效访问策略。
+私有文件访问策略列表无效或超过限制。,私有文件访问策略列表无效或超过限制。
+私有文件访问策略不能为空。,私有文件访问策略不能为空。
+"图片 usage JSON 无效。","图片 usage JSON 无效。"
+文件图片语言必须与当前请求语言一致。,文件图片语言必须与当前请求语言一致。
+图片语境语言与当前请求语言不一致。,图片语境语言与当前请求语言不一致。
+"文件图片渲染缺少显式 ScopeIdentity。","文件图片渲染缺少显式 ScopeIdentity。"
+源文件与目标文件不能相同。,源文件与目标文件不能相同。
+源文件资源已删除，不能移动。,源文件资源已删除，不能移动。
+文件移动补偿清理目标对象失败。,文件移动补偿清理目标对象失败。
+文件移动失败且物理对象补偿失败。,文件移动失败且物理对象补偿失败。
+目录不能移动到自身或其子目录。,目录不能移动到自身或其子目录。
+目录中的文件数量超过单次操作上限。,目录中的文件数量超过单次操作上限。
+存储目录返回了越界文件。,存储目录返回了越界文件。
+源目录包含已删除的文件资源，不能移动。,源目录包含已删除的文件资源，不能移动。
+文件资源对应的存储对象不存在。,文件资源对应的存储对象不存在。
+目标目录包含已登记的同名文件资源。,目标目录包含已登记的同名文件资源。
+源目录已被其他请求修改，请刷新后重试。,源目录已被其他请求修改，请刷新后重试。
+存储目录移动失败。,存储目录移动失败。
+目录移动失败且物理对象补偿失败。,目录移动失败且物理对象补偿失败。
+存储目录未完全删除。,存储目录未完全删除。
+存储目录未完全删除，相关资源已禁用并等待清理。,存储目录未完全删除，相关资源已禁用并等待清理。
+文件资源仍被业务内容引用，不能删除。,文件资源仍被业务内容引用，不能删除。
+当前文件访问上下文不允许修改存储对象。,当前文件访问上下文不允许修改存储对象。
+文件资源修改必须位于写意图事务内。,文件资源修改必须位于写意图事务内。
+文件资源身份无效。,文件资源身份无效。
+文件资源已被其他请求修改，请刷新后重试。,文件资源已被其他请求修改，请刷新后重试。
+文件资源已被其他请求删除。,文件资源已被其他请求删除。
+文件资源对象键不能为空。,文件资源对象键不能为空。
+磁盘中的文件资源超过单次目录操作扫描上限。,磁盘中的文件资源超过单次目录操作扫描上限。
+目录中的文件资源超过单次操作上限。,目录中的文件资源超过单次操作上限。
+目录移动补偿恢复超过条目上限。,目录移动补偿恢复超过条目上限。
+目录移动补偿恢复源目录失败。,目录移动补偿恢复源目录失败。
+目录移动补偿遇到越界对象。,目录移动补偿遇到越界对象。
+目录移动补偿清理目标目录失败。,目录移动补偿清理目标目录失败。
+"资源 ID 不能为空。","资源 ID 不能为空。"
+文件资源不存在。,文件资源不存在。
+文件资源缺少精确语言元数据：%{1},文件资源缺少精确语言元数据：%{1}
+公开发布的页面不能引用私有文件资源。,公开发布的页面不能引用私有文件资源。
+图片资源对应的存储对象不存在。,图片资源对应的存储对象不存在。
+图片语境语言与当前语言不一致。,图片语境语言与当前语言不一致。
+所选资源不是图片。,所选资源不是图片。
+图片资源语言元数据尚未审核。,图片资源语言元数据尚未审核。
+语言代码无效：%{1},语言代码无效：%{1}
+文件资源不可用。,文件资源不可用。
+文件资源尚未完成元数据审核。,文件资源尚未完成元数据审核。
+当前访问上下文不允许管理私有文件资源。,当前访问上下文不允许管理私有文件资源。
+当前上下文无权读取私有文件资源。,当前上下文无权读取私有文件资源。
+文件访问策略版本已更新，请刷新访问上下文。,文件访问策略版本已更新，请刷新访问上下文。
+"当前 Scope 无权读取私有文件资源。","当前 Scope 无权读取私有文件资源。"
+当前角色无权读取私有文件资源。,当前角色无权读取私有文件资源。
+私有文件访问策略无效。,私有文件访问策略无效。
+私有文件访问策略列表超过限制。,私有文件访问策略列表超过限制。
+存储磁盘仍被文件资源引用，不能删除。,存储磁盘仍被文件资源引用，不能删除。
 源码编辑默认关闭,源码编辑默认关闭
 源码编辑策略允许,源码编辑策略允许
 源码编辑策略禁用,源码编辑策略禁用
@@ -533,3 +647,36 @@ Latest,最新
 当前项目路径策略已禁用此根目录写入。,当前项目路径策略已禁用此根目录写入。
 策略允许,策略允许
 当前项目路径策略允许此根目录受控写入。,当前项目路径策略允许此根目录受控写入。
+存储对象不存在。,存储对象不存在。
+"存储对象尚未建立 FileAsset，不能访问。","存储对象尚未建立 FileAsset，不能访问。"
+上传失败，且已写入文件无法自动回收，请立即人工清理。,上传失败，且已写入文件无法自动回收，请立即人工清理。
+文件资源修订版本无效。,文件资源修订版本无效。
+资源身份与当前存储对象不匹配。,资源身份与当前存储对象不匹配。
+文件资源元数据保存必须位于写意图事务内。,文件资源元数据保存必须位于写意图事务内。
+"资源引用 owner 身份无效。","资源引用 owner 身份无效。"
+单个业务版本的文件资源引用数量超过限制。,单个业务版本的文件资源引用数量超过限制。
+文件资源引用写入必须位于写意图事务内。,文件资源引用写入必须位于写意图事务内。
+引用的文件资源不可用。,引用的文件资源不可用。
+引用的文件资源不存在。,引用的文件资源不存在。
+"文件布局仅索引模式必须指定完整 owner 身份。","文件布局仅索引模式必须指定完整 owner 身份。"
+"文件布局校验缺少显式 ScopeIdentity 或 locale_code。","文件布局校验缺少显式 ScopeIdentity 或 locale_code。"
+"Theme 布局内容超过文件校验上限。","Theme 布局内容超过文件校验上限。"
+读取存储对象时连续无数据进展。,读取存储对象时连续无数据进展。
+无法读取上传源以计算校验值。,无法读取上传源以计算校验值。
+读取上传源时连续无数据进展。,读取上传源时连续无数据进展。
+上传源无法恢复到原始读取位置。,上传源无法恢复到原始读取位置。
+"私有图片变体 URL 必须不可共享缓存且带过期时间。","私有图片变体 URL 必须不可共享缓存且带过期时间。"
+允许的文件类型：,允许的文件类型：
+允许的文件大小：,允许的文件大小：
+"mdi mdi-folder-outline","mdi mdi-文件夹大纲"
+"mdi mdi-file-tree-outline","mdi mdi-file-tree-outline"
+"mdi mdi-shield-edit-outline","mdi mdi-shield-编辑大纲"
+"mdi mdi-file-edit-outline","mdi mdi 文件编辑大纲"
+"mdi mdi-progress-clock","MDI MDI 进度时钟"
+"mdi mdi-clipboard-text-clock-outline","mdi mdi-剪贴板-文本-时钟-大纲"
+"mdi mdi-puzzle-outline","MDI MDI-拼图大纲"
+私有文件元数据修改缺少访问上下文。,私有文件元数据修改缺少访问上下文。
+私有文件详情读取缺少访问上下文。,私有文件详情读取缺少访问上下文。
+私有文件上传缺少访问上下文。,私有文件上传缺少访问上下文。
+私有文件操作缺少访问上下文。,私有文件操作缺少访问上下文。
+私有文件重试上传缺少访问上下文。,私有文件重试上传缺少访问上下文。

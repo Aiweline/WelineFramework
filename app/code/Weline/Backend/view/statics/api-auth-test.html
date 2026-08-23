@@ -17,7 +17,7 @@
             border: 1px solid #ddd;
             border-radius: 5px;
         }
-        .form-group {
+        .w-field {
             margin-bottom: 15px;
         }
         label {
@@ -71,15 +71,15 @@
     
     <div class="section">
         <h2>登录</h2>
-        <div class="form-group">
+        <div class="w-field">
             <label for="username">用户名:</label>
             <input type="text" id="username" value="admin">
         </div>
-        <div class="form-group">
+        <div class="w-field">
             <label for="password">密码:</label>
             <input type="password" id="password" value="">
         </div>
-        <div class="form-group">
+        <div class="w-field">
             <label for="expireTime">过期时间(秒，0为默认7天):</label>
             <input type="number" id="expireTime" value="0">
         </div>
@@ -103,11 +103,11 @@
 
     <div class="section">
         <h2>API测试</h2>
-        <div class="form-group">
+        <div class="w-field">
             <label for="apiUrl">API URL:</label>
             <input type="text" id="apiUrl" value="datatable/rest/v1/data-table/model-fields?model=Weline\\Backend\\Model\\BackendUser" style="width: 100%;">
         </div>
-        <div class="form-group">
+        <div class="w-field">
             <label for="apiMethod">请求方法:</label>
             <select id="apiMethod">
                 <option value="GET">GET</option>
@@ -116,7 +116,7 @@
                 <option value="DELETE">DELETE</option>
             </select>
         </div>
-        <div class="form-group">
+        <div class="w-field">
             <label for="apiData">请求数据 (JSON):</label>
             <textarea id="apiData" rows="4" style="width: 100%; font-family: monospace;"></textarea>
         </div>

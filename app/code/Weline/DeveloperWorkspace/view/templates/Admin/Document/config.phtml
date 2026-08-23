@@ -81,32 +81,22 @@ $tr = static function (string $text) use ($isEnglishPage, $labels): string {
     return $isEnglishPage ? ($labels[$text] ?? (string)__($text)) : (string)__($text);
 };
 $help = static function (string $text) use ($tr): string {
-    return '<span class="doc-config-help" title="' . htmlspecialchars($tr($text), ENT_QUOTES, 'UTF-8') . '">?</span>';
+    return '<span class="w-document-config__help" title="' . htmlspecialchars($tr($text), ENT_QUOTES, 'UTF-8') . '">?</span>';
 };
 ?>
 
 <template>Weline_Component::message.phtml</template>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-document-config.css)">
 
-<style>
-    .doc-config-help {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 18px;
-        height: 18px;
-        margin-left: 6px;
-        border-radius: 50%;
-        border: 1px solid #9aa6b2;
-        color: #607086;
-        background: #f8fafc;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1;
-        cursor: help;
-        vertical-align: middle;
-    }
-</style>
-
+<section
+    class="w-document-config"
+    data-document-config
+    data-text-saving="<?=htmlspecialchars($tr('正在保存...'), ENT_QUOTES, 'UTF-8')?>"
+    data-text-save-success="<?=htmlspecialchars($tr('配置已保存'), ENT_QUOTES, 'UTF-8')?>"
+    data-text-save-failed="<?=htmlspecialchars($tr('配置保存失败'), ENT_QUOTES, 'UTF-8')?>"
+    data-text-running="<?=htmlspecialchars($tr('正在执行操作...'), ENT_QUOTES, 'UTF-8')?>"
+    data-text-action-complete="<?=htmlspecialchars($tr('操作已完成'), ENT_QUOTES, 'UTF-8')?>"
+>
 <div class="w-grid">
     <div style="--w-span:12;">
         <div class="w-card">
@@ -129,10 +119,10 @@ $help = static function (string $text) use ($tr): string {
                             <div class="w-text" data-tone="muted" data-size="sm"><?=htmlspecialchars($tr('适配器'))?></div>
                             <div class="w-text" data-weight="strong"><?=htmlspecialchars((string)($adapter['code'] ?? 'developer_document_translation'))?></div>
                             <div style="--w-mt:var(--weline-space-2);">
-                                <span class="w-badge <?=!empty($adapter['exists']) ? 'bg-success' : 'bg-danger'?>">
+                                <span class="w-badge" data-tone="<?=!empty($adapter['exists']) ? 'success' : 'danger'?>">
                                     <?=htmlspecialchars(!empty($adapter['exists']) ? $tr('已注册') : $tr('未注册'))?>
                                 </span>
-                                <span class="w-badge <?=!empty($adapter['active']) ? 'bg-success' : 'bg-secondary'?>">
+                                <span class="w-badge" data-tone="<?=!empty($adapter['active']) ? 'success' : 'neutral'?>">
                                     <?=htmlspecialchars(!empty($adapter['active']) ? $tr('已启用') : $tr('未启用'))?>
                                 </span>
                             </div>
@@ -141,7 +131,7 @@ $help = static function (string $text) use ($tr): string {
                     <div style="--w-span-md:3;">
                         <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
                             <div class="w-text" data-tone="muted" data-size="sm"><?=htmlspecialchars($tr('配置状态'))?></div>
-                            <div class="w-text <?=!empty($validation['ok']) ? 'text-success' : 'text-warning'?>" data-weight="strong">
+                            <div class="w-text" data-tone="<?=!empty($validation['ok']) ? 'success' : 'warning'?>" data-weight="strong">
                                 <?=htmlspecialchars(!empty($validation['ok']) ? $tr('可执行') : $tr('阻塞'))?>
                             </div>
                             <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);"><?=htmlspecialchars((string)($validation['message'] ?? ''))?></div>
@@ -166,7 +156,7 @@ $help = static function (string $text) use ($tr): string {
                     </div>
                 </div>
 
-                <w:form id="documentTranslationConfigForm" csrf="off">
+                <form id="documentTranslationConfigForm" data-document-config-form>
                     <input type="hidden" name="form_key" value="<?=htmlspecialchars($this->getFormKeyValue())?>">
                     <div class="w-grid" style="--w-gap:var(--weline-space-6);">
                         <div style="--w-span-lg:7;">
@@ -185,7 +175,7 @@ $help = static function (string $text) use ($tr): string {
 
                                     <div class="w-alert" data-w-border="border" data-tone="muted" style="--w-mb:var(--weline-space-4);">
                                         <strong><?=htmlspecialchars($tr('源语言固定为中文源文档'))?></strong>
-                                        <code class="ms-2"><?=htmlspecialchars($sourceLocale)?></code>
+                                        <code><?=htmlspecialchars($sourceLocale)?></code>
                                         <?=$help(__('文档导入事实源固定为 zh_Hans_CN，不提供界面配置；翻译结果只写数据库，不回写模块 doc 文件。'))?>
                                         <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?=htmlspecialchars($tr('默认导入文档按中文源文档处理，源语言本身不调用 AI 翻译。'))?></div>
                                     </div>
@@ -346,15 +336,15 @@ $help = static function (string $text) use ($tr): string {
                     <div class="w-cluster" data-wrap="true" style="--w-mt:var(--weline-space-4);--w-gap:var(--weline-space-2);">
                         <button type="submit" id="documentTranslationConfigSaveBtn" class="w-button" data-tone="primary">
                             <w:icon name="save" size="sm"></w:icon>
-                            <span class="doc-save-label"><?=htmlspecialchars($tr('保存配置'))?></span>
-                            <span class="doc-save-loading" hidden><?=htmlspecialchars($tr('正在保存...'))?></span>
+                            <span class="w-document-config__save-label"><?=htmlspecialchars($tr('保存配置'))?></span>
+                            <span class="w-document-config__save-loading" hidden><?=htmlspecialchars($tr('正在保存...'))?></span>
                         </button>
-                        <button type="button" class="w-button doc-translation-action" data-action="translation-scan" data-tone="neutral" data-variant="outline"><?=htmlspecialchars($tr('扫描适配器'))?></button>
-                        <button type="button" class="w-button doc-translation-action" data-action="translation-test" data-tone="info" data-variant="outline"><?=htmlspecialchars($tr('测试适配器'))?></button>
-                        <button type="button" class="w-button doc-translation-action" data-action="translation-run" data-tone="success" data-variant="outline"><?=htmlspecialchars($tr('立即入队并执行'))?></button>
-                        <button type="button" class="w-button doc-translation-action" data-action="translation-retry" data-tone="warning" data-variant="outline"><?=htmlspecialchars($tr('重试失败'))?></button>
+                        <button type="button" class="w-button" data-translation-action="documentTranslationScan" data-tone="neutral"><?=htmlspecialchars($tr('扫描适配器'))?></button>
+                        <button type="button" class="w-button" data-translation-action="documentTranslationTest" data-tone="info"><?=htmlspecialchars($tr('测试适配器'))?></button>
+                        <button type="button" class="w-button" data-translation-action="documentTranslationRun" data-tone="success"><?=htmlspecialchars($tr('立即入队并执行'))?></button>
+                        <button type="button" class="w-button" data-translation-action="documentTranslationRetry" data-tone="warning"><?=htmlspecialchars($tr('重试失败'))?></button>
                     </div>
-                </w:form>
+                </form>
 
                 <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mt:var(--weline-space-6);">
                     <div style="--w-span-lg:5;">
@@ -365,7 +355,7 @@ $help = static function (string $text) use ($tr): string {
                                     <div class="w-text" data-tone="muted"><?=htmlspecialchars($tr('暂无任务'))?></div>
                                 <?php else: ?>
                                     <?php foreach ($counts as $status => $count): ?>
-                                        <span class="w-badge me-2" data-w-background="muted" style="--w-mb:var(--weline-space-2);"><?=htmlspecialchars((string)$status)?>: <?=number_format((int)$count)?></span>
+                                        <span class="w-badge" data-tone="neutral"><?=htmlspecialchars((string)$status)?>: <?=number_format((int)$count)?></span>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
@@ -375,7 +365,7 @@ $help = static function (string $text) use ($tr): string {
                         <div class="w-card" data-w-border="border" data-w-height="full">
                             <div class="w-card__header" data-w-background="muted"><strong><?=htmlspecialchars($tr('操作结果 / 最近错误'))?></strong></div>
                             <div class="w-card__body">
-                                <pre id="documentTranslationActionResult" style="min-height: 120px; white-space: pre-wrap;" data-w-background="muted" data-w-border="border" data-w-radius="md"><?=htmlspecialchars(json_encode($overview['recent_failures'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT))?></pre>
+                                <pre id="documentTranslationActionResult" class="w-document-config__result"><?=htmlspecialchars(json_encode($overview['recent_failures'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT))?></pre>
                             </div>
                         </div>
                     </div>
@@ -386,254 +376,6 @@ $help = static function (string $text) use ($tr): string {
 </div>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_developer_workspace) return;
-  g.__bqAdmin_developer_workspace=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['developer_workspace']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('developer_workspace').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script>
-(function() {
-    var pageIsEnglish = <?= $isEnglishPage ? 'true' : 'false' ?>;
-    var pageTextReplacements = {
-        '文档管理配置': 'Document Management Config',
-        '开发文档': 'Developer Docs',
-        '开发工作台': 'Developer Workspace',
-        '开发者': 'Developer'
-    };
+</section>
 
-    function replacePageTextForEnglish() {
-        if (!pageIsEnglish || !document.body || !document.createTreeWalker) {
-            return;
-        }
-        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        var node;
-        while ((node = walker.nextNode())) {
-            var value = node.nodeValue;
-            var trimmed = value.trim();
-            if (trimmed && pageTextReplacements[trimmed]) {
-                node.nodeValue = value.replace(trimmed, pageTextReplacements[trimmed]);
-            }
-        }
-        document.title = document.title.replace('文档管理配置', 'Document Management Config');
-    }
-
-    replacePageTextForEnglish();
-
-    function getDocumentAdminBasePath() {
-        var path = window.location.pathname.replace(/\/+$/, '');
-        var marker = '/dev/tool/admin/document';
-        var markerIndex = path.indexOf(marker);
-        if (markerIndex >= 0) {
-            return path.slice(0, markerIndex + marker.length);
-        }
-        return path.replace(/\/config$/, '');
-    }
-
-    function buildActionUrl(action) {
-        return getDocumentAdminBasePath() + '/' + action;
-    }
-
-    var saveUrl = buildActionUrl('post-config');
-    var csrfToken = '<?=htmlspecialchars($this->getFormKeyValue())?>';
-    var resultBox = document.getElementById('documentTranslationActionResult');
-    var noticeBox = document.getElementById('documentTranslationConfigNotice');
-    var saveButton = document.getElementById('documentTranslationConfigSaveBtn');
-    var form = document.getElementById('documentTranslationConfigForm');
-
-    function writeResult(payload) {
-        if (!resultBox) {
-            return;
-        }
-        resultBox.textContent = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
-    }
-
-    function showNotice(type, message) {
-        if (!noticeBox) {
-            return;
-        }
-        noticeBox.className = 'alert alert-' + type + ' mt-3 mb-0';
-        noticeBox.textContent = message;
-        if (typeof noticeBox.scrollIntoView === 'function') {
-            noticeBox.scrollIntoView({block: 'nearest', behavior: 'smooth'});
-        }
-    }
-
-    function extractMessage(payload, fallback) {
-        if (!payload || typeof payload !== 'object') {
-            return fallback;
-        }
-        return payload.msg || payload.message || (payload.data && payload.data.message) || fallback;
-    }
-
-    function isSuccess(payload) {
-        return !!payload && (payload.code === 200 || payload.success === true || payload.status === 'success');
-    }
-
-    function serializeForm(formElement) {
-        var payload = {};
-        new FormData(formElement).forEach(function(value, key) {
-            var arrayMatch = key.match(/^(.+)\[\]$/);
-            var objectMatch = key.match(/^([^\[]+)\[([^\]]+)\]$/);
-            if (arrayMatch) {
-                payload[arrayMatch[1]] = payload[arrayMatch[1]] || [];
-                payload[arrayMatch[1]].push(value);
-                return;
-            }
-            if (objectMatch) {
-                payload[objectMatch[1]] = payload[objectMatch[1]] || {};
-                payload[objectMatch[1]][objectMatch[2]] = value;
-                return;
-            }
-            payload[key] = value;
-        });
-        return payload;
-    }
-
-    function attachRequestMeta(error, response, fallbackUrl) {
-        error.status = response ? response.status : null;
-        error.requestUrl = response && response.url ? response.url : fallbackUrl;
-        return error;
-    }
-
-    function fetchJson(url, options) {
-        options = options || {};
-        options.headers = Object.assign({
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        }, options.headers || {});
-        options.credentials = 'same-origin';
-
-        return bqAdmin['developer_workspace'](url, options).then(function(response) {
-            return response.text().then(function(text) {
-                var payload = null;
-                try {
-                    payload = text ? JSON.parse(text) : {};
-                } catch (error) {
-                    throw new Error('服务端没有返回 JSON，HTTP ' + response.status + '：' + text.slice(0, 200));
-                }
-                if (!response.ok) {
-                    throw new Error(extractMessage(payload, '请求失败，HTTP ' + response.status));
-                }
-                return payload;
-            });
-        }).catch(function(error) {
-            if (!error.requestUrl) {
-                error.requestUrl = url;
-            }
-            throw error;
-        });
-    }
-
-    function setSaveLoading(loading) {
-        if (!saveButton) {
-            return;
-        }
-        saveButton.disabled = loading;
-        saveButton.querySelector('.doc-save-label').classList.toggle('d-none', loading);
-        saveButton.querySelector('.doc-save-loading').classList.toggle('d-none', !loading);
-    }
-
-    function finishSave(type, message, payload) {
-        try {
-            writeResult(payload);
-            showNotice(type, message);
-        } finally {
-            setSaveLoading(false);
-        }
-    }
-
-    function finishAction(button, type, message, payload) {
-        try {
-            writeResult(payload);
-            showNotice(type, message);
-        } finally {
-            button.disabled = false;
-        }
-    }
-
-    function refreshConfigPageSoon() {
-        window.setTimeout(function() {
-            window.location.reload();
-        }, 900);
-    }
-
-    form.addEventListener('submit', function(event) {
-        event.preventDefault();
-        setSaveLoading(true);
-        showNotice('info', '正在保存配置...');
-        fetchJson(saveUrl, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken},
-            body: JSON.stringify(serializeForm(event.target))
-        }).then(function(payload) {
-            if (isSuccess(payload)) {
-                finishSave('success', extractMessage(payload, '配置已保存'), payload);
-                refreshConfigPageSoon();
-            } else {
-                finishSave('danger', extractMessage(payload, '配置保存失败'), payload);
-            }
-        }).catch(function(error) {
-            var message = error.message || String(error);
-            if (error.requestUrl) {
-                message += ': ' + error.requestUrl;
-            }
-            finishSave('danger', message, {error: message, url: error.requestUrl || null});
-        });
-    });
-
-    document.querySelectorAll('.doc-translation-action').forEach(function(button) {
-        button.addEventListener('click', function() {
-            var action = button.getAttribute('data-action');
-            button.disabled = true;
-            showNotice('info', '正在执行操作...');
-            fetchJson(buildActionUrl(action), {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken},
-                body: JSON.stringify({form_key: csrfToken})
-            })
-                .then(function(payload) {
-                    var success = isSuccess(payload);
-                    finishAction(
-                        button,
-                        success ? 'success' : 'danger',
-                        extractMessage(payload, '操作已完成'),
-                        payload
-                    );
-                    if (success && action !== 'translation-test') {
-                        refreshConfigPageSoon();
-                    }
-                })
-                .catch(function(error) {
-                    var message = error.message || String(error);
-                    if (error.requestUrl) {
-                        message += ': ' + error.requestUrl;
-                    }
-                    finishAction(button, 'danger', message, {error: message, url: error.requestUrl || null});
-                });
-        });
-    });
-})();
-</script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-developer-document-config.js)"></script>

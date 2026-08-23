@@ -36,18 +36,28 @@
 
 // 提取配置参数
 $logoText = $config['logo_text'] ?? 'WELINE';
-$logoImage = $config['logo_image'] ?? '';
+$logoImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($config['logo_image'] ?? '');
+$logoImageFileHtml = (string)($config['logo_image_file_html'] ?? '');
 $sticky = $config['sticky'] ?? true;
-$bgColor = $config['bg_color'] ?? '#ffffff';
-$textColor = $config['text_color'] ?? '#333333';
-$accentColor = $config['accent_color'] ?? '#e74c3c';
+$sanitizeColor = static function (mixed $value, string $fallback): string {
+    $value = trim((string)$value);
+    return preg_match('/^(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\\([0-9.,%\\s]+\\)|var\\(--[a-zA-Z0-9_-]+\\)|transparent|currentColor)$/D', $value) === 1
+        ? $value
+        : $fallback;
+};
+$bgColor = $sanitizeColor($config['bg_color'] ?? '#ffffff', '#ffffff');
+$textColor = $sanitizeColor($config['text_color'] ?? '#333333', '#333333');
+$accentColor = $sanitizeColor($config['accent_color'] ?? '#e74c3c', '#e74c3c');
 $searchPlaceholder = $config['search_placeholder'] ?? __('搜索商品...');
 $showSearch = $config['show_search'] ?? true;
 $showAccount = $config['show_account'] ?? true;
 $showWishlist = $config['show_wishlist'] ?? true;
 $showCart = $config['show_cart'] ?? true;
 $showNav = $config['show_nav'] ?? true;
-$navStyle = $config['nav_style'] ?? 'simple';
+$navStyle = strtolower(trim((string)($config['nav_style'] ?? 'simple')));
+if (!in_array($navStyle, ['simple', 'expanded', 'mega'], true)) {
+    $navStyle = 'simple';
+}
 $shadow = $config['shadow'] ?? true;
 
 // 生成唯一ID
@@ -82,7 +92,9 @@ $widgetId = 'full-header-' . uniqid();
             <!-- Logo 区域 -->
             <div class="header-logo">
                 <a href="<?= $block->getUrl('/') ?>" class="logo-link" title="<?= htmlspecialchars($logoText) ?>">
-                    <?php if ($logoImage): ?>
+                    <?php if ($logoImageFileHtml !== ''): ?>
+                        <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
+                    <?php elseif ($logoImage): ?>
                         <img src="<?= htmlspecialchars($logoImage) ?>" 
                              alt="<?= htmlspecialchars($logoText) ?>" 
                              class="logo-image">
@@ -319,6 +331,12 @@ $widgetId = 'full-header-' . uniqid();
 }
 
 #<?= $widgetId ?> .logo-image {
+    max-height: 50px;
+    width: auto;
+}
+
+#<?= $widgetId ?> .logo-image--asset img {
+    display: block;
     max-height: 50px;
     width: auto;
 }

@@ -309,7 +309,7 @@ $themeLabels = json_encode(
         font-weight: 850;
         text-transform: uppercase;
     }
-    .wpm-card-value {
+    .wpm-weline-card-value {
         margin: 0;
         color: var(--wpm-text);
         font-size: 24px;
@@ -683,7 +683,7 @@ $themeLabels = json_encode(
                 <?php foreach ($capabilities as $card): ?>
                     <article class="wpm-card" data-wpm-capability-state="<?= $escapeHtml($card['state'] ?? '') ?>">
                         <p class="wpm-card-label"><?= $escapeHtml($card['label'] ?? '') ?></p>
-                        <p class="wpm-card-value"><?= $escapeHtml($card['value'] ?? '') ?></p>
+                        <p class="wpm-weline-card-value"><?= $escapeHtml($card['value'] ?? '') ?></p>
                         <p class="wpm-card-detail"><?= $escapeHtml($card['detail'] ?? '') ?></p>
                     </article>
                 <?php endforeach; ?>
@@ -1273,8 +1273,8 @@ $themeLabels = json_encode(
             if (button) button.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
             if (label) label.textContent = labels[next];
             if (icon) {
-                icon.classList.toggle('mdi-weather-night', next === 'dark');
-                icon.classList.toggle('mdi-white-balance-sunny', next === 'light');
+                icon.classList.toggle('weline-icon--moon', next === 'dark');
+                icon.classList.toggle('weline-icon--sun', next === 'light');
             }
             window.localStorage.setItem('wls_panel_theme', next);
         };

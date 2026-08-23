@@ -1,0 +1,128 @@
+/* Weline UI source: css/pages/theme-editor-overlay.css */
+@layer reset, tokens, base, layout, components, utilities, page;
+
+@layer page {
+    .widget-wrapper {
+        position: relative;
+        overflow: visible !important;
+        transition: box-shadow var(--weline-motion-normal), outline var(--weline-motion-normal);
+    }
+
+    .widget-wrapper:hover,
+    .widget-wrapper.show-actions {
+        z-index: 100;
+        outline: 2px solid var(--weline-theme-primary);
+        outline-offset: 2px;
+    }
+
+    .widget-wrapper.selected {
+        outline: 2px solid var(--weline-theme-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px var(--weline-theme-primary-surface);
+    }
+
+    .widget-hover-actions {
+        position: absolute;
+        inset-block-start: var(--weline-space-1);
+        inset-inline-end: var(--weline-space-1);
+        z-index: 1000;
+        display: none;
+        gap: 3px;
+        padding: var(--weline-space-1);
+        border-radius: var(--weline-radius-sm);
+        background: color-mix(in srgb, var(--weline-theme-text) 92%, transparent);
+        box-shadow: var(--weline-theme-shadow-sm);
+        backdrop-filter: blur(4px);
+    }
+
+    .widget-wrapper.show-actions .widget-hover-actions,
+    .widget-wrapper:hover > .widget-hover-actions {
+        display: flex;
+    }
+
+    .widget-hover-actions button {
+        display: flex;
+        width: 26px;
+        height: 26px;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 0;
+        border-radius: var(--weline-radius-sm);
+        background: color-mix(in srgb, var(--weline-theme-on-primary) 8%, transparent);
+        color: var(--weline-theme-on-primary);
+        cursor: pointer;
+        transition: background-color var(--weline-motion-fast), transform var(--weline-motion-fast);
+    }
+
+    .widget-hover-actions button svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+    }
+
+    .widget-hover-actions button:hover {
+        background: color-mix(in srgb, var(--weline-theme-on-primary) 20%, transparent);
+        transform: scale(1.08);
+    }
+
+    .widget-hover-actions button:active { transform: scale(0.95); }
+    .widget-hover-actions .btn-widget-delete:hover { background: var(--weline-theme-danger); }
+    .widget-hover-actions .btn-widget-replace:hover { background: var(--weline-theme-primary); }
+    .widget-hover-actions .btn-widget-ai-edit:hover,
+    .widget-hover-actions .btn-widget-ai-rebuild:hover,
+    .widget-hover-actions .btn-widget-ai-image:hover { background: var(--weline-theme-info); }
+    .widget-hover-actions .btn-widget-move-up:hover,
+    .widget-hover-actions .btn-widget-move-down:hover { background: var(--weline-theme-success); }
+
+    .widget-hover-actions button:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+    .widget-hover-actions button:disabled:hover {
+        background: color-mix(in srgb, var(--weline-theme-on-primary) 8%, transparent);
+    }
+
+    .widget-wrapper.dragging {
+        opacity: 0.5;
+        outline: 2px dashed var(--weline-theme-primary);
+    }
+
+    .widget-wrapper.drag-over-top::before,
+    .widget-wrapper.drag-over-bottom::after {
+        content: "";
+        position: absolute;
+        inset-inline: 0;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--weline-theme-primary);
+    }
+
+    .widget-wrapper.drag-over-top::before { inset-block-start: -4px; }
+    .widget-wrapper.drag-over-bottom::after { inset-block-end: -4px; }
+    .widget-wrapper.widget-updated { animation: w-theme-editor-widget-highlight 1s ease-out; }
+    .widget-wrapper.widget-new { animation: w-theme-editor-widget-new-highlight 1.5s ease-out; }
+
+    @keyframes w-theme-editor-widget-highlight {
+        0% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--weline-theme-success) 60%, transparent); }
+        100% { box-shadow: none; }
+    }
+
+    @keyframes w-theme-editor-widget-new-highlight {
+        0% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--weline-theme-primary) 80%, transparent); }
+        50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-primary) 40%, transparent); }
+        100% { box-shadow: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .widget-wrapper,
+        .widget-hover-actions button,
+        .widget-wrapper.widget-updated,
+        .widget-wrapper.widget-new {
+            animation: none;
+            transition: none;
+        }
+    }
+}

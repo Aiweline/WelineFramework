@@ -66,7 +66,7 @@ DeepL翻译语言检测失败：%{1},"DeepL Translation language detection faile
 配置保存成功！,"Configuration saved successfully!"
 保存失败：%{1},"Save failed: %{1}"
 没有有效的文本需要翻译,"No valid text to translate"
-确认操作,确认操作
+确认操作,"Confirm action"
 确定,Confirm
 取消,Cancel
 确定要删除此记录吗？,"Are you sure you want to delete this record?"
@@ -173,3 +173,5 @@ Translating...,Translating...
 未找到渠道适配器：%{1},"Channel adapter not found: %{1}"
 适配器类不存在：%{1},"Adapter class does not exist: %{1}"
 适配器类必须实现ProviderInterface接口：%{1},"Adapter class must implement the ProviderInterface: %{1}"
+渠道配置,"Channel configuration"
+翻译服务,"Translation Service"

@@ -20,7 +20,7 @@
 ## Local boundaries
 
 - Preserve unrelated dirty working-tree changes and keep edits task-scoped.
-- Local Git policy (hard): only branches `dev` and `master`; code changes only on `dev`; no `git worktree` and no other local branches. Full text: `dev/ai/global-constraints.md` §7.
+- Local Git policy (hard): only branches `dev` and `master`; code changes only on `dev`; no `git worktree` and no other local branches; commit messages must be Simplified Chinese. Full text: `dev/ai/global-constraints.md` §7.
 - Core-to-site distribution is never implied by a core edit; use only the explicitly requested release workflow.
 - Keep domain constraints, validation rules, authorization, and delivery requirements in `dev/ai/global-constraints.md` or the owning skill instead of mirroring them here.
 

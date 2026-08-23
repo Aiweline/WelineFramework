@@ -5,6 +5,7 @@ namespace Weline\Storage\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Storage\Service\StorageRuntimeDiagnostics;
 
 class StorageAdminQueryProvider implements QueryProviderInterface
 {
@@ -17,6 +18,10 @@ class StorageAdminQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'adminRequest' => $this->adminRequest($params),
+            'runtimeDiagnostics' => [
+                'success' => true,
+                'diagnostics' => StorageRuntimeDiagnostics::snapshot(),
+            ],
             default => throw new \InvalidArgumentException('Unsupported operation: ' . $operation),
         };
     }
@@ -41,6 +46,16 @@ class StorageAdminQueryProvider implements QueryProviderInterface
                     ['name' => 'headers', 'type' => 'array', 'required' => false],
                     ['name' => 'body', 'type' => 'string', 'required' => false],
                 ],
+            ], [
+                'name' => 'runtimeDiagnostics',
+                'description' => 'Read-only WLS Storage resource diagnostics without object paths or secrets',
+                'frontend' => true,
+                'auth' => 'backend',
+                'backend' => true,
+                'backend_acl' => ['kind' => 'self'],
+                'mode' => 'read',
+                'graph' => false,
+                'params' => [],
             ]],
         ];
     }

@@ -26,7 +26,7 @@ $filterObserver = $this->getData('filter_observer') ?? '';
         <p>系统中还没有定义任何事件。请运行 'php bin/w event:rebuild' 重建事件注册表。</p>
     </div>
 <?php else: ?>
-    <div class="table-container">
+    <div class="weline-table-container">
         <table class="w-table">
             <thead>
                 <tr>
@@ -46,7 +46,7 @@ $filterObserver = $this->getData('filter_observer') ?? '';
                         <a href="?<?= $queryParams ?>" class="sort-link" data-sort="name" data-order="<?= $newOrder ?>">
                             事件名
                             <?php if ($currentSort === 'name'): ?>
-                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                             <?php endif; ?>
                         </a>
                     </th>
@@ -67,7 +67,7 @@ $filterObserver = $this->getData('filter_observer') ?? '';
                         <a href="?<?= $queryParams ?>" class="sort-link" data-sort="module" data-order="<?= $newOrder ?>">
                             定义模块
                             <?php if ($currentSort === 'module'): ?>
-                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                             <?php endif; ?>
                         </a>
                     </th>
@@ -88,7 +88,7 @@ $filterObserver = $this->getData('filter_observer') ?? '';
                         <a href="?<?= $queryParams ?>" class="sort-link" data-sort="observers" data-order="<?= $newOrder ?>">
                             观察者
                             <?php if ($currentSort === 'observers'): ?>
-                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                             <?php endif; ?>
                         </a>
                     </th>
@@ -154,7 +154,7 @@ $filterObserver = $this->getData('filter_observer') ?? '';
                         </td>
                         <td>
                             <div class="actions">
-                                <button type="button" class="w-button btn-view-detail" data-event-name="<?= htmlspecialchars($eventName) ?>" title="查看详情" data-tone="primary" data-variant="outline" data-size="sm">
+                                <button type="button" class="w-button weline-btn-view-detail" data-event-name="<?= htmlspecialchars($eventName) ?>" title="查看详情" data-tone="primary" data-variant="outline" data-size="sm">
                                     <w:icon name="eye" size="sm"></w:icon> 详情
                                 </button>
                             </div>
@@ -165,4 +165,3 @@ $filterObserver = $this->getData('filter_observer') ?? '';
         </table>
     </div>
 <?php endif; ?>
-

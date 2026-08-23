@@ -8,23 +8,22 @@ use PHPUnit\Framework\TestCase;
 
 final class SeoOptimizationControlCenterFrontendContractTest extends TestCase
 {
-    public function testOptimizationConsoleUsesItsAclScopedDirectoryProjection(): void
+    public function testOptimizationConsoleUsesOfficialWebsiteSelectAndKeepEvolveSurface(): void
     {
         $template = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/templates/Backend/Optimization/index.phtml'
         );
 
-        self::assertStringContainsString(
-            "resource('seo_optimization_control')",
-            $template
-        );
-        self::assertStringContainsString(
+        self::assertStringContainsString('w:websites:website:select', $template);
+        self::assertStringContainsString('seoWebsiteSelectOptionsJson', $template);
+        self::assertStringContainsString('handleSeoOptWebsiteSelectChange', $template);
+        self::assertStringContainsString('seo_opt_website_id', $template);
+        self::assertStringNotContainsString('websitePicker', $template);
+        self::assertStringNotContainsString('id="websiteSelect"', $template);
+        self::assertStringNotContainsString('seo-opt__site-picker', $template);
+        self::assertStringNotContainsString('function loadWebsites(', $template);
+        self::assertStringNotContainsString(
             'state.directoryApi.optimizationControlCenterSnapshot({sites_only:true})',
-            $template
-        );
-        self::assertStringContainsString('function retry(', $template);
-        self::assertStringContainsString(
-            'Array.isArray(response.sites)?response.sites:items(response)',
             $template
         );
         self::assertStringNotContainsString("resource('websites')", $template);
@@ -32,6 +31,8 @@ final class SeoOptimizationControlCenterFrontendContractTest extends TestCase
             'state.websitesApi.getWebsiteList({})',
             $template
         );
+
+        self::assertStringContainsString("resource('seo_optimization_control')", $template);
         self::assertStringContainsString('searchQueryCloud', $template);
         self::assertStringContainsString('siteEventHeat', $template);
         self::assertStringContainsString('syncSearchQueryCloud', $template);
@@ -49,7 +50,6 @@ final class SeoOptimizationControlCenterFrontendContractTest extends TestCase
         self::assertStringContainsString('evolveScheduleHintByMode', $template);
         self::assertStringContainsString('renderScheduleHint', $template);
         self::assertStringContainsString('function withTimeout(', $template);
-        self::assertStringContainsString('withTimeout(state.directoryApi.optimizationControlCenterSnapshot({sites_only:true}),8000)', $template);
         self::assertStringContainsString('小时调度默认跟随上方自动化模式', $template);
         self::assertStringContainsString('当前为影子模式：小时调度只分析不改稿', $template);
         self::assertStringContainsString('.seo-opt__panel-head h2{margin:4px 0 0;font-size:19px;color:var(--ink);font-weight:800', $template);

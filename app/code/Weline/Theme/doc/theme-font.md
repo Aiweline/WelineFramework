@@ -23,12 +23,16 @@ Theme 已内置（`Weline_Theme/view/fonts/`，OFL）：
 
 `setup:upgrade` 结束后会扫描所有**已启用**模块的 `view/fonts/**`，为内置语言字符集生成子集（已有文件则跳过）。运行时若尚未预热，标签仍会临时生成并缓存。
 
-引用写法：`{Vendor}_{Module}::{相对 view/fonts 的路径}`
+引用写法（与 `theme:css` / `theme:js` 同形）：
+
+- 省略模块 → 默认 `Weline_Theme` 的 `view/fonts/`
+- 写 `{Vendor}_{Module}::相对路径` → 指定该模块的 `view/fonts/`
 
 | 文件 | `src` |
 |---|---|
-| `.../view/fonts/NotoSansSC-Regular.ttf` | `Weline_Theme::NotoSansSC-Regular.ttf` |
-| `.../view/fonts/brand/Logo.woff2` | `Weline_Theme::brand/Logo.woff2` |
+| `Weline_Theme/.../view/fonts/NotoSansSC-Regular.ttf` | `NotoSansSC-Regular.ttf` 或 `Weline_Theme::NotoSansSC-Regular.ttf` |
+| `Weline_Theme/.../view/fonts/brand/Logo.woff2` | `brand/Logo.woff2` 或 `Weline_Theme::brand/Logo.woff2` |
+| `Other_Module/.../view/fonts/Brand.ttf` | `Other_Module::Brand.ttf` |
 
 ## 2. 模板用法
 
@@ -36,7 +40,7 @@ Theme 已内置（`Weline_Theme/view/fonts/`，OFL）：
 
 ```phtml
 <w:theme:font
-  src="Weline_Theme::NotoSansSC-Regular.ttf"
+  src="NotoSansSC-Regular.ttf"
   family="Noto Sans SC"
   lang="zh_Hans"
   weight="400"
@@ -44,30 +48,35 @@ Theme 已内置（`Weline_Theme/view/fonts/`，OFL）：
 />
 ```
 
+等价显式模块：`src="Weline_Theme::NotoSansSC-Regular.ttf"`。
 输出一段 `@font-face` 的 `<style>`，`src` 指向公开 URL：`/pub/media/font-subset/...`。
 
 未写 `lang` 时，使用 `State::getLangLocal()`（与站点/请求语言一致，不要在标签侧再造一套解析）。
 
 ### 按指定字符临时子集
 
-适合标题、品牌短句等小字符集：
+适合标题、品牌短句等小字符集。在标签上写 `chars="…"`，只提取这些字符（忽略语言表）：
 
 ```phtml
 <w:theme:font
-  src="Weline_Theme::Brand.ttf"
+  src="NotoSansSC-Regular.ttf"
   family="Brand"
   chars="仅这些字ABC"
   weight="700"
 />
 ```
 
-同字体 + 同字符内容会命中缓存；再次渲染直接复用文件。
+产物 URL 形如 `/pub/media/font-subset/.../Name.chars.{指纹}.ttf`。同字体 + 同字符内容会命中缓存。
+
+`chars` **只提取属性里的字符**（去重），不会自动并入 ASCII / 语言表；语言子集才带 `LATIN_BASE` + 语言字符集。
+
+前台验收页：`/theme/frontend/test/font`
 
 ### 属性一览
 
 | 属性 | 必填 | 说明 |
 |---|---|---|
-| `src` | 是 | `Vendor_Module::相对路径`，或可读绝对路径 |
+| `src` | 是 | 相对 `view/fonts/` 的路径（默认模块 `Weline_Theme`）；或 `Vendor_Module::相对路径`；或可读绝对路径 |
 | `family` | 否 | CSS `font-family`；默认用文件名 |
 | `lang` | 否 | 语言码，如 `zh_Hans` / `en` / `ja`；与 `chars` 二选一优先 `chars` |
 | `chars` | 否 | 显式字符集子集（忽略语言表） |

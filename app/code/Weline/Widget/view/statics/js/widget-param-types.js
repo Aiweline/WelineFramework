@@ -14,32 +14,177 @@
     function q(root, sel) { return root.querySelector(sel); }
     function qa(root, sel) { return root.querySelectorAll(sel); }
 
-    function normalizeIconClassName(value) {
-        value = (value || '').trim().replace(/\s+/g, ' ');
-        if (!value) return '';
-        var tokens = value.split(' ');
-        if (tokens.length > 8) return '';
-        for (var i = 0; i < tokens.length; i++) {
-            if (!/^[A-Za-z0-9_-]{1,64}$/.test(tokens[i])) return '';
-        }
-        return tokens.join(' ');
+    function getUi() {
+        return window.Weline && window.Weline.UI ? window.Weline.UI : null;
     }
 
-    function renderIconPreview(previewDisplay, value) {
-        if (!previewDisplay) return;
-        while (previewDisplay.firstChild) {
-            previewDisplay.removeChild(previewDisplay.firstChild);
+    var querySelectRegistered = false;
+    var querySelectReadyListenerBound = false;
+    var querySelectDefinitionMarker = typeof Symbol === 'function'
+        ? Symbol.for('weline.ui.definition.widget-query-select')
+        : '__welineUiWidgetQuerySelectDefined';
+
+    function registerQuerySelectComponent() {
+        if (querySelectRegistered) return true;
+        var UI = getUi();
+        if (!UI || typeof UI.define !== 'function') return false;
+        if (UI[querySelectDefinitionMarker] === true) {
+            querySelectRegistered = true;
+            return true;
         }
-        var icon = doc.createElement('i');
-        var className = normalizeIconClassName(value);
-        var tokens = className ? className.split(' ') : ['w-param-placeholder-icon'];
-        tokens.forEach(function (token) {
-            icon.classList.add(token);
+
+        UI.define('widget-query-select', function (context) {
+            var root = context.element;
+            var input = q(root, '[data-query-search]');
+            var select = q(root, '[data-query-value]');
+            var status = q(root, '[data-query-status], .w-query-select__status');
+            if (!(input instanceof HTMLInputElement) || !(select instanceof HTMLSelectElement)) return {};
+
+            var provider = root.dataset.provider || '';
+            var operation = root.dataset.operation || '';
+            var valueKey = root.dataset.valueKey || 'value';
+            var labelKey = root.dataset.labelKey || 'label';
+            var timer = 0;
+            var sequence = 0;
+
+            function setStatus(state, message) {
+                root.dataset.state = state;
+                if (!(status instanceof HTMLElement)) return;
+                status.textContent = message || '';
+                status.dataset.state = state;
+                status.hidden = !message;
+            }
+
+            function unwrapItems(payload) {
+                if (Array.isArray(payload)) return payload;
+                if (!payload || typeof payload !== 'object') return [];
+                if (Array.isArray(payload.items)) return payload.items;
+                if (Array.isArray(payload.options)) return payload.options;
+                if (Object.prototype.hasOwnProperty.call(payload, 'data')) return unwrapItems(payload.data);
+                return Object.keys(payload).map(function (key) {
+                    return { value: key, label: payload[key] };
+                });
+            }
+
+            async function requestItems(search) {
+                var Weline = window.Weline || {};
+                if (!/^[a-z][a-z0-9_.-]{0,127}$/i.test(provider)
+                    || !/^[a-z][a-z0-9_.-]{0,127}$/i.test(operation)
+                    || ['constructor', 'prototype', '__proto__'].indexOf(operation.toLowerCase()) !== -1) {
+                    throw new Error('Widget query provider or operation is invalid.');
+                }
+                var api = Weline.Api;
+                if ((!api || typeof api.resource !== 'function') && typeof Weline.load === 'function') {
+                    api = await Weline.load('api');
+                }
+                if (!api || typeof api.resource !== 'function') {
+                    throw new Error('Weline.Api.resource is unavailable.');
+                }
+                var resource = await api.resource(provider);
+                if (!resource || typeof resource[operation] !== 'function') {
+                    throw new Error('Widget query operation is unavailable.');
+                }
+                return unwrapItems(await resource[operation]({search: search}));
+            }
+
+            function appendOption(value, label, selected) {
+                var option = doc.createElement('option');
+                option.value = String(value == null ? '' : value);
+                option.textContent = String(label == null || label === '' ? option.value : label);
+                option.selected = selected;
+                select.appendChild(option);
+            }
+
+            async function load() {
+                var requestId = ++sequence;
+                var currentValue = String(select.value || root.dataset.current || '');
+                var currentLabel = select.selectedOptions[0] ? select.selectedOptions[0].textContent : currentValue;
+                root.setAttribute('aria-busy', 'true');
+                setStatus('loading', root.dataset.loadingLabel || '');
+                try {
+                    var items = await requestItems(input.value.trim());
+                    if (requestId !== sequence || !root.isConnected) return false;
+                    var latestValue = String(root.dataset.current || '');
+                    var latestOption = Array.prototype.find.call(select.options, function (option) {
+                        return option.value === latestValue;
+                    });
+                    var latestLabel = latestOption ? latestOption.textContent : currentLabel;
+                    select.replaceChildren();
+                    var hasCurrent = false;
+                    items.forEach(function (item) {
+                        var objectItem = item && typeof item === 'object';
+                        var itemValue = objectItem ? item[valueKey] : item;
+                        var itemLabel = objectItem ? item[labelKey] : item;
+                        var normalizedValue = String(itemValue == null ? '' : itemValue);
+                        var selected = normalizedValue === latestValue;
+                        if (selected) hasCurrent = true;
+                        appendOption(normalizedValue, itemLabel, selected);
+                    });
+                    if (latestValue !== '' && !hasCurrent) {
+                        var retained = doc.createElement('option');
+                        retained.value = latestValue;
+                        retained.textContent = latestLabel || latestValue;
+                        retained.selected = true;
+                        select.prepend(retained);
+                    }
+                    root.dataset.current = select.value;
+                    setStatus(items.length === 0 ? 'empty' : 'ready', items.length === 0 ? root.dataset.emptyLabel || '' : '');
+                    context.emit('load', {items: items}, false);
+                    return true;
+                } catch (error) {
+                    if (requestId === sequence) {
+                        setStatus('error', root.dataset.errorLabel || '');
+                        context.emit('error', {error: error}, false);
+                    }
+                    return false;
+                } finally {
+                    if (requestId === sequence) root.removeAttribute('aria-busy');
+                }
+            }
+
+            context.listen(input, 'input', function () {
+                window.clearTimeout(timer);
+                timer = window.setTimeout(load, 180);
+            });
+            context.listen(select, 'change', function () {
+                root.dataset.current = select.value;
+            });
+            load();
+            return {
+                load: load,
+                element: root,
+                destroy: function () {
+                    sequence += 1;
+                    window.clearTimeout(timer);
+                    root.removeAttribute('aria-busy');
+                },
+            };
         });
-        previewDisplay.appendChild(icon);
+        try {
+            Object.defineProperty(UI, querySelectDefinitionMarker, {
+                configurable: false,
+                enumerable: false,
+                value: true,
+                writable: false,
+            });
+        } catch (_error) {
+            UI[querySelectDefinitionMarker] = true;
+        }
+        querySelectRegistered = true;
+        return true;
+    }
+
+    function waitForQuerySelectUi() {
+        if (querySelectReadyListenerBound) return;
+        querySelectReadyListenerBound = true;
+        doc.addEventListener('weline:ui:ready', function () {
+            querySelectReadyListenerBound = false;
+            initForms(doc);
+        }, { once: true });
     }
 
     function initForms(root) {
+        if (!registerQuerySelectComponent()) waitForQuerySelectUi();
         root = root || doc;
         var forms = [];
         if (root.nodeType === 9) {
@@ -51,12 +196,13 @@
         for (var i = 0; i < forms.length; i++) {
             initArrayEditors(forms[i]);
             initRangeSliders(forms[i]);
-            initIconPickers(forms[i]);
             initDatetimeShortcuts(forms[i]);
             initColorPickers(forms[i]);
             initImagePreview(forms[i]);
             initMediaImagePicker(forms[i]);
             initGroupToggles(forms[i]);
+            var ui = getUi();
+            if (ui) ui.mount(forms[i]);
         }
     }
 
@@ -66,32 +212,45 @@
         var preview = previewId ? doc.getElementById(previewId) : doc.getElementById(input.id + '_preview');
         if (!preview) return;
         var val = (input.value || '').trim();
+        var node = parseFileImageNode(val);
+        var previewUrl = sanitizeLegacyImagePreviewUrl(
+            node ? String(input.dataset.previewUrl || '').trim() : val,
+        );
         var inner = q(preview, 'img');
         var placeholder = q(preview, '.w-param-image-placeholder');
         var mediaWrap = preview.closest('.w-param-media-image');
         var actions = q(preview, '.w-param-image-actions');
         var clearBtn = actions ? q(actions, '.w-param-image-clear') : null;
         if (val) {
-            if (!inner) {
+            if (previewUrl && !inner) {
                 inner = doc.createElement('img');
                 inner.alt = 'preview';
                 preview.insertBefore(inner, placeholder || preview.firstChild);
             }
-            inner.src = val;
+            if (inner && previewUrl) inner.src = previewUrl;
+            if (inner && !previewUrl) inner.remove();
             preview.classList.add('w-param-has-image');
-            if (placeholder) placeholder.style.display = 'none';
+            if (placeholder) {
+                placeholder.hidden = !!previewUrl;
+                if (!previewUrl && node) placeholder.textContent = node.usage.alt || node.usage.asset_id;
+            }
             if (actions && !clearBtn) {
                 clearBtn = doc.createElement('button');
                 clearBtn.type = 'button';
-                clearBtn.className = 'w-param-btn w-param-btn-sm w-param-btn-outline-danger w-param-image-clear';
+                clearBtn.className = 'w-button w-param-image-clear';
+                clearBtn.dataset.tone = 'danger';
+                clearBtn.dataset.variant = 'outline';
+                clearBtn.dataset.size = 'sm';
+                clearBtn.dataset.iconOnly = 'true';
                 clearBtn.setAttribute('data-target', input.id);
+                clearBtn.setAttribute('aria-label', input.dataset.clearLabel || '×');
                 clearBtn.textContent = '×';
                 actions.appendChild(clearBtn);
             }
         } else {
             preview.classList.remove('w-param-has-image');
             if (inner) inner.remove();
-            if (placeholder) placeholder.style.display = '';
+            if (placeholder) placeholder.hidden = false;
             if (clearBtn) clearBtn.remove();
         }
         if (mediaWrap) {
@@ -99,16 +258,72 @@
         }
     }
 
+    function parseFileImageNode(value) {
+        var node = value;
+        if (typeof node === 'string') {
+            var trimmed = node.trim();
+            if (!trimmed || trimmed.charAt(0) !== '{') return null;
+            try { node = JSON.parse(trimmed); } catch (error) { return null; }
+        }
+        if (!node || typeof node !== 'object' || Array.isArray(node) || node.type !== 'file-image') return null;
+        var usage = node.usage;
+        if (!usage || typeof usage !== 'object' || !usage.asset_id || !usage.locale_code || Number(usage.version) !== 1) return null;
+        return { type: 'file-image', usage: usage };
+    }
+
+    function sanitizeLegacyImagePreviewUrl(value) {
+        var raw = String(value || '').trim();
+        if (!raw
+            || raw.length > 8192
+            || /[\u0000-\u001F\u007F\\]/.test(raw)
+            || raw.indexOf('//') === 0
+        ) {
+            return '';
+        }
+        try {
+            var parsed = new URL(raw, document.baseURI);
+            if (['http:', 'https:'].indexOf(parsed.protocol) === -1 || parsed.username || parsed.password) {
+                return '';
+            }
+            var explicitScheme = /^[a-z][a-z0-9+.-]*:/i.exec(raw);
+            if (explicitScheme && !/^https?:$/i.test(explicitScheme[0])) {
+                return '';
+            }
+            return raw;
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    function selectedFileImageNode(file) {
+        return parseFileImageNode(file && file.file_image_node);
+    }
+
+    function selectedFileImageValue(file) {
+        var node = selectedFileImageNode(file);
+        return node ? JSON.stringify(node) : '';
+    }
+
+    function resolvePickerLocale(themeEl) {
+        var locale = '';
+        try { locale = new URLSearchParams(window.location.search).get('locale') || ''; } catch (error) {}
+        if (!locale && themeEl) locale = themeEl.getAttribute('data-config-locale') || themeEl.getAttribute('data-locale-code') || '';
+        return String(locale || document.documentElement.lang || 'zh_Hans_CN').replace(/-/g, '_');
+    }
+
     function getSelectedMediaValue(files) {
         if (!files || !files.length) return '';
         var file = files[0] || {};
-        return String(file.url || file.path || file.thumb || file.name || '').trim();
+        var typedValue = selectedFileImageValue(file);
+        if (typedValue) return typedValue;
+        if (file.type !== 'legacy-media-path') return '';
+        return String(file.url || file.path || file.thumb || '').trim();
     }
 
     function getSelectedMediaValues(files) {
         var values = [];
         (files || []).forEach(function (file) {
-            var value = String((file && (file.url || file.path || file.thumb || file.name)) || '').trim();
+            var value = selectedFileImageValue(file);
             if (value) values.push(value);
         });
         return values;
@@ -120,12 +335,13 @@
         input.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    function bindMediaManagerMessages(targetId, onSelect, onCancel) {
+    function bindMediaManagerMessages(targetId, frame, onSelect, onCancel) {
         function isCurrentTarget(data) {
-            return !data.target || data.target === targetId;
+            return typeof data.target === 'string' && data.target === targetId;
         }
 
         function handleMessage(e) {
+            if (e.origin !== window.location.origin || !frame || e.source !== frame.contentWindow) return;
             var data = e.data;
             if (!data || !data.type || !isCurrentTarget(data)) return;
 
@@ -147,6 +363,77 @@
         };
     }
 
+    var activeMediaDialog = null;
+
+    function openMediaManagerDialog(options) {
+        var ui = getUi();
+        if (!ui || !options || !options.targetId || !options.url) return false;
+        if (activeMediaDialog && activeMediaDialog.isConnected) {
+            activeMediaDialog.focus({ preventScroll: true });
+            return false;
+        }
+
+        var dialog = doc.createElement('dialog');
+        dialog.className = 'w-dialog w-param-media-dialog';
+        dialog.dataset.wComponent = 'dialog';
+        dialog.dataset.state = 'closed';
+        dialog.dataset.size = 'lg';
+        dialog.dataset.wClosable = 'true';
+        dialog.dataset.wBackdrop = 'dismissible';
+
+        var header = doc.createElement('header');
+        header.className = 'w-dialog__header';
+        var title = doc.createElement('h2');
+        title.className = 'w-dialog__title';
+        title.id = 'w-param-media-title-' + Date.now();
+        title.textContent = options.title || '选择媒体';
+        dialog.setAttribute('aria-labelledby', title.id);
+        var closeBtn = doc.createElement('button');
+        closeBtn.type = 'button';
+        if (options.closeId) closeBtn.id = options.closeId;
+        closeBtn.className = 'w-button';
+        closeBtn.dataset.tone = 'quiet';
+        closeBtn.dataset.size = 'sm';
+        closeBtn.textContent = '关闭';
+        header.append(title, closeBtn);
+
+        var body = doc.createElement('div');
+        body.className = 'w-dialog__body w-param-media-dialog__body';
+        var iframe = doc.createElement('iframe');
+        iframe.className = 'w-param-media-dialog__frame';
+        iframe.src = options.url;
+        iframe.title = options.title || '媒体管理器';
+        body.appendChild(iframe);
+        dialog.append(header, body);
+
+        var closed = false;
+        var removeMessageHandler = bindMediaManagerMessages(options.targetId, iframe, function (value, files) {
+            if (typeof options.onSelect === 'function') options.onSelect(value, files || []);
+            ui.dialog.close(dialog, 'select');
+        }, function () {
+            ui.dialog.close(dialog, 'cancel');
+        });
+        function finish(event) {
+            if (closed) return;
+            closed = true;
+            removeMessageHandler();
+            if (activeMediaDialog === dialog) activeMediaDialog = null;
+            if (typeof options.onClose === 'function') options.onClose(event?.detail?.returnValue || 'close');
+            ui.unmount(dialog);
+            dialog.remove();
+        }
+        dialog.addEventListener('weline:ui:dialog:close', finish, { once: true });
+        closeBtn.addEventListener('click', function () { ui.dialog.close(dialog, 'button'); }, { once: true });
+        doc.body.appendChild(dialog);
+        activeMediaDialog = dialog;
+        ui.mount(dialog);
+        if (!ui.dialog.open(dialog)) {
+            finish();
+            return false;
+        }
+        return true;
+    }
+
     function initMediaImagePicker(container) {
         qa(container, '.w-param-media-image-select').forEach(function (btn) {
             if (btn.dataset.wParamMediaInited) return;
@@ -160,50 +447,32 @@
                 var baseUrl = (themeEl && themeEl.getAttribute('data-file-manager-connector-base')) || '';
                 if (!baseUrl || !targetId) return;
                 var closeId = 'w-param-media-close-' + (targetId.replace(/[^a-z0-9_-]/gi, '_')) + '-' + Date.now();
-                var params = ['path=' + encodeURIComponent(defaultDir), 'target=' + encodeURIComponent(targetId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp'];
+                var params = ['path=' + encodeURIComponent(defaultDir), 'target=' + encodeURIComponent(targetId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
                 if (recommendW) params.push('recommend_width=' + encodeURIComponent(recommendW));
                 if (recommendH) params.push('recommend_height=' + encodeURIComponent(recommendH));
                 var url = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
-                var overlay = doc.createElement('div');
-                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:flex;align-items:center;justify-content:center;';
-                var box = doc.createElement('div');
-                box.style.cssText = 'background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:90%;max-width:900px;height:80vh;display:flex;flex-direction:column;z-index:9999;';
-                var header = doc.createElement('div');
-                header.style.cssText = 'padding:8px 12px;border-bottom:1px solid #dee2e6;display:flex;align-items:center;justify-content:space-between;';
-                var closeBtn = doc.createElement('button');
-                closeBtn.type = 'button';
-                closeBtn.id = closeId;
-                closeBtn.textContent = '\u5173\u95ED';
-                closeBtn.style.cssText = 'padding:4px 12px;cursor:pointer;border:1px solid #dee2e6;border-radius:4px;background:#fff;';
-                header.appendChild(closeBtn);
-                box.appendChild(header);
-                var iframe = doc.createElement('iframe');
-                iframe.src = url;
-                iframe.style.cssText = 'flex:1;width:100%;border:none;';
-                box.appendChild(iframe);
-                overlay.appendChild(box);
-                var removeMessageHandler = null;
-                var closed = false;
-                function closeModal() {
-                    if (closed) return;
-                    closed = true;
-                    if (removeMessageHandler) removeMessageHandler();
-                    var input = doc.getElementById(targetId);
-                    if (input) {
-                        updateMediaImagePreview(input);
-                        dispatchMediaInputChange(input);
+                openMediaManagerDialog({
+                    targetId: targetId,
+                    closeId: closeId,
+                    url: url,
+                    title: '\u9009\u62e9\u5a92\u4f53',
+                    onSelect: function (value, files) {
+                        var input = doc.getElementById(targetId);
+                        var file = files && files[0] ? files[0] : null;
+                        var storedValue = selectedFileImageValue(file);
+                        if (input && storedValue) {
+                            input.value = storedValue;
+                            delete input.dataset.previewUrl;
+                        }
+                    },
+                    onClose: function () {
+                        var input = doc.getElementById(targetId);
+                        if (input) {
+                            updateMediaImagePreview(input);
+                            dispatchMediaInputChange(input);
+                        }
                     }
-                    overlay.remove();
-                }
-                removeMessageHandler = bindMediaManagerMessages(targetId, function (value) {
-                    var input = doc.getElementById(targetId);
-                    if (!input) return;
-                    input.value = value;
-                    closeModal();
-                }, closeModal);
-                closeBtn.addEventListener('click', closeModal);
-                overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
-                doc.body.appendChild(overlay);
+                });
             });
         });
         qa(container, '.w-param-media-image .w-param-image-clear').forEach(function (btn) {
@@ -213,13 +482,16 @@
                 var targetId = btn.getAttribute('data-target');
                 var input = doc.getElementById(targetId);
                 var preview = doc.getElementById(targetId + '_preview');
-                if (input) input.value = '';
+                if (input) {
+                    input.value = '';
+                    delete input.dataset.previewUrl;
+                }
                 if (preview) {
                     var img = q(preview, 'img');
                     if (img) img.remove();
                     preview.classList.remove('w-param-has-image');
                     var placeholder = q(preview, '.w-param-image-placeholder');
-                    if (placeholder) placeholder.style.display = '';
+                    if (placeholder) placeholder.hidden = false;
                 }
                 if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
             });
@@ -231,9 +503,18 @@
         qa(container, '.w-param-group-title').forEach(function (title) {
             if (title.dataset.wParamInited) return;
             title.dataset.wParamInited = '1';
+            var group = title.closest('.w-param-group');
+            var fields = group ? q(group, ':scope > .w-param-fields') : null;
+            function setExpanded(expanded) {
+                if (!group) return;
+                group.classList.toggle('w-param-collapsed', !expanded);
+                group.dataset.state = expanded ? 'open' : 'closed';
+                title.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                if (fields) fields.hidden = !expanded;
+            }
+            setExpanded(title.getAttribute('aria-expanded') !== 'false' && !(group && group.classList.contains('w-param-collapsed')));
             title.addEventListener('click', function () {
-                var group = title.closest('.w-param-group');
-                if (group) group.classList.toggle('w-param-collapsed');
+                setExpanded(title.getAttribute('aria-expanded') !== 'true');
             });
         });
     }
@@ -284,6 +565,10 @@
                         var field = input.getAttribute('data-field');
                         var v = input.value;
                         if (input.type === 'checkbox') v = input.checked;
+                        else {
+                            var imageNode = parseFileImageNode(v);
+                            if (imageNode) v = imageNode;
+                        }
                         obj[field] = v;
                     });
                     return obj;
@@ -304,7 +589,10 @@
                         var fieldEl = el.querySelector(sel);
                         if (fieldEl) {
                             if (fieldEl.tagName === 'INPUT' && fieldEl.type === 'checkbox') fieldEl.checked = !!val;
-                            else fieldEl.value = val;
+                            else {
+                                var imageNode = parseFileImageNode(val);
+                                fieldEl.value = imageNode ? JSON.stringify(imageNode) : val;
+                            }
                         }
                         html = el.innerHTML;
                     });
@@ -320,15 +608,25 @@
                 }
                 return html;
             }
+            function createItemElement(index, item) {
+                var host = doc.createElement('div');
+                host.innerHTML = buildItemHtml(index, item).trim();
+                var itemElement = host.firstElementChild;
+                return itemElement && itemElement.classList.contains('w-param-array-item')
+                    ? itemElement
+                    : null;
+            }
             function addItem() {
                 var items = getItems();
                 if (maxItems !== null && items.length >= maxItems) return;
                 items.push(itemSchema && Object.keys(itemSchema).length > 0 ? {} : '');
                 setItems(items);
-                var div = doc.createElement('div');
-                div.className = 'w-param-array-item';
-                div.setAttribute('data-index', String(items.length - 1));
-                div.innerHTML = buildItemHtml(items.length - 1, items[items.length - 1]);
+                var div = createItemElement(items.length - 1, items[items.length - 1]);
+                if (!div) {
+                    items.pop();
+                    setItems(items);
+                    return;
+                }
                 var removeBtn = q(div, '.w-param-array-remove');
                 if (removeBtn) removeBtn.addEventListener('click', function () { removeItem(div); });
                 itemsEl.appendChild(div);
@@ -337,35 +635,39 @@
                 });
                 initMediaImagePicker(div);
                 var empty = q(wrapper, '.w-param-array-empty');
-                if (empty) empty.style.display = 'none';
+                if (empty) empty.hidden = true;
             }
-            function addItemWithImage(imageFieldKey, imageUrl) {
-                if (!imageUrl || !imageFieldKey) return;
+            function addItemWithImage(imageFieldKey, imageValue, previewUrl) {
+                var imageNode = parseFileImageNode(imageValue);
+                if (!imageNode || !imageFieldKey) return;
                 var items = getItems();
                 if (maxItems !== null && items.length >= maxItems) return;
                 var newItem = {};
                 if (itemSchema && Object.keys(itemSchema).length > 0) {
                     Object.keys(itemSchema).forEach(function (fk) {
-                        newItem[fk] = fk === imageFieldKey ? imageUrl : (itemSchema[fk].default !== undefined ? itemSchema[fk].default : '');
+                        newItem[fk] = fk === imageFieldKey ? imageNode : (itemSchema[fk].default !== undefined ? itemSchema[fk].default : '');
                     });
                 } else {
-                    newItem = imageUrl;
+                    newItem = imageNode;
                 }
                 items.push(newItem);
                 setItems(items);
-                var div = doc.createElement('div');
-                div.className = 'w-param-array-item';
-                div.setAttribute('data-index', String(items.length - 1));
-                div.innerHTML = buildItemHtml(items.length - 1, newItem);
+                var div = createItemElement(items.length - 1, newItem);
+                if (!div) {
+                    items.pop();
+                    setItems(items);
+                    return;
+                }
                 var removeBtn = q(div, '.w-param-array-remove');
                 if (removeBtn) removeBtn.addEventListener('click', function () { removeItem(div); });
                 itemsEl.appendChild(div);
                 qa(div, 'input[type="hidden"][data-preview]').forEach(function (input) {
+                    if (previewUrl) input.dataset.previewUrl = previewUrl;
                     updateMediaImagePreview(input);
                 });
                 initMediaImagePicker(div);
                 var empty = q(wrapper, '.w-param-array-empty');
-                if (empty) empty.style.display = 'none';
+                if (empty) empty.hidden = true;
                 hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
             }
             function removeItem(itemEl) {
@@ -378,13 +680,51 @@
                 setItems(items);
                 if (items.length === 0) {
                     var empty = q(wrapper, '.w-param-array-empty');
-                    if (empty) empty.style.display = '';
+                    if (empty) empty.hidden = false;
+                }
+            }
+            function reindexArrayItemIdentity(itemEl, newIndex) {
+                var nestedIdentity = q(itemEl, '[data-array-index]');
+                var indexedInput = q(itemEl, '[data-index]');
+                var oldIndex = nestedIdentity
+                    ? nestedIdentity.getAttribute('data-array-index')
+                    : (indexedInput ? indexedInput.getAttribute('data-index') : itemEl.getAttribute('data-index'));
+                var arrayKey = nestedIdentity ? (nestedIdentity.getAttribute('data-array-key') || '') : '';
+                var oldFieldPrefix = arrayKey && oldIndex !== null ? arrayKey + '.' + oldIndex + '.' : '';
+                var newFieldPrefix = arrayKey ? arrayKey + '.' + newIndex + '.' : '';
+                var oldIdToken = oldIndex !== null ? '_' + oldIndex + '_' : '';
+                var newIdToken = '_' + newIndex + '_';
+
+                itemEl.setAttribute('data-index', String(newIndex));
+                qa(itemEl, '[data-index]').forEach(function (node) {
+                    node.setAttribute('data-index', String(newIndex));
+                });
+                qa(itemEl, '[data-array-index]').forEach(function (node) {
+                    node.setAttribute('data-array-index', String(newIndex));
+                });
+                if (oldFieldPrefix) {
+                    qa(itemEl, '[data-field]').forEach(function (node) {
+                        var field = node.getAttribute('data-field') || '';
+                        if (field.indexOf(oldFieldPrefix) === 0) {
+                            node.setAttribute('data-field', newFieldPrefix + field.slice(oldFieldPrefix.length));
+                        }
+                    });
+                }
+                if (oldIdToken && oldIdToken !== newIdToken) {
+                    qa(itemEl, '[id], [for], [data-target], [data-preview], [aria-controls]').forEach(function (node) {
+                        ['id', 'for', 'data-target', 'data-preview', 'aria-controls'].forEach(function (attribute) {
+                            var value = node.getAttribute(attribute);
+                            if (value && value.indexOf(oldIdToken) !== -1) {
+                                node.setAttribute(attribute, value.split(oldIdToken).join(newIdToken));
+                            }
+                        });
+                    });
                 }
             }
             function reindexItems(wrap) {
                 var itemEls = qa(wrap, '.w-param-array-item');
                 for (var j = 0; j < itemEls.length; j++) {
-                    itemEls[j].setAttribute('data-index', String(j));
+                    reindexArrayItemIdentity(itemEls[j], j);
                 }
             }
             function syncFromDom() {
@@ -395,6 +735,11 @@
                     if (it !== null) items.push(it);
                 }
                 setItems(items);
+            }
+            function notifyArrayValueChanged() {
+                if (!hiddenInput) return;
+                hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
             }
 
             if (addBtn) addBtn.addEventListener('click', addItem);
@@ -415,54 +760,32 @@
                     tempInput.type = 'hidden';
                     tempInput.id = tempId;
                     tempInput.setAttribute('data-preview', tempId + '_preview');
-                    tempInput.style.cssText = 'position:absolute;left:-9999px;';
+                    tempInput.className = 'w-visually-hidden';
                     doc.body.appendChild(tempInput);
                     var closeId = 'w-param-media-close-' + tempId.replace(/[^a-z0-9_-]/gi, '_');
-                    var params = ['path=' + encodeURIComponent(defaultDir), 'target=' + encodeURIComponent(tempId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'multi=1'];
+                    var params = ['path=' + encodeURIComponent(defaultDir), 'target=' + encodeURIComponent(tempId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'multi=1', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
                     if (recommendW) params.push('recommend_width=' + encodeURIComponent(recommendW));
                     if (recommendH) params.push('recommend_height=' + encodeURIComponent(recommendH));
                     var url = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
-                    var overlay = doc.createElement('div');
-                    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:flex;align-items:center;justify-content:center;';
-                    var box = doc.createElement('div');
-                    box.style.cssText = 'background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:90%;max-width:900px;height:80vh;display:flex;flex-direction:column;z-index:9999;';
-                    var header = doc.createElement('div');
-                    header.style.cssText = 'padding:8px 12px;border-bottom:1px solid #dee2e6;display:flex;align-items:center;justify-content:space-between;';
-                    var closeBtn = doc.createElement('button');
-                    closeBtn.type = 'button';
-                    closeBtn.id = closeId;
-                    closeBtn.textContent = '\u5173\u95ED';
-                    closeBtn.style.cssText = 'padding:4px 12px;cursor:pointer;border:1px solid #dee2e6;border-radius:4px;background:#fff;';
-                    header.appendChild(closeBtn);
-                    box.appendChild(header);
-                    var iframe = doc.createElement('iframe');
-                    iframe.src = url;
-                    iframe.style.cssText = 'flex:1;width:100%;border:none;';
-                    box.appendChild(iframe);
-                    overlay.appendChild(box);
-                    var removeMessageHandler = null;
-                    var closed = false;
-                    function closeModal() {
-                        if (closed) return;
-                        closed = true;
-                        if (removeMessageHandler) removeMessageHandler();
-                        var selectedUrl = (tempInput.value || '').trim();
-                        if (selectedUrl) addItemWithImage(imageFieldKey, selectedUrl);
-                        overlay.remove();
-                        if (tempInput.parentNode) tempInput.parentNode.removeChild(tempInput);
-                    }
-                    removeMessageHandler = bindMediaManagerMessages(tempId, function (value, files) {
-                        var selectedUrls = getSelectedMediaValues(files);
-                        if (!selectedUrls.length && value) selectedUrls = [value];
-                        selectedUrls.forEach(function (selectedUrl) {
-                            addItemWithImage(imageFieldKey, selectedUrl);
-                        });
-                        tempInput.value = '';
-                        closeModal();
-                    }, closeModal);
-                    closeBtn.addEventListener('click', closeModal);
-                    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
-                    doc.body.appendChild(overlay);
+                    var opened = openMediaManagerDialog({
+                        targetId: tempId,
+                        closeId: closeId,
+                        url: url,
+                        title: '\u6279\u91cf\u9009\u62e9\u5a92\u4f53',
+                        onSelect: function (value, files) {
+                            var selectedValues = getSelectedMediaValues(files);
+                            selectedValues.forEach(function (selectedValue) {
+                                addItemWithImage(imageFieldKey, selectedValue, '');
+                            });
+                            tempInput.value = '';
+                        },
+                        onClose: function () {
+                            var selectedValue = (tempInput.value || '').trim();
+                            if (selectedValue) addItemWithImage(imageFieldKey, selectedValue, tempInput.dataset.previewUrl || '');
+                            if (tempInput.parentNode) tempInput.parentNode.removeChild(tempInput);
+                        }
+                    });
+                    if (!opened && tempInput.parentNode) tempInput.parentNode.removeChild(tempInput);
                 });
             }
             qa(wrapper, '.w-param-array-remove').forEach(function (btn) {
@@ -474,6 +797,15 @@
             qa(wrapper, 'input[type="hidden"][data-preview]').forEach(function (input) {
                 updateMediaImagePreview(input);
             });
+            if (itemsEl && !itemsEl.dataset.wParamReorderInited) {
+                itemsEl.dataset.wParamReorderInited = '1';
+                itemsEl.addEventListener('weline:ui:reorder-list:change', function (event) {
+                    if (event.target !== itemsEl) return;
+                    reindexItems(wrapper);
+                    syncFromDom();
+                    notifyArrayValueChanged();
+                });
+            }
             wrapper.addEventListener('change', syncFromDom);
             wrapper.addEventListener('input', syncFromDom);
             updateAddButton();
@@ -498,57 +830,6 @@
             slider.addEventListener('input', syncToInput);
             if (input) input.addEventListener('input', syncToSlider);
             syncToInput();
-        });
-    }
-
-    function initIconPickers(container) {
-        qa(container, '.w-param-icon').forEach(function (wrapper) {
-            if (wrapper.dataset.wParamInited) return;
-            wrapper.dataset.wParamInited = '1';
-            var trigger = q(wrapper, '.w-param-icon-trigger');
-            var panel = q(wrapper, '.w-param-icon-panel');
-            var hiddenInput = q(wrapper, 'input[type="hidden"]');
-            var previewDisplay = q(wrapper, '.w-param-icon-preview-display');
-            var searchInput = panel ? q(panel, '.w-param-icon-search input, input') : null;
-            var customInput = panel ? q(panel, '.w-param-icon-custom input') : null;
-            var applyBtn = panel ? q(panel, '.w-param-icon-apply') : null;
-            var clearBtn = q(wrapper, '.w-param-icon-clear');
-
-            function setValue(val) {
-                val = normalizeIconClassName(val);
-                if (hiddenInput) hiddenInput.value = val;
-                renderIconPreview(previewDisplay, val);
-                if (panel) panel.style.display = 'none';
-            }
-            if (trigger && panel) {
-                trigger.addEventListener('click', function () {
-                    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-                });
-                doc.addEventListener('click', function (e) {
-                    if (!wrapper.contains(e.target)) panel.style.display = 'none';
-                });
-            }
-            qa(wrapper, '.w-param-icon-item').forEach(function (item) {
-                item.addEventListener('click', function () {
-                    var icon = item.getAttribute('data-icon');
-                    qa(wrapper, '.w-param-icon-item').forEach(function (i) { i.classList.remove('w-param-selected'); });
-                    item.classList.add('w-param-selected');
-                    setValue(icon);
-                });
-            });
-            if (searchInput && panel) {
-                searchInput.addEventListener('input', function () {
-                    var term = searchInput.value.toLowerCase();
-                    qa(panel, '.w-param-icon-item').forEach(function (el) {
-                        var icon = (el.getAttribute('data-icon') || '').toLowerCase();
-                        el.style.display = term === '' || icon.indexOf(term) !== -1 ? '' : 'none';
-                    });
-                });
-            }
-            if (applyBtn && customInput) {
-                applyBtn.addEventListener('click', function () { setValue(customInput.value); });
-            }
-            if (clearBtn) clearBtn.addEventListener('click', function () { setValue(''); });
         });
     }
 
@@ -597,19 +878,30 @@
         qa(container, '.w-param-color').forEach(function (wrapper) {
             var picker = q(wrapper, '.w-param-form-control-color, input[type="color"]');
             var textInput = q(wrapper, 'input[type="text"]');
-            if (picker && textInput) {
-                picker.addEventListener('input', function () { textInput.value = picker.value; });
-                textInput.addEventListener('input', function () {
-                    if (/^#[0-9a-fA-F]{6}$/.test(textInput.value)) picker.value = textInput.value;
+            var transparentButtons = qa(wrapper, '.w-param-btn-transparent');
+            function syncTransparentState() {
+                var active = textInput && textInput.value.trim().toLowerCase() === 'transparent';
+                transparentButtons.forEach(function (btn) {
+                    btn.dataset.state = active ? 'active' : 'idle';
                 });
             }
-            qa(wrapper, '.w-param-btn-transparent').forEach(function (btn) {
+            if (picker && textInput) {
+                picker.addEventListener('input', function () {
+                    textInput.value = picker.value;
+                    syncTransparentState();
+                });
+                textInput.addEventListener('input', function () {
+                    if (/^#[0-9a-fA-F]{6}$/.test(textInput.value)) picker.value = textInput.value;
+                    syncTransparentState();
+                });
+            }
+            transparentButtons.forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     var targetId = btn.getAttribute('data-target');
                     var input = doc.getElementById(targetId);
                     if (input) {
                         input.value = 'transparent';
-                        btn.classList.add('active');
+                        syncTransparentState();
                     }
                 });
             });
@@ -621,8 +913,10 @@
                     var pickerEl = doc.getElementById(targetId + '_picker');
                     if (input) input.value = color;
                     if (pickerEl && /^#[0-9a-fA-F]{6}$/.test(color)) pickerEl.value = color;
+                    syncTransparentState();
                 });
             });
+            syncTransparentState();
         });
     }
 
@@ -644,11 +938,11 @@
                     }
                     inner.src = val;
                     preview.classList.add('w-param-has-image');
-                    if (placeholder) placeholder.style.display = 'none';
+                    if (placeholder) placeholder.hidden = true;
                 } else {
                     preview.classList.remove('w-param-has-image');
                     if (inner) inner.remove();
-                    if (placeholder) placeholder.style.display = '';
+                    if (placeholder) placeholder.hidden = false;
                 }
             });
             }
@@ -663,7 +957,7 @@
                         if (img) img.remove();
                         prev.classList.remove('w-param-has-image');
                         var placeholder = q(prev, '.w-param-image-placeholder');
-                        if (placeholder) placeholder.style.display = '';
+                        if (placeholder) placeholder.hidden = false;
                     }
                 });
             });
@@ -685,10 +979,14 @@
     }
     ready(run);
     if (typeof window !== 'undefined') {
-        window.WidgetParamTypesInit = initForms;
-        window.WidgetParamTypesInitMedia = function (root) {
-            initMediaImagePicker(root || doc);
-        };
+        window.Weline = window.Weline || {};
+        window.Weline.Widget = window.Weline.Widget || {};
+        window.Weline.Widget.Params = Object.assign(window.Weline.Widget.Params || {}, {
+            mount: initForms,
+            mountMedia: function (root) {
+                initMediaImagePicker(root || doc);
+            },
+        });
     }
 })();
 
@@ -715,6 +1013,17 @@
     function ready(fn) {
         if (doc.readyState !== 'loading') fn();
         else doc.addEventListener('DOMContentLoaded', fn);
+    }
+
+    function getUi() {
+        return window.Weline && window.Weline.UI ? window.Weline.UI : null;
+    }
+
+    function aiIconHtml(name, size) {
+        var ui = getUi();
+        if (!ui || !ui.icon || typeof ui.icon.create !== 'function') return '';
+        var icon = ui.icon.create(name, { size: size || 'sm' });
+        return icon ? icon.outerHTML : '';
     }
 
     function escapeHtml(value) {
@@ -757,38 +1066,38 @@
     }
 
     function ensureAiContextProviderApi() {
-        if (!Array.isArray(window.WelineWidgetAiContextProviders)) {
-            window.WelineWidgetAiContextProviders = [];
+        window.Weline = window.Weline || {};
+        window.Weline.Widget = window.Weline.Widget || {};
+        var api = window.Weline.Widget.AI = window.Weline.Widget.AI || {};
+        if (!Array.isArray(api.contextProviders)) {
+            api.contextProviders = [];
         }
-        if (typeof window.WelineRegisterWidgetAiContextProvider !== 'function') {
-            window.WelineRegisterWidgetAiContextProvider = function (provider) {
+        if (typeof api.registerContextProvider !== 'function') {
+            api.registerContextProvider = function (provider) {
                 if (!provider || typeof provider !== 'object') return null;
                 var id = normalizeCode(provider.id || provider.code || provider.name || '');
                 if (!id) return null;
-                var existingIndex = window.WelineWidgetAiContextProviders.findIndex(function (item) {
+                var existingIndex = api.contextProviders.findIndex(function (item) {
                     return normalizeCode(item.id || item.code || item.name || '') === id;
                 });
                 var normalized = Object.assign({}, provider, { id: id });
                 if (existingIndex >= 0) {
-                    window.WelineWidgetAiContextProviders.splice(existingIndex, 1, normalized);
+                    api.contextProviders.splice(existingIndex, 1, normalized);
                 } else {
-                    window.WelineWidgetAiContextProviders.push(normalized);
+                    api.contextProviders.push(normalized);
                 }
                 window.dispatchEvent(new CustomEvent('weline-widget-ai-context-provider-change', { detail: { provider: normalized } }));
                 return normalized;
             };
         }
-        window.Weline = window.Weline || {};
-        window.Weline.WidgetAi = window.Weline.WidgetAi || {};
-        window.Weline.WidgetAi.registerContextProvider = window.WelineRegisterWidgetAiContextProvider;
-        window.Weline.WidgetAi.getContextProviders = function () {
-            return window.WelineWidgetAiContextProviders.slice();
+        api.getContextProviders = function () {
+            return api.contextProviders.slice();
         };
+        return api;
     }
 
     function getContextProviders() {
-        ensureAiContextProviderApi();
-        return window.WelineWidgetAiContextProviders
+        return ensureAiContextProviderApi().getContextProviders()
             .map(function (provider) {
                 var id = normalizeCode(provider.id || provider.code || provider.name || '');
                 return id ? Object.assign({}, provider, { id: id }) : null;
@@ -836,7 +1145,7 @@
     }
 
     function getThemeAdapter() {
-        return window.ThemeEditor || null;
+        return window.Weline && window.Weline.Theme ? window.Weline.Theme.Editor || null : null;
     }
 
     function getPlacementContext() {
@@ -850,51 +1159,6 @@
     function findSlot(context, slotId) {
         if (!context || !slotId) return null;
         return (context.slots || []).find(function (slot) { return String(slot.id || slot.slot_id || '') === String(slotId); }) || null;
-    }
-
-    function installStyles() {
-        if (doc.getElementById('w-ai-widget-style')) return;
-        var style = doc.createElement('style');
-        style.id = 'w-ai-widget-style';
-        style.textContent = [
-            '.w-ai-widget-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #d8d6ff;background:#f5f3ff;color:#4f46e5;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .18s ease;}',
-            '.w-ai-widget-btn:hover{background:#ece9ff;border-color:#b8b3ff;}',
-            '.w-ai-widget-overlay{position:fixed;inset:0;background:rgba(15,23,42,.42);z-index:100200;display:flex;align-items:center;justify-content:center;padding:24px;}',
-            '.w-ai-widget-panel{width:min(980px,96vw);height:min(760px,92vh);background:#fff;border-radius:8px;box-shadow:0 18px 60px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden;}',
-            '.w-ai-widget-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #edf0f5;}',
-            '.w-ai-widget-title{font-size:16px;font-weight:700;color:#111827;display:flex;align-items:center;gap:8px;}',
-            '.w-ai-widget-close{border:0;background:#f3f4f6;color:#64748b;border-radius:6px;width:32px;height:32px;cursor:pointer;}',
-            '.w-ai-widget-body{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:16px;padding:16px;min-height:0;flex:1;background:#f8fafc;}',
-            '.w-ai-widget-section{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:0;}',
-            '.w-ai-widget-section-title{padding:11px 12px;border-bottom:1px solid #edf0f5;font-size:13px;font-weight:700;color:#374151;}',
-            '.w-ai-widget-target{padding:12px;font-size:13px;color:#111827;line-height:1.5;}',
-            '.w-ai-widget-tree{padding:8px;overflow:auto;max-height:520px;}',
-            '.w-ai-tree-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:left;border-radius:6px;padding:7px 8px;font-size:12px;color:#374151;cursor:pointer;}',
-            '.w-ai-tree-row:hover{background:#f3f4f6;}',
-            '.w-ai-tree-row.active{background:#eef2ff;color:#4338ca;font-weight:700;}',
-            '.w-ai-tree-indent{display:inline-block;width:calc(var(--level,0) * 14px);flex:0 0 calc(var(--level,0) * 14px);}',
-            '.w-ai-tree-type{font-size:10px;color:#64748b;border:1px solid #e5e7eb;border-radius:999px;padding:1px 6px;background:#fff;}',
-            '.w-ai-widget-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;}',
-            '.w-ai-widget-field{display:flex;flex-direction:column;gap:6px;}',
-            '.w-ai-widget-field.full{grid-column:1/-1;}',
-            '.w-ai-widget-field label{font-size:12px;font-weight:700;color:#374151;}',
-            '.w-ai-widget-field select,.w-ai-widget-field textarea,.w-ai-widget-field input{border:1px solid #dbe2ea;border-radius:6px;padding:9px 10px;font-size:13px;outline:none;background:#fff;}',
-            '.w-ai-widget-field textarea{min-height:150px;resize:vertical;line-height:1.5;}',
-            '.w-ai-widget-field select:focus,.w-ai-widget-field textarea:focus,.w-ai-widget-field input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12);}',
-            '.w-ai-context-options{display:grid;grid-template-columns:1fr;gap:8px;border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#f8fafc;}',
-            '.w-ai-context-option{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#374151;}',
-            '.w-ai-context-option input{margin-top:2px;flex:0 0 auto;}',
-            '.w-ai-context-option strong{display:block;font-size:12px;color:#111827;}',
-            '.w-ai-context-option span{display:block;color:#64748b;line-height:1.35;}',
-            '.w-ai-widget-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border-top:1px solid #edf0f5;background:#fff;}',
-            '.w-ai-widget-generate{border:0;background:#6d5df6;color:#fff;border-radius:6px;padding:10px 16px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(109,93,246,.22);}',
-            '.w-ai-widget-generate[disabled]{opacity:.6;cursor:not-allowed;box-shadow:none;}',
-            '.w-ai-widget-muted{font-size:12px;color:#64748b;}',
-            '.w-ai-badge{display:inline-flex;align-items:center;border-radius:999px;background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;font-size:10px;font-weight:800;padding:1px 6px;margin-left:6px;vertical-align:middle;}',
-            '.w-ai-widget-placeholder{height:90px;display:flex;align-items:center;justify-content:center;background:#eef2ff;color:#4f46e5;font-weight:800;border-radius:6px;}',
-            '@media(max-width:760px){.w-ai-widget-body{grid-template-columns:1fr}.w-ai-widget-form{grid-template-columns:1fr}.w-ai-widget-panel{height:94vh}}'
-        ].join('\n');
-        doc.head.appendChild(style);
     }
 
     function markAiWidgets(root) {
@@ -918,8 +1182,10 @@
         var button = doc.createElement('button');
         button.type = 'button';
         button.id = 'wAiWidgetButton';
-        button.className = 'w-ai-widget-btn';
-        button.innerHTML = '<i class="ri-sparkling-line"></i><span>AI 生成</span>';
+        button.className = 'w-button w-ai-widget-btn';
+        button.dataset.variant = 'soft';
+        button.dataset.tone = 'primary';
+        button.innerHTML = aiIconHtml('sparkles') + '<span>AI 生成</span>';
         button.addEventListener('click', openPanel);
         header.appendChild(button);
     }
@@ -992,6 +1258,7 @@
 
     function renderTreeNode(node, level, parentAnchor) {
         if (!node || !state.nodeMap) return '';
+        var safeLevel = Math.max(0, Math.min(20, parseInt(level, 10) || 0));
         var id = 'n' + state.nodeMap.size;
         var target = null;
         var nextParentAnchor = parentAnchor;
@@ -1020,7 +1287,7 @@
             (target.slot_id && target.slot_id === state.target.slot_id && target.parent_anchor_layout_id === state.target.parent_anchor_layout_id)
             || (target.anchor_layout_id && target.anchor_layout_id === state.target.anchor_layout_id)
         );
-        var html = '<button type="button" class="w-ai-tree-row ' + (active ? 'active' : '') + '" data-node-id="' + id + '" style="--level:' + level + '">';
+        var html = '<button type="button" class="w-ai-tree-row ' + (active ? 'active' : '') + '" data-node-id="' + id + '" style="--w-ai-tree-level:' + safeLevel + '">';
         html += '<span class="w-ai-tree-indent"></span><span class="w-ai-tree-type">' + escapeHtml(node.type || '') + '</span><span>' + escapeHtml(node.label || node.id || '') + '</span></button>';
         (node.children || []).forEach(function (child) {
             html += renderTreeNode(child, level + 1, nextParentAnchor);
@@ -1121,38 +1388,67 @@
     }
 
     function openPanel() {
-        installStyles();
+        var ui = getUi();
+        if (!ui) return;
+        var existing = doc.getElementById('wAiWidgetPanel');
+        if (existing) {
+            existing.focus({ preventScroll: true });
+            return;
+        }
         refreshContext();
         state.open = true;
         state.manualTarget = false;
-        var overlay = doc.createElement('div');
-        overlay.className = 'w-ai-widget-overlay';
-        overlay.id = 'wAiWidgetOverlay';
-        overlay.innerHTML = [
-            '<div class="w-ai-widget-panel" id="wAiWidgetPanel">',
-            '<div class="w-ai-widget-header"><div class="w-ai-widget-title"><i class="ri-sparkling-line"></i><span>AI 生成 Widget</span></div><button type="button" class="w-ai-widget-close" data-ai-close>×</button></div>',
-            '<div class="w-ai-widget-body">',
+        var panel = doc.createElement('dialog');
+        panel.className = 'w-dialog w-ai-widget-panel';
+        panel.id = 'wAiWidgetPanel';
+        panel.dataset.wComponent = 'dialog';
+        panel.dataset.state = 'closed';
+        panel.dataset.size = 'lg';
+        panel.dataset.wClosable = 'true';
+        panel.dataset.wBackdrop = 'dismissible';
+        panel.setAttribute('aria-labelledby', 'wAiWidgetTitle');
+        panel.innerHTML = [
+            '<header class="w-dialog__header w-ai-widget-header"><h2 class="w-dialog__title w-ai-widget-title" id="wAiWidgetTitle">' + aiIconHtml('sparkles') + '<span>AI 生成 Widget</span></h2><button type="button" class="w-button w-ai-widget-close" data-tone="quiet" data-size="sm" data-ai-close aria-label="关闭">' + aiIconHtml('close') + '</button></header>',
+            '<div class="w-dialog__body w-ai-widget-body">',
             '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">位置选择器</div><div class="w-ai-widget-target"><strong data-ai-target-summary></strong><div class="w-ai-widget-muted" data-ai-target-protocol></div></div><div class="w-ai-widget-tree" data-ai-tree></div></div>',
             '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">生成配置</div><div class="w-ai-widget-form">',
             '<div class="w-ai-widget-field"><label>插入方式</label><select data-ai-insert-mode></select></div>',
             '<div class="w-ai-widget-field"><label>部件类型</label><select data-ai-widget-type></select></div>',
             '<div class="w-ai-widget-field full"><label>参考上下文</label><div class="w-ai-context-options" data-ai-context-options></div></div>',
             '<div class="w-ai-widget-field full"><label>生成要求</label><textarea data-ai-prompt placeholder="例如：在页脚生成一个品牌社交链接区，包含微信、抖音、YouTube 和邮箱订阅入口"></textarea></div>',
-            '</div><div class="w-ai-widget-actions"><span class="w-ai-widget-muted" data-ai-status>生成后会保存为普通 Widget 并自动放入目标位置</span><button type="button" class="w-ai-widget-generate" data-ai-generate>生成并放入</button></div></div>',
-            '</div></div>'
+            '</div><div class="w-ai-widget-actions"><span class="w-ai-widget-muted" data-ai-status>生成后会保存为普通 Widget 并自动放入目标位置</span><button type="button" class="w-button w-ai-widget-generate" data-tone="primary" data-ai-generate>生成并放入</button></div></div>',
+            '</div>'
         ].join('');
-        doc.body.appendChild(overlay);
-        overlay.querySelector('[data-ai-close]').addEventListener('click', closePanel);
-        overlay.addEventListener('click', function (e) { if (e.target === overlay) closePanel(); });
-        overlay.querySelector('[data-ai-generate]').addEventListener('click', generateWidget);
+        doc.body.appendChild(panel);
+        ui.mount(panel);
+        panel.querySelector('[data-ai-close]').addEventListener('click', closePanel, { once: true });
+        panel.querySelector('[data-ai-generate]').addEventListener('click', generateWidget);
+        panel.addEventListener('weline:ui:dialog:close', function () {
+            state.open = false;
+            ui.unmount(panel);
+            panel.remove();
+        }, { once: true });
         bindVisualSelectionRefresh();
         renderPanel();
+        if (!ui.dialog.open(panel)) {
+            state.open = false;
+            ui.unmount(panel);
+            panel.remove();
+        }
     }
 
     function closePanel() {
-        state.open = false;
-        var overlay = doc.getElementById('wAiWidgetOverlay');
-        if (overlay) overlay.remove();
+        var panel = doc.getElementById('wAiWidgetPanel');
+        if (!panel) {
+            state.open = false;
+            return;
+        }
+        var ui = getUi();
+        if (!ui || !ui.dialog.close(panel, 'close')) {
+            state.open = false;
+            if (ui) ui.unmount(panel);
+            panel.remove();
+        }
     }
 
     async function buildGenerationContext() {
@@ -1248,7 +1544,15 @@
             group = doc.createElement('div');
             group.className = 'widget-group';
             group.setAttribute('data-type', type);
-            group.innerHTML = '<div class="widget-group-header" data-toggle="collapse"><i class="ri-arrow-down-s-line toggle-icon"></i><span>' + escapeHtml(type) + '</span><span class="widget-count">0</span></div><div class="widget-group-content"></div>';
+            group.dataset.state = 'open';
+            group.innerHTML = '<button type="button" class="widget-group-header" aria-expanded="true"><span class="w-theme-editor-toggle-icon">' + aiIconHtml('chevron-down') + '</span><span>' + escapeHtml(type) + '</span><span class="widget-count">0</span></button><div class="widget-group-content"></div>';
+            group.querySelector('.widget-group-header').addEventListener('click', function () {
+                var opening = group.dataset.state === 'closed';
+                group.dataset.state = opening ? 'open' : 'closed';
+                group.querySelector('.widget-group-header').setAttribute('aria-expanded', opening ? 'true' : 'false');
+                var groupContent = group.querySelector('.widget-group-content');
+                if (groupContent) groupContent.hidden = !opening;
+            });
             list.insertBefore(group, list.firstChild);
         }
         var content = group.querySelector('.widget-group-content') || group;
@@ -1269,7 +1573,7 @@
         item.setAttribute('data-widget-slots', normalizeCodeList(slotCodes(widget.slots)).join(','));
         item.setAttribute('data-widget-page-layouts', JSON.stringify(widget.page_layouts || ['*']));
         item.setAttribute('data-widget-is-container', widget.is_container ? '1' : '0');
-        item.innerHTML = '<div class="widget-preview"><div class="widget-preview-canvas"><div class="w-ai-widget-placeholder">AI 部件</div></div><div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2"><div class="widget-preview-title">' + escapeHtml(widget.name || widget.code || '') + '<span class="w-ai-badge">AI</span></div><button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(widget.module || 'Weline_Widget') + '" data-widget-code="' + escapeHtml(widget.code || '') + '" data-widget-name="' + escapeHtml(widget.name || widget.code || '') + '"><i class="ri-eye-line"></i></button></div><div class="widget-preview-desc">' + escapeHtml(widget.description || '') + '</div></div></div>';
+        item.innerHTML = '<div class="widget-preview"><div class="widget-preview-canvas"><div class="w-ai-widget-placeholder">AI 部件</div></div><div class="widget-preview-overlay"><div class="widget-preview-title-row w-ai-widget-preview-title-row"><div class="widget-preview-title">' + escapeHtml(widget.name || widget.code || '') + '<span class="w-ai-badge">AI</span></div><button type="button" class="w-button w-theme-editor-preview-component w-ai-widget-preview-button" data-tone="neutral" data-variant="outline" data-size="sm" title="预览" aria-label="预览 ' + escapeHtml(widget.name || widget.code || '') + '" data-widget-module="' + escapeHtml(widget.module || 'Weline_Widget') + '" data-widget-code="' + escapeHtml(widget.code || '') + '" data-widget-name="' + escapeHtml(widget.name || widget.code || '') + '">' + aiIconHtml('eye') + '</button></div><div class="widget-preview-desc">' + escapeHtml(widget.description || '') + '</div></div></div>';
         content.insertBefore(item, content.firstChild);
         var count = group.querySelector('.widget-count');
         if (count) count.textContent = String(content.querySelectorAll('.widget-item').length);
@@ -1282,7 +1586,6 @@
     function init() {
         ensureAiContextProviderApi();
         if (!doc.getElementById('widgetPanel')) return;
-        installStyles();
         installButton();
         markAiWidgets();
         if (typeof MutationObserver !== 'undefined') {

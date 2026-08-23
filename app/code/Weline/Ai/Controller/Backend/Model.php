@@ -222,7 +222,12 @@ class Model extends BackendController
 
         $supplier = trim((string)($row[AiModel::schema_fields_SUPPLIER] ?? ($row['vendor'] ?? '')));
         $modelSource = (string)($row[AiModel::schema_fields_MODEL_SOURCE] ?? '');
-        if ($modelSource === AiModel::SOURCE_LOCAL || ($supplier !== '' && !isset($supportedProviders[$supplier]))) {
+        $providerMeta = $supportedProviders[$supplier] ?? null;
+        if (
+            $modelSource === AiModel::SOURCE_LOCAL
+            || ($supplier !== '' && !isset($supportedProviders[$supplier]))
+            || (is_array($providerMeta) && (($providerMeta['source'] ?? '') === 'custom'))
+        ) {
             return true;
         }
 
@@ -501,7 +506,11 @@ class Model extends BackendController
                 
                 $supplier = (string)($data['supplier'] ?? '');
                 $modelSource = (string)($data[AiModel::schema_fields_MODEL_SOURCE] ?? '');
-                $isCustomSupplier = ($supplier !== '' && !isset($supportedProviders[$supplier]));
+                $providerMeta = $supportedProviders[$supplier] ?? null;
+                $isCustomSupplier = (
+                    (is_array($providerMeta) && (($providerMeta['source'] ?? '') === 'custom'))
+                    || ($supplier !== '' && !isset($supportedProviders[$supplier]))
+                );
                 $isCustomModel = $isCustomSupplier || $modelSource === AiModel::SOURCE_LOCAL;
                 $priceCurrency = (string)($supportedProviders[$supplier]['price_currency'] ?? 'USD');
                 $providerAccountId = (int)($providerData['account_id'] ?? 0);
@@ -1834,8 +1843,13 @@ class Model extends BackendController
                 return $this->redirect('*/backend/model/edit', ['id' => $id]);
             }
 
-            // 保存前校验：供应商必须支持映射后的供应商模型 code
+            // 保存前：自定义/本地供应商模型标记为 local，并跳过内置目录模型白名单
             $supplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            if ($supplierCode !== '' && VendorConfigManager::isCustomProvider($supplierCode)) {
+                $model->setData(AiModel::schema_fields_MODEL_SOURCE, AiModel::SOURCE_LOCAL);
+            }
+
+            // 保存前校验：供应商必须支持映射后的供应商模型 code
             if ($supplierCode !== '' && $providerModelCode !== '') {
                 /** @var AccountService $accService */
                 $accService = ObjectManager::getInstance(AccountService::class);

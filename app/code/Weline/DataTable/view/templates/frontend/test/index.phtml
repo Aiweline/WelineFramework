@@ -1,95 +1,58 @@
-<style>
-    .dt-demo-shell{max-width:1280px;margin:0 auto;padding:32px 20px 64px}
-    .dt-demo-hero{display:grid;gap:16px;padding:24px;border:1px solid #d9e2f1;border-radius:20px;background:linear-gradient(135deg,#f7fafc,#eef6ff)}
-    .dt-demo-actions,.dt-demo-grid{display:grid;gap:16px}
-    .dt-demo-actions{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
-    .dt-demo-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:24px}
-    .dt-demo-card{display:block;padding:20px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;color:#1f2937;text-decoration:none}
-    .dt-demo-card h3{margin:0 0 8px;font-size:18px}
-    .dt-demo-card p{margin:0;color:#526071}
-    .dt-demo-buttons{display:flex;flex-wrap:wrap;gap:12px}
-    .dt-demo-status{min-height:24px;color:#0f5132}
-</style>
+<?php
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$links = is_array($demo_links ?? null) ? $demo_links : [];
+$demos = [
+    ['basic', 'Basic', 'CRUD, filter, sort, pagination and export.', 'table', 'success'],
+    ['join', 'Join', 'Alias fields and cross-table filtering.', 'link', 'info'],
+    ['form', 'Form', 'Standalone create flow with table refresh.', 'edit', 'success'],
+    ['upload', 'Upload', 'Image and file controls with previews.', 'upload', 'warning'],
+    ['transaction', 'Transaction', 'Multi-model save in one transaction.', 'shield', 'warning'],
+    ['dependency', 'Dependency', 'Dependency-ordered multi-model save.', 'tree', 'warning'],
+    ['cascade', 'Cascade', 'Delete related records and reload both tables.', 'trash', 'warning'],
+    ['performance', 'Performance', 'Generated fields and responsive large-table path.', 'chart', 'neutral'],
+];
+$config = [
+    'apiProvider' => 'datatable',
+    'clearConfirm' => (string)__('确定要清理所有测试数据吗？此操作不可恢复！'),
+    'requestFailed' => (string)__('请求失败'),
+];
+?>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-index-js']) ?>
 
-<?= $worker_bootstrap ?? '' ?>
-
-<div class="dt-demo-shell" data-demo-page="<?= $page_key ?>">
-    <section class="dt-demo-hero" weline-code="datatable.test.section_1">
+<div class="w-container w-datatable-demo__main" data-w-datatable-demo="index" data-demo-page="<?= $escape($page_key ?? 'index') ?>">
+    <header class="w-datatable-demo__heading">
         <div>
-            <h1><?= $page_title ?></h1>
-            <p>Frontend-safe DataTable demos backed by explicit whitelist-only REST routes.</p>
+            <p class="w-datatable-demo__eyebrow">Weline UI 2.0</p>
+            <h1><?= $escape($page_title ?? 'DataTable Frontend Demo') ?></h1>
+            <p>Frontend-safe DataTable demos backed by the native Weline Table, Form, Dialog and API components.</p>
         </div>
-        <div class="dt-demo-buttons">
-            <button type="button" class="btn btn-primary" data-testid="demo-init" data-datatable-test-action="demo-bootstrap" data-demo-action="init-data">Init Demo Data</button>
-            <button type="button" class="btn btn-outline-danger" data-testid="demo-clear" data-datatable-test-action="demo-bootstrap" data-demo-action="clear-data">Clear Demo Data</button>
+    </header>
+
+    <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
+
+    <section class="w-card" aria-labelledby="w-demo-data-title" weline-code="datatable.test.demo_data">
+        <header class="w-card__header">
+            <h2 id="w-demo-data-title" class="w-card__title"><w-icon name="database" size="sm"></w-icon>Demo Data</h2>
+        </header>
+        <div class="w-card__body w-stack">
+            <div class="w-cluster">
+                <button type="button" class="w-button" data-testid="demo-init" data-w-demo-action="init"><w-icon name="plus" size="sm"></w-icon>Init Demo Data</button>
+                <button type="button" class="w-button" data-tone="danger" data-testid="demo-clear" data-w-demo-action="clear"><w-icon name="trash" size="sm"></w-icon>Clear Demo Data</button>
+            </div>
+            <div class="w-alert" data-tone="info" data-w-demo-status data-testid="demo-status" role="status" aria-live="polite"><w-icon name="info" size="sm"></w-icon><span>Ready</span></div>
         </div>
-        <div id="demo-status" class="dt-demo-status" data-testid="demo-status"></div>
     </section>
 
-    <section class="dt-demo-grid" weline-code="datatable.test.section_2">
-        <a class="dt-demo-card" data-testid="demo-link-basic" href="<?= $demo_links['basic'] ?>">
-            <h3>Basic</h3><p>CRUD, filter, sort, pagination, export.</p>
-        </a>
-        <a class="dt-demo-card" data-testid="demo-link-join" href="<?= $demo_links['join'] ?>">
-            <h3>Join</h3><p>Alias fields and cross-table filtering.</p>
-        </a>
-        <a class="dt-demo-card" data-testid="demo-link-form" href="<?= $demo_links['form'] ?>">
-            <h3>Form</h3><p>Standalone create flow with table refresh.</p>
-        </a>
-        <a class="dt-demo-card" data-testid="demo-link-upload" href="<?= $demo_links['upload'] ?>">
-            <h3>Upload</h3><p>Image/file controls in frontend-safe forms.</p>
-        </a>
-        <a class="dt-demo-card" data-testid="demo-link-transaction" href="<?= $demo_links['transaction'] ?>">
-            <h3>Transaction</h3><p>Multi-model save wrapped in transaction.</p>
-        </a>
-        <a class="dt-demo-card" data-testid="demo-link-dependency" href="<?= $demo_links['dependency'] ?>">
-            <h3>Dependency</h3><p>Dependency ordering without transaction wrapper.</p>
-        </a>
-        <a class="dt-demo-card" data-testid="demo-link-cascade" href="<?= $demo_links['cascade'] ?>">
-            <h3>Cascade</h3><p>User delete cascades related orders.</p>
-        </a>
-        <a class="dt-demo-card" data-testid="demo-link-performance" href="<?= $demo_links['performance'] ?>">
-            <h3>Performance</h3><p>Stable large-table render and search path.</p>
-        </a>
-    </section>
+    <nav class="w-datatable-demo__grid" aria-label="DataTable demos">
+        <?php foreach ($demos as [$key, $label, $description, $icon, $tone]): ?>
+            <a class="w-card w-datatable-demo__link" data-testid="demo-link-<?= $escape($key) ?>" href="<?= $escape($links[$key] ?? ('/datatable/test/' . $key)) ?>">
+                <div class="w-card__body">
+                    <span class="w-datatable-demo__link-icon" data-tone="<?= $escape($tone) ?>"><w-icon name="<?= $escape($icon) ?>" size="lg"></w-icon></span>
+                    <span><strong><?= $escape($label) ?></strong><small><?= $escape($description) ?></small></span>
+                    <w-icon name="chevron-right" size="sm"></w-icon>
+                </div>
+            </a>
+        <?php endforeach; ?>
+    </nav>
 </div>
-
-<script>
-    let demoApiPromise = null;
-
-    function getDemoApi() {
-        if (demoApiPromise) {
-            return demoApiPromise;
-        }
-        demoApiPromise = Promise.resolve().then(function () {
-            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-                throw new Error('Weline.Api.resource is not available');
-            }
-            return window.Weline.Api.resource('datatable');
-        });
-        return demoApiPromise;
-    }
-
-    async function demoBootstrap(action) {
-        const status = document.getElementById('demo-status');
-        status.textContent = 'Working...';
-        try {
-            const api = await getDemoApi();
-            const operation = action === 'init-data' ? 'initData' : 'clearData';
-            const payload = await api[operation]({}, {silent: true});
-            status.textContent = payload.message || payload.msg || 'Done';
-        } catch (error) {
-            status.textContent = error.message || 'Request failed';
-        }
-    }
-
-    document.addEventListener('click', function (event) {
-        const trigger = event.target.closest('[data-datatable-test-action="demo-bootstrap"]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-        demoBootstrap(trigger.getAttribute('data-demo-action') || '');
-    });
-</script>
+<script type="application/json" id="w-datatable-demo-config"><?= json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}' ?></script>

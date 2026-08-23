@@ -8,7 +8,7 @@
 不能删除基准货币,不能删除基准货币
 货币已删除,货币已删除
 删除失败：%{1},删除失败：%{1}
-"Currency ResourceChange Observer 只接受 v1 契约","Currency ResourceChange Observer 只接受 v1 契约"
+"Currency ResourceChange Observer 只接受 v1 契约","货币ResourceChange Observer 只接受v1 契约"
 基准货币代码必须是3位大写字母,基准货币代码必须是3位大写字母
 Cron执行时间不能为空,Cron执行时间不能为空
 配置已保存，需要更新所有货币汇率,配置已保存，需要更新所有货币汇率
@@ -32,39 +32,38 @@ API服务暂时不可用，请稍后重试,API服务暂时不可用，请稍后�
 无效的请求,无效的请求
 "更新失败: %{1}","更新失败: %{1}"
 货币配置,货币配置
-"mdi mdi-cog","mdi mdi-cog"
+settings,设置
 货币模块配置管理,货币模块配置管理
 查看配置,查看配置
 查看货币配置,查看货币配置
 测试API,测试API
 测试汇率API连接,测试汇率API连接
-"mdi mdi-connection","mdi mdi-connection"
+link,关联
 手动导入,手动导入
 手动触发汇率导入,手动触发汇率导入
-"mdi mdi-download","mdi mdi-download"
+download,下载
 更新汇率,更新汇率
 更新所有货币汇率,更新所有货币汇率
-"mdi mdi-refresh","mdi mdi-refresh"
+refresh,刷新
 货币不存在！,货币不存在！
 保存成功！,保存成功！
 "保存失败: %{1}","保存失败: %{1}"
 删除成功！,删除成功！
 "删除失败: %{1}","删除失败: %{1}"
-"mdi mdi-currency-usd","mdi mdi-currency-usd"
+cash,现金
 货币管理功能,货币管理功能
 查看货币列表,查看货币列表
 添加货币,添加货币
 添加货币界面,添加货币界面
-"mdi mdi-plus-circle-outline","mdi mdi-plus-circle-outline"
+plus,加
 编辑货币,编辑货币
 编辑货币界面,编辑货币界面
-"mdi mdi-pencil","mdi mdi-pencil"
+edit,编辑
 添加货币请求,添加货币请求
 请求添加货币,请求添加货币
-"mdi mdi-content-save","mdi mdi-content-save"
+save,节省
 编辑货币请求,编辑货币请求
 请求编辑货币,请求编辑货币
-"mdi mdi-content-save-edit","mdi mdi-content-save-edit"
 "货币格式错误,示例:2,4","货币格式错误,示例:2,4"
 千分位分隔符不能为空,千分位分隔符不能为空
 小数分隔符不能为空,小数分隔符不能为空
@@ -212,4 +211,14 @@ API返回数据格式错误,API返回数据格式错误
 "无法获取新基准货币的汇率: %{1}","无法获取新基准货币的汇率: %{1}"
 新基准货币的汇率无效，无法重新计算,新基准货币的汇率无效，无法重新计算
 货币汇率无效,货币汇率无效
-"""Currency 查询器不支持的操作：%{1}""","Currency 查询器不支持的操作：%{1}"
+"""Currency 查询器不支持的操作：%{1}""","""Currency 查询器不支持的操作：%{1}"""
+"mdi mdi-cog","mdi mdi-cog"
+"mdi mdi-connection","mdi mdi-connection"
+"mdi mdi-download","mdi mdi-download"
+"mdi mdi-refresh","mdi mdi-refresh"
+"mdi mdi-currency-usd","mdi mdi-currency-usd"
+"mdi mdi-plus-circle-outline","mdi mdi-plus-circle-outline"
+"mdi mdi-pencil","mdi mdi-铅笔"
+"mdi mdi-content-save","MDI MDI 内容保存"
+"mdi mdi-content-save-edit","mdi mdi-content-save-edit"
+"""Currency ResourceChange Observer 只接受 v1 契约""","“Currency ResourceChange Observer 只接受 v1 契约”"

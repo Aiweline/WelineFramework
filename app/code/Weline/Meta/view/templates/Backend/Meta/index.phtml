@@ -39,7 +39,6 @@ $backendBase = $this->getBackendUrl('meta/backend/meta');
 $scannerUrl = $this->getBackendUrl('meta/backend/scanner');
 $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
 ?>
-<link href="@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)" rel="stylesheet" type="text/css"/>
 <style>
     .meta-list .table thead th {
         white-space: nowrap;
@@ -54,7 +53,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
         font-size: 12px;
     }
 
-    .meta-list .badge-space {
+    .meta-list .weline-badge-space {
         text-transform: none;
         font-size: 12px;
     }
@@ -69,8 +68,8 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
         font-size: 13px;
     }
 
-    .filter-card .form-control,
-    .filter-card .form-select {
+    .filter-card .w-input,
+    .filter-card .w-select {
         border-radius: 999px;
         padding-left: 1.2rem;
     }
@@ -100,7 +99,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
     <div style="--w-span-lg:3;--w-span-md:6;">
         <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
             <div class="w-card__body w-cluster" data-align="center">
-                <div class="me-3 w-cluster" data-w-avatar="true" data-w-background="primary" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="primary" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
                     <w:icon name="search" size="sm"></w:icon>
                 </div>
                 <div>
@@ -113,7 +112,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
     <div style="--w-span-lg:3;--w-span-md:6;">
         <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
             <div class="w-card__body w-cluster" data-align="center">
-                <div class="me-3 w-cluster" data-w-avatar="true" data-w-background="success" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="success" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
                     <w:icon name="circle" size="sm"></w:icon>
                 </div>
                 <div>
@@ -126,7 +125,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
     <div style="--w-span-lg:3;--w-span-md:6;">
         <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
             <div class="w-card__body w-cluster" data-align="center">
-                <div class="me-3 w-cluster" data-w-avatar="true" data-w-background="warning" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="warning" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
                     <w:icon name="grid" size="sm"></w:icon>
                 </div>
                 <div>
@@ -191,7 +190,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
                 </div>
             </div>
             <div class="w-text" data-align="end" style="--w-span-lg:2;--w-span-md:4;">
-                <div class="justify-content-lg-end w-cluster" style="--w-gap:var(--weline-space-2);">
+                <div class="weline-justify-lg-end w-cluster" style="--w-gap:var(--weline-space-2);">
                     <button type="submit" class="w-button" data-w-radius="round" data-tone="primary" style="--w-ps:var(--weline-space-6);--w-pe:var(--weline-space-6);">
                         <w:icon name="filter" size="sm"></w:icon><?= __('筛选') ?>
                     </button>
@@ -217,8 +216,8 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
         </div>
 
         <?php if (!$hasResults): ?>
-            <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
-                <img src="@static(Weline_Admin::assets/images/file-search.svg)" alt="empty" class="img-fluid" style="max-width: 220px;">
+            <div class="w-empty">
+                <w:icon name="search" size="xl"></w:icon>
                 <h5 style="--w-mt:var(--weline-space-6);"><?= __('暂无匹配的元数据') ?></h5>
                 <p class="w-text" data-tone="muted"><?= __('尝试调整筛选条件或重新扫描。') ?></p>
             </div>
@@ -344,7 +343,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
 
 <!-- JSON 预览 Modal -->
 <div class="w-dialog" id="metaDetailModal" tabindex="-1" aria-labelledby="metaDetailModalLabel" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
-    <div class="w-dialog__frame modal-dialog-scrollable" data-size="lg">
+    <div class="w-dialog__frame weline-dialog-scrollable" data-size="lg">
         <div class="w-dialog__surface">
             <div class="w-dialog__header">
                 <h5 class="w-dialog__title" id="metaDetailModalLabel"><?= __('元数据详情') ?></h5>
@@ -380,9 +379,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
     });
 
     var ensureModal = function() {
-        if (!metaModal) {
-            metaModal = new bootstrap.Modal(modalEl);
-        }
+        if (!metaModal) metaModal = modalEl;
         return metaModal;
     };
 
@@ -398,7 +395,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
             }
             document.getElementById('metaDetailModalLabel').textContent = title;
             modalBody.textContent = currentJson;
-            ensureModal().show();
+            Weline.UI.dialog.open(ensureModal());
         });
     });
 

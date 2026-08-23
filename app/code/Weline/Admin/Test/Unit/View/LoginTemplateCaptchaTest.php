@@ -20,6 +20,8 @@ final class LoginTemplateCaptchaTest extends TestCase
             $relativePath
         );
         self::assertStringContainsString('need_backend_verification_code', $source);
+        self::assertStringContainsString('<w:i18n:switcher', $source);
+        self::assertStringContainsString('w-login-card__toolbar', $source);
         self::assertStringContainsString('autocomplete="username"', $source);
         self::assertStringContainsString('autocomplete="current-password"', $source);
         self::assertStringNotContainsString('data-bs-', $source);

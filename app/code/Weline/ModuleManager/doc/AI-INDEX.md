@@ -42,12 +42,10 @@
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：0
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：1
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 识别到 QueryProvider 相关 PHP 文件：extends/module/Weline_Framework/Query/ModuleRollbackQueryProvider.php；前端/跨模块读数据先查 query 帮助。
@@ -58,11 +56,14 @@
 - `app/code/Weline/ModuleManager/doc/ai/INDEX.json`
 - `app/code/Weline/ModuleManager/doc/ai/skills/weline-modulemanager-knowledge/.skill-meta.json`
 - `app/code/Weline/ModuleManager/doc/ai/skills/weline-modulemanager-knowledge/SKILL.md`
+- `app/code/Weline/ModuleManager/doc/功能现状.md`
 - `app/code/Weline/ModuleManager/doc/后台模块列表检索与过滤.md`
+- `app/code/Weline/ModuleManager/doc/开发日志.md`
 - `app/code/Weline/ModuleManager/doc/模块卸载数据库备份与恢复系统架构.md`
 - `app/code/Weline/ModuleManager/doc/模块备份恢复API文档.md`
 - `app/code/Weline/ModuleManager/doc/模块备份恢复使用指南.md`
 - `app/code/Weline/ModuleManager/doc/模块备份恢复数据流程图.md`
+- `app/code/Weline/ModuleManager/doc/需求.md`
 
 ## 开发前门禁
 

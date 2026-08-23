@@ -31,6 +31,10 @@ $formatBytes = static function (int $bytes): string {
 $createUrl = $this->getBackendUrl('*/backup/create');
 $deleteUrl = $createUrl;
 $downloadUrl = $createUrl;
+$websiteSelectOptions = \Weline\Websites\Service\WebsiteSelectOptions::fromRows($websites);
+$websiteSelectValue = '';
+$websiteSelectDisplay = '';
+$websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
 <style>
     .website-backup-scope {
@@ -166,20 +170,18 @@ $downloadUrl = $createUrl;
                     <div class="w-grid" data-align="end">
                         <div style="--w-span-md:4;">
                             <div style="--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label" for="website_id"><lang>选择网站</lang></label>
-                                <select class="w-select" id="website_id" name="website_id" required>
-                                    <option value="" selected disabled><lang>请选择网站</lang></option>
-                                    <?php foreach ($websites as $website): ?>
-                                        <?php
-                                        $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
-                                        $websiteName = (string)($website['name'] ?? __('网站') . ' ' . $websiteId);
-                                        $websiteCode = (string)($website['code'] ?? '');
-                                        ?>
-                                        <option value="<?= $websiteId ?>">
-                                            <?= $escapeHtml($websiteName) ?><?= $websiteCode !== '' ? ' · ' . $escapeHtml($websiteCode) : '' ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+                                <label class="w-field__label" for="website_id_trigger"><lang>选择网站</lang></label>
+                                <w:websites:website:select
+                                    id="website_id"
+                                    name="website_id"
+                                    value="websiteSelectValue"
+                                    display="websiteSelectDisplay"
+                                    options="websiteSelectOptionsJson"
+                                    multiple="false"
+                                    allow-empty="true"
+                                    empty-label="@lang(请选择网站)"
+                                    placeholder="@lang(搜索站点名称或编码)"
+                                />
                             </div>
                         </div>
                         <div style="--w-span-md:4;">
@@ -305,7 +307,8 @@ $downloadUrl = $createUrl;
             deleteConfirm: <?= $jsonForScript((string)__('确定要删除这个备份吗？删除后无法从列表恢复。')) ?>,
             deleteFail: <?= $jsonForScript((string)__('删除备份失败')) ?>,
             apiUnavailable: <?= $jsonForScript((string)__('后台请求组件不可用，请刷新页面后重试。')) ?>,
-            confirmUnavailable: <?= $jsonForScript((string)__('确认组件不可用，请刷新页面后重试。')) ?>
+            confirmUnavailable: <?= $jsonForScript((string)__('确认组件不可用，请刷新页面后重试。')) ?>,
+            websiteRequired: <?= $jsonForScript((string)__('请选择网站')) ?>
         }
     };
 
@@ -376,6 +379,13 @@ $downloadUrl = $createUrl;
                 return;
             }
 
+            var websiteIdInput = form.querySelector('#website_id_value');
+            var websiteId = websiteIdInput ? String(websiteIdInput.value || '').trim() : '';
+            if (websiteId === '') {
+                toast('error', config.text.websiteRequired);
+                return;
+            }
+
             var submit = form.querySelector('[data-backup-submit]');
             var submitLabel = submit ? submit.querySelector('span') : null;
             if (submit) {
@@ -389,7 +399,7 @@ $downloadUrl = $createUrl;
             }
 
             manageBackup('create', {
-                website_id: form.querySelector('#website_id').value,
+                website_id: websiteId,
                 backup_type: form.querySelector('#backup_type').value
             }).then(function(response) {
                 var data = unwrapResponse(response);

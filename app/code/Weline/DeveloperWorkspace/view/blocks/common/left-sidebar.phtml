@@ -1,60 +1,44 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 ?>
-<div class="vertical-menu">
-
-    <div data-simplebar data-w-height="full">
-
-        <!--- Sidemenu -->
-        <div id='sidebar-menu'>
-            <!-- Left Menu Start -->
-            <ul class='metismenu list-unstyled mm-show' id='side-menu'>
+<nav class="w-backend-nav" aria-label="<lang>开发工作区</lang>">
+            <ul class="w-backend-nav__list">
                 <foreach name="catalogs" item="v">
-                    <li class='menu-title'>
+                    <li class="w-backend-nav__group">
                         <var>$v['name']</var>
                     </li>
                     <php>$nodes = $v['nodes'];</php>
                     <notempty name="nodes">
                         <foreach name='nodes' item='node'>
-                            <li>
+                            <li class="w-backend-nav__entry">
                                 <php>
                                     $sub_level = $node['level']??1;
                                     $sub_nodes = $node['nodes']??[];
                                 </php>
-                                <a href="@php{if($sub_nodes):echo '#';else:echo $node['href'];endif;}" data-dev-workspace-menu-toggle="@php{if($sub_nodes):echo '1';else:echo '0';endif;}" class="@if{$sub_nodes=>"has-arrow"}">
-                                    <i class='@var{$node["icon"]}'></i>
-                                    <span><var>$node['name']</var></span>
-                                </a>
-
                                 <if condition="$sub_nodes">
-                                    <ul class='sub-menu' aria-expanded='false'>
-                                        <foreach name='sub_nodes' item='sub_node'>
-                                            <li>
-                                                <a href="@var{$sub_node['href']}"><var>$sub_node['name']</var></a>
-                                            </li>
-                                        </foreach>
-                                    </ul>
+                                    <details class="w-backend-nav__disclosure">
+                                        <summary class="w-backend-nav__item">
+                                            <w:icon name="@var{$node['icon']}" size="sm"></w:icon>
+                                            <span><var>$node['name']</var></span>
+                                            <w:icon name="chevron-down" size="xs"></w:icon>
+                                        </summary>
+                                        <ul class="w-backend-nav__list">
+                                            <foreach name='sub_nodes' item='sub_node'>
+                                                <li class="w-backend-nav__entry">
+                                                    <a class="w-backend-nav__item" href="@var{$sub_node['href']}"><var>$sub_node['name']</var></a>
+                                                </li>
+                                            </foreach>
+                                        </ul>
+                                    </details>
+                                <else/>
+                                    <a class="w-backend-nav__item" href="@var{$node['href']}">
+                                        <w:icon name="@var{$node['icon']}" size="sm"></w:icon>
+                                        <span><var>$node['name']</var></span>
+                                    </a>
                                 </if>
                             </li>
                         </foreach>
                     </notempty>
                 </foreach>
             </ul>
-        </div>
-        <!-- Sidebar -->
-    </div>
-</div>
-<script>
-(function() {
-    'use strict';
-
-    document.addEventListener('click', function(event) {
-        var trigger = event.target.closest('a[data-dev-workspace-menu-toggle="1"]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-    });
-})();
-</script>
+</nav>

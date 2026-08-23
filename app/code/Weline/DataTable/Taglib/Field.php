@@ -419,7 +419,7 @@ final class Field implements TaglibInterface
 
     public static function resetRequestState(): void
     {
-        // Field state now lives in TableContext/RequestContext only.
+        TableContext::clearAll();
     }
 
     public static function tag_self_close(): bool

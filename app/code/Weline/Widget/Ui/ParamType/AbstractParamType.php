@@ -44,6 +44,102 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         return implode(' ', $parts);
     }
 
+    /** @return array{type:string,usage:array<string,mixed>}|null */
+    protected function normalizeFileImageNode(mixed $value): ?array
+    {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '' || $trimmed[0] !== '{') {
+                return null;
+            }
+            $decoded = json_decode($trimmed, true);
+            if (!is_array($decoded)) {
+                return null;
+            }
+            $value = $decoded;
+        }
+        if (!is_array($value) || ($value['type'] ?? null) !== 'file-image' || !is_array($value['usage'] ?? null)) {
+            return null;
+        }
+        $usage = $value['usage'];
+        if ((int)($usage['version'] ?? 0) !== 1
+            || trim((string)($usage['asset_id'] ?? '')) === ''
+            || trim((string)($usage['locale_code'] ?? '')) === ''
+        ) {
+            return null;
+        }
+
+        return ['type' => 'file-image', 'usage' => $usage];
+    }
+
+    protected function serializeImageFormValue(mixed $value): string
+    {
+        $node = $this->normalizeFileImageNode($value);
+        if ($node !== null) {
+            return json_encode(
+                $node,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+            ) ?: '';
+        }
+        return is_scalar($value) ? trim((string)$value) : '';
+    }
+
+    protected function legacyImagePreviewUrl(mixed $value): string
+    {
+        if ($this->normalizeFileImageNode($value) !== null || !is_scalar($value)) {
+            return '';
+        }
+        $url = trim(html_entity_decode((string)$value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if ($url === ''
+            || strlen($url) > 8192
+            || preg_match('/[\x00-\x1F\x7F\\\\]/', $url) === 1
+            || str_starts_with($url, '//')
+        ) {
+            return '';
+        }
+        if (str_starts_with($url, '/') || str_starts_with($url, '#')) {
+            return $url;
+        }
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return '';
+        }
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        if ($scheme !== '' && (!in_array($scheme, ['http', 'https'], true)
+            || trim((string)($parts['host'] ?? '')) === ''
+            || isset($parts['user'])
+            || isset($parts['pass']))) {
+            return '';
+        }
+        return isset($parts['host']) && $scheme === '' ? '' : $url;
+    }
+
+    /**
+     * Accept only a single CSS colour scalar suitable for an escaped custom
+     * property value. Delimiters that could terminate the declaration are
+     * rejected; URLs, variables and arbitrary CSS functions are not allowed.
+     */
+    protected function normalizeCssColorScalar(mixed $value): ?string
+    {
+        if (!is_scalar($value)) {
+            return null;
+        }
+        $color = trim((string)$value);
+        if ($color === '' || strlen($color) > 96 || preg_match('/[;\"\'\\\\{}<>]/', $color)) {
+            return null;
+        }
+        if (preg_match('/^#[0-9a-f]{3,8}$/i', $color)) {
+            return $color;
+        }
+        if (preg_match('/^[a-z]+$/i', $color)) {
+            return strtolower($color);
+        }
+        if (preg_match('/^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch)\([0-9a-z.+\-%,\/\s]+\)$/i', $color)) {
+            return $color;
+        }
+        return null;
+    }
+
     protected function renderFieldStart(string $key, array $param, int|string $layoutId): string
     {
         $p = self::CSS_PREFIX;
@@ -89,7 +185,7 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
             if (isset($context['array_index'])) {
                 $dataAttrs .= ' data-array-index="' . htmlspecialchars((string)$context['array_index']) . '"';
             }
-            $html .= '<button type="button" class="' . $p . 'btn-i18n" ' . $dataAttrs . ' title="' . __('编辑多语言') . '">';
+            $html .= '<button type="button" class="w-button w-param-btn-i18n" data-tone="neutral" data-variant="outline" data-size="sm" aria-expanded="false" ' . $dataAttrs . ' title="' . __('编辑多语言') . '">';
             $html .= '<span>' . __('多语言') . '</span>';
             $html .= '</button>';
         }
@@ -121,16 +217,16 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
             $dataAttrs .= ' data-array-index="' . htmlspecialchars((string)$context['array_index']) . '"';
         }
 
-        $html = '<div class="' . $p . 'i18n-panel" id="' . htmlspecialchars($panelId) . '" ' . $dataAttrs . ' style="display:none;">';
+        $html = '<div class="' . $p . 'i18n-panel" id="' . htmlspecialchars($panelId) . '" ' . $dataAttrs . ' data-state="closed" aria-hidden="true" hidden>';
         $html .= '<div class="' . $p . 'i18n-header">';
         $html .= '<span>' . __('多语言配置') . '</span>';
-        $html .= '<button type="button" class="' . $p . 'btn ' . $p . 'btn-outline-secondary ' . $p . 'btn-sm" data-close-i18n data-field="' . htmlspecialchars($key) . '">×</button>';
+        $html .= '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n data-field="' . htmlspecialchars($key) . '" aria-label="' . htmlspecialchars((string)__('关闭多语言配置'), ENT_QUOTES, 'UTF-8') . '"><w-icon name="close" size="sm"></w-icon></button>';
         $html .= '</div>';
         // 空 body，由前端 fetchInstalledLocales() 后动态填充
         $html .= '<div class="' . $p . 'i18n-body"></div>';
         $html .= '<div class="' . $p . 'i18n-footer">';
-        $html .= '<button type="button" class="' . $p . 'btn ' . $p . 'btn-outline-secondary ' . $p . 'btn-sm btn-ai-i18n" data-ai-i18n ' . $dataAttrs . '>' . __('AI翻译') . '</button>';
-        $html .= '<button type="button" class="' . $p . 'btn ' . $p . 'btn-primary ' . $p . 'btn-sm" data-save-i18n ' . $dataAttrs . '>' . __('保存多语言') . '</button>';
+        $html .= '<button type="button" class="w-button w-param-btn-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n ' . $dataAttrs . '>' . __('AI翻译') . '</button>';
+        $html .= '<button type="button" class="w-button" data-tone="primary" data-size="sm" data-save-i18n ' . $dataAttrs . '>' . __('保存多语言') . '</button>';
         $html .= '</div></div>';
         return $html;
     }

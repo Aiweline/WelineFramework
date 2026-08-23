@@ -21,4 +21,10 @@ final class PaginationBuilder
     {
         return $model->getPaginationData($url_path, $pagination_style);
     }
+
+    /** @return array<string,mixed> */
+    public function getPaginationState(AbstractModel $model): array
+    {
+        return $model->getPaginationState();
+    }
 }

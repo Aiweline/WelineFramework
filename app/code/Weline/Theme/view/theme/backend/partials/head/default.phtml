@@ -5,9 +5,22 @@
  * @meta.cache.mode {default="chrome",name="缓存模式"}
  * @meta.cache.auth {default="role",name="鉴权维度"}
  */
+$diskOverrideHtml = '';
+try {
+    $diskOverrideHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Disk\ThemeDiskHeadService::class
+    )->buildOverrideLinkHtml('backend');
+} catch (\Throwable $e) {
+    $diskOverrideHtml = '';
+}
+$uiAssetVersion = static function (string $relative): string {
+    $path = BP . 'app/code/Weline/Theme/view/statics/ui/' . \ltrim($relative, '/');
+    return \is_file($path) ? (string)\filemtime($path) : '0';
+};
 ?>
 <w:theme:font src="Weline_Theme::NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap"/>
 <w:theme:font src="Weline_Theme::NotoSansSC-Bold.ttf" family="Noto Sans SC" weight="700" display="swap"/>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)">
-<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)?v=<?= $uiAssetVersion('weline-foundation.css') ?>">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)?v=<?= $uiAssetVersion('weline-backend.css') ?>">
+<?php echo $diskOverrideHtml; ?>
+<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)?v=<?= $uiAssetVersion('weline-ui.js') ?>"></script>

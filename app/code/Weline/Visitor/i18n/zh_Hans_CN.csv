@@ -1,18 +1,18 @@
 ﻿访客像素标签,访客像素标签
 "在渲染访客像素标签时触发，允许其他模块控制像素启停和名称。出于安全原因，不执行 pixel_code 自定义脚本。","在渲染访客像素标签时触发，允许其他模块控制像素启停和名称。出于安全原因，不执行 pixel_code 自定义脚本。"
-"Visitor Query","Visitor Query"
-"Provides frontend visitor tracking operations through the worker channel.","Provides frontend visitor tracking operations through the worker channel."
-"Track storefront visitor pixel events.","Track storefront visitor pixel events."
-"Load visitor pixel hot buffer status.","Load visitor pixel hot buffer status."
-"Flush visitor pixel hot buffer.","Flush visitor pixel hot buffer."
-"One-click audit of pixel markers on published pages.","One-click audit of pixel markers on published pages."
-"Load latest pixel marker audit report.","Load latest pixel marker audit report."
+"Visitor Query",访客查询
+"Provides frontend visitor tracking operations through the worker channel.",通过工作通道提供前端访客跟踪操作。
+"Track storefront visitor pixel events.",跟踪店面访客像素事件。
+"Load visitor pixel hot buffer status.",加载访客像素热缓冲区状态。
+"Flush visitor pixel hot buffer.",刷新访客像素热缓冲区。
+"One-click audit of pixel markers on published pages.",对已发布页面上的像素标记进行一键审核。
+"Load latest pixel marker audit report.",加载最新的像素标记审核报告。
 "Load Weline↔Google event dictionary.","Load Weline↔Google event dictionary."
-"Load GTM/GA4 channel and last audit status.","Load GTM/GA4 channel and last audit status."
+"Load GTM/GA4 channel and last audit status.","加载 GTM/GA4 通道和上次审核状态。"
 读取优化闭环的只读访客证据。,读取优化闭环的只读访客证据。
-"Create visitor A/B test config.","Create visitor A/B test config."
-"Seed or clean auditable AI/SEO acceptance pixel events.","Seed or clean auditable AI/SEO acceptance pixel events."
-"Export visitor analytics data.","Export visitor analytics data."
+"Create visitor A/B test config.","创建访客 A/B 测试配置。"
+"Seed or clean auditable AI/SEO acceptance pixel events.","种子或清理可审核的 AI/SEO 接受像素事件。"
+"Export visitor analytics data.",导出访客分析数据。
 加载流量渠道列表失败：%{1},加载流量渠道列表失败：%{1}
 流量渠道,流量渠道
 新建投放渠道,新建投放渠道
@@ -26,17 +26,23 @@
 渠道详情,渠道详情
 渠道已启用,渠道已启用
 渠道已停用,渠道已停用
+circle,圆圈
 像素流量渠道管理,像素流量渠道管理
 查看流量渠道列表,查看流量渠道列表
+list,列表
 新建流量渠道,新建流量渠道
+plus,加
 提交新建流量渠道,提交新建流量渠道
 提交新建投放渠道,提交新建投放渠道
 编辑流量渠道,编辑流量渠道
+edit,编辑
 提交编辑流量渠道,提交编辑流量渠道
 提交编辑投放渠道,提交编辑投放渠道
 查看流量渠道详情总计,查看流量渠道详情总计
+chart,图表
 查看投放渠道热表总计,查看投放渠道热表总计
 停用或启用流量渠道,停用或启用流量渠道
+switch,转变
 停用或启用投放渠道,停用或启用投放渠道
 加载像素统计失败：%{1},加载像素统计失败：%{1}
 请选择站点后再查看详情报表,请选择站点后再查看详情报表
@@ -67,6 +73,7 @@
 查看像素统计,查看像素统计
 查看站点详情,查看站点详情
 查看像素事件列表,查看像素事件列表
+table,桌子
 查看像素事件明细列表,查看像素事件明细列表
 查看冷归档像素事件,查看冷归档像素事件
 查看冷归档像素事件明细,查看冷归档像素事件明细
@@ -75,6 +82,7 @@
 查看像素每日对比,查看像素每日对比
 查看像素事件统计,查看像素事件统计
 导出像素数据,导出像素数据
+download,下载
 获取A/B测试数据失败：%{1},获取A/B测试数据失败：%{1}
 系统级别事件,系统级别事件
 自定义事件,自定义事件
@@ -176,7 +184,7 @@
 重置,重置
 "冷归档查询被拒绝或暂不可用（无站 / 超窗 / 数据库异常）。","冷归档查询被拒绝或暂不可用（无站 / 超窗 / 数据库异常）。"
 时间,时间
-URL,URL
+URL,网址
 归档时间,归档时间
 列表未就绪。,列表未就绪。
 请修正筛选条件后重试。,请修正筛选条件后重试。
@@ -225,7 +233,7 @@ URL,URL
 渠道,渠道
 暂无来源数据。,暂无来源数据。
 最近事件,最近事件
-IP,IP
+IP,知识产权
 暂无最近事件。,暂无最近事件。
 今日,今日
 昨日,昨日
@@ -240,16 +248,16 @@ IP,IP
 "对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源","对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源"
 返回事件看板,返回事件看板
 切换站点,切换站点
-Sessions,Sessions
+Sessions,会议
 参与率,参与率
-"Engaged sessions","Engaged sessions"
+"Engaged sessions",参与的会话
 跳出率,跳出率
-"Bounce rate","Bounce rate"
+"Bounce rate",跳出率
 平均停留,平均停留
-"Avg session duration","Avg session duration"
+"Avg session duration",平均会话持续时间
 页/会话,页/会话
-"Pages / session","Pages / session"
-Events,Events
+"Pages / session",页数/会话数
+Events,活动
 页面表现,页面表现
 "暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。","暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。"
 路径,路径
@@ -349,7 +357,7 @@ Events,Events
 "按 IP 去重","按 IP 去重"
 事件种类,事件种类
 处理率,处理率
-"Cron 处理","Cron 处理"
+"Cron 处理",克朗处理
 像素概览,像素概览
 查看事件列表,查看事件列表
 像素事件趋势,像素事件趋势
@@ -481,9 +489,11 @@ Events,Events
 成功,成功
 创建成功,创建成功
 创建失败,创建失败
-瀵煎嚭澶辫触,瀵煎嚭澶辫触
-纭畾,纭畾
+导出失败,导出失败
 站点ID,站点ID
 "0 表示全局渠道。","0 表示全局渠道。"
 "站点 ID（必填）","站点 ID（必填）"
 "站点 ID","站点 ID"
+事件看板,事件看板
+像素分析,像素分析
+访问信息,访问信息

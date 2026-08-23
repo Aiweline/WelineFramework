@@ -195,6 +195,7 @@ class Router implements RouterInterface
         if ($normalizedPath === ''
             || str_starts_with($normalizedPath, 'theme/frontend/')
             || self::shouldSkipPreviewRewrite($normalizedPath)
+            || self::isInstalledModuleOwnedPublicRoute($normalizedPath)
             || self::generatedFrontendRouteExists($normalizedPath, $request)
         ) {
             return;
@@ -315,6 +316,24 @@ class Router implements RouterInterface
         }
 
         return strtolower(trim($path, '/'));
+    }
+
+    /**
+     * Installed business modules own their public aliases. Theme routes are a
+     * shell-only fallback and must not consume those aliases before the
+     * module router gets a chance to resolve them.
+     */
+    private static function isInstalledModuleOwnedPublicRoute(string $normalizedPath): bool
+    {
+        if (!class_exists('Weline\\Product\\Controller\\Router')) {
+            return false;
+        }
+
+        if (in_array($normalizedPath, ['products', 'product-list'], true)) {
+            return true;
+        }
+
+        return preg_match('#^product/[1-9][0-9]*$#D', $normalizedPath) === 1;
     }
 
     /**

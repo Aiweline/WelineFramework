@@ -17,40 +17,26 @@ class ImageType extends AbstractParamType
     public function getHtml(string $key, array $param, mixed $value, int|string $layoutId = '', array $attrs = []): string
     {
         $fieldId = $this->generateFieldId($key, $layoutId);
-        $accept = $param['accept'] ?? 'image/*';
-        $maxSize = $param['max_size'] ?? null;
-        $aspectRatio = $param['aspect_ratio'] ?? null;
-        $placeholder = $param['placeholder'] ?? __('点击选择图片或输入URL');
+        $mediaOptions = is_array($param['media_options'] ?? null) ? $param['media_options'] : [];
+        $defaultDir = $mediaOptions['default_directory'] ?? $param['default_directory'] ?? 'banner';
+        $placeholder = $param['placeholder'] ?? __('从媒体库选择图片');
         $currentValue = $value ?? $this->getDefaultValue($param) ?? '';
         $hasImage = !empty($currentValue);
-        $inputHtml = '<div class="w-param-image">';
+        $storedValue = $this->serializeImageFormValue($currentValue);
+        $previewUrl = $this->legacyImagePreviewUrl($currentValue);
+        $inputHtml = '<div class="w-param-media-image">';
         $inputHtml .= '<div class="w-param-image-preview' . ($hasImage ? ' w-param-has-image' : '') . '" id="' . htmlspecialchars($fieldId) . '_preview">';
-        if ($hasImage) {
-            $inputHtml .= '<img src="' . htmlspecialchars($currentValue) . '" alt="' . __('预览') . '">';
+        if ($previewUrl !== '') {
+            $inputHtml .= '<img src="' . htmlspecialchars($previewUrl) . '" alt="' . __('预览') . '">';
         }
-        $inputHtml .= '<div class="w-param-image-placeholder" style="' . ($hasImage ? 'display:none;' : '') . '">' . htmlspecialchars($placeholder) . '</div>';
+        $inputHtml .= '<div class="w-param-image-placeholder"' . ($hasImage ? ' hidden' : '') . '>' . htmlspecialchars($placeholder) . '</div>';
         $inputHtml .= '<div class="w-param-image-actions">';
-        $inputHtml .= '<button type="button" class="w-param-btn w-param-btn-sm w-param-btn-outline-primary" data-target="' . htmlspecialchars($fieldId) . '" title="' . __('从媒体库选择') . '">' . __('选择') . '</button>';
-        $inputHtml .= '<button type="button" class="w-param-btn w-param-btn-sm w-param-btn-outline-secondary" data-target="' . htmlspecialchars($fieldId) . '" title="' . __('上传图片') . '">' . __('上传') . '</button>';
+        $inputHtml .= '<button type="button" class="w-button w-param-image-select w-param-media-image-select" data-tone="primary" data-variant="outline" data-size="sm" data-target="' . htmlspecialchars($fieldId) . '" data-default-dir="' . htmlspecialchars((string)$defaultDir) . '" title="' . __('从媒体库选择') . '">' . __('选择') . '</button>';
         if ($hasImage) {
-            $inputHtml .= '<button type="button" class="w-param-btn w-param-btn-sm w-param-btn-outline-danger w-param-image-clear" data-target="' . htmlspecialchars($fieldId) . '" title="' . __('清除图片') . '">×</button>';
+            $inputHtml .= '<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="' . htmlspecialchars($fieldId) . '" aria-label="' . __('清除图片') . '">×</button>';
         }
         $inputHtml .= '</div></div>';
-        $inputHtml .= '<div class="w-param-input-group">';
-        $inputHtml .= '<span class="w-param-input-group-text">URL</span>';
-        $inputHtml .= '<input type="text" class="w-param-input" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($currentValue) . '" placeholder="' . __('图片URL') . '" data-preview="' . htmlspecialchars($fieldId) . '_preview">';
-        $inputHtml .= '</div>';
-        $inputHtml .= '<input type="file" style="display:none;" id="' . htmlspecialchars($fieldId) . '_file" accept="' . htmlspecialchars($accept) . '" data-target="' . htmlspecialchars($fieldId) . '"' . ($maxSize !== null ? ' data-max-size="' . (string)$maxSize . '"' : '') . '>';
-        $hints = [];
-        if ($maxSize !== null) {
-            $hints[] = sprintf(__('最大 %s KB'), $maxSize);
-        }
-        if ($aspectRatio !== null) {
-            $hints[] = sprintf(__('建议比例 %s'), $aspectRatio);
-        }
-        if (!empty($hints)) {
-            $inputHtml .= '<small class="w-param-image-hint">' . implode(' | ', $hints) . '</small>';
-        }
+        $inputHtml .= '<input type="hidden" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($storedValue) . '" data-preview="' . htmlspecialchars($fieldId) . '_preview" data-clear-label="' . __('清除图片') . '">';
         $inputHtml .= '</div>';
         return $this->wrapField($key, $param, $inputHtml, $layoutId);
     }
@@ -62,6 +48,12 @@ class ImageType extends AbstractParamType
         }
         if ($value === null || $value === '') {
             return true;
+        }
+        if ($this->normalizeFileImageNode($value) !== null) {
+            return true;
+        }
+        if (!is_scalar($value)) {
+            return false;
         }
         $url = (string)$value;
         if (str_starts_with($url, '/') || str_starts_with($url, './') || str_starts_with($url, '../')) {
@@ -78,6 +70,6 @@ class ImageType extends AbstractParamType
 
     public function processValue(mixed $value, array $param): mixed
     {
-        return trim((string)$value);
+        return $this->normalizeFileImageNode($value) ?? trim((string)$value);
     }
 }
