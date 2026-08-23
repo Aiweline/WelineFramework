@@ -138,14 +138,19 @@ final class ProviderUsageAuditUpgradeTest extends TestCase
         self::assertSame('column', $migration->getBackupStrategy()['strategy']);
     }
 
-    public function testModuleMetadataVersionMatchesUsageAuditMigrationVersion(): void
+    public function testModuleMetadataVersionIncludesUsageAuditMigration(): void
     {
         $module = require BP . 'app/code/Weline/Ai/etc/module.php';
         $register = (string)file_get_contents(BP . 'app/code/Weline/Ai/register.php');
+        $moduleVersion = $module['version'] ?? null;
 
-        self::assertSame('1.1.1', $module['version'] ?? null);
+        self::assertIsString($moduleVersion);
+        self::assertTrue(
+            version_compare($moduleVersion, '1.1.1', '>='),
+            'The current module version must include the historical 1.1.1 migration.',
+        );
         self::assertMatchesRegularExpression(
-            "/'Weline_Ai',\\s*__DIR__,\\s*'1\\.1\\.1'/s",
+            "/'Weline_Ai',\\s*__DIR__,\\s*'" . preg_quote($moduleVersion, '/') . "'/s",
             $register,
         );
     }

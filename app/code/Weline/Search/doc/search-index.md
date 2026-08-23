@@ -191,7 +191,7 @@ php bin/w setup:di:compile
 php bin/w setup:upgrade --stage=schema_diff -m Weline_Product
 php bin/w setup:upgrade --stage=schema_diff -m Weline_Search
 php bin/w query:help search
-php dev/ai/scripts/check-browser-business-requests.php --module=Weline_Search
+php 迁移前 AI 资料（已清理） --module=Weline_Search
 PLAYWRIGHT_INSTANCE_NAME=ai-test-p3c002-20260728-0048 \
 PLAYWRIGHT_TARGET_ORIGIN=https://127.0.0.1:9632 \
 PLAYWRIGHT_DISABLE_PROXY=1 PLAYWRIGHT_WORKERS=1 \

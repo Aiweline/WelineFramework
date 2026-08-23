@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weline.local/schemas/session-directives.v1.json",
+  "title": "Ephemeral Weline session directives receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "project_id", "client_session_id", "readiness_id",
+    "directive_count", "directives_hash", "persisted", "repository_written", "credentials_stored"
+  ],
+  "properties": {
+    "schema_version": {"const": "session-directives.v1"},
+    "status": {"const": "accepted"},
+    "project_id": {"type": "string", "minLength": 1},
+    "client_session_id": {"type": "string", "minLength": 1},
+    "readiness_id": {"type": "string", "minLength": 1},
+    "directive_count": {"type": "integer", "minimum": 0, "maximum": 50},
+    "directives_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "persisted": {"const": false},
+    "repository_written": {"const": false},
+    "credentials_stored": {"const": false}
+  }
+}

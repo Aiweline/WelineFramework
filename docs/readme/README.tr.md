@@ -11,7 +11,7 @@ WelineFramework, modüler web uygulamaları, yönetim sistemleri ve ticaret sena
 - Yeni yerel kurulum: tek adımlı installer kullanın.
 - PHP, Composer ve veritabanı hazır: temiz kurulum kullanın.
 - Mimari: [Weline architecture](../weline/README.md).
-- AI / Codex çalışması: [AI-ENTRY.md](../../AI-ENTRY.md) ile başlayın.
+- AI / Codex çalışması: [AGENTS.md](../../AGENTS.md) ile başlayın.
 
 ## Gereksinimler
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [Mimari genel bakış](../weline/架构总览.md)
 - [Geliştirme kılavuzu](../开发文档.md)
 - [Dağıtım kılavuzu](../部署文档.md)
-- [AI asistan girişi](../../AI-README.md)
+- [AI asistan girişi](../../AGENTS.md)
 
 ## Notlar
 

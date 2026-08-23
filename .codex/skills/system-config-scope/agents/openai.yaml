@@ -1,4 +1,0 @@
-interface:
-  display_name: "SystemConfig Scope"
-  short_description: "Weline module config, scope, and PHTML template rules"
-  default_prompt: "Use $system-config-scope when developing or reading Weline module configuration, scope-aware settings, or SystemConfig PHTML config templates."

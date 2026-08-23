@@ -1,6 +1,6 @@
 # FileManager 模块：媒体选择与分辨率配置
 
-本模块子计划，总计划见 [.cursor/plans/媒体选择与分辨率配置_676aad06.plan.md](../../../../.cursor/plans/媒体选择与分辨率配置_676aad06.plan.md)。
+本模块子计划，总计划见 [.cursor/plans/媒体选择与分辨率配置_676aad06.plan.md](../需求.md)。
 
 ## 目标
 

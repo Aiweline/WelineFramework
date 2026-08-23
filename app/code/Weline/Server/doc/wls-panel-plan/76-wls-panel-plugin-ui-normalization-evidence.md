@@ -29,7 +29,7 @@ app/code/Weline/Deploy/view/templates/Backend/WlsDeploy/index.phtml
 app/code/Weline/PhpManager/view/templates/Backend/WlsPhpManager/index.phtml
 app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
 app/code/Weline/FileManager/view/templates/Backend/WlsFileManager/index.phtml
-dev/ai/codex/tasks/2026-06-21/2026-06-21-1050-wls-panel-plugin-ui-normalization
+迁移前历史任务记录（已清理）
 ```
 
 ## Static Validation

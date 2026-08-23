@@ -1,21 +1,10 @@
-<!-- weline:module-readme:auto-generated -->
-# Weline_Base 模块文档
-
-> 本 README 由 `dev/ai/scripts/generate-missing-module-readmes.php` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
-
-## 当前入口
-
-开发前先读：
-
-1. `app/code/Weline/Base/doc/AI-INDEX.md`
-2. `dev/ai/diagrams/08-module-docs-index.txt`
-3. `dev/ai/global-constraints.md`
+# Weline_Base
 
 ## 模块定位
 
 - 模块代码：`Weline_Base`
 - 目录：`app/code/Weline/Base`
-- 当前状态：非运行时注册模块，作为根项目安装默认发行模块集的 Composer 聚合包。
+- 当前状态：非运行时注册模块；作为默认发行模块集的 Composer 聚合包。
 
 ## 代码面概览
 
@@ -31,14 +20,9 @@
 - 模块包更名时必须同步本聚合包，不得继续依赖旧别名。
 - Path repository 只负责发现本地包；是否纳入默认发行集以 Base `composer.json` 的 `require` 为准。
 
-## 本模块文档资产
+## 维护边界
 
-- 当前除 `AI-INDEX.md` 外没有其他模块文档。后续一旦涉及稳定行为、接口或配置约定，请把长期说明补到本目录。
-
-## 维护规则
-
-- 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
-- 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
-- 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
-- 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。
-- 本 README 目前是结构稿；后续功能稳定后，应继续补模块职责、关键流程、接口与反例。
+- 本包没有运行时代码、模块注册或数据库升级；不要把业务逻辑放入此目录。
+- 默认发行模块的增删或包名变更必须同步 `composer.json`，并通过 Composer 依赖解析验证。
+- 某模块存在于 path repository 不代表进入默认发行集；是否默认安装以本包 `require` 为准。
+- 长期需求和依赖集变更分别记录在 [需求](需求.md) 与 [开发日志](开发日志.md)。

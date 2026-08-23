@@ -99,7 +99,7 @@ class AssetMerger implements AssetMergerInterface
 ### 接口层 (Interface Layer)
 
 ```
-app/code/Weline/Theme/Helper/Interface/
+../Helper/Interface/
 ├── ThemeChainResolverInterface.php    # 主题链解析接口
 ├── AssetScannerInterface.php          # 资源扫描接口
 ├── AssetDeduplicatorInterface.php     # 资源去重接口
@@ -110,7 +110,7 @@ app/code/Weline/Theme/Helper/Interface/
 ### 实现层 (Implementation Layer)
 
 ```
-app/code/Weline/Theme/Helper/
+../Helper/
 ├── ThemeChainResolver.php              # 主题链解析实现
 ├── AssetScanner.php                    # 资源扫描实现
 ├── AssetDeduplicator.php               # 资源去重实现
@@ -220,6 +220,6 @@ $assetMerger = new AssetMerger($theme, $mockResolver, $mockScanner);
 
 ## 相关文件
 
-- [接口定义](app/code/Weline/Theme/Helper/Interface/)
-- [实现类](app/code/Weline/Theme/Helper/)
-- [观察者](app/code/Weline/Theme/Observer/TemplateFetchFile.php)
+- [接口定义](../Helper/Interface/)
+- [实现类](../Helper/)
+- [观察者](../Observer/TemplateFetchFile.php)

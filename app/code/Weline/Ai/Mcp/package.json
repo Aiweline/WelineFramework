@@ -1,0 +1,52 @@
+{
+  "name": "weline-codex-mcp",
+  "version": "0.13.0",
+  "description": "PHP Weline Project Intelligence MCP server with a dependency-free Node launcher and durable execution runs and a live MCP App.",
+  "license": "Apache-2.0",
+  "author": "Aiweline",
+  "homepage": "https://github.com/Aiweline/Weline-Codex-Mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Aiweline/Weline-Codex-Mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aiweline/Weline-Codex-Mcp.git"
+  },
+  "type": "commonjs",
+  "bin": {
+    "weline-codex-mcp": "bin/weline-mcp.js",
+    "weline-mcp": "bin/weline-mcp.js"
+  },
+  "files": [
+    "bin/",
+    "docs/",
+    "examples/",
+    "index-migrations/",
+    "migrations/",
+    "prompts/",
+    "schemas/",
+    "scripts/",
+    "src/",
+    "ui/",
+    "config.example.yaml",
+    "install.sh",
+    "start.bat",
+    "start.sh",
+    "README.md",
+    "README.en.md",
+    "README.ja.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check:node": "node --check bin/weline-mcp.js",
+    "doctor": "php bin/learningctl doctor",
+    "test:readiness": "php tests/project-readiness.php"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["codex", "mcp", "mcp-app", "model-context-protocol", "php", "project-intelligence", "code-index", "readiness"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

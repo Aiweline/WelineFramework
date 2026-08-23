@@ -1,4 +1,4 @@
-> 警告：本文是历史主题设计资料，仅用于理解早期设计思路，不是当前开发规范。当前主题开发先读 `app/code/Weline/Theme/doc/AI-INDEX.md`、`app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`、`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`；浏览器业务请求只使用 `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`。
+> 警告：本文是历史主题设计资料，仅用于理解早期设计思路，不是当前开发规范。当前主题开发先调用 `resolve_task_context` 获取任务约束，再参考 `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`、`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`；浏览器业务请求只使用 `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`。
 
 # assets/ 目录文档
 
@@ -703,4 +703,3 @@ if ($themeMode && $themeMode !== 'light'): ?>
 - [variables/ 目录文档](./variables目录文档.md)
 - [colors/ 目录文档](./colors目录文档.md)
 - [components/ 目录文档](./components目录文档.md)
-

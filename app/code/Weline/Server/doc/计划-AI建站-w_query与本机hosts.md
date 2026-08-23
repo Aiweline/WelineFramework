@@ -82,4 +82,4 @@ curl -k https://p11005ce4.weline.localhost:8443/ -I
 ## 关联文档
 
 - [Websites 侧 AI 建站工作台计划](../../Websites/doc/计划-AI建站工作台-Websites侧.md)
-- [WLS 端口冲突修复记录](./WLS-PORT-CONFLICT-FIX.md)
+- [WLS 端口冲突修复记录](./WLS-Lifecycle-IPC-Hardening-2026-05-23.md)

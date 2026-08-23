@@ -2,7 +2,7 @@
 
 Date: 2026-06-21
 
-Task: `dev/ai/codex/tasks/2026-06-21/2026-06-21-1408-wls-panel-current-integrated-verification-refresh`
+Task: `迁移前历史任务记录（已清理）`
 
 Status: passed for the current integrated browser smoke on a dedicated WLS
 instance. This is an acceptance refresh only; it does not change production
@@ -813,7 +813,7 @@ Results:
 ## 2026-06-22 WLS Panel Current Release-Candidate Browser Sweep
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep`
+`迁移前历史任务记录（已清理）`
 
 Scope:
 
@@ -829,8 +829,8 @@ Validation:
 ```text
 php bin/w server:start ai-test-wls-panel-rc-10044 -p 10044 --no-ssl -c 2 --worker-memory-limit=512M --dispatcher-memory-limit=512M
 route precheck for /server/backend/wls-panel, /weline_phpmanager/backend/wls-php-manager, and /deploy/backend/wls-deploy
-node --check dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/wls-panel-rc-cdp-smoke.mjs
-node dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/wls-panel-rc-cdp-smoke.mjs
+node --check 迁移前历史任务记录（已清理）
+node 迁移前历史任务记录（已清理）
 php bin/w server:stop ai-test-wls-panel-rc-10044
 php bin/w server:status ai-test-wls-panel-rc-10044
 Get-NetTCPConnection -LocalPort 10044 -State Listen
@@ -861,16 +861,16 @@ Results:
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/wls-panel-rc-cdp-smoke.mjs
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/wls-panel-rc-cdp-smoke-result.json
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/dashboard-desktop-light-1440.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/dashboard-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/marketplace-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/security-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/php-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/db-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/file-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0703-wls-panel-current-release-candidate-browser-sweep/artifacts/deploy-phone-dark-390.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 ## 2026-06-22 PhpManager Guarded Extension Adapter Slice
@@ -943,8 +943,8 @@ Results:
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0558-wls-php-extension-guarded-adapter/php-extension-adapter-desktop.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0558-wls-php-extension-guarded-adapter/php-extension-adapter-desktop-wrapped.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 ## 2026-06-22 DbManager Guarded Migration Execution Slice
@@ -978,16 +978,16 @@ php -l app/code/Weline/DbManager/Service/WlsDatabaseMigrationPreflightService.ph
 php -l app/code/Weline/DbManager/Service/WlsDatabaseProjectHealthService.php
 php -l app/code/Weline/DbManager/Controller/Backend/WlsDbManager.php
 php -l app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
-php dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/migration-execution-guard-probe.php
+php 迁移前历史任务记录（已清理）
 docker network create wls-migration-net
 docker run -d --name wls-migration-mariadb --network wls-migration-net mariadb:11.4
 docker run --rm --network wls-migration-net -v E:/WelineFramework/DEV-workspace:/work -w /work php:8.4-cli bash -lc "... migration-execution-mariadb-harness.php"
 docker rm -f wls-migration-mariadb
 docker network rm wls-migration-net
 php bin/w server:start ai-test-wls-db-migration-10042 --port=10042 --no-ssl -c 2 --worker-memory-limit=512M
-php dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-execution-browser-fixture.php prepare
+php 迁移前历史任务记录（已清理） prepare
 Codex in-app Browser smoke against the prepared DbManager URL
-php dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-execution-browser-fixture.php cleanup
+php 迁移前历史任务记录（已清理） cleanup
 php bin/w server:stop ai-test-wls-db-migration-10042
 php bin/w server:status ai-test-wls-db-migration-10042
 git diff --check -- <touched file set>
@@ -1035,13 +1035,13 @@ Results:
 Evidence:
 
 ```text
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/migration-execution-guard-probe.php
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-execution-mariadb-harness.php
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-execution-browser-smoke-result.json
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-desktop-1280-light.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-desktop-1280-dark.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-phone-390-dark.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0504-wls-db-migration-execution-guarded-adapter/artifacts/migration-phone-390-light.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 ## 2026-06-22 DbManager Guarded SQL Apply Slice
@@ -1070,13 +1070,13 @@ php -l app/code/Weline/DbManager/Service/WlsDatabaseSqlApplyExecutionService.php
 php -l app/code/Weline/DbManager/Service/WlsDatabaseBackupPlanService.php
 php -l app/code/Weline/DbManager/Controller/Backend/WlsDbManager.php
 php -l app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
-php dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/sql-apply-guard-probe.php
-php dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/static-validate.php
+php 迁移前历史任务记录（已清理）
+php 迁移前历史任务记录（已清理）
 php bin/w server:start ai-test-wls-db-sql-apply-10041 -p 10041 -c 1 --no-ssl --supervisor false --worker-memory-limit=512M --dispatcher-memory-limit=512M
-php dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-browser-fixture.php prepare
-node --check dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-browser-smoke.mjs
-node dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-browser-smoke.mjs
-php dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-browser-fixture.php cleanup
+php 迁移前历史任务记录（已清理） prepare
+node --check 迁移前历史任务记录（已清理）
+node 迁移前历史任务记录（已清理）
+php 迁移前历史任务记录（已清理） cleanup
 php bin/w server:stop ai-test-wls-db-sql-apply-10041
 php bin/w server:status ai-test-wls-db-sql-apply-10041
 curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:10041/
@@ -1123,14 +1123,14 @@ Results:
 Evidence:
 
 ```text
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/sql-apply-guard-probe.php
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/static-validate.php
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-browser-smoke-result.json
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-desktop-1280-light.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-desktop-1280-dark.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-phone-390-light.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-phone-390-dark.png
-dev/ai/codex/tasks/2026-06-22/2026-06-22-0415-wls-db-sql-apply-guarded-adapter/artifacts/sql-apply-mariadb-harness.php
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 ## 2026-06-21 Worker Self-Heal Observability Follow-up
@@ -1345,11 +1345,11 @@ Results:
 Evidence:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-2055-wls-db-postgres-reset-restore-visual-smoke/artifacts/browser-smoke-result.json
-dev/ai/codex/tasks/2026-06-21/2026-06-21-2055-wls-db-postgres-reset-restore-visual-smoke/artifacts/dbmanager-restore-reset-desktop-light.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-2055-wls-db-postgres-reset-restore-visual-smoke/artifacts/dbmanager-restore-reset-desktop-dark.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-2055-wls-db-postgres-reset-restore-visual-smoke/artifacts/dbmanager-restore-reset-mobile-light-form.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-2055-wls-db-postgres-reset-restore-visual-smoke/artifacts/dbmanager-restore-reset-mobile-dark-form-visible.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 ## 2026-06-21 DbManager Explicit Slave Create / Remove Slice
@@ -1452,7 +1452,7 @@ Results:
   `data-wdb-slave-can-create="0"`, `data-wdb-slave-count="0"`, no destructive
   create/remove form exposed, and visible Project Database Profile guidance.
 - Screenshots and JSON evidence are stored in
-  `dev/ai/codex/tasks/2026-06-21/2026-06-21-1909-wls-db-slave-management-visual-smoke/artifacts/`.
+  `迁移前历史任务记录（已清理）`.
 - Cleanup passed: final `server:status` reported `全部停止 (0/0)`, and the
   final curl to port `10030` failed to connect as expected.
 
@@ -1726,7 +1726,7 @@ Results:
   light states. The form hierarchy, guarded warning, checkbox, copy wrapping,
   and disabled action button remained readable without overlap.
 - Evidence JSON:
-  `dev/ai/codex/tasks/2026-06-21/2026-06-21-1553-wls-db-migration-preflight-visual-smoke/artifacts/dbmanager-migration-preflight-visual-smoke-result.json`.
+  `迁移前历史任务记录（已清理）`.
 - Cleanup for the focused visual-smoke instance completed:
   `php bin\w server:stop ai-test-wls-db-migration-vis-10024` drained the
   Dispatcher and two Workers, and final `server:status` reported
@@ -1786,7 +1786,7 @@ Results:
   light states. The restore boundary hierarchy, guarded warning, checkbox,
   copy wrapping, and disabled action button remained readable without overlap.
 - Evidence JSON:
-  `dev/ai/codex/tasks/2026-06-21/2026-06-21-1607-wls-db-restore-preflight-visual-smoke/artifacts/dbmanager-restore-preflight-visual-smoke-result.json`.
+  `迁移前历史任务记录（已清理）`.
 - Cleanup for the focused visual-smoke instance completed:
   `php bin\w server:stop ai-test-wls-db-restore-vis-10026` drained the
   Dispatcher and two Workers, and final `server:status` reported
@@ -1846,7 +1846,7 @@ Results:
   checkbox state was visible, and the disabled action stayed visually contained
   without overlap.
 - Evidence JSON:
-  `dev/ai/codex/tasks/2026-06-21/2026-06-21-1619-wls-deploy-rollback-gate-browser-smoke/artifacts/wls-deploy-rollback-gate-browser-smoke-result.json`.
+  `迁移前历史任务记录（已清理）`.
 - Screenshot evidence:
   `wls-deploy-rollback-gate-desktop-1280-light.png`,
   `wls-deploy-rollback-gate-desktop-1280-dark.png`,
@@ -1919,11 +1919,11 @@ Results:
 
 Evidence:
 
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0535-wls-db-project-health-summary/artifacts/browser-smoke-result.json`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0535-wls-db-project-health-summary/artifacts/dbmanager-project-health-desktop-light.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0535-wls-db-project-health-summary/artifacts/dbmanager-project-health-desktop-dark.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0535-wls-db-project-health-summary/artifacts/dbmanager-project-health-mobile-light-visible.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0535-wls-db-project-health-summary/artifacts/dbmanager-project-health-mobile-dark.png`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 DbManager Project Health Active Probe Slice
 
@@ -1999,12 +1999,12 @@ Results:
 
 Evidence:
 
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2152-wls-db-health-active-probe/artifacts/browser-smoke-result.json`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2152-wls-db-health-active-probe/artifacts/health-probe-sqlite-smoke.php`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2152-wls-db-health-active-probe/artifacts/dbmanager-health-probe-desktop-light.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2152-wls-db-health-active-probe/artifacts/dbmanager-health-probe-desktop-dark.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2152-wls-db-health-active-probe/artifacts/dbmanager-health-probe-mobile-current.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2152-wls-db-health-active-probe/artifacts/dbmanager-health-probe-mobile-toggled.png`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 DbManager Project Health Browser Success Slice
 
@@ -2075,12 +2075,12 @@ Results:
 
 Evidence:
 
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2228-wls-db-health-browser-success-probe/artifacts/browser-success-result.json`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2228-wls-db-health-browser-success-probe/artifacts/audit-health-probe.json`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2228-wls-db-health-browser-success-probe/artifacts/dbmanager-health-success-desktop-light.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2228-wls-db-health-browser-success-probe/artifacts/dbmanager-health-success-desktop-dark.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2228-wls-db-health-browser-success-probe/artifacts/dbmanager-health-success-mobile-current.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2228-wls-db-health-browser-success-probe/artifacts/dbmanager-health-success-mobile-toggled.png`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 WLS Panel Security Policy Audit Filter Slice
 
@@ -2120,7 +2120,7 @@ php -l dev\ai\codex\tasks\2026-06-21\2026-06-21-2245-wls-panel-security-policy-a
 php dev\ai\codex\tasks\2026-06-21\2026-06-21-2245-wls-panel-security-policy-audit-filters\artifacts\security-policy-audit-filter-probe.php
 php dev\ai\codex\tasks\2026-06-21\2026-06-21-2245-wls-panel-security-policy-audit-filters\artifacts\validate-server-i18n-csv.php
 rg -n "alert\(|confirm\(|prompt\(" app\code\Weline\Server\view\templates\Backend\WlsPanel\index.phtml
-git diff --check -- app/code/Weline/Server/Service/WlsPanelSecurityDataService.php app/code/Weline/Server/Controller/Backend/WlsPanel.php app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml app/code/Weline/Server/i18n/en_US.csv app/code/Weline/Server/i18n/zh_Hans_CN.csv dev/ai/codex/tasks/2026-06-21/2026-06-21-2245-wls-panel-security-policy-audit-filters
+git diff --check -- app/code/Weline/Server/Service/WlsPanelSecurityDataService.php app/code/Weline/Server/Controller/Backend/WlsPanel.php app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml app/code/Weline/Server/i18n/en_US.csv app/code/Weline/Server/i18n/zh_Hans_CN.csv 迁移前历史任务记录（已清理）
 php bin\w server:status ai-test-wls-sec-audit-10038
 curl.exe -I --max-time 10 http://127.0.0.1:10038/
 curl.exe -I --max-time 10 "http://127.0.0.1:10038/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/security?policy_audit_action=save&policy_audit_source=panel&policy_audit_domain=*&policy_audit_section=rate_limit&policy_audit_keyword=domain&policy_audit_limit=5"
@@ -2160,8 +2160,8 @@ Results:
 
 Evidence:
 
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2245-wls-panel-security-policy-audit-filters/artifacts/security-policy-audit-filter-probe.json`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2245-wls-panel-security-policy-audit-filters/artifacts/server-i18n-csv-validation.json`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 WLS Panel Security Policy Audit Filter Visual Smoke
 
@@ -2226,11 +2226,11 @@ Results:
 
 Evidence:
 
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0715-wls-security-audit-filter-visual-smoke/artifacts/security-audit-filter-visual-smoke-result.json`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0715-wls-security-audit-filter-visual-smoke/artifacts/security-audit-filter-desktop-1280-light.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0715-wls-security-audit-filter-visual-smoke/artifacts/security-audit-filter-desktop-1280-dark.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0715-wls-security-audit-filter-visual-smoke/artifacts/security-audit-filter-phone-390-light.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0715-wls-security-audit-filter-visual-smoke/artifacts/security-audit-filter-phone-390-dark.png`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 WLS Panel Project Config And Legacy Marketplace Entry Smoke
 
@@ -2334,19 +2334,19 @@ code=200
 
 Evidence:
 
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-current-smoke-report.json`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-current-dashboard-1440-light.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-current-dashboard-390-dark.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-current-marketplace-1440-light.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-current-marketplace-390-dark.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-current-security-1440-light.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-current-security-390-dark.png`
-- `dev/ai/codex/tasks/2026-06-21/2026-06-21-2325-wls-project-config-center-first-slice/artifacts/wls-panel-legacy-marketplace-redirect-report.json`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 WLS Panel Project Readiness Summary
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0002-wls-panel-project-readiness-summary`
+`迁移前历史任务记录（已清理）`
 
 ### Scope
 
@@ -2405,16 +2405,16 @@ curl.exe -I --max-time 5 http://127.0.0.1:10041/
 
 ### Artifacts
 
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0002-wls-panel-project-readiness-summary/artifacts/wls-panel-project-readiness-cdp-smoke-result.json`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0002-wls-panel-project-readiness-summary/artifacts/wls-project-readiness-desktop-1440-light.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0002-wls-panel-project-readiness-summary/artifacts/wls-project-readiness-phone-390-dark.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0002-wls-panel-project-readiness-summary/artifacts/wls-project-readiness-section-desktop-1440-light.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0002-wls-panel-project-readiness-summary/artifacts/wls-project-readiness-section-phone-390-dark.png`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 WLS Deploy Release Path Browser Smoke
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0025-wls-deploy-browser-release-history-path`
+`迁移前历史任务记录（已清理）`
 
 ### Scope
 
@@ -2470,17 +2470,17 @@ curl.exe -I --max-time 5 http://127.0.0.1:10042/
 
 ### Artifacts
 
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0025-wls-deploy-browser-release-history-path/artifacts/wls-deploy-release-path-cdp-smoke-result.json`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0025-wls-deploy-browser-release-history-path/artifacts/wls-deploy-release-path-desktop-1440-light.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0025-wls-deploy-browser-release-history-path/artifacts/wls-deploy-release-path-phone-390-dark.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0025-wls-deploy-browser-release-history-path/artifacts/wls-deploy-release-path-section-desktop-1440-light.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0025-wls-deploy-browser-release-history-path/artifacts/wls-deploy-release-path-section-phone-390-dark.png`
-- `dev/ai/codex/tasks/2026-06-22/2026-06-22-0025-wls-deploy-browser-release-history-path/artifacts/wls-deploy-release-path-history-click-desktop-1440-light.png`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
+- `迁移前历史任务记录（已清理）`
 
 ## 2026-06-22 Official Marketplace Typed Tag Source Contract
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0112-official-marketplace-typed-tag-evidence`
+`迁移前历史任务记录（已清理）`
 
 ### Scope
 
@@ -2517,7 +2517,7 @@ php vendor\phpunit\phpunit\phpunit app\code\Weline\PlatformAppStore\test\Unit\Se
 ## 2026-06-22 Current Environment Gate Refresh
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0947-wls-panel-environment-gate-refresh`
+`迁移前历史任务记录（已清理）`
 
 Scope:
 
@@ -2569,7 +2569,7 @@ Conclusion:
 ## 2026-06-22 WLS Direct-Listen Supported Runner Proof
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0729-wls-direct-listen-supported-runner-proof`
+`迁移前历史任务记录（已清理）`
 
 Scope:
 
@@ -2588,13 +2588,13 @@ Scope:
 Validation commands:
 
 ```powershell
-docker build -t wls-direct-listen-proof:20260622 -f dev/ai/codex/tasks/2026-06-22/2026-06-22-0729-wls-direct-listen-supported-runner-proof/artifacts/Dockerfile.direct-listen-proof .
-docker run --rm -v E:/WelineFramework/DEV-workspace:/work -w /work wls-direct-listen-proof:20260622 php dev/ai/codex/tasks/2026-06-22/2026-06-22-0729-wls-direct-listen-supported-runner-proof/artifacts/runtime-capability-probe.php
+docker build -t wls-direct-listen-proof:20260622 -f 迁移前历史任务记录（已清理） .
+docker run --rm -v E:/WelineFramework/DEV-workspace:/work -w /work wls-direct-listen-proof:20260622 php 迁移前历史任务记录（已清理）
 docker run --rm -v E:/WelineFramework/DEV-workspace:/work -w /work wls-direct-listen-proof:20260622 php bin/w server:doctor ai-test-wls-direct-docker-10045 --json
 docker run -d --name wls-direct-proof-10045 -p 10045:10045 -v E:/WelineFramework/DEV-workspace:/work -w /work wls-direct-listen-proof:20260622 bash -lc "php bin/w server:start ai-test-wls-direct-docker-10045 -p 10045 --host 0.0.0.0 --no-ssl -c 2 --direct --worker-memory-limit=512M --dispatcher-memory-limit=512M; tail -f /dev/null"
 docker exec wls-direct-proof-10045 php bin/w server:start ai-test-wls-dispatcher-docker-10046 -p 10046 --host 127.0.0.1 --no-ssl -c 2 --dispatcher --worker-memory-limit=512M --dispatcher-memory-limit=512M
-docker exec wls-direct-proof-10045 php dev/ai/codex/tasks/2026-06-22/2026-06-22-0729-wls-direct-listen-supported-runner-proof/artifacts/health-distribution-probe.php "http://127.0.0.1:10045/_wls/health?detail=1" 3000 150
-docker exec wls-direct-proof-10045 php dev/ai/codex/tasks/2026-06-22/2026-06-22-0729-wls-direct-listen-supported-runner-proof/artifacts/health-distribution-probe.php "http://127.0.0.1:10046/_wls/health?detail=1" 3000 150
+docker exec wls-direct-proof-10045 php 迁移前历史任务记录（已清理） "http://127.0.0.1:10045/_wls/health?detail=1" 3000 150
+docker exec wls-direct-proof-10045 php 迁移前历史任务记录（已清理） "http://127.0.0.1:10046/_wls/health?detail=1" 3000 150
 docker exec wls-direct-proof-10045 php bin/w server:stop ai-test-wls-dispatcher-docker-10046
 docker exec wls-direct-proof-10045 php bin/w server:stop ai-test-wls-direct-docker-10045
 docker rm -f wls-direct-proof-10045
@@ -2642,7 +2642,7 @@ Notes:
 ## 2026-06-22 Superseded Public Marketplace Probe
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0755-official-marketplace-wls-typed-tag-live-e2e`
+`迁移前历史任务记录（已清理）`
 
 Scope:
 
@@ -2859,7 +2859,7 @@ Remove-Item Env:\WLS_MARKETPLACE_BEARER_TOKEN
 ## 2026-06-22 GitNexus CLI Recovery Probe
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-0201-wls-gitnexus-cli-recovery`
+`迁移前历史任务记录（已清理）`
 
 Scope:
 
@@ -2930,7 +2930,7 @@ Results:
 ## 2026-06-22 Database Restore Rollback Automation
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-1128-wls-db-restore-rollback-automation`
+`迁移前历史任务记录（已清理）`
 
 Scope:
 
@@ -3001,7 +3001,7 @@ Residual risk:
 ## 2026-06-22 Integrated Panel Regression After DB Rollback
 
 Task:
-`dev/ai/codex/tasks/2026-06-22/2026-06-22-1240-wls-panel-integrated-rollback-regression`
+`迁移前历史任务记录（已清理）`
 
 Scope:
 
@@ -3021,7 +3021,7 @@ $env:WLS_BASE_URL='http://127.0.0.1:10040'
 $env:WLS_BACKEND_ENTRY='U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8'
 $env:CDP_PORT='9369'
 $env:BROWSER_PATH='C:/Program Files/Google/Chrome/Application/chrome.exe'
-$env:OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-22/2026-06-22-1240-wls-panel-integrated-rollback-regression/artifacts'
+$env:OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理）
 node dev\ai\codex\tasks\2026-06-19\2026-06-19-1551-wls-panel-multi-page-visual-smoke\artifacts\wls-panel-multi-page-cdp-smoke.mjs
 
 php bin\w server:stop ai-test-wls-panel-reg-rollback-10040
@@ -3194,7 +3194,7 @@ Results:
   there was no login fallback, fatal text, target-page console error, or
   horizontal overflow.
 - Screenshot and JSON evidence were saved under
-  `dev/ai/codex/tasks/2026-06-22/2026-06-22-2056-wls-appstore-endpoint-observability/artifacts/`.
+  `迁移前历史任务记录（已清理）`.
 - Cleanup passed: `server:stop` drained the test instance,
   `server:status` reported `全部停止 (0/0)`, and the final curl probe could not
   connect to port `10052`.

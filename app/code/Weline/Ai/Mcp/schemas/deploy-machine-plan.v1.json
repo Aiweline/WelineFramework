@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weline.io/schemas/deploy-machine-plan.v1.json",
+  "title": "Weline read-only deployment plan",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "status",
+    "development_blocked",
+    "deployment_blocked",
+    "release_executed",
+    "orchestrator_called"
+  ],
+  "properties": {
+    "schema_version": { "const": "deploy-machine-plan.v1" },
+    "operation": { "enum": ["config", "preflight", "release"] },
+    "target": { "enum": ["local", "staging", "production"] },
+    "status": { "enum": ["ready", "needs_configuration", "blocked", "not_applicable"] },
+    "development_blocked": { "type": "boolean" },
+    "deployment_blocked": { "type": "boolean" },
+    "repository_written": { "const": false },
+    "settings_written": { "const": false },
+    "requires_execution_authorization": { "type": "boolean" },
+    "execution_authorized": { "const": false },
+    "release_executed": { "const": false },
+    "orchestrator_called": { "const": false },
+    "checks": { "type": "array", "items": { "type": "object" } },
+    "blockers": { "type": "array", "items": { "type": "object" } },
+    "configuration": { "type": "object" },
+    "release": { "type": "object" },
+    "bridge": { "type": "object" }
+  }
+}

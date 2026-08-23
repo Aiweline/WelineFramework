@@ -201,12 +201,12 @@ interface DomainRegistrarInterface extends
 
 | 技能 | 路径 | 说明 |
 |------|------|------|
-| code-generation-standards | `dev/ai/skills/code-generation-standards/SKILL.md` | 架构分层、框架边界 |
-| module-development | `dev/ai/skills/module-development/SKILL.md` | 模块开发规范、setup:upgrade |
-| create-extends | `dev/ai/skills/create-extends/SKILL.md` | 扩展点定义 |
-| unified-query-provider | `dev/ai/skills/unified-query-provider/SKILL.md` | QueryProvider 修改 |
-| php-unit-testing | `dev/ai/skills/php-unit-testing/SKILL.md` | 单元测试 |
-| i18n-internationalization | `dev/ai/skills/i18n-internationalization/SKILL.md` | 翻译文案 |
+| code-generation-standards | `归属模块文档（由 MCP 动态检索）` | 架构分层、框架边界 |
+| module-development | `归属模块文档（由 MCP 动态检索）` | 模块开发规范、setup:upgrade |
+| create-extends | `归属模块文档（由 MCP 动态检索）` | 扩展点定义 |
+| unified-query-provider | `归属模块文档（由 MCP 动态检索）` | QueryProvider 修改 |
+| php-unit-testing | `归属模块文档（由 MCP 动态检索）` | 单元测试 |
+| i18n-internationalization | `归属模块文档（由 MCP 动态检索）` | 翻译文案 |
 
 ---
 

@@ -10,7 +10,7 @@
 [Architecture](./docs/weline/README.md) ·
 [WLS](./app/code/Weline/Server/doc/README.md) ·
 [Languages](./docs/readme/README.md) ·
-[AI Engineering Entry](./AI-ENTRY.md)
+[AI Engineering Entry](./AGENTS.md)
 
 ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4?logo=php&logoColor=white)
 ![Composer 2.7+](https://img.shields.io/badge/Composer-2.7%2B-885630?logo=composer&logoColor=white)

@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weline 变更报告</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f7f8fb;
+  --panel: #ffffff;
+  --panel-subtle: #f8fafc;
+  --text: #172033;
+  --muted: #5f6b7d;
+  --line: #d9e0ea;
+  --brand: #356df3;
+  --selected: #edf3ff;
+  --hover: #f3f6fb;
+  --good: #087a55;
+  --warn: #9a5a00;
+  --bad: #b4233c;
+  --code: #101828;
+  --code-text: #e6edf7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1424;
+    --panel: #111c30;
+    --panel-subtle: #0e192b;
+    --text: #edf3ff;
+    --muted: #a6b2c4;
+    --line: #2b3950;
+    --brand: #83a7ff;
+    --selected: #172a4a;
+    --hover: #15243c;
+    --good: #5ad8a6;
+    --warn: #ffc46b;
+    --bad: #ff8795;
+    --code: #08101d;
+    --code-text: #dce7f8;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+button { font: inherit; }
+.app {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 10px;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.heading { min-width: 0; flex: 1; }
+.title { font-size: 15px; line-height: 1.2; font-weight: 750; }
+.sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.badge {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ok { color: var(--good); }
+.warning { color: var(--warn); }
+.error { color: var(--bad); }
+.summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-top: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 20px;
+  padding: 1px 9px;
+  border-right: 1px solid var(--line);
+  white-space: nowrap;
+}
+.metric:first-child { padding-left: 2px; }
+.metric:last-child { border-right: 0; }
+.metric b { font-size: 12px; }
+.metric span { color: var(--muted); font-size: 11px; }
+.report {
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 700;
+}
+.count {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.files {
+  max-height: 320px;
+  overflow: auto;
+}
+.file {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.file:last-child { border-bottom: 0; }
+.file:hover { background: var(--hover); }
+.file.active { background: var(--selected); }
+.file:focus-visible,
+.close:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.chevron {
+  display: inline-flex;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+.file.active .chevron { transform: rotate(90deg); color: var(--brand); }
+.file-main { min-width: 0; }
+.path {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.file-numbers {
+  display: inline-flex;
+  gap: 7px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.plus { color: var(--good); }
+.minus { color: var(--bad); }
+.preview { border-top: 1px solid var(--line); }
+.preview-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 5px 8px 5px 10px;
+  background: var(--panel-subtle);
+}
+.preview-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hunks { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.close:hover { background: var(--hover); color: var(--text); }
+pre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 9px 10px;
+  background: var(--code);
+  color: var(--code-text);
+  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre;
+}
+pre.empty-diff {
+  color: #a9b6ca;
+  white-space: pre-wrap;
+}
+.empty {
+  padding: 11px 10px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.flags:empty { display: none; }
+.flag {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+details { margin-top: 7px; }
+summary {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.details {
+  margin-top: 4px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .app { padding: 8px; }
+  .summary { align-items: flex-start; }
+  .metric { padding: 1px 7px; }
+  .file { grid-template-columns: 16px minmax(0, 1fr); }
+  .file-numbers { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .file, .chevron { transition: none; }
+}
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <div class="heading">
+      <div class="title">Weline 变更报告</div>
+      <div class="sub" id="subtitle">等待工具结果…</div>
+    </div>
+    <div class="badge" id="state" aria-live="polite">等待</div>
+  </header>
+
+  <section class="summary" id="stats" aria-label="变更摘要"></section>
+
+  <section class="report" aria-label="修改文件">
+    <div class="panel-head">
+      <span>修改文件</span>
+      <span class="count" id="fileCount">0</span>
+    </div>
+    <div class="files" id="files">
+      <div class="empty">暂无变更数据</div>
+    </div>
+    <section class="preview" id="preview" aria-label="文件差异" hidden>
+      <div class="preview-head">
+        <span class="preview-title" id="diffTitle">差异预览</span>
+        <span class="hunks" id="hunks"></span>
+        <button class="close" id="closeDiff" type="button" aria-label="收起差异">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </div>
+      <pre id="diff" tabindex="0"></pre>
+    </section>
+  </section>
+
+  <div class="flags" id="flags"></div>
+
+  <details>
+    <summary>事务详情</summary>
+    <div class="details" id="details"></div>
+  </details>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var latest = {};
+  var selectedIndex = -1;
+
+  function number(value) {
+    var parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function text(value) {
+    return value === undefined || value === null ? "" : String(value);
+  }
+
+  function escapeHtml(value) {
+    return text(value).replace(/[&<>"']/g, function (character) {
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[character];
+    });
+  }
+
+  function parseJson(value) {
+    if (typeof value !== "string") {
+      return value;
+    }
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      return value;
+    }
+  }
+
+  function contentPayload(content) {
+    if (!Array.isArray(content)) {
+      return null;
+    }
+    for (var index = 0; index < content.length; index += 1) {
+      if (content[index] && content[index].type === "text") {
+        var parsed = parseJson(content[index].text);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  function unwrap(payload) {
+    var current = payload;
+    for (var depth = 0; depth < 8; depth += 1) {
+      if (typeof current === "string") {
+        var parsedString = parseJson(current);
+        if (parsedString === current) {
+          break;
+        }
+        current = parsedString;
+        continue;
+      }
+      if (!current || typeof current !== "object") {
+        break;
+      }
+      if (current.structuredContent) {
+        current = current.structuredContent;
+        continue;
+      }
+      if (current.result && current.result.structuredContent) {
+        current = current.result.structuredContent;
+        continue;
+      }
+      if (current.toolOutput) {
+        current = current.toolOutput;
+        continue;
+      }
+      if (current.globals && current.globals.toolOutput) {
+        current = current.globals.toolOutput;
+        continue;
+      }
+      if (current.params) {
+        current = current.params;
+        continue;
+      }
+      var parsedContent = contentPayload(current.content);
+      if (parsedContent) {
+        current = parsedContent;
+        continue;
+      }
+      if (current.result && !current.edit_id && !current.change_report && !current.changeReport) {
+        current = current.result;
+        continue;
+      }
+      if (current.data && !current.edit_id && !current.change_report && !current.changeReport) {
+        current = current.data;
+        continue;
+      }
+      break;
+    }
+    return current && typeof current === "object" ? current : {};
+  }
+
+  function firstValue(source, keys) {
+    for (var index = 0; index < keys.length; index += 1) {
+      if (source && source[keys[index]] !== undefined && source[keys[index]] !== null) {
+        return source[keys[index]];
+      }
+    }
+    return undefined;
+  }
+
+  function firstNumber(values, fallback) {
+    for (var index = 0; index < values.length; index += 1) {
+      if (values[index] !== undefined && values[index] !== null && values[index] !== "") {
+        var parsed = Number(values[index]);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+    }
+    return fallback;
+  }
+
+  function normalizeFile(value, index) {
+    var source = typeof value === "string" ? { path: value } : (value || {});
+    return {
+      path: text(source.path || source.file || ("文件 " + (index + 1))),
+      status: text(source.status || source.action || "modified"),
+      insertions: number(firstValue(source, ["insertions", "additions"])),
+      deletions: number(source.deletions),
+      hunks: number(firstValue(source, ["hunks", "hunk_count"])),
+      diff: text(source.diff || source.patch || source.unified_diff || ""),
+      error: text(source.error || ""),
+      binary: source.binary === true,
+      truncated: source.diff_truncated === true,
+      included: source.diff_included === true || Boolean(source.diff || source.patch || source.unified_diff)
+    };
+  }
+
+  function collectFiles(report, result) {
+    var source = Array.isArray(report.files) && report.files.length ? report.files : null;
+    if (!source && Array.isArray(result.files) && result.files.length) {
+      source = result.files;
+    }
+    if (!source && Array.isArray(result.paths) && result.paths.length) {
+      source = result.paths;
+    }
+    return (source || []).map(normalizeFile);
+  }
+
+  function sum(files, key) {
+    return files.reduce(function (total, file) {
+      return total + number(file[key]);
+    }, 0);
+  }
+
+  function renderStats(cards) {
+    document.getElementById("stats").innerHTML = cards.map(function (card) {
+      return '<span class="metric"><b>' + escapeHtml(card[1]) + '</b><span>' + escapeHtml(card[0]) + '</span></span>';
+    }).join("");
+  }
+
+  function reviewState(file) {
+    if (file.error) {
+      return "不可用";
+    }
+    if (file.binary) {
+      return "二进制";
+    }
+    if (file.truncated) {
+      return "已截断";
+    }
+    if (file.included) {
+      return "可审核";
+    }
+    return "无文本差异";
+  }
+
+  function chevron() {
+    return '<span class="chevron" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"></path></svg></span>';
+  }
+
+  function closePreview() {
+    selectedIndex = -1;
+    document.getElementById("preview").hidden = true;
+    Array.prototype.forEach.call(document.querySelectorAll(".file"), function (button) {
+      button.classList.remove("active");
+      button.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function selectFile(files, index) {
+    var preview = document.getElementById("preview");
+    if (selectedIndex === index && !preview.hidden) {
+      closePreview();
+      return;
+    }
+
+    selectedIndex = index;
+    var file = files[index] || {};
+    var diff = text(file.diff);
+    if (!diff) {
+      diff = file.error
+        ? "差异不可用：" + text(file.error)
+        : file.binary
+          ? "二进制文件无法进行文本审核"
+          : file.truncated
+            ? "该文件差异已截断；请将所有缺失路径合并为一次补充审核"
+            : "此回执包含文件信息，但没有该文件的文本差异。请在新版任务中重新执行修改以获得可审核 diff。";
+    }
+
+    document.getElementById("diffTitle").textContent = file.path || "差异预览";
+    document.getElementById("hunks").textContent = file.hunks ? file.hunks + " 个区块" : "";
+    var diffElement = document.getElementById("diff");
+    diffElement.textContent = diff;
+    diffElement.classList.toggle("empty-diff", !file.diff);
+    preview.hidden = false;
+
+    Array.prototype.forEach.call(document.querySelectorAll(".file"), function (button) {
+      var active = number(button.dataset.index) === index;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-expanded", active ? "true" : "false");
+    });
+  }
+
+  function renderFiles(files) {
+    var filesElement = document.getElementById("files");
+    closePreview();
+
+    if (!files.length) {
+      filesElement.innerHTML = '<div class="empty">此次回执没有可展示的文件。旧任务不会补写历史差异，请在新版任务中重新执行修改。</div>';
+      return;
+    }
+
+    filesElement.innerHTML = files.map(function (file, index) {
+      return '<button class="file" type="button" data-index="' + index + '" aria-expanded="false" aria-controls="preview">'
+        + chevron()
+        + '<span class="file-main"><span class="path" title="' + escapeHtml(file.path) + '">' + escapeHtml(file.path) + '</span>'
+        + '<span class="meta">' + escapeHtml(file.status) + ' · ' + escapeHtml(reviewState(file)) + (file.hunks ? ' · ' + file.hunks + ' hunks' : '') + '</span></span>'
+        + '<span class="file-numbers"><span class="plus">+' + file.insertions + '</span><span class="minus">-' + file.deletions + '</span></span>'
+        + '</button>';
+    }).join("");
+
+    Array.prototype.forEach.call(filesElement.querySelectorAll(".file"), function (button) {
+      button.addEventListener("click", function () {
+        selectFile(files, number(button.dataset.index));
+      });
+    });
+  }
+
+  function render(payload) {
+    latest = unwrap(payload);
+    var report = latest.change_report || latest.changeReport || latest.report || {};
+    if (!report || typeof report !== "object" || Array.isArray(report)) {
+      report = {};
+    }
+
+    var files = collectFiles(report, latest);
+    var summary = report.summary && typeof report.summary === "object" ? report.summary : {};
+    var fileTotal = Math.max(
+      files.length,
+      firstNumber([
+        firstValue(report, ["file_count", "files_changed"]),
+        firstValue(summary, ["file_count", "files_changed"]),
+        latest.files_changed
+      ], 0)
+    );
+    var insertions = Math.max(
+      sum(files, "insertions"),
+      firstNumber([
+        firstValue(report, ["insertions", "additions"]),
+        firstValue(summary, ["insertions", "additions"]),
+        latest.insertions
+      ], 0)
+    );
+    var deletions = Math.max(
+      sum(files, "deletions"),
+      firstNumber([
+        report.deletions,
+        summary.deletions,
+        latest.deletions
+      ], 0)
+    );
+    var changed = Math.max(
+      insertions + deletions,
+      firstNumber([
+        report.changed_lines,
+        summary.changed_lines,
+        latest.changed_lines
+      ], 0)
+    );
+
+    var validation = latest.validation || latest.validation_result || {};
+    if ((!validation || !validation.status) && Array.isArray(latest.validations) && latest.validations.length) {
+      validation = latest.validations[0] || {};
+    }
+    var validationState = text(firstValue(validation, ["status", "state"]) || latest.validation_status || "未提供");
+    var state = text(firstValue(latest, ["state", "status"]) || "完成");
+    var workspace = text(report.workspace_effect || latest.workspace_effect || "工作区结果");
+
+    document.getElementById("subtitle").textContent = "Edit " + text(latest.edit_id || "—") + " · " + workspace;
+    var stateElement = document.getElementById("state");
+    stateElement.textContent = state;
+    stateElement.className = "badge " + (/fail|error|rollback/i.test(state) ? "error" : /warn|pending|partial/i.test(state) ? "warning" : "ok");
+
+    renderStats([
+      ["文件", fileTotal],
+      ["新增", "+" + insertions],
+      ["删除", "-" + deletions],
+      ["变更行", changed],
+      ["验证", validationState]
+    ]);
+    document.getElementById("fileCount").textContent = text(fileTotal);
+    renderFiles(files);
+
+    var review = report.review_contract || {};
+    var flags = [];
+    if (review.complete === true) {
+      flags.push("审核上下文完整");
+    }
+    if (review.complete === false) {
+      flags.push("审核上下文不完整");
+    }
+    if (report.diff_truncated) {
+      flags.push("差异已截断");
+    }
+    if (number(report.binary_files)) {
+      flags.push(number(report.binary_files) + " 个二进制文件");
+    }
+    if (number(report.unavailable_files)) {
+      flags.push(number(report.unavailable_files) + " 个预览不可用");
+    }
+    if (latest.recovery || latest.rollback_available) {
+      flags.push("可恢复/回滚");
+    }
+    var indexState = latest.index || latest.index_state || {};
+    if (/pending|stale/i.test(text(indexState.status || indexState.state))) {
+      flags.push("索引 " + text(indexState.status || indexState.state));
+    }
+    document.getElementById("flags").innerHTML = flags.map(function (flag) {
+      return '<span class="flag">' + escapeHtml(flag) + '</span>';
+    }).join("");
+
+    document.getElementById("details").innerHTML = [
+      "Edit ID: " + text(latest.edit_id || "—"),
+      "索引修订: " + text(latest.index_revision || indexState.revision || "—"),
+      "回滚: " + text(latest.rollback_available === true ? "可用" : latest.rollback_available === false ? "不可用" : "未提供"),
+      "耗时: " + text(latest.duration_ms || (latest.timing && latest.timing.total_ms) || (latest.timing_ms && latest.timing_ms.total) || "—") + " ms"
+    ].map(escapeHtml).join("<br>");
+  }
+
+  document.getElementById("closeDiff").addEventListener("click", closePreview);
+
+  window.addEventListener("message", function (event) {
+    var message = event.data || {};
+    if (message.method === "ui/notifications/tool-result") {
+      render(message.params || {});
+    }
+    if (message.type === "openai:set_globals" && message.globals && message.globals.toolOutput) {
+      render(message.globals.toolOutput);
+    }
+  });
+
+  if (window.openai && window.openai.toolOutput) {
+    render(window.openai.toolOutput);
+  }
+})();
+</script>
+</body>
+</html>

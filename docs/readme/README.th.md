@@ -11,7 +11,7 @@ WelineFramework คือ PHP framework สำหรับเว็บแอป�
 - ตั้งค่า local ใหม่: ใช้ one-click installer
 - มี PHP, Composer และ database แล้ว: ใช้ clean install
 - สถาปัตยกรรม: [Weline architecture](../weline/README.md)
-- งาน AI / Codex: เริ่มจาก [AI-ENTRY.md](../../AI-ENTRY.md)
+- งาน AI / Codex: เริ่มจาก [AGENTS.md](../../AGENTS.md)
 
 ## ความต้องการ
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [ภาพรวมสถาปัตยกรรม](../weline/架构总览.md)
 - [คู่มือนักพัฒนา](../开发文档.md)
 - [คู่มือ deploy](../部署文档.md)
-- [ทางเข้า AI assistant](../../AI-README.md)
+- [ทางเข้า AI assistant](../../AGENTS.md)
 
 ## หมายเหตุ
 

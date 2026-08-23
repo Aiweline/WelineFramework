@@ -834,6 +834,7 @@ tag：%{1},"Tag: %{1}"
 "第 %{1} 次检测：当前 %{2}，期望 %{3}","Check #%{1}: current %{2}, expected %{3}"
 "超时：版本 %{1} 未在 %{2} 秒内生效","Timeout: version %{1} not active within %{2}s"
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","Full release: Git update + post commands + stamp + reload"
+生成不执行发布的机器可读部署计划,生成不执行发布的机器可读部署计划
 "mdi mdi-rocket-launch-outline","mdi mdi-rocket-launch-outline"
 "mdi mdi-update","mdi mdi-update"
 "mdi mdi-rocket-launch","mdi mdi-rocket-launch"

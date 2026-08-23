@@ -93,5 +93,5 @@ view/hooks/Weline_Frontend--frontend--partials--head--before.phtml
 
 ## 相关资源
 
-- [Weline Framework Hook 系统文档](../../../../Framework/doc/hook/README.md)
-- [前端模块开发指南](../../doc/README.md)
+- [Weline Framework Hook 系统文档](../../../../Framework/Hook/doc/Hook优先级和排序顺序使用指南.md)
+- [前端模块开发指南](../../README.md)

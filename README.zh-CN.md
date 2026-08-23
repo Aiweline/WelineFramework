@@ -10,7 +10,7 @@
 [架构](./docs/weline/README.md) ·
 [WLS](./app/code/Weline/Server/doc/README.md) ·
 [多语言 README](./docs/readme/README.md) ·
-[AI 工程入口](./AI-ENTRY.md)
+[AI 工程入口](./AGENTS.md)
 
 ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4?logo=php&logoColor=white)
 ![Composer 2.7+](https://img.shields.io/badge/Composer-2.7%2B-885630?logo=composer&logoColor=white)

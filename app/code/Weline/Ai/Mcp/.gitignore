@@ -1,0 +1,8 @@
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+config.yaml
+node_modules/
+npm-debug.log*
+vendor/

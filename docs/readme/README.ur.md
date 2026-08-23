@@ -11,7 +11,7 @@ WelineFramework ماڈیولر ویب ایپلی کیشنز، ایڈمن سسٹ�
 - نیا local setup: one-click installer استعمال کریں۔
 - PHP، Composer اور database پہلے سے موجود ہیں: clean install استعمال کریں۔
 - Architecture: [Weline architecture](../weline/README.md).
-- AI / Codex کام: [AI-ENTRY.md](../../AI-ENTRY.md) سے شروع کریں۔
+- AI / Codex کام: [AGENTS.md](../../AGENTS.md) سے شروع کریں۔
 
 ## ضروریات
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [Architecture overview](../weline/架构总览.md)
 - [Development guide](../开发文档.md)
 - [Deployment guide](../部署文档.md)
-- [AI assistant entry](../../AI-README.md)
+- [AI assistant entry](../../AGENTS.md)
 
 ## Notes
 

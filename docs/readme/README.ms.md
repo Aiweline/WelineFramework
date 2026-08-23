@@ -11,7 +11,7 @@ WelineFramework ialah framework PHP untuk aplikasi web modular, sistem pentadbir
 - Setup tempatan baharu: guna pemasang satu langkah.
 - PHP, Composer dan database sudah tersedia: guna pemasangan bersih.
 - Seni bina: [Weline architecture](../weline/README.md).
-- Kerja AI / Codex: mula dari [AI-ENTRY.md](../../AI-ENTRY.md).
+- Kerja AI / Codex: mula dari [AGENTS.md](../../AGENTS.md).
 
 ## Keperluan
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [Ringkasan seni bina](../weline/架构总览.md)
 - [Panduan pembangunan](../开发文档.md)
 - [Panduan deployment](../部署文档.md)
-- [Masuk pembantu AI](../../AI-README.md)
+- [Masuk pembantu AI](../../AGENTS.md)
 
 ## Nota
 

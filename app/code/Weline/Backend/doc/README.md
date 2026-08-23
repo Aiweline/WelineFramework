@@ -2,9 +2,10 @@
 
 ## 开发前先读
 
-1. `app/code/Weline/Backend/doc/AI-INDEX.md`
-2. `app/code/Weline/Backend/doc/menu-acl-and-backend-entry-conventions.md`
-3. 命中 hook 时，再读 `app/code/Weline/Backend/doc/hook/*`
+先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：
+
+1. `app/code/Weline/Backend/doc/menu-acl-and-backend-entry-conventions.md`
+2. 命中 hook 时，再读 `app/code/Weline/Backend/doc/hook/*`
 
 ## 模块定位
 

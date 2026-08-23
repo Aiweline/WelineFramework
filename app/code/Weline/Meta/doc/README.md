@@ -1,19 +1,13 @@
 <!-- weline:module-readme:auto-generated -->
 # Weline_Meta 模块文档
 
-> 本 README 由 `dev/ai/scripts/generate-missing-module-readmes.php` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
+> 本 README 由 `prepare_project 文档修复流程` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
 
 ## 当前入口
 
-开发前先读：
+开发前先调用项目 MCP `prepare_project`；返回 `ready` 后，使用 `resolve_task_context` 按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取得必要上下文。
 
-1. `app/code/Weline/Meta/doc/AI-INDEX.md`
-2. `dev/ai/diagrams/08-module-docs-index.txt`
-3. `dev/ai/global-constraints.md`
-4. `app/code/Weline/Theme/doc/AI-INDEX.md`
-5. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-6. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-7. `app/code/Weline/Meta/doc/public-repository-contract.md`
+稳定公开仓储契约见 `app/code/Weline/Meta/doc/public-repository-contract.md`。
 
 ## 模块定位
 

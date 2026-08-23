@@ -15,6 +15,6 @@ Register::register(
     Register::MODULE,
     'Weline_Ai',
     __DIR__,
-    '1.1.1',
+    '1.2.0',
     'AI module for WelineFramework providing unified AI model management, API access control, multi-tenant isolation, and monitoring capabilities.'
 );
