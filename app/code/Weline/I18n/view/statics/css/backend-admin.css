@@ -15,11 +15,11 @@
     color: var(--i18n-text);
 }
 
-[data-layout-mode="dark"] .i18n-admin-page,
-[data-topbar="dark"] .i18n-admin-page,
+[data-theme="dark"] .i18n-admin-page,
+[data-weline-topbar="dark"] .i18n-admin-page,
 [data-sidebar="dark"] .i18n-admin-page,
-body[data-bs-theme="dark"] .i18n-admin-page,
-html[data-bs-theme="dark"] .i18n-admin-page {
+body[data-theme="dark"] .i18n-admin-page,
+html[data-theme="dark"] .i18n-admin-page {
     --i18n-page-bg: #0f172a;
     --i18n-surface: rgba(15, 23, 42, 0.78);
     --i18n-surface-strong: rgba(15, 23, 42, 0.92);

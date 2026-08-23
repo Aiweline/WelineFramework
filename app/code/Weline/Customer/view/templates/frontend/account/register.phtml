@@ -6,979 +6,107 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? '');
 ?>
 <style>
 /* ========== 注册表单容器 ========== */
-.auth-form {
-    max-width: 480px;
-    width: 100%;
-    margin: 0 auto;
-    padding: var(--spacing-xl, 2rem) var(--spacing-lg, 1.5rem);
-    background: var(--color-bg-primary);
-    border-radius: var(--radius-lg, 12px);
-    box-shadow: var(--shadow-md);
-    animation: authFadeInUp 0.6s ease-out;
-}
-
-@keyframes authFadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ========== 注册头部 ========== */
-.auth-form__header {
-    text-align: center;
-    margin-bottom: var(--spacing-xl, 2rem);
-}
-
-.auth-form__icon {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto var(--spacing-md, 1rem);
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    border-radius: var(--radius-lg, 12px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
-    flex-shrink: 0;
-}
-
-.auth-form__icon-svg {
-    width: 2rem;
-    height: 2rem;
-    color: var(--color-text-light);
-    display: block;
-}
-
-.auth-form__title {
-    font-size: var(--font-size-xxl, 1.875rem);
-    font-weight: var(--font-weight-bold, 700);
-    color: var(--color-text-primary);
-    margin: 0 0 var(--spacing-xs, 0.25rem) 0;
-    letter-spacing: -0.5px;
-}
-
-.auth-form__subtitle {
-    font-size: var(--font-size-sm, 0.875rem);
-    color: var(--color-text-secondary);
-    margin: 0;
-}
-
-/* ========== 表单样式 ========== */
-.auth-form__body {
-    margin-top: var(--spacing-lg, 1.5rem);
-}
-
-.auth-form__row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-md, 1rem);
-}
-
-.auth-form__field {
-    margin-bottom: var(--spacing-md, 1rem);
-}
-
-.auth-form__label {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs, 0.5rem);
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--color-text-primary);
-    margin-bottom: var(--spacing-xs, 0.5rem);
-}
-
-.auth-form__label i {
-    color: var(--color-primary);
-    font-size: var(--font-size-sm, 0.875rem);
-}
-
-.auth-form__input-wrapper {
-    position: relative;
-}
-
-.auth-form__input-wrapper i {
-    position: absolute;
-    left: var(--spacing-sm, 0.75rem);
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--color-text-tertiary);
-    font-size: 1rem;
-    z-index: 1;
-    transition: color 0.3s;
-}
-
-.auth-form__input {
-    width: 100%;
-    padding: var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-xl, 2.25rem);
-    border: 2px solid var(--color-border-default);
-    border-radius: var(--radius-md, 8px);
-    font-size: var(--font-size-base, 0.9375rem);
-    transition: all 0.3s;
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-}
-
-.auth-form__input:focus {
-    outline: none;
-    border-color: var(--color-border-focus);
-    box-shadow: 0 0 0 3px var(--color-accent-light);
-}
-
-.auth-form__input:focus + i,
-.auth-form__input-wrapper:focus-within i {
-    color: var(--color-primary);
-}
-
-.auth-form__input::placeholder {
-    color: var(--color-text-tertiary);
-}
-
-/* ========== 协议同意区块 ========== */
-.auth-form__terms {
-    margin: var(--spacing-md, 1rem) 0;
-    padding: var(--spacing-sm, 0.75rem);
-    background: var(--color-bg-secondary);
-    border-radius: var(--radius-md, 8px);
-    border: 1px solid var(--color-border-default);
-}
-
-.auth-form__terms-label {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--spacing-sm, 0.75rem);
-    font-size: var(--font-size-sm, 0.875rem);
-    color: var(--color-text-primary);
-    cursor: pointer;
-}
-
-.auth-form__terms-checkbox {
-    margin-top: 0.2rem;
-    width: 18px;
-    height: 18px;
-    accent-color: var(--color-primary);
-    cursor: pointer;
-}
-
-.auth-form__terms-link {
-    color: var(--color-link);
-    text-decoration: none;
-    font-weight: var(--font-weight-medium, 500);
-    transition: color 0.3s;
-}
-
-.auth-form__terms-link:hover {
-    color: var(--color-link-hover);
-    text-decoration: underline;
-}
-
-/* ========== 提交按钮 ========== */
-.auth-form__submit {
-    width: 100%;
-    padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    border: 2px solid var(--color-primary-border);
-    border-radius: var(--radius-md, 8px);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-base, 1rem);
-    font-weight: var(--font-weight-semibold, 600);
-    cursor: pointer;
-    transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
-    position: relative;
-    overflow: hidden;
-}
-
-.auth-form__submit::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
-}
-
-.auth-form__submit:hover::before {
-    width: 300px;
-    height: 300px;
-}
-
-.auth-form__submit:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(240, 193, 75, 0.5);
-}
-
-.auth-form__submit:active {
-    transform: translateY(0);
-}
-
-.auth-form__submit:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.auth-form__submit-inner {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-}
-
-.auth-form__submit-icon {
-    width: 1.125rem;
-    height: 1.125rem;
-    flex-shrink: 0;
-    color: currentColor;
-    display: block;
-}
-
-/* ========== 服务端 Flash（与登录一致：展示在表单卡片内） ========== */
-.auth-form__flash {
-    width: 100%;
-}
-
-/* ========== 服务端 / 前端校验提示 ========== */
-.auth-form__error {
-    border-radius: var(--radius-md, 8px);
-    margin-bottom: var(--spacing-md, 1rem);
-}
-
-.auth-form__error--shake {
-    animation: authShake 0.5s;
-}
-
-@keyframes authShake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-10px); }
-    75% { transform: translateX(10px); }
-}
-
-/* ========== 页脚链接 ========== */
-.auth-form__footer {
-    margin-top: var(--spacing-lg, 1.5rem);
-    padding-top: var(--spacing-md, 1rem);
-    border-top: none;
-    text-align: center;
-    font-size: var(--font-size-sm, 0.875rem);
-    color: var(--color-text-secondary);
-    line-height: 1.6;
-}
-
-.auth-form__footer-link {
-    color: var(--color-link);
-    text-decoration: none;
-    font-weight: var(--font-weight-semibold, 600);
-    transition: color 0.3s;
-    margin-inline-start: 0.25rem;
-}
-
-.auth-form__footer-link:hover {
-    color: var(--color-link-hover);
-    text-decoration: underline;
-}
-
-/* ========== 输入框焦点效果 ========== */
-.auth-form__input-wrapper--focused {
-    transform: translateY(-2px);
-}
-
-.auth-form__input-wrapper--focused i {
-    color: var(--color-primary);
-    transform: translateY(-50%) scale(1.1);
-}
-
-/* ========== 响应式设计 ========== */
-@media (max-width: 640px) {
-    .auth-form {
-        padding: var(--spacing-lg, 1.5rem) var(--spacing-md, 1rem);
-        margin: var(--spacing-sm, 0.5rem);
-        border-radius: var(--radius-md, 8px);
-    }
-
-    .auth-form__title {
-        font-size: var(--font-size-xl, 1.5rem);
-    }
-
-    .auth-form__icon {
-        width: 56px;
-        height: 56px;
-    }
-
-    .auth-form__icon-svg {
-        width: 1.75rem;
-        height: 1.75rem;
-    }
-
-    .auth-form__row {
-        grid-template-columns: 1fr;
-    }
-}
-
-.auth-form {
-    --auth-surface: #ffffff;
-    --auth-surface-soft: #f8fafc;
-    --auth-border: #dbe4f0;
-    --auth-border-strong: #b9c7dc;
-    --auth-text: #0f172a;
-    --auth-text-soft: #475569;
-    --auth-text-muted: #64748b;
-    --auth-primary: #4f46e5;
-    --auth-primary-strong: #4338ca;
-    --auth-primary-soft: rgba(79, 70, 229, 0.12);
-    max-width: 528px;
-    padding: 2rem;
-    background: var(--auth-surface);
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
-    overflow: hidden;
-    box-sizing: border-box;
-}
-
-.auth-form *,
+.auth-form { max-width: 480px; width: 100%; margin: 0 auto; padding: var(--spacing-xl, 2rem) var(--spacing-lg, 1.5rem); background: var(--color-bg-primary); border-radius: var(--radius-lg, 12px); box-shadow: var(--shadow-md); animation: authFadeInUp 0.6s ease-out;
+} @keyframes authFadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }
+} /* ========== 注册头部 ========== */
+.auth-form__header { text-align: center; margin-bottom: var(--spacing-xl, 2rem);
+} .auth-form__icon { width: 64px; height: 64px; margin: 0 auto var(--spacing-md, 1rem); background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%); border-radius: var(--radius-lg, 12px); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4); flex-shrink: 0;
+} .auth-form__icon-svg { width: 2rem; height: 2rem; color: var(--color-text-light); display: block;
+} .auth-form__title { font-size: var(--font-size-xxl, 1.875rem); font-weight: var(--font-weight-bold, 700); color: var(--color-text-primary); margin: 0 0 var(--spacing-xs, 0.25rem) 0; letter-spacing: -0.5px;
+} .auth-form__subtitle { font-size: var(--font-size-sm, 0.875rem); color: var(--color-text-secondary); margin: 0;
+} /* ========== 表单样式 ========== */
+.auth-form__body { margin-top: var(--spacing-lg, 1.5rem);
+} .auth-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md, 1rem);
+} .auth-form__field { margin-bottom: var(--spacing-md, 1rem);
+} .auth-form__label { display: flex; align-items: center; gap: var(--spacing-xs, 0.5rem); font-size: var(--font-size-sm, 0.875rem); font-weight: var(--font-weight-semibold, 600); color: var(--color-text-primary); margin-bottom: var(--spacing-xs, 0.5rem);
+} .auth-form__label i { color: var(--color-primary); font-size: var(--font-size-sm, 0.875rem);
+} .auth-form__input-wrapper { position: relative;
+} .auth-form__input-wrapper i { position: absolute; left: var(--spacing-sm, 0.75rem); top: 50%; transform: translateY(-50%); color: var(--color-text-tertiary); font-size: 1rem; z-index: 1; transition: color 0.3s;
+} .auth-form__input { width: 100%; padding: var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-xl, 2.25rem); border: 2px solid var(--color-border-default); border-radius: var(--radius-md, 8px); font-size: var(--font-size-base, 0.9375rem); transition: all 0.3s; background: var(--color-bg-primary); color: var(--color-text-primary);
+} .auth-form__input:focus { outline: none; border-color: var(--color-border-focus); box-shadow: 0 0 0 3px var(--color-accent-light);
+} .auth-form__input:focus + i,
+.auth-form__input-wrapper:focus-within i { color: var(--color-primary);
+} .auth-form__input::placeholder { color: var(--color-text-tertiary);
+} /* ========== 协议同意区块 ========== */
+.auth-form__terms { margin: var(--spacing-md, 1rem) 0; padding: var(--spacing-sm, 0.75rem); background: var(--color-bg-secondary); border-radius: var(--radius-md, 8px); border: 1px solid var(--color-border-default);
+} .auth-form__terms-label { display: flex; align-items: flex-start; gap: var(--spacing-sm, 0.75rem); font-size: var(--font-size-sm, 0.875rem); color: var(--color-text-primary); cursor: pointer;
+} .auth-form__terms-checkbox { margin-top: 0.2rem; width: 18px; height: 18px; accent-color: var(--color-primary); cursor: pointer;
+} .auth-form__terms-link { color: var(--color-link); text-decoration: none; font-weight: var(--font-weight-medium, 500); transition: color 0.3s;
+} .auth-form__terms-link:hover { color: var(--color-link-hover); text-decoration: underline;
+} /* ========== 提交按钮 ========== */
+.auth-form__submit { width: 100%; padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem); background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%); border: 2px solid var(--color-primary-border); border-radius: var(--radius-md, 8px); color: var(--color-text-primary); font-size: var(--font-size-base, 1rem); font-weight: var(--font-weight-semibold, 600); cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4); position: relative; overflow: hidden;
+} .auth-form__submit::before { content: ''; position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.3); transform: translate(-50%, -50%); transition: width 0.6s, height 0.6s;
+} .auth-form__submit:hover::before { width: 300px; height: 300px;
+} .auth-form__submit:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(240, 193, 75, 0.5);
+} .auth-form__submit:active { transform: translateY(0);
+} .auth-form__submit:disabled { opacity: 0.7; cursor: not-allowed; transform: none;
+} .auth-form__submit-inner { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+} .auth-form__submit-icon { width: 1.125rem; height: 1.125rem; flex-shrink: 0; color: currentColor; display: block;
+} /* ========== 服务端 Flash（与登录一致：展示在表单卡片内） ========== */
+.auth-form__flash { width: 100%;
+} /* ========== 服务端 / 前端校验提示 ========== */
+.auth-form__error { border-radius: var(--radius-md, 8px); margin-bottom: var(--spacing-md, 1rem);
+} .auth-form__error--shake { animation: authShake 0.5s;
+} @keyframes authShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); }
+} /* ========== 页脚链接 ========== */
+.auth-form__footer { margin-top: var(--spacing-lg, 1.5rem); padding-top: var(--spacing-md, 1rem); border-top: none; text-align: center; font-size: var(--font-size-sm, 0.875rem); color: var(--color-text-secondary); line-height: 1.6;
+} .auth-form__footer-link { color: var(--color-link); text-decoration: none; font-weight: var(--font-weight-semibold, 600); transition: color 0.3s; margin-inline-start: 0.25rem;
+} .auth-form__footer-link:hover { color: var(--color-link-hover); text-decoration: underline;
+} /* ========== 输入框焦点效果 ========== */
+.auth-form__input-wrapper--focused { transform: translateY(-2px);
+} .auth-form__input-wrapper--focused i { color: var(--color-primary); transform: translateY(-50%) scale(1.1);
+} /* ========== 响应式设计 ========== */
+@media (max-width: 640px) { .auth-form { padding: var(--spacing-lg, 1.5rem) var(--spacing-md, 1rem); margin: var(--spacing-sm, 0.5rem); border-radius: var(--radius-md, 8px); } .auth-form__title { font-size: var(--font-size-xl, 1.5rem); } .auth-form__icon { width: 56px; height: 56px; } .auth-form__icon-svg { width: 1.75rem; height: 1.75rem; } .auth-form__row { grid-template-columns: 1fr; }
+} .auth-form { --auth-surface: #ffffff; --auth-surface-soft: #f8fafc; --auth-border: #dbe4f0; --auth-border-strong: #b9c7dc; --auth-text: #0f172a; --auth-text-soft: #475569; --auth-text-muted: #64748b; --auth-primary: #4f46e5; --auth-primary-strong: #4338ca; --auth-primary-soft: rgba(79, 70, 229, 0.12); max-width: 528px; padding: 2rem; background: var(--auth-surface); border: 1px solid rgba(148, 163, 184, 0.22); box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12); overflow: hidden; box-sizing: border-box;
+} .auth-form *,
 .auth-form *::before,
-.auth-form *::after {
-    box-sizing: border-box;
-}
-
-.auth-form__header {
-    margin-bottom: 1.75rem;
-}
-
-.auth-form__icon {
-    margin-bottom: 1.25rem;
-    background: linear-gradient(135deg, var(--auth-primary) 0%, var(--auth-primary-strong) 100%);
-    box-shadow: 0 16px 34px rgba(79, 70, 229, 0.26);
-}
-
-.auth-form__title {
-    color: var(--auth-text);
-    font-size: 2rem;
-    letter-spacing: 0;
-    line-height: 1.15;
-    margin-bottom: 0.45rem;
-}
-
-.auth-form__subtitle,
-.auth-form__footer {
-    color: var(--auth-text-soft);
-}
-
-.auth-form__body {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    margin-top: 0;
-    width: 100%;
-}
-
-.auth-form__row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 0.875rem;
-    width: 100%;
-}
-
-.auth-form__field,
-.auth-form__input-wrapper {
-    min-width: 0;
-    width: 100%;
-}
-
-.auth-form__field,
-.auth-form__terms {
-    margin-bottom: 0;
-}
-
-.auth-form__label {
-    color: var(--auth-text);
-    margin-bottom: 0.45rem;
-}
-
-.auth-form__label i,
+.auth-form *::after { box-sizing: border-box;
+} .auth-form__header { margin-bottom: 1.75rem;
+} .auth-form__icon { margin-bottom: 1.25rem; background: linear-gradient(135deg, var(--auth-primary) 0%, var(--auth-primary-strong) 100%); box-shadow: 0 16px 34px rgba(79, 70, 229, 0.26);
+} .auth-form__title { color: var(--auth-text); font-size: 2rem; letter-spacing: 0; line-height: 1.15; margin-bottom: 0.45rem;
+} .auth-form__subtitle,
+.auth-form__footer { color: var(--auth-text-soft);
+} .auth-form__body { display: flex; flex-direction: column; gap: 1rem; margin-top: 0; width: 100%;
+} .auth-form__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.875rem; width: 100%;
+} .auth-form__field,
+.auth-form__input-wrapper { min-width: 0; width: 100%;
+} .auth-form__field,
+.auth-form__terms { margin-bottom: 0;
+} .auth-form__label { color: var(--auth-text); margin-bottom: 0.45rem;
+} .auth-form__label i,
 .auth-form__input:focus + i,
-.auth-form__input-wrapper:focus-within > i {
-    color: var(--auth-primary);
-}
-
-.auth-form__input-wrapper > i {
-    color: var(--auth-text-muted);
-    left: 1rem;
-    pointer-events: none;
-}
-
-.auth-form__input,
+.auth-form__input-wrapper:focus-within > i { color: var(--auth-primary);
+} .auth-form__input-wrapper > i { color: var(--auth-text-muted); left: 1rem; pointer-events: none;
+} .auth-form__input,
 .dark .auth-form__input,
-html.dark .auth-form__input {
-    width: 100%;
-    min-height: 52px;
-    padding: 0.875rem 1rem 0.875rem 2.75rem;
-    border: 1px solid var(--auth-border);
-    border-radius: var(--radius-md, 8px);
-    background-color: var(--auth-surface-soft);
-    color: var(--auth-text);
-    font-size: var(--font-size-base, 1rem);
-    line-height: 1.4;
-}
-
-.auth-form__input:focus,
+html.dark .auth-form__input { width: 100%; min-height: 52px; padding: 0.875rem 1rem 0.875rem 2.75rem; border: 1px solid var(--auth-border); border-radius: var(--radius-md, 8px); background-color: var(--auth-surface-soft); color: var(--auth-text); font-size: var(--font-size-base, 1rem); line-height: 1.4;
+} .auth-form__input:focus,
 .dark .auth-form__input:focus,
-html.dark .auth-form__input:focus {
-    border-color: var(--auth-primary);
-    background-color: #ffffff;
-    box-shadow: 0 0 0 4px var(--auth-primary-soft);
+html.dark .auth-form__input:focus { border-color: var(--auth-primary); background-color: #ffffff; box-shadow: 0 0 0 4px var(--auth-primary-soft);
+} .auth-form__input::placeholder { color: var(--auth-text-muted);
+} .auth-form__input-wrapper--password .auth-form__input { padding-right: 3.75rem;
+} .auth-form__password-toggle { position: absolute; top: 50%; right: 0.5rem; z-index: 2; width: 40px; height: 40px; min-width: 40px; padding: 0; border: 0; border-radius: var(--radius-sm, 6px); background: transparent; color: var(--auth-text-soft); display: inline-flex; align-items: center; justify-content: center; line-height: 1; cursor: pointer; transform: translateY(-50%); box-shadow: none; -webkit-appearance: none; appearance: none; transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+} .auth-form__password-toggle:hover,
+.auth-form__password-toggle:focus-visible { background: var(--auth-primary-soft); color: var(--auth-primary);
+} .auth-form__password-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-primary-soft);
+} .auth-form__password-toggle-icon,
+.auth-form__pwd-svg { width: 1.25rem; height: 1.25rem; display: inline-flex; align-items: center; justify-content: center;
+} .auth-form__pwd-svg[hidden] { display: none !important;
+} .auth-form__terms { padding: 0.875rem; background: var(--auth-surface-soft); border: 1px solid var(--auth-border); border-radius: var(--radius-md, 8px);
+} .auth-form__terms-label { align-items: center; color: var(--auth-text); line-height: 1.55;
+} .auth-form__terms-checkbox { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; accent-color: var(--auth-primary);
+} .auth-form__terms-link,
+.auth-form__footer-link { color: var(--auth-primary);
+} .auth-form__terms-link:hover,
+.auth-form__footer-link:hover { color: var(--auth-primary-strong);
+} .auth-form__submit { min-height: 52px; padding: 0.875rem 1rem; background: linear-gradient(135deg, var(--auth-primary) 0%, var(--auth-primary-strong) 100%); border: 1px solid var(--auth-primary); color: #ffffff; box-shadow: 0 14px 28px rgba(79, 70, 229, 0.22); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+} .auth-form__submit:hover { box-shadow: 0 18px 34px rgba(79, 70, 229, 0.28);
+} .auth-form__submit-inner { position: relative; z-index: 1;
+} .auth-form__footer { margin-top: 1.5rem; padding-top: 0.75rem;
+} @media (max-width: 640px) { .auth-form { max-width: calc(100vw - 1rem); padding: 1.35rem; } .auth-form__title { font-size: 1.625rem; } .auth-form__row { grid-template-columns: 1fr; }
 }
-
-.auth-form__input::placeholder {
-    color: var(--auth-text-muted);
-}
-
-.auth-form__input-wrapper--password .auth-form__input {
-    padding-right: 3.75rem;
-}
-
-.auth-form__password-toggle {
-    position: absolute;
-    top: 50%;
-    right: 0.5rem;
-    z-index: 2;
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-sm, 6px);
-    background: transparent;
-    color: var(--auth-text-soft);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    cursor: pointer;
-    transform: translateY(-50%);
-    box-shadow: none;
-    -webkit-appearance: none;
-    appearance: none;
-    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.auth-form__password-toggle:hover,
-.auth-form__password-toggle:focus-visible {
-    background: var(--auth-primary-soft);
-    color: var(--auth-primary);
-}
-
-.auth-form__password-toggle:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px var(--auth-primary-soft);
-}
-
-.auth-form__password-toggle-icon,
-.auth-form__pwd-svg {
-    width: 1.25rem;
-    height: 1.25rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.auth-form__pwd-svg[hidden] {
-    display: none !important;
-}
-
-.auth-form__terms {
-    padding: 0.875rem;
-    background: var(--auth-surface-soft);
-    border: 1px solid var(--auth-border);
-    border-radius: var(--radius-md, 8px);
-}
-
-.auth-form__terms-label {
-    align-items: center;
-    color: var(--auth-text);
-    line-height: 1.55;
-}
-
-.auth-form__terms-checkbox {
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    flex: 0 0 auto;
-    accent-color: var(--auth-primary);
-}
-
-.auth-form__terms-link,
-.auth-form__footer-link {
-    color: var(--auth-primary);
-}
-
-.auth-form__terms-link:hover,
-.auth-form__footer-link:hover {
-    color: var(--auth-primary-strong);
-}
-
-.auth-form__submit {
-    min-height: 52px;
-    padding: 0.875rem 1rem;
-    background: linear-gradient(135deg, var(--auth-primary) 0%, var(--auth-primary-strong) 100%);
-    border: 1px solid var(--auth-primary);
-    color: #ffffff;
-    box-shadow: 0 14px 28px rgba(79, 70, 229, 0.22);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-}
-
-.auth-form__submit:hover {
-    box-shadow: 0 18px 34px rgba(79, 70, 229, 0.28);
-}
-
-.auth-form__submit-inner {
-    position: relative;
-    z-index: 1;
-}
-
-.auth-form__footer {
-    margin-top: 1.5rem;
-    padding-top: 0.75rem;
-}
-
-@media (max-width: 640px) {
-    .auth-form {
-        max-width: calc(100vw - 1rem);
-        padding: 1.35rem;
-    }
-
-    .auth-form__title {
-        font-size: 1.625rem;
-    }
-
-    .auth-form__row {
-        grid-template-columns: 1fr;
-    }
-}
-</style>
-
-<div class="auth-form">
-    <header class="auth-form__header">
-        <div class="auth-form__icon" aria-hidden="true">
-            <svg class="auth-form__icon-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false">
-                <path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9 8v-1c0-2.33 4.67-3.5 7-3.5 1.46 0 2.83.22 4 .57V14h2v8H6zm13-6v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2z"/>
-            </svg>
-        </div>
-        <h1 class="auth-form__title"><lang>创建账户</lang></h1>
-        <p class="auth-form__subtitle"><lang>使用邮箱注册您的账户</lang></p>
-    </header>
-
-    <div class="auth-form__flash wf-system-messages" aria-live="polite">
-        <template>Weline_Component::message.phtml</template>
-    </div>
-
-    <w:form action="@var($registerSubmitUrl)" method="post" class="auth-form__body" data-customer-register-form csrf="off">
-        <?= $this->getFormKey($registerSubmitUrl) ?>
-        <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') ?>" />
-        <?php $referralCode = trim((string) ($this->getData('referral_code') ?? ($_GET['ref'] ?? ''))); ?>
-        <?php if ($referralCode !== ''): ?>
-            <input type="hidden" name="ref" value="<?= htmlspecialchars($referralCode, ENT_QUOTES, 'UTF-8') ?>">
-        <?php endif; ?>
-
-        <div id="registerClientError" class="wflash wflash--danger auth-form__error" role="alert" hidden></div>
-
-        <div class="auth-form__row">
-            <div class="auth-form__field">
-                <label class="auth-form__label" for="firstname">
-                    <i class="fas fa-id-card"></i>
-                    <lang>名</lang>
-                </label>
-                <div class="auth-form__input-wrapper">
-                    <i class="fas fa-user"></i>
-                    <input
-                        class="auth-form__input"
-                        type="text"
-                        id="firstname"
-                        name="firstname"
-                        required
-                        autocomplete="given-name"
-                        placeholder="<lang>请输入名</lang>"
-                    />
-                </div>
-            </div>
-            <div class="auth-form__field">
-                <label class="auth-form__label" for="lastname">
-                    <i class="fas fa-id-card"></i>
-                    <lang>姓</lang>
-                </label>
-                <div class="auth-form__input-wrapper">
-                    <i class="fas fa-user"></i>
-                    <input
-                        class="auth-form__input"
-                        type="text"
-                        id="lastname"
-                        name="lastname"
-                        required
-                        autocomplete="family-name"
-                        placeholder="<lang>请输入姓</lang>"
-                    />
-                </div>
-            </div>
-        </div>
-
-        <div class="auth-form__field">
-            <label class="auth-form__label" for="email">
-                <i class="fas fa-envelope"></i>
-                <lang>电子邮箱</lang>
-            </label>
-            <div class="auth-form__input-wrapper">
-                <i class="fas fa-at"></i>
-                <input
-                    class="auth-form__input"
-                    type="email"
-                    id="email"
-                    name="email"
-                    required
-                    autocomplete="email"
-                    placeholder="<lang>请输入邮箱地址</lang>"
-                />
-            </div>
-        </div>
-
-        <div class="auth-form__field">
-            <label class="auth-form__label" for="password">
-                <i class="fas fa-lock"></i>
-                <lang>密码</lang>
-            </label>
-            <div class="auth-form__input-wrapper auth-form__input-wrapper--password">
-                <i class="fas fa-key"></i>
-                <input
-                    class="auth-form__input"
-                    type="password"
-                    id="password"
-                    name="password"
-                    required
-                    minlength="8"
-                    autocomplete="new-password"
-                    placeholder="<lang>至少8位，包含字母和数字</lang>"
-                />
-                <button
-                    type="button"
-                    class="auth-form__password-toggle"
-                    data-password-target="password"
-                    data-label-show="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>"
-                    data-label-hide="<?= htmlspecialchars(__('隐藏密码'), ENT_QUOTES) ?>"
-                    aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>"
-                    aria-pressed="false"
-                >
-                        <span class="auth-form__password-toggle-icon" aria-hidden="true">
-                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                        </span>
-                </button>
-            </div>
-        </div>
-
-        <div class="auth-form__field">
-            <label class="auth-form__label" for="confirm_password">
-                <i class="fas fa-check-double"></i>
-                <lang>确认密码</lang>
-            </label>
-            <div class="auth-form__input-wrapper auth-form__input-wrapper--password">
-                <i class="fas fa-check-double"></i>
-                <input
-                    class="auth-form__input"
-                    type="password"
-                    id="confirm_password"
-                    name="confirm_password"
-                    required
-                    autocomplete="new-password"
-                    placeholder="<lang>请再次输入密码</lang>"
-                />
-                <button
-                    type="button"
-                    class="auth-form__password-toggle"
-                    data-password-target="confirm_password"
-                    data-label-show="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>"
-                    data-label-hide="<?= htmlspecialchars(__('隐藏密码'), ENT_QUOTES) ?>"
-                    aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>"
-                    aria-pressed="false"
-                >
-                        <span class="auth-form__password-toggle-icon" aria-hidden="true">
-                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            <svg class="auth-form__pwd-svg auth-form__pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                        </span>
-                </button>
-            </div>
-        </div>
-
-        <div class="auth-form__terms">
-            <label class="auth-form__terms-label">
-                <input
-                    type="checkbox"
-                    class="auth-form__terms-checkbox"
-                    id="agree_terms"
-                    name="agree_terms"
-                    value="1"
-                    required
-                />
-                <span>
-                    <lang>我已阅读并同意</lang>
-                    <a href="/terms" class="auth-form__terms-link"><lang>服务条款</lang></a>
-                    <lang>和</lang>
-                    <a href="/privacy" class="auth-form__terms-link"><lang>隐私政策</lang></a>
-                </span>
-            </label>
-        </div>
-
-        <button type="submit" class="auth-form__submit">
-            <span class="auth-form__submit-inner">
-                <svg class="auth-form__submit-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                    <path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9 8v-1c0-2.33 4.67-3.5 7-3.5 1.46 0 2.83.22 4 .57V14h2v8H6zm13-6v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2z"/>
-                </svg>
-                <lang>创建账户</lang>
-            </span>
-        </button>
-    </w:form>
-
-    <footer class="auth-form__footer">
-        <span><lang>已有账户？</lang></span>
-        <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>" class="auth-form__footer-link"><lang>立即登录</lang></a>
-    </footer>
-</div>
-
-<script>
-(function() {
-    'use strict';
-
-    function resolveStorefrontRedirect(target, fallback) {
-        var destination = String(target || fallback || '/customer/account').trim();
-        try {
-            var parsed = new URL(destination, window.location.origin);
-            if (parsed.origin !== window.location.origin) {
-                destination = String(fallback || '/customer/account');
-            } else {
-                destination = parsed.pathname + parsed.search + parsed.hash;
-            }
-        } catch (error) {
-            destination = String(fallback || '/customer/account');
-        }
-        if (destination.charAt(0) !== '/') destination = '/' + destination;
-        var segments = window.location.pathname.split('/').filter(Boolean);
-        var customerIndex = segments.findIndex(function(segment) {
-            return segment.toLowerCase() === 'customer';
-        });
-        var prefix = customerIndex > 0 ? '/' + segments.slice(0, customerIndex).join('/') : '';
-        if (prefix && destination !== prefix && destination.indexOf(prefix + '/') !== 0) {
-            destination = prefix + destination;
-        }
-        return destination;
-    }
-
-    function closest(el, selector) {
-        while (el && el.nodeType === 1) {
-            if (el.matches(selector)) {
-                return el;
-            }
-            el = el.parentElement;
-        }
-        return null;
-    }
-
-    var accountApiPromise = null;
-
-    function getAccountApi() {
-        if (!accountApiPromise) {
-            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
-                accountApiPromise = window.Weline.Api.resource('account');
-            } else if (window.Weline && typeof window.Weline.load === 'function') {
-                accountApiPromise = window.Weline.load('api').then(function() {
-                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-                        throw new Error('Weline.Api is unavailable.');
-                    }
-                    return window.Weline.Api.resource('account');
-                });
-            } else {
-                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
-            }
-        }
-        return accountApiPromise;
-    }
-
-    function canUseAccountApi() {
-        return Boolean(
-            window.Weline
-            && (
-                (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
-                || typeof window.Weline.load === 'function'
-            )
-        );
-    }
-
-    function formDataToObject(formData) {
-        var payload = {};
-        formData.forEach(function(value, key) {
-            payload[key] = value;
-        });
-        delete payload.form_key;
-        payload.agree_terms = Object.prototype.hasOwnProperty.call(payload, 'agree_terms')
-            && ['1', 'true', 'yes', 'on'].indexOf(String(payload.agree_terms).toLowerCase()) !== -1;
-        return payload;
-    }
-
-    function showRegisterError(clientError, message, focusEl) {
-        clientError.textContent = message;
-        clientError.hidden = false;
-        clientError.classList.add('auth-form__error--shake');
-        if (focusEl && typeof focusEl.focus === 'function') {
-            focusEl.focus();
-        }
-        setTimeout(function() {
-            clientError.classList.remove('auth-form__error--shake');
-        }, 500);
-    }
-
-    function setRegisterLoading(form, loading) {
-        var submitButton = form.querySelector('button[type="submit"]');
-        if (submitButton) {
-            submitButton.disabled = loading;
-            submitButton.classList.toggle('auth-form__submit--busy', loading);
-            submitButton.setAttribute('aria-busy', loading ? 'true' : 'false');
-        }
-    }
-
-    function submitNative(form) {
-        HTMLFormElement.prototype.submit.call(form);
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        var form = document.querySelector('[data-customer-register-form]');
-        var passwordEl = document.getElementById('password');
-        var confirmPasswordEl = document.getElementById('confirm_password');
-        var clientError = document.getElementById('registerClientError');
-
-        if (!form || !passwordEl || !confirmPasswordEl || !clientError) {
-            return;
-        }
-
-        document.querySelectorAll('.auth-form__password-toggle[data-password-target]').forEach(function(btn) {
-            var targetId = btn.getAttribute('data-password-target');
-            var pwdInput = targetId ? document.getElementById(targetId) : null;
-            if (!pwdInput) {
-                return;
-            }
-            var showLabel = btn.getAttribute('data-label-show') || '';
-            var hideLabel = btn.getAttribute('data-label-hide') || '';
-            var iconWrap = btn.querySelector('.auth-form__password-toggle-icon');
-            btn.addEventListener('click', function() {
-                var wasPassword = pwdInput.type === 'password';
-                pwdInput.type = wasPassword ? 'text' : 'password';
-                var nowPlain = pwdInput.type === 'text';
-                btn.setAttribute('aria-pressed', nowPlain ? 'true' : 'false');
-                btn.setAttribute('aria-label', nowPlain ? hideLabel : showLabel);
-                if (iconWrap) {
-                    var svgShow = iconWrap.querySelector('.auth-form__pwd-svg--show');
-                    var svgHide = iconWrap.querySelector('.auth-form__pwd-svg--hide');
-                    if (svgShow && svgHide) {
-                        if (nowPlain) {
-                            svgShow.setAttribute('hidden', 'hidden');
-                            svgHide.removeAttribute('hidden');
-                        } else {
-                            svgShow.removeAttribute('hidden');
-                            svgHide.setAttribute('hidden', 'hidden');
-                        }
-                    }
-                }
-            });
-        });
-
-        document.querySelectorAll('.auth-form__input').forEach(function(input) {
-            input.addEventListener('focus', function() {
-                var wrap = closest(input, '.auth-form__input-wrapper');
-                if (wrap) {
-                    wrap.classList.add('auth-form__input-wrapper--focused');
-                }
-            });
-            input.addEventListener('blur', function() {
-                var wrap = closest(input, '.auth-form__input-wrapper');
-                if (wrap) {
-                    wrap.classList.remove('auth-form__input-wrapper--focused');
-                }
-            });
-        });
-
-        form.addEventListener('submit', function(e) {
-            var password = passwordEl.value;
-            var confirmPassword = confirmPasswordEl.value;
-
-            clientError.hidden = true;
-            clientError.classList.remove('auth-form__error--shake');
-            clientError.textContent = '';
-
-            if (password !== confirmPassword) {
-                e.preventDefault();
-                clientError.innerHTML = '<lang>两次输入的密码不一致</lang>';
-                clientError.hidden = false;
-                clientError.classList.add('auth-form__error--shake');
-                confirmPasswordEl.focus();
-                setTimeout(function() {
-                    clientError.classList.remove('auth-form__error--shake');
-                }, 500);
-                return;
-            }
-
-            if (password.length < 8) {
-                e.preventDefault();
-                clientError.innerHTML = '<lang>密码长度至少为8位</lang>';
-                clientError.hidden = false;
-                clientError.classList.add('auth-form__error--shake');
-                passwordEl.focus();
-                setTimeout(function() {
-                    clientError.classList.remove('auth-form__error--shake');
-                }, 500);
-                return;
-            }
-
-            if (!canUseAccountApi()) {
-                return;
-            }
-
-            e.preventDefault();
-            setRegisterLoading(form, true);
-            getAccountApi()
-                .then(function(AccountApi) {
-                    return AccountApi.register(formDataToObject(new FormData(form)), {silent: true});
-                })
-                .then(function(data) {
-                    if (data && data.success !== false) {
-                        window.location.assign(resolveStorefrontRedirect(data.redirect, '/customer/account'));
-                        return;
-                    }
-                    setRegisterLoading(form, false);
-                    if (!data || !data.message) {
-                        data = Object.assign({}, data || {}, { message: <?= json_encode((string)__('注册失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> });
-                    }
-                    showRegisterError(clientError, (data && data.message) || <?= json_encode((string)__('注册失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, null);
-                })
-                .catch(function(error) {
-                    if (error && error.message === 'Weline.Api is unavailable.') {
-                        submitNative(form);
-                        return;
-                    }
-
-                    setRegisterLoading(form, false);
-                    if (!error || !error.message) {
-                        error = new Error(<?= json_encode((string)__('注册请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
-                    }
-                    showRegisterError(clientError, (error && error.message) || <?= json_encode((string)__('注册请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, null);
-                });
-        });
-    });
+</style> <div class="auth-form"> <header class="auth-form__header"> <div class="auth-form__icon" aria-hidden="true"> <svg class="auth-form__icon-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false"> <path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9 8v-1c0-2.33 4.67-3.5 7-3.5 1.46 0 2.83.22 4 .57V14h2v8H6zm13-6v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2z"/> </svg> </div> <h1 class="auth-form__title"><lang>创建账户</lang></h1> <p class="auth-form__subtitle"><lang>使用邮箱注册您的账户</lang></p> </header> <div class="auth-form__flash wf-system-messages" aria-live="polite"> <template>Weline_Component::message.phtml</template> </div> <w:form action="@var($registerSubmitUrl)" method="post" class="auth-form__body" data-customer-register-form csrf="off"> <?= $this->getFormKey($registerSubmitUrl) ?> <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') ?>" /> <?php $referralCode = trim((string) ($this->getData('referral_code') ?? ($_GET['ref'] ?? ''))); ?> <?php if ($referralCode !== ''): ?> <input type="hidden" name="ref" value="<?= htmlspecialchars($referralCode, ENT_QUOTES, 'UTF-8') ?>"> <?php endif; ?> <div id="registerClientError" class="wflash wflash--danger auth-form__error" role="alert" hidden></div> <div class="auth-form__row"> <div class="auth-form__field"> <label class="auth-form__label" for="firstname"> <w:icon name="circle" size="sm"></w:icon> <lang>名</lang> </label> <div class="auth-form__input-wrapper"> <w:icon name="user" size="sm"></w:icon> <input class="auth-form__input" type="text" id="firstname" name="firstname" required autocomplete="given-name" placeholder="<lang>请输入名</lang>" /> </div> </div> <div class="auth-form__field"> <label class="auth-form__label" for="lastname"> <w:icon name="circle" size="sm"></w:icon> <lang>姓</lang> </label> <div class="auth-form__input-wrapper"> <w:icon name="user" size="sm"></w:icon> <input class="auth-form__input" type="text" id="lastname" name="lastname" required autocomplete="family-name" placeholder="<lang>请输入姓</lang>" /> </div> </div> </div> <div class="auth-form__field"> <label class="auth-form__label" for="email"> <w:icon name="mail" size="sm"></w:icon> <lang>电子邮箱</lang> </label> <div class="auth-form__input-wrapper"> <w:icon name="circle" size="sm"></w:icon> <input class="auth-form__input" type="email" id="email" name="email" required autocomplete="email" placeholder="<lang>请输入邮箱地址</lang>" /> </div> </div> <div class="auth-form__field"> <label class="auth-form__label" for="password"> <w:icon name="lock" size="sm"></w:icon> <lang>密码</lang> </label> <div class="auth-form__input-wrapper auth-form__input-wrapper--password"> <w:icon name="key" size="sm"></w:icon> <input class="auth-form__input" type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="<lang>至少8位，包含字母和数字</lang>" /> <button type="button" class="auth-form__password-toggle" data-password-target="password" data-label-show="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>" data-label-hide="<?= htmlspecialchars(__('隐藏密码'), ENT_QUOTES) ?>" aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>" aria-pressed="false" > <span class="auth-form__password-toggle-icon" aria-hidden="true"> <svg class="auth-form__pwd-svg auth-form__pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> <svg class="auth-form__pwd-svg auth-form__pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> </span> </button> </div> </div> <div class="auth-form__field"> <label class="auth-form__label" for="confirm_password"> <w:icon name="check" size="sm"></w:icon> <lang>确认密码</lang> </label> <div class="auth-form__input-wrapper auth-form__input-wrapper--password"> <w:icon name="check" size="sm"></w:icon> <input class="auth-form__input" type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" placeholder="<lang>请再次输入密码</lang>" /> <button type="button" class="auth-form__password-toggle" data-password-target="confirm_password" data-label-show="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>" data-label-hide="<?= htmlspecialchars(__('隐藏密码'), ENT_QUOTES) ?>" aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>" aria-pressed="false" > <span class="auth-form__password-toggle-icon" aria-hidden="true"> <svg class="auth-form__pwd-svg auth-form__pwd-svg--show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> <svg class="auth-form__pwd-svg auth-form__pwd-svg--hide" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> </span> </button> </div> </div> <div class="auth-form__terms"> <label class="auth-form__terms-label"> <input type="checkbox" class="auth-form__terms-checkbox" id="agree_terms" name="agree_terms" value="1" required /> <span> <lang>我已阅读并同意</lang> <a href="/terms" class="auth-form__terms-link"><lang>服务条款</lang></a> <lang>和</lang> <a href="/privacy" class="auth-form__terms-link"><lang>隐私政策</lang></a> </span> </label> </div> <button type="submit" class="auth-form__submit"> <span class="auth-form__submit-inner"> <svg class="auth-form__submit-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"> <path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9 8v-1c0-2.33 4.67-3.5 7-3.5 1.46 0 2.83.22 4 .57V14h2v8H6zm13-6v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2z"/> </svg> <lang>创建账户</lang> </span> </button> </w:form> <footer class="auth-form__footer"> <span><lang>已有账户？</lang></span> <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>" class="auth-form__footer-link"><lang>立即登录</lang></a> </footer>
+</div> <script>
+(function() { 'use strict'; function resolveStorefrontRedirect(target, fallback) { var destination = String(target || fallback || '/customer/account').trim(); try { var parsed = new URL(destination, window.location.origin); if (parsed.origin !== window.location.origin) { destination = String(fallback || '/customer/account'); } else { destination = parsed.pathname + parsed.search + parsed.hash; } } catch (error) { destination = String(fallback || '/customer/account'); } if (destination.charAt(0) !== '/') destination = '/' + destination; var segments = window.location.pathname.split('/').filter(Boolean); var customerIndex = segments.findIndex(function(segment) { return segment.toLowerCase() === 'customer'; }); var prefix = customerIndex > 0 ? '/' + segments.slice(0, customerIndex).join('/') : ''; if (prefix && destination !== prefix && destination.indexOf(prefix + '/') !== 0) { destination = prefix + destination; } return destination; } function closest(el, selector) { while (el && el.nodeType === 1) { if (el.matches(selector)) { return el; } el = el.parentElement; } return null; } var accountApiPromise = null; function getAccountApi() { if (!accountApiPromise) { if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') { accountApiPromise = window.Weline.Api.resource('account'); } else if (window.Weline && typeof window.Weline.load === 'function') { accountApiPromise = window.Weline.load('api').then(function() { if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') { throw new Error('Weline.Api is unavailable.'); } return window.Weline.Api.resource('account'); }); } else { accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.')); } } return accountApiPromise; } function canUseAccountApi() { return Boolean( window.Weline && ( (window.Weline.Api && typeof window.Weline.Api.resource === 'function') || typeof window.Weline.load === 'function' ) ); } function formDataToObject(formData) { var payload = {}; formData.forEach(function(value, key) { payload[key] = value; }); delete payload.form_key; payload.agree_terms = Object.prototype.hasOwnProperty.call(payload, 'agree_terms') && ['1', 'true', 'yes', 'on'].indexOf(String(payload.agree_terms).toLowerCase()) !== -1; return payload; } function showRegisterError(clientError, message, focusEl) { clientError.textContent = message; clientError.hidden = false; clientError.classList.add('auth-form__error--shake'); if (focusEl && typeof focusEl.focus === 'function') { focusEl.focus(); } setTimeout(function() { clientError.classList.remove('auth-form__error--shake'); }, 500); } function setRegisterLoading(form, loading) { var submitButton = form.querySelector('button[type="submit"]'); if (submitButton) { submitButton.disabled = loading; submitButton.classList.toggle('auth-form__submit--busy', loading); submitButton.setAttribute('aria-busy', loading ? 'true' : 'false'); } } function submitNative(form) { HTMLFormElement.prototype.submit.call(form); } document.addEventListener('DOMContentLoaded', function() { var form = document.querySelector('[data-customer-register-form]'); var passwordEl = document.getElementById('password'); var confirmPasswordEl = document.getElementById('confirm_password'); var clientError = document.getElementById('registerClientError'); if (!form || !passwordEl || !confirmPasswordEl || !clientError) { return; } document.querySelectorAll('.auth-form__password-toggle[data-password-target]').forEach(function(btn) { var targetId = btn.getAttribute('data-password-target'); var pwdInput = targetId ? document.getElementById(targetId) : null; if (!pwdInput) { return; } var showLabel = btn.getAttribute('data-label-show') || ''; var hideLabel = btn.getAttribute('data-label-hide') || ''; var iconWrap = btn.querySelector('.auth-form__password-toggle-icon'); btn.addEventListener('click', function() { var wasPassword = pwdInput.type === 'password'; pwdInput.type = wasPassword ? 'text' : 'password'; var nowPlain = pwdInput.type === 'text'; btn.setAttribute('aria-pressed', nowPlain ? 'true' : 'false'); btn.setAttribute('aria-label', nowPlain ? hideLabel : showLabel); if (iconWrap) { var svgShow = iconWrap.querySelector('.auth-form__pwd-svg--show'); var svgHide = iconWrap.querySelector('.auth-form__pwd-svg--hide'); if (svgShow && svgHide) { if (nowPlain) { svgShow.setAttribute('hidden', 'hidden'); svgHide.removeAttribute('hidden'); } else { svgShow.removeAttribute('hidden'); svgHide.setAttribute('hidden', 'hidden'); } } } }); }); document.querySelectorAll('.auth-form__input').forEach(function(input) { input.addEventListener('focus', function() { var wrap = closest(input, '.auth-form__input-wrapper'); if (wrap) { wrap.classList.add('auth-form__input-wrapper--focused'); } }); input.addEventListener('blur', function() { var wrap = closest(input, '.auth-form__input-wrapper'); if (wrap) { wrap.classList.remove('auth-form__input-wrapper--focused'); } }); }); form.addEventListener('submit', function(e) { var password = passwordEl.value; var confirmPassword = confirmPasswordEl.value; clientError.hidden = true; clientError.classList.remove('auth-form__error--shake'); clientError.textContent = ''; if (password !== confirmPassword) { e.preventDefault(); clientError.innerHTML = '<lang>两次输入的密码不一致</lang>'; clientError.hidden = false; clientError.classList.add('auth-form__error--shake'); confirmPasswordEl.focus(); setTimeout(function() { clientError.classList.remove('auth-form__error--shake'); }, 500); return; } if (password.length < 8) { e.preventDefault(); clientError.innerHTML = '<lang>密码长度至少为8位</lang>'; clientError.hidden = false; clientError.classList.add('auth-form__error--shake'); passwordEl.focus(); setTimeout(function() { clientError.classList.remove('auth-form__error--shake'); }, 500); return; } if (!canUseAccountApi()) { return; } e.preventDefault(); setRegisterLoading(form, true); getAccountApi() .then(function(AccountApi) { return AccountApi.register(formDataToObject(new FormData(form)), {silent: true}); }) .then(function(data) { if (data && data.success !== false) { window.location.assign(resolveStorefrontRedirect(data.redirect, '/customer/account')); return; } setRegisterLoading(form, false); if (!data || !data.message) { data = Object.assign({}, data || {}, { message: <?= json_encode((string)__('注册失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> }); } showRegisterError(clientError, (data && data.message) || <?= json_encode((string)__('注册失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, null); }) .catch(function(error) { if (error && error.message === 'Weline.Api is unavailable.') { submitNative(form); return; } setRegisterLoading(form, false); if (!error || !error.message) { error = new Error(<?= json_encode((string)__('注册请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); } showRegisterError(clientError, (error && error.message) || <?= json_encode((string)__('注册请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, null); }); }); });
 })();
 </script>

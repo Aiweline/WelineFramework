@@ -6,64 +6,81 @@ namespace Weline\I18n\Test\Unit\Taglib;
 
 use PHPUnit\Framework\TestCase;
 
-/**
- * LIVE/path clicks must not preventDefault+assign (Chromium blank docs).
- * Emit/preview mode still cancels the anchor and broadcasts the locale.
- */
 final class LanguageSwitcherClickRaceContractTest extends TestCase
 {
-    public function testTaglibPathModeUsesNativeAuthoritativeHrefNavigation(): void
+    public function testTaglibUsesTheLazyUiComponentAndAuthoritativeHrefs(): void
     {
-        $path = dirname(__DIR__, 3) . '/Taglib/LanguageSwitcher.php';
-        self::assertFileExists($path);
-        $content = (string) file_get_contents($path);
+        $taglib = $this->read('Taglib/LanguageSwitcher.php');
+        $runtime = $this->read('view/statics/js/language-switcher.js');
 
-        self::assertStringContainsString('|markup=v2-lang-native-path-nav-10', $content);
-        self::assertStringContainsString('if(navigation==="emit"){', $content);
-        self::assertStringContainsString('writeLanguagePreference(code)', $content);
-        self::assertStringContainsString('// Native navigation — do not preventDefault.', $content);
-        self::assertStringContainsString(
-            'preventDefault + location.assign races',
-            $content
-        );
-        // Fallback JS navigation only for missing href / same-path reload.
-        self::assertStringContainsString('i18n.switchLang(code,href)', $content);
-        self::assertStringNotContainsString(
-            'window.setTimeout(function(){window.location.assign(href);},0);',
-            $content
-        );
+        self::assertStringContainsString('|markup=weline-ui-2-language-switcher-component-19', $taglib);
+        self::assertStringContainsString('data-w-component="menu language-switcher"', $taglib);
+        self::assertStringContainsString('data-w-anchor-mode="element"', $taglib);
+        self::assertStringContainsString('data-w-language-search', $taglib);
+        self::assertStringContainsString('data-w-search=', $taglib);
+        self::assertStringContainsString('translateChrome', $taglib);
+        self::assertStringContainsString('loadChromeDictionary', $taglib);
+        self::assertStringContainsString('applySearchFilter', $runtime);
+        self::assertStringContainsString('resolvePanel', $runtime);
+        self::assertStringContainsString('bindSearch', $runtime);
+        self::assertStringContainsString('focusSearch', $runtime);
+        self::assertStringContainsString('window.setTimeout', $runtime);
+        self::assertStringContainsString("navigation === 'emit'", $runtime);
+        self::assertStringContainsString('writeLanguagePreference(locale', $runtime);
+        self::assertStringContainsString('resolveLanguageNavigationHref', $runtime);
+        self::assertStringContainsString('rebuildPathWithLocale', $runtime);
+        self::assertStringContainsString('refreshLanguageOptionHrefs', $runtime);
+        self::assertStringContainsString('window.urlWithLang', $runtime);
+        self::assertStringContainsString('window.location.assign(', $runtime);
+        self::assertStringContainsString('inPanel', $runtime);
+        self::assertStringContainsString('window.location.reload();', $runtime);
+        self::assertStringNotContainsString('<script', $taglib);
+        self::assertStringNotContainsString('window.WelineI18n', $runtime);
     }
 
-    public function testFilterQueriesStayOnPanelAfterBodyPortal(): void
+    public function testLanguageRequestUsesTheSameScopedComponent(): void
     {
-        $path = dirname(__DIR__, 3) . '/Taglib/LanguageSwitcher.php';
-        $content = (string) file_get_contents($path);
-        self::assertStringContainsString(
-            'var groups=function(){return panel.querySelectorAll("[data-language-group]");};',
-            $content
-        );
-        self::assertStringContainsString(
-            'var options=function(){return panel.querySelectorAll(".weline-language-option");};',
-            $content
-        );
-        self::assertStringContainsString('function ensureEmpty(){var empty=panel.querySelector("#"+emptyId);', $content);
-        self::assertStringNotContainsString(
-            'var groups=function(){return root.querySelectorAll("[data-language-group]");};',
-            $content
-        );
-        self::assertStringNotContainsString(
-            'function ensureEmpty(){var empty=root.querySelector("#"+emptyId);',
-            $content
-        );
+        $taglib = $this->read('Taglib/LanguageSwitcher.php');
+        $runtime = $this->read('view/statics/js/language-switcher.js');
+
+        self::assertStringContainsString('data-language-request-open', $taglib);
+        self::assertStringContainsString('data-language-request-modal', $taglib);
+        self::assertStringContainsString('data-language-request-body', $taglib);
+        self::assertStringContainsString('data-w-component="dialog"', $taglib);
+        self::assertStringContainsString('<dialog id="', $taglib);
+        self::assertStringContainsString('getLanguageSupportRequestForm', $runtime);
+        self::assertStringContainsString('submitLanguageSupportRequest', $runtime);
+        self::assertStringContainsString('bindLanguageRequestForm', $runtime);
+        self::assertStringContainsString('activateTrustedScripts', $runtime);
+        self::assertStringContainsString('event.preventDefault()', $runtime);
+        self::assertStringContainsString('i18n_language_requests', $runtime);
+        self::assertStringContainsString('UI.dialog.open', $runtime);
+        self::assertStringNotContainsString('WelineLanguageSupportRequest', $runtime);
+        self::assertStringNotContainsString('/i18n/frontend/language-support-request', $taglib);
     }
 
-    public function testRequestEntryStaysPinnedInLongLists(): void
+    public function testLanguageSupportRequestFormHasNoInlineSubmitScript(): void
     {
-        $path = dirname(__DIR__, 3) . '/Taglib/LanguageSwitcher.php';
-        $content = (string) file_get_contents($path);
-        self::assertStringContainsString('overflow:hidden;flex-direction:column', $content);
-        self::assertStringContainsString('weline-language-request-entry{flex:0 0 auto', $content);
-        self::assertStringContainsString('position:sticky;bottom:0', $content);
-        self::assertStringContainsString('display","flex","important"', $content);
+        $form = $this->read('view/templates/Frontend/language-support-request.phtml');
+        self::assertStringContainsString('data-language-request-form-shell', $form);
+        self::assertStringContainsString('data-language-request-feedback', $form);
+        self::assertStringContainsString('data-msg-success=', $form);
+        self::assertStringNotContainsString('<script', $form);
+        self::assertStringNotContainsString('addEventListener(\'submit\'', $form);
+    }
+
+    public function testLiveHttpRequestBeatsStaleThemeDataBackendArea(): void
+    {
+        $taglib = $this->read('Taglib/LanguageSwitcher.php');
+        self::assertStringContainsString('Live HTTP request is authoritative', $taglib);
+        self::assertStringContainsString('ThemeData area can remain', $taglib);
+    }
+
+    private function read(string $path): string
+    {
+        $content = file_get_contents(dirname(__DIR__, 3) . '/' . $path);
+        self::assertIsString($content, $path . ' must be readable');
+
+        return $content;
     }
 }

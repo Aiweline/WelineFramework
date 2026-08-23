@@ -163,4 +163,49 @@ moduleDescribe(test, MODULE, 'Weline_Storage 后台流程', () => {
       await expect(page.locator('body')).not.toContainText(FATAL);
     }
   );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'STORAGE-DIAGNOSTICS-001' },
+    '已登录后台可读取无敏感信息的 WLS Storage 运行诊断',
+    async ({ page }) => {
+      await loginAsAdmin(page);
+      const { route, fatal } = await openPrimary(page);
+      if (!route) {
+        expect(fatal, `候选后台路由命中运行期错误(FATAL)：${fatal} —— 属真实产品 Bug，需修复`).toBeFalsy();
+        test.skip(true, '未发现该模块可渲染的独立后台页（配置可能在统一配置中心/无后台 UI）');
+        return;
+      }
+
+      const result = await page.evaluate(async () => {
+        let api = window.Weline && window.Weline.Api;
+        if (!api || typeof api.resource !== 'function') {
+          api = await window.Weline.load('api');
+        }
+        const storage = await api.resource('storage');
+        return storage.runtimeDiagnostics({});
+      });
+
+      expect(result.success).toBe(true);
+      const diagnostics = result.diagnostics || {};
+      const baselineKeys = [
+        'active_resource_handles',
+        'active_clients',
+        'active_read_handles',
+        'active_write_handles',
+        'active_temporary_files',
+        'active_multipart_uploads',
+        'request_disk_cache_entries',
+        'request_config_cache_entries',
+        'uncleaned_at_last_reset',
+      ];
+      for (const key of baselineKeys) {
+        expect(Number.isInteger(diagnostics[key]), `${key} 应为整数计数`).toBe(true);
+        expect(diagnostics[key], `${key} 应在请求结束基线归零`).toBe(0);
+      }
+      expect(JSON.stringify(result)).not.toMatch(
+        /object[_ -]?(?:key|path)|secret|signature|signed[_ -]?url/i
+      );
+    }
+  );
 });

@@ -1,32 +1,5 @@
 
-<script>
-(function(g){
-  if(g.__bqAdmin_widget) return;
-  g.__bqAdmin_widget=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['widget']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('widget').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <?php
 /**@var \Weline\Framework\View\Template $this */
 
@@ -49,8 +22,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <style>
-    .widget-admin-toolbar .form-control,
-    .widget-admin-toolbar .form-select { min-height: 38px; }
+    .widget-admin-toolbar .w-input,
+    .widget-admin-toolbar .w-select { min-height: 38px; }
     .widget-admin-summary .card { border: 0; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
     .widget-admin-summary .summary-value { font-size: 1.25rem; font-weight: 700; line-height: 1.1; }
     .widget-admin-table td, .widget-admin-table th { vertical-align: middle; }
@@ -58,22 +31,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     .widget-admin-name .text-muted { font-size: 12px; }
 </style>
 <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <div>
-                                <h4 class="mb-1 mb-sm-0"><?= $page_title ?? __('部件管理') ?></h4>
-                                <small class="text-muted"><?= __('快速查看、筛选并预览部件详情') ?></small>
-                            </div>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
-                                        <span><?= $breadcrumb_parent ?? __('内容管理') ?></span>
-                                    </li>
-                                    <li class="breadcrumb-item active"><?= $breadcrumb_current ?? __('部件管理') ?></li>
-                                </ol>
-                            </div>
-                        </div>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <small class="w-text" data-tone="muted"><?= __('快速查看、筛选并预览部件详情') ?></small>
                     </div>
                 </div>
 
@@ -103,17 +63,17 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         modalEl.tabIndex = -1;
         modalEl.setAttribute('aria-hidden', 'true');
         modalEl.innerHTML = '' +
-            '<div class="modal-dialog modal-lg">' +
-            '  <div class="modal-content">' +
-            '    <div class="modal-header">' +
-            '      <h5 class="modal-title" id="widgetDetailModalLabel"><?= __('部件详情') ?></h5>' +
-            '      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>' +
+            '<div class="w-dialog__frame" data-size="lg">' +
+            '  <div class="w-dialog__surface">' +
+            '    <div class="w-dialog__header">' +
+            '      <h5 class="w-dialog__title" id="widgetDetailModalLabel"><?= __('部件详情') ?></h5>' +
+            '      <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>' +
             '    </div>' +
-            '    <div class="modal-body" id="widgetDetailModalBody">' +
-            '      <div class="text-muted"><?= __('加载中...') ?></div>' +
+            '    <div class="w-dialog__body" id="widgetDetailModalBody">' +
+            '      <div class="w-text" data-tone="muted"><?= __('加载中...') ?></div>' +
             '    </div>' +
-            '    <div class="modal-footer">' +
-            '      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>' +
+            '    <div class="w-dialog__footer">' +
+            '      <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('关闭') ?></button>' +
             '    </div>' +
             '  </div>' +
             '</div>';
@@ -128,15 +88,15 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         var modalEl = ensureModal();
         var bodyEl = modalEl.querySelector('#widgetDetailModalBody');
         var labelEl = modalEl.querySelector('#widgetDetailModalLabel');
-        if (bodyEl) bodyEl.innerHTML = '<div class="text-muted"><?= __('加载中...') ?></div>';
+        if (bodyEl) bodyEl.innerHTML = '<div class="w-text" data-tone="muted"><?= __('加载中...') ?></div>';
         if (labelEl) labelEl.textContent = '<?= __('部件详情') ?>';
 
         var url = WIDGET_DETAIL_URL + '?type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name);
-        bqAdmin['widget'](url, { credentials: 'include' })
+        Weline.adminRequest('widget', url, { credentials: 'include' })
             .then(function (resp) { return resp.json(); })
             .then(function (data) {
                 if (!data || !data.success) {
-                    if (bodyEl) bodyEl.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml((data && data.message) ? data.message : '<?= __('操作失败') ?>') + '</div>';
+                    if (bodyEl) bodyEl.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;">' + escapeHtml((data && data.message) ? data.message : '<?= __('操作失败') ?>') + '</div>';
                     return;
                 }
 
@@ -157,38 +117,36 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
                 if (bodyEl) {
                     bodyEl.innerHTML =
-                        '<div class="row g-3">' +
-                        '  <div class="col-12">' +
-                        '    <div class="card border-0 bg-light">' +
-                        '      <div class="card-body">' +
-                        '        <div class="d-flex flex-wrap gap-2 mb-2">' +
-                        '          <span class="badge text-bg-info"><?= __('类型') ?>: ' + escapeHtml(type || '') + '</span>' +
-                        '          <span class="badge text-bg-secondary"><?= __('模块') ?>: ' + escapeHtml(module) + '</span>' +
-                        '          <span class="badge text-bg-primary"><?= __('版本') ?>: ' + escapeHtml(version || '') + '</span>' +
+                        '<div class="w-grid" style="--w-gap:var(--weline-space-4);">' +
+                        '  <div style="--w-span:12;">' +
+                        '    <div class="w-card" data-w-border="none" data-w-background="muted">' +
+                        '      <div class="w-card__body">' +
+                        '        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">' +
+                        '          <span class="w-badge" data-w-background="info" data-tone="info"><?= __('类型') ?>: ' + escapeHtml(type || '') + '</span>' +
+                        '          <span class="w-badge" data-w-background="muted" data-tone="muted"><?= __('模块') ?>: ' + escapeHtml(module) + '</span>' +
+                        '          <span class="w-badge" data-w-background="primary" data-tone="inverse"><?= __('版本') ?>: ' + escapeHtml(version || '') + '</span>' +
                         '        </div>' +
-                        '        <div class="text-muted mb-0">' + escapeHtml(description) + '</div>' +
+                        '        <div class="w-text" data-tone="muted" style="--w-mb:0;">' + escapeHtml(description) + '</div>' +
                         '      </div>' +
                         '    </div>' +
                         '  </div>' +
-                        '  <div class="col-12">' +
-                        '    <h6 class="mb-2"><?= __('参数配置') ?></h6>' +
-                        '    <pre class="bg-light p-2 rounded mb-0" style="white-space: pre-wrap;">' + escapeHtml(paramsText) + '</pre>' +
+                        '  <div style="--w-span:12;">' +
+                        '    <h6 style="--w-mb:var(--weline-space-2);"><?= __('参数配置') ?></h6>' +
+                        '    <pre style="white-space: pre-wrap;" data-w-background="muted" data-w-radius="md">' + escapeHtml(paramsText) + '</pre>' +
                         '  </div>' +
                         '</div>';
                 }
 
                 try {
-                    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-                    modal.show();
+                    Weline.UI.dialog.open(modalEl);
                 } catch (e) {
                     // ignore: 不影响主要功能
                 }
             })
             .catch(function () {
-                if (bodyEl) bodyEl.innerHTML = '<div class="alert alert-danger mb-0"><?= __('操作失败') ?></div>';
+                if (bodyEl) bodyEl.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;"><?= __('操作失败') ?></div>';
                 try {
-                    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-                    modal.show();
+                    Weline.UI.dialog.open(modalEl);
                 } catch (e) {
                     // ignore
                 }
@@ -212,27 +170,27 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </js:part>
 
                 <!-- 概览卡片 -->
-                <div class="row g-3 mb-3 widget-admin-summary">
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body py-3">
-                                <div class="text-muted mb-1"><?= __('总部件数') ?></div>
+                <div class="w-grid widget-admin-summary" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+                    <div style="--w-span-md:4;">
+                        <div class="w-card" data-w-height="full">
+                            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('总部件数') ?></div>
                                 <div class="summary-value"><?= (int)$totalWidgetCount ?></div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body py-3">
-                                <div class="text-muted mb-1"><?= __('部件类型') ?></div>
+                    <div style="--w-span-md:4;">
+                        <div class="w-card" data-w-height="full">
+                            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('部件类型') ?></div>
                                 <div class="summary-value"><?= (int)$totalTypeCount ?></div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body py-3">
-                                <div class="text-muted mb-1"><?= __('来源模块') ?></div>
+                    <div style="--w-span-md:4;">
+                        <div class="w-card" data-w-height="full">
+                            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('来源模块') ?></div>
                                 <div class="summary-value"><?= (int)$totalModuleCount ?></div>
                             </div>
                         </div>
@@ -240,20 +198,18 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 </div>
 
                 <!-- 筛选工具栏 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <w:form method="get" class="row g-2 align-items-end widget-admin-toolbar">
-                                    <div class="col-md-4">
-                                        <label class="form-label mb-1"><?= __('关键字') ?></label>
-                                        <input type="text" class="form-control" name="search" 
-                                               placeholder="<?= __('搜索部件...') ?>" 
-                                               value="<?= htmlspecialchars($search) ?>">
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__body">
+                                <w:form method="get" class="w-grid widget-admin-toolbar" data-align="end" style="--w-gap:var(--weline-space-2);">
+                                    <div style="--w-span-md:4;">
+                                        <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('关键字') ?></label>
+                                        <input type="text" class="w-input" name="search" placeholder="<?= __('搜索部件...') ?>" value="<?= htmlspecialchars($search) ?>">
                                     </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label mb-1"><?= __('模块') ?></label>
-                                        <select class="form-select" name="module">
+                                    <div style="--w-span-md:3;">
+                                        <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('模块') ?></label>
+                                        <select class="w-select" name="module">
                                             <option value=""><?= __('所有模块') ?></option>
                                             <?php foreach ($modules as $module): ?>
                                                 <option value="<?= htmlspecialchars($module) ?>" 
@@ -263,9 +219,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label mb-1"><?= __('类型') ?></label>
-                                        <select class="form-select" name="type">
+                                    <div style="--w-span-md:3;">
+                                        <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('类型') ?></label>
+                                        <select class="w-select" name="type">
                                             <option value=""><?= __('所有类型') ?></option>
                                             <?php foreach ($allowedTypes as $type): ?>
                                                 <option value="<?= htmlspecialchars($type) ?>" 
@@ -275,12 +231,12 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="col-md-2 d-flex gap-2">
-                                        <button type="submit" class="btn btn-primary flex-fill">
-                                            <i class="ri-search-line me-1"></i><?= __('筛选') ?>
+                                    <div class="w-cluster" style="--w-span-md:2;--w-gap:var(--weline-space-2);">
+                                        <button type="submit" class="w-button flex-fill" data-tone="primary">
+                                            <w:icon name="search" size="sm"></w:icon><?= __('筛选') ?>
                                         </button>
-                                        <a href="<?= $this->getBackendUrl('widget/backend/widget') ?>" class="btn btn-light border" title="<?= __('重置筛选') ?>">
-                                            <i class="ri-refresh-line"></i>
+                                        <a href="<?= $this->getBackendUrl('widget/backend/widget') ?>" class="w-button" title="<?= __('重置筛选') ?>" data-w-border="border" data-tone="neutral">
+                                            <w:icon name="refresh" size="sm"></w:icon>
                                         </a>
                                     </div>
                                 </w:form>
@@ -290,24 +246,24 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 </div>
 
                 <!-- 部件列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;">
                                     <?= __('部件列表') ?>
-                                    <span class="badge bg-primary ms-2"><?= (int)$totalWidgetCount ?></span>
+                                    <span class="w-badge" data-w-background="primary"><?= (int)$totalWidgetCount ?></span>
                                 </h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($widgets)): ?>
-                                    <div class="text-center py-5">
-                                        <i class="ri-inbox-line" style="font-size: 48px; color: #ccc;"></i>
-                                        <p class="text-muted mt-3"><?= __('没有找到部件') ?></p>
+                                    <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                                        <w:icon name="box" size="sm"></w:icon>
+                                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?= __('没有找到部件') ?></p>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover table-sm align-middle widget-admin-table">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table widget-admin-table" data-w-vertical="middle">
                                             <thead>
                                                 <tr>
                                                     <th style="width:60px;">#</th>
@@ -324,25 +280,21 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                                 <?php foreach ($widgets as $type => $typeWidgets): ?>
                                                     <?php foreach ($typeWidgets as $name => $widget): ?>
                                                         <tr>
-                                                            <td class="text-muted"><?= $rowIndex++ ?></td>
+                                                            <td class="w-text" data-tone="muted"><?= $rowIndex++ ?></td>
                                                             <td class="widget-admin-name">
                                                                 <strong><?= htmlspecialchars($widget['name'] ?? $name) ?></strong>
                                                                 <br>
-                                                                <small class="text-muted"><?= htmlspecialchars($name) ?></small>
+                                                                <small class="w-text" data-tone="muted"><?= htmlspecialchars($name) ?></small>
                                                             </td>
                                                             <td>
-                                                                <span class="badge bg-info"><?= htmlspecialchars(ucfirst($type)) ?></span>
+                                                                <span class="w-badge" data-w-background="info"><?= htmlspecialchars(ucfirst($type)) ?></span>
                                                             </td>
                                                             <td><?= htmlspecialchars($widget['module'] ?? '') ?></td>
                                                             <td><?= htmlspecialchars($widget['description'] ?? '') ?></td>
                                                             <td><?= htmlspecialchars($widget['version'] ?? '1.0.0') ?></td>
                                                             <td>
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-outline-primary"
-                                                                        data-widget-detail-trigger
-                                                                        data-widget-type="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>"
-                                                                        data-widget-name="<?= htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') ?>">
-                                                                    <i class="ri-eye-line"></i> <?= __('详情') ?>
+                                                                <button type="button" class="w-button" data-widget-detail-trigger data-widget-type="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>" data-widget-name="<?= htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                                                    <w:icon name="eye" size="sm"></w:icon> <?= __('详情') ?>
                                                                 </button>
                                                             </td>
                                                         </tr>

@@ -36,7 +36,7 @@ class SystemNotification extends Model
     public const schema_fields_is_icon = 'is_icon';
     #[Col(type: 'smallint', length: 1, default: 0, comment: '是否图片')]
     public const schema_fields_is_img = 'is_img';
-    #[Col(type: 'varchar', length: 255, default: 'ri-notification-line', comment: '头像/图标')]
+    #[Col(type: 'varchar', length: 255, default: 'bell', comment: '头像/图标')]
     public const schema_fields_avatar = 'avatar';
     #[Col(type: 'smallint', length: 1, default: 0, comment: '是否已通知外部')]
     public const schema_fields_external_notified = 'external_notified';

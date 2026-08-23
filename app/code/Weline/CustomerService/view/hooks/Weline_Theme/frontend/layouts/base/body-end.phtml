@@ -96,8 +96,14 @@ $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales
     'zh_Hans_CN',
 ]);
 
+$customerServiceModule = Env::getInstance()->getModuleList()['Weline_CustomerService'] ?? [];
+$customerServiceStaticDir = rtrim((string)($customerServiceModule['base_path'] ?? ''), DIRECTORY_SEPARATOR)
+    . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'statics';
+$customerServiceCssVersion = (string) ((int) (@filemtime($customerServiceStaticDir . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'customer-service.css') ?: time()));
+$customerServiceJsVersion = (string) ((int) (@filemtime($customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'customer-service.js') ?: time()));
+
 ?>
-<link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)">
+<link rel="stylesheet" href="<?php echo '@static(Weline_CustomerService::css/customer-service.css)'; ?>?v=<?= htmlspecialchars($customerServiceCssVersion, ENT_QUOTES, 'UTF-8') ?>">
 <div id="customer-service-widget" class="customer-service-widget" data-editor-interactive>
     <div id="cs-chat-button" class="cs-chat-button" data-cs-toggle-chat>
         <svg class="cs-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -114,16 +120,18 @@ $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
                 </svg>
-                <span id="cs-title-text"><?= __('客服服务') ?></span>
-                <span id="cs-status-label" class="cs-status-label"><?= __('检测中...') ?></span>
+                <div class="cs-chat-title-copy">
+                    <span id="cs-title-text"><?= __('客服服务') ?></span>
+                    <span id="cs-status-label" class="cs-status-label cs-status-offline"><?= __('检测中...') ?></span>
+                </div>
             </div>
             <div class="cs-chat-actions">
-                <button type="button" class="cs-btn-icon" id="cs-settings-btn" data-cs-toggle-settings title="<?= __('设置') ?>">
+                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-settings-btn" data-cs-toggle-settings title="<?= __('设置') ?>">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
                     </svg>
                 </button>
-                <button type="button" class="cs-btn-icon" id="cs-minimize-btn" data-cs-toggle-chat title="<?= __('收起') ?>">
+                <button type="button" class="w-button cs-btn-icon" data-tone="quiet" data-icon-only="true" data-size="sm" id="cs-minimize-btn" data-cs-toggle-chat title="<?= __('收起') ?>">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M6 19h12v2H6z"/>
                     </svg>
@@ -139,7 +147,7 @@ $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales
                     </svg>
                     <span id="cs-locale-label-text"><?= __('我的语言') ?></span>
                 </label>
-                <select id="cs-locale-select">
+                <select id="cs-locale-select" class="w-select" data-size="sm">
                     <?php foreach ($supportedLocales as $locale): ?>
                         <option value="<?= htmlspecialchars((string)$locale['code']) ?>"><?= htmlspecialchars((string)$locale['nativeLabel']) ?></option>
                     <?php endforeach; ?>
@@ -152,7 +160,7 @@ $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales
                     </svg>
                     <span id="cs-display-mode-label-text"><?= __('显示模式') ?></span>
                 </label>
-                <select id="cs-display-mode">
+                <select id="cs-display-mode" class="w-select" data-size="sm">
                     <option value="translated"><?= __('仅显示译文') ?></option>
                     <option value="both"><?= __('原文+译文') ?></option>
                     <option value="original"><?= __('仅显示原文') ?></option>
@@ -171,10 +179,10 @@ $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales
             <div class="cs-input-area">
                 <textarea
                     id="cs-message-input"
-                    class="cs-message-input"
+                    class="w-textarea cs-message-input"
                     placeholder="<?= __('输入消息...') ?>"
                     rows="2"></textarea>
-                <button type="button" class="cs-send-button" data-cs-send-message>
+                <button type="button" class="w-button cs-send-button" data-icon-only="true" data-cs-send-message>
                     <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                     </svg>
@@ -191,7 +199,7 @@ $bindModalHtml = <<<'BIND_MODAL_HTML'
     <div class="cs-modal-content">
         <div class="cs-modal-header">
             <h3>{{title}}</h3>
-            <button type="button" class="cs-modal-close" data-cs-bind-close>
+            <button type="button" class="w-button cs-modal-close" data-tone="quiet" data-icon-only="true" data-size="sm" data-cs-bind-close>
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                 </svg>
@@ -200,16 +208,16 @@ $bindModalHtml = <<<'BIND_MODAL_HTML'
         <div class="cs-modal-body">
             <p class="cs-modal-copy">{{copy}}</p>
             <p class="cs-modal-note">{{note}}</p>
-            <div class="cs-form-group">
+            <div class="cs-w-field">
                 <label>{{email_label}}</label>
-                <input type="email" id="cs-bind-email" class="cs-form-input" placeholder="{{email_placeholder}}">
+                <input type="email" id="cs-bind-email" class="w-input cs-form-input" placeholder="{{email_placeholder}}">
             </div>
         </div>
         <div class="cs-modal-footer">
-            <button type="button" class="cs-btn cs-btn-secondary" data-cs-bind-close>
+            <button type="button" class="w-button cs-btn cs-btn-secondary" data-tone="neutral" data-variant="outline" data-cs-bind-close>
                 {{later}}
             </button>
-            <button type="button" class="cs-btn cs-btn-primary" data-cs-bind-send>
+            <button type="button" class="w-button cs-btn cs-btn-primary" data-cs-bind-send>
                 {{send}}
             </button>
         </div>
@@ -258,7 +266,7 @@ function initCustomerServiceWidget() {
 (function () {
     'use strict';
 
-    var customerServiceScriptUrl = '@static(Weline_CustomerService::js/customer-service.js)';
+    var customerServiceScriptUrl = <?php echo json_encode('@static(Weline_CustomerService::js/customer-service.js)', JSON_UNESCAPED_SLASHES); ?> + '?v=<?= htmlspecialchars($customerServiceJsVersion, ENT_QUOTES, 'UTF-8') ?>';
     var customerServiceScriptLoading = false;
     var customerServiceOpenAfterLoad = false;
 

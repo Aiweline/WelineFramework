@@ -23,7 +23,7 @@ use Weline\Geo\Service\FeedGeneratorService;
  * 
  * @package Weline_Geo
  */
-#[Acl('Weline_Geo::feed_list', 'Feed管理', 'mdi-rss', 'Feed管理', 'Weline_Geo::geo_manager')]
+#[Acl('Weline_Geo::feed_list', 'Feed管理', 'circle', 'Feed管理', 'Weline_Geo::geo_manager')]
 class Feed extends BackendController
 {
     /**
@@ -31,7 +31,7 @@ class Feed extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::feed_list_index', '查看Feed列表', 'mdi-rss', '查看Feed列表')]
+    #[Acl('Weline_Geo::feed_list_index', '查看Feed列表', 'circle', '查看Feed列表')]
     public function index(): string
     {
         try {
@@ -54,7 +54,7 @@ class Feed extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::feed_edit', '编辑Feed', 'mdi-pencil', '编辑Feed')]
+    #[Acl('Weline_Geo::feed_edit', '编辑Feed', 'edit', '编辑Feed')]
     public function edit(): string
     {
         try {
@@ -106,7 +106,7 @@ class Feed extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::feed_save', '保存Feed', 'mdi-content-save', '保存Feed')]
+    #[Acl('Weline_Geo::feed_save', '保存Feed', 'save', '保存Feed')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -178,7 +178,7 @@ class Feed extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Geo::feed_generate', '生成Feed', 'mdi-refresh', '生成Feed')]
+    #[Acl('Weline_Geo::feed_generate', '生成Feed', 'refresh', '生成Feed')]
     public function generate(): string
     {
         if (!$this->request->isPost()) {

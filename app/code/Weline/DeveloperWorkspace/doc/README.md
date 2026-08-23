@@ -14,11 +14,13 @@
 
 ## 浏览器文档页 API 契约
 
-- `/dev/tool/docs` 与 `/dev/tool/docs/api` 是独立页面，必须先配置并加载官方 `weline-api` / Theme loader，再调用 `Weline.load('api')`。
-- 文档目录、搜索与 API 调试统一通过 `developer_workspace` QueryProvider 桥接；API runtime 缺失时必须失败并保留控制台证据，不得回退到未初始化的 `window.Weline.Api` 或原生业务请求。
-- 公开文档浏览页只调用 `developer_workspace.docsRequest`；该操作仅允许 `GET /dev/tool/docs/{tree|documents|document|search}`。通用 `adminRequest` 继续要求后台身份，禁止为了公开文档读取而放宽其鉴权。
-- `docsRequest` 的浏览器兼容响应必须保留原文档接口的 JSON 形状（数组仍为数组），不得套用后台桥的 `{success,data}` 数组包装。
-- 开发面板的 shell、session、document、routes、trace、DB explain 与 SEO crawl 必须经 `developer_workspace.panelRequest` 的固定路由/方法白名单；该 Query 操作仍由 `PanelAccessService` 执行 DEV 或生产 token-cookie 二次鉴权，禁止原生 `fetch` 和任意 URL 代理。
+- `/dev/tool/docs` 与 `/dev/tool/docs/api` 是独立页面，必须由后台 Header Base 配置并加载官方 `weline-api` / Theme runtime；页面代码只在需要时调用 `Weline.load('api')`。
+- 公开文档目录和搜索只调用 `developer_workspace.docsRequest`；该操作仅允许 `GET /dev/tool/docs/{tree|documents|document|search}`，并保留原 JSON 形状。
+- API 调用测试工作台属于框架开发基础设施：Frontend Worker 必须走 `Weline.Api.resource(provider)[operation](params)`；文档中已登记的 REST 路由必须走后台 runtime 的 `Weline.Api.request(url, options)`。两者均不得降级为原生 Ajax、XHR、`fetch`、axios 或 jQuery。
+- 调试客户端的功能基线包括 REST/Worker 请求编辑、示例导入、Token、沙盒/正式环境、语言货币、状态/耗时/大小/Header/Body 响应诊断、SDK 下载与指南；迁移 UI 时不得删减这些产品能力。
+- API 页面只使用原生 DOM 与 Weline UI 的 `w-*` 外壳；jQuery、jsTree、Bootstrap、Prism 和字体图标不属于运行时依赖。桌面分栏可调整，窄屏自动单列。
+- 通用 `adminRequest` 继续要求后台身份，禁止为了公开文档读取或任意 REST 代理而放宽鉴权。
+- 开发面板的 shell、session、document、routes、trace、DB explain 与 SEO crawl 必须经 `developer_workspace.panelRequest` 的固定路由/方法白名单；该 Query 操作仍由 `PanelAccessService` 执行 DEV 或生产 token-cookie 二次鉴权。
 
 ## 统计信息
 

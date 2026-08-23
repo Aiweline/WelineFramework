@@ -6,32 +6,32 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>创建备份</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>创建备份</lang></h4>
         </div>
     </div>
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 创建备份表单 -->
-<div class="row">
-    <div class="col-xl-8">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>备份设置</lang></h4>
+<div class="w-grid">
+    <div style="--w-span-lg:8;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title" style="--w-mb:var(--weline-space-6);"><lang>备份设置</lang></h4>
                 
                 <w:form id="backupForm">
-                    <div class="mb-3">
-                        <label class="form-label"><lang>备份类型</lang></label>
-                        <select class="form-select" id="backup_type" name="type" required>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>备份类型</lang></label>
+                        <select class="w-select" id="backup_type" name="type" required>
                             <option value="full"><lang>完整备份（数据库+代码）</lang></option>
                             <option value="database"><lang>数据库备份</lang></option>
                             <option value="code"><lang>代码备份</lang></option>
@@ -39,18 +39,18 @@
                         </select>
                     </div>
 
-                    <div class="mb-3">
-                        <div class="alert alert-info">
-                            <i class="mdi mdi-information me-2"></i>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <div class="w-alert" data-tone="info">
+                            <w:icon name="info" size="sm"></w:icon>
                             <lang>创建备份可能需要几分钟时间，请耐心等待。</lang>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <button type="submit" class="btn btn-primary" id="submitBtn">
-                            <i class="mdi mdi-content-save me-2"></i><lang>创建备份</lang>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <button type="submit" class="w-button" id="submitBtn" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon><lang>创建备份</lang>
                         </button>
-                        <a href="<?= $this->getBackendUrl('maintenance/backend/backup/index') ?>" class="btn btn-secondary ms-2">
+                        <a href="<?= $this->getBackendUrl('maintenance/backend/backup/index') ?>" class="w-button" data-tone="neutral">
                             <lang>返回列表</lang>
                         </a>
                     </div>
@@ -61,34 +61,7 @@
 </div>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_maintenance) return;
-  g.__bqAdmin_maintenance=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['maintenance']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('maintenance').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function() {
     'use strict';
@@ -101,28 +74,28 @@
         var submitBtn = document.getElementById('submitBtn');
         var originalText = submitBtn.innerHTML;
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-2"></i><?= __('创建中...') ?>';
+        submitBtn.innerHTML = '<w:icon name="circle" size="sm"></w:icon><?= __('创建中...') ?>';
 
         var formData = new FormData(event.target);
         
         var createUrl = '<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>';
         var createOpts = { method: 'POST', body: formData };
-        bqAdmin['maintenance'](createUrl, createOpts)
+        Weline.adminRequest('maintenance', createUrl, createOpts)
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
-                BackendToast.success(data.message);
+                Weline.UI.toast.success(data.message);
                 setTimeout(function() {
                     location.href = '<?= $this->getBackendUrl('maintenance/backend/backup/index') ?>';
                 }, 1500);
             } else {
-                BackendToast.error(data.message);
+                Weline.UI.toast.error(data.message);
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
             }
         })
         .catch(function(error) {
-            BackendToast.error('<?= __('创建备份失败') ?>');
+            Weline.UI.toast.error('<?= __('创建备份失败') ?>');
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         });

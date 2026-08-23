@@ -1,0 +1,130 @@
+@layer page {
+    .w-admin-dashboard {
+        display: grid;
+        gap: var(--weline-space-5);
+    }
+
+    .w-admin-dashboard__gauge {
+        --w-gauge-color: var(--weline-theme-primary);
+        position: relative;
+        display: grid;
+        width: 4.5rem;
+        height: 4.5rem;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: var(--weline-radius-round);
+        background: conic-gradient(var(--w-gauge-color) var(--w-progress, 0%), var(--weline-theme-surface-muted) 0);
+        color: var(--weline-theme-text);
+        font-size: var(--weline-font-size-xs);
+        font-weight: 700;
+    }
+
+    .w-admin-dashboard__gauge::before {
+        position: absolute;
+        inset: 0.45rem;
+        border-radius: inherit;
+        background: var(--weline-theme-surface);
+        content: "";
+    }
+
+    .w-admin-dashboard__gauge > span {
+        position: relative;
+    }
+
+    .w-admin-dashboard__gauge[data-tone="success"] {
+        --w-gauge-color: var(--weline-theme-success);
+    }
+
+    .w-admin-dashboard__gauge[data-tone="danger"] {
+        --w-gauge-color: var(--weline-theme-danger);
+    }
+
+    .w-admin-dashboard__trend {
+        display: grid;
+        min-height: 18rem;
+        grid-template-columns: repeat(12, minmax(1.25rem, 1fr));
+        align-items: end;
+        gap: var(--weline-space-2);
+        padding-block: var(--weline-space-5);
+        overflow-x: auto;
+    }
+
+    .w-admin-dashboard__trend-item {
+        display: grid;
+        min-width: 1.25rem;
+        grid-template-rows: minmax(10rem, 1fr) auto;
+        gap: var(--weline-space-2);
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-xs);
+        text-align: center;
+    }
+
+    .w-admin-dashboard__trend-bar {
+        align-self: end;
+        width: 100%;
+        height: var(--w-value, 0%);
+        min-height: 0.25rem;
+        border-radius: var(--weline-radius-sm) var(--weline-radius-sm) 0 0;
+        background: var(--weline-theme-primary);
+    }
+
+    .w-admin-dashboard__regions {
+        display: grid;
+        gap: var(--weline-space-4);
+        margin-block: var(--weline-space-5);
+        padding: 0;
+        list-style: none;
+    }
+
+    .w-admin-dashboard__region {
+        display: grid;
+        grid-template-columns: minmax(5rem, auto) minmax(6rem, 1fr) auto;
+        align-items: center;
+        gap: var(--weline-space-3);
+    }
+
+    .w-admin-dashboard__region .w-progress__bar {
+        width: var(--w-progress, 0%);
+    }
+
+    .w-admin-dashboard__social-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--weline-space-3);
+        margin-block-start: var(--weline-space-5);
+    }
+
+    .w-admin-dashboard__list {
+        display: grid;
+        gap: var(--weline-space-4);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .w-admin-dashboard__activity {
+        display: grid;
+        max-height: 18rem;
+        gap: var(--weline-space-3);
+        overflow: auto;
+    }
+
+    .w-admin-dashboard__table-select {
+        width: 3.125rem;
+    }
+
+    .w-admin-dashboard__table-avatar {
+        width: 3.75rem;
+    }
+
+    @media (max-width: 47.99rem) {
+        .w-admin-dashboard__region {
+            grid-template-columns: 1fr auto;
+        }
+
+        .w-admin-dashboard__region .w-progress {
+            grid-column: 1 / -1;
+            grid-row: 2;
+        }
+    }
+}

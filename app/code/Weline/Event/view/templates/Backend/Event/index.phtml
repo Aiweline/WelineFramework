@@ -4,9 +4,9 @@ $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framewor
 $backendUrlPrefix = $request->getUrlBuilder()->getBackendUrl('/');
 $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 ?>
-<div class="container-fluid">
+<div class="w-container">
     <!-- 页面标题 -->
-    <div class="page-title">
+    <div class="w-backend-page__title">
     <h1><?= $title ?? '事件管理' ?></h1>
 </div>
 
@@ -15,40 +15,40 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 $stats = $this->getData('stats') ?? [];
 ?>
 <div class="stats-cards">
-    <div class="card">
-        <div class="card-content">
-            <div class="card-title">总事件数</div>
-            <div class="card-value"><?= $stats['total_events'] ?? 0 ?></div>
+    <div class="w-card">
+        <div class="weline-card-content">
+            <div class="w-card__title">总事件数</div>
+            <div class="weline-card-value"><?= $stats['total_events'] ?? 0 ?></div>
         </div>
     </div>
-    <div class="card">
-        <div class="card-content">
-            <div class="card-title">有规约的事件</div>
-            <div class="card-value text-success"><?= $stats['events_with_spec'] ?? 0 ?></div>
+    <div class="w-card">
+        <div class="weline-card-content">
+            <div class="w-card__title">有规约的事件</div>
+            <div class="weline-card-value w-text" data-tone="success"><?= $stats['events_with_spec'] ?? 0 ?></div>
         </div>
     </div>
-    <div class="card">
-        <div class="card-content">
-            <div class="card-title">有文档的事件</div>
-            <div class="card-value text-info"><?= $stats['events_with_doc'] ?? 0 ?></div>
+    <div class="w-card">
+        <div class="weline-card-content">
+            <div class="w-card__title">有文档的事件</div>
+            <div class="weline-card-value w-text" data-tone="info"><?= $stats['events_with_doc'] ?? 0 ?></div>
         </div>
     </div>
-    <div class="card">
-        <div class="card-content">
-            <div class="card-title">有观察者的事件</div>
-            <div class="card-value text-primary"><?= $stats['events_with_observers'] ?? 0 ?></div>
+    <div class="w-card">
+        <div class="weline-card-content">
+            <div class="w-card__title">有观察者的事件</div>
+            <div class="weline-card-value w-text" data-tone="primary"><?= $stats['events_with_observers'] ?? 0 ?></div>
         </div>
     </div>
-    <div class="card">
-        <div class="card-content">
-            <div class="card-title">总观察者数</div>
-            <div class="card-value text-warning"><?= $stats['total_observers'] ?? 0 ?></div>
+    <div class="w-card">
+        <div class="weline-card-content">
+            <div class="w-card__title">总观察者数</div>
+            <div class="weline-card-value w-text" data-tone="warning"><?= $stats['total_observers'] ?? 0 ?></div>
         </div>
     </div>
-    <div class="card">
-        <div class="card-content">
-            <div class="card-title">无观察者的事件</div>
-            <div class="card-value text-muted"><?= $stats['events_without_observers'] ?? 0 ?></div>
+    <div class="w-card">
+        <div class="weline-card-content">
+            <div class="w-card__title">无观察者的事件</div>
+            <div class="weline-card-value w-text" data-tone="muted"><?= $stats['events_without_observers'] ?? 0 ?></div>
         </div>
     </div>
 </div>
@@ -59,16 +59,11 @@ $stats = $this->getData('stats') ?? [];
         <div class="filter-row">
             <div class="filter-group">
                 <label for="q">快速搜索：</label>
-                <input type="text" 
-                       id="q" 
-                       name="q" 
-                       value="<?= htmlspecialchars($this->getData('quick_search') ?? '') ?>" 
-                       placeholder="输入事件名、描述、模块名..."
-                       class="form-control form-control-sm">
+                <input type="text" id="q" name="q" value="<?= htmlspecialchars($this->getData('quick_search') ?? '') ?>" placeholder="输入事件名、描述、模块名..." class="w-input" data-size="sm">
             </div>
             <div class="filter-group">
                 <label for="module">模块筛选：</label>
-                <select id="module" name="module" class="form-control form-control-sm">
+                <select id="module" name="module" class="w-input" data-size="sm">
                     <option value="">全部模块</option>
                     <?php foreach ($this->getData('all_modules') ?? [] as $module): ?>
                         <option value="<?= htmlspecialchars($module) ?>" 
@@ -80,7 +75,7 @@ $stats = $this->getData('stats') ?? [];
             </div>
             <div class="filter-group">
                 <label for="spec">规约状态：</label>
-                <select id="spec" name="spec" class="form-control form-control-sm">
+                <select id="spec" name="spec" class="w-input" data-size="sm">
                     <option value="">全部</option>
                     <option value="1" <?= ($this->getData('filter_spec') ?? '') === '1' ? 'selected' : '' ?>>有规约</option>
                     <option value="0" <?= ($this->getData('filter_spec') ?? '') === '0' ? 'selected' : '' ?>>无规约</option>
@@ -88,7 +83,7 @@ $stats = $this->getData('stats') ?? [];
             </div>
             <div class="filter-group">
                 <label for="doc">文档状态：</label>
-                <select id="doc" name="doc" class="form-control form-control-sm">
+                <select id="doc" name="doc" class="w-input" data-size="sm">
                     <option value="">全部</option>
                     <option value="1" <?= ($this->getData('filter_doc') ?? '') === '1' ? 'selected' : '' ?>>有文档</option>
                     <option value="0" <?= ($this->getData('filter_doc') ?? '') === '0' ? 'selected' : '' ?>>无文档</option>
@@ -96,7 +91,7 @@ $stats = $this->getData('stats') ?? [];
             </div>
             <div class="filter-group">
                 <label for="observer">观察者：</label>
-                <select id="observer" name="observer" class="form-control form-control-sm">
+                <select id="observer" name="observer" class="w-input" data-size="sm">
                     <option value="">全部</option>
                     <option value="1" <?= ($this->getData('filter_observer') ?? '') === '1' ? 'selected' : '' ?>>有观察者</option>
                     <option value="0" <?= ($this->getData('filter_observer') ?? '') === '0' ? 'selected' : '' ?>>无观察者</option>
@@ -104,7 +99,7 @@ $stats = $this->getData('stats') ?? [];
             </div>
             <div class="filter-group">
                 <label for="sort">排序：</label>
-                <select id="sort" name="sort" class="form-control form-control-sm">
+                <select id="sort" name="sort" class="w-input" data-size="sm">
                     <option value="name" <?= ($this->getData('sort_by') ?? 'name') === 'name' ? 'selected' : '' ?>>事件名</option>
                     <option value="module" <?= ($this->getData('sort_by') ?? '') === 'module' ? 'selected' : '' ?>>定义模块</option>
                     <option value="observers" <?= ($this->getData('sort_by') ?? '') === 'observers' ? 'selected' : '' ?>>观察者数</option>
@@ -112,17 +107,17 @@ $stats = $this->getData('stats') ?? [];
             </div>
             <div class="filter-group">
                 <label for="order">顺序：</label>
-                <select id="order" name="order" class="form-control form-control-sm">
+                <select id="order" name="order" class="w-input" data-size="sm">
                     <option value="asc" <?= ($this->getData('sort_order') ?? 'asc') === 'asc' ? 'selected' : '' ?>>升序</option>
                     <option value="desc" <?= ($this->getData('sort_order') ?? '') === 'desc' ? 'selected' : '' ?>>降序</option>
                 </select>
             </div>
             <div class="filter-actions">
-                <button type="submit" class="btn btn-sm btn-primary">
-                    <i class="mdi mdi-filter"></i> 应用筛选
+                <button type="submit" class="w-button" data-tone="primary" data-size="sm">
+                    <w:icon name="filter" size="sm"></w:icon> 应用筛选
                 </button>
-                <a href="*/backend/event/index" class="btn btn-sm btn-secondary">
-                    <i class="mdi mdi-refresh"></i> 重置
+                <a href="*/backend/event/index" class="w-button" data-tone="neutral" data-size="sm">
+                    <w:icon name="refresh" size="sm"></w:icon> 重置
                 </a>
             </div>
         </div>
@@ -140,20 +135,20 @@ $totalCount = count($events);
             <span>共找到 <strong><?= $totalCount ?></strong> 个事件</span>
         </div>
         <div class="list-actions">
-            <a href="*/backend/event/refresh" class="btn btn-sm btn-warning">
-                <i class="mdi mdi-refresh"></i> 刷新注册表
+            <a href="*/backend/event/refresh" class="w-button" data-tone="warning" data-size="sm">
+                <w:icon name="refresh" size="sm"></w:icon> 刷新注册表
             </a>
         </div>
     </div>
     <?php if (empty($events)): ?>
         <div class="empty-state">
-            <i class="mdi mdi-lightning-bolt-outline"></i>
+            <w:icon name="bolt" size="sm"></w:icon>
             <h3>暂无事件信息</h3>
             <p>系统中还没有定义任何事件。请运行 'php bin/w event:rebuild' 重建事件注册表。</p>
         </div>
     <?php else: ?>
-        <div class="table-container">
-            <table class="table">
+        <div class="weline-table-container">
+            <table class="w-table">
                 <thead>
                     <tr>
                         <th>
@@ -174,7 +169,7 @@ $totalCount = count($events);
                             <a href="?<?= $queryParams ?>" class="sort-link" data-sort="name" data-order="<?= $newOrder ?>">
                                 事件名
                                 <?php if ($currentSort === 'name'): ?>
-                                    <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                    <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                                 <?php endif; ?>
                             </a>
                         </th>
@@ -195,7 +190,7 @@ $totalCount = count($events);
                             <a href="?<?= $queryParams ?>" class="sort-link" data-sort="module" data-order="<?= $newOrder ?>">
                                 定义模块
                                 <?php if ($currentSort === 'module'): ?>
-                                    <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                    <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                                 <?php endif; ?>
                             </a>
                         </th>
@@ -216,7 +211,7 @@ $totalCount = count($events);
                             <a href="?<?= $queryParams ?>" class="sort-link" data-sort="observers" data-order="<?= $newOrder ?>">
                                 观察者
                                 <?php if ($currentSort === 'observers'): ?>
-                                    <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                                    <w:icon name="<?= $currentOrder === 'asc' ? 'arrow-up' : 'arrow-down' ?>" size="xs"></w:icon>
                                 <?php endif; ?>
                             </a>
                         </th>
@@ -237,26 +232,26 @@ $totalCount = count($events);
                                 </div>
                                 <?php if (!empty($eventInfo['description'])): ?>
                                     <div class="event-description">
-                                        <small class="text-muted"><?= htmlspecialchars(mb_substr($eventInfo['description'] ?? '', 0, 100)) ?><?= mb_strlen($eventInfo['description'] ?? '') > 100 ? '...' : '' ?></small>
+                                        <small class="w-text" data-tone="muted"><?= htmlspecialchars(mb_substr($eventInfo['description'] ?? '', 0, 100)) ?><?= mb_strlen($eventInfo['description'] ?? '') > 100 ? '...' : '' ?></small>
                                     </div>
                                 <?php endif; ?>
                             </td>
                             <td>
                                 <div class="event-module">
-                                    <span class="badge badge-info"><?= htmlspecialchars($eventInfo['module'] ?? '') ?></span>
+                                    <span class="w-badge" data-tone="info"><?= htmlspecialchars($eventInfo['module'] ?? '') ?></span>
                                 </div>
                             </td>
                             <td>
                                 <div class="event-spec-doc">
                                     <?php if ($eventInfo['has_spec'] ?? false): ?>
-                                        <span class="badge badge-success" title="有规约文件">规约</span>
+                                        <span class="w-badge" title="有规约文件" data-tone="success">规约</span>
                                     <?php else: ?>
-                                        <span class="badge badge-danger" title="缺少规约文件">无规约</span>
+                                        <span class="w-badge" title="缺少规约文件" data-tone="danger">无规约</span>
                                     <?php endif; ?>
                                     <?php if ($eventInfo['has_doc'] ?? false): ?>
-                                        <span class="badge badge-info" title="有文档文件">文档</span>
+                                        <span class="w-badge" title="有文档文件" data-tone="info">文档</span>
                                     <?php else: ?>
-                                        <span class="badge badge-warning" title="缺少文档文件">无文档</span>
+                                        <span class="w-badge" title="缺少文档文件" data-tone="warning">无文档</span>
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -267,26 +262,23 @@ $totalCount = count($events);
                                     $observerModules = $eventInfo['observer_modules'] ?? [];
                                     ?>
                                     <?php if ($observerCount > 0): ?>
-                                        <span class="badge badge-primary">
-                                            <i class="mdi mdi-eye"></i> <?= $observerCount ?> 个观察者
+                                        <span class="w-badge" data-tone="primary">
+                                            <w:icon name="eye" size="sm"></w:icon> <?= $observerCount ?> 个观察者
                                         </span>
                                         <div class="observer-modules">
-                                            <small class="text-muted">
+                                            <small class="w-text" data-tone="muted">
                                                 来自 <?= count($observerModules) ?> 个模块
                                             </small>
                                         </div>
                                     <?php else: ?>
-                                        <span class="text-muted">无观察者</span>
+                                        <span class="w-text" data-tone="muted">无观察者</span>
                                     <?php endif; ?>
                                 </div>
                             </td>
                             <td>
                                 <div class="actions">
-                                    <button type="button" 
-                                            class="btn btn-sm btn-outline-primary btn-view-detail" 
-                                            data-event-name="<?= htmlspecialchars($eventName) ?>"
-                                            title="查看详情">
-                                        <i class="mdi mdi-eye"></i> 详情
+                                    <button type="button" class="w-button weline-btn-view-detail" data-event-name="<?= htmlspecialchars($eventName) ?>" title="查看详情" data-tone="primary" data-variant="outline" data-size="sm">
+                                        <w:icon name="eye" size="sm"></w:icon> 详情
                                     </button>
                                 </div>
                             </td>
@@ -308,7 +300,7 @@ $totalCount = count($events);
     color: #505d69;
 }
 
-[data-theme-mode="dark"] .page-title {
+[data-theme="dark"] .page-title {
     color: #79859c;
 }
 
@@ -319,7 +311,7 @@ $totalCount = count($events);
     margin: 0;
 }
 
-[data-theme-mode="dark"] .page-title h1 {
+[data-theme="dark"] .page-title h1 {
     color: #79859c;
 }
 
@@ -344,7 +336,7 @@ $totalCount = count($events);
     transition: all 0.2s ease-in-out;
 }
 
-[data-theme-mode="dark"] .card {
+[data-theme="dark"] .card {
     background: #252b3b;
     border-color: #2d3448;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -355,11 +347,11 @@ $totalCount = count($events);
     transform: translateY(-2px);
 }
 
-[data-theme-mode="dark"] .card:hover {
+[data-theme="dark"] .card:hover {
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }
 
-.card-content {
+.weline-card-content {
     text-align: center;
 }
 
@@ -370,28 +362,28 @@ $totalCount = count($events);
     font-weight: 500;
 }
 
-[data-theme-mode="dark"] .card-title {
+[data-theme="dark"] .card-title {
     color: #8590a5;
 }
 
-.card-value {
+.weline-card-value {
     font-size: 32px;
     font-weight: bold;
     color: #212529;
     line-height: 1.2;
 }
 
-[data-theme-mode="dark"] .card-value {
+[data-theme="dark"] .weline-card-value {
     color: #e9ecef;
 }
 
-.card-value.text-primary { color: #0bb197; }
-.card-value.text-success { color: #0ac074; }
-.card-value.text-info { color: #4aa3ff; }
-.card-value.text-warning { color: #fcb92c; }
-.card-value.text-muted { color: #74788d; }
+.weline-card-value.text-primary { color: #0bb197; }
+.weline-card-value.w-text { color: #0ac074; }
+.weline-card-value.text-info { color: #4aa3ff; }
+.weline-card-value.w-text { color: #fcb92c; }
+.weline-card-value.text-muted { color: #74788d; }
 
-[data-theme-mode="dark"] .card-value.text-muted {
+[data-theme="dark"] .weline-card-value.text-muted {
     color: #8590a5;
 }
 
@@ -402,12 +394,12 @@ $totalCount = count($events);
     overflow: hidden;
 }
 
-[data-theme-mode="dark"] .events-list {
+[data-theme="dark"] .events-list {
     background: #252b3b;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.table-container {
+.weline-table-container {
     overflow-x: auto;
 }
 
@@ -417,7 +409,7 @@ $totalCount = count($events);
     color: #212529;
 }
 
-[data-theme-mode="dark"] .table {
+[data-theme="dark"] .table {
     color: #e9ecef;
 }
 
@@ -429,8 +421,8 @@ $totalCount = count($events);
     vertical-align: middle;
 }
 
-[data-theme-mode="dark"] .table th,
-[data-theme-mode="dark"] .table td {
+[data-theme="dark"] .table th,
+[data-theme="dark"] .table td {
     border-bottom-color: #2d3448;
 }
 
@@ -443,7 +435,7 @@ $totalCount = count($events);
     z-index: 10;
 }
 
-[data-theme-mode="dark"] .table th {
+[data-theme="dark"] .table th {
     background-color: #1e2125;
     color: #e9ecef;
 }
@@ -456,7 +448,7 @@ $totalCount = count($events);
     background-color: #f8f9fa;
 }
 
-[data-theme-mode="dark"] .table tbody tr:hover {
+[data-theme="dark"] .table tbody tr:hover {
     background-color: #1e2125;
 }
 
@@ -471,7 +463,7 @@ $totalCount = count($events);
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .event-name code {
+[data-theme="dark"] .event-name code {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -512,7 +504,7 @@ $totalCount = count($events);
     color: #74788d;
 }
 
-[data-theme-mode="dark"] .empty-state {
+[data-theme="dark"] .empty-state {
     color: #8590a5;
 }
 
@@ -523,7 +515,7 @@ $totalCount = count($events);
     opacity: 0.5;
 }
 
-[data-theme-mode="dark"] .empty-state i {
+[data-theme="dark"] .empty-state i {
     color: #2d3448;
 }
 
@@ -533,7 +525,7 @@ $totalCount = count($events);
     font-weight: 600;
 }
 
-[data-theme-mode="dark"] .empty-state h3 {
+[data-theme="dark"] .empty-state h3 {
     color: #e9ecef;
 }
 
@@ -543,7 +535,7 @@ $totalCount = count($events);
     line-height: 1.6;
 }
 
-[data-theme-mode="dark"] .empty-state p {
+[data-theme="dark"] .empty-state p {
     color: #8590a5;
 }
 
@@ -558,36 +550,36 @@ $totalCount = count($events);
     white-space: nowrap;
 }
 
-.badge-primary { 
+.weline-badge-primary { 
     background-color: #0bb197; 
     color: white; 
 }
 
-.badge-info { 
+.weline-badge-info { 
     background-color: #4aa3ff; 
     color: white; 
 }
 
-.badge-success { 
+.weline-badge-success { 
     background-color: #0ac074; 
     color: white; 
 }
 
-.badge-warning { 
+.weline-badge-warning { 
     background-color: #fcb92c; 
     color: #212529; 
 }
 
-[data-theme-mode="dark"] .badge-warning {
+[data-theme="dark"] .weline-badge-warning {
     color: #e9ecef;
 }
 
-.badge-danger { 
+.weline-badge-danger { 
     background-color: #ff3d60; 
     color: white; 
 }
 
-.badge-secondary { 
+.weline-badge-secondary { 
     background-color: #74788d; 
     color: white; 
 }
@@ -608,61 +600,61 @@ $totalCount = count($events);
     vertical-align: middle;
 }
 
-.btn-sm {
+.weline-btn-sm {
     padding: 4px 8px;
     font-size: 12px;
 }
 
-.btn-primary {
+.weline-btn-primary {
     background: #0bb197;
     color: white;
     border: 1px solid #0bb197;
 }
 
-.btn-primary:hover {
+.weline-btn-primary:hover {
     background: #0bb197;
     opacity: 0.9;
     transform: translateY(-1px);
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
-.btn-outline-primary {
+.weline-btn-outline-primary {
     color: #0bb197;
     border-color: #0bb197;
     background: transparent;
 }
 
-.btn-outline-primary:hover {
+.weline-btn-outline-primary:hover {
     background: #0bb197;
     color: white;
     transform: translateY(-1px);
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
-.btn-secondary {
+.weline-btn-secondary {
     background: #74788d;
     color: white;
     border: 1px solid #74788d;
 }
 
-.btn-secondary:hover {
+.weline-btn-secondary:hover {
     background: #74788d;
     opacity: 0.9;
     transform: translateY(-1px);
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
-.btn-warning {
+.weline-btn-warning {
     background: #fcb92c;
     color: #212529;
     border: 1px solid #fcb92c;
 }
 
-[data-theme-mode="dark"] .btn-warning {
+[data-theme="dark"] .weline-btn-warning {
     color: #e9ecef;
 }
 
-.btn-warning:hover {
+.weline-btn-warning:hover {
     background: #fcb92c;
     opacity: 0.9;
     transform: translateY(-1px);
@@ -673,7 +665,7 @@ $totalCount = count($events);
     color: #74788d;
 }
 
-[data-theme-mode="dark"] .text-muted {
+[data-theme="dark"] .text-muted {
     color: #8590a5;
 }
 
@@ -687,7 +679,7 @@ $totalCount = count($events);
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .filter-toolbar {
+[data-theme="dark"] .filter-toolbar {
     background: #252b3b;
     border-color: #2d3448;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -718,7 +710,7 @@ $totalCount = count($events);
     line-height: 1.5;
 }
 
-[data-theme-mode="dark"] .filter-group label {
+[data-theme="dark"] .filter-group label {
     color: #8590a5;
 }
 
@@ -729,7 +721,7 @@ $totalCount = count($events);
 }
 
 /* 表单控件样式 */
-.form-control-sm {
+.w-input-sm {
     padding: 6px 10px;
     font-size: 13px;
     border: 1px solid #eff2f7;
@@ -741,52 +733,52 @@ $totalCount = count($events);
     line-height: 1.5;
 }
 
-[data-theme-mode="dark"] .form-control-sm {
+[data-theme="dark"] .w-input-sm {
     border-color: #8590a5;
     background-color: #252b3b;
     color: #e9ecef;
 }
 
-.form-control-sm::placeholder {
+.w-input-sm::placeholder {
     color: #74788d;
     opacity: 0.6;
 }
 
-[data-theme-mode="dark"] .form-control-sm::placeholder {
+[data-theme="dark"] .w-input-sm::placeholder {
     color: #8590a5;
 }
 
-.form-control-sm:hover {
+.w-input-sm:hover {
     border-color: #74788d;
 }
 
-[data-theme-mode="dark"] .form-control-sm:hover {
+[data-theme="dark"] .w-input-sm:hover {
     border-color: #8590a5;
 }
 
-.form-control-sm:focus {
+.w-input-sm:focus {
     outline: none;
     border-color: #0bb197;
     border-width: 2px;
     background-color: #fff;
 }
 
-[data-theme-mode="dark"] .form-control-sm:focus {
+[data-theme="dark"] .w-input-sm:focus {
     background-color: #252b3b;
 }
 
-.form-control-sm:disabled {
+.w-input-sm:disabled {
     background-color: #f8f9fa;
     opacity: 0.6;
     cursor: not-allowed;
 }
 
-[data-theme-mode="dark"] .form-control-sm:disabled {
+[data-theme="dark"] .w-input-sm:disabled {
     background-color: #1e2125;
 }
 
 /* 选择框样式 */
-select.form-control-sm {
+select.w-input-sm {
     cursor: pointer;
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%2374788d' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E");
@@ -796,7 +788,7 @@ select.form-control-sm {
     padding-right: 30px;
 }
 
-[data-theme-mode="dark"] select.form-control-sm {
+[data-theme="dark"] select.w-input-sm {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%238590a5' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E");
 }
 
@@ -811,7 +803,7 @@ select.form-control-sm {
     align-items: center;
 }
 
-[data-theme-mode="dark"] .list-header {
+[data-theme="dark"] .list-header {
     background: #1e2125;
     border-bottom-color: #2d3448;
 }
@@ -822,7 +814,7 @@ select.form-control-sm {
     line-height: 1.5;
 }
 
-[data-theme-mode="dark"] .list-info {
+[data-theme="dark"] .list-info {
     color: #8590a5;
 }
 
@@ -837,7 +829,7 @@ select.form-control-sm {
     font-weight: 600;
 }
 
-[data-theme-mode="dark"] .list-info strong {
+[data-theme="dark"] .list-info strong {
     color: #e9ecef;
 }
 
@@ -852,7 +844,7 @@ select.form-control-sm {
     transition: all 0.2s ease-in-out;
 }
 
-[data-theme-mode="dark"] .sort-link {
+[data-theme="dark"] .sort-link {
     color: #e9ecef;
 }
 
@@ -906,47 +898,20 @@ select.form-control-sm {
     border-radius: 0.25rem;
 }
 
-.alert-danger {
+.weline-alert-danger {
     color: #ff3d60;
     background-color: #fff;
     border: 1px solid #ff3d60;
     border-left-width: 4px;
 }
 
-[data-theme-mode="dark"] .alert-danger {
+[data-theme="dark"] .weline-alert-danger {
     background-color: #252b3b;
 }
 </style>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_event) return;
-  g.__bqAdmin_event=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['event']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('event').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 // 异步搜索功能
 (function() {
@@ -966,7 +931,7 @@ select.form-control-sm {
         if (!filterForm || !eventsListContainer) return;
         
         // 显示加载状态
-        eventsListContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-3">正在搜索...</p></div>';
+        eventsListContainer.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pe:var(--weline-space-12);--w-pb:var(--weline-space-12);--w-ps:var(--weline-space-12);"><div class="w-spinner" role="status"><span class="w-visually-hidden">加载中...</span></div><p style="--w-mt:var(--weline-space-4);">正在搜索...</p></div>';
         
         // 收集表单数据
         const formData = new FormData(filterForm);
@@ -981,7 +946,7 @@ select.form-control-sm {
         const searchUrl = backendUrlPrefix + '/event/backend/event/search-ajax?' + params.toString();
         
         var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
-        bqAdmin['event'](searchUrl, opts)
+        Weline.adminRequest('event', searchUrl, opts)
         .then(function(response) {
             var data = (response && response.data) || response;
             if (!response || response.ok === false) {
@@ -1004,18 +969,18 @@ select.form-control-sm {
                 const newUrl = window.location.pathname + '?' + params.toString();
                 window.history.pushState({path: newUrl}, '', newUrl);
             } else {
-                eventsListContainer.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.message || '搜索失败') + '</div>';
+                eventsListContainer.innerHTML = '<div class="w-alert" data-tone="danger">' + escapeHtml(data.message || '搜索失败') + '</div>';
             }
         })
         .catch(function(error) {
             console.error('搜索失败:', error);
-            eventsListContainer.innerHTML = '<div class="alert alert-danger">' + escapeHtml('搜索失败，请稍后重试。错误：' + (error && error.message ? error.message : '')) + '</div>';
+            eventsListContainer.innerHTML = '<div class="w-alert" data-tone="danger">' + escapeHtml('搜索失败，请稍后重试。错误：' + (error && error.message ? error.message : '')) + '</div>';
         });
     }
     
     // 更新统计信息
     function updateStats(stats) {
-        const statsCards = document.querySelectorAll('.stats-cards .card-value');
+        const statsCards = document.querySelectorAll('.stats-cards .weline-card-value');
         if (statsCards.length >= 6) {
             statsCards[0].textContent = stats.total_events || 0;
             statsCards[1].textContent = stats.events_with_spec || 0;
@@ -1115,19 +1080,14 @@ select.form-control-sm {
         return offcanvasElement && offcanvasTitle && offcanvasBody;
     }
     
-    // 初始化 Bootstrap Offcanvas
+    // 初始化 Weline Drawer
     function initOffcanvasInstance() {
         if (!getOffcanvasElements()) {
             return false;
         }
-        
-        if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-            if (!offcanvasInstance) {
-                offcanvasInstance = new bootstrap.Offcanvas(offcanvasElement);
-            }
-            return true;
-        }
-        return false;
+        offcanvasInstance = offcanvasElement;
+        Weline.UI.mount(offcanvasElement);
+        return true;
     }
     
     // 打开 offcanvas
@@ -1137,38 +1097,12 @@ select.form-control-sm {
             return;
         }
         
-        if (initOffcanvasInstance() && offcanvasInstance) {
-            offcanvasInstance.show();
-        } else if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-            offcanvasInstance = new bootstrap.Offcanvas(offcanvasElement);
-            offcanvasInstance.show();
-        } else {
-            // 降级方案：直接操作 DOM
-            offcanvasElement.classList.add('show');
-            offcanvasElement.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('offcanvas-backdrop', 'modal-open');
-            // 添加背景遮罩
-            const backdrop = document.createElement('div');
-            backdrop.className = 'offcanvas-backdrop fade show';
-            backdrop.setAttribute('data-bs-dismiss', 'offcanvas');
-            backdrop.addEventListener('click', function() {
-                hideOffcanvas();
-            });
-            document.body.appendChild(backdrop);
-        }
+        if (initOffcanvasInstance() && offcanvasInstance) Weline.UI.drawer.open(offcanvasInstance);
     }
     
     // 关闭 offcanvas
     function hideOffcanvas() {
-        if (offcanvasElement) {
-            offcanvasElement.classList.remove('show');
-            offcanvasElement.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('offcanvas-backdrop', 'modal-open');
-            const backdrop = document.querySelector('.offcanvas-backdrop');
-            if (backdrop) {
-                backdrop.remove();
-            }
-        }
+        if (offcanvasElement) Weline.UI.drawer.close(offcanvasElement, 'action');
     }
     
     // 绑定查看详情按钮事件（使用事件委托）
@@ -1193,7 +1127,7 @@ select.form-control-sm {
             }
             
             // 显示加载状态
-            offcanvasBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-3">正在加载事件详情...</p></div>';
+            offcanvasBody.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pe:var(--weline-space-12);--w-pb:var(--weline-space-12);--w-ps:var(--weline-space-12);"><div class="w-spinner" role="status"><span class="w-visually-hidden">加载中...</span></div><p style="--w-mt:var(--weline-space-4);">正在加载事件详情...</p></div>';
             
             // 设置标题
             offcanvasTitle.textContent = '事件详情';
@@ -1204,7 +1138,7 @@ select.form-control-sm {
             const backendUrlPrefix = '<?= $backendUrlPrefix ?>';
             const detailUrl = backendUrlPrefix + '/event/backend/event/detail?event=' + encodeURIComponent(eventName) + '&isAjax=1';
             var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
-            bqAdmin['event'](detailUrl, opts)
+            Weline.adminRequest('event', detailUrl, opts)
             .then(function(response) {
                 var data = (response && response.data) || response;
                 if (data.success && data.html) {
@@ -1213,12 +1147,12 @@ select.form-control-sm {
                         offcanvasTitle.textContent = data.title;
                     }
                 } else {
-                    offcanvasBody.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.message || '加载失败') + '</div>';
+                    offcanvasBody.innerHTML = '<div class="w-alert" data-tone="danger">' + escapeHtml(data.message || '加载失败') + '</div>';
                 }
             })
             .catch(function(error) {
                 console.error('加载详情失败:', error);
-                offcanvasBody.innerHTML = '<div class="alert alert-danger">' + escapeHtml('加载详情失败，请稍后重试。错误：' + (error && error.message ? error.message : '')) + '</div>';
+                offcanvasBody.innerHTML = '<div class="w-alert" data-tone="danger">' + escapeHtml('加载详情失败，请稍后重试。错误：' + (error && error.message ? error.message : '')) + '</div>';
             });
         });
     }
@@ -1253,14 +1187,14 @@ select.form-control-sm {
 </script>
 
 <!-- Offcanvas 详情容器 -->
-<div class="offcanvas offcanvas-start" tabindex="-1" id="eventDetailOffcanvas" aria-labelledby="eventDetailOffcanvasLabel" style="width: 75%; max-width: 75%;">
-    <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="eventDetailOffcanvasTitle">事件详情</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="关闭"></button>
+<div class="w-drawer" tabindex="-1" id="eventDetailOffcanvas" aria-labelledby="eventDetailOffcanvasLabel" style="width: 75%; max-width: 75%;" data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+    <div class="w-drawer__header" data-w-border="bottom">
+        <h5 class="w-drawer__title" id="eventDetailOffcanvasTitle">事件详情</h5>
+        <button type="button" class="w-button" aria-label="关闭" data-w-action="drawer.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
     </div>
-    <div class="offcanvas-body" id="eventDetailOffcanvasBody" style="overflow-y: auto; padding: 1rem;">
-        <div class="text-center p-5">
-            <p class="text-muted">点击"详情"按钮查看事件详情</p>
+    <div class="w-drawer__body" id="eventDetailOffcanvasBody" style="overflow-y: auto; padding: 1rem;">
+        <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pe:var(--weline-space-12);--w-pb:var(--weline-space-12);--w-ps:var(--weline-space-12);">
+            <p class="w-text" data-tone="muted">点击"详情"按钮查看事件详情</p>
         </div>
     </div>
 </div>
@@ -1274,38 +1208,38 @@ select.form-control-sm {
     border-right: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] #eventDetailOffcanvas {
+[data-theme="dark"] #eventDetailOffcanvas {
     background-color: #252b3b;
     border-right-color: #2d3448;
 }
 
-#eventDetailOffcanvas .offcanvas-header {
+#eventDetailOffcanvas .w-drawer__header {
     background-color: #f8f9fa;
     border-bottom: 1px solid #eff2f7;
     padding: 1rem 1.25rem;
 }
 
-[data-theme-mode="dark"] #eventDetailOffcanvas .offcanvas-header {
+[data-theme="dark"] #eventDetailOffcanvas .w-drawer__header {
     background-color: #1e2125;
     border-bottom-color: #2d3448;
 }
 
-#eventDetailOffcanvas .offcanvas-title {
+#eventDetailOffcanvas .w-drawer__title {
     color: #212529;
     font-weight: 600;
     font-size: 1.25rem;
 }
 
-[data-theme-mode="dark"] #eventDetailOffcanvas .offcanvas-title {
+[data-theme="dark"] #eventDetailOffcanvas .w-drawer__title {
     color: #e9ecef;
 }
 
-#eventDetailOffcanvas .btn-close {
+#eventDetailOffcanvas .weline-btn-close {
     filter: invert(1);
     opacity: 0.5;
 }
 
-[data-theme-mode="dark"] #eventDetailOffcanvas .btn-close {
+[data-theme="dark"] #eventDetailOffcanvas .weline-btn-close {
     filter: none;
     opacity: 0.8;
 }
@@ -1317,7 +1251,7 @@ select.form-control-sm {
     }
 }
 
-#eventDetailOffcanvas .offcanvas-body {
+#eventDetailOffcanvas .w-drawer__body {
     padding: 1rem;
     color: #212529;
     background-color: #fff;
@@ -1326,35 +1260,35 @@ select.form-control-sm {
     scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent);
 }
 
-#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar {
+#eventDetailOffcanvas .w-drawer__body::-webkit-scrollbar {
     width: 6px;
 }
 
-#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar-track {
+#eventDetailOffcanvas .w-drawer__body::-webkit-scrollbar-track {
     background: var(--scrollbar-track, transparent);
 }
 
-#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar-thumb {
+#eventDetailOffcanvas .w-drawer__body::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb, #a2adb7);
     border-radius: 3px;
 }
 
-#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar-thumb:hover {
+#eventDetailOffcanvas .w-drawer__body::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover, #8590a5);
 }
 
-[data-theme-mode="dark"] #eventDetailOffcanvas .offcanvas-body {
+[data-theme="dark"] #eventDetailOffcanvas .w-drawer__body {
     color: #e9ecef;
     background-color: #252b3b;
     scrollbar-color: var(--scrollbar-thumb, #8590a5) var(--scrollbar-track, transparent);
 }
 
 /* Offcanvas 背景遮罩 */
-.offcanvas-backdrop {
+.w-drawer-backdrop {
     background-color: rgba(0, 0, 0, 0.5);
 }
 
-[data-theme-mode="dark"] .offcanvas-backdrop {
+[data-theme="dark"] .w-drawer-backdrop {
     background-color: rgba(0, 0, 0, 0.7);
 }
 </style>

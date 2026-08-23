@@ -1,255 +1,123 @@
-<{{target_tag}} class='{{target_button_class}}' type='button' data-bs-toggle='offcanvas'
-data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
-<?php if (!empty($icon)): ?>
-    <i class='<?= $icon ?>' aria-hidden='true'></i>
-<?php endif; ?>
-<lang>{{target_button_text|''}}</lang>
-</{{target_tag}}>
-<!-- {{id}} -->
-<div class='offcanvas weline-component-offcanvas {{class_names}}' tabindex='-1' id='{{id}}'
-     aria-labelledby='{{id}}Label'>
-    <div class='offcanvas-header'>
-        <h5 id='{{id}}Label'>
-            <?php if (!empty($icon)): ?>
-                <i class='<?= $icon ?>' aria-hidden='true'></i>
+<?php
+/**
+ * Weline UI 2.0 remote drawer.
+ *
+ * @var string $id
+ * @var string $target_tag
+ * @var string $target_button_text
+ * @var string $target_tone
+ * @var string $target_variant
+ * @var string $target_size
+ * @var string $target_class
+ * @var string $target_hidden
+ * @var string $drawer_side
+ * @var string $drawer_size
+ * @var string $action
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$buttonLabel = trim((string)($target_button_text ?? ''));
+$iconName = trim((string)($icon ?? ''));
+$iconOnly = $iconName !== '' && $buttonLabel === '';
+$targetClass = trim((string)($target_class ?? ''));
+$targetVariant = (string)($target_variant ?? '');
+$targetSize = (string)($target_size ?? '');
+// 避免与布局/页面级 $title 冲突（图标按钮 title/aria-label 会串成站点名）
+$drawerTitle = (string)($this->getData('drawer_title') ?? $drawer_title ?? '');
+$renderIcon = static function (string $name) {
+    return \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Ui\IconRegistry::class
+    )->render($name, 'sm');
+};
+$targetAttributes = [
+    'class="w-button' . ($targetClass !== '' ? ' ' . $escape($targetClass) : '') . '"',
+    'type="button"',
+    'data-w-action="drawer.open"',
+    'data-w-target="#' . $escape($id) . '"',
+    'data-tone="' . $escape($target_tone) . '"',
+    'aria-controls="' . $escape($id) . '"',
+    'title="' . $escape($drawerTitle) . '"',
+];
+if ($iconOnly) {
+    $targetAttributes[] = 'data-icon-only="true"';
+    $targetAttributes[] = 'aria-label="' . $escape($drawerTitle !== '' ? $drawerTitle : $iconName) . '"';
+}
+if ($targetVariant !== '') {
+    $targetAttributes[] = 'data-variant="' . $escape($targetVariant) . '"';
+}
+if ($targetSize !== '') {
+    $targetAttributes[] = 'data-size="' . $escape($targetSize) . '"';
+}
+if (filter_var($target_hidden ?? false, FILTER_VALIDATE_BOOLEAN)) {
+    $targetAttributes[] = 'hidden';
+}
+?>
+<<?= $target_tag ?> <?= implode(' ', $targetAttributes) ?>>
+    <?php if ($iconName !== ''): ?>
+        <?php echo $renderIcon($iconName); ?>
+    <?php endif; ?>
+    <?php if ($buttonLabel !== ''): ?>
+        <?= $escape(__($buttonLabel)) ?>
+    <?php endif; ?>
+</<?= $target_tag ?>>
+
+<section
+    class="w-drawer w-remote-drawer"
+    id="<?= $escape($id) ?>"
+    data-w-component="drawer remote-drawer"
+    data-w-side="<?= $escape($drawer_side) ?>"
+    data-size="<?= $escape($drawer_size) ?>"
+    data-state="closed"
+    data-w-keep-mounted="true"
+    data-w-remote-save="<?= filter_var($save ?? false, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false' ?>"
+    data-w-remote-form="<?= $escape($save_form ?? '') ?>"
+    tabindex="-1"
+    aria-labelledby="<?= $escape($id) ?>-title"
+    aria-hidden="true"
+    hidden
+>
+    <header class="w-drawer__header">
+        <h2 class="w-drawer__title" id="<?= $escape($id) ?>-title">
+            <?php if ($iconName !== ''): ?>
+                <?php echo $renderIcon($iconName); ?>
             <?php endif; ?>
-            <lang>{{title|''}}</lang>
-        </h5>
-        <has name='close_button_show'>
-            <button type='button' class='btn-close text-reset {{submit_button_class}}' data-bs-dismiss='offcanvas'
-                    aria-label='{{close_button_text}}'></button>
-        </has>
-    </div>
-    <div class='offcanvas-body'>
-        <div class='position-relative w-100 h-100'>
-            <if condition='flush || save'>
-                <div class='btn btn-group-justified sticky-top pull-right gap-2 d-flex'>
-                    <if condition='flush'>
-                        <button class='{{flush_button_class}} pull-right ' data-offcanvas-flush='{{id}}'>
-                            <lang>{{flush_button_text}}</lang>
-                        </button>
-                    </if>
-                    <if condition='save'>
-                        <button class='{{submit_button_class}} pull-right' id="{{id}}Save">
-                            <lang>{{submit_button_text|'保存'}}</lang>
-                        </button>
-                    </if>
-                </div>
-            </if>
-            <iframe id='{{id}}Iframe' class='w-100 h-100'
-                    data-src='{{action}}'
-                    frameborder='0'></iframe>
-        </div>
-    </div>
-</div>
-<style>
-    .weline-component-offcanvas {
-        z-index: 200020 !important;
-    }
-    .offcanvas-backdrop.weline-component-offcanvas-backdrop {
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        transform: none !important;
-        z-index: 200009 !important;
-    }
-    .weline-component-offcanvas-screen {
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        background: rgba(33, 37, 41, 0.5);
-        z-index: 200010 !important;
-        pointer-events: auto;
-    }
-    body.weline-component-offcanvas-active #page-topbar,
-    body.weline-component-offcanvas-active .navbar-header,
-    body.weline-component-offcanvas-active .vertical-menu {
-        z-index: 200000 !important;
-    }
-</style>
-<script>
-    //show.bs.offcanvas
-    $(function () {
-        var offcanvasEl = document.getElementById('{{id}}');
-        if (offcanvasEl && offcanvasEl.parentElement !== document.body) {
-            document.body.appendChild(offcanvasEl);
-        }
-        function markOffcanvasBackdrop() {
-            $('.offcanvas-backdrop').addClass('weline-component-offcanvas-backdrop');
-            document.body.classList.add('weline-component-offcanvas-active');
-        }
-        function ensureOffcanvasScreen() {
-            var screenId = 'weline-component-offcanvas-screen';
-            var screen = document.getElementById(screenId);
-            if (!screen) {
-                screen = document.createElement('div');
-                screen.id = screenId;
-                screen.className = 'weline-component-offcanvas-screen';
-                screen.addEventListener('click', function () {
-                    var shown = document.querySelector('.weline-component-offcanvas.show');
-                    if (!shown || !window.bootstrap || !window.bootstrap.Offcanvas) {
-                        return;
-                    }
-                    var instance = window.bootstrap.Offcanvas.getInstance(shown);
-                    if (instance) {
-                        instance.hide();
-                    }
-                });
-                document.body.appendChild(screen);
-            }
-        }
-        function removeOffcanvasScreenIfIdle() {
-            if ($('.weline-component-offcanvas.show').length) {
-                return;
-            }
-            var screen = document.getElementById('weline-component-offcanvas-screen');
-            if (screen) {
-                screen.remove();
-            }
-        }
-        $('#{{id}}').on('show.bs.offcanvas', function () {
-            document.body.classList.add('weline-component-offcanvas-active');
-            ensureOffcanvasScreen();
-            setTimeout(markOffcanvasBackdrop, 0);
-            var Iframe = $('#{{id}}Iframe')
-            Iframe.attr('src', Iframe.attr('data-src'))
-            if ('{{save}}' === '1') {
-                // Iframe加载完成后
-                Iframe.on('load', function () {
-                    try {
-                        // 优先看 iframe 内 body 是否有 data-offcanvas-result（success/error 模板会输出），有则一律不检测 form
-                        try {
-                            var resultAttr = Iframe.contents().find('body').attr('data-offcanvas-result');
-                            if (resultAttr === 'success' || resultAttr === 'error' || resultAttr === 'info') {
-                                return;
-                            }
-                        } catch (e) {}
-                        // 再按 URL 判断：成功/错误页（前端或后端路由）不检测 form
-                        var iframeSrc = Iframe.attr('src') || '';
-                        var iframeLocation = '';
-                        try { iframeLocation = Iframe[0].contentWindow.location.href || ''; } catch (e) {}
-                        var u = iframeSrc + ' ' + iframeLocation;
-                        var isOffcanvasResultPage = u.indexOf('/component/offcanvas/') !== -1 ||
-                                                    u.indexOf('/component/backend/offcanvas/') !== -1 ||
-                                                    /offcanvas\/(getSuccess|getError|getResult|success|error)([\?\/\s]|$)/i.test(u);
-                        if (isOffcanvasResultPage) {
-                            return;
-                        }
-                        
-                        <?php if (isset($save_form) and $save_form): ?>
-                        var form = Iframe.contents().find('body').find('{{save_form}}');
-                        form = (form && form.length > 0) ? form : undefined;
-                        <?php else: ?>
-                        var form = Iframe.contents().find('body').find('form');
-                        form = (form && form.length > 0) ? form : undefined;
-                        <?php endif; ?>
-                        if (form !== undefined && form.length > 0) {
-                            for (var i = 0; i < form.length; i++) {
-                                // 触发原生表单校验
-                                if ($(form[i]).find(':submit').length === 0) {
-                                    form[i].insertAdjacentHTML('beforeend', '<input type="submit" class="sr-only">')
-                                }
-                            }
-                        } else {
-                            <?php if (DEBUG) {
-                           $msg = __("DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}", $save_form ?? '');
-                           $msgJs = addslashes($msg);
-                           echo "if(window.parent&&window.parent.BackendToast){window.parent.BackendToast.warning('{$msgJs}');}else{console.warn('{$msgJs}');}";
-                            }
-                            ?>
-                        }
-                    } catch (e) {
-                        // 跨域或其他错误时忽略
-                        console.log('OffCanvas form check skipped:', e);
-                    }
-                })
-            }
-        })
-        $('#{{id}}').on('shown.bs.offcanvas', markOffcanvasBackdrop)
-        $('#{{id}}').on('hidden.bs.offcanvas', function () {
-            if (!$('.weline-component-offcanvas.show').length) {
-                $('.offcanvas-backdrop.weline-component-offcanvas-backdrop').removeClass('weline-component-offcanvas-backdrop');
-                document.body.classList.remove('weline-component-offcanvas-active');
-                removeOffcanvasScreenIfIdle();
-            }
-        })
-    })
-</script>
-<if condition='flush'>
-    <script>
-        $(function () {
-            window['{{id}}flushIframe'] = function () {
-                showLoading();
-                let iframe = $('#{{id}}Iframe');
-                iframe.attr('src', iframe.attr('src'))
-                hideLoading();
-            }
+            <?= $escape(__($drawerTitle)) ?>
+        </h2>
+        <?php if (filter_var($close_button_show ?? true, FILTER_VALIDATE_BOOLEAN)): ?>
+            <button
+                type="button"
+                class="w-button"
+                data-tone="quiet"
+                data-size="sm"
+                data-w-close
+                data-w-action="drawer.close"
+                data-w-target="#<?= $escape($id) ?>"
+                aria-label="<?= $escape($close_button_text ?? __('关闭')) ?>"
+            ></button>
+        <?php endif; ?>
+    </header>
 
-            $('[data-offcanvas-flush="{{id}}"]').on('click', function () {
-                window['{{id}}flushIframe']();
-            })
-        })
-    </script>
-</if>
-<if condition='save'>
-    <script>
-        $(function () {
-            $('#{{id}}Save').on('click', function () {
-                let iframe = $('#{{id}}Iframe');
-                <?php if ($save_form): ?>
-                var form = iframe.contents().find('body').find('{{save_form}}');
-                form = (form && form.length > 0) ? form : undefined;
-                <?php else: ?>
-                var form = iframe.contents().find('body').find('form');
-                form = (form && form.length > 0) ? form : undefined;
+    <div class="w-drawer__body">
+        <?php if (filter_var($flush ?? false, FILTER_VALIDATE_BOOLEAN) || filter_var($save ?? false, FILTER_VALIDATE_BOOLEAN)): ?>
+            <div class="w-toolbar w-remote-drawer__toolbar">
+                <?php if (filter_var($flush ?? false, FILTER_VALIDATE_BOOLEAN)): ?>
+                    <button type="button" class="w-button" data-tone="<?= $escape($flush_tone) ?>" data-w-remote-action="reload">
+                        <w:icon name="refresh" size="sm"></w:icon>
+                        <?= $escape(__($flush_button_text ?? '刷新')) ?>
+                    </button>
                 <?php endif; ?>
-
-                try {
-                    // 优先看 body 的 data-offcanvas-result 标记，有则不检测 form
-                    try {
-                        var resultAttr = iframe.contents().find('body').attr('data-offcanvas-result');
-                        if (resultAttr === 'success' || resultAttr === 'error' || resultAttr === 'info') {
-                            return;
-                        }
-                    } catch (e) {}
-                    var iframeSrc = iframe.attr('src') || '';
-                    var iframeLocation = '';
-                    try { iframeLocation = iframe[0].contentWindow.location.href || ''; } catch (e) {}
-                    var u = iframeSrc + ' ' + iframeLocation;
-                    var isOffcanvasResultPage = u.indexOf('/component/offcanvas/') !== -1 ||
-                                                u.indexOf('/component/backend/offcanvas/') !== -1 ||
-                                                /offcanvas\/(getSuccess|getError|getResult|success|error)([\?\/\s]|$)/i.test(u);
-                    if (isOffcanvasResultPage) {
-                        return;
-                    }
-                    
-                    if (form !== undefined && form.length > 0) {
-                        for (var i = 0; i < form.length; i++) {
-                            // 使用原生 requestSubmit 触发 submit 事件，兼容 iframe 内由 JS 接管的 AJAX 表单。
-                            // 直接模拟按钮 click 在表单调用 preventDefault 时可能只触发按钮事件而不进入提交处理。
-                            if (typeof form[i].requestSubmit === 'function') {
-                                form[i].requestSubmit();
-                            } else {
-                                $(form[i]).trigger('submit');
-                            }
-                            showLoading();
-                        }
-                        hideLoading();
-                    } else {
-                        <?php if (DEBUG) {
-                        $msg = __("DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}", $save_form ?? '');
-                        $msgJs = addslashes($msg);
-                        echo "if(window.parent&&window.parent.BackendToast){window.parent.BackendToast.warning('{$msgJs}');}else{console.warn('{$msgJs}');}";
-                    }
-                        ?>
-                    }
-                } catch (e) {
-                    // 跨域或其他错误时忽略
-                    console.log('OffCanvas form submit check skipped:', e);
-                }
-            })
-        })
-    </script>
-</if>
+                <?php if (filter_var($save ?? false, FILTER_VALIDATE_BOOLEAN)): ?>
+                    <button type="button" class="w-button" data-tone="<?= $escape($submit_tone) ?>" data-w-remote-action="submit">
+                        <w:icon name="save" size="sm"></w:icon>
+                        <?= $escape(__($submit_button_text ?? '保存')) ?>
+                    </button>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+        <iframe
+            class="w-remote-drawer__frame"
+            data-w-remote-frame
+            data-src="<?= $escape($action) ?>"
+            title="<?= $escape($drawerTitle !== '' ? $drawerTitle : __('抽屉内容')) ?>"
+        ></iframe>
+    </div>
+</section>

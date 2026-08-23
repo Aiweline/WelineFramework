@@ -55,7 +55,7 @@ class Notification extends BackendRestController
             $options = [
                 'priority'      => $this->request->getBodyParam('priority'),
                 'metadata'      => $this->request->getBodyParam('metadata') ?? [],
-                'icon'          => $this->request->getBodyParam('icon') ?? 'ri-notification-line',
+                'icon'          => $this->request->getBodyParam('icon') ?? 'bell',
                 'notify_users'  => $this->request->getBodyParam('notify_users') ?? [],
                 'source_module' => $this->request->getBodyParam('source_module') ?? '',
             ];

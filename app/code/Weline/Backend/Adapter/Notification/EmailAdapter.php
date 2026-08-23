@@ -77,7 +77,7 @@ class EmailAdapter implements ChannelAdapterInterface
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <div class="header">
             <h1>[{$typeLabel}] {$title}</h1>
         </div>

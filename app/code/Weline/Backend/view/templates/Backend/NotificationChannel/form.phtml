@@ -34,40 +34,39 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;">
                 <?= $channel ? __('编辑渠道') : __('新建渠道') ?>
             </h4>
             <div>
-                <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="btn btn-outline-secondary">
-                    <i class="mdi mdi-arrow-left me-1"></i><lang>返回列表</lang>
+                <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="w-button" data-tone="neutral" data-variant="outline">
+                    <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                 </a>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-xl-8">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span-lg:8;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <w:form id="channelForm">
                     <input type="hidden" name="channel_id" value="<?= $channelData['channel_id'] ?? '' ?>">
 
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>渠道类型</lang> <span class="text-danger">*</span></label>
-                                <select class="form-select" name="channel_code" id="channelCode" required
-                                        <?= $channel ? 'disabled' : '' ?>>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>渠道类型</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <select class="w-select" name="channel_code" id="channelCode" required <?= $channel ? 'disabled' : '' ?>>
                                     <option value=""><lang>请选择</lang></option>
                                     <?php foreach ($adapter_options as $code => $name): ?>
                                     <option value="<?= $code ?>" <?= $code === $currentCode ? 'selected' : '' ?>>
@@ -80,21 +79,19 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>渠道名称</lang> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="channel_name" required
-                                       value="<?= htmlspecialchars($channelData['channel_name'] ?? '') ?>"
-                                       placeholder="<?= __('如：飞书机器人-研发群') ?>">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>渠道名称</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type="text" class="w-input" name="channel_name" required value="<?= htmlspecialchars($channelData['channel_name'] ?? '') ?>" placeholder="<?= __('如：飞书机器人-研发群') ?>">
                             </div>
                         </div>
                     </div>
 
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>最低通知级别</lang></label>
-                                <select class="form-select" name="min_type">
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>最低通知级别</lang></label>
+                                <select class="w-select" name="min_type">
                                     <?php foreach ($types as $value => $label): ?>
                                     <option value="<?= htmlspecialchars($value) ?>" 
                                             <?= ($channelData['min_type'] ?? 'info') === $value ? 'selected' : '' ?>>
@@ -102,16 +99,15 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                     </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <small class="form-text text-muted"><lang>只发送达到此级别的通知</lang></small>
+                                <small class="w-field__hint w-text" data-tone="muted"><lang>只发送达到此级别的通知</lang></small>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>状态</lang></label>
-                                <div class="form-check form-switch mt-2">
-                                    <input class="form-check-input" type="checkbox" name="is_enabled" value="1"
-                                           <?= ($channelData['is_enabled'] ?? 1) ? 'checked' : '' ?>>
-                                    <label class="form-check-label"><lang>启用此渠道</lang></label>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>状态</lang></label>
+                                <div class="w-switch" style="--w-mt:var(--weline-space-2);">
+                                    <input type="checkbox" name="is_enabled" value="1" <?= ($channelData['is_enabled'] ?? 1) ? 'checked' : '' ?>>
+                                    <label><lang>启用此渠道</lang></label>
                                 </div>
                             </div>
                         </div>
@@ -121,49 +117,38 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
                     <div id="channelConfigFields">
                         <?php if ($currentCode && isset($config_fields[$currentCode])): ?>
-                        <h5 class="mb-3"><lang>渠道配置</lang></h5>
+                        <h5 style="--w-mb:var(--weline-space-4);"><lang>渠道配置</lang></h5>
                         <?php foreach ($config_fields[$currentCode] as $field): ?>
-                        <div class="mb-3">
-                            <label class="form-label">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label">
                                 <?= htmlspecialchars($field['label']) ?>
                                 <?php if ($field['required'] ?? false): ?>
-                                <span class="text-danger">*</span>
+                                <span class="w-text" data-tone="danger">*</span>
                                 <?php endif; ?>
                             </label>
                             <?php if (($field['type'] ?? 'text') === 'password'): ?>
-                            <input type="password" class="form-control" 
-                                   name="channel_config[<?= $field['name'] ?>]"
-                                   value="<?= htmlspecialchars($currentConfig[$field['name']] ?? '') ?>"
-                                   placeholder="<?= htmlspecialchars($field['placeholder'] ?? '') ?>"
-                                   <?= ($field['required'] ?? false) ? 'required' : '' ?>>
+                            <input type="password" class="w-input" name="channel_config[<?= $field['name'] ?>]" value="<?= htmlspecialchars($currentConfig[$field['name']] ?? '') ?>" placeholder="<?= htmlspecialchars($field['placeholder'] ?? '') ?>" <?= ($field['required'] ?? false) ? 'required' : '' ?>>
                             <?php else: ?>
-                            <input type="text" class="form-control" 
-                                   name="channel_config[<?= $field['name'] ?>]"
-                                   value="<?= htmlspecialchars($currentConfig[$field['name']] ?? '') ?>"
-                                   placeholder="<?= htmlspecialchars($field['placeholder'] ?? '') ?>"
-                                   <?= ($field['required'] ?? false) ? 'required' : '' ?>>
+                            <input type="text" class="w-input" name="channel_config[<?= $field['name'] ?>]" value="<?= htmlspecialchars($currentConfig[$field['name']] ?? '') ?>" placeholder="<?= htmlspecialchars($field['placeholder'] ?? '') ?>" <?= ($field['required'] ?? false) ? 'required' : '' ?>>
                             <?php endif; ?>
                         </div>
                         <?php endforeach; ?>
                         <?php else: ?>
-                        <p class="text-muted"><lang>请先选择渠道类型</lang></p>
+                        <p class="w-text" data-tone="muted"><lang>请先选择渠道类型</lang></p>
                         <?php endif; ?>
                     </div>
 
                     <hr>
 
-                    <div class="mb-3">
-                        <label class="form-label"><lang>订阅主题</lang></label>
-                        <p class="text-muted mb-2"><lang>留空表示订阅所有主题</lang></p>
-                        <div class="row">
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>订阅主题</lang></label>
+                        <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><lang>留空表示订阅所有主题</lang></p>
+                        <div class="w-grid">
                             <?php foreach ($topics as $topic): ?>
-                            <div class="col-md-4 col-sm-6">
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" 
-                                           name="subscribed_topics[]" 
-                                           value="<?= htmlspecialchars($topic['topic_code'] ?? '') ?>"
-                                           <?= in_array($topic['topic_code'] ?? '', $currentTopics, true) ? 'checked' : '' ?>>
-                                    <label class="form-check-label">
+                            <div style="--w-span-md:4;--w-span:6;">
+                                <div class="w-check" style="--w-mb:var(--weline-space-2);">
+                                    <input type="checkbox" name="subscribed_topics[]" value="<?= htmlspecialchars($topic['topic_code'] ?? '') ?>" <?= in_array($topic['topic_code'] ?? '', $currentTopics, true) ? 'checked' : '' ?>>
+                                    <label>
                                         <?= htmlspecialchars($topic['topic_name'] ?? $topic['topic_code'] ?? '') ?>
                                     </label>
                                 </div>
@@ -174,14 +159,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
                     <hr>
 
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-primary" data-channel-form-action="save">
-                            <i class="mdi mdi-content-save me-1"></i><lang>保存</lang>
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                        <button type="button" class="w-button" data-channel-form-action="save" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon><lang>保存</lang>
                         </button>
-                        <button type="button" class="btn btn-outline-info" data-channel-form-action="test">
-                            <i class="mdi mdi-send me-1"></i><lang>测试连接</lang>
+                        <button type="button" class="w-button" data-channel-form-action="test" data-tone="info" data-variant="outline">
+                            <w:icon name="arrow-right" size="sm"></w:icon><lang>测试连接</lang>
                         </button>
-                        <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="btn btn-secondary">
+                        <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="w-button" data-tone="neutral">
                             <lang>取消</lang>
                         </a>
                     </div>
@@ -190,12 +175,12 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         </div>
     </div>
 
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><lang>帮助</lang></h5>
+    <div style="--w-span-lg:4;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h5 class="w-card__title" style="--w-mb:0;"><lang>帮助</lang></h5>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <h6><lang>渠道类型说明</lang></h6>
                 <ul class="weline-channel-help-list">
                     <li><strong><lang>飞书</lang></strong>：<lang>通过飞书机器人 Webhook 发送消息</lang></li>
@@ -205,13 +190,13 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 </ul>
                 <hr>
                 <h6><lang>通知级别</lang></h6>
-                <p class="text-muted"><lang>只有达到设定级别的通知才会发送到此渠道。级别从低到高：</lang></p>
+                <p class="w-text" data-tone="muted"><lang>只有达到设定级别的通知才会发送到此渠道。级别从低到高：</lang></p>
                 <p>
-                    <span class="badge bg-info"><lang>信息</lang></span>
-                    <span class="badge bg-success"><lang>成功</lang></span>
-                    <span class="badge bg-warning"><lang>警告</lang></span>
-                    <span class="badge bg-danger"><lang>错误</lang></span>
-                    <span class="badge" style="background: #721c24;"><lang>紧急</lang></span>
+                    <span class="w-badge" data-w-background="info"><lang>信息</lang></span>
+                    <span class="w-badge" data-w-background="success"><lang>成功</lang></span>
+                    <span class="w-badge" data-w-background="warning"><lang>警告</lang></span>
+                    <span class="w-badge" data-w-background="danger"><lang>错误</lang></span>
+                    <span class="w-badge" style="background: #721c24;"><lang>紧急</lang></span>
                 </p>
             </div>
         </div>
@@ -230,34 +215,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </style>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_backend_admin) return;
-  g.__bqAdmin_backend_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['backend_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('backend_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function() {
     'use strict';
@@ -278,23 +236,21 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         onChannelCodeChange: function(code) {
             var container = document.getElementById('channelConfigFields');
             if (!code || !configFieldsData[code]) {
-                container.innerHTML = '<p class="text-muted"><?= __('请先选择渠道类型') ?></p>';
+                container.innerHTML = '<p class="w-text" data-tone="muted"><?= __('请先选择渠道类型') ?></p>';
                 return;
             }
 
             var fields = configFieldsData[code];
-            var html = '<h5 class="mb-3"><?= __('渠道配置') ?></h5>';
+            var html = '<h5 style="--w-mb:var(--weline-space-4);"><?= __('渠道配置') ?></h5>';
 
             fields.forEach(function(field) {
                 var inputType = field.type === 'password' ? 'password' : 'text';
                 var required = field.required ? 'required' : '';
-                var requiredMark = field.required ? '<span class="text-danger">*</span>' : '';
+                var requiredMark = field.required ? '<span class="w-text" data-tone="danger">*</span>' : '';
 
-                html += '<div class="mb-3">';
-                html += '<label class="form-label">' + escapeHtml(field.label || '') + ' ' + requiredMark + '</label>';
-                html += '<input type="' + inputType + '" class="form-control" ';
-                html += 'name="channel_config[' + escapeAttr(field.name || '') + ']" ';
-                html += 'placeholder="' + escapeAttr(field.placeholder || '') + '" ' + required + '>';
+                html += '<div style="--w-mb:var(--weline-space-4);">';
+                html += '<label class="w-field__label">' + escapeHtml(field.label || '') + ' ' + requiredMark + '</label>';
+                html += '<input type="' + inputType + '" class="w-input" html escapeAttr required>';
                 html += '</div>';
             });
 
@@ -307,21 +263,21 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/save') ?>';
             var opts = { method: 'POST', body: new URLSearchParams(formData) };
-            bqAdmin['backend_admin'](url, opts)
+            Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    BackendToast.success(data.message);
+                    Weline.UI.toast.success(data.message);
                     setTimeout(function() {
                         window.location.href = '<?= $this->getBackendUrl('*/backend/notificationchannel') ?>';
                     }, 1000);
                 } else {
-                    BackendToast.error(data.message);
+                    Weline.UI.toast.error(data.message);
                 }
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                BackendToast.error('<?= __('保存失败') ?>');
+                Weline.UI.toast.error('<?= __('保存失败') ?>');
             });
         },
 
@@ -329,22 +285,22 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             var form = document.getElementById('channelForm');
             var formData = new FormData(form);
 
-            BackendToast.info('<?= __('正在测试连接...') ?>');
+            Weline.UI.toast.info('<?= __('正在测试连接...') ?>');
 
             var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/test') ?>';
             var opts = { method: 'POST', body: new URLSearchParams(formData) };
-            bqAdmin['backend_admin'](url, opts)
+            Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    BackendToast.success(data.message);
+                    Weline.UI.toast.success(data.message);
                 } else {
-                    BackendToast.error(data.message);
+                    Weline.UI.toast.error(data.message);
                 }
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                BackendToast.error('<?= __('测试失败') ?>');
+                Weline.UI.toast.error('<?= __('测试失败') ?>');
             });
         }
     };

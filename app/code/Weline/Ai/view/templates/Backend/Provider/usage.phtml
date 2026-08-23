@@ -20,21 +20,21 @@
 </style>
 
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-flex justify-content-between align-items-center">
-            <h4 class="page-title">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-justify="between" data-align="center">
+            <h4 class="w-backend-page__title">
                 <lang>使用记录</lang>
                 <?php if (isset($account)): ?>
                     - <?= htmlspecialchars($account->getData('account_name')) ?>
                 <?php endif; ?>
             </h4>
             <div>
-                <button type="button" class="btn btn-secondary" id="weline-ai-export-data">
-                    <i class="mdi mdi-download me-1"></i><lang>导出</lang>
+                <button type="button" class="w-button" id="weline-ai-export-data" data-tone="neutral">
+                    <w:icon name="download" size="sm"></w:icon><lang>导出</lang>
                 </button>
-                <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="btn btn-primary ms-2">
-                    <i class="mdi mdi-arrow-left me-1"></i><lang>返回列表</lang>
+                <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button" data-tone="primary">
+                    <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                 </a>
             </div>
         </div>
@@ -42,78 +42,78 @@
 </div>
 
 <!-- 消息 -->
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 统计卡片 -->
-<div class="row mb-4" id="weline-ai-stats-cards" style="display: none;">
-    <div class="col-md-3">
-        <div class="card weline-ai-stat-card total-requests">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><lang>总请求数</lang></h6>
-                <h3 class="mb-0" id="weline-ai-total-requests">0</h3>
+<div class="w-grid" id="weline-ai-stats-cards" style="display: none;">
+    <div style="--w-span-md:3;">
+        <div class="w-card weline-ai-stat-card total-requests">
+            <div class="w-card__body">
+                <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><lang>总请求数</lang></h6>
+                <h3 id="weline-ai-total-requests" style="--w-mb:0;">0</h3>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card weline-ai-stat-card total-tokens">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><lang>总令牌数</lang></h6>
-                <h3 class="mb-0" id="weline-ai-total-tokens">0</h3>
+    <div style="--w-span-md:3;">
+        <div class="w-card weline-ai-stat-card total-tokens">
+            <div class="w-card__body">
+                <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><lang>总令牌数</lang></h6>
+                <h3 id="weline-ai-total-tokens" style="--w-mb:0;">0</h3>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card weline-ai-stat-card total-cost">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><lang>总花费</lang></h6>
-                <h3 class="mb-0" id="weline-ai-total-cost">$0.00</h3>
+    <div style="--w-span-md:3;">
+        <div class="w-card weline-ai-stat-card total-cost">
+            <div class="w-card__body">
+                <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><lang>总花费</lang></h6>
+                <h3 id="weline-ai-total-cost" style="--w-mb:0;">$0.00</h3>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card weline-ai-stat-card success-rate">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><lang>成功率</lang></h6>
-                <h3 class="mb-0" id="weline-ai-success-rate">0%</h3>
+    <div style="--w-span-md:3;">
+        <div class="w-card weline-ai-stat-card success-rate">
+            <div class="w-card__body">
+                <h6 class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><lang>成功率</lang></h6>
+                <h3 id="weline-ai-success-rate" style="--w-mb:0;">0%</h3>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 使用记录列表 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <!-- 筛选条件 -->
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <label for="dateFrom" class="form-label"><lang>开始日期</lang></label>
-                        <input type="date" class="form-control" id="weline-ai-date-from">
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                    <div style="--w-span-md:3;">
+                        <label for="dateFrom" class="w-field__label"><lang>开始日期</lang></label>
+                        <input type="date" class="w-input" id="weline-ai-date-from">
                     </div>
-                    <div class="col-md-3">
-                        <label for="dateTo" class="form-label"><lang>结束日期</lang></label>
-                        <input type="date" class="form-control" id="weline-ai-date-to">
+                    <div style="--w-span-md:3;">
+                        <label for="dateTo" class="w-field__label"><lang>结束日期</lang></label>
+                        <input type="date" class="w-input" id="weline-ai-date-to">
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <button class="btn btn-primary d-block" id="weline-ai-filter-records">
-                            <i class="mdi mdi-filter me-1"></i><lang>筛选</lang>
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label">&nbsp;</label>
+                        <button class="w-button" id="weline-ai-filter-records" data-w-display="block" data-tone="primary">
+                            <w:icon name="filter" size="sm"></w:icon><lang>筛选</lang>
                         </button>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <button class="btn btn-secondary d-block" id="weline-ai-reset-filter">
-                            <i class="mdi mdi-refresh me-1"></i><lang>重置</lang>
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label">&nbsp;</label>
+                        <button class="w-button" id="weline-ai-reset-filter" data-w-display="block" data-tone="neutral">
+                            <w:icon name="refresh" size="sm"></w:icon><lang>重置</lang>
                         </button>
                     </div>
                 </div>
 
                 <!-- 记录列表 -->
-                <div class="table-responsive">
-                    <table class="table table-hover" id="weline-ai-usage-table">
+                <div class="w-table-wrap">
+                    <table class="w-table" id="weline-ai-usage-table">
                         <thead>
                             <tr>
                                 <th><lang>时间</lang></th>
@@ -131,9 +131,9 @@
                         </thead>
                         <tbody id="weline-ai-usage-list">
                             <tr>
-                                <td colspan="11" class="text-center">
-                                    <div class="spinner-border" role="status">
-                                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                <td colspan="11" class="w-text" data-align="center">
+                                    <div class="w-spinner" role="status">
+                                        <span class="w-visually-hidden"><?= __('加载中...') ?></span>
                                     </div>
                                 </td>
                             </tr>
@@ -142,21 +142,21 @@
                 </div>
 
                 <!-- 分页 -->
-                <div id="weline-ai-pagination" class="mt-3"></div>
+                <div id="weline-ai-pagination" style="--w-mt:var(--weline-space-4);"></div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 详情模态框 -->
-<div class="modal fade" id="weline-ai-detail-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><lang>使用详情</lang></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="w-dialog" id="weline-ai-detail-modal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><lang>使用详情</lang></h5>
+                <button type="button" class="w-button" aria-label="Close" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body" id="weline-ai-detail-content">
+            <div class="w-dialog__body" id="weline-ai-detail-content">
             </div>
         </div>
     </div>
@@ -218,15 +218,15 @@
                         self.displayPagination(data.total, data.page, data.limit);
                         self.updateStats(data.stats);
                     } else {
-                        if (typeof BackendToast !== 'undefined') {
-                            BackendToast.error(data.message || '<?= __('加载失败') ?>');
+                        if (typeof Weline.UI.toast !== 'undefined') {
+                            Weline.UI.toast.error(data.message || '<?= __('加载失败') ?>');
                         }
                     }
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.error('<?= __('加载失败，请重试') ?>');
+                    if (typeof Weline.UI.toast !== 'undefined') {
+                        Weline.UI.toast.error('<?= __('加载失败，请重试') ?>');
                     }
                 });
         },
@@ -276,7 +276,7 @@
                 button.className = 'btn btn-sm btn-info weline-ai-view-detail';
                 button.setAttribute('data-record-key', recordKey);
                 var icon = document.createElement('i');
-                icon.className = 'mdi mdi-eye';
+                icon.className = 'weline-icon weline-icon--eye';
                 button.appendChild(icon);
                 actionCell.appendChild(button);
                 row.appendChild(actionCell);
@@ -304,22 +304,22 @@
                 return;
             }
             
-            var html = '<nav><ul class="pagination justify-content-center">';
+            var html = '<nav><ul class="w-pagination" data-justify="center">';
             
-            html += '<li class="page-item ' + (page === 1 ? 'disabled' : '') + '">' +
-                '<a class="page-link" href="#" data-page="' + (page - 1) + '"><?= __('上一页') ?></a></li>';
+            html += '<li class="w-pagination__item ' + (page === 1 ? 'disabled' : '')">' +
+                '<a class="w-pagination__link" href="#" data-page="' + (page - 1) + '"><?= __('上一页') ?></a></li>';
             
             for (var i = 1; i <= totalPages; i++) {
                 if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
-                    html += '<li class="page-item ' + (i === page ? 'active' : '') + '">' +
-                        '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+                    html += '<li class="w-pagination__item ' + (i === page ? 'active' : '')">' +
+                        '<a class="w-pagination__link" href="#" data-page="' + i + '">' + i + '</a></li>';
                 } else if (i === page - 3 || i === page + 3) {
-                    html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    html += '<li class="w-pagination__item" aria-disabled="true"><span class="w-pagination__link">...</span></li>';
                 }
             }
             
-            html += '<li class="page-item ' + (page === totalPages ? 'disabled' : '') + '">' +
-                '<a class="page-link" href="#" data-page="' + (page + 1) + '"><?= __('下一页') ?></a></li>';
+            html += '<li class="w-pagination__item ' + (page === totalPages ? 'disabled' : '')">' +
+                '<a class="w-pagination__link" href="#" data-page="' + (page + 1) + '"><?= __('下一页') ?></a></li>';
             
             html += '</ul></nav>';
             pagination.innerHTML = html;
@@ -404,7 +404,7 @@
                 detailContent.appendChild(this.createPreBlock('<?= __('响应数据') ?>', record.response_data));
             }
             
-            new bootstrap.Modal(document.getElementById('weline-ai-detail-modal')).show();
+            Weline.UI.dialog.open('#weline-ai-detail-modal');
         },
 
         getRecordKey: function(record, index) {

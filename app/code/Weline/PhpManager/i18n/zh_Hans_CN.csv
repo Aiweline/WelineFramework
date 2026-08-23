@@ -1,6 +1,6 @@
 ﻿"WLS PHP Manager","WLS PHP Manager"
-"Invalid request method.",无效的请求方法。
-"WLS reload was not completed.","WLS 重载未完成。"
+"Invalid request method.",请求方法无效。
+"WLS reload was not completed.","WLS 重新加载未完成。"
 "Project PHP profile save failed.","项目 PHP Profile 保存失败。"
 "php.ini apply failed.","php.ini 应用失败。"
 "php.ini rollback failed.","php.ini 回滚失败。"
@@ -8,10 +8,10 @@
 "Runtime PHP","运行态 PHP"
 Extensions,扩展
 Loaded,已加载
-"Project Profile","项目 Profile"
+"Project Profile",项目简介
 Saved,已保存
-Inherited,继承
-Enabled,已启用
+Inherited,遗传
+Enabled,启用
 Disabled,已禁用
 "Project PHP profile saved.","项目 PHP Profile 已保存。"
 "Project PHP profile saved and WLS reload was requested.","项目 PHP Profile 已保存，并已请求 WLS 重载。"
@@ -20,52 +20,50 @@ Disabled,已禁用
 "php.ini restored from backup.","php.ini 已从备份恢复。"
 "PHP extension operation completed and audit record was written.","PHP 扩展操作已完成，并已写入审计记录。"
 "No PHP extension changes were needed.","无需 PHP 扩展变更。"
-"mdi mdi-language-php","mdi mdi-language-php"
-"WLS Panel PHP profile entry","WLS Panel PHP profile entry"
-"View WLS PHP Manager","View WLS PHP Manager"
-"View WLS Panel PHP profiles","View WLS Panel PHP profiles"
-"View WLS PHP Summary","View WLS PHP Summary"
-"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
-"View WLS Panel PHP summary","View WLS Panel PHP summary"
-"View WLS PHP Runtime","View WLS PHP Runtime"
-"mdi mdi-console","mdi mdi-console"
-"View WLS Panel PHP runtime","View WLS Panel PHP runtime"
-"View WLS PHP Inheritance","View WLS PHP Inheritance"
-"mdi mdi-source-branch","mdi mdi-source-branch"
-"View WLS Panel PHP inheritance","View WLS Panel PHP inheritance"
-"View WLS PHP Project Profile","View WLS PHP Project Profile"
-"mdi mdi-tune-variant","mdi mdi-tune-variant"
-"View WLS Panel PHP project profile","View WLS Panel PHP project profile"
-"View WLS PHP ini","View WLS PHP ini"
-"mdi mdi-file-cog-outline","mdi mdi-file-cog-outline"
-"View WLS Panel php.ini apply","View WLS Panel php.ini apply"
-"View WLS PHP Extensions","View WLS PHP Extensions"
-"mdi mdi-puzzle-outline","mdi mdi-puzzle-outline"
-"View WLS Panel PHP extensions","View WLS Panel PHP extensions"
-"View WLS PHP Audit","View WLS PHP Audit"
-"mdi mdi-clipboard-text-clock-outline","mdi mdi-clipboard-text-clock-outline"
-"View WLS Panel PHP audit","View WLS Panel PHP audit"
-"Save WLS PHP Profile","Save WLS PHP Profile"
-"mdi mdi-content-save-cog-outline","mdi mdi-content-save-cog-outline"
-"Save WLS Panel project PHP profile","Save WLS Panel project PHP profile"
-"Apply WLS PHP ini","Apply WLS PHP ini"
-"Apply WLS Panel project PHP profile to php.ini","Apply WLS Panel project PHP profile to php.ini"
-"Rollback WLS PHP ini","Rollback WLS PHP ini"
-"mdi mdi-file-restore-outline","mdi mdi-file-restore-outline"
-"Restore a PHP Manager php.ini backup","Restore a PHP Manager php.ini backup"
-"Run WLS PHP Extension Action","Run WLS PHP Extension Action"
-"mdi mdi-puzzle-check-outline","mdi mdi-puzzle-check-outline"
-"Run a guarded WLS Panel PHP extension adapter action","Run a guarded WLS Panel PHP extension adapter action"
+language,语言
+"WLS Panel PHP profile entry","WLS 面板 PHP 配置文件条目"
+"View WLS PHP Manager","查看 WLS PHP 管理器"
+"View WLS Panel PHP profiles","查看 WLS 面板 PHP 配置文件"
+"View WLS PHP Summary","查看 WLS PHP 摘要"
+grid,网格
+"View WLS Panel PHP summary","查看 WLS 面板 PHP 摘要"
+"View WLS PHP Runtime","查看 WLS PHP 运行时"
+terminal,终端
+"View WLS Panel PHP runtime","查看 WLS 面板 PHP 运行时"
+"View WLS PHP Inheritance","查看 WLS PHP 继承"
+branch,分支
+"View WLS Panel PHP inheritance","查看 WLS 面板 PHP 继承"
+"View WLS PHP Project Profile","查看 WLS PHP 项目简介"
+settings,设置
+"View WLS Panel PHP project profile","查看 WLS Panel PHP 项目简介"
+"View WLS PHP ini","查看 WLS PHP ini"
+"View WLS Panel php.ini apply","查看 WLS 面板 php.ini 应用"
+"View WLS PHP Extensions","查看 WLS PHP 扩展"
+puzzle,谜
+"View WLS Panel PHP extensions","查看 WLS 面板 PHP 扩展"
+"View WLS PHP Audit","查看 WLS PHP 审计"
+clock,钟
+"View WLS Panel PHP audit","查看 WLS 面板 PHP 审核"
+"Save WLS PHP Profile","保存 WLS PHP 配置文件"
+"Save WLS Panel project PHP profile","保存 WLS Panel 项目 PHP 配置文件"
+"Apply WLS PHP ini","应用 WLS PHP ini"
+"Apply WLS Panel project PHP profile to php.ini","将 WLS Panel 项目 PHP 配置文件应用到 php.ini"
+"Rollback WLS PHP ini","回滚 WLS PHP ini"
+file,文件
+"Restore a PHP Manager php.ini backup","恢复 PHP 管理器 php.ini 备份"
+"Run WLS PHP Extension Action","运行 WLS PHP 扩展操作"
+check,查看
+"Run a guarded WLS Panel PHP extension adapter action","运行受保护的 WLS 面板 PHP 扩展适配器操作"
 "PHP path fields contain unsafe characters.","PHP 路径字段包含不安全字符。"
 "PHP max execution time must be between 0 and 86400 seconds.","PHP 最大执行时间必须在 0 到 86400 秒之间。"
 "PHP timezone contains unsafe characters.","PHP 时区包含不安全字符。"
 "PHP list values may contain only letters, numbers, dot, dash, or underscore.","PHP 列表值只能包含字母、数字、点、横线或下划线。"
-Dark,深色
-Light,浅色
-"WLS Standalone Backend","WLS 独立后台"
+Dark,黑暗的
+Light,光
+"WLS Standalone Backend","WLS 独立后端"
 "PHP Manager","PHP 配置"
 "WLS PHP Manager navigation","WLS PHP 管理导航"
-Summary,总览
+Summary,概括
 Runtime,运行态
 Inheritance,继承
 php.ini,php.ini
@@ -73,13 +71,13 @@ Audit,审计
 切换明暗色,切换明暗色
 "WLS Panel Plugin","WLS 面板插件"
 "PHP runtime readout, guarded project profile storage, reversible php.ini apply, and WLS reload controls for managed projects.","为托管项目提供 PHP 运行态读取、受保护的项目 Profile 存储、可回滚 php.ini 应用和 WLS 重载控制。"
-"WLS Panel","WLS 面板"
-"Project Admin",项目后台
-"Project Context",项目上下文
+"WLS Panel",WLS面板
+"Project Admin",项目管理员
+"Project Context",项目背景
 "Safe project context is passed from the WLS Panel. Project paths are not exposed in plugin URLs.","WLS 面板会传入安全的项目上下文，插件 URL 不暴露项目路径。"
-Operation,操作
-"Project ID","项目 ID"
-Domain,域名
+Operation,手术
+"Project ID",项目编号
+Domain,领域
 "Project Type",项目类型
 "Current PHP Runtime","当前 PHP 运行态"
 "This is the PHP process currently serving the WLS Panel. Runtime changes require explicit php.ini apply and optional WLS reload.","这里显示当前承载 WLS 面板的 PHP 进程；运行态变更需要显式应用 php.ini，并可选择请求 WLS 重载。"
@@ -89,15 +87,15 @@ SAPI,SAPI
 "PHP Binary","PHP 可执行文件"
 "Loaded php.ini","已加载 php.ini"
 "Upload Max",上传上限
-"Post Max","POST 上限"
+"Post Max",邮政最大
 "PHP Profile Inheritance Map","PHP 配置继承地图"
 "Compare current runtime values with the selected project Profile before applying php.ini or requesting WLS reload.","在应用 php.ini 或请求 WLS 重载前，对比当前运行态与所选项目 Profile 的取值。"
 "Total Checks",检查项
 Overrides,覆盖
-Attention,需关注
+Attention,关注
 Setting,配置项
 "Profile / Effective","Profile / 生效值"
-Profile:,Profile：
+Profile:,轮廓：
 "Current Runtime",当前运行态
 "Project PHP Profile","项目 PHP Profile"
 "Save project-specific PHP configuration. The php.ini section previews exactly what will be written before apply.","保存项目专属 PHP 配置；php.ini 区域会在应用前准确预览将写入的内容。"
@@ -108,15 +106,15 @@ Profile:,Profile：
 Timezone,时区
 "Runtime Action",运行时动作
 "Save only",仅保存
-"Request WLS reload","请求 WLS 重载"
+"Request WLS reload","请求 WLS 重新加载"
 "Runtime Instance",运行实例
 "Enable this PHP Profile for the selected WLS project.","为所选 WLS 项目启用此 PHP Profile。"
 "Required Extensions",必需扩展
 "Disabled Functions",禁用函数
-Description,说明
+Description,描述
 "I understand this saves a project PHP profile and may request a WLS reload when selected.","我确认这会保存项目 PHP Profile，并在选择时请求 WLS 重载。"
 "Current source:",当前来源：
-"Save Project Profile","保存项目 Profile"
+"Save Project Profile",保存项目简介
 "php.ini Apply Plan","php.ini 应用计划"
 "Apply writes only a WLS-managed directive block, creates a backup first, and can be rolled back from the latest PHP Manager backup.","应用时只写入 WLS 托管指令块，先创建备份，并可从最新 PHP 管理器备份回滚。"
 "Target php.ini","目标 php.ini"
@@ -129,10 +127,10 @@ Present,存在
 "No php.ini directive changes are pending for this profile.","当前 Profile 没有待应用的 php.ini 指令变更。"
 Directive,指令
 Current,当前
-Profile,Profile
+Profile,轮廓
 "Apply only",仅应用
 "Apply and request WLS reload","应用并请求 WLS 重载"
-"Confirmation Phrase",确认口令
+"Confirmation Phrase",确认短语
 "I understand PHP Manager will write the managed block to the selected php.ini after creating a backup.","我确认 PHP 管理器会先创建备份，再把托管块写入所选 php.ini。"
 "Apply php.ini","应用 php.ini"
 "Rollback Backup",回滚备份
@@ -168,11 +166,11 @@ Adapter,适配器
 "Run Extension Action",执行扩展动作
 "Execution stays locked until the adapter reports ready.",适配器报告就绪前，执行保持锁定。
 "Loaded Extensions",已加载扩展
-"Recent Audit",最近审计
+"Recent Audit",最近的审计
 "No PHP profile audit records yet.","暂无 PHP Profile 审计记录。"
-Marketplace,插件商城
+Marketplace,市场
 "Open WLS Marketplace","打开 WLS 插件商城"
-"Panel Profile","面板 Profile"
+"Panel Profile",面板简介
 "Confirm the PHP profile save before submitting.","提交前请确认 PHP Profile 保存操作。"
 "Runtime reload skipped.",已跳过运行时重载。
 "Select a running WLS instance before requesting reload.","请求重载前请选择正在运行的 WLS 实例。"
@@ -210,7 +208,7 @@ Satisfied,已满足
 "The bundled extension DLL was not found for the selected extension.","未找到所选扩展对应的内置 DLL。"
 "The extension already appears to be loaded or configured, so WLS will not add a duplicate extension line.","该扩展似乎已加载或已配置，因此 WLS 不会重复添加扩展行。"
 "Only extension lines created inside the WLS-managed block can be removed by this adapter.","此适配器只能移除 WLS 托管块内创建的扩展行。"
-Ready,就绪
+Ready,准备好
 "Adapter Blocked",适配器已阻止
 "Guarded Adapter Ready",受控适配器已就绪
 "Guarded Adapter Blocked",受控适配器已阻止
@@ -247,7 +245,7 @@ Ready,就绪
 "Required by Profile","Profile 必需"
 "Not Required by Profile","Profile 未要求"
 "Ready to Execute",可执行
-Blocked,已阻止
+Blocked,已阻断
 Missing,缺失
 "Only safe extension identifiers are accepted.",只接受安全的扩展标识。
 "Project Profile Requirement","项目 Profile 要求"
@@ -272,4 +270,15 @@ remove,移除
 "Confirm the PHP extension operation before submitting.","提交前请确认 PHP 扩展操作。"
 "Type RUN_PHP_EXTENSION_ACTION to run the guarded extension operation.","输入 RUN_PHP_EXTENSION_ACTION 以运行受控扩展操作。"
 "PHP extension operation completed.","PHP 扩展操作已完成。"
-"""WLS PHP Manager""","WLS PHP Manager"
+"""WLS PHP Manager""","“WLS PHP 管理器”"
+"mdi mdi-language-php","mdi mdi-language-php"
+"mdi mdi-view-dashboard-outline","MDI MDI-视图-仪表板-大纲"
+"mdi mdi-console","mdi mdi-console"
+"mdi mdi-source-branch","MDI MDI 源分支"
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-file-cog-outline","mdi mdi-file-cog-outline"
+"mdi mdi-puzzle-outline","MDI MDI-拼图大纲"
+"mdi mdi-clipboard-text-clock-outline","mdi mdi-剪贴板-文本-时钟-大纲"
+"mdi mdi-content-save-cog-outline","mdi mdi-content-save-cog-outline"
+"mdi mdi-file-restore-outline","mdi mdi-file-restore-outline"
+"mdi mdi-puzzle-check-outline","mdi mdi-puzzle-check-outline"

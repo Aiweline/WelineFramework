@@ -3,27 +3,28 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service\Provider;
 
+use Weline\Ai\Model\Provider\CustomVendor;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 供应商配置管理器
  * 
- * 负责动态读取和管理供应商配置文件
+ * 负责动态读取和管理供应商配置文件，并合并 DB 自定义/本地供应商
  * 
  * @package Weline_Ai
  */
 class VendorConfigManager
 {
     /**
-     * @var array 供应商配置缓存
+     * @var array 供应商配置缓存（内置 JSON + 自定义 DB）
      */
     private static array $configCache = [];
 
     /**
-     * @var string 配置文件目录
+     * @var list<string>|null 仅内置 JSON 的 code 列表
      */
-    private static string $configDir = 'etc/vendors';
+    private static ?array $builtinCodes = null;
 
     /**
      * 获取所有支持的供应商配置
@@ -37,6 +38,29 @@ class VendorConfigManager
         }
         
         return self::$configCache;
+    }
+
+    /**
+     * 仅内置 etc/vendors/*.json 的 code（不含自定义）
+     *
+     * @return list<string>
+     */
+    public static function getBuiltinProviderCodes(): array
+    {
+        if (self::$builtinCodes === null) {
+            self::loadVendorConfigs();
+        }
+
+        return self::$builtinCodes ?? [];
+    }
+
+    /**
+     * 是否为自定义/本地供应商（目录中 source=custom）
+     */
+    public static function isCustomProvider(string $providerCode): bool
+    {
+        $config = self::getProviderConfig($providerCode);
+        return is_array($config) && (($config['source'] ?? '') === CustomVendor::SOURCE_CUSTOM);
     }
 
     /**
@@ -160,6 +184,8 @@ class VendorConfigManager
                 'description' => $config['description'] ?? '',
                 'base_url' => $config['base_url'] ?? '',
                 'models' => $config['models'] ?? [],
+                'source' => $config['source'] ?? 'builtin',
+                'driver' => $config['driver'] ?? null,
             ];
         }
         
@@ -167,49 +193,81 @@ class VendorConfigManager
     }
 
     /**
-     * 加载所有供应商配置文件
+     * 加载所有供应商配置文件并合并自定义供应商
      * 
      * @return void
      */
     private static function loadVendorConfigs(): void
     {
-        // 获取当前文件的目录，然后相对于当前模块的etc目录
-        // VendorConfigManager.php 位于: app/code/Weline/Ai/Service/Provider/
-        // 需要回到模块根目录: app/code/Weline/Ai/
-        // 然后进入etc目录: app/code/Weline/Ai/etc/
-        $currentFileDir = dirname(__FILE__); // Service/Provider
-        $serviceDir = dirname($currentFileDir); // Service
-        $moduleDir = dirname($serviceDir); // Ai
-        $configDir = $moduleDir . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'vendors';
+        self::$configCache = [];
+        self::$builtinCodes = [];
+
+        $configDir = self::getVendorsConfigDir();
         
         if (!is_dir($configDir)) {
             Env::log('ai_vendor_config.log', "供应商配置目录不存在: {$configDir}", 'WARNING');
-            return;
-        }
+        } else {
+            $files = glob($configDir . '/*.json') ?: [];
+            $loadedProviders = [];
 
-        $files = glob($configDir . '/*.json');
-        $loadedProviders = [];
+            foreach ($files as $file) {
+                $providerCode = basename($file, '.json');
+                
+                if (isset($loadedProviders[$providerCode])) {
+                    Env::log('ai_vendor_config.log', "发现重复的供应商配置: {$providerCode}", 'WARNING');
+                    continue;
+                }
 
-        foreach ($files as $file) {
-            $providerCode = basename($file, '.json');
-            
-            // 供应商去重检查
-            if (isset($loadedProviders[$providerCode])) {
-                Env::log('ai_vendor_config.log', "发现重复的供应商配置: {$providerCode}", 'WARNING');
-                continue;
-            }
-
-            $config = self::loadConfigFile($file);
-            if ($config) {
-                // 验证配置完整性
-                if (self::validateConfig($config, $providerCode)) {
-                    self::$configCache[$providerCode] = $config;
-                    $loadedProviders[$providerCode] = true;
+                $config = self::loadConfigFile($file);
+                if ($config) {
+                    if (self::validateConfig($config, $providerCode)) {
+                        if (!isset($config['source'])) {
+                            $config['source'] = 'builtin';
+                        }
+                        self::$configCache[$providerCode] = $config;
+                        self::$builtinCodes[] = $providerCode;
+                        $loadedProviders[$providerCode] = true;
+                    }
                 }
             }
         }
 
+        self::mergeCustomVendors();
+
         Env::log('ai_vendor_config.log', "成功加载 " . count(self::$configCache) . " 个供应商配置", 'INFO');
+    }
+
+    private static function mergeCustomVendors(): void
+    {
+        try {
+            /** @var CustomVendorService $service */
+            $service = ObjectManager::getInstance(CustomVendorService::class);
+            $rows = $service->listRows(true);
+            foreach ($rows as $row) {
+                $config = $service->toVendorConfig($row);
+                $code = (string)($config['code'] ?? '');
+                if ($code === '') {
+                    continue;
+                }
+                if (isset(self::$configCache[$code]) && !self::isCustomProvider($code)) {
+                    // 不应覆盖内置；跳过并记日志
+                    Env::log('ai_vendor_config.log', "自定义供应商 code 与内置冲突，已跳过: {$code}", 'WARNING');
+                    continue;
+                }
+                self::$configCache[$code] = $config;
+            }
+        } catch (\Throwable $e) {
+            // 表尚未创建或 DB 不可用时不影响内置目录
+            Env::log('ai_vendor_config.log', '合并自定义供应商失败: ' . $e->getMessage(), 'WARNING');
+        }
+    }
+
+    private static function getVendorsConfigDir(): string
+    {
+        $currentFileDir = dirname(__FILE__); // Service/Provider
+        $serviceDir = dirname($currentFileDir); // Service
+        $moduleDir = dirname($serviceDir); // Ai
+        return $moduleDir . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'vendors';
     }
 
     /**
@@ -220,10 +278,7 @@ class VendorConfigManager
      */
     public static function getProviderConfigPath(string $providerCode): ?string
     {
-        $currentFileDir = dirname(__FILE__); // Service/Provider
-        $serviceDir = dirname($currentFileDir); // Service
-        $moduleDir = dirname($serviceDir); // Ai
-        $configDir = $moduleDir . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'vendors';
+        $configDir = self::getVendorsConfigDir();
         $path = $configDir . DIRECTORY_SEPARATOR . $providerCode . '.json';
 
         return file_exists($path) ? $path : null;
@@ -291,6 +346,7 @@ class VendorConfigManager
     public static function clearCache(): void
     {
         self::$configCache = [];
+        self::$builtinCodes = null;
     }
 
     /**

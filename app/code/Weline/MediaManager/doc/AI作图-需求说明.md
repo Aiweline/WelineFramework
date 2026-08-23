@@ -488,4 +488,4 @@ postSave(save_mode=save_as)
 **维护者**：WelineFramework Team  
 **创建日期**：2026-07-08  
 **修订日期**：2026-07-08（扩展：图生图、多轮修图、批量、覆盖/另存）  
-**关联文档**：`doc/README.md`、`doc/AI-INDEX.md`、`Weline_Ai/doc/开发/AI模块开发文档.md`
+**关联文档**：`doc/README.md`、`resolve_task_context`、`Weline_Ai/doc/开发/AI模块开发文档.md`

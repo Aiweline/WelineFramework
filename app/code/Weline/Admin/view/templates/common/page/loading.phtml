@@ -1,25 +1,11 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 ?>
-<!--Loading-->
-<section id="loading" class="loader-section">
-    <div class="loader-container">
-        <div class='loader loader-1'>
-            <div class='loader-outter'></div>
-            <div class='loader-inner'></div>
-        </div>
-    </div>
+<section id="loading" class="w-loading" data-w-component="loading" data-state="closed"
+         role="status" aria-live="polite" aria-hidden="true" hidden>
+    <span class="w-loading__backdrop" aria-hidden="true"></span>
+    <span class="w-loading__content">
+        <span class="w-spinner" aria-hidden="true"></span>
+        <span data-w-loading-message><lang>加载中</lang></span>
+    </span>
 </section>
-<script>
-    function showLoading() {
-        $('#loading').show()
-    }
-
-    function hideLoading() {
-        $('#loading').hide()
-    }
-
-    $(function () {
-        $('#loading').hide()
-    })
-</script>

@@ -2009,10 +2009,10 @@
         const area = config.theme?.area || config.area || 'backend';
         
         if (window.Weline && window.Weline.declare) {
-            Weline.declare('url-backend', true, 'Weline_Backend::js/url-backend.js');
+            Weline.declare('url-backend', true, 'Weline_Backend::js/url-backend.js?v=rebuild2');
         } else if (window.Weline && window.Weline.load) {
             // 如果 declare 不可用，直接加载
-            window.Weline.load('url-backend', 'Weline_Backend::js/url-backend.js');
+            window.Weline.load('url-backend', 'Weline_Backend::js/url-backend.js?v=rebuild2');
         }
     })();
 

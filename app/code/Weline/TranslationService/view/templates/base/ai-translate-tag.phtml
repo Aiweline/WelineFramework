@@ -102,10 +102,6 @@ $uniqueId = 'ai-translate-' . uniqid();
 }
 </style>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
 <script>
 (function() {
@@ -186,16 +182,12 @@ $uniqueId = 'ai-translate-' . uniqid();
         }
         
         if (!targetInput) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('未找到目标输入框：%{1}', ['']) ?>'.replace('%{1}', targetSelector),
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('未找到目标输入框：%{1}', ['']) ?>'.replace('%{1}', targetSelector));
-            }
+            Weline.UI.dialog.request({
+                tone: 'warning',
+                title: '<?= __('提示') ?>',
+                message: '<?= __('未找到目标输入框：%{1}', ['']) ?>'.replace('%{1}', targetSelector),
+                confirmLabel: '<?= __('确定') ?>'
+            });
             return;
         }
         
@@ -203,16 +195,12 @@ $uniqueId = 'ai-translate-' . uniqid();
         const text = targetInput.value || targetInput.textContent || '';
         
         if (!text.trim()) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('输入框内容为空，无法翻译') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('输入框内容为空，无法翻译') ?>');
-            }
+            Weline.UI.dialog.request({
+                tone: 'warning',
+                title: '<?= __('提示') ?>',
+                message: '<?= __('输入框内容为空，无法翻译') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
             return;
         }
         

@@ -1,4 +1,4 @@
-﻿闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie,Cookie
+﻿"公开 API 请求不允许携带 Cookie","公开 API 请求不允许携带 Cookie"
 "Missing authentication token.","Missing authentication token."
 "Token is invalid or expired.","Token is invalid or expired."
 "User has been disabled.","User has been disabled."
@@ -57,36 +57,36 @@ Token无效,"Token is invalid"
 该用户尚未分配角色，请先分配角色,"This user has not been assigned a role yet. Please assign a role first"
 权限分配成功！,"Permission assignment succeeded!"
 权限分配失败：%{1},"Permission assignment failed: %{1}"
-API用户管理,API用户管理
-"fa fa-users","fa fa-users"
+API用户管理,"API user management"
+users,users
 管理API用户,"Manage API Users"
-API用户列表,API用户列表
-"fa fa-list","fa fa-list"
-添加API用户,添加API用户
-"fa fa-plus","fa fa-plus"
+API用户列表,"API user list"
+list,list
+添加API用户,"Add API user"
+plus,plus
 编辑API用户,"Edit API user"
-"fa fa-edit","fa fa-edit"
-添加API用户请求,添加API用户请求
-"fa fa-save","fa fa-save"
-编辑API用户请求,编辑API用户请求
-删除API用户,删除API用户
-"fa fa-trash","fa fa-trash"
-启用API用户,启用API用户
-"fa fa-check","fa fa-check"
-禁用API用户,禁用API用户
-"fa fa-ban","fa fa-ban"
+edit,edit
+添加API用户请求,"Add API user request"
+save,save
+编辑API用户请求,"Edit API user request"
+删除API用户,"Delete API user"
+trash,trash
+启用API用户,"Enable API users"
+check,check
+禁用API用户,"Disable API user"
+circle,circle
 重新生成API凭证,"Regenerate API credentials"
-"fa fa-refresh","fa fa-refresh"
+refresh,refresh
 API用户权限分配,"API user permission assignment"
-"fa fa-key","fa fa-key"
-API用户权限分配请求,API用户权限分配请求
+key,key
+API用户权限分配请求,"API User Permission Assignment Request"
 仅支持POST请求,"Only POST requests are supported"
 配置保存成功！,"Configuration saved successfully!"
 没有需要保存的配置,"No configuration to save"
 保存失败：%{1},"Save failed: %{1}"
 查看API接入管理失败：{1},"View API access management failure: {1}"
-API接入管理,API接入管理
-查看API接入管理,查看API接入管理
+API接入管理,"API access management"
+查看API接入管理,"View API access management"
 API模块配置,"API module configuration"
 配置API令牌刷新周期等参数,"Configure API token refresh cycle and other parameters"
 令牌刷新配置,"Token refresh configuration"
@@ -104,7 +104,7 @@ API模块配置,"API module configuration"
 建议值：2592000秒（30天）。范围：86400-31536000秒,"Recommended value: 2592000 seconds (30 days). Range: 86400-31536000 seconds"
 保存配置,"Save Configuration"
 返回,Back
-保存配置失败，请重试,保存配置失败，请重试
+保存配置失败，请重试,"Failed to save configuration, please try again"
 API集成,"API integration"
 API用户,"API users"
 启用用户,"Enable user"
@@ -132,16 +132,14 @@ API用户需分配角色方可访问接口,"API users need to be assigned roles 
 禁用,Disable
 正式,Official
 暂无API用户，立即创建第一个吧。,"No API Users, Create the First One Now."
+"API 用户 #%{1}","API user #%{1}"
+"API 用户权限分配","API user permission assignment"
+"为 API 用户所属角色配置实际需要的权限资源。","Configure the actual required permission resources for the role of the API user."
+返回用户,"return user"
+"API 用户","API users"
+所属角色,Role
+未命名角色,"unnamed role"
 API,API
-编辑用户,"Edit User"
-权限分配,"Permission assignment"
-为API用户分配权限资源,"Assign permission resources to API users"
-当前用户：,"Current user:"
-所属角色：,Role:
-保存,Save
-菜单,Menu
-链接,Link
-其他,Other
 请输入用户名（3-50字符）,"Please enter the username (3-50 characters)"
 请输入有效的邮箱地址,"Please enter a valid email address"
 密码,Password
@@ -158,6 +156,7 @@ API,API
 "API Secret","API Secret"
 "API Secret已加密存储，无法查看。如需重新生成，请点击""重新生成凭证""按钮。","The API Secret is stored encrypted and cannot be viewed. If you need to regenerate, please click the ""Regenerate Credentials"" button."
 "重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。","After regeneration, the old API Key and Secret will become invalid, and all related tokens will be deleted."
+保存,Save
 取消,Cancel
 新增API用户,"Add API User"
 编辑,Edit
@@ -171,22 +170,21 @@ API,API
 默认604800（7天），范围：86400-2592000（1-30天）,"Default 604800 (7 days), range: 86400-2592000 (1-30 days)"
 默认2592000（30天），范围：604800-7776000（7-90天）,"Default 2592000 (30 days), range: 604800-7776000 (7-90 days)"
 已复制到剪贴板,"Copied to clipboard"
-应用创建成功,应用创建成功
-应用授权范围,应用授权范围
-"应用 token 不能批准新的应用授权","应用 token 不能批准新的应用授权"
-应用授权成功,应用授权成功
-授权码或客户端凭证无效,授权码或客户端凭证无效
-"Token 发放成功","Token 发放成功"
-"刷新 token 无效","刷新 token 无效"
-"Token 刷新成功","Token 刷新成功"
-"Token 不能为空","Token 不能为空"
-"Token 不存在或已失效","Token 不存在或已失效"
-"Token 已撤销","Token 已撤销"
-创建第三方应用,创建第三方应用
-edit,edit
-查看应用授权范围,查看应用授权范围
+应用创建成功,"Application created successfully"
+应用授权范围,"Application authorization scope"
+"应用 token 不能批准新的应用授权","App token cannot approve new app authorization"
+应用授权成功,"Application authorization successful"
+授权码或客户端凭证无效,"Invalid authorization code or client credentials"
+"Token 发放成功","Token issued successfully"
+"刷新 token 无效","Refresh token is invalid"
+"Token 刷新成功","Token refreshed successfully"
+"Token 不能为空","Token cannot be empty"
+"Token 不存在或已失效","Token does not exist or has expired"
+"Token 已撤销","Token has been revoked"
+创建第三方应用,"Create third-party applications"
+查看应用授权范围,"View application authorization scope"
 read,read
-批准应用授权,批准应用授权
+批准应用授权,"Approve application authorization"
 用户未登录,"User not logged in"
 测试成功,"Test Passed"
 测试数量不能为负数,"Test count cannot be negative"
@@ -205,11 +203,31 @@ API文档导入测试成功,"API documentation import test successful"
 删除成功,"Deleted successfully"
 数据已从沙盒数据库删除,"Data has been deleted from sandbox database"
 数据已从正式数据库删除,"Data has been deleted from production database"
-应用名称不能为空,应用名称不能为空
-回调地址不能为空,回调地址不能为空
-应用不存在或已禁用,应用不存在或已禁用
-回调地址不匹配,回调地址不匹配
-安装目标无效或未注册解析器,安装目标无效或未注册解析器
-"授权 scope 不能为空","授权 scope 不能为空"
-"以下 scope 不存在、已禁用或不允许外部授权：%{1}","以下 scope 不存在、已禁用或不允许外部授权：%{1}"
+应用名称不能为空,"Application name cannot be empty"
+回调地址不能为空,"The callback address cannot be empty"
+应用不存在或已禁用,"App does not exist or is disabled"
+回调地址不匹配,"Callback address does not match"
+安装目标无效或未注册解析器,"The installation target is invalid or the resolver is not registered"
+"授权 scope 不能为空","Authorization scope cannot be empty"
+"以下 scope 不存在、已禁用或不允许外部授权：%{1}","The following scope does not exist, is disabled, or does not allow external authorization: %{1}"
 配置值不能为负数：%{1},"Configuration value cannot be negative: %{1}"
+"""公开 API 请求不允许携带 Cookie""","Public API requests must not include Cookie headers"
+编辑用户,"Edit User"
+权限分配,"Permission assignment"
+为API用户分配权限资源,"Assign permission resources to API users"
+当前用户：,"Current user:"
+所属角色：,Role:
+菜单,Menu
+链接,Link
+其他,Other
+"fa fa-users","fa fa-users"
+"fa fa-list","fa fa-list"
+"fa fa-plus","fa fa-plus"
+"fa fa-edit","fa fa-edit"
+"fa fa-save","fa fa-save"
+"fa fa-trash","fa fa-trash"
+"fa fa-check","fa fa-check"
+"fa fa-ban","fa fa-ban"
+"fa fa-refresh","fa fa-refresh"
+"fa fa-key","fa fa-key"
+API管理,"API management"

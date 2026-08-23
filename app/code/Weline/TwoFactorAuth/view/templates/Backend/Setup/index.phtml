@@ -176,18 +176,18 @@
             margin-bottom: 20px;
         }
         
-        .form-group {
+        .w-field {
             margin: 20px 0;
         }
         
-        .form-group label {
+        .w-field label {
             display: block;
             margin-bottom: 10px;
             color: #333;
             font-weight: bold;
         }
         
-        .form-group input {
+        .w-field input {
             width: 100%;
             max-width: 300px;
             padding: 15px;
@@ -209,16 +209,16 @@
             transition: all 0.3s;
         }
         
-        .btn-primary {
+        .weline-btn-primary {
             background: #007bff;
             color: white;
         }
         
-        .btn-primary:hover {
+        .weline-btn-primary:hover {
             background: #0056b3;
         }
         
-        .btn-secondary {
+        .weline-btn-secondary {
             background: #6c757d;
             color: white;
             text-decoration: none;
@@ -226,7 +226,7 @@
             margin-right: 10px;
         }
         
-        .btn-secondary:hover {
+        .weline-btn-secondary:hover {
             background: #5a6268;
         }
         
@@ -292,8 +292,8 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
+    <div class="w-container">
+        <div class="w-card">
             <div class="header">
                 <h1>🔐 <?= __('启用双因素身份验证') ?></h1>
                 <p><?= __('按照以下步骤完成设置，增强您的账户安全') ?></p>
@@ -397,7 +397,7 @@
                     <?= __('在验证器应用中找到刚添加的账户，输入显示的6位数字验证码：') ?>
                 </p>
                 
-                <div class="form-group">
+                <div class="w-field">
                     <input 
                         type="text" 
                         id="verifyCode" 
@@ -409,8 +409,8 @@
                 </div>
                 
                 <div>
-                    <a href="/two-factor-auth/frontend" class="btn btn-secondary"><?= __('取消') ?></a>
-                    <button class="btn btn-primary" type="button" data-twofa-action="enable-two-factor"><?= __('确认启用') ?></button>
+                    <a href="/two-factor-auth/frontend" class="w-button" data-tone="neutral"><?= __('取消') ?></a>
+                    <button class="w-button" type="button" data-twofa-action="enable-two-factor" data-tone="primary"><?= __('确认启用') ?></button>
                 </div>
             </div>
         </div>
@@ -419,39 +419,8 @@
     <input type="hidden" id="secret" value="<?= $secret ?>">
     <input type="hidden" id="backupCodesJson" value='<?= json_encode($backup_codes) ?>'>
 
-    <!-- SweetAlert2 CSS -->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <!-- SweetAlert2 JS -->
     
-<script>
-(function(g){
-  if(g.__bqAdmin_two_factor_auth) return;
-  g.__bqAdmin_two_factor_auth=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['two_factor_auth']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('two_factor_auth').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
     <script>
         document.addEventListener('click', function(e) {
             const trigger = e.target.closest('[data-twofa-action]');
@@ -488,17 +457,13 @@
         function copySecret() {
             const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
             navigator.clipboard.writeText(text).then(() => {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('复制成功') ?>',
-                        text: '<?= __('密钥已复制到剪贴板') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    console.log('<?= __('密钥已复制到剪贴板') ?>');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'success',
+                    title: '<?= __('复制成功') ?>',
+                    message: '<?= __('密钥已复制到剪贴板') ?>',
+                    duration: 2000,
+                    confirmable: false
+                });
             });
         }
 
@@ -507,17 +472,10 @@
             const codes = <?= json_encode($backup_codes) ?>;
             const text = codes.join('\n');
             navigator.clipboard.writeText(text).then(() => {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('复制成功') ?>',
-                        html: '<?= __('备份码已复制到剪贴板') ?><br><?= __('请妥善保存') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    console.log('<?= __('备份码已复制到剪贴板\n请妥善保存！') ?>');
-                }
+                Weline.UI.toast.show('<?= __('备份码已复制到剪贴板，请妥善保存') ?>', {
+                    tone: 'success',
+                    duration: 2000
+                });
             });
         }
 
@@ -554,17 +512,10 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('下载成功') ?>',
-                    html: '<?= __('备份码已下载') ?><br><?= __('文件名：') ?>' + link.download,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                console.log('<?= __('备份码已下载！\n文件名：') ?>' + link.download);
-            }
+            Weline.UI.toast.show('<?= __('备份码已下载，文件名：') ?>' + link.download, {
+                tone: 'success',
+                duration: 2000
+            });
         }
 
         // 自动格式化验证码输入
@@ -579,21 +530,17 @@
             const backupCodes = document.getElementById('backupCodesJson').value;
 
             if (!code || code.length !== 6) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请输入6位验证码') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('请输入6位验证码') ?>');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'warning',
+                    title: '<?= __('提示') ?>',
+                    message: '<?= __('请输入6位验证码') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 return;
             }
 
             try {
-                const response = await bqAdmin['two_factor_auth']('/two-factor-auth/frontend/setup/enable', {
+                const response = await Weline.adminRequest('two_factor_auth', '/two-factor-auth/frontend/setup/enable', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
@@ -604,42 +551,29 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            html: '<?= __('双因素身份验证已成功启用') ?><br><br><?= __('请确保已保存备份码，然后点击确定返回管理页面。') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
-                        }).then(() => {
-                            window.location.href = '/two-factor-auth/frontend';
-                        });
-                    } else {
-                        console.log('✅ <?= __('双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。') ?>');
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: '<?= __('双因素身份验证已成功启用。\n\n请确保已保存备份码，然后返回管理页面。') ?>',
+                        confirmLabel: '<?= __('确定') ?>'
+                    }).then(() => {
                         window.location.href = '/two-factor-auth/frontend';
-                    }
-                } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('失败') ?>',
-                            html: result.message + '<br><br><?= __('请检查验证码是否正确，注意验证码每30秒会更新。') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error('❌ ' + result.message + '\n\n<?= __('请检查验证码是否正确，注意验证码每30秒会更新。') ?>');
-                    }
-                }
-            } catch (error) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('操作失败') ?>',
-                        text: '<?= __('请重试') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
                     });
                 } else {
-                    console.error('<?= __('操作失败，请重试') ?>');
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('失败') ?>',
+                        message: result.message + '\n\n<?= __('请检查验证码是否正确，注意验证码每30秒会更新。') ?>',
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
+            } catch (error) {
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('操作失败') ?>',
+                    message: '<?= __('请重试') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 console.error(error);
             }
         }
@@ -746,4 +680,3 @@
     </script>
 </body>
 </html>
-

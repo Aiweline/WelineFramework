@@ -1,27 +1,35 @@
 ﻿前台账户订阅分区,"Frontend account subscription section"
 在顾客账户首页注入周期性订阅列表与管理入口。,"Adds recurring subscription status and management links to the customer account home page."
-"仅允许 POST 请求。","仅允许 POST 请求。"
+"仅允许 POST 请求。","Only POST requests are allowed."
 操作失败，请稍后重试。参考编号：%{1},"The operation failed. Please try again later. Reference: %{1}"
 数据暂时无法加载。参考编号：%{1},"Data is temporarily unavailable. Reference: %{1}"
 状态暂时无法读取。参考编号：%{1},"Status is temporarily unavailable. Reference: %{1}"
-订阅管理,订阅管理
-订阅创建、周期与续费管理,订阅创建、周期与续费管理
-订阅,订阅
-查看订阅,查看订阅
-订阅周期,订阅周期
-查看订阅周期,查看订阅周期
-续费调度,续费调度
-查看续费调度租约,查看续费调度租约
-续费尝试,续费尝试
-查看续费尝试,查看续费尝试
-失败水位,失败水位
-查看订阅失败水位,查看订阅失败水位
-迁移状态,迁移状态
-只读查看订阅迁移状态,只读查看订阅迁移状态
-创建订阅,创建订阅
-创建订阅并开启首个周期,创建订阅并开启首个周期
-执行续费,执行续费
-通过订单与沙箱支付端口执行续费尝试,通过订单与沙箱支付端口执行续费尝试
+订阅管理,"Subscription management"
+refresh,refresh
+订阅创建、周期与续费管理,"Subscription creation, cycle and renewal management"
+订阅,subscription
+check,check
+查看订阅,"View subscriptions"
+订阅周期,"Subscription cycle"
+calendar,calendar
+查看订阅周期,"View subscription period"
+续费调度,"Renewal Scheduling"
+circle,circle
+查看续费调度租约,"View renewal scheduling lease"
+续费尝试,"Renewal attempt"
+history,history
+查看续费尝试,"View renewal attempts"
+失败水位,"failure level"
+warning,warning
+查看订阅失败水位,"Check the subscription failure level"
+迁移状态,"Migration status"
+eye,eye
+只读查看订阅迁移状态,"Read-only view of subscription migration status"
+创建订阅,"Create subscription"
+plus,plus
+创建订阅并开启首个周期,"Create a subscription and start the first cycle"
+执行续费,"Execute renewal"
+通过订单与沙箱支付端口执行续费尝试,"Execute renewal attempt through order and sandbox payment port"
 "store_id 不能为负数：%{1}","store_id must not be negative: %{1}"
 "Subscription 必填字段为空：%{1}","Subscription required field is empty: %{1}"
 "Subscription version/CAS/hash 非法","Subscription version/CAS/hash is invalid"
@@ -38,24 +46,24 @@
 我的订阅,"My subscriptions"
 查看订阅周期与账单状态,"View subscription periods and billing status"
 订阅周期订单由系统按期新建，可在此查看状态。,"Period orders are created by the system each cycle; view status here."
-是,是
-否,否
-只读诊断,只读诊断
-可管理,可管理
-此页面显示订阅、周期与调度持久化事实；生产迁移不在后台触发。,此页面显示订阅、周期与调度持久化事实；生产迁移不在后台触发。
-"创建与续费复用 Subscription 服务；续费只通过 Order 公共端口和 sandbox Payment 公共端口执行。","创建与续费复用 Subscription 服务；续费只通过 Order 公共端口和 sandbox Payment 公共端口执行。"
-执行续费尝试,执行续费尝试
-"订阅 ID","订阅 ID"
-"客户 ID","客户 ID"
-"网站 ID","网站 ID"
-"店铺 ID","店铺 ID"
+是,yes
+否,no
+只读诊断,"Read-only diagnostics"
+可管理,Manageable
+此页面显示订阅、周期与调度持久化事实；生产迁移不在后台触发。,"This page displays subscription, period, and schedule persistence facts; production migrations are not triggered in the background."
+"创建与续费复用 Subscription 服务；续费只通过 Order 公共端口和 sandbox Payment 公共端口执行。","Create and renew multiple Subscription services; renewal is only performed through the Order public port and the sandbox Payment public port."
+执行续费尝试,"Perform renewal attempt"
+"订阅 ID","Subscription ID"
+"客户 ID","Customer ID"
+网站,website
+"店铺 ID","Store ID"
 Provider,Provider
-方案代码,方案代码
-幂等键,幂等键
-环境,环境
+方案代码,"Scheme code"
+幂等键,"idempotent keys"
+环境,environment
 "Worker ID","Worker ID"
-创建,创建
-当前没有记录。,当前没有记录。
+创建,create
+当前没有记录。,"There are currently no records."
 "Subscription 周期续费","Subscription periodic renewal"
 "按 Subscription lease 执行单周期续费或 missed 恢复","Run one renewal cycle or missed-period recovery under a Subscription lease"
 "Subscription renewal queue content 必须是 JSON object","Subscription renewal queue content must be a JSON object"
@@ -118,6 +126,7 @@ Provider,Provider
 "apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify/allowlist/rollback)"
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
 显示本帮助,"Show this help"
+"网站 ID","Website ID"
 "MIG lease 探针失败","MIG lease probe failed"
 "MIG-P4B：Subscription shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4B: move Subscription from shadow to allowlist (apply requires --database=mig_clone_*)"
 已取消订阅不可调度：%{1},"Cancelled subscription cannot be scheduled: %{1}"

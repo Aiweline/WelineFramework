@@ -203,6 +203,21 @@ class Page extends Model
     {
         parent::save_before();
 
+        $title = trim($this->getTitle());
+        $titleLength = function_exists('mb_strlen') ? mb_strlen($title, 'UTF-8') : strlen($title);
+        if (
+            $title === ''
+            || preg_match('//u', $title) !== 1
+            || preg_match('/[\x00-\x1F\x7F]/', $title) === 1
+            || $titleLength > 255
+        ) {
+            throw new \InvalidArgumentException((string)__('CMS 页面标题内容无效。'));
+        }
+        if (!in_array($this->getStatus(), [self::STATUS_DRAFT, self::STATUS_PUBLISHED, self::STATUS_DISABLED], true)) {
+            throw new \InvalidArgumentException((string)__('CMS 页面聚合状态无效。'));
+        }
+        $this->setData(self::schema_fields_TITLE, $title);
+
         $now = date('Y-m-d H:i:s');
         if (!$this->getData(self::schema_fields_CREATED_AT)) {
             $this->setData(self::schema_fields_CREATED_AT, $now);

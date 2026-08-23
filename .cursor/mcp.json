@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "gitnexus": {
-      "command": "npx",
-      "args": ["-y", "gitnexus@latest", "mcp"]
+    "weline_project_intelligence": {
+      "command": "php",
+      "args": ["app/code/Weline/Ai/Mcp/bin/learning-mcp"]
     }
   }
 }

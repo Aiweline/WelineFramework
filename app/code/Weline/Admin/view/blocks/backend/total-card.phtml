@@ -1,22 +1,24 @@
-<div class='card'>
-    <div class='card-body'>
-        <div class='d-flex text-muted'>
-            <div class='flex-shrink-0 me-3 align-self-center'>
-                <div id='@var(id)' class='apex-charts' dir='ltr'></div>
+<div class="w-card">
+    <div class="w-card__body">
+        <div class="w-text w-cluster" data-tone="muted">
+            <div data-shrink="false" data-self="center">
+                <div class="w-admin-dashboard__gauge" data-tone="@var(rate_tone)" style="--w-progress:@var(gauge_progress)%" role="img" aria-label="@var(rate)%">
+                    <span><var>rate</var>%</span>
+                </div>
             </div>
-            <div class='flex-grow-1 overflow-hidden'>
-                <p class='mb-1'>
+            <div data-grow="true" data-w-overflow="hidden">
+                <p style="--w-mb:var(--weline-space-1);">
                     <lang><var>title</var></lang>
                 </p>
-                <h5 class='mb-3'><var>total</var></h5>
+                <h5 style="--w-mb:var(--weline-space-4);"><var>total</var></h5>
                 <?php
                 if (isset($rate)) {
                     ?>
-                    <p class='text-truncate mb-0'>
+                    <p class="w-text" data-truncate="true" style="--w-mb:0;">
                         <lang><var>tip</var></lang>
-                        <span class='@var(class) me-2'>
+                        <span class="w-text" data-tone="@var(rate_tone)">
                         <var>rate</var>%
-                        <i class='ri-arrow-right-@var(up_down)-line align-bottom ms-1'></i>
+                        <w:icon name="arrow-right" size="sm"></w:icon>
                     </span>
                     </p>
                     <?php

@@ -23,13 +23,24 @@
  */
 
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
-$image = $this->getData('image') ?? $placeholder;
+$image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
+    $this->getData('image') ?? $placeholder,
+);
+$backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($image, true);
+$imageFileHtml = (string)($this->getData('image_file_html') ?? '');
 $title = $this->getData('title') ?? '';
 $content = $this->getData('content') ?? '';
 $buttonText = $this->getData('button_text') ?? '';
-$buttonLink = $this->getData('button_link') ?? '';
+$buttonLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('button_link') ?? '');
 $layout = $this->getData('layout') ?? 'image-left';
 $imageWidth = $this->getData('image_width') ?? '50';
+
+if (!in_array($layout, ['image-left', 'image-right', 'image-top', 'image-bg'], true)) {
+    $layout = 'image-left';
+}
+if (!in_array((string)$imageWidth, ['33', '40', '50', '60'], true)) {
+    $imageWidth = '50';
+}
 
 $widgetId = 'image-text-' . uniqid();
 ?>
@@ -37,7 +48,10 @@ $widgetId = 'image-text-' . uniqid();
 <div class="widget-image-text layout-<?= htmlspecialchars($layout) ?>" id="<?= $widgetId ?>">
     <?php if ($layout === 'image-bg'): ?>
         <!-- 图片背景布局 -->
-        <div class="bg-container" style="background-image: url('<?= htmlspecialchars($image ?? '') ?>');">
+        <div class="bg-container"<?= $imageFileHtml === '' && $backgroundImage !== '' ? ' style="background-image:url(&quot;' . htmlspecialchars($backgroundImage, ENT_QUOTES, 'UTF-8') . '&quot;)"' : '' ?>>
+            <?php if ($imageFileHtml !== ''): ?>
+                <div class="bg-media"><?= $imageFileHtml ?></div>
+            <?php endif; ?>
             <div class="bg-overlay"></div>
             <div class="text-content">
                 <?php if ($title): ?>
@@ -54,7 +68,11 @@ $widgetId = 'image-text-' . uniqid();
     <?php elseif ($layout === 'image-top'): ?>
         <!-- 图上文下布局 -->
         <div class="image-section">
-            <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
+            <?php if ($imageFileHtml !== ''): ?>
+                <div class="content-image content-image--asset"><?= $imageFileHtml ?></div>
+            <?php else: ?>
+                <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
+            <?php endif; ?>
         </div>
         <div class="text-section">
             <?php if ($title): ?>
@@ -71,7 +89,11 @@ $widgetId = 'image-text-' . uniqid();
         <!-- 图左文右 / 图右文左 -->
         <div class="content-row">
             <div class="image-section" style="flex: 0 0 <?= $imageWidth ?>%;">
-                <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
+                <?php if ($imageFileHtml !== ''): ?>
+                    <div class="content-image content-image--asset"><?= $imageFileHtml ?></div>
+                <?php else: ?>
+                    <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
+                <?php endif; ?>
             </div>
             <div class="text-section">
                 <?php if ($title): ?>
@@ -114,6 +136,12 @@ $widgetId = 'image-text-' . uniqid();
     height: auto;
     display: block;
     transition: transform 0.5s;
+}
+
+.widget-image-text .content-image--asset img {
+    display: block;
+    width: 100%;
+    height: auto;
 }
 
 .widget-image-text:hover .content-image {
@@ -180,11 +208,26 @@ $widgetId = 'image-text-' . uniqid();
     width: 100%;
     height: 100%;
     background: rgba(0,0,0,0.5);
+    z-index: 1;
+}
+
+.widget-image-text.layout-image-bg .bg-media,
+.widget-image-text.layout-image-bg .bg-media figure,
+.widget-image-text.layout-image-bg .bg-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+.widget-image-text.layout-image-bg .bg-media img {
+    object-fit: cover;
 }
 
 .widget-image-text.layout-image-bg .text-content {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     text-align: center;
     padding: 40px;
     max-width: 700px;

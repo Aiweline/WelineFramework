@@ -7,6 +7,8 @@ namespace Weline\SystemConfig\Service;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ConfigScopeSource;
 use Weline\SystemConfig\Api\Scope\ConfigScopeValue;
+use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\SystemConfig\Model\SystemConfig;
 
 /**
@@ -17,7 +19,7 @@ use Weline\SystemConfig\Model\SystemConfig;
  * - Global → `default.default.default`
  * - Website(default) → `default.__website__.default`（`__website__` 非法 store 段，可作哨兵）
  */
-final class SystemConfigScopeResolver
+final class SystemConfigScopeResolver implements ScopeHierarchyInterface
 {
     public const KEY_VALUE = 'value';
     public const KEY_VERSION = 'version';
@@ -28,40 +30,67 @@ final class SystemConfigScopeResolver
     /** Website(code=default) 专用存储哨兵（不可作为真实 store_code） */
     public const WEBSITE_DEFAULT_SENTINEL = '__website__';
 
+    /** Store(code=default) 专用存储哨兵。 */
+    public const STORE_DEFAULT_SENTINEL = '__store__';
+
+    /** Channel(code=default) 专用存储哨兵。 */
+    public const CHANNEL_DEFAULT_SENTINEL = '__channel__';
+
+    public function contextFromIdentity(ScopeIdentity $identity): ScopeContext
+    {
+        $storageScope = $this->toStorageScope($identity);
+
+        return new ScopeContext(
+            identity: $identity,
+            storageScope: $storageScope,
+            storeMode: (string)($identity->storeMode ?: ScopeIdentity::MODE_NORMAL),
+            fallbackStorageScopes: $this->chainFromIdentity($identity),
+        );
+    }
+
+    public function contextFromClaims(array $claims, ScopeIdentity $authoritativeIdentity): ScopeContext
+    {
+        $claimed = ScopeIdentity::fromArray($claims);
+        if (!$claimed->equals($authoritativeIdentity)) {
+            throw new \InvalidArgumentException('system_config_scope_claim_identity_mismatch');
+        }
+
+        return $this->contextFromIdentity($authoritativeIdentity);
+    }
+
     /**
      * @return list<string> 存储 scope 链（近→远）
      */
     public function chainFromIdentity(ScopeIdentity $identity): array
     {
+        $chain = [];
+        $cursor = $identity;
+        do {
+            $chain[] = $this->toStorageScope($cursor);
+            $cursor = $this->parentIdentity($cursor);
+        } while ($cursor instanceof ScopeIdentity);
+
+        return $chain;
+    }
+
+    public function parentIdentity(ScopeIdentity $identity): ?ScopeIdentity
+    {
         return match ($identity->scopeKind) {
-            ScopeIdentity::KIND_GLOBAL => [SystemConfig::SCOPE_GLOBAL],
-            ScopeIdentity::KIND_WEBSITE => [
-                $this->toStorageScope($identity),
-                SystemConfig::SCOPE_GLOBAL,
-            ],
-            ScopeIdentity::KIND_STORE => [
-                $this->toStorageScope($identity),
-                $this->toStorageScope(ScopeIdentity::website(
-                    (int)$identity->websiteId,
-                    (string)$identity->websiteCode,
-                )),
-                SystemConfig::SCOPE_GLOBAL,
-            ],
-            ScopeIdentity::KIND_CHANNEL => [
-                $this->toStorageScope($identity),
-                $this->toStorageScope(ScopeIdentity::store(
-                    (int)$identity->websiteId,
-                    (string)$identity->websiteCode,
-                    (string)$identity->storeCode,
-                    (string)$identity->storeMode,
-                )),
-                $this->toStorageScope(ScopeIdentity::website(
-                    (int)$identity->websiteId,
-                    (string)$identity->websiteCode,
-                )),
-                SystemConfig::SCOPE_GLOBAL,
-            ],
-            default => [SystemConfig::SCOPE_GLOBAL],
+            ScopeIdentity::KIND_GLOBAL => null,
+            ScopeIdentity::KIND_WEBSITE => ScopeIdentity::global($identity->contextVersion),
+            ScopeIdentity::KIND_STORE => ScopeIdentity::website(
+                (int)$identity->websiteId,
+                (string)$identity->websiteCode,
+                $identity->contextVersion,
+            ),
+            ScopeIdentity::KIND_CHANNEL => ScopeIdentity::store(
+                (int)$identity->websiteId,
+                (string)$identity->websiteCode,
+                (string)$identity->storeCode,
+                (string)$identity->storeMode,
+                $identity->contextVersion,
+            ),
+            default => throw new \InvalidArgumentException('system_config_scope_kind_invalid'),
         };
     }
 
@@ -71,34 +100,74 @@ final class SystemConfigScopeResolver
             ScopeIdentity::KIND_GLOBAL => SystemConfig::SCOPE_GLOBAL,
             ScopeIdentity::KIND_WEBSITE => $this->websiteStorage((string)$identity->websiteCode),
             ScopeIdentity::KIND_STORE => \strtolower((string)$identity->websiteCode)
-                . '.' . \strtolower((string)$identity->storeCode)
+                . '.' . $this->storeStorageSegment((string)$identity->storeCode)
                 . '.default',
             ScopeIdentity::KIND_CHANNEL => \strtolower((string)$identity->websiteCode)
-                . '.' . \strtolower((string)$identity->storeCode)
-                . '.' . \strtolower((string)$identity->channelCode),
-            default => SystemConfig::SCOPE_GLOBAL,
+                . '.' . $this->storeStorageSegment((string)$identity->storeCode)
+                . '.' . $this->channelStorageSegment((string)$identity->channelCode),
+            default => throw new \InvalidArgumentException('system_config_scope_kind_invalid'),
         };
     }
 
     /**
      * 尽力从存储 scope 还原 Identity（无法识别时返回 null）。
      */
-    public function fromStorageScope(string $storageScope): ?ScopeIdentity
+    public function fromStorageScope(string $storageScope, bool $allowLegacy = true): ?ScopeIdentity
     {
         $storageScope = \strtolower(\trim($storageScope));
-        if ($storageScope === '' || $storageScope === SystemConfig::SCOPE_GLOBAL) {
+        if ($storageScope === '') {
+            return $allowLegacy ? ScopeIdentity::global() : null;
+        }
+        if ($storageScope === SystemConfig::SCOPE_GLOBAL) {
             return ScopeIdentity::global();
         }
-        $parts = \explode('.', $storageScope) + ['default', 'default', 'default'];
+        $parts = \explode('.', $storageScope);
+        if (\count($parts) !== 3) {
+            if (!$allowLegacy || \count($parts) > 3) {
+                return null;
+            }
+            while (\count($parts) < 3) {
+                $parts[] = 'default';
+            }
+        }
         [$w, $s, $c] = $parts;
+        if (!$this->isBusinessSegment($w, 255)) {
+            return null;
+        }
         if ($s === self::WEBSITE_DEFAULT_SENTINEL && $c === 'default') {
             return ScopeIdentity::website(0, $w === '' ? 'default' : $w);
+        }
+        // 2.0 compatibility: default Store was accidentally written as website.default.__store__.
+        if ($allowLegacy && $s === 'default' && $c === self::STORE_DEFAULT_SENTINEL) {
+            return ScopeIdentity::store(0, $w, 'default', ScopeIdentity::MODE_NORMAL);
+        }
+        if ($s === self::STORE_DEFAULT_SENTINEL) {
+            if ($c === 'default') {
+                return ScopeIdentity::store(0, $w, 'default', ScopeIdentity::MODE_NORMAL);
+            }
+            if ($c === self::CHANNEL_DEFAULT_SENTINEL) {
+                return ScopeIdentity::channel(0, $w, 'default', 'default', ScopeIdentity::MODE_NORMAL);
+            }
+            if (!$this->isBusinessSegment($c)) {
+                return null;
+            }
+
+            return ScopeIdentity::channel(0, $w, 'default', $c, ScopeIdentity::MODE_NORMAL);
+        }
+        if (!$this->isBusinessSegment($s)) {
+            return null;
         }
         if ($s === 'default' && $c === 'default') {
             return ScopeIdentity::website(0, $w);
         }
         if ($c === 'default') {
             return ScopeIdentity::store(0, $w, $s, ScopeIdentity::MODE_NORMAL);
+        }
+        if ($c === self::CHANNEL_DEFAULT_SENTINEL) {
+            return ScopeIdentity::channel(0, $w, $s, 'default', ScopeIdentity::MODE_NORMAL);
+        }
+        if (!$this->isBusinessSegment($c)) {
+            return null;
         }
 
         return ScopeIdentity::channel(0, $w, $s, $c, ScopeIdentity::MODE_NORMAL);
@@ -211,12 +280,13 @@ final class SystemConfigScopeResolver
         if ($trimmed === '') {
             return;
         }
-        $parts = \array_values(\array_filter(
-            \array_map('trim', \explode('.', \strtolower($trimmed))),
-            static fn(string $s): bool => $s !== '',
-        ));
-        if ($parts !== [] && \count($parts) < 3) {
+        $parts = \explode('.', \strtolower($trimmed));
+        if (\count($parts) !== 3 || \in_array('', $parts, true)) {
             throw new \InvalidArgumentException('system_config_short_scope_write_forbidden:' . $trimmed);
+        }
+        $identity = $this->fromStorageScope($trimmed, false);
+        if (!$identity instanceof ScopeIdentity || $this->toStorageScope($identity) !== \strtolower($trimmed)) {
+            throw new \InvalidArgumentException('system_config_noncanonical_scope_write_forbidden:' . $trimmed);
         }
     }
 
@@ -228,5 +298,26 @@ final class SystemConfigScopeResolver
         }
 
         return $websiteCode . '.default.default';
+    }
+
+    private function storeStorageSegment(string $storeCode): string
+    {
+        $storeCode = \strtolower(\trim($storeCode));
+
+        return $storeCode === 'default' ? self::STORE_DEFAULT_SENTINEL : $storeCode;
+    }
+
+    private function channelStorageSegment(string $channelCode): string
+    {
+        $channelCode = \strtolower(\trim($channelCode));
+
+        return $channelCode === 'default' ? self::CHANNEL_DEFAULT_SENTINEL : $channelCode;
+    }
+
+    private function isBusinessSegment(string $value, int $maxLength = 64): bool
+    {
+        $maxTail = $maxLength - 1;
+
+        return \preg_match('/^[a-z0-9][a-z0-9_-]{0,' . $maxTail . '}$/D', $value) === 1;
     }
 }

@@ -6,11 +6,11 @@
         "php": "^8.4",
         "weline/framework": "@dev",
         "weline/module-backend": "@dev",
-        "weline/module-file-manager": "@dev"
+        "weline/module-file-manager": "@dev",
+        "weline/module-storage": "^1.2"
     },
     "suggest": {
         "weline/module-ai": "Enables the optional AI media-generation adapter.",
-        "weline/module-storage": "Enables optional configured storage sources in the media connector.",
         "weline/module-theme": "Publishes requested development-theme override assets through the Theme integration."
     },
     "authors": [

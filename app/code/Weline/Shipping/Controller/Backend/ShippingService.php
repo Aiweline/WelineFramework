@@ -19,7 +19,7 @@ use Weline\Shipping\Model\Carrier;
 use Weline\Shipping\Model\Zone;
 use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
-#[Acl('Weline_Shipping::shipping_service', '配送服务管理', 'mdi-truck-fast', '配送服务管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::shipping_service', '配送服务管理', 'truck', '配送服务管理', 'Weline_Backend::shipping_group')]
 class ShippingService extends BackendController
 {
     private ShippingServiceModel $service;
@@ -36,7 +36,7 @@ class ShippingService extends BackendController
     /**
      * 配送服务列表页（占位实现，保证页面可用）
      */
-    #[Acl('Weline_Shipping::shipping_service_index', '查看配送服务', 'mdi-format-list-bulleted', '查看配送服务列表')]
+    #[Acl('Weline_Shipping::shipping_service_index', '查看配送服务', 'list', '查看配送服务列表')]
     public function index()
     {
         $services = $this->service->reset()
@@ -53,7 +53,7 @@ class ShippingService extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Shipping::shipping_service_save', '保存配送服务', 'mdi-content-save', '创建配送服务')]
+    #[Acl('Weline_Shipping::shipping_service_save', '保存配送服务', 'save', '创建配送服务')]
     public function save()
     {
         try {

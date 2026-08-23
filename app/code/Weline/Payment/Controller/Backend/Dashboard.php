@@ -20,13 +20,13 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Payment\Block\Backend\Dashboard as DashboardBlock;
 use Weline\Payment\Service\PaymentObjectScopeService;
 
-#[Acl('Weline_Payment::payment_dashboard', '支付统计驾驶舱', 'mdi-view-dashboard-outline', '支付统计驾驶舱', 'Weline_Backend::payment_group')]
+#[Acl('Weline_Payment::payment_dashboard', '支付统计驾驶舱', 'grid', '支付统计驾驶舱', 'Weline_Backend::payment_group')]
 class Dashboard extends BackendController
 {
     /**
      * 支付统计驾驶舱
      */
-    #[Acl('Weline_Payment::payment_dashboard_index', '查看支付统计驾驶舱', 'mdi-view-dashboard-outline', '查看支付统计驾驶舱')]
+    #[Acl('Weline_Payment::payment_dashboard_index', '查看支付统计驾驶舱', 'grid', '查看支付统计驾驶舱')]
     public function index(): string
     {
         try {

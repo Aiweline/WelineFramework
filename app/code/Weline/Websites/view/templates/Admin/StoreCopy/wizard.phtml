@@ -28,33 +28,36 @@ $config = [
         'errorCode' => (string)__('错误码'),
     ],
 ];
+$storeCopyTargetWebsiteValue = '';
+$storeCopyTargetWebsiteDisplay = '';
+$storeCopySourceWebsiteValue = '';
+$storeCopySourceWebsiteDisplay = '';
+$storeCopyWebsiteSelectOptionsJson = '[]';
 ?>
-<div class="container-fluid py-3"
-     data-testid="store-copy-wizard"
-     data-plan-cases="TEST-P2C-COPY-01,TEST-P2C-COPY-02,TEST-P2C-COPY-03,TEST-P2C-COPY-04,TEST-P2C-COPY-05">
-    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+<div class="w-container" data-testid="store-copy-wizard" data-plan-cases="TEST-P2C-COPY-01,TEST-P2C-COPY-02,TEST-P2C-COPY-03,TEST-P2C-COPY-04,TEST-P2C-COPY-05" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+    <div class="w-cluster" data-wrap="true" data-align="start" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
         <div>
-            <h3 class="mb-1" data-testid="store-copy-title"><lang>Store 商品复制向导</lang></h3>
-            <p class="text-muted mb-0" data-testid="store-copy-summary">
+            <h3 data-testid="store-copy-title" style="--w-mb:var(--weline-space-1);"><lang>Store 商品复制向导</lang></h3>
+            <p class="w-text" data-testid="store-copy-summary" data-tone="muted" style="--w-mb:0;">
                 <lang>三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。</lang>
             </p>
         </div>
-        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+        <span class="w-badge w-text border-primary-subtle" data-w-background="primary" data-w-border="border" data-tone="primary">
             <lang>持久化事务模式</lang>
         </span>
     </div>
 
-    <div class="row g-3">
-        <div class="col-12 col-xl-7">
-            <div class="card h-100">
-                <div class="card-header">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+        <div style="--w-span:12;--w-span-lg:7;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__header">
                     <strong><lang>复制范围</lang></strong>
                 </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label" for="store-copy-entry"><lang>入口</lang></label>
-                            <select class="form-select" id="store-copy-entry" data-testid="store-copy-entry">
+                <div class="w-card__body">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span:12;">
+                            <label class="w-field__label" for="store-copy-entry"><lang>入口</lang></label>
+                            <select class="w-select" id="store-copy-entry" data-testid="store-copy-entry">
                                 <?php foreach ($entries as $code => $label): ?>
                                     <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"
                                             data-testid="store-copy-entry-<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>">
@@ -65,67 +68,66 @@ $config = [
                             </select>
                         </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label" for="store-copy-target-website"><lang>目标 Website</lang></label>
-                            <select class="form-select"
-                                    id="store-copy-target-website"
-                                    data-testid="store-copy-target-website"></select>
+                        <div style="--w-span-md:6;" data-testid="store-copy-target-website">
+                            <label class="w-field__label" for="store-copy-target-website_trigger"><lang>目标 Website</lang></label>
+                            <w:websites:website:select
+                                id="store-copy-target-website"
+                                name="target_website_id"
+                                value="storeCopyTargetWebsiteValue"
+                                display="storeCopyTargetWebsiteDisplay"
+                                options="storeCopyWebsiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                                on-select="storeCopyOnTargetWebsiteSelect"
+                            />
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label" for="store-copy-target-store"><lang>目标 Store</lang></label>
-                            <select class="form-select"
-                                    id="store-copy-target-store"
-                                    data-testid="store-copy-target-store"></select>
-                        </div>
-
-                        <div class="col-md-6" data-copy-source-field="website">
-                            <label class="form-label" for="store-copy-source-website"><lang>来源 Website</lang></label>
-                            <select class="form-select"
-                                    id="store-copy-source-website"
-                                    data-testid="store-copy-source-website"></select>
-                        </div>
-                        <div class="col-md-6" data-copy-source-field="store">
-                            <label class="form-label" for="store-copy-source-store"><lang>来源 Store</lang></label>
-                            <select class="form-select"
-                                    id="store-copy-source-store"
-                                    data-testid="store-copy-source-store"></select>
+                        <div style="--w-span-md:6;">
+                            <label class="w-field__label" for="store-copy-target-store"><lang>目标 Store</lang></label>
+                            <select class="w-select" id="store-copy-target-store" data-testid="store-copy-target-store"></select>
                         </div>
 
-                        <div class="col-md-6" data-copy-catalog-field>
-                            <label class="form-label" for="store-copy-category-ids"><lang>分类 ID</lang></label>
-                            <input class="form-control"
-                                   id="store-copy-category-ids"
-                                   data-testid="store-copy-category-ids"
-                                   inputmode="numeric"
-                                   placeholder="<?= htmlspecialchars((string)__('逗号分隔；留空表示全部分类'), ENT_QUOTES, 'UTF-8') ?>">
+                        <div data-copy-source-field="website" style="--w-span-md:6;" data-testid="store-copy-source-website">
+                            <label class="w-field__label" for="store-copy-source-website_trigger"><lang>来源 Website</lang></label>
+                            <w:websites:website:select
+                                id="store-copy-source-website"
+                                name="source_website_id"
+                                value="storeCopySourceWebsiteValue"
+                                display="storeCopySourceWebsiteDisplay"
+                                options="storeCopyWebsiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                                on-select="storeCopyOnSourceWebsiteSelect"
+                            />
                         </div>
-                        <div class="col-md-6" data-copy-catalog-field>
-                            <label class="form-label" for="store-copy-excluded-category-ids"><lang>排除分类 ID</lang></label>
-                            <input class="form-control"
-                                   id="store-copy-excluded-category-ids"
-                                   data-testid="store-copy-excluded-category-ids"
-                                   inputmode="numeric"
-                                   placeholder="<?= htmlspecialchars((string)__('逗号分隔；排除所选分类及完整子树'), ENT_QUOTES, 'UTF-8') ?>">
+                        <div data-copy-source-field="store" style="--w-span-md:6;">
+                            <label class="w-field__label" for="store-copy-source-store"><lang>来源 Store</lang></label>
+                            <select class="w-select" id="store-copy-source-store" data-testid="store-copy-source-store"></select>
                         </div>
 
-                        <div class="col-md-6" data-copy-catalog-field>
-                            <div class="form-check form-switch mt-md-4 pt-md-2">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       role="switch"
-                                       id="store-copy-include-products"
-                                       data-testid="store-copy-include-products"
-                                       checked>
-                                <label class="form-check-label" for="store-copy-include-products">
+                        <div data-copy-catalog-field style="--w-span-md:6;">
+                            <label class="w-field__label" for="store-copy-category-ids"><lang>分类 ID</lang></label>
+                            <input class="w-input" id="store-copy-category-ids" data-testid="store-copy-category-ids" inputmode="numeric" placeholder="<?= htmlspecialchars((string)__('逗号分隔；留空表示全部分类'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div data-copy-catalog-field style="--w-span-md:6;">
+                            <label class="w-field__label" for="store-copy-excluded-category-ids"><lang>排除分类 ID</lang></label>
+                            <input class="w-input" id="store-copy-excluded-category-ids" data-testid="store-copy-excluded-category-ids" inputmode="numeric" placeholder="<?= htmlspecialchars((string)__('逗号分隔；排除所选分类及完整子树'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+
+                        <div data-copy-catalog-field style="--w-span-md:6;">
+                            <div class="w-switch" style="--w-mt-md:var(--weline-space-6);--w-pt-md:var(--weline-space-2);">
+                                <input type="checkbox" role="switch" id="store-copy-include-products" data-testid="store-copy-include-products" checked>
+                                <label for="store-copy-include-products">
                                     <lang>复制分类下商品</lang>
                                 </label>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label" for="store-copy-duplicate-policy"><lang>重复复制策略</lang></label>
-                            <select class="form-select"
-                                    id="store-copy-duplicate-policy"
-                                    data-testid="store-copy-duplicate-policy">
+                        <div style="--w-span-md:6;">
+                            <label class="w-field__label" for="store-copy-duplicate-policy"><lang>重复复制策略</lang></label>
+                            <select class="w-select" id="store-copy-duplicate-policy" data-testid="store-copy-duplicate-policy">
                                 <?php foreach ($duplicatePolicies as $code => $label): ?>
                                     <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>">
                                         <?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?>
@@ -136,115 +138,86 @@ $config = [
                         </div>
                     </div>
 
-                    <hr class="my-4">
+                    <hr style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-6);">
                     <h6><lang>字段包</lang></h6>
-                    <div class="row g-2" data-testid="store-copy-packages">
+                    <div class="w-grid" data-testid="store-copy-packages" style="--w-gap:var(--weline-space-2);">
                         <?php foreach ($packages as $pkg): ?>
-                            <div class="col-6 col-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input"
-                                           type="checkbox"
-                                           name="store-copy-package"
-                                           value="<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>"
-                                           id="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>"
-                                           data-testid="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>"
-                                           checked>
-                                    <label class="form-check-label"
-                                           for="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>">
+                            <div style="--w-span:6;--w-span-md:4;">
+                                <div class="w-check">
+                                    <input type="checkbox" name="store-copy-package" value="<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>" id="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>" data-testid="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>" checked>
+                                    <label for="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>">
                                         <code><?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?></code>
                                     </label>
                                 </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
-                    <div class="form-check form-switch mt-3">
-                        <input class="form-check-input"
-                               type="checkbox"
-                               role="switch"
-                               id="store-copy-inventory-copy-qty"
-                               data-testid="store-copy-inventory-copy-qty">
-                        <label class="form-check-label" for="store-copy-inventory-copy-qty">
+                    <div class="w-switch" style="--w-mt:var(--weline-space-4);">
+                        <input type="checkbox" role="switch" id="store-copy-inventory-copy-qty" data-testid="store-copy-inventory-copy-qty">
+                        <label for="store-copy-inventory-copy-qty">
                             <lang>显式复制库存数量（不勾选时目标 on_hand=0）</lang>
                         </label>
                     </div>
                 </div>
-                <div class="card-footer d-flex flex-wrap gap-2">
-                    <button type="button"
-                            class="btn btn-primary"
-                            id="store-copy-preview"
-                            data-testid="store-copy-preview">
+                <div class="w-card__footer w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                    <button type="button" class="w-button" id="store-copy-preview" data-testid="store-copy-preview" data-tone="primary">
                         <lang>创建草稿并预览</lang>
                     </button>
-                    <button type="button"
-                            class="btn btn-success"
-                            id="store-copy-commit"
-                            data-testid="store-copy-commit"
-                            disabled>
+                    <button type="button" class="w-button" id="store-copy-commit" data-testid="store-copy-commit" disabled data-tone="success">
                         <lang>提交复制</lang>
                     </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            id="store-copy-cancel"
-                            data-testid="store-copy-cancel"
-                            disabled>
+                    <button type="button" class="w-button" id="store-copy-cancel" data-testid="store-copy-cancel" disabled data-tone="neutral" data-variant="outline">
                         <lang>取消草稿</lang>
                     </button>
                 </div>
             </div>
         </div>
 
-        <div class="col-12 col-xl-5">
-            <div class="card mb-3">
-                <div class="card-header">
+        <div style="--w-span:12;--w-span-lg:5;">
+            <div class="w-card" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__header">
                     <strong><lang>预览与提交结果</lang></strong>
                 </div>
-                <div class="card-body">
-                    <div class="alert alert-secondary mb-3"
-                         role="status"
-                         aria-live="polite"
-                         data-testid="store-copy-status"
-                         id="store-copy-status">
+                <div class="w-card__body">
+                    <div class="w-alert" role="status" aria-live="polite" data-testid="store-copy-status" id="store-copy-status" data-tone="muted" style="--w-mb:var(--weline-space-4);">
                         <lang>正在加载 Website/Store 选项…</lang>
                     </div>
-                    <div class="row mb-3 small">
-                        <span class="col-6"><lang>分类</lang></span>
-                        <span class="col-6 text-end" data-testid="store-copy-count-categories">0</span>
-                        <span class="col-6"><lang>商品</lang></span>
-                        <span class="col-6 text-end" data-testid="store-copy-count-products">0</span>
-                        <span class="col-6"><lang>Offer</lang></span>
-                        <span class="col-6 text-end" data-testid="store-copy-count-offers">0</span>
-                        <span class="col-6"><lang>创建 / 跳过 / 更新</lang></span>
-                        <span class="col-6 text-end" data-testid="store-copy-count-actions">0 / 0 / 0</span>
-                        <span class="col-6"><lang>复制库存数量</lang></span>
-                        <span class="col-6 text-end" data-testid="store-copy-preview-inventory">false</span>
+                    <div class="w-grid w-text" data-size="sm" style="--w-mb:var(--weline-space-4);">
+                        <span style="--w-span:6;"><lang>分类</lang></span>
+                        <span class="w-text" data-testid="store-copy-count-categories" data-align="end" style="--w-span:6;">0</span>
+                        <span style="--w-span:6;"><lang>商品</lang></span>
+                        <span class="w-text" data-testid="store-copy-count-products" data-align="end" style="--w-span:6;">0</span>
+                        <span style="--w-span:6;"><lang>Offer</lang></span>
+                        <span class="w-text" data-testid="store-copy-count-offers" data-align="end" style="--w-span:6;">0</span>
+                        <span style="--w-span:6;"><lang>创建 / 跳过 / 更新</lang></span>
+                        <span class="w-text" data-testid="store-copy-count-actions" data-align="end" style="--w-span:6;">0 / 0 / 0</span>
+                        <span style="--w-span:6;"><lang>复制库存数量</lang></span>
+                        <span class="w-text" data-testid="store-copy-preview-inventory" data-align="end" style="--w-span:6;">false</span>
                     </div>
-                    <pre class="bg-light border rounded p-3 small mb-0"
-                         style="min-height: 9rem; max-height: 24rem; overflow: auto;"
-                         data-testid="store-copy-result"
-                         id="store-copy-result">{}</pre>
+                    <pre class="w-text" style="min-height: 9rem; max-height: 24rem; overflow: auto;" data-testid="store-copy-result" id="store-copy-result" data-w-background="muted" data-w-border="border" data-w-radius="md" data-size="sm">{}</pre>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header">
+            <div class="w-card">
+                <div class="w-card__header">
                     <strong><lang>契约要点</lang></strong>
                 </div>
-                <div class="card-body">
-                    <ul class="mb-3 ps-3" data-testid="store-copy-contracts">
-                        <li class="mb-2" data-testid="store-copy-contract-tree">
+                <div class="w-card__body">
+                    <ul class="ps-3" data-testid="store-copy-contracts" style="--w-mb:var(--weline-space-4);">
+                        <li data-testid="store-copy-contract-tree" style="--w-mb:var(--weline-space-2);">
                             <lang>分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。</lang>
                         </li>
-                        <li class="mb-2" data-testid="store-copy-contract-inventory">
+                        <li data-testid="store-copy-contract-inventory" style="--w-mb:var(--weline-space-2);">
                             <lang>库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。</lang>
                         </li>
-                        <li class="mb-2" data-testid="store-copy-contract-cross-website">
+                        <li data-testid="store-copy-contract-cross-website" style="--w-mb:var(--weline-space-2);">
                             <lang>跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。</lang>
                         </li>
                         <li data-testid="store-copy-contract-duplicate">
                             <lang>同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。</lang>
                         </li>
                     </ul>
-                    <p class="mb-0 small">
+                    <p class="w-text" data-size="sm" style="--w-mb:0;">
                         <lang>详细契约见</lang>
                         <code data-testid="store-copy-guide-path">app/code/Weline/Product/doc/copy-guide.md</code>
                     </p>
@@ -274,9 +247,9 @@ $config = [
     };
     var elements = {
         entry: document.getElementById('store-copy-entry'),
-        targetWebsite: document.getElementById('store-copy-target-website'),
+        targetWebsite: document.getElementById('store-copy-target-website_value'),
         targetStore: document.getElementById('store-copy-target-store'),
-        sourceWebsite: document.getElementById('store-copy-source-website'),
+        sourceWebsite: document.getElementById('store-copy-source-website_value'),
         sourceStore: document.getElementById('store-copy-source-store'),
         categories: document.getElementById('store-copy-category-ids'),
         excludedCategories: document.getElementById('store-copy-excluded-category-ids'),
@@ -291,8 +264,8 @@ $config = [
     };
 
     function toast(type, message) {
-        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-            window.BackendToast[type](message);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') {
+            window.Weline.UI.toast[type](message);
         }
     }
 
@@ -316,16 +289,43 @@ $config = [
         return Promise.resolve(window.Weline.Api.resource(config.provider || 'product_copy'));
     }
 
-    function fillWebsiteSelect(select, selectedValue) {
-        select.innerHTML = '';
-        state.websites.forEach(function (website) {
-            var option = document.createElement('option');
-            option.value = String(website.website_id);
-            option.textContent = website.name + ' (' + website.code + ', ID=' + website.website_id + ')';
-            select.appendChild(option);
+    function websiteSelectApi(id) {
+        return window.WelineWebsiteSelect && window.WelineWebsiteSelect[id]
+            ? window.WelineWebsiteSelect[id]
+            : null;
+    }
+
+    function toWebsiteSelectOptions(websites) {
+        return (websites || []).map(function (website) {
+            return {
+                value: String(website.website_id),
+                label: String(website.name || ''),
+                meta: String(website.code || '')
+            };
         });
-        if (selectedValue !== undefined && selectedValue !== null) {
-            select.value = String(selectedValue);
+    }
+
+    function fillWebsiteSelect(selectId, selectedValue) {
+        var options = toWebsiteSelectOptions(state.websites);
+        var api = websiteSelectApi(selectId);
+        var value = selectedValue !== undefined && selectedValue !== null ? String(selectedValue) : '';
+        if (api && typeof api.setOptions === 'function') {
+            api.setOptions(options);
+            if (typeof api.setValue === 'function') {
+                api.setValue(value);
+            }
+            return;
+        }
+        var hidden = document.getElementById(selectId + '_value');
+        var display = document.getElementById(selectId + '_display');
+        if (hidden) {
+            hidden.value = value;
+        }
+        if (display) {
+            var matched = options.find(function (item) { return item.value === value; });
+            display.textContent = matched
+                ? (matched.label || matched.meta || matched.value)
+                : (messages.emptyOption || '');
         }
     }
 
@@ -367,7 +367,14 @@ $config = [
         document.querySelectorAll('[data-copy-catalog-field]').forEach(function (node) {
             node.classList.toggle('d-none', blank);
         });
-        elements.sourceWebsite.disabled = blank;
+        if (elements.sourceWebsite) {
+            elements.sourceWebsite.disabled = blank;
+        }
+        var sourceWrapper = document.getElementById('store-copy-source-website_wrapper');
+        if (sourceWrapper) {
+            sourceWrapper.style.pointerEvents = blank ? 'none' : '';
+            sourceWrapper.style.opacity = blank ? '0.55' : '';
+        }
         elements.sourceStore.disabled = !inherit;
         elements.categories.disabled = blank;
         elements.excludedCategories.disabled = blank;
@@ -491,8 +498,8 @@ $config = [
             var response = await api.scopeOptions({}, {silent: true});
             state.websites = response.websites || [];
             state.stores = response.stores || [];
-            fillWebsiteSelect(elements.targetWebsite, 0);
-            fillWebsiteSelect(elements.sourceWebsite, 0);
+            fillWebsiteSelect('store-copy-target-website', 0);
+            fillWebsiteSelect('store-copy-source-website', 0);
             fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
             fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
             updateEntryFields();
@@ -583,13 +590,24 @@ $config = [
         }
     }
 
+    window.storeCopyOnTargetWebsiteSelect = function () {
+        fillStoreSelect(elements.targetStore, elements.targetWebsite ? elements.targetWebsite.value : '');
+    };
+    window.storeCopyOnSourceWebsiteSelect = function () {
+        fillStoreSelect(elements.sourceStore, elements.sourceWebsite ? elements.sourceWebsite.value : '');
+    };
+
     elements.entry.addEventListener('change', updateEntryFields);
-    elements.targetWebsite.addEventListener('change', function () {
-        fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
-    });
-    elements.sourceWebsite.addEventListener('change', function () {
-        fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
-    });
+    if (elements.targetWebsite) {
+        elements.targetWebsite.addEventListener('change', function () {
+            fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
+        });
+    }
+    if (elements.sourceWebsite) {
+        elements.sourceWebsite.addEventListener('change', function () {
+            fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
+        });
+    }
     elements.previewButton.addEventListener('click', createAndPreview);
     elements.commitButton.addEventListener('click', commitDraft);
     elements.cancelButton.addEventListener('click', cancelDraft);

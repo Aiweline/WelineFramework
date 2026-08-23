@@ -25,7 +25,7 @@ return [
             'label' => 'Logo',
             'default' => '',
             'required' => false,
-            'description' => '网站 Logo 图片 URL'
+            'description' => '从统一媒体库选择的网站 Logo'
         ],
         'show_search' => [
             'type' => 'bool',
@@ -42,4 +42,3 @@ return [
         ]
     ]
 ];
-

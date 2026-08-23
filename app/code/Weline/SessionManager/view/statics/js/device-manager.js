@@ -28,10 +28,10 @@
     }
 
     function toast(message, type) {
-        if (global.Weline && global.Weline.Toast && typeof global.Weline.Toast.show === 'function') {
-            global.Weline.Toast.show(message, type || 'info');
-        } else if (global.BackendToast && typeof global.BackendToast[type] === 'function') {
-            global.BackendToast[type](message);
+        if (global.Weline && global.Weline.UI.toast && typeof global.Weline.UI.toast.show === 'function') {
+            global.Weline.UI.toast.show(message, {tone: type || 'info'});
+        } else if (global.Weline.UI.toast && typeof global.Weline.UI.toast[type] === 'function') {
+            global.Weline.UI.toast[type](message);
         }
     }
 
@@ -100,7 +100,7 @@
             var icon = document.createElement('span');
             icon.className = 'session-device-card__icon';
             var iconGlyph = document.createElement('i');
-            iconGlyph.className = 'mdi mdi-laptop';
+            iconGlyph.className = 'mdi weline-icon--laptop';
             iconGlyph.setAttribute('aria-hidden', 'true');
             icon.appendChild(iconGlyph);
             article.appendChild(icon);

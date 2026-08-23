@@ -15,11 +15,10 @@ enum NotificationType: string
     public function getColor(): string
     {
         return match ($this) {
-            self::INFO => 'var(--backend-color-info)',
-            self::SUCCESS => 'var(--backend-color-success)',
-            self::WARNING => 'var(--backend-color-warning)',
-            self::ERROR => 'var(--backend-color-danger)',
-            self::URGENT => 'var(--backend-color-danger)',
+            self::INFO => 'var(--weline-theme-info)',
+            self::SUCCESS => 'var(--weline-theme-success)',
+            self::WARNING => 'var(--weline-theme-warning)',
+            self::ERROR, self::URGENT => 'var(--weline-theme-danger)',
         };
     }
 
@@ -59,11 +58,9 @@ enum NotificationType: string
     public function getIcon(): string
     {
         return match ($this) {
-            self::INFO => 'ri-information-line',
-            self::SUCCESS => 'ri-checkbox-circle-line',
-            self::WARNING => 'ri-alert-line',
-            self::ERROR => 'ri-error-warning-line',
-            self::URGENT => 'ri-alarm-warning-line',
+            self::INFO => 'info',
+            self::SUCCESS => 'check',
+            self::WARNING, self::ERROR, self::URGENT => 'warning',
         };
     }
 

@@ -7,31 +7,31 @@ $eventName = $this->getData('event_name') ?? '';
 <div class="event-overview">
     <div class="event-header">
         <div class="event-icon">
-            <i class="mdi mdi-lightning-bolt"></i>
+            <w:icon name="bolt" size="sm"></w:icon>
         </div>
         <div class="event-info">
             <h2><?= htmlspecialchars($event['name'] ?? $eventName) ?></h2>
             <div class="event-code">
                 <code id="event-code-value"><?= htmlspecialchars($eventName) ?></code>
-                <button type="button" class="btn-copy" data-event-copy="1" title="复制事件名">
-                    <i class="mdi mdi-content-copy"></i>
+                <button type="button" class="weline-btn-copy" data-event-copy="1" title="复制事件名">
+                    <w:icon name="copy" size="sm"></w:icon>
                 </button>
             </div>
             <div class="event-badges">
                 <?php if ($event['has_spec'] ?? false): ?>
-                    <span class="badge badge-success">有规约</span>
+                    <span class="w-badge" data-tone="success">有规约</span>
                 <?php else: ?>
-                    <span class="badge badge-danger">无规约</span>
+                    <span class="w-badge" data-tone="danger">无规约</span>
                 <?php endif; ?>
                 <?php if ($event['has_doc'] ?? false): ?>
-                    <span class="badge badge-info">有文档</span>
+                    <span class="w-badge" data-tone="info">有文档</span>
                 <?php else: ?>
-                    <span class="badge badge-warning">无文档</span>
+                    <span class="w-badge" data-tone="warning">无文档</span>
                 <?php endif; ?>
                 <?php if (($event['observer_count'] ?? 0) > 0): ?>
-                    <span class="badge badge-primary"><?= $event['observer_count'] ?> 个观察者</span>
+                    <span class="w-badge" data-tone="primary"><?= $event['observer_count'] ?> 个观察者</span>
                 <?php else: ?>
-                    <span class="badge badge-secondary">无观察者</span>
+                    <span class="w-badge" data-tone="muted">无观察者</span>
                 <?php endif; ?>
             </div>
         </div>
@@ -42,7 +42,7 @@ $eventName = $this->getData('event_name') ?? '';
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-cube-outline"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= htmlspecialchars($event['module'] ?? '') ?></div>
@@ -51,7 +51,7 @@ $eventName = $this->getData('event_name') ?? '';
     </div>
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-eye"></i>
+            <w:icon name="eye" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= $event['observer_count'] ?? 0 ?></div>
@@ -60,7 +60,7 @@ $eventName = $this->getData('event_name') ?? '';
     </div>
     <div class="stat-card">
         <div class="stat-icon">
-            <i class="mdi mdi-package-variant"></i>
+            <w:icon name="box" size="sm"></w:icon>
         </div>
         <div class="stat-content">
             <div class="stat-value"><?= count($event['observer_modules'] ?? []) ?></div>
@@ -73,7 +73,7 @@ $eventName = $this->getData('event_name') ?? '';
 <div class="event-details">
     <!-- 基本信息 -->
     <div class="detail-section">
-        <h3><i class="mdi mdi-information"></i> 基本信息</h3>
+        <h3><w:icon name="info" size="sm"></w:icon> 基本信息</h3>
         <div class="detail-content">
             <div class="detail-item">
                 <label>事件名：</label>
@@ -106,14 +106,14 @@ $eventName = $this->getData('event_name') ?? '';
 
     <!-- 观察者信息 -->
     <div class="detail-section">
-        <h3><i class="mdi mdi-eye"></i> 观察者信息</h3>
+        <h3><w:icon name="eye" size="sm"></w:icon> 观察者信息</h3>
         <?php
         $observers = $event['observers'] ?? [];
         $observersByModule = $event['observers_by_module'] ?? [];
         ?>
         <?php if (empty($observers)): ?>
             <div class="empty-state">
-                <i class="mdi mdi-eye-off"></i>
+                <w:icon name="eye-off" size="sm"></w:icon>
                 <p>该事件暂无观察者</p>
             </div>
         <?php else: ?>
@@ -121,12 +121,12 @@ $eventName = $this->getData('event_name') ?? '';
                 <?php foreach ($observersByModule as $moduleName => $moduleObservers): ?>
                     <div class="observer-module-group">
                         <h4>
-                            <i class="mdi mdi-package-variant"></i> 
+                            <w:icon name="box" size="sm"></w:icon> 
                             <?= htmlspecialchars($moduleName) ?>
-                            <span class="badge badge-primary"><?= count($moduleObservers) ?></span>
+                            <span class="w-badge" data-tone="primary"><?= count($moduleObservers) ?></span>
                         </h4>
                         <div class="observers-table">
-                            <table class="table">
+                            <table class="w-table">
                                 <thead>
                                     <tr>
                                         <th>观察者名</th>
@@ -143,23 +143,23 @@ $eventName = $this->getData('event_name') ?? '';
                                                 <code><?= htmlspecialchars($observer['name'] ?? '') ?></code>
                                             </td>
                                             <td>
-                                                <code class="text-primary"><?= htmlspecialchars($observer['instance'] ?? '') ?></code>
+                                                <code class="w-text" data-tone="primary"><?= htmlspecialchars($observer['instance'] ?? '') ?></code>
                                             </td>
                                             <td>
-                                                <span class="badge badge-secondary"><?= $observer['sort'] ?? 10000 ?></span>
+                                                <span class="w-badge" data-tone="muted"><?= $observer['sort'] ?? 10000 ?></span>
                                             </td>
                                             <td>
                                                 <?php if (($observer['disabled'] ?? 'false') === 'false'): ?>
-                                                    <span class="badge badge-success">启用</span>
+                                                    <span class="w-badge" data-tone="success">启用</span>
                                                 <?php else: ?>
-                                                    <span class="badge badge-danger">禁用</span>
+                                                    <span class="w-badge" data-tone="danger">禁用</span>
                                                 <?php endif; ?>
                                             </td>
                                             <td>
                                                 <?php if (($observer['shared'] ?? 'true') === 'true'): ?>
-                                                    <span class="badge badge-info">是</span>
+                                                    <span class="w-badge" data-tone="info">是</span>
                                                 <?php else: ?>
-                                                    <span class="badge badge-secondary">否</span>
+                                                    <span class="w-badge" data-tone="muted">否</span>
                                                 <?php endif; ?>
                                             </td>
                                         </tr>
@@ -184,7 +184,7 @@ $eventName = $this->getData('event_name') ?? '';
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .event-overview {
+[data-theme="dark"] .event-overview {
     background: #252b3b;
     border-color: #2d3448;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -206,7 +206,7 @@ $eventName = $this->getData('event_name') ?? '';
     color: #212529;
 }
 
-[data-theme-mode="dark"] .event-info h2 {
+[data-theme="dark"] .event-info h2 {
     color: #e9ecef;
 }
 
@@ -227,12 +227,12 @@ $eventName = $this->getData('event_name') ?? '';
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .event-code code {
+[data-theme="dark"] .event-code code {
     background-color: #1e2125;
     border-color: #2d3448;
 }
 
-.btn-copy {
+.weline-btn-copy {
     background: #f8f9fa;
     border: 1px solid #eff2f7;
     border-radius: 4px;
@@ -243,23 +243,23 @@ $eventName = $this->getData('event_name') ?? '';
     transition: all 0.2s ease-in-out;
 }
 
-[data-theme-mode="dark"] .btn-copy {
+[data-theme="dark"] .weline-btn-copy {
     background: #1e2125;
     border-color: #2d3448;
     color: #8590a5;
 }
 
-.btn-copy:hover {
+.weline-btn-copy:hover {
     background: #e9ecef;
     color: #212529;
 }
 
-[data-theme-mode="dark"] .btn-copy:hover {
+[data-theme="dark"] .weline-btn-copy:hover {
     background: #2d3448;
     color: #e9ecef;
 }
 
-.btn-copy i {
+.weline-btn-copy i {
     font-size: 16px;
 }
 
@@ -288,7 +288,7 @@ $eventName = $this->getData('event_name') ?? '';
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .stat-card {
+[data-theme="dark"] .stat-card {
     background: #252b3b;
     border-color: #2d3448;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -310,7 +310,7 @@ $eventName = $this->getData('event_name') ?? '';
     margin-bottom: 4px;
 }
 
-[data-theme-mode="dark"] .stat-value {
+[data-theme="dark"] .stat-value {
     color: #e9ecef;
 }
 
@@ -319,7 +319,7 @@ $eventName = $this->getData('event_name') ?? '';
     color: #74788d;
 }
 
-[data-theme-mode="dark"] .stat-label {
+[data-theme="dark"] .stat-label {
     color: #8590a5;
 }
 
@@ -331,7 +331,7 @@ $eventName = $this->getData('event_name') ?? '';
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .event-details {
+[data-theme="dark"] .event-details {
     background: #252b3b;
     border-color: #2d3448;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -355,7 +355,7 @@ $eventName = $this->getData('event_name') ?? '';
     gap: 8px;
 }
 
-[data-theme-mode="dark"] .detail-section h3 {
+[data-theme="dark"] .detail-section h3 {
     border-bottom-color: #2d3448;
     color: #e9ecef;
 }
@@ -378,7 +378,7 @@ $eventName = $this->getData('event_name') ?? '';
     min-width: 100px;
 }
 
-[data-theme-mode="dark"] .detail-item label {
+[data-theme="dark"] .detail-item label {
     color: #8590a5;
 }
 
@@ -387,7 +387,7 @@ $eventName = $this->getData('event_name') ?? '';
     color: #212529;
 }
 
-[data-theme-mode="dark"] .detail-item span {
+[data-theme="dark"] .detail-item span {
     color: #e9ecef;
 }
 
@@ -403,7 +403,7 @@ $eventName = $this->getData('event_name') ?? '';
     padding: 20px;
 }
 
-[data-theme-mode="dark"] .observer-module-group {
+[data-theme="dark"] .observer-module-group {
     border-color: #2d3448;
 }
 
@@ -415,7 +415,7 @@ $eventName = $this->getData('event_name') ?? '';
     color: #212529;
 }
 
-[data-theme-mode="dark"] .observer-module-group h4 {
+[data-theme="dark"] .observer-module-group h4 {
     color: #e9ecef;
 }
 
@@ -435,8 +435,8 @@ $eventName = $this->getData('event_name') ?? '';
     border-bottom: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .table th,
-[data-theme-mode="dark"] .table td {
+[data-theme="dark"] .table th,
+[data-theme="dark"] .table td {
     border-bottom-color: #2d3448;
 }
 
@@ -446,7 +446,7 @@ $eventName = $this->getData('event_name') ?? '';
     font-size: 12px;
 }
 
-[data-theme-mode="dark"] .table th {
+[data-theme="dark"] .table th {
     background-color: #1e2125;
 }
 
@@ -456,7 +456,7 @@ $eventName = $this->getData('event_name') ?? '';
     color: #74788d;
 }
 
-[data-theme-mode="dark"] .empty-state {
+[data-theme="dark"] .empty-state {
     color: #8590a5;
 }
 
@@ -467,7 +467,7 @@ $eventName = $this->getData('event_name') ?? '';
     opacity: 0.5;
 }
 
-[data-theme-mode="dark"] .empty-state i {
+[data-theme="dark"] .empty-state i {
     color: #2d3448;
 }
 
@@ -479,14 +479,14 @@ $eventName = $this->getData('event_name') ?? '';
     border-radius: 12px;
 }
 
-.badge-primary { background-color: #0bb197; color: white; }
-.badge-info { background-color: #4aa3ff; color: white; }
-.badge-success { background-color: #0ac074; color: white; }
-.badge-warning { background-color: #fcb92c; color: #212529; }
-.badge-danger { background-color: #ff3d60; color: white; }
-.badge-secondary { background-color: #74788d; color: white; }
+.weline-badge-primary { background-color: #0bb197; color: white; }
+.weline-badge-info { background-color: #4aa3ff; color: white; }
+.weline-badge-success { background-color: #0ac074; color: white; }
+.weline-badge-warning { background-color: #fcb92c; color: #212529; }
+.weline-badge-danger { background-color: #ff3d60; color: white; }
+.weline-badge-secondary { background-color: #74788d; color: white; }
 
-[data-theme-mode="dark"] .badge-warning {
+[data-theme="dark"] .weline-badge-warning {
     color: #e9ecef;
 }
 
@@ -499,7 +499,7 @@ code {
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] code {
+[data-theme="dark"] code {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -514,10 +514,6 @@ code {
 }
 </style>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('click', function(event) {
     const trigger = event.target.closest('[data-event-copy]');
@@ -558,16 +554,12 @@ function fallbackCopyText(text) {
         showCopySuccess();
     } catch (err) {
         console.error('复制失败:', err);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('复制失败') ?>',
-                text: '<?= __('请手动复制') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('复制失败，请手动复制');
-        }
+        Weline.UI.dialog.request({
+            tone: 'warning',
+            title: '<?= __('复制失败') ?>',
+            message: '<?= __('请手动复制') ?>',
+            confirmLabel: '<?= __('确定') ?>'
+        });
     }
     document.body.removeChild(textArea);
 }
@@ -577,7 +569,7 @@ function showCopySuccess() {
     if (!btn) return;
     
     const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<i class="mdi mdi-check"></i>';
+    btn.innerHTML = '<w:icon name="check" size="sm"></w:icon>';
     btn.style.color = '#28a745';
     setTimeout(function() {
         btn.innerHTML = originalHTML;

@@ -14,33 +14,33 @@ $defaultLabel = __('商品编辑');
 $websiteText = (string)$website_id;
 $currentSku = (string)$product_sku;
 ?>
-<div class="container-fluid" data-testid="product-edit-workbench">
-    <div class="d-flex align-items-center justify-content-between mb-3">
+<div class="w-container" data-testid="product-edit-workbench">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
         <div>
-            <h4 class="mb-1"><?= $escape($defaultLabel) ?></h4>
-            <div class="text-muted"><lang>网站 ID：</lang><?= $escape($websiteText) ?> · <lang>商品 ID：</lang><?= $escape($product_id) ?></div>
+            <h4 style="--w-mb:var(--weline-space-1);"><?= $escape($defaultLabel) ?></h4>
+            <div class="w-text" data-tone="muted"><lang>网站 ID：</lang><?= $escape($websiteText) ?> · <lang>商品 ID：</lang><?= $escape($product_id) ?></div>
         </div>
-        <a href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>" class="btn btn-outline-secondary">
-            <i class="mdi mdi-arrow-left"></i> <lang>返回商品列表</lang>
+        <a href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>" class="w-button" data-tone="neutral" data-variant="outline">
+            <w:icon name="arrow-left" size="sm"></w:icon> <lang>返回商品列表</lang>
         </a>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/save-product')" class="row g-3" data-testid="product-edit-form" csrf="auto">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/catalog/save-product')" class="w-grid" data-testid="product-edit-form" csrf="auto" style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
                 <input type="hidden" name="product_id" value="<?= $escape($product_id) ?>">
 
-                <div class="col-md-6">
-                    <label class="form-label"><lang>当前 SKU</lang></label>
-                    <input class="form-control" value="<?= $escape($currentSku) ?>" disabled>
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label"><lang>当前 SKU</lang></label>
+                    <input class="w-input" value="<?= $escape($currentSku) ?>" disabled>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label"><lang>新 SKU</lang></label>
-                    <input class="form-control" name="sku" value="<?= $escape($currentSku) ?>" required maxlength="128">
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label"><lang>新 SKU</lang></label>
+                    <input class="w-input" name="sku" value="<?= $escape($currentSku) ?>" required maxlength="128">
                 </div>
-                <div class="col-md-12 d-flex gap-2 justify-content-end">
-                    <button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save-outline"></i> <lang>保存商品</lang></button>
+                <div class="w-cluster" data-justify="end" style="--w-span-md:12;--w-gap:var(--weline-space-2);">
+                    <button type="submit" class="w-button" data-tone="primary"><w:icon name="save" size="sm"></w:icon> <lang>保存商品</lang></button>
                 </div>
             </w:form>
         </div>

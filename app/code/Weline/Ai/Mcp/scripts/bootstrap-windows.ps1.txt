@@ -1,0 +1,64 @@
+param(
+    [ValidateSet('install','status','uninstall')][string]$Action = 'install',
+    [ValidateSet('github','gitee')][string]$Source = 'github',
+    [string]$Branch = 'main',
+    [string]$InstallDir = '',
+    [switch]$PurgeData
+)
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+if ([string]::IsNullOrWhiteSpace($InstallDir)) { $InstallDir = Join-Path $env:LOCALAPPDATA 'Weline\CodexMcp' }
+$marker = Join-Path $InstallDir '.weline-mcp-managed'
+$tempRoot = $null
+function Get-WelineSource {
+    $script:tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('weline-mcp-' + [guid]::NewGuid().ToString('N'))
+    $archive = Join-Path $script:tempRoot 'source.zip'; $extract = Join-Path $script:tempRoot 'extract'
+    New-Item -ItemType Directory -Path $extract -Force | Out-Null
+    if ($Source -eq 'gitee') { $url = "https://gitee.com/aiweline/weline-codex-mcp/repository/archive/$Branch.zip" }
+    else { $url = "https://github.com/Aiweline/Weline-Codex-Mcp/archive/refs/heads/$Branch.zip" }
+    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $archive
+    Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+    $entry = Get-ChildItem -LiteralPath $extract -Recurse -File -Filter 'learning-mcp' |
+        Where-Object { $_.FullName -match '[\\/]bin[\\/]learning-mcp$' } | Select-Object -First 1
+    if ($null -eq $entry) { throw 'Downloaded archive does not contain bin/learning-mcp.' }
+    return Split-Path (Split-Path $entry.FullName -Parent) -Parent
+}
+function Invoke-WelineStart([string]$Root,[string]$Mode) {
+    $start = Join-Path $Root 'start.bat'
+    if (-not (Test-Path -LiteralPath $start -PathType Leaf)) { throw "Missing start.bat in $Root" }
+    $command = '"' + $start + '" ' + $Mode
+    if ($PurgeData) { $command += ' --purge-data' }
+    $previousInternal = $env:WELINE_MCP_INTERNAL
+    $env:WELINE_MCP_INTERNAL = '1'
+    try { & $env:ComSpec /d /c $command } finally { $env:WELINE_MCP_INTERNAL = $previousInternal }
+    if ($LASTEXITCODE -ne 0) { throw "start.bat $Mode failed with exit code $LASTEXITCODE" }
+}
+try {
+    if ($Action -eq 'install') {
+        $sourceRoot = Get-WelineSource
+        if ((Test-Path -LiteralPath $InstallDir) -and -not (Test-Path -LiteralPath $marker -PathType Leaf)) { throw "Refusing to replace unowned directory: $InstallDir" }
+        $parent = Split-Path $InstallDir -Parent; New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        $backup = $InstallDir + '.backup.' + [guid]::NewGuid().ToString('N')
+        if (Test-Path -LiteralPath $InstallDir) { Move-Item -LiteralPath $InstallDir -Destination $backup }
+        try {
+            Move-Item -LiteralPath $sourceRoot -Destination $InstallDir
+            New-Item -ItemType File -Path $marker -Force | Out-Null
+            Invoke-WelineStart $InstallDir 'install'
+            if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
+        } catch {
+            if (Test-Path -LiteralPath $InstallDir) { Remove-Item -LiteralPath $InstallDir -Recurse -Force }
+            if (Test-Path -LiteralPath $backup) { Move-Item -LiteralPath $backup -Destination $InstallDir }
+            throw
+        }
+        Write-Host "Managed installation: $InstallDir"; exit 0
+    }
+    if (Test-Path -LiteralPath (Join-Path $InstallDir 'start.bat') -PathType Leaf) { $sourceRoot = $InstallDir } else { $sourceRoot = Get-WelineSource }
+    Invoke-WelineStart $sourceRoot $Action
+    if ($Action -eq 'uninstall' -and (Test-Path -LiteralPath $marker -PathType Leaf)) {
+        Remove-Item -LiteralPath $InstallDir -Recurse -Force
+        Write-Host "Removed managed installation: $InstallDir"
+    }
+    exit 0
+} finally {
+    if ($null -ne $tempRoot -and (Test-Path -LiteralPath $tempRoot)) { Remove-Item -LiteralPath $tempRoot -Recurse -Force }
+}

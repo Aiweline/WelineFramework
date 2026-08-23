@@ -29,7 +29,7 @@ final class ScopedUrgentNotifier
         string $dedupeKey,
         array $metadata = [],
         ?array $notifyUsers = null,
-        string $icon = 'ri-alarm-warning-line',
+        string $icon = 'warning',
     ): void {
         if ($scope->isGlobal()) {
             throw new \InvalidArgumentException('Scoped urgent 禁止 global Scope；无 Scope 事件请用普通 w_msg');

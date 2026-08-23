@@ -21,14 +21,20 @@
  * @param logo_height {default=40,type="number",label="Logo高度(px)"}
  */
 
-$logoImage = $this->getData('logo_image') ?? '';
+$logoImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('logo_image') ?? '');
+$logoImageFileHtml = (string)($this->getData('logo_image_file_html') ?? '');
 $logoText = $this->getData('logo_text') ?? 'WeShop';
-$logoLink = $this->getData('logo_link') ?? '/';
-$logoHeight = (int)($this->getData('logo_height') ?? 40);
+$logoLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('logo_link') ?? '/');
+if ($logoLink === '') {
+    $logoLink = '/';
+}
+$logoHeight = max(16, min(400, (int)($this->getData('logo_height') ?? 40)));
 ?>
 <div class="widget-header-logo">
-    <a href="<?= htmlspecialchars($logoLink) ?>" class="logo-link" title="<?= htmlspecialchars($logoText) ?>">
-        <?php if ($logoImage): ?>
+    <a href="<?= htmlspecialchars($logoLink, ENT_QUOTES, 'UTF-8') ?>" class="logo-link" title="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>">
+        <?php if ($logoImageFileHtml !== ''): ?>
+            <span class="logo-image logo-image--asset" style="--logo-height: <?= $logoHeight ?>px;"><?= $logoImageFileHtml ?></span>
+        <?php elseif ($logoImage): ?>
             <img src="<?= htmlspecialchars($logoImage) ?>" 
                  alt="<?= htmlspecialchars($logoText) ?>" 
                  class="logo-image"
@@ -50,6 +56,13 @@ $logoHeight = (int)($this->getData('logo_height') ?? 40);
     text-decoration: none;
 }
 .widget-header-logo .logo-image {
+    max-width: 200px;
+    object-fit: contain;
+}
+.widget-header-logo .logo-image--asset img {
+    display: block;
+    height: var(--logo-height);
+    width: auto;
     max-width: 200px;
     object-fit: contain;
 }

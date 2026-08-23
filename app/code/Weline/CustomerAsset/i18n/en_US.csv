@@ -1,129 +1,138 @@
 ﻿账户首页资产分区,"Account overview asset section"
 在顾客账户首页注入余额、预占与返还等资产账本内容。,"Show balance, reservation, and return ledger content on the customer account overview."
-诊断暂时无法执行。参考编号：%{1},诊断暂时无法执行。参考编号：%{1}
-"仅允许 POST 请求。","仅允许 POST 请求。"
-操作失败，请稍后重试。参考编号：%{1},操作失败，请稍后重试。参考编号：%{1}
-数据暂时无法加载。参考编号：%{1},数据暂时无法加载。参考编号：%{1}
-状态暂时无法读取。参考编号：%{1},状态暂时无法读取。参考编号：%{1}
-客户资产,客户资产
-客户资产账户、预留、结算、退回与一致性诊断,客户资产账户、预留、结算、退回与一致性诊断
-资产账户,资产账户
-查看客户资产账户,查看客户资产账户
-资产账本,资产账本
-查看客户资产账本,查看客户资产账本
-资产预留,资产预留
-查看客户资产预留,查看客户资产预留
-资产结算,资产结算
-查看已结算客户资产,查看已结算客户资产
-资产退回,资产退回
-查看已退回客户资产,查看已退回客户资产
-一致性异常,一致性异常
-只读诊断客户资产一致性异常,只读诊断客户资产一致性异常
-迁移状态,迁移状态
-只读查看客户资产迁移状态,只读查看客户资产迁移状态
-资产入账,资产入账
-向隔离命名空间资产账户入账,向隔离命名空间资产账户入账
-预留资产,预留资产
-创建客户资产预留,创建客户资产预留
-结算资产,结算资产
-提交资产预留结算,提交资产预留结算
-退回资产,退回资产
-退回已结算资产,退回已结算资产
-"CustomerAsset customer_id 非法","CustomerAsset customer_id 非法"
-"CustomerAsset website_id 不能为负数：%{1}","CustomerAsset website_id 不能为负数：%{1}"
-"CustomerAsset asset_code 非法","CustomerAsset asset_code 非法"
-"CustomerAsset 余额或版本非法","CustomerAsset 余额或版本非法"
-"CustomerAsset CAS token 非法","CustomerAsset CAS token 非法"
-"CustomerAsset ledger 必填字段为空：%{1}","CustomerAsset ledger 必填字段为空：%{1}"
-"CustomerAsset ledger event_type 非法","CustomerAsset ledger event_type 非法"
-"CustomerAsset ledger 数值或 hash 非法","CustomerAsset ledger 数值或 hash 非法"
-"CustomerAsset reservation 必填字段为空：%{1}","CustomerAsset reservation 必填字段为空：%{1}"
-"CustomerAsset reservation 数值非法","CustomerAsset reservation 数值非法"
-"CustomerAsset reservation status 非法","CustomerAsset reservation status 非法"
-"CustomerAsset reservation hash/CAS 非法","CustomerAsset reservation hash/CAS 非法"
+诊断暂时无法执行。参考编号：%{1},"Diagnosis cannot be performed at the moment. Reference number: %{1}"
+"仅允许 POST 请求。","Only POST requests are allowed."
+操作失败，请稍后重试。参考编号：%{1},"The operation failed, please try again later. Reference number: %{1}"
+数据暂时无法加载。参考编号：%{1},"The data cannot be loaded temporarily. Reference number: %{1}"
+状态暂时无法读取。参考编号：%{1},"The status cannot be read at the moment. Reference number: %{1}"
+客户资产,"customer assets"
+circle,circle
+客户资产账户、预留、结算、退回与一致性诊断,"Client asset accounts, reservations, settlements, returns and consistency diagnostics"
+资产账户,"asset account"
+user,user
+查看客户资产账户,"View client asset accounts"
+资产账本,"Asset ledger"
+book,book
+查看客户资产账本,"View customer asset ledger"
+资产预留,"Asset reservation"
+clock,clock
+查看客户资产预留,"View client asset reservations"
+资产结算,"Asset settlement"
+cash,cash
+查看已结算客户资产,"View settled client assets"
+资产退回,"Asset return"
+查看已退回客户资产,"View returned customer assets"
+一致性异常,"Consistency exception"
+warning,warning
+只读诊断客户资产一致性异常,"Read-only diagnosis of customer asset consistency exceptions"
+迁移状态,"Migration status"
+eye,eye
+只读查看客户资产迁移状态,"Read-only view of customer asset migration status"
+资产入账,"Asset recording"
+plus,plus
+向隔离命名空间资产账户入账,"Debit to isolated namespace asset account"
+预留资产,"reserved assets"
+创建客户资产预留,"Create a customer asset reservation"
+结算资产,"settlement assets"
+提交资产预留结算,"Submit asset reservation settlement"
+退回资产,"Return assets"
+退回已结算资产,"Return settled assets"
+"CustomerAsset customer_id 非法","CustomerAsset customer_id is illegal"
+"CustomerAsset website_id 不能为负数：%{1}","CustomerAsset website_id cannot be negative: %{1}"
+"CustomerAsset asset_code 非法","CustomerAsset asset_code is illegal"
+"CustomerAsset 余额或版本非法","CustomerAsset balance or version is illegal"
+"CustomerAsset CAS token 非法","CustomerAsset CAS token is illegal"
+"CustomerAsset ledger 必填字段为空：%{1}","CustomerAsset ledger required field is empty: %{1}"
+"CustomerAsset ledger event_type 非法","CustomerAsset ledger event_type illegal"
+"CustomerAsset ledger 数值或 hash 非法","CustomerAsset ledger value or hash is illegal"
+"CustomerAsset reservation 必填字段为空：%{1}","CustomerAsset reservation required field is empty: %{1}"
+"CustomerAsset reservation 数值非法","CustomerAsset reservation value is illegal"
+"CustomerAsset reservation status 非法","CustomerAsset reservation status is illegal"
+"CustomerAsset reservation hash/CAS 非法","CustomerAsset reservation hash/CAS is illegal"
 我的资产,"My assets"
-查看余额与最近变动,查看余额与最近变动
+查看余额与最近变动,"View balance and recent changes"
 "余额、预占与返还记录由 CustomerAsset 账本提供。","Balance, reservation, and return records are provided by the CustomerAsset ledger."
-当前站点的资产余额与最近账本记录。,当前站点的资产余额与最近账本记录。
-当前站点,当前站点
-需要登录,需要登录
-登录后可查看当前站点的资产余额和最近变动。,登录后可查看当前站点的资产余额和最近变动。
-暂时无法读取资产,暂时无法读取资产
-请稍后重试；资产账本不会因此发生变化。,请稍后重试；资产账本不会因此发生变化。
-还没有资产账户,还没有资产账户
-"使用支持的储值、积分或 WCoin 后，余额会显示在这里。","使用支持的储值、积分或 WCoin 后，余额会显示在这里。"
-可用余额,可用余额
-已预占,已预占
-当前可使用,当前可使用
-余额按资产最小单位展示,余额按资产最小单位展示
-最近变动,最近变动
-暂无账本记录,暂无账本记录
-储值余额,储值余额
-积分,积分
+当前站点的资产余额与最近账本记录。,"The current site’s asset balance and recent ledger records."
+当前站点,"current site"
+需要登录,"Login required"
+登录后可查看当前站点的资产余额和最近变动。,"After logging in, you can view the asset balance and recent changes of the current site."
+暂时无法读取资产,"The asset cannot be read at the moment"
+请稍后重试；资产账本不会因此发生变化。,"Please try again later; the asset ledger will not be changed as a result."
+还没有资产账户,"No asset account yet"
+"使用支持的储值、积分或 WCoin 后，余额会显示在这里。","After using supported stored value, points or WCoin, your balance will be displayed here."
+可用余额,"available balance"
+已预占,Reserved
+当前可使用,"Currently available"
+余额按资产最小单位展示,"The balance is displayed according to the smallest unit of assets"
+最近变动,"recent changes"
+暂无账本记录,"No ledger record yet"
+储值余额,"Stored value balance"
+积分,integral
 WCoin,WCoin
-增加,增加
-预占,预占
-释放,释放
-扣减,扣减
-返还,返还
-是,是
-否,否
-只读诊断,只读诊断
-可管理,可管理
-此页面复用真实资产账本事实和迁移一致性算法；生产迁移不在后台触发。,此页面复用真实资产账本事实和迁移一致性算法；生产迁移不在后台触发。
-"写操作复用 CustomerAsset 的事务、幂等和追加账本服务；测试验收使用 sandbox 命名空间。","写操作复用 CustomerAsset 的事务、幂等和追加账本服务；测试验收使用 sandbox 命名空间。"
-资产操作,资产操作
-"客户 ID","客户 ID"
-"网站 ID","网站 ID"
-资产代码,资产代码
-命名空间,命名空间
-金额（分）,金额（分）
-"事件 ID","事件 ID"
-"预留 ID","预留 ID"
-"结算事件 ID","结算事件 ID"
-"已结算预留 ID","已结算预留 ID"
-退回金额（分）,退回金额（分）
-"退回事件 ID","退回事件 ID"
-入账,入账
-预留,预留
-结算,结算
-退回,退回
-当前没有记录。,当前没有记录。
-"CustomerAsset reservation 不存在：%{1}","CustomerAsset reservation 不存在：%{1}"
-"CustomerAsset account 不存在","CustomerAsset account 不存在"
-"CustomerAsset 可预占余额不足","CustomerAsset 可预占余额不足"
-"CustomerAsset reservation 终态重放身份冲突","CustomerAsset reservation 终态重放身份冲突"
-"CustomerAsset reservation 终态缺少 ledger","CustomerAsset reservation 终态缺少 ledger"
-"CustomerAsset reservation 状态不能执行该动作：%{1}","CustomerAsset reservation 状态不能执行该动作：%{1}"
-"CustomerAsset reservation 与账户余额不守恒","CustomerAsset reservation 与账户余额不守恒"
-"CustomerAsset 仅已 commit reservation 可执行返还","CustomerAsset 仅已 commit reservation 可执行返还"
-"CustomerAsset 返还金额超过已 commit 金额","CustomerAsset 返还金额超过已 commit 金额"
-"CustomerAsset event 已被不同请求占用：%{1}","CustomerAsset event 已被不同请求占用：%{1}"
-"CustomerAsset ledger 缺少账户","CustomerAsset ledger 缺少账户"
-"CustomerAsset reserve replay 缺少账户或 reservation","CustomerAsset reserve replay 缺少账户或 reservation"
-"CustomerAsset settlement replay 缺少账户或 reservation","CustomerAsset settlement replay 缺少账户或 reservation"
-"CustomerAsset account 写后不可见","CustomerAsset account 写后不可见"
-"CustomerAsset 账户余额不守恒","CustomerAsset 账户余额不守恒"
-"CustomerAsset account CAS 冲突","CustomerAsset account CAS 冲突"
-"CustomerAsset reservation 写后不可见","CustomerAsset reservation 写后不可见"
-"CustomerAsset reservation CAS 冲突","CustomerAsset reservation CAS 冲突"
-"CustomerAsset event 已存在：%{1}","CustomerAsset event 已存在：%{1}"
-"CustomerAsset ledger 写后不可见","CustomerAsset ledger 写后不可见"
-"CustomerAsset amount_minor 必须大于 0","CustomerAsset amount_minor 必须大于 0"
-"CustomerAsset event_id 非法","CustomerAsset event_id 非法"
-"CustomerAsset reservation_id 非法","CustomerAsset reservation_id 非法"
-"CustomerAsset mode off/shadow，禁止新资产 tender","CustomerAsset mode off/shadow，禁止新资产 tender"
-"CustomerAsset 持久化失败","CustomerAsset 持久化失败"
+增加,Increase
+预占,Preemption
+释放,release
+扣减,deduction
+返还,return
+是,yes
+否,no
+只读诊断,"Read-only diagnostics"
+可管理,Manageable
+此页面复用真实资产账本事实和迁移一致性算法；生产迁移不在后台触发。,"This page reuses real asset ledger facts and migration consistency algorithms; production migration is not triggered in the background."
+"写操作复用 CustomerAsset 的事务、幂等和追加账本服务；测试验收使用 sandbox 命名空间。","Write operations reuse CustomerAsset's transactions, idempotence, and append ledger services; test acceptance uses the sandbox namespace."
+资产操作,"Asset operations"
+"客户 ID","Customer ID"
+网站,website
+资产代码,"Asset code"
+命名空间,namespace
+金额（分）,"Amount (cents)"
+"事件 ID","Event ID"
+"预留 ID","Reserve ID"
+"结算事件 ID","Billing event ID"
+"已结算预留 ID","Billed reservation ID"
+退回金额（分）,"Refund amount (cents)"
+"退回事件 ID","Bounce event ID"
+入账,account
+预留,reserved
+结算,Settlement
+退回,return
+当前没有记录。,"There are currently no records."
+"CustomerAsset reservation 不存在：%{1}","CustomerAsset reservation does not exist: %{1}"
+"CustomerAsset account 不存在","CustomerAsset account does not exist"
+"CustomerAsset 可预占余额不足","CustomerAsset can reserve insufficient balance"
+"CustomerAsset reservation 终态重放身份冲突","CustomerAsset reservation final state replay identity conflict"
+"CustomerAsset reservation 终态缺少 ledger","CustomerAsset reservation final state is missing ledger"
+"CustomerAsset reservation 状态不能执行该动作：%{1}","CustomerAsset reservation status cannot perform this action: %{1}"
+"CustomerAsset reservation 与账户余额不守恒","CustomerAsset reservation and account balance are not conserved"
+"CustomerAsset 仅已 commit reservation 可执行返还","CustomerAsset Only committed reservations can be returned"
+"CustomerAsset 返还金额超过已 commit 金额","The CustomerAsset return amount exceeds the committed amount"
+"CustomerAsset event 已被不同请求占用：%{1}","CustomerAsset event has been occupied by different requests: %{1}"
+"CustomerAsset ledger 缺少账户","CustomerAsset ledger missing account"
+"CustomerAsset reserve replay 缺少账户或 reservation","CustomerAsset reserve replay Missing account or reservation"
+"CustomerAsset settlement replay 缺少账户或 reservation","CustomerAsset settlement replay missing account or reservation"
+"CustomerAsset account 写后不可见","CustomerAsset account is invisible after writing"
+"CustomerAsset 账户余额不守恒","CustomerAsset account balance is not conserved"
+"CustomerAsset account CAS 冲突","CustomerAsset account CAS conflict"
+"CustomerAsset reservation 写后不可见","CustomerAsset reservation is invisible after writing"
+"CustomerAsset reservation CAS 冲突","CustomerAsset reservation CAS conflict"
+"CustomerAsset event 已存在：%{1}","CustomerAsset event already exists: %{1}"
+"CustomerAsset ledger 写后不可见","CustomerAsset ledger is invisible after writing"
+"CustomerAsset amount_minor 必须大于 0","CustomerAsset amount_minor must be greater than 0"
+"CustomerAsset event_id 非法","CustomerAsset event_id is illegal"
+"CustomerAsset reservation_id 非法","CustomerAsset reservation_id is illegal"
+"CustomerAsset mode off/shadow，禁止新资产 tender","CustomerAsset mode off/shadow, prohibiting new assets tender"
+"CustomerAsset 持久化失败","CustomerAsset persistence failed"
 "MIG-P4D CustomerAsset balance, reservation and ledger conservation on a registered PostgreSQL full clone","MIG-P4D CustomerAsset balance, reservation and ledger conservation on a registered PostgreSQL full clone"
-打印帮助,打印帮助
-"在 PostgreSQL full clone 只读重放 account/reservation/ledger","在 PostgreSQL full clone 只读重放 account/reservation/ledger"
-"写前 checkpoint，验证守恒并保持 shadow","写前 checkpoint，验证守恒并保持 shadow"
-"新进程重载 checkpoint，重算事实 hash 与守恒","新进程重载 checkpoint，重算事实 hash 与守恒"
-"fresh verify 后仅放量 checkpoint 冻结的 Website tender","fresh verify 后仅放量 checkpoint 冻结的 Website tender"
-"按 checkpoint mode off，保留 ledger 与既有结算义务","按 checkpoint mode off，保留 ledger 与既有结算义务"
-"migration registry 已登记的 PostgreSQL full mig_clone_*","migration registry 已登记的 PostgreSQL full mig_clone_*"
-"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）"
-"目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
-显示本帮助,显示本帮助
+打印帮助,"Print help"
+"在 PostgreSQL full clone 只读重放 account/reservation/ledger","In PostgreSQL full clone read-only replay account/reservation/ledger"
+"写前 checkpoint，验证守恒并保持 shadow","Checkpoint before writing, verify conservation and keep shadow"
+"新进程重载 checkpoint，重算事实 hash 与守恒","The new process reloads checkpoint and recalculates fact hash and conservation."
+"fresh verify 后仅放量 checkpoint 冻结的 Website tender","Only increase the amount of checkpoint frozen Website tender after fresh verify"
+"按 checkpoint mode off，保留 ledger 与既有结算义务","Press checkpoint mode off to retain the ledger and existing settlement obligations."
+"migration registry 已登记的 PostgreSQL full mig_clone_*","migration registry registered PostgreSQL full mig_clone_*"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID output by apply (required for verify/allowlist/rollback)"
+"目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the legitimate system default site"
+显示本帮助,"Show this help"
+"网站 ID","Website ID"
 查看余额、预占与返还状态,"View balances, reservations, and return status"
 "MIG-P4D：CustomerAsset shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4D: Migrate CustomerAsset from shadow to allowlist (apply requires --database=mig_clone_*)"

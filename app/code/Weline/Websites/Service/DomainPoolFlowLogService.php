@@ -85,51 +85,51 @@ final class DomainPoolFlowLogService
             }
         }
 
-        $arrow = ' <span class="text-muted small">→</span> ';
+        $arrow = ' <span class="w-text" data-tone="muted" data-size="sm">→</span> ';
         $parts = [];
 
-        $parts[] = '<span class="text-success fw-semibold" title="' . self::h(__('已入池')) . '">' . self::h(__('入池')) . ' ✓</span>';
+        $parts[] = '<span class="w-text" title="' . self::h(__('已入池')) . '" data-weight="strong" data-tone="success">' . self::h(__('入池')) . ' ✓</span>';
 
         if ($resolve === DomainPool::RESOLVE_STATUS_ERROR) {
-            $parts[] = '<span class="text-danger fw-semibold" title="' . self::h($resolveErr ?: __('解析异常')) . '">' . self::h(__('解析')) . ' ✗</span>';
+            $parts[] = '<span class="w-text" title="' . self::h($resolveErr ?: __('解析异常')) . '" data-weight="strong" data-tone="danger">' . self::h(__('解析')) . ' ✗</span>';
         } elseif ($resolve === DomainPool::RESOLVE_STATUS_RESOLVED) {
-            $parts[] = '<span class="text-success fw-semibold" title="' . self::h(__('已解析到 IP')) . '">' . self::h(__('解析')) . ' ✓</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('已解析到 IP')) . '" data-weight="strong" data-tone="success">' . self::h(__('解析')) . ' ✓</span>';
         } else {
-            $parts[] = '<span class="text-secondary" title="' . self::h(__('等待解析检测')) . '">' . self::h(__('解析')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('等待解析检测')) . '" data-tone="muted">' . self::h(__('解析')) . ' …</span>';
         }
 
         if ($resolve === DomainPool::RESOLVE_STATUS_ERROR) {
-            $parts[] = '<span class="text-secondary" title="">' . self::h(__('源站')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="" data-tone="muted">' . self::h(__('源站')) . ' …</span>';
         } elseif ($isLocal) {
-            $parts[] = '<span class="text-success fw-semibold" title="' . self::h(__('记录指向本机源站')) . '">' . self::h(__('源站')) . ' ✓</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('记录指向本机源站')) . '" data-weight="strong" data-tone="success">' . self::h(__('源站')) . ' ✓</span>';
         } elseif ($resolve === DomainPool::RESOLVE_STATUS_RESOLVED) {
-            $parts[] = '<span class="text-secondary" title="' . self::h(__('未指向本机或 CDN 边缘')) . '">' . self::h(__('源站')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('未指向本机或 CDN 边缘')) . '" data-tone="muted">' . self::h(__('源站')) . ' …</span>';
         } else {
-            $parts[] = '<span class="text-secondary" title="">' . self::h(__('源站')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="" data-tone="muted">' . self::h(__('源站')) . ' …</span>';
         }
 
         if ($https === DomainPool::HTTPS_STATUS_ERROR) {
-            $parts[] = '<span class="text-danger fw-semibold" title="' . self::h($certFailMsg ?: __('证书申请失败')) . '">' . self::h(__('证书')) . ' ✗</span>';
+            $parts[] = '<span class="w-text" title="' . self::h($certFailMsg ?: __('证书申请失败')) . '" data-weight="strong" data-tone="danger">' . self::h(__('证书')) . ' ✗</span>';
         } elseif ($https === DomainPool::HTTPS_STATUS_VALID) {
-            $parts[] = '<span class="text-success fw-semibold" title="' . self::h(__('证书有效')) . '">' . self::h(__('证书')) . ' ✓</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('证书有效')) . '" data-weight="strong" data-tone="success">' . self::h(__('证书')) . ' ✓</span>';
         } elseif ($https === DomainPool::HTTPS_STATUS_PENDING) {
-            $parts[] = '<span class="text-secondary" title="' . self::h(__('正在向 CA 申请')) . '">' . self::h(__('证书')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('正在向 CA 申请')) . '" data-tone="muted">' . self::h(__('证书')) . ' …</span>';
         } else {
-            $parts[] = '<span class="text-secondary" title="' . self::h(__('待申请')) . '">' . self::h(__('证书')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('待申请')) . '" data-tone="muted">' . self::h(__('证书')) . ' …</span>';
         }
 
         if ($siteReady) {
-            $parts[] = '<span class="text-success fw-semibold" title="' . self::h(__('可创建站点')) . '">' . self::h(__('可建站')) . ' ✓</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('可创建站点')) . '" data-weight="strong" data-tone="success">' . self::h(__('可建站')) . ' ✓</span>';
         } elseif ($https === DomainPool::HTTPS_STATUS_ERROR || $resolve === DomainPool::RESOLVE_STATUS_ERROR) {
-            $parts[] = '<span class="text-secondary" title="">' . self::h(__('可建站')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="" data-tone="muted">' . self::h(__('可建站')) . ' …</span>';
         } else {
-            $parts[] = '<span class="text-secondary" title="' . self::h(__('需证书有效等条件')) . '">' . self::h(__('可建站')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('需证书有效等条件')) . '" data-tone="muted">' . self::h(__('可建站')) . ' …</span>';
         }
 
         if ($siteCreated) {
-            $parts[] = '<span class="text-success fw-semibold" title="' . self::h(__('已绑定站点')) . '">' . self::h(__('已建站')) . ' ✓</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('已绑定站点')) . '" data-weight="strong" data-tone="success">' . self::h(__('已建站')) . ' ✓</span>';
         } else {
-            $parts[] = '<span class="text-secondary" title="' . self::h(__('尚未绑定站点')) . '">' . self::h(__('已建站')) . ' …</span>';
+            $parts[] = '<span class="w-text" title="' . self::h(__('尚未绑定站点')) . '" data-tone="muted">' . self::h(__('已建站')) . ' …</span>';
         }
 
         $hintLines = [];
@@ -138,7 +138,7 @@ final class DomainPoolFlowLogService
         }
         $titleAttr = $hintLines !== [] ? ' title="' . self::h(\implode("\n", \array_slice($hintLines, 0, 20))) . '"' : '';
 
-        return '<div class="small text-break"' . $titleAttr . ' style="max-width:32rem;line-height:1.65;">' . \implode($arrow, $parts) . '</div>';
+        return '<div class="w-text" style="max-width:32rem;line-height:1.65;" data-w-text-wrap="break" data-size="sm">' . \implode($arrow, $parts) . '</div>';
     }
 
     private static function h(string $s): string

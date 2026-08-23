@@ -88,57 +88,56 @@ $listDrillUrl = $channelCode !== ''
     : '';
 ?>
 <div class="weline-traffic-channel-detail">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
         <div>
-            <h1 class="h4 mb-1"><lang>渠道详情</lang></h1>
-            <div class="text-muted">
+            <h1 class="h4" style="--w-mb:var(--weline-space-1);"><lang>渠道详情</lang></h1>
+            <div class="w-text" data-tone="muted">
                 <?= $h($channel['name'] ?? '') ?>
                 · <code><?= $h($channel['code'] ?? '') ?></code>
                 · <?= $websiteId === 0 ? $h(__('全局')) : $h(__('站点') . ' ' . $websiteId) ?>
                 · <?= $h($channel['traffic_type'] ?? '') ?>
             </div>
         </div>
-        <div class="d-flex gap-2">
-            <a class="btn btn-sm btn-outline-secondary" href="<?= $h($indexUrl) ?>"><lang>返回列表</lang></a>
+        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <a class="w-button" href="<?= $h($indexUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><lang>返回列表</lang></a>
             <?php if ($listDrillUrl !== ''): ?>
-                <a class="btn btn-sm btn-outline-primary" href="<?= $h($listDrillUrl) ?>"><lang>像素事件列表</lang></a>
+                <a class="w-button" href="<?= $h($listDrillUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><lang>像素事件列表</lang></a>
             <?php endif; ?>
-            <a class="btn btn-sm btn-outline-primary" href="<?= $h($editUrl) ?>"><lang>编辑</lang></a>
+            <a class="w-button" href="<?= $h($editUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><lang>编辑</lang></a>
         </div>
     </div>
 
     <?php if (!empty($landingPreview['showable']) && !empty($landingPreview['url'])): ?>
-        <div class="alert alert-light border d-flex justify-content-between align-items-center">
-            <div class="text-truncate me-3">
+        <div class="w-alert w-cluster" data-w-border="border" data-justify="between" data-align="center" data-tone="muted">
+            <div class="w-text" data-truncate="true">
                 <lang>投放链接</lang>：
                 <code class="user-select-all"><?= $h($landingPreview['url']) ?></code>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-success js-copy-landing"
-                    data-url="<?= $h($landingPreview['url']) ?>"><lang>复制链接</lang></button>
+            <button type="button" class="w-button js-copy-landing" data-url="<?= $h($landingPreview['url']) ?>" data-tone="success" data-variant="outline" data-size="sm"><lang>复制链接</lang></button>
         </div>
     <?php endif; ?>
 
     <?php if (($hotTotals['error'] ?? '') !== ''): ?>
-        <div class="alert alert-warning">
+        <div class="w-alert" data-tone="warning">
             <lang>热表总计暂不可用（扁平列未就绪或查询失败）。完成 setup:upgrade 后重试。</lang>
         </div>
     <?php endif; ?>
 
-    <div class="row g-3 mb-4">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
         <?php foreach ([7, 30] as $days): ?>
             <?php
             $window = is_array($windows[$days] ?? null) ? $windows[$days] : [];
             ?>
-            <div class="col-lg-6">
-                <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+            <div style="--w-span-lg:6;">
+                <div class="w-card" data-w-height="full">
+                    <div class="w-card__header w-cluster" data-justify="between" data-align="center">
                         <strong><?= $h(__('近 %{1} 天', [(string)$days])) ?></strong>
-                        <small class="text-muted">
+                        <small class="w-text" data-tone="muted">
                             <?= $h(($window['start_date'] ?? '') . ' ~ ' . ($window['end_date'] ?? '')) ?>
                         </small>
                     </div>
-                    <div class="card-body">
-                        <div class="row g-3">
+                    <div class="w-card__body">
+                        <div class="w-grid" style="--w-gap:var(--weline-space-4);">
                             <?php foreach ($metricLabels as $key => $label): ?>
                                 <?php
                                 $value = $window[$key] ?? 0;
@@ -146,10 +145,10 @@ $listDrillUrl = $channelCode !== ''
                                     ? number_format((float)$value, 2)
                                     : number_format((int)$value);
                                 ?>
-                                <div class="col-6 col-md-4">
-                                    <div class="border rounded p-2 h-100">
-                                        <div class="text-muted small"><?= $h($label) ?></div>
-                                        <div class="fs-5 fw-semibold"><?= $h($display) ?></div>
+                                <div style="--w-span:6;--w-span-md:4;">
+                                    <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
+                                        <div class="w-text" data-tone="muted" data-size="sm"><?= $h($label) ?></div>
+                                        <div class="fs-5 w-text" data-weight="strong"><?= $h($display) ?></div>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -160,52 +159,48 @@ $listDrillUrl = $channelCode !== ''
         <?php endforeach; ?>
     </div>
 
-    <div class="card mb-3" id="channel-funnel" data-funnel-mode="<?= $h($funnelMode) ?>">
-        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div class="w-card" id="channel-funnel" data-funnel-mode="<?= $h($funnelMode) ?>" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
             <div>
                 <strong><?= $h(\Weline\Visitor\Service\PixelChannelFunnelMode::label($funnelMode)) ?></strong>
-                <span class="text-muted small ms-2">
+                <span class="w-text" data-tone="muted" data-size="sm">
                     <?= $h(__('按会话去重 · 近 %{1} 天 · %{2}占比', [
                         (string)$timelineDays,
                         \Weline\Visitor\Service\PixelChannelFunnelMode::baselineLabel($funnelMode),
                     ])) ?>
                 </span>
             </div>
-            <div class="d-flex flex-wrap gap-2">
-                <div class="btn-group btn-group-sm" role="group" data-funnel-mode-switch>
-                    <a class="btn <?= $funnelIsEcommerce ? 'btn-outline-secondary' : 'btn-primary' ?>"
-                       href="<?= $h($funnelMarketingUrl) ?>"><lang>营销简漏斗</lang></a>
-                    <a class="btn <?= $funnelIsEcommerce ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                       href="<?= $h($funnelEcommerceUrl) ?>"><lang>电商四步</lang></a>
+            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                <div class="w-button-group" role="group" data-funnel-mode-switch>
+                    <a class="w-button <?= $funnelIsEcommerce ? 'btn-outline-secondary' : 'btn-primary' ?>" href="<?= $h($funnelMarketingUrl) ?>"><lang>营销简漏斗</lang></a>
+                    <a class="w-button <?= $funnelIsEcommerce ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($funnelEcommerceUrl) ?>"><lang>电商四步</lang></a>
                 </div>
-                <div class="btn-group btn-group-sm" role="group">
-                    <a class="btn <?= $timelineDays === 7 ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                       href="<?= $h($funnelDay7Url) ?>"><lang>近 7 天</lang></a>
-                    <a class="btn <?= $timelineDays === 30 ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                       href="<?= $h($funnelDay30Url) ?>"><lang>近 30 天</lang></a>
+                <div class="w-button-group" role="group">
+                    <a class="w-button <?= $timelineDays === 7 ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($funnelDay7Url) ?>"><lang>近 7 天</lang></a>
+                    <a class="w-button <?= $timelineDays === 30 ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($funnelDay30Url) ?>"><lang>近 30 天</lang></a>
                 </div>
             </div>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <?php if (($funnel['error'] ?? '') !== ''): ?>
-                <div class="alert alert-warning mb-0">
+                <div class="w-alert" data-tone="warning" style="--w-mb:0;">
                     <lang>渠道漏斗暂不可用（扁平列未就绪或查询失败）。</lang>
                 </div>
             <?php elseif ((int)($funnel['step1_sessions'] ?? 0) <= 0): ?>
-                <p class="text-muted mb-0">
+                <p class="w-text" data-tone="muted" style="--w-mb:0;">
                     <?= $h(\Weline\Visitor\Service\PixelChannelFunnelMode::emptyHint($funnelMode)) ?>
                 </p>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
+                <div class="w-table-wrap">
+                    <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                         <thead>
                         <tr>
                             <th><lang>步骤</lang></th>
-                            <th class="text-end"><lang>会话数</lang></th>
-                            <th class="text-end">
+                            <th class="w-text" data-align="end"><lang>会话数</lang></th>
+                            <th class="w-text" data-align="end">
                                 <?= $h(\Weline\Visitor\Service\PixelChannelFunnelMode::baselineLabel($funnelMode)) ?>
                             </th>
-                            <th class="text-end"><lang>相对上步流失</lang></th>
+                            <th class="w-text" data-align="end"><lang>相对上步流失</lang></th>
                             <th style="min-width:160px"><lang>占比条</lang></th>
                         </tr>
                         </thead>
@@ -219,19 +214,16 @@ $listDrillUrl = $channelCode !== ''
                             ?>
                             <tr>
                                 <td><?= $h(__($labelKey)) ?></td>
-                                <td class="text-end"><?= $h(number_format((int)($step['sessions'] ?? 0))) ?></td>
-                                <td class="text-end"><?= $h(number_format($rate * 100, 1)) ?>%</td>
-                                <td class="text-end">
+                                <td class="w-text" data-align="end"><?= $h(number_format((int)($step['sessions'] ?? 0))) ?></td>
+                                <td class="w-text" data-align="end"><?= $h(number_format($rate * 100, 1)) ?>%</td>
+                                <td class="w-text" data-align="end">
                                     <?= (string)($step['key'] ?? '') === $funnelFirstStepKey
                                         ? '—'
                                         : $h(number_format($dropoff * 100, 1) . '%') ?>
                                 </td>
                                 <td>
-                                    <div class="progress" style="height:8px">
-                                        <div class="progress-bar" role="progressbar"
-                                             style="width: <?= $h((string)max(0, min(100, $pct))) ?>%"
-                                             aria-valuenow="<?= $h((string)$pct) ?>"
-                                             aria-valuemin="0" aria-valuemax="100"></div>
+                                    <div class="w-progress" style="height:8px">
+                                        <div class="w-progress__bar" role="progressbar" style="width: <?= $h((string)max(0, min(100, $pct))) ?>%" aria-valuenow="<?= $h((string)$pct) ?>" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
                                 </td>
                             </tr>
@@ -239,67 +231,65 @@ $listDrillUrl = $channelCode !== ''
                         </tbody>
                     </table>
                 </div>
-                <p class="text-muted small mb-0 mt-2">
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;--w-mt:var(--weline-space-2);">
                     <?= $h(\Weline\Visitor\Service\PixelChannelFunnelMode::description($funnelMode)) ?>
                 </p>
             <?php endif; ?>
         </div>
     </div>
 
-    <div class="card mb-3" id="channel-timeline">
-        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div class="w-card" id="channel-timeline" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);">
             <div>
                 <strong><lang>事件轨迹</lang></strong>
-                <span class="text-muted small ms-2">
+                <span class="w-text" data-tone="muted" data-size="sm">
                     <?= $h(__('%{1} 个会话 / %{2} 条事件', [
                         (string)(int)($timeline['session_count'] ?? 0),
                         (string)(int)($timeline['event_count'] ?? 0),
                     ])) ?>
                 </span>
             </div>
-            <div class="btn-group btn-group-sm" role="group">
-                <a class="btn <?= $timelineDays === 7 ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                   href="<?= $h($timeline7Url) ?>#channel-timeline"><lang>近 7 天</lang></a>
-                <a class="btn <?= $timelineDays === 30 ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                   href="<?= $h($timeline30Url) ?>#channel-timeline"><lang>近 30 天</lang></a>
+            <div class="w-button-group" role="group">
+                <a class="w-button <?= $timelineDays === 7 ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($timeline7Url) ?>#channel-timeline"><lang>近 7 天</lang></a>
+                <a class="w-button <?= $timelineDays === 30 ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($timeline30Url) ?>#channel-timeline"><lang>近 30 天</lang></a>
             </div>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <?php if (($timeline['error'] ?? '') !== ''): ?>
-                <div class="alert alert-warning mb-0">
+                <div class="w-alert" data-tone="warning" style="--w-mb:0;">
                     <lang>事件轨迹暂不可用（扁平列未就绪或查询失败）。</lang>
                 </div>
             <?php elseif (!$sessions): ?>
-                <p class="text-muted mb-0"><lang>该窗口暂无归因到此渠道的事件。</lang></p>
+                <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>该窗口暂无归因到此渠道的事件。</lang></p>
             <?php else: ?>
                 <?php foreach ($sessions as $session): ?>
                     <?php
                     $sessionId = (string)($session['session_id'] ?? '');
                     $sessionEvents = is_array($session['events'] ?? null) ? $session['events'] : [];
                     ?>
-                    <div class="border rounded mb-3 p-3">
-                        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+                    <div data-w-border="border" data-w-radius="md" style="--w-mb:var(--weline-space-4);--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                        <div class="w-cluster" data-wrap="true" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
                             <div>
-                                <span class="text-muted"><lang>会话</lang></span>
+                                <span class="w-text" data-tone="muted"><lang>会话</lang></span>
                                 <code><?= $sessionId !== '' ? $h($sessionId) : $h(__('（无 session_id）')) ?></code>
                             </div>
-                            <div class="text-muted small">
+                            <div class="w-text" data-tone="muted" data-size="sm">
                                 <?= $h(($session['started_at'] ?? '') . ' → ' . ($session['ended_at'] ?? '')) ?>
                                 · <?= $h(__('%{1} 事件', [(string)(int)($session['event_count'] ?? 0)])) ?>
                             </div>
                         </div>
-                        <ol class="mb-0 ps-3">
+                        <ol class="ps-3" style="--w-mb:0;">
                             <?php foreach ($sessionEvents as $event): ?>
-                                <li class="mb-2">
-                                    <div class="d-flex flex-wrap gap-2 align-items-baseline">
-                                        <span class="text-muted small"><?= $h($event['created_at'] ?? '') ?></span>
+                                <li style="--w-mb:var(--weline-space-2);">
+                                    <div class="weline-align-baseline w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                                        <span class="w-text" data-tone="muted" data-size="sm"><?= $h($event['created_at'] ?? '') ?></span>
                                         <strong><?= $h($event['event'] ?? '') ?></strong>
                                         <?php if ((float)($event['value'] ?? 0) > 0): ?>
-                                            <span class="badge text-bg-light"><?= $h(number_format((float)$event['value'], 2)) ?></span>
+                                            <span class="w-badge" data-w-background="muted" data-tone="muted"><?= $h(number_format((float)$event['value'], 2)) ?></span>
                                         <?php endif; ?>
                                     </div>
                                     <?php if (($event['url'] ?? '') !== ''): ?>
-                                        <div class="small text-truncate" title="<?= $h($event['url']) ?>">
+                                        <div class="w-text" title="<?= $h($event['url']) ?>" data-truncate="true" data-size="sm">
                                             <?= $h($event['url']) ?>
                                         </div>
                                     <?php endif; ?>
@@ -312,7 +302,7 @@ $listDrillUrl = $channelCode !== ''
         </div>
     </div>
 
-    <p class="text-muted small mt-3 mb-0">
+    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-4);--w-mb:0;">
         <lang>口径：热表明细按 channel_code 过滤；会话内事件按时间升序；漏斗按会话去重顺序步进。</lang>
     </p>
 </div>

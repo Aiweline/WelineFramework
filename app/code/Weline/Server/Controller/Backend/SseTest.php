@@ -74,7 +74,7 @@ class SseTest extends BackendController
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <h1>🌊 WLS SSE 流式响应测试</h1>
         <div class="status" id="status">状态：就绪</div>
         <button id="startBtn" data-sse-test-action="start">开始测试</button>

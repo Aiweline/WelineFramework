@@ -38,7 +38,7 @@ use Weline\Framework\App\Env;
  * - 模型状态管理
  * - 模型收集和更新
  */
-#[Acl('Weline_Ai::ai_model_manager', 'AI模型管理', 'mdi-robot', 'AI模型管理', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_model_manager', 'AI模型管理', 'robot', 'AI模型管理', 'Weline_Backend::ai_group')]
 class Model extends BackendController
 {
     private bool $vendorModelsEnsured = false;
@@ -222,7 +222,12 @@ class Model extends BackendController
 
         $supplier = trim((string)($row[AiModel::schema_fields_SUPPLIER] ?? ($row['vendor'] ?? '')));
         $modelSource = (string)($row[AiModel::schema_fields_MODEL_SOURCE] ?? '');
-        if ($modelSource === AiModel::SOURCE_LOCAL || ($supplier !== '' && !isset($supportedProviders[$supplier]))) {
+        $providerMeta = $supportedProviders[$supplier] ?? null;
+        if (
+            $modelSource === AiModel::SOURCE_LOCAL
+            || ($supplier !== '' && !isset($supportedProviders[$supplier]))
+            || (is_array($providerMeta) && (($providerMeta['source'] ?? '') === 'custom'))
+        ) {
             return true;
         }
 
@@ -400,7 +405,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_list', '查看AI模型列表', 'mdi-view-list', '查看AI模型列表')]
+    #[Acl('Weline_Ai::ai_model_list', '查看AI模型列表', 'list', '查看AI模型列表')]
     public function index(): string
     {
         // The static vendor catalog is only used as quick-create presets; do not flood the list with every vendor model.
@@ -501,7 +506,11 @@ class Model extends BackendController
                 
                 $supplier = (string)($data['supplier'] ?? '');
                 $modelSource = (string)($data[AiModel::schema_fields_MODEL_SOURCE] ?? '');
-                $isCustomSupplier = ($supplier !== '' && !isset($supportedProviders[$supplier]));
+                $providerMeta = $supportedProviders[$supplier] ?? null;
+                $isCustomSupplier = (
+                    (is_array($providerMeta) && (($providerMeta['source'] ?? '') === 'custom'))
+                    || ($supplier !== '' && !isset($supportedProviders[$supplier]))
+                );
                 $isCustomModel = $isCustomSupplier || $modelSource === AiModel::SOURCE_LOCAL;
                 $priceCurrency = (string)($supportedProviders[$supplier]['price_currency'] ?? 'USD');
                 $providerAccountId = (int)($providerData['account_id'] ?? 0);
@@ -657,7 +666,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_detail', '查看AI模型详情', 'mdi-information', '查看AI模型详情')]
+    #[Acl('Weline_Ai::ai_model_detail', '查看AI模型详情', 'info', '查看AI模型详情')]
     public function detail(): string
     {
         $this->layoutType = 'default.blank';
@@ -687,7 +696,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_detail', '查看AI模型详情', 'mdi-information', '查看AI模型详情')]
+    #[Acl('Weline_Ai::ai_model_detail', '查看AI模型详情', 'info', '查看AI模型详情')]
     public function detailOffcanvas(): string
     {
         $this->layoutType = 'default.blank';
@@ -725,7 +734,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_collect', '收集AI模型', 'mdi-download', '收集AI模型配置')]
+    #[Acl('Weline_Ai::ai_model_collect', '收集AI模型', 'download', '收集AI模型配置')]
     public function collect(): string
     {
         try {
@@ -767,7 +776,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_toggle', '切换AI模型状态', 'mdi-toggle-switch', '启用或禁用AI模型')]
+    #[Acl('Weline_Ai::ai_model_toggle', '切换AI模型状态', 'switch', '启用或禁用AI模型')]
     public function toggleStatus(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -854,7 +863,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_default', '设置默认AI模型', 'mdi-star', '设置默认AI模型')]
+    #[Acl('Weline_Ai::ai_model_default', '设置默认AI模型', 'star', '设置默认AI模型')]
     public function setDefault(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -903,7 +912,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_template', '获取AI模型配置模板', 'mdi-file-document', '获取AI模型配置模板')]
+    #[Acl('Weline_Ai::ai_model_template', '获取AI模型配置模板', 'file', '获取AI模型配置模板')]
     public function getConfigTemplate(): string
     {
         $template = $this->getModelCollector()->getModelConfigTemplate();
@@ -919,7 +928,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_test', '测试AI模型连接', 'mdi-connection', '测试AI模型连接')]
+    #[Acl('Weline_Ai::ai_model_test', '测试AI模型连接', 'link', '测试AI模型连接')]
     public function testConnection(): string
     {
         // 兼容 JSON 请求体与表单/查询参数
@@ -1371,7 +1380,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_test_self_config', '测试AI模型自配置连接', 'mdi-cog', '测试AI模型自配置连接')]
+    #[Acl('Weline_Ai::ai_model_test_self_config', '测试AI模型自配置连接', 'settings', '测试AI模型自配置连接')]
     public function testSelfConfig(): string
     {
         // 兼容 JSON 请求体与表单/查询参数
@@ -1465,7 +1474,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_edit', '编辑AI模型', 'mdi-pencil', '编辑AI模型')]
+    #[Acl('Weline_Ai::ai_model_edit', '编辑AI模型', 'edit', '编辑AI模型')]
     public function edit(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -1588,7 +1597,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_edit_offcanvas', '编辑AI模型（侧边栏）', 'mdi-pencil', '编辑AI模型（侧边栏）')]
+    #[Acl('Weline_Ai::ai_model_edit_offcanvas', '编辑AI模型（侧边栏）', 'edit', '编辑AI模型（侧边栏）')]
     public function editOffcanvas(): string
     {
         # 使用blank布局
@@ -1645,7 +1654,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_save', '保存AI模型', 'mdi-content-save', '保存AI模型')]
+    #[Acl('Weline_Ai::ai_model_save', '保存AI模型', 'save', '保存AI模型')]
     public function postSave(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -1834,8 +1843,13 @@ class Model extends BackendController
                 return $this->redirect('*/backend/model/edit', ['id' => $id]);
             }
 
-            // 保存前校验：供应商必须支持映射后的供应商模型 code
+            // 保存前：自定义/本地供应商模型标记为 local，并跳过内置目录模型白名单
             $supplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            if ($supplierCode !== '' && VendorConfigManager::isCustomProvider($supplierCode)) {
+                $model->setData(AiModel::schema_fields_MODEL_SOURCE, AiModel::SOURCE_LOCAL);
+            }
+
+            // 保存前校验：供应商必须支持映射后的供应商模型 code
             if ($supplierCode !== '' && $providerModelCode !== '') {
                 /** @var AccountService $accService */
                 $accService = ObjectManager::getInstance(AccountService::class);
@@ -1896,7 +1910,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_copy_form', '复制AI模型表单', 'mdi-content-copy', '复制AI模型表单')]
+    #[Acl('Weline_Ai::ai_model_copy_form', '复制AI模型表单', 'copy', '复制AI模型表单')]
     public function copyForm(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -1917,7 +1931,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_copy', '复制AI模型', 'mdi-content-copy', '复制AI模型')]
+    #[Acl('Weline_Ai::ai_model_copy', '复制AI模型', 'copy', '复制AI模型')]
     public function copy(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -2049,7 +2063,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_delete', '删除AI模型', 'mdi-delete', '删除AI模型')]
+    #[Acl('Weline_Ai::ai_model_delete', '删除AI模型', 'trash', '删除AI模型')]
     public function delete(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -2157,7 +2171,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_bulk_activate', '批量激活模型', 'mdi-check-all', '批量激活模型')]
+    #[Acl('Weline_Ai::ai_model_bulk_activate', '批量激活模型', 'check', '批量激活模型')]
     public function bulkActivate(): string
     {
         $bodyParams = $this->request->getBodyParams();
@@ -2200,7 +2214,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_bulk_deactivate', '批量禁用模型', 'mdi-cancel', '批量禁用模型')]
+    #[Acl('Weline_Ai::ai_model_bulk_deactivate', '批量禁用模型', 'close', '批量禁用模型')]
     public function bulkDeactivate(): string
     {
         $bodyParams = $this->request->getBodyParams();
@@ -2243,7 +2257,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_bulk_delete', '批量删除模型', 'mdi-delete-sweep', '批量删除模型')]
+    #[Acl('Weline_Ai::ai_model_bulk_delete', '批量删除模型', 'trash', '批量删除模型')]
     public function bulkDelete(): string
     {
         $ids = $this->resolveBulkModelIds();
@@ -2352,7 +2366,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_clear_all', '清空模型表', 'mdi-delete-forever', '清空所有模型数据')]
+    #[Acl('Weline_Ai::ai_model_clear_all', '清空模型表', 'trash', '清空所有模型数据')]
     public function clearAll(): string
     {
         try {
@@ -2391,7 +2405,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_batch_test', '批量测试AI模型连接', 'mdi-connection', '批量测试AI模型连接')]
+    #[Acl('Weline_Ai::ai_model_batch_test', '批量测试AI模型连接', 'link', '批量测试AI模型连接')]
     public function batchTestConnection(): string
     {
         $modelIds = $this->request->getPost('model_ids', []);
@@ -2505,7 +2519,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_providers', '获取AI供应商列表', 'mdi-domain', '获取AI供应商及模型列表')]
+    #[Acl('Weline_Ai::ai_model_providers', '获取AI供应商列表', 'globe', '获取AI供应商及模型列表')]
     public function getProviders(): string
     {
         try {
@@ -2528,7 +2542,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_provider_models', '获取供应商模型列表', 'mdi-format-list-bulleted', '获取指定供应商支持的模型列表')]
+    #[Acl('Weline_Ai::ai_model_provider_models', '获取供应商模型列表', 'list', '获取指定供应商支持的模型列表')]
     public function getProviderModels(): string
     {
         $providerCode = $this->request->getGet('provider') ?? $this->request->getPost('provider');

@@ -126,6 +126,8 @@ final class ThemePreviewEntryApplication
             (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE)
         );
         $layoutOption = \trim($layoutOption) !== '' ? \trim($layoutOption) : 'default';
+        $context['layout_option'] = $layoutOption;
+        $context = $previewContextService->buildContext($context, false);
 
         if ($area === PreviewContextService::AREA_FRONTEND) {
             $tokenThemeId = $previewContextService->getThemeIdForArea(

@@ -3,16 +3,22 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Backend\Api\View\BackendThemeConfigInterface;
 use Weline\Eav\Api\Options\EavOptionsQueryInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationProviderInterface;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
+use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Api\Layout\LayoutWorkspaceInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeContextService;
-use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeResourceCatalog;
 use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
@@ -160,6 +166,18 @@ class ThemeQueryProvider implements QueryProviderInterface
             true
         );
 
+        // The query operation is backend-authenticated. Bind the server-side
+        // preview capability to that authenticated actor here, after all
+        // caller-provided context has been normalized, so a CMS caller cannot
+        // inject another FileAccessContext identity. The claim remains only in
+        // the protected opaque-token payload and is resolved per request.
+        $backendUser = ObjectManager::getInstance(BackendUserContextProviderInterface::class)->current();
+        if ($backendUser === null || !$backendUser->getIsEnabled() || $backendUser->getId() < 1) {
+            throw new \RuntimeException((string)__('生成预览凭据需要有效的后台用户上下文。'));
+        }
+        $context['file_access_actor_id'] = $backendUser->getId();
+        $context['file_access_policy_revision'] = 1;
+
         $token = $previewTokenService->generateToken(
             $frontendThemeId,
             $pageType,
@@ -222,12 +240,6 @@ class ThemeQueryProvider implements QueryProviderInterface
         $expectedPageType = trim((string)($params['page_type'] ?? ''));
         if ($expectedPageType !== '') {
             $actualPageType = trim((string)($tokenData['page_type'] ?? $context['page_type'] ?? $context['layout_type'] ?? ''));
-            $isGenericRestoredToken = $actualPageType === 'homepage'
-                && empty($context['theme_layout_target_type'])
-                && preg_match('/^pv_\d+_\d+_[a-f0-9]{16}$/', (string)($tokenData['token'] ?? ''));
-            if ($isGenericRestoredToken) {
-                return true;
-            }
             if ($actualPageType !== $expectedPageType) {
                 return false;
             }
@@ -274,39 +286,16 @@ class ThemeQueryProvider implements QueryProviderInterface
         $themeConfig = $this->backendThemeConfig;
         $themeConfig->reloadForCurrentUser();
 
-        $originConfig = $themeConfig->getOriginThemeConfig();
-        if (!is_array($originConfig)) {
-            $originConfig = [];
-        }
-
-        $layouts = isset($originConfig['layouts']) && is_array($originConfig['layouts'])
-            ? $originConfig['layouts']
-            : [];
-        $layouts['data-theme-preference'] = $mode;
-        if ($mode === 'system') {
-            unset($layouts['data-topbar'], $layouts['data-sidebar'], $layouts['data-theme-mode'], $layouts['data-layout-mode']);
-        } else {
-            $layouts['data-topbar'] = $mode;
-            $layouts['data-sidebar'] = $mode;
-            $layouts['data-theme-mode'] = $mode;
-            $layouts['data-layout-mode'] = $mode;
-        }
-
-        $nextConfig = $originConfig;
-        $nextConfig['theme-mode-switch'] = $mode;
-        $nextConfig['dark-mode-switch'] = $mode === 'dark';
-        $nextConfig['light-mode-switch'] = $mode === 'light';
+        $nextConfig = ['theme-mode-switch' => $mode];
         if (array_key_exists('rtl_mode', $params) || array_key_exists('rtl', $params)) {
             $nextConfig['rtl-mode-switch'] = $this->normalizeBool($params['rtl_mode'] ?? $params['rtl'] ?? false);
         }
-        $nextConfig['layouts'] = $layouts;
 
         $themeConfig->setThemeConfig($nextConfig);
         return [
             'success' => true,
             'mode' => $mode,
             'preference' => $mode,
-            'layouts' => $layouts,
             'msg' => (string)__('同步成功'),
             'message' => (string)__('同步成功'),
         ];
@@ -411,7 +400,8 @@ class ThemeQueryProvider implements QueryProviderInterface
             $layoutType,
             (int)$theme->getId(),
             $area,
-            isset($params['scope']) ? (string)$params['scope'] : null
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale_code']) ? (string)$params['locale_code'] : (isset($params['locale']) ? (string)$params['locale'] : null),
         );
 
         return array_replace($fileOptions, $virtualOptions);
@@ -468,7 +458,8 @@ class ThemeQueryProvider implements QueryProviderInterface
             (string)($params['layout_type'] ?? ''),
             (int)($params['theme_id'] ?? 0),
             $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND,
-            isset($params['scope']) ? (string)$params['scope'] : null
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale_code']) ? (string)$params['locale_code'] : (isset($params['locale']) ? (string)$params['locale'] : null),
         );
     }
 
@@ -513,102 +504,57 @@ class ThemeQueryProvider implements QueryProviderInterface
 
     private function copyTargetLayoutData(array $params): array
     {
-        $area = $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND;
-        $themeId = (int)($params['theme_id'] ?? 0);
-        if ($themeId <= 0) {
-            $theme = $this->themeContext->resolveTheme($area);
-            $themeId = $theme !== null ? (int)$theme->getId() : 0;
-        }
-
         $layoutType = (string)($params['layout_type'] ?? $params['page_type'] ?? '');
-        $layoutOption = (string)($params['layout_option'] ?? $params['layout_code'] ?? 'default');
-        $scope = (string)($params['scope'] ?? 'default');
-        $sourceTargetType = (string)($params['source_target_type'] ?? $params['target_type_from'] ?? '');
-        $sourceTargetId = (int)($params['source_target_id'] ?? $params['target_id_from'] ?? 0);
-        $targetTargetType = (string)($params['target_target_type'] ?? $params['target_type_to'] ?? '');
-        $targetTargetId = (int)($params['target_target_id'] ?? $params['target_id_to'] ?? 0);
-
-        /** @var ThemeTargetIdentityResolver $identityResolver */
-        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
-        [$sourceTargetType, $sourceTargetId] = $identityResolver->resolveFirst([[
-            'target_type' => $sourceTargetType,
-            'target_id' => $sourceTargetId,
-        ]]);
-        [$targetTargetType, $targetTargetId] = $identityResolver->resolveFirst([[
-            'target_type' => $targetTargetType,
-            'target_id' => $targetTargetId,
-        ]]);
-
-        if ($themeId <= 0 || trim($layoutType) === '' || $sourceTargetType === '' || $targetTargetType === '') {
+        $sourceIdentityData = $params['source_identity'] ?? null;
+        $targetIdentityData = $params['target_identity'] ?? null;
+        $sourceScopeData = $params['source_scope_identity'] ?? null;
+        $targetScopeData = $params['target_scope_identity'] ?? null;
+        if (trim($layoutType) === ''
+            || !is_array($sourceIdentityData)
+            || !is_array($targetIdentityData)
+            || !is_array($sourceScopeData)
+            || !is_array($targetScopeData)
+        ) {
             return [
                 'success' => false,
                 'status' => 'invalid_identity',
-                'message' => (string)__('Theme target 布局复制参数不完整。'),
+                'message' => (string)__('Theme target 布局复制必须分别指定源和目标的 Scope、语言与 target 身份。'),
+            ];
+        }
+        try {
+            $sourceIdentity = LayoutIdentity::fromArray($sourceIdentityData);
+            $targetIdentity = LayoutIdentity::fromArray($targetIdentityData);
+            $sourceScope = ScopeIdentity::fromArray($sourceScopeData);
+            $targetScope = ScopeIdentity::fromArray($targetScopeData);
+        } catch (\InvalidArgumentException) {
+            return [
+                'success' => false,
+                'status' => 'invalid_identity',
+                'message' => (string)__('Theme target 布局复制身份无效。'),
             ];
         }
 
-        $sourceIdentity = [
-            'theme_id' => $themeId,
-            'area' => $area,
-            'layout_type' => $layoutType,
-            'layout_option' => $layoutOption,
-            'scope' => $scope,
-            'target_type' => $sourceTargetType,
-            'target_id' => $sourceTargetId,
-        ];
-        $targetIdentity = [
-            'theme_id' => $themeId,
-            'area' => $area,
-            'layout_type' => $layoutType,
-            'layout_option' => $layoutOption,
-            'scope' => $scope,
-            'target_type' => $targetTargetType,
-            'target_id' => $targetTargetId,
-        ];
-
-        $selectionResult = $this->saveLayoutSelection([
-            'target_type' => $targetTargetType,
-            'target_id' => $targetTargetId,
-            'layout_type' => $layoutType,
-            'layout_option' => $layoutOption,
-            'scope' => $scope,
-            'options' => [
-                'reason' => (string)__('复制 Theme target 布局选择'),
-                'metadata' => [
-                    'copied_from_target_type' => $sourceTargetType,
-                    'copied_from_target_id' => $sourceTargetId,
-                ],
-            ],
-        ]);
-
-        $layoutResult = ObjectManager::getInstance(ThemeLayoutService::class)->copyLayoutIdentity(
-            $themeId,
-            $layoutType,
-            $sourceIdentity,
-            $targetIdentity
-        );
-        $virtualLayoutResult = $this->virtualLayoutService()->copyVirtualLayoutIdentity(
-            $sourceIdentity,
-            $targetIdentity
-        );
-        $this->clearRuntimeLayoutCaches(['reason' => 'theme_query_copy_target_layout_data']);
-
-        $success = !empty($selectionResult['success'])
-            && !empty($layoutResult['success'])
-            && !empty($virtualLayoutResult['success']);
-
-        return [
-            'success' => $success,
-            'status' => $success ? 'copied' : 'partial_failed',
-            'theme_id' => $themeId,
-            'area' => $area,
-            'layout_type' => $layoutType,
-            'layout_option' => $layoutOption,
-            'scope' => $scope,
-            'selection' => $selectionResult,
-            'layout' => $layoutResult,
-            'virtual_layout' => $virtualLayoutResult,
-        ];
+        try {
+            /** @var LayoutWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(LayoutWorkspaceInterface::class);
+            $result = $workspace->copyTargetLayoutData(
+                $layoutType,
+                $sourceIdentity,
+                $targetIdentity,
+                $sourceScope,
+                $targetScope,
+            );
+            if ($result->success) {
+                $this->clearRuntimeLayoutCaches(['reason' => 'theme_query_copy_target_layout_data']);
+            }
+            return $result->toArray();
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'status' => 'copy_failed',
+                'message' => (string)__('Theme target 布局复制失败。'),
+            ];
+        }
     }
 
     private function rollbackVirtualLayoutVersion(array $params): array
@@ -628,7 +574,8 @@ class ThemeQueryProvider implements QueryProviderInterface
             (int)($params['theme_id'] ?? 0),
             $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND,
             isset($params['scope']) ? (string)$params['scope'] : null,
-            is_array($params['target_chain'] ?? null) ? $params['target_chain'] : []
+            is_array($params['target_chain'] ?? null) ? $params['target_chain'] : [],
+            isset($params['locale_code']) ? (string)$params['locale_code'] : (isset($params['locale']) ? (string)$params['locale'] : null),
         );
     }
 
@@ -734,7 +681,13 @@ class ThemeQueryProvider implements QueryProviderInterface
         $url = $this->resolveEditorRequestUrl($url, $request);
         $this->assertAllowedEditorRequestUrl($url);
 
-        $directResponse = $this->dispatchEditorRequestDirect($url, $method, $headers, $body);
+        $directResponse = $this->dispatchEditorRequestDirect(
+            $url,
+            $method,
+            $headers,
+            $body,
+            $this->editorContextFromHeaders($headers),
+        );
         if ($directResponse !== null) {
             return $directResponse;
         }
@@ -746,7 +699,13 @@ class ThemeQueryProvider implements QueryProviderInterface
         ];
     }
 
-    private function dispatchEditorRequestDirect(string $url, string $method, array $headers, string $body): mixed
+    private function dispatchEditorRequestDirect(
+        string $url,
+        string $method,
+        array $headers,
+        string $body,
+        mixed $fallbackEditorContext = null,
+    ): mixed
     {
         $parts = parse_url($url);
         if (!is_array($parts) || empty($parts['path'])) {
@@ -762,12 +721,18 @@ class ThemeQueryProvider implements QueryProviderInterface
         ) {
             return null;
         }
+        $this->assertScopedEditorRequestAcl($path, $method);
 
         $queryParams = [];
         if (!empty($parts['query'])) {
             parse_str((string)$parts['query'], $queryParams);
         }
         $bodyParams = $this->parseEditorRequestBody($body, $headers);
+        [$queryParams, $bodyParams] = $this->attachFallbackEditorContext(
+            $queryParams,
+            $bodyParams,
+            $fallbackEditorContext,
+        );
         $this->injectEditorRequestParams($queryParams, $bodyParams, $body);
         $requestParams = array_merge($queryParams, $bodyParams);
         $themeEditor = null;
@@ -781,6 +746,11 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/widget-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetPreview(),
                 '/theme/backend/theme-editor/layout-options' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutOptionsPayload(),
                 '/theme/backend/theme-editor/layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutConfigPayload(),
+                '/theme/backend/theme-editor/layout-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutPreview(),
+                '/theme/backend/theme-editor/scoped-workspace' => $method === 'POST'
+                    ? ($themeEditor ??= $this->createDirectThemeEditor())->postScopedWorkspace()
+                    : ($themeEditor ??= $this->createDirectThemeEditor())->getScopedWorkspace(),
+                '/theme/backend/theme-editor/publish-scoped-workspace' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublishScopedWorkspace(),
                 '/theme/backend/theme-editor/save-layout-selection' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutSelectionPayload(),
                 '/theme/backend/theme-editor/save-layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutConfigPayload(),
                 '/theme/backend/theme-editor/ai-translate-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postAiTranslateConfig(),
@@ -814,6 +784,11 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/publish-version' => ($themeEditor ??= $this->createDirectThemeEditor())->publishVersionPayload(),
                 '/theme/backend/theme-editor/delete-version' => ($themeEditor ??= $this->createDirectThemeEditor())->deleteVersionPayload(),
                 '/theme/backend/theme-editor/rename-version' => ($themeEditor ??= $this->createDirectThemeEditor())->renameVersionPayload(),
+                '/theme/backend/theme-editor/theme-tokens' => ($themeEditor ??= $this->createDirectThemeEditor())->getThemeTokens(),
+                '/theme/backend/theme-editor/disk-save' => ($themeEditor ??= $this->createDirectThemeEditor())->postDiskSave(),
+                '/theme/backend/theme-editor/disk-save-as' => ($themeEditor ??= $this->createDirectThemeEditor())->postDiskSaveAs(),
+                '/theme/backend/theme-editor/disk-select' => ($themeEditor ??= $this->createDirectThemeEditor())->postDiskSelect(),
+                '/theme/backend/theme-editor/disk-delete' => ($themeEditor ??= $this->createDirectThemeEditor())->postDiskDelete(),
                 '/theme/backend/virtual-theme/manifest' => $this->createDirectVirtualTheme()->getManifest(),
                 '/theme/backend/virtual-theme/ai-catalog' => $this->createDirectVirtualTheme()->getAiCatalog(),
                 '/theme/backend/virtual-theme/source' => $this->createDirectVirtualTheme()->getSource(),
@@ -924,6 +899,77 @@ class ThemeQueryProvider implements QueryProviderInterface
         }
     }
 
+    private function assertScopedEditorRequestAcl(string $path, string $method): void
+    {
+        $sourceId = $this->scopedEditorRequestAclSourceId($path, $method);
+        if ($sourceId === null) {
+            return;
+        }
+
+        $execution = RequestContext::get(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY);
+        if (!$execution instanceof FrontendWorkerExecutionContext
+            || $execution->area !== FrontendWorkerExecutionContext::AREA_BACKEND
+            || $execution->backendBinding === null
+        ) {
+            throw new \RuntimeException('theme_scope_backend_authority_missing');
+        }
+        ObjectManager::getInstance(FrontendWorkerBackendAuthorizationProviderInterface::class)
+            ->assertSourceAllowed(
+                $execution->backendBinding,
+                $sourceId,
+                $this->getProviderName(),
+                'editorRequest',
+            );
+    }
+
+    private function scopedEditorRequestAclSourceId(string $path, string $method): ?string
+    {
+        if ($path === '/theme/backend/theme-editor/publish-scoped-workspace' && $method !== 'POST') {
+            throw new \InvalidArgumentException('theme_scope_publish_method_invalid');
+        }
+
+        return match ($path) {
+            '/theme/backend/theme-editor/scoped-workspace' => $method === 'GET'
+                ? 'Weline_Theme::theme_visual_editor_scope_read'
+                : 'Weline_Theme::theme_visual_editor_scope_edit',
+            '/theme/backend/theme-editor/publish-scoped-workspace'
+                => 'Weline_Theme::theme_visual_editor_scope_publish',
+            default => null,
+        };
+    }
+
+    /** @param array<string,mixed> $headers */
+    private function editorContextFromHeaders(array $headers): mixed
+    {
+        foreach ($headers as $name => $value) {
+            if (strcasecmp((string)$name, 'X-Weline-Editor-Context') === 0) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $queryParams
+     * @param array<string,mixed> $bodyParams
+     * @return array{0: array<string,mixed>, 1: array<string,mixed>}
+     */
+    private function attachFallbackEditorContext(
+        array $queryParams,
+        array $bodyParams,
+        mixed $fallbackEditorContext,
+    ): array {
+        if ($fallbackEditorContext !== null
+            && !array_key_exists('editor_context', $queryParams)
+            && !array_key_exists('editor_context', $bodyParams)
+        ) {
+            $queryParams['editor_context'] = $fallbackEditorContext;
+        }
+
+        return [$queryParams, $bodyParams];
+    }
+
     private function parseEditorRequestBody(string $body, array $headers): array
     {
         if ($body === '') {
@@ -952,15 +998,20 @@ class ThemeQueryProvider implements QueryProviderInterface
     {
         /** @var \Weline\Framework\Http\Request $request */
         $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        $merged = array_merge($queryParams, $bodyParams);
+        // Seed Request::getParams() first. A real field named "params" must then
+        // overwrite this aggregate cache just like it does on a normal HTTP request.
+        $request->setData('params', $merged);
         foreach ($queryParams as $key => $value) {
             $request->setGet((string)$key, $value);
         }
         foreach ($bodyParams as $key => $value) {
             $request->setPost((string)$key, $value);
         }
+        // Keep the complete inner request payload separate from both the outer
+        // QueryBin body and a legitimate inner field named "params".
+        $request->setData('__theme_editor_request_params', $merged);
 
-        $merged = array_merge($queryParams, $bodyParams);
-        $request->setData('params', $merged);
         $request->setData('body_params', $bodyParams !== [] ? $bodyParams : $rawBody);
         $request->setData('array_body_params', $bodyParams);
         $request->getParameterBag()->setBody($bodyParams);
@@ -1250,13 +1301,11 @@ class ThemeQueryProvider implements QueryProviderInterface
                     'description' => __('复制 Theme target 的布局选择、可视化布局和虚拟布局数据'),
                     'mode' => 'write',
                     'params' => [
-                        ['name' => 'source_target_type', 'type' => 'string', 'required' => true],
-                        ['name' => 'source_target_id', 'type' => 'int', 'required' => true],
-                        ['name' => 'target_target_type', 'type' => 'string', 'required' => true],
-                        ['name' => 'target_target_id', 'type' => 'int', 'required' => true],
                         ['name' => 'layout_type', 'type' => 'string', 'required' => true],
-                        ['name' => 'layout_option', 'type' => 'string', 'required' => false],
-                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'source_identity', 'type' => 'array', 'required' => true],
+                        ['name' => 'target_identity', 'type' => 'array', 'required' => true],
+                        ['name' => 'source_scope_identity', 'type' => 'array', 'required' => true],
+                        ['name' => 'target_scope_identity', 'type' => 'array', 'required' => true],
                     ],
                 ],
                 [
@@ -1367,6 +1416,9 @@ class ThemeQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'generatePreviewToken',
                     'description' => __('生成 Theme 前台预览 token'),
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Theme::theme_visual_editor'],
                     'mode' => 'write',
                     'params' => [
                         ['name' => 'page_type', 'type' => 'string', 'required' => true],

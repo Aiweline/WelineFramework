@@ -10,13 +10,13 @@ $backups = $backups ?? [];
 $filters = $filters ?? [];
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>备份管理</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>备份管理</lang></h4>
             <div>
-                <a class="btn btn-primary" href="<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>">
-                    <i class="mdi mdi-plus me-2"></i><lang>创建备份</lang>
+                <a class="w-button" href="<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>" data-tone="primary">
+                    <w:icon name="plus" size="sm"></w:icon><lang>创建备份</lang>
                 </a>
             </div>
         </div>
@@ -24,19 +24,19 @@ $filters = $filters ?? [];
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 备份列表 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table">
                         <thead>
                             <tr>
                                 <th><lang>备份ID</lang></th>
@@ -51,7 +51,7 @@ $filters = $filters ?? [];
                         <tbody>
                             <?php if (empty($backups)): ?>
                                 <tr>
-                                    <td colspan="7" class="text-center"><lang>暂无备份记录</lang></td>
+                                    <td colspan="7" class="w-text" data-align="center"><lang>暂无备份记录</lang></td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($backups as $backup): ?>
@@ -85,22 +85,20 @@ $filters = $filters ?? [];
                                         <td>
                                             <?php
                                             $statusMap = [
-                                                'completed' => '<span class="badge bg-success">' . __('已完成') . '</span>',
-                                                'pending' => '<span class="badge bg-warning">' . __('进行中') . '</span>',
-                                                'failed' => '<span class="badge bg-danger">' . __('失败') . '</span>',
+                                                'completed' => '<span class="w-badge" data-w-background="success">' . __('已完成') . '</span>',
+                                                'pending' => '<span class="w-badge" data-w-background="warning">' . __('进行中') . '</span>',
+                                                'failed' => '<span class="w-badge" data-w-background="danger">' . __('失败') . '</span>',
                                             ];
                                             echo $statusMap[$backup['status'] ?? 'pending'] ?? $backup['status'] ?? '';
                                             ?>
                                         </td>
                                         <td><?= $backup['created_at'] ?? '' ?></td>
                                         <td>
-                                            <a href="<?= $this->getBackendUrl('maintenance/backend/backup/download', ['id' => $backup['backup_id'] ?? 0]) ?>" 
-                                               class="btn btn-sm btn-primary me-1">
-                                                <i class="mdi mdi-download"></i> <lang>下载</lang>
+                                            <a href="<?= $this->getBackendUrl('maintenance/backend/backup/download', ['id' => $backup['backup_id'] ?? 0]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                                                <w:icon name="download" size="sm"></w:icon> <lang>下载</lang>
                                             </a>
-                                            <button type="button" class="btn btn-sm btn-danger"
-                                                    data-maintenance-backup-delete="<?= (int)($backup['backup_id'] ?? 0) ?>">
-                                                <i class="mdi mdi-delete"></i> <lang>删除</lang>
+                                            <button type="button" class="w-button" data-maintenance-backup-delete="<?= (int)($backup['backup_id'] ?? 0) ?>" data-tone="danger" data-size="sm">
+                                                <w:icon name="trash" size="sm"></w:icon> <lang>删除</lang>
                                             </button>
                                         </td>
                                     </tr>
@@ -115,34 +113,7 @@ $filters = $filters ?? [];
 </div>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_maintenance) return;
-  g.__bqAdmin_maintenance=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['maintenance']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('maintenance').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function() {
     'use strict';
@@ -157,7 +128,7 @@ $filters = $filters ?? [];
         },
         
         deleteBackup: function(backupId) {
-            AdminConfirm.show('<?= __('确定要删除此备份吗？') ?>').then(function(confirmed) {
+            Weline.UI.dialog.confirm('<?= __('确定要删除此备份吗？') ?>').then(function(confirmed) {
                 if (!confirmed) return;
                 
                 var formData = new FormData();
@@ -165,18 +136,18 @@ $filters = $filters ?? [];
                 
                 var url = '<?= $this->getBackendUrl('maintenance/backend/backup/delete') ?>';
                 var opts = { method: 'POST', body: formData };
-                bqAdmin['maintenance'](url, opts)
+                Weline.adminRequest('maintenance', url, opts)
                 .then(function(res) {
                     var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
-                        BackendToast.success(data.message);
+                        Weline.UI.toast.success(data.message);
                         setTimeout(function() { location.reload(); }, 1000);
                     } else {
-                        BackendToast.error(data.message);
+                        Weline.UI.toast.error(data.message);
                     }
                 })
                 .catch(function(error) {
-                    BackendToast.error('<?= __('操作失败') ?>');
+                    Weline.UI.toast.error('<?= __('操作失败') ?>');
                 });
             });
         }

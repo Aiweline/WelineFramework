@@ -1,109 +1,77 @@
 <?php
-/**
- * Backend layout chrome for business content.
- *
- * Layouts own page title, breadcrumbs, and system messages. Business templates
- * should only render business-specific content.
- *
- * @var \Weline\Framework\View\Template $this
- */
+/** @var \Weline\Framework\View\Template $this */
 
-$meta = $meta ?? ($this->getData('meta') ?? []);
-$layoutBool = static function (mixed $value, bool $default = true): bool {
-    if ($value === null || $value === '') {
-        return $default;
-    }
-    if (is_bool($value)) {
-        return $value;
-    }
-    if (is_numeric($value)) {
-        return (int)$value !== 0;
-    }
-
+$meta = is_array($meta ?? null) ? $meta : (is_array($this->getData('meta')) ? $this->getData('meta') : []);
+$asBool = static function (mixed $value, bool $default = true): bool {
+    if ($value === null || $value === '') return $default;
+    if (is_bool($value)) return $value;
+    if (is_numeric($value)) return (int)$value !== 0;
     return !in_array(strtolower(trim((string)$value)), ['0', 'false', 'no', 'off'], true);
 };
-
-$layoutMainId = trim((string)($layoutMainId ?? 'main-content'));
-$layoutMainId = $layoutMainId !== '' ? $layoutMainId : 'main-content';
-$layoutMainClass = trim((string)($layoutMainClass ?? 'backend-main-content'));
-$layoutMainClass = $layoutMainClass !== '' ? $layoutMainClass : 'backend-main-content';
-$layoutMainAttributes = trim((string)($layoutMainAttributes ?? ''));
-$layoutShowPageHeader = $layoutBool($layoutShowPageHeader ?? ($meta['showPageHeader'] ?? true), true);
-$layoutShowMessages = $layoutBool($layoutShowMessages ?? ($meta['showMessages'] ?? true), true);
-
-$layoutContentHtml = $layoutContentHtml ?? (string)$this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml');
-$hasContentPageTitle = stripos((string)$layoutContentHtml, 'page-title-box') !== false;
-$fallbackPageTitle = trim((string)($layoutTitle ?? $title ?? $this->getData('title') ?? ($meta['title'] ?? '')));
-$pageHeader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\BackendPageHeaderResolver::class)
-    ->resolve($fallbackPageTitle);
-$pageTitle = (string)($pageHeader['title'] ?? '');
-$breadcrumbs = (array)($pageHeader['breadcrumbs'] ?? []);
+$layoutMainId = (string)($layoutMainId ?? 'main-content');
+if (preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $layoutMainId) !== 1) {
+    $layoutMainId = 'main-content';
+}
+$layoutMainClasses = array_values(array_filter(
+    preg_split('/\s+/', trim((string)($layoutMainClass ?? 'w-backend-page'))) ?: [],
+    static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1
+));
+if ($layoutMainClasses === []) $layoutMainClasses = ['w-backend-page'];
+$showPageHeader = $asBool($layoutShowPageHeader ?? ($meta['showPageHeader'] ?? true), true);
+$showMessages = $asBool($layoutShowMessages ?? ($meta['showMessages'] ?? true), true);
+$contentHtml = $layoutContentHtml ?? (string)$this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml');
+$fallbackTitle = '';
+foreach ([
+    $layoutTitle ?? null,
+    $page_title ?? $this->getData('page_title'),
+    $title ?? $this->getData('title'),
+    $meta['title'] ?? null,
+] as $titleCandidate) {
+    $titleValue = trim((string)($titleCandidate ?? ''));
+    if ($titleValue !== '') {
+        $fallbackTitle = $titleValue;
+        break;
+    }
+}
+$pageHeader = \Weline\Framework\Manager\ObjectManager::getInstance(
+    \Weline\Theme\Service\BackendPageHeaderResolver::class
+)->resolve($fallbackTitle);
+$pageTitle = trim((string)($pageHeader['title'] ?? ''));
+$breadcrumbs = is_array($pageHeader['breadcrumbs'] ?? null) ? $pageHeader['breadcrumbs'] : [];
 ?>
-<main class="<?= htmlspecialchars($layoutMainClass, ENT_QUOTES, 'UTF-8') ?>" id="<?= htmlspecialchars($layoutMainId, ENT_QUOTES, 'UTF-8') ?>"<?= $layoutMainAttributes !== '' ? ' ' . $layoutMainAttributes : '' ?>>
-    <?php if ($layoutShowPageHeader && !$hasContentPageTitle && $pageTitle !== ''): ?>
-        <div class="row" data-backend-layout-page-header>
-            <div class="col-12">
-                <div class="page-title-box d-flex align-items-center justify-content-between">
-                    <h4 class="mb-0"><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></h4>
-                    <div class="page-title-right">
-                        <?php if (!empty($breadcrumbs)): ?>
-                            <ol class="breadcrumb m-0">
-                                <?php foreach ($breadcrumbs as $breadcrumb): ?>
-                                    <li class="breadcrumb-item <?= !empty($breadcrumb['active']) ? 'active' : '' ?>">
-                                        <?php if (empty($breadcrumb['active']) && !empty($breadcrumb['url'])): ?>
-                                            <a href="<?= htmlspecialchars((string)$breadcrumb['url'], ENT_QUOTES, 'UTF-8') ?>">
-                                                <?= htmlspecialchars((string)$breadcrumb['title'], ENT_QUOTES, 'UTF-8') ?>
-                                            </a>
-                                        <?php else: ?>
-                                            <?= htmlspecialchars((string)$breadcrumb['title'], ENT_QUOTES, 'UTF-8') ?>
-                                        <?php endif; ?>
-                                    </li>
-                                <?php endforeach; ?>
-                            </ol>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
+<main class="<?= htmlspecialchars(implode(' ', $layoutMainClasses), ENT_QUOTES, 'UTF-8') ?>"
+      id="<?= htmlspecialchars($layoutMainId, ENT_QUOTES, 'UTF-8') ?>"
+      data-layout="main_content">
+    <?php if ($showPageHeader && $pageTitle !== ''): ?>
+        <header class="w-backend-page__heading">
+            <h1><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></h1>
+            <?php if ($breadcrumbs !== []): ?>
+                <nav aria-label="<?= htmlspecialchars((string)__('面包屑'), ENT_QUOTES, 'UTF-8') ?>">
+                    <ol class="w-breadcrumb">
+                        <?php foreach ($breadcrumbs as $breadcrumb): ?>
+                            <li>
+                                <?php if (empty($breadcrumb['active']) && !empty($breadcrumb['url'])): ?>
+                                    <a href="<?= htmlspecialchars((string)$breadcrumb['url'], ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars((string)($breadcrumb['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                    </a>
+                                <?php elseif (!empty($breadcrumb['active'])): ?>
+                                    <span aria-current="page"><?= htmlspecialchars((string)($breadcrumb['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php else: ?>
+                                    <span><?= htmlspecialchars((string)($breadcrumb['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ol>
+                </nav>
+            <?php endif; ?>
+        </header>
+    <?php endif; ?>
+
+    <?php if ($showMessages): ?>
+        <div class="w-stack" data-backend-system-messages>
+            <template>Weline_Component::message.phtml</template>
         </div>
     <?php endif; ?>
 
-    <?php if ($layoutShowMessages): ?>
-        <div class="row wf-system-messages" data-backend-system-messages>
-            <div class="col-12">
-                <template>Weline_Component::message.phtml</template>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <?= $layoutContentHtml ?>
+    <?= $contentHtml ?>
 </main>
-
-<?php if ($layoutShowMessages): ?>
-    <script>
-        (function () {
-            function placeBackendMessages() {
-                var messages = document.querySelector('[data-backend-system-messages]');
-                var main = document.getElementById(<?= json_encode($layoutMainId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
-                if (!messages || !main) {
-                    return;
-                }
-
-                var titleBox = main.querySelector('.page-title-box');
-                if (!titleBox) {
-                    return;
-                }
-
-                var titleRow = titleBox.closest('.row') || titleBox;
-                if (titleRow.nextElementSibling !== messages) {
-                    titleRow.insertAdjacentElement('afterend', messages);
-                }
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', placeBackendMessages);
-            } else {
-                placeBackendMessages();
-            }
-        })();
-    </script>
-<?php endif; ?>

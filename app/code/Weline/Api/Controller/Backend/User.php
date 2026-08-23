@@ -15,13 +15,14 @@ use Weline\Api\Model\ApiUser;
 use Weline\Api\Model\ApiUserRole;
 use Weline\Acl\Api\Role;
 use Weline\Acl\Api\RoleAccess;
+use Weline\Acl\Service\Resource\AclResourcePresentation;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
 #[Acl(
     'Weline_Api::api_user_management',
     'API用户管理',
-    'fa fa-users',
+    'users',
     '管理API用户',
     'Weline_Api::integration'
 )]
@@ -35,7 +36,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $this->apiUser = $apiUser;
     }
 
-    #[Acl('Weline_Api::api_user_list', 'API用户列表', 'fa fa-list')]
+    #[Acl('Weline_Api::api_user_list', 'API用户列表', 'list')]
     public function index()
     {
         // 搜索功能
@@ -57,7 +58,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Api::api_user_add', '添加API用户', 'fa fa-plus')]
+    #[Acl('Weline_Api::api_user_add', '添加API用户', 'plus')]
     public function getAdd()
     {
         // 获取所有角色
@@ -70,7 +71,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Api::api_user_edit', '编辑API用户', 'fa fa-edit')]
+    #[Acl('Weline_Api::api_user_edit', '编辑API用户', 'edit')]
     public function getEdit()
     {
         $userId = (int)$this->request->getGet('id', 0);
@@ -102,7 +103,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Api::api_user_add_post', '添加API用户请求', 'fa fa-save')]
+    #[Acl('Weline_Api::api_user_add_post', '添加API用户请求', 'save')]
     public function postAdd()
     {
         try {
@@ -189,7 +190,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    #[Acl('Weline_Api::api_user_edit_post', '编辑API用户请求', 'fa fa-save')]
+    #[Acl('Weline_Api::api_user_edit_post', '编辑API用户请求', 'save')]
     public function postEdit()
     {
         try {
@@ -296,7 +297,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    #[Acl('Weline_Api::api_user_delete_post', '删除API用户', 'fa fa-trash')]
+    #[Acl('Weline_Api::api_user_delete_post', '删除API用户', 'trash')]
     public function postDelete()
     {
         try {
@@ -329,7 +330,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/api/backend/user');
     }
 
-    #[Acl('Weline_Api::api_user_enable_post', '启用API用户', 'fa fa-check')]
+    #[Acl('Weline_Api::api_user_enable_post', '启用API用户', 'check')]
     public function postEnable()
     {
         try {
@@ -355,7 +356,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/api/backend/user');
     }
 
-    #[Acl('Weline_Api::api_user_disable_post', '禁用API用户', 'fa fa-ban')]
+    #[Acl('Weline_Api::api_user_disable_post', '禁用API用户', 'circle')]
     public function postDisable()
     {
         try {
@@ -381,7 +382,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/api/backend/user');
     }
 
-    #[Acl('Weline_Api::api_user_regenerate_credentials_post', '重新生成API凭证', 'fa fa-refresh')]
+    #[Acl('Weline_Api::api_user_regenerate_credentials_post', '重新生成API凭证', 'refresh')]
     public function postRegenerateCredentials()
     {
         try {
@@ -419,7 +420,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/api/backend/user/edit', ['id' => $userId ?? 0]);
     }
 
-    #[Acl('Weline_Api::api_user_assign_permissions', 'API用户权限分配', 'fa fa-key')]
+    #[Acl('Weline_Api::api_user_assign_permissions', 'API用户权限分配', 'key')]
     public function getAssignPermissions()
     {
         $userId = (int)$this->request->getGet('id', 0);
@@ -455,16 +456,22 @@ class User extends \Weline\Framework\App\Controller\BackendController
         foreach ($currentAccesses as $access) {
             $currentAccessIds[] = $access['source_id'] ?? '';
         }
+        $treeSummary = AclResourcePresentation::summarizeTrees($trees);
         
         $this->assign('user', $user);
         $this->assign('user_role', $userRole);
         $this->assign('trees', $trees);
-        $this->assign('current_accesses', $currentAccessIds);
+        $this->assign('selected_source_ids', $currentAccessIds);
+        $this->assign('tree_statistics', $treeSummary['statistics']);
+        $this->assign('module_list', $treeSummary['modules']);
+        $this->assign('type_list', $treeSummary['types']);
+        $this->assign('tag_tree', []);
+        $this->assign('tag_grants', []);
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/api/backend/user/assign-permissions', ['id' => $userId]));
         return $this->fetch('assign_permissions');
     }
 
-    #[Acl('Weline_Api::api_user_assign_permissions_post', 'API用户权限分配请求', 'fa fa-save')]
+    #[Acl('Weline_Api::api_user_assign_permissions_post', 'API用户权限分配请求', 'save')]
     public function postAssignPermissions()
     {
         try {
@@ -487,11 +494,15 @@ class User extends \Weline\Framework\App\Controller\BackendController
             
             $roleId = $userRole->getId();
             $aclIds = $this->request->getPost('ids', []);
+            if (!\is_array($aclIds)) {
+                $aclIds = [];
+            }
             
             // 构建权限数据
             $acls = [];
-            foreach ($aclIds as $aclId) {
-                if (empty($aclId)) {
+            foreach (\array_unique(\array_map('strval', $aclIds)) as $aclId) {
+                $aclId = \trim($aclId);
+                if ($aclId === '') {
                     continue;
                 }
                 $acls[] = [

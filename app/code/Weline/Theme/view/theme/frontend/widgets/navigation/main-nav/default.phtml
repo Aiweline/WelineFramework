@@ -29,19 +29,19 @@ $menuItems = $this->getData('menu_items') ?? [];
 // 示例菜单数据（实际使用时应从系统获取）
 if (empty($menuItems)) {
     $menuItems = [
-        ['label' => __('首页'), 'url' => '/', 'icon' => 'ri-home-line'],
-        ['label' => __('商品'), 'url' => '/products', 'icon' => 'ri-shopping-bag-line', 'children' => [
+        ['label' => __('首页'), 'url' => '/', 'icon' => 'home'],
+        ['label' => __('商品'), 'url' => '/products', 'icon' => 'pin', 'children' => [
             ['label' => __('新品上架'), 'url' => '/products/new'],
             ['label' => __('热销商品'), 'url' => '/products/bestsellers'],
             ['label' => __('特价促销'), 'url' => '/products/sale'],
         ]],
-        ['label' => __('分类'), 'url' => '/categories', 'icon' => 'ri-apps-line', 'children' => [
+        ['label' => __('分类'), 'url' => '/categories', 'icon' => 'grid', 'children' => [
             ['label' => __('电子产品'), 'url' => '/category/electronics'],
             ['label' => __('服装鞋帽'), 'url' => '/category/fashion'],
             ['label' => __('家居生活'), 'url' => '/category/home'],
         ]],
-        ['label' => __('关于我们'), 'url' => '/about', 'icon' => 'ri-information-line'],
-        ['label' => __('联系我们'), 'url' => '/contact', 'icon' => 'ri-mail-line'],
+        ['label' => __('关于我们'), 'url' => '/about', 'icon' => 'info'],
+        ['label' => __('联系我们'), 'url' => '/contact', 'icon' => 'mail'],
     ];
 }
 
@@ -51,17 +51,17 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
     $icon = $item['icon'] ?? '';
     ?>
     <li class="nav-item<?= $hasChildren ? ' has-children' : '' ?>">
-        <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="nav-link">
+        <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
             <?php if ($showIcons && $icon): ?>
                 <i class="<?= htmlspecialchars($icon) ?>"></i>
             <?php endif; ?>
             <span><?= htmlspecialchars($item['label'] ?? '') ?></span>
             <?php if ($hasChildren): ?>
-                <i class="ri-arrow-down-s-line dropdown-icon"></i>
+                <w:icon name="arrow-down" size="sm"></w:icon>
             <?php endif; ?>
         </a>
         <?php if ($hasChildren): ?>
-            <ul class="dropdown-menu">
+            <ul class="w-menu" data-w-menu-panel role="menu" hidden>
                 <?php foreach ($item['children'] as $child): ?>
                     <?php $renderMenuItem($child, $depth + 1, $maxDepth, $showIcons); ?>
                 <?php endforeach; ?>

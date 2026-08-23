@@ -382,7 +382,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
         font-size: 12px;
         font-weight: 700;
     }
-    .wdep-card-value {
+    .wdep-weline-card-value {
         margin: 0;
         color: var(--wdep-text);
         font-size: 19px;
@@ -962,15 +962,15 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
             <div class="wdep-brand-title"><?= $escapeHtml(__('部署发布')) ?></div>
         </div>
         <nav class="wdep-nav" data-wls-plugin-nav aria-label="<?= $escapeHtml(__('部署发布菜单')) ?>">
-            <a class="<?= $escapeHtml($deployNavClass('overview')) ?>"<?= $deployNavCurrent('overview') ?> href="<?= $escapeHtml($buildDeployRouteUrl('overview')) ?>"><i class="mdi mdi-view-dashboard-outline"></i><?= $escapeHtml(__('总览')) ?></a>
-            <a class="<?= $escapeHtml($deployNavClass('release-path')) ?>"<?= $deployNavCurrent('release-path') ?> href="<?= $escapeHtml($buildDeployRouteUrl('release-path')) ?>"><i class="mdi mdi-source-branch-sync"></i><?= $escapeHtml(__('发布路径')) ?></a>
-            <a class="<?= $escapeHtml($deployNavClass('configuration')) ?>"<?= $deployNavCurrent('configuration') ?> href="<?= $escapeHtml($buildDeployRouteUrl('configuration')) ?>"><i class="mdi mdi-tune-variant"></i><?= $escapeHtml(__('配置摘要')) ?></a>
-            <a class="<?= $escapeHtml($deployNavClass('project-profile')) ?>"<?= $deployNavCurrent('project-profile') ?> href="<?= $escapeHtml($buildDeployRouteUrl('project-profile')) ?>"><i class="mdi mdi-clipboard-edit-outline"></i><?= $escapeHtml(__('项目 Profile')) ?></a>
-            <a class="<?= $escapeHtml($deployNavClass('preflight')) ?>"<?= $deployNavCurrent('preflight') ?> href="<?= $escapeHtml($buildDeployRouteUrl('preflight')) ?>"><i class="mdi mdi-shield-check-outline"></i><?= $escapeHtml(__('发布预检')) ?></a>
-            <a class="<?= $escapeHtml($deployNavClass('webhooks')) ?>"<?= $deployNavCurrent('webhooks') ?> href="<?= $escapeHtml($buildDeployRouteUrl('webhooks')) ?>"><i class="mdi mdi-replay"></i><?= $escapeHtml(__('Webhook 回放')) ?></a>
-            <a class="<?= $escapeHtml($deployNavClass('releases')) ?>"<?= $deployNavCurrent('releases') ?> href="<?= $escapeHtml($buildDeployRouteUrl('releases')) ?>"><i class="mdi mdi-history"></i><?= $escapeHtml(__('发布记录')) ?></a>
-            <a href="<?= $escapeHtml($marketplaceUrl) ?>"><i class="mdi mdi-store-outline"></i><?= $escapeHtml(__('插件商城')) ?></a>
-            <a class="<?= $escapeHtml($deployNavClass('manual-plan')) ?>"<?= $deployNavCurrent('manual-plan') ?> href="<?= $escapeHtml($buildDeployRouteUrl('manual-plan')) ?>"><i class="mdi mdi-clipboard-list-outline"></i><?= $escapeHtml(__('Manual Plan')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('overview')) ?>"<?= $deployNavCurrent('overview') ?> href="<?= $escapeHtml($buildDeployRouteUrl('overview')) ?>"><w:icon name="grid" size="sm"></w:icon><?= $escapeHtml(__('总览')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('release-path')) ?>"<?= $deployNavCurrent('release-path') ?> href="<?= $escapeHtml($buildDeployRouteUrl('release-path')) ?>"><w:icon name="refresh" size="sm"></w:icon><?= $escapeHtml(__('发布路径')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('configuration')) ?>"<?= $deployNavCurrent('configuration') ?> href="<?= $escapeHtml($buildDeployRouteUrl('configuration')) ?>"><w:icon name="circle" size="sm"></w:icon><?= $escapeHtml(__('配置摘要')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('project-profile')) ?>"<?= $deployNavCurrent('project-profile') ?> href="<?= $escapeHtml($buildDeployRouteUrl('project-profile')) ?>"><w:icon name="edit" size="sm"></w:icon><?= $escapeHtml(__('项目 Profile')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('preflight')) ?>"<?= $deployNavCurrent('preflight') ?> href="<?= $escapeHtml($buildDeployRouteUrl('preflight')) ?>"><w:icon name="check" size="sm"></w:icon><?= $escapeHtml(__('发布预检')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('webhooks')) ?>"<?= $deployNavCurrent('webhooks') ?> href="<?= $escapeHtml($buildDeployRouteUrl('webhooks')) ?>"><w:icon name="play" size="sm"></w:icon><?= $escapeHtml(__('Webhook 回放')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('releases')) ?>"<?= $deployNavCurrent('releases') ?> href="<?= $escapeHtml($buildDeployRouteUrl('releases')) ?>"><w:icon name="history" size="sm"></w:icon><?= $escapeHtml(__('发布记录')) ?></a>
+            <a href="<?= $escapeHtml($marketplaceUrl) ?>"><w:icon name="store" size="sm"></w:icon><?= $escapeHtml(__('插件商城')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('manual-plan')) ?>"<?= $deployNavCurrent('manual-plan') ?> href="<?= $escapeHtml($buildDeployRouteUrl('manual-plan')) ?>"><w:icon name="list" size="sm"></w:icon><?= $escapeHtml(__('Manual Plan')) ?></a>
         </nav>
         <div class="wdep-sidebar-spacer"></div>
         <button type="button"
@@ -980,11 +980,11 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                 data-wdep-theme-light-label="<?= $escapeHtml(__('浅色')) ?>"
                 aria-label="<?= $escapeHtml(__('切换明暗色')) ?>"
                 aria-pressed="false">
-            <i class="mdi mdi-theme-light-dark"></i>
+            <w:icon name="circle" size="sm"></w:icon>
             <span data-wdep-theme-label><?= $escapeHtml(__('深色')) ?></span>
         </button>
         <a class="wdep-action" href="<?= $escapeHtml($panelUrl) ?>">
-            <i class="mdi mdi-arrow-left"></i>
+            <w:icon name="arrow-left" size="sm"></w:icon>
             <?= $escapeHtml(__('返回 WLS Panel')) ?>
         </a>
     </aside>
@@ -1002,15 +1002,15 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
             </div>
             <div class="wdep-actions">
                 <a class="wdep-action is-primary" href="<?= $escapeHtml($deployConfigUrl) ?>">
-                    <i class="mdi mdi-cog-outline"></i>
+                    <w:icon name="settings" size="sm"></w:icon>
                     <?= $escapeHtml(__('打开 Deploy 配置')) ?>
                 </a>
                 <a class="wdep-action" href="<?= $escapeHtml($deployReleaseUrl) ?>">
-                    <i class="mdi mdi-format-list-bulleted"></i>
+                    <w:icon name="list" size="sm"></w:icon>
                     <?= $escapeHtml(__('完整发布历史')) ?>
                 </a>
                 <a class="wdep-action" href="<?= $escapeHtml($projectAdminUrl) ?>">
-                    <i class="mdi mdi-application-cog-outline"></i>
+                    <w:icon name="settings" size="sm"></w:icon>
                     <?= $escapeHtml(__('项目后台')) ?>
                 </a>
             </div>
@@ -1028,22 +1028,22 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
             <div class="wdep-grid">
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('项目')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($projectId !== '' ? $projectId : __('当前 WLS')) ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($projectId !== '' ? $projectId : __('当前 WLS')) ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml($projectType !== '' ? $projectType : __('本机面板')) ?></p>
                 </article>
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('域名')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($domain !== '' ? $domain : __('未指定')) ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($domain !== '' ? $domain : __('未指定')) ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml(__('由项目卡片安全透传')) ?></p>
                 </article>
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('操作')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($operation !== '' ? $operation : 'deploy.tag') ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($operation !== '' ? $operation : 'deploy.tag') ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml(__('来自 WLS capability 链接')) ?></p>
                 </article>
                 <article class="wdep-card">
                     <p class="wdep-card-label"><?= $escapeHtml(__('触发策略')) ?></p>
-                    <p class="wdep-card-value"><?= $escapeHtml($settings['deploy_trigger_mode_label'] ?? __('仅 Tag Push')) ?></p>
+                    <p class="wdep-weline-card-value"><?= $escapeHtml($settings['deploy_trigger_mode_label'] ?? __('仅 Tag Push')) ?></p>
                     <p class="wdep-card-note"><?= $escapeHtml(__('默认保守发布策略')) ?></p>
                 </article>
             </div>
@@ -1092,7 +1092,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                             <p class="wdep-release-path-copy"><?= $escapeHtml(($profile['source_label'] ?? __('继承全局配置')) . ' / ' . $releasePathProfileState) ?></p>
                             <div class="wdep-release-path-actions">
                                 <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('project-profile')) ?>">
-                                    <i class="mdi mdi-clipboard-edit-outline"></i>
+                                    <w:icon name="edit" size="sm"></w:icon>
                                     <?= $escapeHtml(__('配置 Profile')) ?>
                                 </a>
                             </div>
@@ -1106,11 +1106,11 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                             <p class="wdep-release-path-copy"><?= $escapeHtml(__('默认示例：%{1}', [$releasePathRefSample])) ?></p>
                             <div class="wdep-release-path-actions">
                                 <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('webhooks')) ?>">
-                                    <i class="mdi mdi-replay"></i>
+                                    <w:icon name="play" size="sm"></w:icon>
                                     <?= $escapeHtml(__('Webhook 回放')) ?>
                                 </a>
                                 <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('manual-plan')) ?>">
-                                    <i class="mdi mdi-clipboard-list-outline"></i>
+                                    <w:icon name="list" size="sm"></w:icon>
                                     <?= $escapeHtml(__('Manual Plan')) ?>
                                 </a>
                             </div>
@@ -1124,7 +1124,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                             <p class="wdep-release-path-copy"><?= $escapeHtml($historyScopeLabel . ' / ' . $releasePathHistoryNote) ?></p>
                             <div class="wdep-release-path-actions">
                                 <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('releases')) ?>">
-                                    <i class="mdi mdi-history"></i>
+                                    <w:icon name="history" size="sm"></w:icon>
                                     <?= $escapeHtml(__('查看当前范围')) ?>
                                 </a>
                             </div>
@@ -1742,7 +1742,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                         </p>
                     </div>
                     <a class="wdep-action" href="<?= $escapeHtml($deployReleaseUrl) ?>">
-                        <i class="mdi mdi-open-in-new"></i>
+                        <w:icon name="circle" size="sm"></w:icon>
                         <?= $escapeHtml(__('查看完整列表')) ?>
                     </a>
                 </div>

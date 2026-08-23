@@ -4,8 +4,8 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_Checkout::checkout_sessions" name="checkout_sessions" title="结账会话"
           action="checkout/backend/session/index" parent="Weline_Backend::order_group"
-          icon="mdi mdi-cart-clock" order="20"/>
+          icon="clock" order="20"/>
     <menu source="Weline_Checkout::checkout_diagnostics" name="checkout_diagnostics" title="结账诊断"
           action="checkout/backend/session/diagnostics" parent="Weline_Backend::order_group"
-          icon="mdi mdi-stethoscope" order="30"/>
+          icon="circle" order="30"/>
 </menus>

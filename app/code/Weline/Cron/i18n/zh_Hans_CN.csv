@@ -31,33 +31,32 @@
 "CSRF 验证失败","CSRF 验证失败"
 执行名不能为空,执行名不能为空
 计划任务接口,计划任务接口
-"mdi mdi-clock-outline","mdi mdi-clock-outline"
+clock,钟
 计划任务后台（列表、锁定、手动运行等）,计划任务后台（列表、锁定、手动运行等）
 计划任务列表,计划任务列表
-"mdi mdi-format-list-bulleted","mdi mdi-format-list-bulleted"
+list,列表
 查看计划任务列表,查看计划任务列表
 锁定计划任务,锁定计划任务
-"mdi mdi-lock","mdi mdi-lock"
+lock,锁
 锁定定时任务,锁定定时任务
 解锁计划任务,解锁计划任务
-"mdi mdi-lock-open","mdi mdi-lock-open"
 解锁定时任务,解锁定时任务
 手动运行帮助,手动运行帮助
-"mdi mdi-help-circle-outline","mdi mdi-help-circle-outline"
+help,帮助
 "计划任务 SSE 手动运行说明 JSON","计划任务 SSE 手动运行说明 JSON"
 手动运行SSE（GET）,手动运行SSE（GET）
-"mdi mdi-play-network","mdi mdi-play-network"
+play,玩
 "计划任务真实执行 SSE 流（GET 兼容入口）","计划任务真实执行 SSE 流（GET 兼容入口）"
 手动运行SSE,手动运行SSE
 "计划任务真实执行 SSE 流","计划任务真实执行 SSE 流"
 运行日志列表,运行日志列表
-"mdi mdi-history","mdi mdi-history"
+history,历史
 计划任务调度日志历史与当前文件信息,计划任务调度日志历史与当前文件信息
 运行日志内容,运行日志内容
-"mdi mdi-file-document-outline","mdi mdi-file-document-outline"
+file,文件
 读取单次调度归档日志全文,读取单次调度归档日志全文
 运行日志SSE（GET）,运行日志SSE（GET）
-"mdi mdi-access-point","mdi mdi-access-point"
+wifi,无线上网
 "当前调度日志实时尾随（GET 兼容入口）","当前调度日志实时尾随（GET 兼容入口）"
 运行日志SSE,运行日志SSE
 当前调度日志实时尾随（SSE）,当前调度日志实时尾随（SSE）
@@ -149,7 +148,7 @@ ID,ID
 "缺少 --task","缺少 --task"
 未找到任务：%{1},未找到任务：%{1}
 "该类未实现 test()：%{1}","该类未实现 test()：%{1}"
-"无 test()","无 test()"
+"无 test()",无测试()
 调度：,调度：
 （无输出）,（无输出）
 "任务 id","任务 id"
@@ -198,7 +197,16 @@ ID,ID
 受管计划任务子进程已退出但未提交终态，已由调度父进程标记失败。进程ID：%{1},受管计划任务子进程已退出但未提交终态，已由调度父进程标记失败。进程ID：%{1}
 受管计划任务失败，任务未提供错误摘要。,受管计划任务失败，任务未提供错误摘要。
 等待受管计划任务时丢失状态围栏：%{1},等待受管计划任务时丢失状态围栏：%{1}
-"""Cron 查询器不支持的操作：%{1}""","Cron 查询器不支持的操作：%{1}"
+"""Cron 查询器不支持的操作：%{1}""","""Cron 查询器不支持的操作：%{1}"""
+"mdi mdi-clock-outline","mdi mdi-clock-outline"
+"mdi mdi-format-list-bulleted","mdi mdi 格式列表项目符号"
+"mdi mdi-lock","mdi mdi-lock"
+"mdi mdi-lock-open","mdi mdi-lock-open"
+"mdi mdi-help-circle-outline","mdi mdi-help-circle-outline"
+"mdi mdi-play-network","mdi mdi-play-network"
+"mdi mdi-history","MDI MDI 历史"
+"mdi mdi-file-document-outline","mdi mdi-file-document-outline"
+"mdi mdi-access-point","MDI MDI 接入点"
 系统定时任务名称无效：%{1},系统定时任务名称无效：%{1}
 后台手动运行对应的任务记录已不存在。,后台手动运行对应的任务记录已不存在。
 后台手动运行代次已被替换，停止转发旧代次日志：%{1},后台手动运行代次已被替换，停止转发旧代次日志：%{1}
@@ -211,3 +219,4 @@ ID,ID
 无法设置手动运行环境变量,无法设置手动运行环境变量
 "%{1} 程序ID:%{2} 已运行完毕!","%{1} 程序ID:%{2} 已运行完毕!"
 进程创建失败！请检查进程状态！,进程创建失败！请检查进程状态！
+计划任务,计划任务

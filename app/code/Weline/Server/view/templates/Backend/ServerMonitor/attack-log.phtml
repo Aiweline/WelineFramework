@@ -19,75 +19,75 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
 
 <div class="attack-log-page">
     <!-- 面包屑 -->
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="<?= $monitorUrl ?>"><?= __('服务器监控') ?></a></li>
-            <li class="breadcrumb-item active"><?= __('攻击日志') ?></li>
+    <nav aria-label="breadcrumb" style="--w-mb:var(--weline-space-4);">
+        <ol class="w-breadcrumb">
+            <li class="w-breadcrumb__item"><a href="<?= $monitorUrl ?>"><?= __('服务器监控') ?></a></li>
+            <li class="w-breadcrumb__item" data-state="active"><?= __('攻击日志') ?></li>
         </ol>
     </nav>
     
     <!-- 统计卡片 -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <h3 class="text-danger mb-1"><?= $attackStats['total_attacks'] ?? 0 ?></h3>
-                    <small class="text-muted"><?= __('总攻击次数') ?></small>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card">
+                <div class="w-card__body w-text" data-align="center">
+                    <h3 class="w-text" data-tone="danger" style="--w-mb:var(--weline-space-1);"><?= $attackStats['total_attacks'] ?? 0 ?></h3>
+                    <small class="w-text" data-tone="muted"><?= __('总攻击次数') ?></small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <h3 class="text-success mb-1"><?= $attackStats['blocked_attacks'] ?? 0 ?></h3>
-                    <small class="text-muted"><?= __('已拦截') ?></small>
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card">
+                <div class="w-card__body w-text" data-align="center">
+                    <h3 class="w-text" data-tone="success" style="--w-mb:var(--weline-space-1);"><?= $attackStats['blocked_attacks'] ?? 0 ?></h3>
+                    <small class="w-text" data-tone="muted"><?= __('已拦截') ?></small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <h3 class="mb-1"><?= count($attackStats['top_ips'] ?? []) ?></h3>
-                    <small class="text-muted"><?= __('攻击IP数') ?></small>
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card">
+                <div class="w-card__body w-text" data-align="center">
+                    <h3 style="--w-mb:var(--weline-space-1);"><?= count($attackStats['top_ips'] ?? []) ?></h3>
+                    <small class="w-text" data-tone="muted"><?= __('攻击IP数') ?></small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <h3 class="mb-1"><?= $attackStats['cdn_notifications'] ?? 0 ?></h3>
-                    <small class="text-muted"><?= __('CDN通知') ?></small>
+        <div style="--w-span-md:3;">
+            <div class="w-card stat-card">
+                <div class="w-card__body w-text" data-align="center">
+                    <h3 style="--w-mb:var(--weline-space-1);"><?= $attackStats['cdn_notifications'] ?? 0 ?></h3>
+                    <small class="w-text" data-tone="muted"><?= __('CDN通知') ?></small>
                 </div>
             </div>
         </div>
     </div>
     
     <!-- 日志列表 -->
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">
-                <i class="bi bi-shield-exclamation me-2"></i><?= __('攻击日志列表') ?>
-                <small class="text-muted">(<?= __('共 %{1} 条', $total) ?>)</small>
+    <div class="w-card">
+        <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+            <h5 style="--w-mb:0;">
+                <w:icon name="warning" size="sm"></w:icon><?= __('攻击日志列表') ?>
+                <small class="w-text" data-tone="muted">(<?= __('共 %{1} 条', $total) ?>)</small>
             </h5>
-            <div class="d-flex gap-2">
-                <select class="form-select form-select-sm" style="width: auto;" data-attack-log-change="filter-instance">
+            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                <select class="w-select" style="width: auto;" data-attack-log-change="filter-instance" data-size="sm">
                     <option value=""><?= __('全部实例') ?></option>
                     <option value="default" <?= $instance === 'default' ? 'selected' : '' ?>>default</option>
                 </select>
-                <button class="btn btn-sm btn-outline-primary" data-attack-log-action="reload">
-                    <i class="bi bi-arrow-clockwise"></i>
+                <button class="w-button" data-attack-log-action="reload" data-tone="primary" data-variant="outline" data-size="sm">
+                    <w:icon name="clock" size="sm"></w:icon>
                 </button>
             </div>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <?php if (empty($attacks)): ?>
-                <div class="text-center text-muted py-5">
-                    <i class="bi bi-shield-check display-1 text-success"></i>
-                    <p class="mt-3"><?= __('暂无攻击记录') ?></p>
+                <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="check" size="sm"></w:icon>
+                    <p style="--w-mt:var(--weline-space-4);"><?= __('暂无攻击记录') ?></p>
                 </div>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover">
+                <div class="w-table-wrap">
+                    <table class="w-table">
                         <thead>
                             <tr>
                                 <th width="5%">ID</th>
@@ -108,36 +108,36 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
                                         <small><?= date('m-d H:i:s', strtotime($attack[AttackLog::schema_fields_CREATED_AT])) ?></small>
                                     </td>
                                     <td>
-                                        <span class="badge" style="background-color: <?= AttackLog::getSeverityColor(AttackLog::getSeverityByType($attack[AttackLog::schema_fields_ATTACK_TYPE])) ?>">
+                                        <span class="w-badge" style="background-color: <?= AttackLog::getSeverityColor(AttackLog::getSeverityByType($attack[AttackLog::schema_fields_ATTACK_TYPE])) ?>">
                                             <?= AttackLog::getTypeLabel($attack[AttackLog::schema_fields_ATTACK_TYPE]) ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <code class="small"><?= htmlspecialchars($attack[AttackLog::schema_fields_IP] ?: '-') ?></code>
+                                        <code class="w-text" data-size="sm"><?= htmlspecialchars($attack[AttackLog::schema_fields_IP] ?: '-') ?></code>
                                     </td>
                                     <td>
-                                        <small class="text-truncate d-inline-block" style="max-width: 120px;" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_DOMAIN]) ?>">
+                                        <small class="w-text" style="max-width: 120px;" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_DOMAIN]) ?>" data-truncate="true" data-w-display="inline-block">
                                             <?= htmlspecialchars($attack[AttackLog::schema_fields_DOMAIN] ?: '-') ?>
                                         </small>
                                     </td>
                                     <td>
-                                        <code class="small text-truncate d-inline-block" style="max-width: 200px;" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_URI]) ?>">
+                                        <code class="w-text" style="max-width: 200px;" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_URI]) ?>" data-truncate="true" data-w-display="inline-block" data-size="sm">
                                             <?= htmlspecialchars(substr($attack[AttackLog::schema_fields_URI] ?: '-', 0, 50)) ?>
                                         </code>
                                         <?php if (!empty($attack[AttackLog::schema_fields_REASON])): ?>
-                                            <br><small class="text-muted"><?= htmlspecialchars(substr($attack[AttackLog::schema_fields_REASON], 0, 60)) ?></small>
+                                            <br><small class="w-text" data-tone="muted"><?= htmlspecialchars(substr($attack[AttackLog::schema_fields_REASON], 0, 60)) ?></small>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="badge" style="background-color: <?= AttackLog::getSeverityColor($attack[AttackLog::schema_fields_SEVERITY]) ?>">
+                                        <span class="w-badge" style="background-color: <?= AttackLog::getSeverityColor($attack[AttackLog::schema_fields_SEVERITY]) ?>">
                                             <?= AttackLog::getSeverityLabel($attack[AttackLog::schema_fields_SEVERITY]) ?>
                                         </span>
                                     </td>
                                     <td>
                                         <?php if ($attack[AttackLog::schema_fields_BLOCKED]): ?>
-                                            <span class="badge bg-success"><i class="bi bi-shield-check"></i> <?= __('已拦截') ?></span>
+                                            <span class="w-badge" data-w-background="success"><w:icon name="check" size="sm"></w:icon> <?= __('已拦截') ?></span>
                                         <?php else: ?>
-                                            <span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> <?= __('未拦截') ?></span>
+                                            <span class="w-badge" data-w-background="warning"><w:icon name="warning" size="sm"></w:icon> <?= __('未拦截') ?></span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -148,18 +148,18 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
                 
                 <!-- 分页 -->
                 <?php if ($totalPages > 1): ?>
-                    <nav aria-label="Page navigation" class="mt-3">
-                        <ul class="pagination justify-content-center mb-0">
-                            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-                                <a class="page-link" href="<?= $currentUrl ?>?page=<?= $page - 1 ?>&instance=<?= $instance ?>">&laquo;</a>
+                    <nav aria-label="Page navigation" style="--w-mt:var(--weline-space-4);">
+                        <ul class="w-pagination" data-justify="center" style="--w-mb:0;">
+                            <li class="w-pagination__item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                <a class="w-pagination__link" href="<?= $currentUrl ?>?page=<?= $page - 1 ?>&instance=<?= $instance ?>">&laquo;</a>
                             </li>
                             <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                                    <a class="page-link" href="<?= $currentUrl ?>?page=<?= $i ?>&instance=<?= $instance ?>"><?= $i ?></a>
+                                <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                                    <a class="w-pagination__link" href="<?= $currentUrl ?>?page=<?= $i ?>&instance=<?= $instance ?>"><?= $i ?></a>
                                 </li>
                             <?php endfor; ?>
-                            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                                <a class="page-link" href="<?= $currentUrl ?>?page=<?= $page + 1 ?>&instance=<?= $instance ?>">&raquo;</a>
+                            <li class="w-pagination__item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                <a class="w-pagination__link" href="<?= $currentUrl ?>?page=<?= $page + 1 ?>&instance=<?= $instance ?>">&raquo;</a>
                             </li>
                         </ul>
                     </nav>

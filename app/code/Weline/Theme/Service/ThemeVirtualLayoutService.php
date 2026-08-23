@@ -69,6 +69,7 @@ class ThemeVirtualLayoutService
         if (!$this->isSelectableLayoutOption($layoutType, $layoutOption, [
             'area' => self::DEFAULT_AREA,
             'scope' => $scope,
+            'locale_code' => $this->normalizeAssetLocale($locale),
             'target_type' => $targetType,
             'target_id' => $targetId,
         ])) {
@@ -450,6 +451,7 @@ class ThemeVirtualLayoutService
             ->setLayoutType($identity['layout_type'])
             ->setLayoutOption($identity['layout_option'])
             ->setScope($identity['scope'])
+            ->setLocaleCode($identity['locale_code'])
             ->setTargetType($identity['target_type'])
             ->setTargetId($identity['target_id'])
             ->setSourceType((string)($versionData['source_type'] ?? ThemeVirtualLayout::SOURCE_TYPE_VIRTUAL))
@@ -510,7 +512,11 @@ class ThemeVirtualLayoutService
      * @param array<string,mixed> $targetIdentity
      * @return array{success:bool,status:string,copied:int,source_identity:array<string,mixed>,target_identity:array<string,mixed>,results:list<array<string,mixed>>}
      */
-    public function copyVirtualLayoutIdentity(array $sourceIdentity, array $targetIdentity): array
+    public function copyVirtualLayoutIdentity(
+        array $sourceIdentity,
+        array $targetIdentity,
+        bool $publishCopiedVersions = true,
+    ): array
     {
         $sourceTargetType = strtolower(trim((string)($sourceIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)));
         $sourceTargetId = (int)($sourceIdentity['target_id'] ?? 0);
@@ -582,22 +588,49 @@ class ThemeVirtualLayoutService
             ? $this->loadVersion($asset->getPublishedVersionId())
             : null;
 
-        if ($published && $published->getId()) {
-            $results[] = $this->saveSourceVersion(
-                $targetIdentity,
-                $published->getSourceCode(),
-                $this->buildCopiedVersionData($published, $asset, (string)__('复制 CMS 页面发布布局版本')),
-                true
-            );
-        }
+        if (!$publishCopiedVersions) {
+            $sourceVersion = $latest && $latest->getId() ? $latest : $published;
+            if ($sourceVersion && $sourceVersion->getId()) {
+                $results[] = $this->saveSourceVersion(
+                    $targetIdentity,
+                    $sourceVersion->getSourceCode(),
+                    $this->buildCopiedVersionData(
+                        $sourceVersion,
+                        $asset,
+                        (string)__('复制 CMS 页面草稿布局版本'),
+                        (string)$targetIdentity['locale_code'],
+                    ),
+                    false,
+                );
+            }
+        } else {
+            if ($published && $published->getId()) {
+                $results[] = $this->saveSourceVersion(
+                    $targetIdentity,
+                    $published->getSourceCode(),
+                    $this->buildCopiedVersionData(
+                        $published,
+                        $asset,
+                        (string)__('复制 CMS 页面发布布局版本'),
+                        (string)$targetIdentity['locale_code'],
+                    ),
+                    true,
+                );
+            }
 
-        if ($latest && $latest->getId() && (!$published || $latest->getId() !== $published->getId())) {
-            $results[] = $this->saveSourceVersion(
-                $targetIdentity,
-                $latest->getSourceCode(),
-                $this->buildCopiedVersionData($latest, $asset, (string)__('复制 CMS 页面草稿布局版本')),
-                false
-            );
+            if ($latest && $latest->getId() && (!$published || $latest->getId() !== $published->getId())) {
+                $results[] = $this->saveSourceVersion(
+                    $targetIdentity,
+                    $latest->getSourceCode(),
+                    $this->buildCopiedVersionData(
+                        $latest,
+                        $asset,
+                        (string)__('复制 CMS 页面草稿布局版本'),
+                        (string)$targetIdentity['locale_code'],
+                    ),
+                    false,
+                );
+            }
         }
 
         $copied = 0;
@@ -689,6 +722,7 @@ class ThemeVirtualLayoutService
             'layout_type' => $asset->getLayoutType(),
             'layout_option' => $asset->getLayoutOption(),
             'scope' => $asset->getScope(),
+            'locale_code' => $asset->getLocaleCode(),
             'target_type' => $asset->getTargetType(),
             'target_id' => $asset->getTargetId(),
             'name' => $asset->getName(),
@@ -716,12 +750,14 @@ class ThemeVirtualLayoutService
         int $themeId = 0,
         string $area = self::DEFAULT_AREA,
         ?string $scope = null,
-        array $targetChain = []
+        array $targetChain = [],
+        ?string $localeCode = null,
     ): ?array {
         $layoutType = $this->normalizeLayoutType($layoutType);
         $layoutOption = $this->normalizeLayoutOption($layoutOption);
         $area = $this->normalizeArea($area);
         $scope = $this->normalizeScope($scope);
+        $localeCode = $this->normalizeAssetLocale($localeCode);
         $themeId = $themeId > 0 ? $themeId : $this->getActiveThemeId($area);
         if ($themeId <= 0 || $layoutType === '' || $layoutOption === '') {
             return null;
@@ -732,38 +768,42 @@ class ThemeVirtualLayoutService
 
         foreach ($targets as $target) {
             foreach ($this->systemConfig->getFallbackScopes($scope) as $fallbackScope) {
-                $asset = $this->loadAssetByIdentity([
-                    'theme_id' => $themeId,
-                    'area' => $area,
-                    'layout_type' => $layoutType,
-                    'layout_option' => $layoutOption,
-                    'scope' => $fallbackScope,
-                    'target_type' => $target['target_type'],
-                    'target_id' => $target['target_id'],
-                ]);
-                if (!$asset || !$asset->getPublishedVersionId()) {
-                    continue;
-                }
-                $version = $this->loadVersion($asset->getPublishedVersionId());
-                if (!$version || trim($version->getSourceCode()) === '') {
-                    continue;
-                }
-                $runtime = $this->materializeRuntimeSource($version->getSourceCode(), $asset->getId(), $version->getId());
+                foreach ($this->assetLocaleCandidates($localeCode) as $candidateLocale) {
+                    $asset = $this->loadAssetByIdentity([
+                        'theme_id' => $themeId,
+                        'area' => $area,
+                        'layout_type' => $layoutType,
+                        'layout_option' => $layoutOption,
+                        'scope' => $fallbackScope,
+                        'locale_code' => $candidateLocale,
+                        'target_type' => $target['target_type'],
+                        'target_id' => $target['target_id'],
+                    ]);
+                    if (!$asset || !$asset->getPublishedVersionId()) {
+                        continue;
+                    }
+                    $version = $this->loadVersion($asset->getPublishedVersionId());
+                    if (!$version || trim($version->getSourceCode()) === '') {
+                        continue;
+                    }
+                    $runtime = $this->materializeRuntimeSource($version->getSourceCode(), $asset->getId(), $version->getId());
 
-                return [
-                    'asset_id' => $asset->getId(),
-                    'version_id' => $version->getId(),
-                    'version_no' => $version->getVersionNo(),
-                    'theme_id' => $asset->getThemeId(),
-                    'area' => $asset->getArea(),
-                    'layout_type' => $asset->getLayoutType(),
-                    'layout_option' => $asset->getLayoutOption(),
-                    'scope' => $asset->getScope(),
-                    'target_type' => $asset->getTargetType(),
-                    'target_id' => $asset->getTargetId(),
-                    'module_path' => $runtime['module_path'],
-                    'file_path' => $runtime['file_path'],
-                ];
+                    return [
+                        'asset_id' => $asset->getId(),
+                        'version_id' => $version->getId(),
+                        'version_no' => $version->getVersionNo(),
+                        'theme_id' => $asset->getThemeId(),
+                        'area' => $asset->getArea(),
+                        'layout_type' => $asset->getLayoutType(),
+                        'layout_option' => $asset->getLayoutOption(),
+                        'scope' => $asset->getScope(),
+                        'locale_code' => $asset->getLocaleCode(),
+                        'target_type' => $asset->getTargetType(),
+                        'target_id' => $asset->getTargetId(),
+                        'module_path' => $runtime['module_path'],
+                        'file_path' => $runtime['file_path'],
+                    ];
+                }
             }
         }
 
@@ -854,12 +894,19 @@ class ThemeVirtualLayoutService
     /**
      * @return array<string,array<string,mixed>>
      */
-    public function listLayoutOptions(string $layoutType, int $themeId = 0, string $area = self::DEFAULT_AREA, ?string $scope = null): array
+    public function listLayoutOptions(
+        string $layoutType,
+        int $themeId = 0,
+        string $area = self::DEFAULT_AREA,
+        ?string $scope = null,
+        ?string $localeCode = null,
+    ): array
     {
         $layoutType = $this->normalizeLayoutType($layoutType);
         $area = $this->normalizeArea($area);
         $themeId = $themeId > 0 ? $themeId : $this->getActiveThemeId($area);
         $scopeChain = $this->systemConfig->getFallbackScopes($scope);
+        $localeCandidates = $this->assetLocaleCandidates($this->normalizeAssetLocale($localeCode));
         $rows = $this->virtualLayout->clear()->reset()
             ->where(ThemeVirtualLayout::schema_fields_THEME_ID, $themeId)
             ->where(ThemeVirtualLayout::schema_fields_AREA, $area)
@@ -869,14 +916,39 @@ class ThemeVirtualLayoutService
             ->fetchArray();
 
         $options = [];
+        $optionRanks = [];
+        $scopeRanks = [];
+        foreach (array_values($scopeChain) as $rank => $candidateScope) {
+            if (is_string($candidateScope) && !array_key_exists($candidateScope, $scopeRanks)) {
+                $scopeRanks[$candidateScope] = $rank;
+            }
+        }
+        $localeRanks = array_flip($localeCandidates);
         foreach (is_array($rows) ? $rows : [] as $row) {
-            if (!in_array((string)($row[ThemeVirtualLayout::schema_fields_SCOPE] ?? ''), $scopeChain, true)) {
+            $rowScope = (string)($row[ThemeVirtualLayout::schema_fields_SCOPE] ?? '');
+            if (!array_key_exists($rowScope, $scopeRanks)) {
+                continue;
+            }
+            $rowLocale = (string)($row[ThemeVirtualLayout::schema_fields_LOCALE_CODE] ?? '');
+            if (!array_key_exists($rowLocale, $localeRanks)) {
                 continue;
             }
             $code = $this->normalizeLayoutOption((string)($row[ThemeVirtualLayout::schema_fields_LAYOUT_OPTION] ?? ''));
-            if ($code === '' || isset($options[$code])) {
+            if ($code === '') {
                 continue;
             }
+            // Scope ownership is primary; within the same Scope an exact
+            // locale wins over the migrated language-neutral row. Database
+            // row order must never decide which Store's option is rendered.
+            $rank = [(int)$scopeRanks[$rowScope], (int)$localeRanks[$rowLocale]];
+            $existingRank = $optionRanks[$code] ?? null;
+            if (is_array($existingRank)
+                && ($existingRank[0] < $rank[0]
+                    || ($existingRank[0] === $rank[0] && $existingRank[1] <= $rank[1]))
+            ) {
+                continue;
+            }
+            $optionRanks[$code] = $rank;
             $options[$code] = [
                 'name' => (string)($row[ThemeVirtualLayout::schema_fields_NAME] ?? $this->humanizeLayoutOption($code)),
                 'description' => (string)($row[ThemeVirtualLayout::schema_fields_DESCRIPTION] ?? ''),
@@ -885,7 +957,8 @@ class ThemeVirtualLayoutService
                 'source' => 'theme_virtual_layout',
                 'asset_id' => (int)($row[ThemeVirtualLayout::schema_fields_ID] ?? 0),
                 'published_version_id' => (int)($row[ThemeVirtualLayout::schema_fields_PUBLISHED_VERSION_ID] ?? 0),
-                'scope' => (string)($row[ThemeVirtualLayout::schema_fields_SCOPE] ?? ''),
+                'scope' => $rowScope,
+                'locale_code' => $rowLocale,
                 'target_type' => (string)($row[ThemeVirtualLayout::schema_fields_TARGET_TYPE] ?? ThemeVirtualLayout::TARGET_GLOBAL),
                 'target_id' => (int)($row[ThemeVirtualLayout::schema_fields_TARGET_ID] ?? 0),
                 'config' => [],
@@ -929,6 +1002,9 @@ class ThemeVirtualLayoutService
             'layout_type' => $this->normalizeLayoutType((string)($identity['layout_type'] ?? '')),
             'layout_option' => $this->normalizeLayoutOption((string)($identity['layout_option'] ?? '')),
             'scope' => $this->normalizeScope(isset($identity['scope']) ? (string)$identity['scope'] : null),
+            'locale_code' => $this->normalizeAssetLocale(
+                isset($identity['locale_code']) ? (string)$identity['locale_code'] : (string)($identity['locale'] ?? ''),
+            ),
             'target_type' => $this->normalizeTargetType((string)($identity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)),
             'target_id' => (int)($identity['target_id'] ?? 0),
             'name' => (string)($identity['name'] ?? ''),
@@ -967,6 +1043,23 @@ class ThemeVirtualLayoutService
         return $locale === ''
             ? ScopedConfigData::LOCALE_DEFAULT
             : $this->systemConfig->normalizeLocale($locale);
+    }
+
+    private function normalizeAssetLocale(?string $locale = null): string
+    {
+        $locale = trim((string)($locale ?? ''));
+        if ($locale === '' || $locale === ScopedConfigData::LOCALE_DEFAULT) {
+            return '';
+        }
+
+        return $this->systemConfig->normalizeLocale($locale);
+    }
+
+    /** @return list<string> */
+    private function assetLocaleCandidates(string $localeCode): array
+    {
+        $localeCode = $this->normalizeAssetLocale($localeCode);
+        return $localeCode === '' ? [''] : [$localeCode, ''];
     }
 
     /**
@@ -1189,6 +1282,7 @@ class ThemeVirtualLayoutService
             ->where(ThemeVirtualLayout::schema_fields_LAYOUT_TYPE, (string)$identity['layout_type'])
             ->where(ThemeVirtualLayout::schema_fields_LAYOUT_OPTION, (string)$identity['layout_option'])
             ->where(ThemeVirtualLayout::schema_fields_SCOPE, (string)$identity['scope'])
+            ->where(ThemeVirtualLayout::schema_fields_LOCALE_CODE, (string)$identity['locale_code'])
             ->where(ThemeVirtualLayout::schema_fields_TARGET_TYPE, (string)$identity['target_type'])
             ->where(ThemeVirtualLayout::schema_fields_TARGET_ID, (int)$identity['target_id'])
             ->where(ThemeVirtualLayout::schema_fields_IS_ACTIVE, 1)
@@ -1219,13 +1313,16 @@ class ThemeVirtualLayoutService
 
         foreach ($targets as $target) {
             foreach ($this->systemConfig->getFallbackScopes($identity['scope']) as $scope) {
-                $asset = $this->loadAssetByIdentity(array_merge($identity, [
-                    'scope' => $scope,
-                    'target_type' => $target['target_type'],
-                    'target_id' => $target['target_id'],
-                ]));
-                if ($asset) {
-                    return $asset;
+                foreach ($this->assetLocaleCandidates((string)$identity['locale_code']) as $localeCode) {
+                    $asset = $this->loadAssetByIdentity(array_merge($identity, [
+                        'scope' => $scope,
+                        'locale_code' => $localeCode,
+                        'target_type' => $target['target_type'],
+                        'target_id' => $target['target_id'],
+                    ]));
+                    if ($asset) {
+                        return $asset;
+                    }
                 }
             }
         }
@@ -1355,23 +1452,48 @@ class ThemeVirtualLayoutService
     private function buildCopiedVersionData(
         ThemeVirtualLayoutVersion $version,
         ThemeVirtualLayout $asset,
-        string $reason
+        string $reason,
+        string $targetLocale,
     ): array {
+        $validation = $version->getValidation();
+        $validation['state'] = 'pending';
+        $validation['translation_review_required'] = true;
         return [
             'source_type' => $asset->getSourceType(),
             'is_ai_generated' => (bool)$asset->getData(ThemeVirtualLayout::schema_fields_IS_AI_GENERATED),
-            'visual_schema' => $version->getVisualSchema(),
+            'visual_schema' => $this->markCopiedFileImagesForReview(
+                $version->getVisualSchema(),
+                $targetLocale,
+            ),
             'generation_meta' => array_merge($version->getGenerationMeta(), [
                 'copied_from_version_id' => $version->getId(),
                 'copied_from_asset_id' => $asset->getId(),
             ]),
-            'validation' => $version->getValidation(),
+            'validation' => $validation,
             'ai_prompt' => (string)($version->getData(ThemeVirtualLayoutVersion::schema_fields_AI_PROMPT) ?: ''),
             'parent_version_id' => $version->getId(),
             'actor_id' => (string)($version->getData(ThemeVirtualLayoutVersion::schema_fields_ACTOR_ID) ?: ''),
             'actor_name' => (string)($version->getData(ThemeVirtualLayoutVersion::schema_fields_ACTOR_NAME) ?: ''),
             'reason' => $reason,
         ];
+    }
+
+    /** @param array<string|int,mixed> $value @return array<string|int,mixed> */
+    private function markCopiedFileImagesForReview(array $value, string $targetLocale): array
+    {
+        if (($value['type'] ?? null) === 'file-image' && is_array($value['usage'] ?? null)) {
+            $value['usage']['locale_code'] = trim($targetLocale) !== ''
+                ? trim($targetLocale)
+                : (string)($value['usage']['locale_code'] ?? '');
+            $value['usage']['alt_state'] = 'needs_review';
+            return $value;
+        }
+        foreach ($value as $key => $child) {
+            if (is_array($child)) {
+                $value[$key] = $this->markCopiedFileImagesForReview($child, $targetLocale);
+            }
+        }
+        return $value;
     }
 
     /**
@@ -1482,6 +1604,7 @@ class ThemeVirtualLayoutService
                 'layout_type' => $asset->getLayoutType(),
                 'layout_option' => $asset->getLayoutOption(),
                 'scope' => $asset->getScope(),
+                'locale_code' => $asset->getLocaleCode(),
                 'target_type' => $asset->getTargetType(),
                 'target_id' => $asset->getTargetId(),
                 'name' => $asset->getName(),

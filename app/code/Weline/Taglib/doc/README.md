@@ -12,23 +12,20 @@ Taglib 是模板语义扩展层，不是“所有前端能力都往里塞”的�
 - 可视化编辑器部件：用 widget
 - 只有当模板语法本身需要扩展时，才创建 Taglib
 
-如果你的任务与主题开发相关，先读：
+如果任务与主题开发相关，先完成 `prepare_project`，再调用一次 `resolve_task_context`，同时将 `Weline_Taglib` 与 `Weline_Theme` 作为任务范围。随后按命中结果阅读：
 
-1. [`AI-INDEX.md`](./AI-INDEX.md)
-2. [`../../Theme/doc/AI-INDEX.md`](../../Theme/doc/AI-INDEX.md)
-3. [`../../Theme/doc/theme-inheritance-and-file-conventions.md`](../../Theme/doc/theme-inheritance-and-file-conventions.md)
-4. [`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
-5. [`../../Theme/doc/部件开发指南.md`](../../Theme/doc/部件开发指南.md)
+1. [`../../Theme/doc/theme-inheritance-and-file-conventions.md`](../../Theme/doc/theme-inheritance-and-file-conventions.md)
+2. [`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
+3. [`../../Theme/doc/部件开发指南.md`](../../Theme/doc/部件开发指南.md)
 
 ## 当前推荐阅读顺序
 
-1. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-2. **场景映射与全量目录（强制）**：`dev/ai/skills/framework-taglib-catalog/SKILL.md` → `tag-catalog.md`
-3. 新增/变更标签：`dev/ai/skills/framework-taglib-catalog/tag-development.md`
+1. 调用 `resolve_task_context` 获取当前任务命中的最小文档集合
+2. **场景映射（强制）**：本 README 的“场景映射”章节
+3. 新增/变更标签：`app/code/Weline/Taglib/doc/如何自定义Tag.md`
 4. `app/code/Weline/Framework/View/doc/README.md`
 5. `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
-6. 本 README
-7. 如果是主题标签，再补 `Weline_Theme/doc/AI-INDEX.md` 和相关专项文档
+6. 如果是主题标签，再读取 MCP 命中的 Theme 专题文档
 
 ## Taglib 适合做什么
 
@@ -102,32 +99,29 @@ ID 与 data-only metadata。Taglib Model/Controller 不得引用 ModuleManager M
 
 模板需要站点、店铺、语言、文件、编辑器、ACL、DataTable 等能力时，先查：
 
-- `dev/ai/skills/framework-taglib-catalog/SKILL.md`（场景 → 标签）
-- `dev/ai/skills/framework-taglib-catalog/tag-catalog.md`（全量清单）
+- 本 README 的场景映射与示例
+- `resolve_task_context` 返回的当前 Taglib 源码、接口和专题文档
 
 例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:switcher .../>`（旧名 `language:switcher` 为别名）。禁止手写裸 select 拼领域选项。
 
 浮层定位与 hover 保活用 `FloatingDropdownEmitter` / `WelineTaglibFloatingDropdown` 在标签输出内自洽，禁止往 Theme.js 塞标签交互。
 
-新增标签后必须在同一任务内更新上述目录与映射表（见 `tag-development.md`）。
+新增标签后必须在同一任务内更新本 README 的场景映射与 `如何自定义Tag.md`；MCP 自动刷新索引。
 
 ## 快速示例
 
 最小自定义 Taglib 仍然可以按 `TaglibInterface` 方式实现，但具体接口用法、编译流程与缓存细节请直接看：
 
-- `dev/ai/skills/framework-taglib-catalog/tag-development.md`
+- `app/code/Weline/Taglib/doc/README.md`
 - `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
 - `app/code/Weline/Framework/View/doc/Taglib/架构设计.md`
 
 ## 相关文档
 
-- `dev/ai/skills/framework-taglib-catalog/SKILL.md`
-- `dev/ai/skills/framework-taglib-catalog/tag-catalog.md`
-- `dev/ai/skills/framework-taglib-catalog/tag-development.md`
+- `app/code/Weline/Taglib/doc/README.md`
+- `app/code/Weline/Taglib/doc/如何自定义Tag.md`
 - `app/code/Weline/Framework/View/doc/README.md`
 - `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
-- `app/code/Weline/Taglib/doc/AI-INDEX.md`
-- `app/code/Weline/Theme/doc/AI-INDEX.md`
 - `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
 - `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
 - `app/code/Weline/Theme/doc/部件开发指南.md`

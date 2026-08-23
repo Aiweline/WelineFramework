@@ -1,220 +1,35 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 $user = $this->getData('user');
-$userRole = $this->getData('user_role');
-$trees = $this->getData('trees') ?? [];
-$currentAccesses = $this->getData('current_accesses') ?? [];
+$role = $this->getData('user_role');
+$value = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) return $item[$key] ?? $default;
+    if (is_object($item) && method_exists($item, 'getData')) return $item->getData($key) ?? $default;
+    return $default;
+};
+$userId = max(0, (int)$value($user, 'user_id', is_object($user) && method_exists($user, 'getId') ? $user->getId() : 0));
+$username = trim((string)$value($user, 'username'));
+$email = trim((string)$value($user, 'email'));
+$roleName = trim((string)$value($role, 'role_name'));
+$subject = $username !== '' ? $username : (string)__('API 用户 #%{1}', [$userId]);
+if ($email !== '') {
+    $subject .= ' · ' . $email;
+}
 ?>
-<!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>API用户权限分配</lang>
-            </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
-                        <span>
-                            <lang>API</lang>
-                        </span>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/api/backend/user')"><lang>API用户</lang></a>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/api/backend/user/edit')?id=<?= $user->getId() ?>"><lang>编辑用户</lang></a>
-                    </li>
-                    <li class='breadcrumb-item active'>
-                        <lang>权限分配</lang>
-                    </li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- end page title -->
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>API用户权限分配</lang>
-                </h4>
-                <p class='card-title-desc'>
-                    <lang>为API用户分配权限资源</lang>
-                </p>
-                <p>
-                    <lang>当前用户：</lang>
-                    <b class="text-info"><?= htmlspecialchars($user->getUsername() ?? '') ?></b>
-                    <lang>（<?= htmlspecialchars($user->getEmail() ?? '') ?>）</lang>
-                    <br>
-                    <lang>所属角色：</lang>
-                    <b class="text-info"><?= htmlspecialchars($userRole->getRoleName() ?? '') ?></b>
-                </p>
-                <div class='button-items mb-1 mt-1'>
-                    <w:form action="{{action}}" id="aclForm" method="post">
-                        <input type="hidden" name="user_id" value="<?= $user->getId() ?>">
-                        <button type='submit' id='save_button'
-                                class='btn btn-primary waves-effect waves-light'>
-                            <lang>保存</lang>
-                        </button>
-                        <a href="@backend-url('*/api/backend/user/edit')?id=<?= $user->getId() ?>" class='btn btn-secondary'>
-                            <lang>返回</lang>
-                        </a>
-                    </w:form>
-                </div>
-                <div id='acl' class='acl-container' style="max-height: 600px; overflow-y: auto;">
-                    <ul>
-                        <foreach name='trees' item='tree'>
-                            <?php
-                            $attr = $getTreeLiAttr($tree, $currentAccesses);
-                            ?>
-                            <li id='{{tree.source_id}}' {{attr}}>{{tree.source_name}}
-                                <if condition="tree.method">
-                                    ({{tree.method}})
-                                </if>
-                                <?php
-                                /**@var \Weline\Acl\Model\Acl $tree */
-                                echo $getTreeNode($tree, $currentAccesses, $getTreeNode, $getTreeLiAttr);
-                                ?>
-                            </li>
-                        </foreach>
-                    </ul>
-                    <?php
-                    /**@var \Weline\Acl\Model\Acl $tree */
-                    $getTreeNode = function(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $tree, array $currentAccesses, callable $getTreeNode, callable $getLiAttr): string
-                    {
-                        $result = '';
-                        if ($tree->getSub()) {
-                            $result .= '<ul>';
-                            /**@var \Weline\Acl\Model\Acl $sub */
-                            foreach ($tree->getSub() as $sub) {
-                                $method = $sub->getMethod() ? "({$sub->getMethod()})" : '';
-                                $attr = $getLiAttr($sub, $currentAccesses);
-                                $result .= "<li id='{$sub->getSourceId()}' {$attr}>{$sub->getSourceName()}{$method}";
-                                $result .= $getTreeNode($sub, $currentAccesses, $getTreeNode, $getLiAttr);
-                                $result .= '</li>';
-                            }
-                            $result .= '</ul>';
-                        }
-                        return $result;
-                    };
-
-                    /**@var \Weline\Acl\Model\Acl $acl */
-                    $getTreeLiAttr = function(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $acl, array $currentAccesses): string
-                    {
-                        $type = $acl->getType() ? __($acl->getType()) : '';
-                        $icon = $acl->getIcon();
-                        if (empty($icon))
-                            $icon = match ($type) {
-                                'menus' => 'mdi mdi-microsoft-xbox-controller-menu',
-                                'pc' => 'mdi mdi-shield-link-variant-outline',
-                                '' => ''
-                            };
-                        if (empty($icon)) {
-                            if ($acl->getMethod()) {
-                                $icon = match (strtolower($acl->getMethod())) {
-                                    'get' => 'mdi mdi-eye-check-outline',
-                                    'post' => 'ri-save-3-line',
-                                    'delete' => 'ri-delete-bin-6-line',
-                                    'put' => 'ri-edit-box-line',
-                                    'update' => 'mdi mdi-autorenew',
-                                    default => 'fas fa-fingerprint'
-                                };
-                            }
-                        }
-                        $desc = $acl->getDocument() ? __($acl->getDocument()) : '';
-                        if (empty($desc)) {
-                            $desc = match ($type) {
-                                'menus' => __('菜单'),
-                                'pc' => __('链接'),
-                                '' => __('其他')
-                            };
-                        }
-                        $desc .= "({$acl->getSourceId()})";
-                        $access = in_array($acl->getSourceId(), $currentAccesses) ? 'true' : 'false';
-                        return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":true,\"selected\":{$access},
-                        \"icon\":\"$icon\"}' ";
-                    };
-
-                    ?>
-                </div>
-            </div>
-        </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
-
-<js:part>
-<link rel='stylesheet' href='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)'/>
-<script src='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)'></script>
-<script>
-(function() {
-    'use strict';
-    
-    let aclData = $('#acl').jstree({
-        'core': {
-            'themes': {
-                'variant': 'large'
-            },
-        },
-        'checkbox': {
-            'keep_selected_style': false,
-            'three_state': false,
-            'cascade': '',
-        },
-        'plugins': ['wholerow', 'checkbox']
-    });
-    
-    $('#acl').on('select_node.jstree', function (e, data) {
-        var tree = $('#acl').jstree(true);
-        var node = data.node;
-
-        if (node.parent !== '#') {
-            var parentNode = tree.get_node(node.parent);
-            if (parentNode) {
-                tree.select_node(parentNode, true);
-            }
-        }
-    });
-    
-    $('#acl').on('deselect_node.jstree', function (e, data) {
-        var tree = $('#acl').jstree(true);
-        var node = data.node;
-
-        if (node.parent !== '#') {
-            var parentNode = tree.get_node(node.parent);
-
-            if (parentNode) {
-                var hasSelectedChildren = false;
-                if (parentNode.children && parentNode.children.length > 0) {
-                    hasSelectedChildren = parentNode.children.some(function (childId) {
-                        return tree.is_selected(childId);
-                    });
-                }
-                if (!hasSelectedChildren) {
-                    tree.deselect_node(parentNode);
-                }
-            }
-        }
-        if (node.children && node.children.length > 0) {
-            node.children.forEach(function (childId) {
-                tree.deselect_node(childId);
-            });
-        }
-    });
-    
-    $('#save_button').on('click', function () {
-        let selectedNodes = $('#acl').jstree('get_selected', true);
-        $('#aclForm input[name="ids[]"]').remove();
-        $.each(selectedNodes, function () {
-            $('#aclForm').append('<input type="hidden" name="ids[]" value="' + this.id + '">');
-        });
-    });
-})();
-</script>
-</js:part>
+<?= $this->fetch('Weline_Acl::templates/Backend/Acl/Role/assign.phtml', [
+    'assignment_mode' => 'api-user',
+    'assignment_action' => (string)$this->getData('action'),
+    'assignment_identifier_name' => 'user_id',
+    'assignment_identifier_value' => $userId,
+    'assignment_title' => (string)__('API 用户权限分配'),
+    'assignment_description' => (string)__('为 API 用户所属角色配置实际需要的权限资源。'),
+    'assignment_back_url' => $this->getBackendUrl('*/api/backend/user/edit') . '?id=' . $userId,
+    'assignment_back_label' => (string)__('返回用户'),
+    'assignment_subject_label' => (string)__('API 用户'),
+    'assignment_subject_name' => $subject,
+    'assignment_subject_icon' => 'key',
+    'assignment_context_label' => (string)__('所属角色'),
+    'assignment_context_name' => $roleName !== '' ? $roleName : (string)__('未命名角色'),
+    'assignment_context_icon' => 'shield',
+    'assignment_show_tags' => false,
+]) ?>

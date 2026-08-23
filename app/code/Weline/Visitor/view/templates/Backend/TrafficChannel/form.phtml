@@ -37,13 +37,13 @@ $indexUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/index');
 $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
 ?>
 <div class="weline-traffic-channel-form">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h4 mb-0"><?= $h($formTitle) ?></h1>
-        <a class="btn btn-sm btn-outline-secondary" href="<?= $h($indexUrl) ?>"><lang>返回列表</lang></a>
+    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
+        <h1 class="h4" style="--w-mb:0;"><?= $h($formTitle) ?></h1>
+        <a class="w-button" href="<?= $h($indexUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><lang>返回列表</lang></a>
     </div>
 
-    <div class="card">
-        <div class="card-body">
+    <div class="w-card">
+        <div class="w-card__body">
             <w:form method="post" action="@var($action)" id="traffic-channel-form">
                 <input type="hidden" name="enabled_present" value="1"/>
                 <?php if ($isEdit): ?>
@@ -51,22 +51,15 @@ $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
                     <input type="hidden" name="code" value="<?= $h($form['code'] ?? '') ?>"/>
                 <?php endif; ?>
 
-                <div class="mb-3">
-                    <label class="form-label"><lang>渠道名称</lang> <span class="text-danger">*</span></label>
-                    <input type="text" name="name" class="form-control" required maxlength="255"
-                           value="<?= $h($form['name'] ?? '') ?>"
-                           placeholder="<?= $h(__('例如：夏季促销投放')) ?>"/>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><lang>渠道名称</lang> <span class="w-text" data-tone="danger">*</span></label>
+                    <input type="text" name="name" class="w-input" required maxlength="255" value="<?= $h($form['name'] ?? '') ?>" placeholder="<?= $h(__('例如：夏季促销投放')) ?>" />
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label"><lang>渠道码</lang> <span class="text-danger">*</span></label>
-                    <input type="text" name="<?= $codeReadonly ? 'code_display' : 'code' ?>"
-                           id="channel-code" class="form-control" required maxlength="32"
-                           pattern="[a-z0-9][a-z0-9_-]{1,31}"
-                           value="<?= $h($form['code'] ?? '') ?>"
-                           placeholder="summer_2026"
-                           <?= $codeReadonly ? 'readonly' : '' ?>/>
-                    <div class="form-text">
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><lang>渠道码</lang> <span class="w-text" data-tone="danger">*</span></label>
+                    <input type="text" name="<?= $codeReadonly ? 'code_display' : 'code' ?>" id="channel-code" class="w-input" required maxlength="32" pattern="[a-z0-9][a-z0-9_-]{1,31}" value="<?= $h($form['code'] ?? '') ?>" placeholder="summer_2026" <?= $codeReadonly ? 'readonly' : '' ?> />
+                    <div class="w-field__hint">
                         <?php if ($codeReadonly): ?>
                             <lang>渠道码创建后不可修改。</lang>
                         <?php else: ?>
@@ -75,10 +68,10 @@ $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label"><lang>流量类型</lang></label>
-                        <select name="traffic_type" id="channel-traffic-type" class="form-select">
+                <div class="w-grid">
+                    <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>流量类型</lang></label>
+                        <select name="traffic_type" id="channel-traffic-type" class="w-select">
                             <?php foreach ($trafficTypes as $type): ?>
                                 <option value="<?= $h($type) ?>" <?= (($form['traffic_type'] ?? '') === $type) ? 'selected' : '' ?>>
                                     <?= $h($type) ?>
@@ -86,8 +79,8 @@ $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="channel-website_trigger"><lang>站点</lang></label>
+                    <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="channel-website_trigger"><lang>站点</lang></label>
                         <w:websites:website:select
                             id="channel-website"
                             name="website_id"
@@ -101,79 +94,71 @@ $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
                             placeholder="@lang(搜索站点名称或编码)"
                             class="weline-traffic-channel-website-select"
                         />
-                        <div class="form-text"><lang>选择系统默认站表示全局渠道（website_id=0）。</lang></div>
+                        <div class="w-field__hint"><lang>选择系统默认站表示全局渠道（website_id=0）。</lang></div>
                     </div>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label"><lang>描述</lang></label>
-                    <textarea name="description" class="form-control" rows="2"><?= $h($form['description'] ?? '') ?></textarea>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><lang>描述</lang></label>
+                    <textarea name="description" class="w-textarea" rows="2"><?= $h($form['description'] ?? '') ?></textarea>
                 </div>
 
-                <div class="form-check mb-3">
-                    <input type="checkbox" class="form-check-input" name="enabled" id="channel-enabled" value="1"
-                        <?= !empty($form['enabled']) ? 'checked' : '' ?>/>
-                    <label class="form-check-label" for="channel-enabled"><lang>启用</lang></label>
+                <div class="w-check" style="--w-mb:var(--weline-space-4);">
+                    <input type="checkbox" name="enabled" id="channel-enabled" value="1" <?= !empty($form['enabled']) ? 'checked' : '' ?> />
+                    <label for="channel-enabled"><lang>启用</lang></label>
                     <?php if ($isEdit): ?>
-                        <div class="form-text"><lang>取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。</lang></div>
+                        <div class="w-field__hint"><lang>取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。</lang></div>
                     <?php endif; ?>
                 </div>
 
                 <hr/>
                 <h2 class="h6"><lang>自动 UTM 包</lang></h2>
-                <p class="text-muted small"><lang>默认 utm_source=weline，utm_campaign/wch=渠道码，utm_medium 随流量类型；可覆盖 source/medium。</lang></p>
+                <p class="w-text" data-tone="muted" data-size="sm"><lang>默认 utm_source=weline，utm_campaign/wch=渠道码，utm_medium 随流量类型；可覆盖 source/medium。</lang></p>
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">utm_source</label>
-                        <input type="text" name="utm_source" id="channel-utm-source" class="form-control"
-                               value="<?= $h($form['utm_source'] ?? ($default_utm_source ?? 'weline')) ?>"/>
+                <div class="w-grid">
+                    <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label">utm_source</label>
+                        <input type="text" name="utm_source" id="channel-utm-source" class="w-input" value="<?= $h($form['utm_source'] ?? ($default_utm_source ?? 'weline')) ?>" />
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">utm_medium</label>
-                        <input type="text" name="utm_medium" id="channel-utm-medium" class="form-control"
-                               value="<?= $h($form['utm_medium'] ?? '') ?>"/>
+                    <div style="--w-span-md:6;--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label">utm_medium</label>
+                        <input type="text" name="utm_medium" id="channel-utm-medium" class="w-input" value="<?= $h($form['utm_medium'] ?? '') ?>" />
                     </div>
                 </div>
 
-                <div class="alert alert-light border small mb-3">
+                <div class="w-alert w-text" data-w-border="border" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);">
                     <div><strong>utm_campaign</strong> = <code id="preview-utm-campaign"><?= $h($form['utm_campaign_preview'] ?? '') ?></code></div>
                     <div><strong>wch</strong> = <code id="preview-wch"><?= $h($form['wch_preview'] ?? '') ?></code></div>
                 </div>
 
                 <hr/>
                 <h2 class="h6"><lang>投放链接</lang></h2>
-                <div class="mb-3">
-                    <label class="form-label"><lang>落地路径</lang></label>
-                    <input type="text" name="landing_path" id="channel-landing-path" class="form-control"
-                           value="<?= $h($form['landing_path'] ?? '/') ?>"
-                           placeholder="/"/>
-                    <div class="form-text"><lang>相对站点根路径，如 / 或 /promo；查询参数由 UTM 自动附加。</lang></div>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><lang>落地路径</lang></label>
+                    <input type="text" name="landing_path" id="channel-landing-path" class="w-input" value="<?= $h($form['landing_path'] ?? '/') ?>" placeholder="/" />
+                    <div class="w-field__hint"><lang>相对站点根路径，如 / 或 /promo；查询参数由 UTM 自动附加。</lang></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label"><lang>链接预览</lang></label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="channel-landing-url" readonly
-                               value="<?= $h($form['landing_url'] ?? '') ?>"
-                               data-base-url="<?= $h($form['landing_base_url'] ?? '') ?>"/>
-                        <button type="button" class="btn btn-outline-primary" id="channel-copy-url"
-                            <?= empty($form['landing_showable']) ? 'disabled' : '' ?>>
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><lang>链接预览</lang></label>
+                    <div class="w-field__control">
+                        <input type="text" class="w-input" id="channel-landing-url" readonly value="<?= $h($form['landing_url'] ?? '') ?>" data-base-url="<?= $h($form['landing_base_url'] ?? '') ?>" />
+                        <button type="button" class="w-button" id="channel-copy-url" <?= empty($form['landing_showable']) ? 'disabled' : '' ?> data-tone="primary" data-variant="outline">
                             <lang>复制链接</lang>
                         </button>
                     </div>
-                    <div class="form-text" id="channel-landing-hint">
+                    <div class="w-field__hint" id="channel-landing-hint">
                         <?php if (empty($form['landing_showable'])): ?>
                             <lang>启用渠道并填写渠道码后可生成链接；全局渠道(website_id=0)使用系统默认基址。</lang>
                         <?php else: ?>
                             <lang>基址来自 Websites 站点 URL（查不到则回退系统基址）。</lang>
                         <?php endif; ?>
                     </div>
-                    <div class="form-text text-success d-none" id="channel-copy-ok"><lang>已复制到剪贴板</lang></div>
+                    <div class="w-field__hint w-text" id="channel-copy-ok" hidden data-tone="success"><lang>已复制到剪贴板</lang></div>
                 </div>
 
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
-                    <a class="btn btn-outline-secondary" href="<?= $h($indexUrl) ?>"><lang>取消</lang></a>
+                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                    <button type="submit" class="w-button" data-tone="primary"><lang>保存</lang></button>
+                    <a class="w-button" href="<?= $h($indexUrl) ?>" data-tone="neutral" data-variant="outline"><lang>取消</lang></a>
                 </div>
             </w:form>
         </div>

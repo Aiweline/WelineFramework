@@ -20,41 +20,39 @@ Disabled,Disabled
 "php.ini restored from backup.","php.ini restored from backup."
 "PHP extension operation completed and audit record was written.","PHP extension operation completed and audit record was written."
 "No PHP extension changes were needed.","No PHP extension changes were needed."
-"mdi mdi-language-php","mdi mdi-language-php"
+language,language
 "WLS Panel PHP profile entry","WLS Panel PHP profile entry"
 "View WLS PHP Manager","View WLS PHP Manager"
 "View WLS Panel PHP profiles","View WLS Panel PHP profiles"
 "View WLS PHP Summary","View WLS PHP Summary"
-"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+grid,grid
 "View WLS Panel PHP summary","View WLS Panel PHP summary"
 "View WLS PHP Runtime","View WLS PHP Runtime"
-"mdi mdi-console","mdi mdi-console"
+terminal,terminal
 "View WLS Panel PHP runtime","View WLS Panel PHP runtime"
 "View WLS PHP Inheritance","View WLS PHP Inheritance"
-"mdi mdi-source-branch","mdi mdi-source-branch"
+branch,branch
 "View WLS Panel PHP inheritance","View WLS Panel PHP inheritance"
 "View WLS PHP Project Profile","View WLS PHP Project Profile"
-"mdi mdi-tune-variant","mdi mdi-tune-variant"
+settings,settings
 "View WLS Panel PHP project profile","View WLS Panel PHP project profile"
 "View WLS PHP ini","View WLS PHP ini"
-"mdi mdi-file-cog-outline","mdi mdi-file-cog-outline"
 "View WLS Panel php.ini apply","View WLS Panel php.ini apply"
 "View WLS PHP Extensions","View WLS PHP Extensions"
-"mdi mdi-puzzle-outline","mdi mdi-puzzle-outline"
+puzzle,puzzle
 "View WLS Panel PHP extensions","View WLS Panel PHP extensions"
 "View WLS PHP Audit","View WLS PHP Audit"
-"mdi mdi-clipboard-text-clock-outline","mdi mdi-clipboard-text-clock-outline"
+clock,clock
 "View WLS Panel PHP audit","View WLS Panel PHP audit"
 "Save WLS PHP Profile","Save WLS PHP Profile"
-"mdi mdi-content-save-cog-outline","mdi mdi-content-save-cog-outline"
 "Save WLS Panel project PHP profile","Save WLS Panel project PHP profile"
 "Apply WLS PHP ini","Apply WLS PHP ini"
 "Apply WLS Panel project PHP profile to php.ini","Apply WLS Panel project PHP profile to php.ini"
 "Rollback WLS PHP ini","Rollback WLS PHP ini"
-"mdi mdi-file-restore-outline","mdi mdi-file-restore-outline"
+file,file
 "Restore a PHP Manager php.ini backup","Restore a PHP Manager php.ini backup"
 "Run WLS PHP Extension Action","Run WLS PHP Extension Action"
-"mdi mdi-puzzle-check-outline","mdi mdi-puzzle-check-outline"
+check,check
 "Run a guarded WLS Panel PHP extension adapter action","Run a guarded WLS Panel PHP extension adapter action"
 "PHP path fields contain unsafe characters.","PHP path fields contain unsafe characters."
 "PHP max execution time must be between 0 and 86400 seconds.","PHP max execution time must be between 0 and 86400 seconds."
@@ -70,7 +68,7 @@ Runtime,Runtime
 Inheritance,Inheritance
 php.ini,php.ini
 Audit,Audit
-切换明暗色,切换明暗色
+切换明暗色,"Switch between light and dark colors"
 "WLS Panel Plugin","WLS Panel Plugin"
 "PHP runtime readout, guarded project profile storage, reversible php.ini apply, and WLS reload controls for managed projects.","PHP runtime readout, guarded project profile storage, reversible php.ini apply, and WLS reload controls for managed projects."
 "WLS Panel","WLS Panel"
@@ -273,3 +271,14 @@ remove,remove
 "Type RUN_PHP_EXTENSION_ACTION to run the guarded extension operation.","Type RUN_PHP_EXTENSION_ACTION to run the guarded extension operation."
 "PHP extension operation completed.","PHP extension operation completed."
 """WLS PHP Manager""","WLS PHP Manager"
+"mdi mdi-language-php","mdi mdi-language-php"
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+"mdi mdi-console","mdi mdi-console"
+"mdi mdi-source-branch","mdi mdi-source-branch"
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-file-cog-outline","mdi mdi-file-cog-outline"
+"mdi mdi-puzzle-outline","mdi mdi-puzzle-outline"
+"mdi mdi-clipboard-text-clock-outline","mdi mdi-clipboard-text-clock-outline"
+"mdi mdi-content-save-cog-outline","mdi mdi-content-save-cog-outline"
+"mdi mdi-file-restore-outline","mdi mdi-file-restore-outline"
+"mdi mdi-puzzle-check-outline","mdi mdi-puzzle-check-outline"

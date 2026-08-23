@@ -17,7 +17,7 @@ final class PreviewThemeModeResolver implements PreviewThemeModeResolverInterfac
 
     public function resolveFrontendMode(): ?string
     {
-        if (!$this->previewContext->shouldUseStoredContext()) {
+        if (!$this->previewContext->hasAuthoritativePreviewContext()) {
             return null;
         }
         $context = $this->previewContext->getCurrentContext();

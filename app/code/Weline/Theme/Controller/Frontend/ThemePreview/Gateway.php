@@ -6,6 +6,7 @@ namespace Weline\Theme\Controller\Frontend\ThemePreview;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Theme\Service\ThemePreviewEntryApplication;
 
 /**
@@ -17,6 +18,14 @@ class Gateway extends FrontendController
 {
     public function index(): array|string
     {
+        try {
+            if (!SessionFactory::getInstance()->createBackendSession()->isLoggedIn()) {
+                return $this->error(__('主题预览需要有效的后台登录状态。'));
+            }
+        } catch (\Throwable) {
+            return $this->error(__('主题预览需要有效的后台登录状态。'));
+        }
+
         $editorArea = (string)$this->request->getParam(
             'editor_area',
             (string)$this->request->getParam('preview_area', 'frontend')

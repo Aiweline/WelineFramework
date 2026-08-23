@@ -1,204 +1,122 @@
 <?php
-/**
- * 内容模板
- * @var \Weline\Framework\View\Template $this
- */
-?>
-<style>
-.acl-role-action-buttons .acl-role-permission-btn {
-    color: #334155 !important;
-    background-color: #f8fafc !important;
-    border-color: #cbd5e1 !important;
-}
-
-.acl-role-action-buttons .acl-role-permission-btn:hover,
-.acl-role-action-buttons .acl-role-permission-btn:focus {
-    color: #0f172a !important;
-    background-color: #e2e8f0 !important;
-    border-color: #94a3b8 !important;
-}
-
-[data-theme="dark"] .acl-role-action-buttons .acl-role-permission-btn,
-[data-theme-mode="dark"] .acl-role-action-buttons .acl-role-permission-btn,
-[data-bs-theme="dark"] .acl-role-action-buttons .acl-role-permission-btn,
-[data-layout-mode="dark"] .acl-role-action-buttons .acl-role-permission-btn {
-    color: var(--backend-color-text-primary, #e6eef8) !important;
-    background-color: var(--backend-color-bg-secondary, #172033) !important;
-    border-color: var(--backend-color-border-emphasis, rgba(148, 163, 184, 0.28)) !important;
-}
-</style>
-<!-- start page title -->
-<div class='row' data-testid="acl-role-management">
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>权限角色</lang>
-            </h4>
-
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
-                        <span>
-                            <lang>系统配置</lang>
-                        </span>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
-                    </li>
-                    <li class='breadcrumb-item active'>
-                        <a href="@backend-url('*/backend/acl/role')"><lang>Acl角色管理</lang></a>
-                    </li>
-                </ol>
-            </div>
-
-        </div>
-    </div>
-</div>
-<!-- end page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>权限角色</lang>
-                </h4>
-                <p class='card-title-desc'>
-                    <lang>支持角色权限管理</lang>
-                </p>
-                <div class='row'>
-                    <div class='col-6'>
-                        <div class="col-md-6">
-                            <block class='Weline\Component\Block\Form\Search' id='acl-search'
-                                   action='*/backend/acl/role'
-                                   method='get'
-                                   keyword='search' value=''
-                                   params=''
-                                   placeholder='请输入搜索词'></block>
-                        </div>
-                    </div>
-                    <div class='col-6'>
-                        <button type="button" class='btn btn-primary pull-right mt-1 mb-1' data-testid="acl-role-add" data-bs-toggle="offcanvas" data-bs-target="#roleAddOffcanvas" aria-controls="roleAddOffcanvas">
-                            <lang>添加</lang>
-                        </button>
-                    </div>
-                </div>
-
-                <div class='table-rep-plugin'>
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1'>
-                                    <lang>ID</lang>
-                                </th>
-                                <th data-priority='1'>角色</th>
-                                <th data-priority='1'>描述</th>
-                                <th data-priority='1'>创建于</th>
-                                <th data-priority='1'>更新于</th>
-                                <th data-priority='1'>操作</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <foreach name="roles" item="role" key="key">
-                                <tr data-testid="acl-role-row" data-role-name="{{role.role_name}}">
-                                    <td class='co-name'>{{role.role_id}}</td>
-                                    <td class='co-name'>{{role.role_name}}</td>
-                                    <td class='co-name'>{{role.role_description}}</td>
-                                    <td class='co-name'>{{role.create_time}}</td>
-                                    <td class='co-name'>{{role.update_time}}</td>
-                                    <td class='co-name'>
-                                        <if condition="role.role_id !== 1">
-                                            <div class="acl-role-action-buttons d-grid gap-2 d-md-flex">
-                                                <w:form action="@backend-url('*/backend/acl/role/delete')" method='post'>
-                                                    <input type='hidden' name='id' value='{{role.role_id}}'>
-                                                    <input type='submit' class='btn btn-danger btn-sm' value='@lang{删除}'>
-                                                </w:form>
-                                                <a class='btn btn-sm btn-info' href="@backend-url('*/backend/acl/role/edit')?id={{role.role_id}}">
-                                                    <lang>编辑</lang>
-                                                </a>
-                                                <a class='acl-role-permission-btn btn btn-sm btn-secondary' href="@backend-url('*/backend/acl/role/assign')?id={{role.role_id}}">
-                                                    <lang>权限管理</lang>
-                                                </a>
-                                            </div>
-                                        </if>
-                                    </td>
-                                </tr>
-                            </foreach>
-                            <empty name="roles">
-                                <tr>
-                                    <td colspan="5" class="text-center">
-                                        <lang>暂无记录</lang>
-                                    </td>
-                                </tr>
-                            </empty>
-                            </tbody>
-                        </table>
-                        {{pagination}}
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
-
-<!-- 添加角色 Offcanvas -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="roleAddOffcanvas" aria-labelledby="roleAddOffcanvasLabel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="roleAddOffcanvasLabel">
-            <lang>添加角色</lang>
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-    <div class="offcanvas-body">
-        <w:form id="roleAddForm"
-                class="needs-validation"
-                method="post"
-                action="@backend-url('*/backend/acl/role/add')"
-                novalidate>
-            <div class="mb-3">
-                <label for="role_name" class="form-label">
-                    <lang>角色名</lang> <span class="text-danger">*</span>
-                </label>
-                <input type="text" class="form-control" id="role_name" name="role_name" required placeholder="@lang{请输入角色名}">
-                <div class="invalid-feedback">
-                    <lang>请输入角色名称</lang>
-                </div>
-            </div>
-            <div class="mb-3">
-                <label for="role_description" class="form-label">
-                    <lang>角色描述</lang> <span class="text-danger">*</span>
-                </label>
-                <textarea class="form-control" id="role_description" name="role_description" rows="3" required placeholder="@lang{请输入角色描述}"></textarea>
-                <div class="invalid-feedback">
-                    <lang>请输入角色描述</lang>
-                </div>
-            </div>
-            <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-primary">
-                    <lang>提交</lang>
-                </button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">
-                    <lang>取消</lang>
-                </button>
-            </div>
-        </w:form>
-    </div>
-</div>
-
-
-<script>
-(function() {
-    'use strict';
-
-    var form = document.getElementById('roleAddForm');
-    var offcanvasElement = document.getElementById('roleAddOffcanvas');
-
-    if (form && offcanvasElement) {
-      offcanvasElement.addEventListener('hidden.bs.offcanvas', function() {
-        form.reset();
-        form.classList.remove('was-validated');
-      });
+/** @var \Weline\Framework\View\Template $this */
+$roles = is_iterable($this->getData('roles')) ? $this->getData('roles') : [];
+$pagination = is_array($this->getData('pagination')) ? $this->getData('pagination') : [];
+$search = trim((string)$this->getData('search'));
+$page = max(1, (int)($pagination['page'] ?? 1));
+$lastPage = max(1, (int)($pagination['lastPage'] ?? 1));
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$value = static function (mixed $role, string $key, mixed $default = ''): mixed {
+    if (is_array($role)) {
+        return $role[$key] ?? $default;
     }
-})();
-</script>
+    if (is_object($role) && method_exists($role, 'getData')) {
+        $resolved = $role->getData($key);
+        return $resolved === null ? $default : $resolved;
+    }
+    return $default;
+};
+$listUrl = $this->getBackendUrl('*/backend/acl/role');
+$pageUrl = static function (int $number) use ($listUrl, $search): string {
+    $params = ['page' => max(1, $number)];
+    if ($search !== '') {
+        $params['search'] = $search;
+    }
+    return $listUrl . '?' . http_build_query($params);
+};
+?>
+
+<main
+    class="w-backend-page w-stack"
+    data-acl-role-index
+    data-text-delete-title="<?= $escape(__('删除角色')) ?>"
+    data-text-delete-message="<?= $escape(__('确定删除角色“%{1}”吗？此操作无法撤销。')) ?>"
+    data-text-delete-confirm="<?= $escape(__('删除')) ?>"
+    data-text-cancel="<?= $escape(__('取消')) ?>"
+>
+    <header class="w-backend-page__heading">
+        <div class="w-stack">
+            <h1><w:icon name="shield" size="md"></w:icon><?= $escape(__('权限角色')) ?></h1>
+            <p class="w-text" data-tone="muted"><?= $escape(__('建立角色并按实际职责分配权限。')) ?></p>
+        </div>
+        <nav class="w-breadcrumb" aria-label="<?= $escape(__('面包屑')) ?>">
+            <a class="w-breadcrumb__item" href="@backend-url('*/backend/acl')"><?= $escape(__('ACL 权限管理')) ?></a>
+            <span class="w-breadcrumb__item" aria-current="page"><?= $escape(__('角色')) ?></span>
+        </nav>
+    </header>
+
+    <section class="w-card">
+        <header class="w-card__header w-toolbar">
+            <form class="w-cluster" method="get" action="<?= $escape($listUrl) ?>" role="search">
+                <label class="w-field">
+                    <span class="w-visually-hidden"><?= $escape(__('搜索角色')) ?></span>
+                    <input class="w-input" type="search" name="search" value="<?= $escape($search) ?>" placeholder="<?= $escape(__('搜索名称或描述')) ?>">
+                </label>
+                <button class="w-button" type="submit" data-tone="neutral"><w:icon name="search" size="sm"></w:icon><?= $escape(__('搜索')) ?></button>
+                <?php if ($search !== ''): ?><a class="w-button" data-tone="quiet" href="<?= $escape($listUrl) ?>"><?= $escape(__('清除')) ?></a><?php endif; ?>
+            </form>
+            <button class="w-button" type="button" data-tone="primary" data-w-action="drawer.open" data-w-target="#w-role-create"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加角色')) ?></button>
+        </header>
+
+        <div class="w-table-wrap">
+            <table class="w-table">
+                <thead><tr><th><?= $escape(__('ID')) ?></th><th><?= $escape(__('角色')) ?></th><th><?= $escape(__('描述')) ?></th><th><?= $escape(__('创建于')) ?></th><th><?= $escape(__('更新于')) ?></th><th><?= $escape(__('操作')) ?></th></tr></thead>
+                <tbody>
+                <?php $hasRoles = false; foreach ($roles as $role): $hasRoles = true; $roleId = max(0, (int)$value($role, 'role_id')); $roleName = (string)$value($role, 'role_name'); ?>
+                    <tr data-testid="acl-role-row" data-role-name="<?= $escape($roleName) ?>">
+                        <td><?= $roleId ?></td>
+                        <td><strong><?= $escape($roleName) ?></strong></td>
+                        <td><?= $escape($value($role, 'role_description')) ?></td>
+                        <td><?= $escape($value($role, 'create_time')) ?></td>
+                        <td><?= $escape($value($role, 'update_time')) ?></td>
+                        <td>
+                            <?php if ($roleId !== 1): ?>
+                                <div class="w-cluster">
+                                    <a class="w-button" data-tone="neutral" data-size="sm" href="@backend-url('*/backend/acl/role/edit')?id=<?= $roleId ?>"><w:icon name="edit" size="sm"></w:icon><?= $escape(__('编辑')) ?></a>
+                                    <a class="w-button" data-tone="info" data-size="sm" href="@backend-url('*/backend/acl/role/assign')?id=<?= $roleId ?>"><w:icon name="key" size="sm"></w:icon><?= $escape(__('权限管理')) ?></a>
+                                    <form method="post" action="@backend-url('*/backend/acl/role/delete')" data-role-delete data-role-name="<?= $escape($roleName) ?>">
+                                        <input type="hidden" name="form_key" value="<?= $escape($this->getFormKeyValue()) ?>">
+                                        <input type="hidden" name="id" value="<?= $roleId ?>">
+                                        <button class="w-button" type="submit" data-tone="danger" data-size="sm"><w:icon name="trash" size="sm"></w:icon><?= $escape(__('删除')) ?></button>
+                                    </form>
+                                </div>
+                            <?php else: ?>
+                                <span class="w-badge" data-tone="neutral"><?= $escape(__('系统角色')) ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (!$hasRoles): ?><tr><td colspan="6"><div class="w-empty"><w:icon name="shield" size="lg"></w:icon><p><?= $escape(__('暂无角色')) ?></p></div></td></tr><?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <?php if ($lastPage > 1): ?>
+            <footer class="w-card__footer">
+                <nav aria-label="<?= $escape(__('角色分页')) ?>">
+                    <ul class="w-pagination">
+                        <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($pageUrl(max(1, $page - 1))) ?>" <?= $page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' ?>><?= $escape(__('上一页')) ?></a></li>
+                        <?php for ($number = max(1, $page - 2), $end = min($lastPage, $page + 2); $number <= $end; ++$number): ?>
+                            <li class="w-pagination__item" <?= $number === $page ? 'data-state="active"' : '' ?>><a class="w-pagination__link" href="<?= $escape($pageUrl($number)) ?>" <?= $number === $page ? 'aria-current="page"' : '' ?>><?= $number ?></a></li>
+                        <?php endfor; ?>
+                        <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($pageUrl(min($lastPage, $page + 1))) ?>" <?= $page >= $lastPage ? 'aria-disabled="true" tabindex="-1"' : '' ?>><?= $escape(__('下一页')) ?></a></li>
+                    </ul>
+                </nav>
+            </footer>
+        <?php endif; ?>
+    </section>
+
+    <section class="w-drawer" id="w-role-create" data-w-component="drawer" data-state="closed" aria-labelledby="w-role-create-title" aria-hidden="true" hidden>
+        <header class="w-drawer__header"><h2 class="w-drawer__title" id="w-role-create-title"><?= $escape(__('添加角色')) ?></h2><button class="w-button" type="button" data-tone="quiet" data-size="sm" data-w-action="drawer.close" aria-label="<?= $escape(__('关闭')) ?>"><w:icon name="close" size="sm"></w:icon></button></header>
+        <div class="w-drawer__body">
+            <form class="w-form w-stack" method="post" action="@backend-url('*/backend/acl/role/add')">
+                <input type="hidden" name="form_key" value="<?= $escape($this->getFormKeyValue()) ?>">
+                <label class="w-field"><span class="w-field__label"><?= $escape(__('角色名')) ?></span><input class="w-input" type="text" name="role_name" required maxlength="120" autocomplete="off"><span class="w-field__error"><?= $escape(__('请输入角色名称')) ?></span></label>
+                <label class="w-field"><span class="w-field__label"><?= $escape(__('角色描述')) ?></span><textarea class="w-textarea" name="role_description" rows="4" required maxlength="500"></textarea><span class="w-field__error"><?= $escape(__('请输入角色描述')) ?></span></label>
+                <div class="w-cluster"><button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存')) ?></button><button class="w-button" type="button" data-tone="neutral" data-w-action="drawer.close"><?= $escape(__('取消')) ?></button></div>
+            </form>
+        </div>
+    </section>
+</main>
+
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-acl-role-index.js)"></script>

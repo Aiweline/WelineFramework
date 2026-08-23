@@ -46,76 +46,65 @@ $activeAccountSelectOptionsJson = json_encode(array_values($activeAccountSelectO
 $providerSelectOptionsJson = json_encode(array_values($providerSelectMap), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 
-<div class="row">
+<div class="w-grid">
     <!-- 左侧：输入区 -->
-    <div class="col-lg-5">
-        <h5 class="mb-3"><?= __('批量购买域名') ?></h5>
+    <div style="--w-span-lg:5;">
+        <h5 style="--w-mb:var(--weline-space-4);"><?= __('批量购买域名') ?></h5>
 
-        <div class="mb-3">
-            <label class="form-label"><?= __('选择域名商账号') ?> <span class="text-danger">*</span></label>
-            <w:websites:registrar:select
-                id="purchase-account-id"
-                name="purchase_account_id"
-                value="''"
-                display="''"
-                options="activeAccountSelectOptionsJson"
-                empty-label="@lang(请选择域名商账号)"
-                placeholder="@lang(搜索服务商/账号...)"
-                class="w-100"
-            />
+        <div style="--w-mb:var(--weline-space-4);">
+            <label class="w-field__label"><?= __('选择域名商账号') ?> <span class="w-text" data-tone="danger">*</span></label>
+            <w:websites:registrar:select id="purchase-account-id" name="purchase_account_id" value="''" display="''" options="activeAccountSelectOptionsJson" empty-label="@lang(请选择域名商账号)" placeholder="@lang(搜索服务商/账号...)" data-w-width="full" />
         </div>
 
-        <div class="mb-3">
-            <label class="form-label"><?= __('域名列表（一行一个）') ?> <span class="text-danger">*</span></label>
-            <textarea id="purchase-domains-input" class="form-control" rows="8"
-                      placeholder="<?= __("example.com\nmysite.net\nshop.org") ?>"></textarea>
-            <div class="form-text"><?= __('每行一个域名，支持批量输入多个域名。') ?></div>
+        <div style="--w-mb:var(--weline-space-4);">
+            <label class="w-field__label"><?= __('域名列表（一行一个）') ?> <span class="w-text" data-tone="danger">*</span></label>
+            <textarea id="purchase-domains-input" class="w-textarea" rows="8" placeholder="<?= __("example.com\nmysite.net\nshop.org") ?>"></textarea>
+            <div class="w-field__hint"><?= __('每行一个域名，支持批量输入多个域名。') ?></div>
         </div>
 
-        <button type="button" class="btn btn-primary w-100" data-domain-purchase-action="check-availability">
-            <i class="mdi mdi-magnify me-1"></i><?= __('检查可用性') ?>
+        <button type="button" class="w-button" data-domain-purchase-action="check-availability" data-w-width="full" data-tone="primary">
+            <w:icon name="search" size="sm"></w:icon><?= __('检查可用性') ?>
         </button>
 
-        <div class="mt-3 p-3" style="background:var(--bs-info-bg-subtle, #e7f1ff); border-radius:6px;">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="purchase-auto-resolve" checked>
-                <label class="form-check-label fw-bold" for="purchase-auto-resolve">
+        <div style="background:var(--bs-info-bg-subtle, #e7f1ff); border-radius:6px;">
+            <div class="w-check">
+                <input type="checkbox" id="purchase-auto-resolve" checked>
+                <label class="w-text" for="purchase-auto-resolve" data-weight="strong">
                     <?= __('自动解析到本服务器') ?>
                 </label>
             </div>
-            <div class="small text-muted mt-1">
-                <i class="mdi mdi-information-outline"></i>
+            <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);">
+                <w:icon name="info" size="sm"></w:icon>
                 <?= __('购买后自动将域名的 @ 和 www 记录解析到本服务器公网IP，通过Cron任务在域名可用后自动执行') ?>
             </div>
-            <div class="mt-3">
-                <label class="form-label small fw-bold"><?= __('子域名（逗号分隔，默认 @,www）') ?></label>
-                <input type="text" class="form-control form-control-sm" id="purchase-subdomains"
-                       placeholder="@, www" value="@, www">
-                <div class="form-text small"><?= __('购买后入池并自动解析的子域名列表') ?></div>
+            <div style="--w-mt:var(--weline-space-4);">
+                <label class="w-field__label w-text" data-weight="strong" data-size="sm"><?= __('子域名（逗号分隔，默认 @,www）') ?></label>
+                <input type="text" class="w-input" id="purchase-subdomains" placeholder="@, www" value="@, www" data-size="sm">
+                <div class="w-field__hint w-text" data-size="sm"><?= __('购买后入池并自动解析的子域名列表') ?></div>
             </div>
         </div>
     </div>
 
     <!-- 右侧：结果区 -->
-    <div class="col-lg-7">
-        <h5 class="mb-3"><?= __('检查结果') ?></h5>
+    <div style="--w-span-lg:7;">
+        <h5 style="--w-mb:var(--weline-space-4);"><?= __('检查结果') ?></h5>
         <div id="availability-results">
-            <div class="text-center py-5 text-muted">
-                <i class="mdi mdi-dns-outline" style="font-size:3rem;"></i>
-                <p class="mt-2"><?= __('请在左侧输入域名并点击"检查可用性"。') ?></p>
+            <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <w:icon name="dns" size="sm"></w:icon>
+                <p style="--w-mt:var(--weline-space-2);"><?= __('请在左侧输入域名并点击"检查可用性"。') ?></p>
             </div>
         </div>
 
         <!-- 购买确认区域（检查完成后显示） -->
-        <div id="purchase-actions" style="display:none;" class="mt-3">
-            <div class="card bg-light border-0">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
+        <div id="purchase-actions" style="display:none;">
+            <div class="w-card" data-w-background="muted" data-w-border="none">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-justify="between" data-align="center">
                         <div>
                             <strong id="purchase-count-text"><?= __('0 个可用域名') ?></strong>
                         </div>
-                        <button type="button" class="btn btn-success" data-domain-purchase-action="submit-purchase">
-                            <i class="mdi mdi-cart-check me-1"></i><?= __('批量购买') ?>
+                        <button type="button" class="w-button" data-domain-purchase-action="submit-purchase" data-tone="success">
+                            <w:icon name="check" size="sm"></w:icon><?= __('批量购买') ?>
                         </button>
                     </div>
                 </div>
@@ -123,161 +112,141 @@ $providerSelectOptionsJson = json_encode(array_values($providerSelectMap), JSON_
         </div>
 
         <!-- 购买记录 -->
-        <div class="mt-4">
+        <div style="--w-mt:var(--weline-space-6);">
             <h6><?= __('购买记录') ?></h6>
             <div id="purchase-orders-container">
-                <p class="text-muted small"><?= __('购买完成后会在此处显示记录。') ?></p>
+                <p class="w-text" data-tone="muted" data-size="sm"><?= __('购买完成后会在此处显示记录。') ?></p>
             </div>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="welinePurchaseConfigModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('购买域名') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
+<div class="w-dialog" id="welinePurchaseConfigModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('购买域名') ?></h5>
+                <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
-                <p class="text-muted mb-3"><?= __('确认购买后，系统会按所选策略处理解析与后续状态跟踪。') ?></p>
-                <p class="text-info small mb-3"><?= __('DNS/CDN 切换不会在购买后立即执行：域名可能仍在注册中。注册完成后将由系统自动处理，无需您手动操作。') ?></p>
-                <div class="row g-3">
-                    <div class="col-12" id="purchase-extra-gname" style="display:none;">
-                        <div class="card border-primary">
-                            <div class="card-body py-2">
-                                <label class="form-label fw-bold"><?= __('Gname 模板 ID') ?></label>
-                                <input type="text" class="form-control" id="purchase-gname-template" placeholder="<?= __('可在账号凭据中配置 default_template_id；此处可覆盖') ?>">
+            <div class="w-dialog__body">
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);"><?= __('确认购买后，系统会按所选策略处理解析与后续状态跟踪。') ?></p>
+                <p class="w-text" data-tone="info" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('DNS/CDN 切换不会在购买后立即执行：域名可能仍在注册中。注册完成后将由系统自动处理，无需您手动操作。') ?></p>
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div id="purchase-extra-gname" style="display:none;">
+                        <div class="w-card border-primary">
+                            <div class="w-card__body" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
+                                <label class="w-field__label w-text" data-weight="strong"><?= __('Gname 模板 ID') ?></label>
+                                <input type="text" class="w-input" id="purchase-gname-template" placeholder="<?= __('可在账号凭据中配置 default_template_id；此处可覆盖') ?>">
                             </div>
                         </div>
                     </div>
-                    <div class="col-12" id="purchase-extra-registrant" style="display:none;">
-                        <div class="card border-secondary">
-                            <div class="card-body">
-                                <h6 class="mb-3"><?= __('注册联系人（GoDaddy / AWS Route53 / 阿里云）') ?></h6>
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <label class="form-label small"><?= __('名') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-first">
+                    <div id="purchase-extra-registrant" style="display:none;">
+                        <div class="w-card border-secondary">
+                            <div class="w-card__body">
+                                <h6 style="--w-mb:var(--weline-space-4);"><?= __('注册联系人（GoDaddy / AWS Route53 / 阿里云）') ?></h6>
+                                <div class="w-grid" style="--w-gap:var(--weline-space-2);">
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('名') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-first" data-size="sm">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small"><?= __('姓') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-last">
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('姓') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-last" data-size="sm">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small"><?= __('邮箱') ?> <span class="text-danger">*</span></label>
-                                        <input type="email" class="form-control form-control-sm" id="purchase-reg-email">
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('邮箱') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="email" class="w-input" id="purchase-reg-email" data-size="sm">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small"><?= __('电话') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-phone" placeholder="+1.5551234567 <?= __('或') ?> 13800138000">
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('电话') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-phone" placeholder="+1.5551234567 <?= __('或') ?> 13800138000" data-size="sm">
                                     </div>
-                                    <div class="col-12">
-                                        <label class="form-label small"><?= __('地址') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-address1">
+                                    <div style="--w-span:12;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('地址') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-address1" data-size="sm">
                                     </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small"><?= __('城市') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-city">
+                                    <div style="--w-span-md:4;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('城市') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-city" data-size="sm">
                                     </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small"><?= __('州/省') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-state" placeholder="<?= __('美国/加拿大必填') ?>">
+                                    <div style="--w-span-md:4;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('州/省') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-state" placeholder="<?= __('美国/加拿大必填') ?>" data-size="sm">
                                     </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small"><?= __('邮编') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-postal">
+                                    <div style="--w-span-md:4;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('邮编') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-postal" data-size="sm">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small"><?= __('国家代码') ?> <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-country" value="US" maxlength="2" placeholder="US / CN">
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('国家代码') ?> <span class="w-text" data-tone="danger">*</span></label>
+                                        <input type="text" class="w-input" id="purchase-reg-country" value="US" maxlength="2" placeholder="US / CN" data-size="sm">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small"><?= __('组织（可选）') ?></label>
-                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-org">
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label w-text" data-size="sm"><?= __('组织（可选）') ?></label>
+                                        <input type="text" class="w-input" id="purchase-reg-org" data-size="sm">
                                     </div>
-                                    <div class="col-12">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="purchase-reg-privacy" checked>
-                                            <label class="form-check-label" for="purchase-reg-privacy"><?= __('开启 WHOIS 隐私保护（若注册商支持）') ?></label>
+                                    <div style="--w-span:12;">
+                                        <div class="w-check">
+                                            <input type="checkbox" id="purchase-reg-privacy" checked>
+                                            <label for="purchase-reg-privacy"><?= __('开启 WHOIS 隐私保护（若注册商支持）') ?></label>
                                         </div>
                                     </div>
                                 </div>
-                                <p class="small text-muted mb-0 mt-2"><?= __('阿里云：提交后为待支付任务，需在阿里云控制台付款后域名才生效。') ?></p>
+                                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;--w-mt:var(--weline-space-2);"><?= __('阿里云：提交后为待支付任务，需在阿里云控制台付款后域名才生效。') ?></p>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-6">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h6 class="mb-3"><?= __('DNS 配置') ?></h6>
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('DNS 策略') ?></label>
-                                    <select class="form-select" id="purchase-dialog-dns-choice">
+                    <div style="--w-span-lg:6;">
+                        <div class="w-card" data-w-height="full">
+                            <div class="w-card__body">
+                                <h6 style="--w-mb:var(--weline-space-4);"><?= __('DNS 配置') ?></h6>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><?= __('DNS 策略') ?></label>
+                                    <select class="w-select" id="purchase-dialog-dns-choice">
                                         <option value="follow_registrar"><?= __('跟随当前购买账号') ?></option>
                                         <option value="provider_account"><?= __('指定供应商账户') ?></option>
                                         <option value="custom_nameservers"><?= __('自定义 Nameserver') ?></option>
                                     </select>
                                 </div>
                                 <div id="purchase-dialog-dns-provider-area" style="display:none;">
-                                    <div class="mb-3">
-                                        <label class="form-label"><?= __('DNS 服务商') ?></label>
-                                        <w:websites:registrar:select
-                                            id="purchase-dialog-dns-provider"
-                                            name="purchase_dialog_dns_provider"
-                                            value="''"
-                                            display="''"
-                                            options="providerSelectOptionsJson"
-                                            empty-label="@lang(请选择 DNS 服务商)"
-                                            placeholder="@lang(搜索 DNS 服务商...)"
-                                            class="w-100"
-                                            on-select="handlePurchaseDnsProviderSelect"
-                                        />
+                                    <div style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label"><?= __('DNS 服务商') ?></label>
+                                        <w:websites:registrar:select id="purchase-dialog-dns-provider" name="purchase_dialog_dns_provider" value="''" display="''" options="providerSelectOptionsJson" empty-label="@lang(请选择 DNS 服务商)" placeholder="@lang(搜索 DNS 服务商...)" on-select="handlePurchaseDnsProviderSelect" data-w-width="full" />
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label"><?= __('DNS 子账户') ?></label>
-                                        <select class="form-select" id="purchase-dialog-dns-account" disabled>
+                                    <div style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label"><?= __('DNS 子账户') ?></label>
+                                        <select class="w-select" id="purchase-dialog-dns-account" disabled>
                                             <option value=""><?= __('请先选择 DNS 服务商') ?></option>
                                         </select>
                                     </div>
                                 </div>
-                                <div class="mb-3" id="purchase-dialog-dns-ns-area" style="display:none;">
-                                    <label class="form-label"><?= __('Nameserver 列表') ?></label>
-                                    <input type="text" class="form-control" id="purchase-dialog-dns-nameservers" placeholder="<?= __('ns1.example.com, ns2.example.com') ?>">
+                                <div id="purchase-dialog-dns-ns-area" style="display:none;">
+                                    <label class="w-field__label"><?= __('Nameserver 列表') ?></label>
+                                    <input type="text" class="w-input" id="purchase-dialog-dns-nameservers" placeholder="<?= __('ns1.example.com, ns2.example.com') ?>">
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-6">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h6 class="mb-3"><?= __('CDN 配置') ?></h6>
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('CDN 策略') ?></label>
-                                    <select class="form-select" id="purchase-dialog-cdn-choice">
+                    <div style="--w-span-lg:6;">
+                        <div class="w-card" data-w-height="full">
+                            <div class="w-card__body">
+                                <h6 style="--w-mb:var(--weline-space-4);"><?= __('CDN 配置') ?></h6>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><?= __('CDN 策略') ?></label>
+                                    <select class="w-select" id="purchase-dialog-cdn-choice">
                                         <option value="follow_registrar"><?= __('跟随当前购买账号') ?></option>
                                         <option value="provider_account"><?= __('指定供应商账户') ?></option>
                                         <option value="none"><?= __('暂不配置 CDN') ?></option>
                                     </select>
                                 </div>
                                 <div id="purchase-dialog-cdn-provider-area" style="display:none;">
-                                    <div class="mb-3">
-                                        <label class="form-label"><?= __('CDN 服务商') ?></label>
-                                        <w:websites:registrar:select
-                                            id="purchase-dialog-cdn-provider"
-                                            name="purchase_dialog_cdn_provider"
-                                            value="''"
-                                            display="''"
-                                            options="providerSelectOptionsJson"
-                                            empty-label="@lang(请选择 CDN 服务商)"
-                                            placeholder="@lang(搜索 CDN 服务商...)"
-                                            class="w-100"
-                                            on-select="handlePurchaseCdnProviderSelect"
-                                        />
+                                    <div style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label"><?= __('CDN 服务商') ?></label>
+                                        <w:websites:registrar:select id="purchase-dialog-cdn-provider" name="purchase_dialog_cdn_provider" value="''" display="''" options="providerSelectOptionsJson" empty-label="@lang(请选择 CDN 服务商)" placeholder="@lang(搜索 CDN 服务商...)" on-select="handlePurchaseCdnProviderSelect" data-w-width="full" />
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label"><?= __('CDN 子账户') ?></label>
-                                        <select class="form-select" id="purchase-dialog-cdn-account" disabled>
+                                    <div style="--w-mb:var(--weline-space-4);">
+                                        <label class="w-field__label"><?= __('CDN 子账户') ?></label>
+                                        <select class="w-select" id="purchase-dialog-cdn-account" disabled>
                                             <option value=""><?= __('请先选择 CDN 服务商') ?></option>
                                         </select>
                                     </div>
@@ -285,68 +254,49 @@ $providerSelectOptionsJson = json_encode(array_values($providerSelectMap), JSON_
                             </div>
                         </div>
                     </div>
-                    <div class="col-12">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="purchase-dialog-resolve-to-local" checked>
-                            <label class="form-check-label fw-bold" for="purchase-dialog-resolve-to-local">
+                    <div style="--w-span:12;">
+                        <div class="w-check">
+                            <input type="checkbox" id="purchase-dialog-resolve-to-local" checked>
+                            <label class="w-text" for="purchase-dialog-resolve-to-local" data-weight="strong">
                                 <?= __('自动解析到本服务器') ?>
                             </label>
                         </div>
-                        <div class="small text-muted mt-1"><?= __('默认会解析 @ 和 www，并持续检查域名状态。') ?></div>
+                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('默认会解析 @ 和 www，并持续检查域名状态。') ?></div>
                     </div>
-                    <div class="col-12">
-                        <label class="form-label"><?= __('自动解析子域名') ?></label>
-                        <input type="text" class="form-control" id="purchase-dialog-subdomains" value="@, www" placeholder="<?= __('@, www') ?>">
+                    <div style="--w-span:12;">
+                        <label class="w-field__label"><?= __('自动解析子域名') ?></label>
+                        <input type="text" class="w-input" id="purchase-dialog-subdomains" value="@, www" placeholder="<?= __('@, www') ?>">
                     </div>
-                    <div class="col-12">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="purchase-dialog-start-lifecycle" checked>
-                            <label class="form-check-label fw-bold" for="purchase-dialog-start-lifecycle">
+                    <div style="--w-span:12;">
+                        <div class="w-check">
+                            <input type="checkbox" id="purchase-dialog-start-lifecycle" checked>
+                            <label class="w-text" for="purchase-dialog-start-lifecycle" data-weight="strong">
                                 <?= __('启动全流程状态跟踪') ?>
                             </label>
                         </div>
-                        <div class="small text-muted mt-1"><?= __('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。') ?></div>
+                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);"><?= __('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。') ?></div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="purchase-dialog-confirm-btn"><?= __('确认购买') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="purchase-dialog-confirm-btn" data-tone="primary"><?= __('确认购买') ?></button>
             </div>
         </div>
     </div>
 </div>
 
 
+
 <script>
-(function(g){
-  if(g.__bqAdmin_websites) return;
-  g.__bqAdmin_websites=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['websites']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('websites').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script>
+(function() {
+'use strict';
+
+function showToast(message, type) {
+    var tone = type === 'error' ? 'danger' : (type || 'info');
+    Weline.UI.toast.show(message, { tone: tone });
+}
+
 var checkAvailabilityUrl = '<?= $this->getUrl('*/admin/domain/check-availability') ?>';
 var purchaseUrl = '<?= $this->getUrl('*/admin/domain/purchase') ?>';
 var ordersUrl = '<?= $this->getUrl('*/admin/domain/orders') ?>';
@@ -425,7 +375,7 @@ function loadPurchaseDialogProviders(callback) {
         if (typeof callback === 'function') callback();
         return;
     }
-    bqAdmin['websites'](getRegistrarAccountsUrl).then(function(r) { return r.json(); }).then(function(data) {
+    Weline.adminRequest('websites', getRegistrarAccountsUrl).then(function(r) { return r.json(); }).then(function(data) {
         purchaseProviderAccounts = {};
         var accounts = (data.data && data.data.accounts) ? data.data.accounts : [];
         accounts.forEach(function(acc) {
@@ -504,7 +454,7 @@ function syncPurchaseDialogSections() {
 function openPurchaseConfigModal(accountId, items) {
     pendingPurchasePayload = { accountId: accountId, items: items };
     if (!purchaseDialogModal) {
-        purchaseDialogModal = new bootstrap.Modal(document.getElementById('welinePurchaseConfigModal'));
+        purchaseDialogModal = document.getElementById('welinePurchaseConfigModal');
     }
 
     var currentAccount = getPurchaseDialogCurrentAccount();
@@ -522,7 +472,7 @@ function openPurchaseConfigModal(accountId, items) {
 
     syncPurchaseDialogSections();
     updatePurchaseExtraVisibility();
-    purchaseDialogModal.show();
+    Weline.UI.dialog.open(purchaseDialogModal);
 }
 
 function collectPurchaseDialogResult() {
@@ -612,13 +562,13 @@ function checkDomainAvailability() {
     }
 
     var container = document.getElementById('availability-results');
-    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2"><?= __('正在检查域名可用性...') ?></p></div>';
+    container.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p style="--w-mt:var(--weline-space-2);"><?= __('正在检查域名可用性...') ?></p></div>';
 
     var formData = new FormData();
     formData.append('account_id', accountId);
     formData.append('domains', domainsText);
 
-    bqAdmin['websites'](checkAvailabilityUrl, {
+    Weline.adminRequest('websites', checkAvailabilityUrl, {
         method: 'POST',
         body: formData
     })
@@ -628,11 +578,11 @@ function checkDomainAvailability() {
             availabilityResults = data.data || [];
             renderAvailabilityResults(availabilityResults);
         } else {
-            container.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.msg || '<?= __('检查失败') ?>') + '</div>';
+            container.innerHTML = '<div class="w-alert" data-tone="danger">' + escapeHtml(data.msg || '<?= __('检查失败') ?>') + '</div>';
         }
     })
     .catch(function(err) {
-        container.innerHTML = '<div class="alert alert-danger"><?= __('请求失败') ?>: ' + escapeHtml((err && err.message) || '') + '</div>';
+        container.innerHTML = '<div class="w-alert" data-tone="danger"><?= __('请求失败') ?>: ' + escapeHtml((err && err.message) || '') + '</div>';
     });
 }
 
@@ -641,7 +591,7 @@ function renderAvailabilityResults(results) {
     var availableCount = 0;
     var websitesJson = <?= json_encode($websites, JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
-    var html = '<div class="table-responsive"><table class="table table-sm align-middle"><thead class="table-light"><tr>';
+    var html = '<div class="w-table-wrap"><table class="w-table" data-w-vertical="middle"><thead><tr>';
     html += '<th><?= __('域名') ?></th><th><?= __('状态') ?></th><th><?= __('价格') ?></th>';
     html += '<th><?= __('年限') ?></th><th><?= __('绑定站点') ?></th></tr></thead><tbody>';
 
@@ -650,16 +600,16 @@ function renderAvailabilityResults(results) {
         var available = r.available;
         if (available) availableCount++;
 
-        html += '<tr class="' + (available ? '' : 'table-secondary') + '">';
+        html += '<tr class="' + (available ? '' : 'weline-table-secondary') + '">';
         html += '<td><strong>' + escapeHtml(r.domain) + '</strong></td>';
         html += '<td>' + (available
-            ? '<span class="badge bg-success"><?= __('可用') ?></span>'
-            : '<span class="badge bg-secondary"><?= __('不可用') ?></span>') + '</td>';
+            ? '<span class="w-badge" data-w-background="success"><?= __('可用') ?></span>'
+            : '<span class="w-badge" data-w-background="muted"><?= __('不可用') ?></span>') + '</td>';
         html += '<td>' + (available && r.price ? (r.currency || '$') + r.price + '/yr' : '-') + '</td>';
 
         if (available) {
-            html += '<td><input type="number" class="form-control form-control-sm purchase-years" data-index="' + i + '" value="1" min="1" max="10" style="width:70px;"></td>';
-            html += '<td><select class="form-select form-select-sm purchase-bind-site" data-index="' + i + '" style="min-width:160px;">';
+            html += '<td><input type="number" class="w-input purchase-years" data-index="' + i + '" value="1" min="1" max="10" style="width:70px;" data-size="sm"></td>';
+            html += '<td><select class="w-select purchase-bind-site" data-index="' + i + '" style="min-width:160px;" data-size="sm">';
             html += '<option value=""><?= __('不绑定') ?></option>';
             html += '<option value="__auto__"><?= __('自动新建站点') ?></option>';
             for (var j = 0; j < websitesJson.length; j++) {
@@ -668,7 +618,7 @@ function renderAvailabilityResults(results) {
             }
             html += '</select></td>';
         } else {
-            html += '<td>-</td><td>' + (r.message ? '<small class="text-muted">' + escapeHtml(r.message) + '</small>' : '-') + '</td>';
+            html += '<td>-</td><td>' + (r.message ? '<small class="w-text" data-tone="muted">' + escapeHtml(r.message) + '</small>' : '-') + '</td>';
         }
         html += '</tr>';
     }
@@ -749,7 +699,7 @@ function executePurchase(accountId, items, dialogResult) {
         formData.append('purchase_contact', JSON.stringify(dialogResult.purchase_contact));
     }
 
-    bqAdmin['websites'](purchaseUrl, {
+    Weline.adminRequest('websites', purchaseUrl, {
         method: 'POST',
         body: formData
     })
@@ -795,11 +745,11 @@ function executePurchase(accountId, items, dialogResult) {
 }
 
 function loadOrders() {
-    bqAdmin['websites'](ordersUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    Weline.adminRequest('websites', ordersUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.code === 200 && data.data && data.data.length > 0) {
-            var html = '<div class="table-responsive"><table class="table table-sm"><thead class="table-light"><tr>';
+            var html = '<div class="w-table-wrap"><table class="w-table"><thead><tr>';
             html += '<th><?= __('订单号') ?></th><th><?= __('数量') ?></th><th><?= __('状态') ?></th><th><?= __('时间') ?></th></tr></thead><tbody>';
             for (var i = 0; i < data.data.length; i++) {
                 var o = data.data[i];
@@ -872,10 +822,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             if (purchaseDialogModal) {
-                purchaseDialogModal.hide();
+                Weline.UI.dialog.close(purchaseDialogModal, 'confirmed');
             }
             executePurchase(pendingPurchasePayload.accountId, pendingPurchasePayload.items, dialogResult);
         });
     }
 });
+})();
 </script>

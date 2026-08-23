@@ -4,245 +4,134 @@ declare(strict_types=1);
 
 namespace Weline\Storage\Service;
 
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Storage\Adapter\LocalStorage;
-use Weline\Storage\Adapter\OssStorage;
-use Weline\Storage\Adapter\S3Storage;
+use Weline\Storage\Adapter\StorageInterfaceBridge;
+use Weline\Storage\Api\Data\StorageDiskCode;
 use Weline\Storage\Api\StorageInterface;
-use Weline\Storage\Model\StorageConfig;
+use Weline\Storage\Api\StorageManagerInterface;
 
 /**
- * @DESC | 存储管理器，统一管理所有存储后端
+ * @deprecated Legacy facade. New code must depend on StorageManagerInterface.
+ *
+ * The facade owns no driver registry, SDK client, disk cache, or local
+ * fallback. Compatibility calls therefore retain the request/Fiber resource
+ * lifecycle, immutable config snapshot, and URL-adapter behavior of v2.
  */
 class StorageManager
 {
-    private array $disks = [];
-    private array $drivers = [];
-    private ?string $defaultDisk = null;
-    private bool $initialized = false;
-    
-    private StorageConfig $storageConfig;
-    private EventsManager $eventsManager;
-    
-    public function __construct()
-    {
-        $this->storageConfig = ObjectManager::getInstance(StorageConfig::class);
-        $this->eventsManager = ObjectManager::getInstance(EventsManager::class);
-        
-        $this->registerDefaultDrivers();
+    public function __construct(
+        private readonly ?StorageManagerInterface $manager = null,
+        private readonly ?StorageConfigTester $tester = null,
+        private readonly ?StorageDriverProviderRegistry $providers = null,
+    ) {
     }
-    
-    /**
-     * 注册默认驱动
-     */
-    private function registerDefaultDrivers(): void
-    {
-        $this->drivers = [
-            'local' => LocalStorage::class,
-            's3' => S3Storage::class,
-            'oss' => OssStorage::class,
-        ];
-        
-        $eventData = ['data' => ['drivers' => &$this->drivers]];
-        $this->eventsManager->dispatch('Weline_Storage::integration::register_drivers', $eventData);
-    }
-    
-    /**
-     * 从数据库加载存储配置
-     */
-    private function loadFromDatabase(): void
-    {
-        if ($this->initialized) {
-            return;
-        }
-        
-        $this->initialized = true;
-        
-        $configs = $this->storageConfig->getEnabledConfigs();
-        
-        foreach ($configs as $config) {
-            $name = $config['name'] ?? '';
-            if (!$name) {
-                continue;
-            }
-            
-            $driver = $config['driver'] ?? 'local';
-            $configArray = [];
-            
-            if (!empty($config['config'])) {
-                $configArray = \json_decode($config['config'], true) ?: [];
-            }
-            
-            $this->registerDisk($name, $driver, $configArray);
-            
-            if (($config['is_default'] ?? 0) == 1) {
-                $this->defaultDisk = $name;
-            }
-        }
-        
-        if ($this->defaultDisk === null && !empty($this->disks)) {
-            $this->defaultDisk = \array_key_first($this->disks);
-        }
-    }
-    
-    /**
-     * 注册存储磁盘
-     */
+
     public function registerDisk(string $name, string $driver, array $config = []): self
     {
-        if (!isset($this->drivers[$driver])) {
-            throw new \InvalidArgumentException(__('未知的存储驱动：%{driver}', ['driver' => $driver]));
-        }
-        
-        $adapterClass = $this->drivers[$driver];
-        $this->disks[$name] = new $adapterClass($config);
-        
-        return $this;
+        throw new \LogicException((string)__('运行时注册存储磁盘已禁用，请保存磁盘配置并推进 config_revision。'));
     }
-    
-    /**
-     * 注册自定义驱动
-     */
+
     public function registerDriver(string $driver, string $adapterClass): self
     {
-        if (!\is_subclass_of($adapterClass, StorageInterface::class)) {
-            throw new \InvalidArgumentException(__('驱动类必须实现 StorageInterface 接口'));
-        }
-        
-        $this->drivers[$driver] = $adapterClass;
-        return $this;
+        throw new \LogicException((string)__('运行时注册存储驱动已禁用，请通过编译 Provider 注册。'));
     }
-    
-    /**
-     * 获取指定存储磁盘
-     */
+
     public function disk(?string $name = null): StorageInterface
     {
-        $this->loadFromDatabase();
-        
-        $name = $name ?? $this->defaultDisk;
-        
-        if ($name === null) {
-            return $this->getLocalDisk();
-        }
-        
-        if (!isset($this->disks[$name])) {
-            throw new \InvalidArgumentException(__('存储磁盘不存在：%{name}', ['name' => $name]));
-        }
-        
-        return $this->disks[$name];
+        $disk = $name === null || trim($name) === ''
+            ? $this->getManager()->defaultDisk()
+            : $this->getManager()->disk($name);
+
+        return new StorageInterfaceBridge($disk);
     }
-    
-    /**
-     * 获取默认存储磁盘
-     */
+
     public function getDefault(): StorageInterface
     {
         return $this->disk();
     }
-    
-    /**
-     * 获取本地存储磁盘（备用）
-     */
+
     public function getLocalDisk(): StorageInterface
     {
-        if (!isset($this->disks['__local__'])) {
-            $this->disks['__local__'] = new LocalStorage([
-                'root_path' => PUB . 'media',
-                'base_url' => '/pub/media',
-            ]);
-        }
-        
-        return $this->disks['__local__'];
+        return $this->disk(StorageDiskCode::BUILTIN_LOCAL_MEDIA);
     }
-    
-    /**
-     * 获取所有已注册的磁盘
-     */
+
+    /** @return array<string,StorageInterface> */
     public function getDisks(): array
     {
-        $this->loadFromDatabase();
-        return $this->disks;
+        $result = [];
+        foreach ($this->getManager()->catalog() as $item) {
+            $code = trim((string)($item['disk_code'] ?? ''));
+            if ($code !== '') {
+                $result[$code] = $this->disk($code);
+            }
+        }
+        return $result;
     }
-    
-    /**
-     * 获取所有可用的驱动
-     */
+
+    /** @return array<string,class-string> */
     public function getDrivers(): array
     {
-        return $this->drivers;
+        $result = [];
+        foreach ($this->getProviders()->all() as $code => $provider) {
+            $result[$code] = $provider::class;
+        }
+        return $result;
     }
-    
-    /**
-     * 获取默认磁盘名称
-     */
+
     public function getDefaultDiskName(): ?string
     {
-        $this->loadFromDatabase();
-        return $this->defaultDisk;
+        return $this->getManager()->defaultDisk()->diskCode();
     }
-    
-    /**
-     * 检查磁盘是否存在
-     */
+
     public function hasDisk(string $name): bool
     {
-        $this->loadFromDatabase();
-        return isset($this->disks[$name]);
+        try {
+            $this->getManager()->disk($name);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
-    
-    /**
-     * 测试存储配置
-     */
+
     public function testConfig(string $driver, array $config): bool
     {
-        if (!isset($this->drivers[$driver])) {
-            return false;
-        }
-        
-        try {
-            $adapterClass = $this->drivers[$driver];
-            $adapter = new $adapterClass($config);
-            return $adapter->testConnection();
-        } catch (\Throwable $e) {
-            return false;
-        }
+        return $this->getTester()->test($driver, 'connection_test', $config);
     }
-    
-    /**
-     * 获取存储配置列表（用于前端展示）
-     */
+
+    /** @return list<array<string,mixed>> */
     public function getStorageList(): array
     {
-        $this->loadFromDatabase();
-        
-        $list = [];
-        foreach ($this->disks as $name => $disk) {
-            if ($name === '__local__') {
-                continue;
-            }
-            
-            $info = $disk->getInfo();
-            $list[] = [
-                'name' => $name,
-                'driver' => $info['driver'] ?? 'unknown',
-                'is_default' => $name === $this->defaultDisk,
-                'info' => $info,
-            ];
-        }
-        
-        return $list;
+        return array_map(
+            static fn(array $item): array => [
+                'name' => (string)($item['disk_code'] ?? ''),
+                'driver' => (string)($item['provider_code'] ?? ''),
+                'is_default' => (bool)($item['is_default'] ?? false),
+                'info' => $item,
+            ],
+            $this->getManager()->catalog(),
+        );
     }
-    
-    /**
-     * 重新加载配置
-     */
+
     public function reload(): void
     {
-        $this->disks = [];
-        $this->defaultDisk = null;
-        $this->initialized = false;
-        $this->loadFromDatabase();
+        $manager = $this->getManager();
+        if ($manager instanceof StorageManagerV2) {
+            $manager->resetRequestState();
+        }
+    }
+
+    private function getManager(): StorageManagerInterface
+    {
+        return $this->manager ?? ObjectManager::getInstance(StorageManagerInterface::class);
+    }
+
+    private function getTester(): StorageConfigTester
+    {
+        return $this->tester ?? ObjectManager::getInstance(StorageConfigTester::class);
+    }
+
+    private function getProviders(): StorageDriverProviderRegistry
+    {
+        return $this->providers ?? ObjectManager::getInstance(StorageDriverProviderRegistry::class);
     }
 }

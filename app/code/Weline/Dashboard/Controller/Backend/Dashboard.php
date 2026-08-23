@@ -52,7 +52,7 @@ class Dashboard extends BackendPageController
 
     private function applyDashboardLayoutIdentity(DashboardView $view): void
     {
-        $identity = $view->layoutIdentity();
+        $identity = $this->dashboardViewService->layoutIdentity($view)->toArray();
         $params = [
             'page_type' => DashboardView::PAGE_TYPE,
             'layout_type' => DashboardView::PAGE_TYPE,

@@ -31,7 +31,7 @@ use Weline\Websites\Service\WebsiteChangeSnapshotFactory;
 use Weline\Websites\Service\WebsiteEntryUrlService;
 use Weline\Websites\Service\WebsiteStoreChannelDirectory;
 
-#[Acl('Weline_Websites::website', '网站管理', 'mdi mdi-web', '网站管理', 'Weline_Websites::website_service')]
+#[Acl('Weline_Websites::website', '网站管理', 'globe', '网站管理', 'Weline_Websites::website_service')]
 class Website extends BackendController
 {
     private const FRONTEND_START_PAGE_CONFIG_KEY = 'frontend_start_page_path';
@@ -47,7 +47,7 @@ class Website extends BackendController
         $this->website = $website;
     }
 
-    #[Acl('Weline_Websites::website_list', '网站列表', 'mdi mdi-view-list', '网站管理')]
+    #[Acl('Weline_Websites::website_list', '网站列表', 'list', '网站管理')]
     public function index()
     {
         // 保留既有 AJAX 响应兼容面；当前官方模板只使用普通 GET 页面搜索。
@@ -162,7 +162,7 @@ class Website extends BackendController
         unset($website);
     }
 
-    #[Acl('Weline_Websites::website_enter_backend', '直进子站后台', 'mdi mdi-login-variant', '主站直进已授权子站后台', 'Weline_Websites::website_list')]
+    #[Acl('Weline_Websites::website_enter_backend', '直进子站后台', 'login', '主站直进已授权子站后台', 'Weline_Websites::website_list')]
     public function getEnterBackend()
     {
         $websiteId = (int)$this->request->getGet('website_id', 0);
@@ -285,7 +285,7 @@ class Website extends BackendController
         return $websiteId;
     }
 
-    #[Acl('Weline_Websites::website_add', '添加网站', 'mdi mdi-plus', '网站管理')]
+    #[Acl('Weline_Websites::website_add', '添加网站', 'plus', '网站管理')]
     public function add()
     {
         // 使用空白布局（适用于 offcanvas/弹窗）
@@ -446,7 +446,7 @@ class Website extends BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Websites::website_edit', '编辑网站', 'mdi mdi-pencil', '网站管理')]
+    #[Acl('Weline_Websites::website_edit', '编辑网站', 'edit', '网站管理')]
     public function edit()
     {
         // 使用空白布局（适用于 offcanvas/弹窗）
@@ -825,7 +825,7 @@ class Website extends BackendController
         }
     }
 
-    #[Acl('Weline_Websites::website_delete', '删除网站', 'mdi mdi-delete', '网站管理')]
+    #[Acl('Weline_Websites::website_delete', '删除网站', 'trash', '网站管理')]
     public function deleteDelete(): string
     {
         $rawWebsiteId = $this->request->getGet('id');

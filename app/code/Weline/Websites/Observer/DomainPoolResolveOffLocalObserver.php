@@ -65,7 +65,7 @@ class DomainPoolResolveOffLocalObserver implements ObserverInterface
                 'source_module' => 'Weline_Websites',
             ],
             null,
-            'ri-error-warning-line',
+            'warning',
         );
     }
 }

@@ -60,14 +60,14 @@ class Install implements \Weline\Framework\Setup\InstallInterface
             'type' => 'info',
             'is_icon' => true,
             'is_img' => false,
-            'avatar' => 'ri-checkbox-circle-line',
+            'avatar' => 'check',
         ], [
             'title' => '框架开发理念！',
             'content' => '灵活适应性强，高性能的基于PHP8的互联网快速开发框架...',
             'type' => 'info',
-            'is_icon' => false,
-            'is_img' => true,
-            'avatar' => 'assets/images/users/avatar-3.jpg',
+            'is_icon' => true,
+            'is_img' => false,
+            'avatar' => 'sparkles',
         ]]);
     }
 }

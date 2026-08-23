@@ -115,7 +115,7 @@ class DomainPoolResolveCheck
                                     'warning',
                                     __('域名 %{1} DNS 未解析且添加记录失败', [$domainName]),
                                     $addResult['message'],
-                                    ['icon' => 'ri-error-warning-line']
+                                    ['icon' => 'warning']
                                 );
                             }
                         } elseif (!$hasDnsOrCdnAccount) {
@@ -167,7 +167,7 @@ class DomainPoolResolveCheck
                         'warning',
                         __('域名 %{1} 处理异常', [$domainName]),
                         $errMsg,
-                        ['icon' => 'ri-error-warning-line']
+                        ['icon' => 'warning']
                     );
                 }
             }
@@ -216,7 +216,7 @@ class DomainPoolResolveCheck
                     'warning',
                     __('域名池检测有 %{1} 个域名失败', [$errors]),
                     $message,
-                    ['icon' => 'ri-error-warning-line']
+                    ['icon' => 'warning']
                 );
             }
 

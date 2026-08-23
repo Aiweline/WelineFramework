@@ -24,6 +24,8 @@ return [
         \Weline\Websites\Api\Catalog\WebsiteCatalogInterface::class => \Weline\Websites\Service\WebsiteCatalog::class,
         \Weline\Websites\Api\Catalog\StoreCatalogInterface::class => \Weline\Websites\Service\StoreCatalog::class,
         \Weline\Websites\Api\Catalog\SalesChannelCatalogInterface::class => \Weline\Websites\Service\SalesChannelCatalog::class,
+        'system_config.scope_identity_catalog.Weline_Websites'
+            => \Weline\Websites\Integration\SystemConfig\ScopeIdentityCatalog::class,
         \Weline\Websites\Api\Localization\WebsiteCurrencyCatalogInterface::class => \Weline\Websites\Service\CurrentWebsiteCurrencyCatalog::class,
         \Weline\Websites\Api\Localization\WebsiteLanguageAssignmentInterface::class => \Weline\Websites\Service\Localization\WebsiteLanguageAssignment::class,
         \Weline\Framework\Runtime\StorefrontWebsiteCodeResolverInterface::class => \Weline\Websites\Observer\DetectWebsite::class,

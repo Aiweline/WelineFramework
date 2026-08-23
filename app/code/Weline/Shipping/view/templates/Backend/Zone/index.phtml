@@ -10,16 +10,16 @@ $backendBase = $this->getBackendUrl('shipping/backend/zone');
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row" data-testid="shipping-zone-management">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('配送区域') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
+<div class="w-grid" data-testid="shipping-zone-management">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;"><?= __('配送区域') ?></h4>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
                                     </li>
-                                    <li class="breadcrumb-item active"><?= __('配送区域') ?></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><?= __('配送区域') ?></li>
                                 </ol>
                             </div>
                         </div>
@@ -27,32 +27,32 @@ $embed = $this->getData('embed') ?? false;
                 </div>
 <?php endif; ?>
 
-                <div class="row mb-3"><div class="col-12"><div class="card" data-testid="shipping-zone-create-form">
-                    <div class="card-header"><h5 class="card-title mb-0"><?= __('新增配送区域') ?></h5></div>
-                    <div class="card-body"><w:form method="post" action="@backend-url('shipping/backend/zone/save')"><div class="row g-3">
-                        <div class="col-md-3"><label class="form-label"><?= __('区域名称') ?></label><input class="form-control" name="zone_name" maxlength="255" required></div>
-                        <div class="col-md-3"><label class="form-label"><?= __('区域代码') ?></label><input class="form-control" name="zone_code" maxlength="50" required></div>
-                        <div class="col-md-3"><label class="form-label"><?= __('描述') ?></label><input class="form-control" name="description"></div>
-                        <div class="col-md-1"><label class="form-label"><?= __('排序') ?></label><input class="form-control" type="number" min="0" name="sort_order" value="0"></div>
-                        <div class="col-md-2 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-zone-submit"><?= __('创建') ?></button></div>
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);"><div style="--w-span:12;"><div class="w-card" data-testid="shipping-zone-create-form">
+                    <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('新增配送区域') ?></h5></div>
+                    <div class="w-card__body"><w:form method="post" action="@backend-url('shipping/backend/zone/save')"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('区域名称') ?></label><input class="w-input" name="zone_name" maxlength="255" required></div>
+                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('区域代码') ?></label><input class="w-input" name="zone_code" maxlength="50" required></div>
+                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('描述') ?></label><input class="w-input" name="description"></div>
+                        <div style="--w-span-md:1;"><label class="w-field__label"><?= __('排序') ?></label><input class="w-input" type="number" min="0" name="sort_order" value="0"></div>
+                        <div class="w-cluster" data-align="end" style="--w-span-md:2;"><input type="hidden" name="is_active" value="1"><button class="w-button" type="submit" data-testid="shipping-zone-submit" data-w-width="full" data-tone="primary"><?= __('创建') ?></button></div>
                     </div></w:form></div>
                 </div></div></div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('配送区域列表') ?></h5>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('配送区域列表') ?></h5>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($zones)): ?>
-                                    <div class="alert alert-info mb-0">
+                                    <div class="w-alert" data-tone="info" style="--w-mb:0;">
                                         <?= __('当前暂无配送区域，请后续在此页面完善配置。') ?>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-hover align-middle">
-                                            <thead class="table-light">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table" data-w-vertical="middle">
+                                            <thead>
                                             <tr>
                                                 <th><?= __('区域名称') ?></th>
                                                 <th><?= __('区域代码') ?></th>
@@ -67,9 +67,9 @@ $embed = $this->getData('embed') ?? false;
                                                     <td><?= htmlspecialchars($zone->getData(Zone::schema_fields_ZONE_CODE)) ?></td>
                                                     <td>
                                                         <?php if ($zone->getData(Zone::schema_fields_IS_ACTIVE)): ?>
-                                                            <span class="badge bg-success"><?= __('启用') ?></span>
+                                                            <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                                            <span class="w-badge" data-w-background="muted"><?= __('禁用') ?></span>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>

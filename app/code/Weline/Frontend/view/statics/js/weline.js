@@ -50,7 +50,7 @@
     const runtimeConfig = Object.assign(
         {},
         defaultConfig,
-        (window.Weline && window.Weline.config) || window.__WelineThemeConfig || window.WelineConfig || {}
+        (window.Weline && window.Weline.config) || {}
     );
 
     function writeCookieValue(key, value, expiry = 365, options = {}) {
@@ -312,9 +312,10 @@
         },
 
         /**
-         * Api 模块代理
+         * Api 模块代理（stub；weline-api.js 加载后会替换为同步 ApiModule）
          */
         Api: {
+            __fallback: true,
             call: async (provider, operation, params, options) => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.call(provider, operation, params, options);
@@ -359,6 +360,12 @@
                 return ApiModule.getClient();
             },
         },
+
+        /**
+         * 按需加载模块（返回真实模块，如 WelineApiModule）。
+         * 用法：Weline.load('api').then(api => api.resource('consent').status({}))
+         */
+        load: (moduleName, modulePath = null) => moduleLoader.loadModule(moduleName, modulePath),
 
         /**
          * i18n 国际化对象
@@ -532,40 +539,6 @@
 
     // 将翻译函数也挂载到 Weline 对象上，方便后续更新
     Weline.__ = __;
-
-    // Account 旧方法命名兼容
-    const accountLegacyMap = {
-        checkFrontendLogin: 'checkFrontendUserLogin',
-        frontendLogin: 'frontendUserLogin',
-        frontendLogout: 'frontendUserLogout',
-        checkApiLogin: 'checkFrontendApiLogin',
-        apiLogin: 'frontendApiLogin',
-        apiLogout: 'frontendApiLogout',
-        getApiUser: 'getFrontendApiUser',
-        getApiToken: 'getFrontendApiToken',
-    };
-    Object.entries(accountLegacyMap).forEach(([oldName, newName]) => {
-        if (typeof Weline.Account[newName] === 'function') {
-            Weline.Account[oldName] = (...args) => {
-                if (runtimeConfig.debug) {
-                    console.warn(`[Weline] ${__('Weline.Account.%{1} 已弃用，请使用 %{2}', { 1: oldName, 2: newName })}`);
-                }
-                return Weline.Account[newName](...args);
-            };
-        }
-    });
-
-    // 兼容旧版本（可选）
-    if (!window.WelineApi) {
-        window.WelineApi = {
-            call: (provider, operation, params, options) => Weline.Api.call(provider, operation, params, options),
-            graph: (graph, options) => Weline.Api.graph(graph, options),
-            stream: (channel, params, options) => Weline.Api.stream(channel, params, options),
-            resource: (provider, optionalMap) => Weline.Api.resource(provider, optionalMap),
-            request: () => Promise.reject(new Error('[WelineApi] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().')),
-            account: Weline.Account,
-        };
-    }
 
     /**
      * 根据页面路径自动预加载模块

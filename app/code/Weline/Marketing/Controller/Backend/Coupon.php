@@ -22,13 +22,13 @@ use Weline\Marketing\Service\CouponService;
 /**
  * 优惠券管理控制器
  */
-#[Acl('Weline_Marketing::coupon', '优惠券管理', 'mdi-ticket-percent', '优惠券管理', 'Weline_Backend::marketing_group')]
+#[Acl('Weline_Marketing::coupon', '优惠券管理', 'circle', '优惠券管理', 'Weline_Backend::marketing_group')]
 class Coupon extends BackendController
 {
     /**
      * 优惠券列表
      */
-    #[Acl('Weline_Marketing::coupon_list', '优惠券列表', 'mdi-format-list-bulleted', '查看优惠券列表')]
+    #[Acl('Weline_Marketing::coupon_list', '优惠券列表', 'list', '查看优惠券列表')]
     public function index(): string
     {
         try {
@@ -51,7 +51,7 @@ class Coupon extends BackendController
         }
     }
 
-    #[Acl('Weline_Marketing::coupon_add', '添加优惠券', 'mdi-plus', '打开优惠券新建表单')]
+    #[Acl('Weline_Marketing::coupon_add', '添加优惠券', 'plus', '打开优惠券新建表单')]
     public function getAdd(): string
     {
         try {
@@ -67,7 +67,7 @@ class Coupon extends BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Marketing::coupon_save', '保存优惠券', 'mdi-content-save', '保存优惠券')]
+    #[Acl('Weline_Marketing::coupon_save', '保存优惠券', 'save', '保存优惠券')]
     public function postSave(): string
     {
         try {

@@ -4,89 +4,86 @@
 已强制清理所有缓存池（包括持久缓存）,"Forcibly cleared all cache pools (including persistent cache)"
 已清理所有非持久缓存池,"Cleaned all non-persistent cache pools"
 "并额外清理 %{1} 个 WLS 共享缓存命名空间","And additionally clean up %{1} WLS shared cache namespaces"
-请先选择要清理的缓存,请先选择要清理的缓存
-清理中...,清理中...
-所选缓存已清理完成,所选缓存已清理完成
-部分缓存清理失败，请查看提示后重试,部分缓存清理失败，请查看提示后重试
-请求失败,请求失败
-"bin-query 接口不可用，请刷新页面后重试","bin-query 接口不可用，请刷新页面后重试"
-确定要清理所选缓存池吗？,确定要清理所选缓存池吗？
-所选缓存里包含持久缓存，将以强制模式清理。是否继续？,所选缓存里包含持久缓存，将以强制模式清理。是否继续？
-确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。,确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。
-继续,继续
-取消,取消
-无匹配缓存,无匹配缓存
-系统维护,系统维护
-清理缓存,清理缓存
-弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。,弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。
-关闭,关闭
-"搜索缓存类型（identity / 名称 / 模块）","搜索缓存类型（identity / 名称 / 模块）"
-全选当前结果,全选当前结果
-个已选,个已选
-持久,持久
-全部清理（非持久）,全部清理（非持久）
-清理所选,清理所选
-"后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。","后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。"
-缓存策略已保存，非持久缓存已清理,缓存策略已保存，非持久缓存已清理
-缓存策略,缓存策略
-"mdi mdi-tune-variant","mdi mdi-tune-variant"
-"运行时缓存 TTL 与共享 Memory 策略","运行时缓存 TTL 与共享 Memory 策略"
-缓存策略设置,缓存策略设置
-查看运行时缓存策略,查看运行时缓存策略
-保存缓存策略,保存缓存策略
-"mdi mdi-content-save","mdi mdi-content-save"
-保存运行时缓存策略,保存运行时缓存策略
+请先选择要清理的缓存,"Please select the cache you want to clean first"
+清理中...,"Cleaning up..."
+所选缓存已清理完成,"The selected cache has been cleaned"
+部分缓存清理失败，请查看提示后重试,"Part of the cache cleanup failed, please check the prompts and try again."
+请求失败,"Request failed"
+"bin-query 接口不可用，请刷新页面后重试","The bin-query interface is unavailable, please refresh the page and try again."
+确定要清理所选缓存池吗？,"Are you sure you want to clean the selected cache pool?"
+所选缓存里包含持久缓存，将以强制模式清理。是否继续？,"The selected cache contains persistent cache and will be cleaned in force mode. Continue?"
+确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。,"Are you sure you want to clear all non-persistent caches? This maintains a system critical persistent cache."
+继续,continue
+取消,Cancel
+无匹配缓存,"No matching cache"
+系统维护,"System maintenance"
+清理缓存,"clear cache"
+弹窗内可搜索选择缓存类型，或一键清理全部非持久缓存。,"In the pop-up window, you can search and select the cache type, or clear all non-persistent caches with one click."
+关闭,closure
+"搜索缓存类型（identity / 名称 / 模块）","Search cache type (identity/name/module)"
+全选当前结果,"Select all current results"
+个已选,selected
+持久,lasting
+全部清理（非持久）,"Clean all (non-persistent)"
+清理所选,"Clear selected"
+"后台设置面板的清理缓存入口：弹窗支持搜索多选缓存池清理或全部清理，仅拥有 %{1} ACL 的用户可见。","Clean cache entry in the background settings panel: The pop-up window supports searching for multiple selections to clean cache pools or clear all, and is only visible to users with %{1} ACL."
+缓存策略已保存，非持久缓存已清理,"Cache policy saved, non-persistent cache cleared"
+缓存策略,"caching strategy"
+settings,settings
+"运行时缓存 TTL 与共享 Memory 策略","Runtime cache TTL and shared memory strategy"
+缓存策略设置,"Cache policy settings"
+查看运行时缓存策略,"View runtime caching policies"
+保存缓存策略,"Save cache policy"
+save,save
+保存运行时缓存策略,"Save runtime cache policy"
 操作成功！,"Operation successful!"
 请至少选择一个缓存项,"Please select at least one cache item"
 批量缓存状态已更新,"Batch cache status updated"
 定时任务执行完成！已清理过期缓存文件。,"Scheduled Task Execution Completed! Expired Cache Files Have Been Cleaned Up."
 "定时任务执行失败: %{1}。请检查 Cron 配置和日志。","Scheduled Task Execution Failed: %{1}. Please Check the Cron Configuration and Logs."
 缓存管理,"Cache Management"
-"mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
-系统缓存状态管理,系统缓存状态管理
-缓存列表,缓存列表
-"mdi mdi-view-list","mdi mdi-view-list"
-查看缓存列表,查看缓存列表
-更新缓存状态,更新缓存状态
-"mdi mdi-toggle-switch","mdi mdi-toggle-switch"
-启用或禁用缓存,启用或禁用缓存
-批量更新缓存状态,批量更新缓存状态
-"mdi mdi-toggle-switch-off-outline","mdi mdi-toggle-switch-off-outline"
-批量启用或禁用缓存,批量启用或禁用缓存
-"mdi mdi-delete","mdi mdi-delete"
-清理指定缓存池,清理指定缓存池
-清理所有缓存,清理所有缓存
-"mdi mdi-delete-sweep","mdi mdi-delete-sweep"
-清理所有非持久缓存池,清理所有非持久缓存池
-缓存统计,缓存统计
-"mdi mdi-chart-bar","mdi mdi-chart-bar"
-查看缓存统计信息,查看缓存统计信息
-执行定时任务,执行定时任务
-"mdi mdi-play","mdi mdi-play"
-手动执行缓存清理定时任务,手动执行缓存清理定时任务
-单池统计,单池统计
-"mdi mdi-chart-pie","mdi mdi-chart-pie"
-查看单个缓存池统计,查看单个缓存池统计
-默认值：%{1},默认值：%{1}
-运行时缓存策略,运行时缓存策略
-"这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。","这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。"
-页面片段缓存,页面片段缓存
-控制首页、分类页、商品页主内容旁路缓存时间。,控制首页、分类页、商品页主内容旁路缓存时间。
-搜索与筛选缓存,搜索与筛选缓存
-控制目录浏览和筛选聚合结果的旁路缓存。,控制目录浏览和筛选聚合结果的旁路缓存。
-主题渲染缓存,主题渲染缓存
-"控制 header/footer/head、插槽布局和可缓存组件输出。","控制 header/footer/head、插槽布局和可缓存组件输出。"
-开发工具缓存,开发工具缓存
-"控制 Dev Panel 旁路数据保留时间。","控制 Dev Panel 旁路数据保留时间。"
-站点数据缓存,站点数据缓存
-控制店铺、货币、语言和分类树等全站通用数据的内存缓存时间。,控制店铺、货币、语言和分类树等全站通用数据的内存缓存时间。
-"共享 Memory 超时","共享 Memory 超时"
-"控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。","控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。"
-保存策略并清理缓存,保存策略并清理缓存
-正在保存...,正在保存...
-保存失败,保存失败
-保存成功,保存成功
-"cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限","cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限"
+系统缓存状态管理,"System cache status management"
+缓存列表,"cache list"
+list,list
+查看缓存列表,"View cache list"
+更新缓存状态,"Update cache status"
+switch,switch
+启用或禁用缓存,"Enable or disable caching"
+批量更新缓存状态,"Update cache status in batches"
+circle,circle
+批量启用或禁用缓存,"Enable or disable cache in batches"
+trash,trash
+清理指定缓存池,"Clean the specified cache pool"
+清理所有缓存,"clear all cache"
+清理所有非持久缓存池,"Clean all non-persistent cache pools"
+缓存统计,"cache statistics"
+chart,chart
+查看缓存统计信息,"View cache statistics"
+执行定时任务,"Execute scheduled tasks"
+play,play
+手动执行缓存清理定时任务,"Manually execute cache cleaning scheduled tasks"
+单池统计,"Single pool statistics"
+查看单个缓存池统计,"View individual cache pool statistics"
+默认值：%{1},"Default value: %{1}"
+运行时缓存策略,"Runtime caching strategy"
+"这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。","This manages hot path cache TTL and shared Memory access timeout under WLS/FPM. It belongs to the cache policy, not to the server parameter; after saving, the non-persistent cache will be cleared so that the new policy can take effect as soon as possible."
+页面片段缓存,"Page fragment caching"
+控制首页、分类页、商品页主内容旁路缓存时间。,"Control the bypass cache time of the main content of the home page, category page, and product page."
+搜索与筛选缓存,"Search and filter cache"
+控制目录浏览和筛选聚合结果的旁路缓存。,"Controls bypass caching of directory browsing and filtering aggregation results."
+主题渲染缓存,"Theme rendering cache"
+"控制 header/footer/head、插槽布局和可缓存组件输出。","Control header/footer/head, slot layout and cacheable component output."
+开发工具缓存,"Development tools cache"
+"控制 Dev Panel 旁路数据保留时间。","Controls Dev Panel bypass data retention time."
+站点数据缓存,"Site data caching"
+控制店铺、货币、语言和分类树等全站通用数据的内存缓存时间。,"Control the memory cache time of site-wide common data such as stores, currencies, languages, and classification trees."
+"共享 Memory 超时","Shared Memory timeout"
+"控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。","Controls the upper limit of waiting for the hot path directly connected to the Memory Service. A value that is too large may slow down business response, and a value that is too small may make it easier to fall back to the local or file cache."
+保存策略并清理缓存,"Save policy and clear cache"
+正在保存...,Saving...
+保存失败,"Save failed"
+保存成功,"Saved successfully"
+"cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限","cache.runtime_policy configuration failed to write, please check app/etc/env.php permissions"
 "缓存池 %{1} 不存在","Cache pool %{1} does not exist"
 "env 配置写入失败，请检查 app/etc/env.php 权限","Failed to write env configuration, please check app/etc/env.php permissions"
 "缓存池 %{1} 为持久缓存，需要强制清理（force=1）","Cache pool %{1} is a persistent cache and requires forced cleanup (force=1)"
@@ -108,4 +105,16 @@ APCu,APCu
 缓存清理完成,"Cache Cleanup Complete"
 "缓存清理任务执行失败: %{1}","Cache Cleanup Task Execution Failed: %{1}"
 "缓存清理失败: %{1}","Cache Cleanup Failed: %{1}"
-"""参数 identity 不能为空""","参数 identity 不能为空"
+"""参数 identity 不能为空""","""The parameter identity cannot be empty"""
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-content-save","mdi mdi-content-save"
+"mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
+"mdi mdi-view-list","mdi mdi-view-list"
+"mdi mdi-toggle-switch","mdi mdi-toggle-switch"
+"mdi mdi-toggle-switch-off-outline","mdi mdi-toggle-switch-off-outline"
+"mdi mdi-delete","mdi mdi-delete"
+"mdi mdi-delete-sweep","mdi mdi-delete-sweep"
+"mdi mdi-chart-bar","mdi mdi-chart-bar"
+"mdi mdi-play","mdi mdi-play"
+"mdi mdi-chart-pie","mdi mdi-chart-pie"
+缓存服务,"Cache service"

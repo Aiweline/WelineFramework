@@ -16,7 +16,7 @@
           title="环境管理" 
           action="weline_framework/backend/env-manager"
           parent="Weline_Framework::system_service_group"
-          icon="mdi mdi-chip" 
+          icon="circle" 
           order="90"/>
 
     <menu source="Weline_Framework::event_delivery_view"
@@ -24,19 +24,19 @@
           title="异步事件死信运维"
           action="weline_framework/backend/event-delivery"
           parent="Weline_Framework::system_service_group"
-          icon="mdi mdi-email-alert-outline"
+          icon="mail"
           order="100">
         <menu source="Weline_Framework::event_delivery_replay"
               name="event_delivery_replay"
               title="重放异步事件死信"
               action=""
-              icon="mdi mdi-replay"
+              icon="play"
               order="10"/>
         <menu source="Weline_Framework::event_delivery_all_websites"
               name="event_delivery_all_websites"
               title="查看全部网站异步事件"
               action=""
-              icon="mdi mdi-web"
+              icon="globe"
               order="20"/>
     </menu>
 
@@ -46,6 +46,6 @@
           title="测试管理"
           action="weline_framework/backend/test"
           parent="Weline_Backend::dev_workspace"
-          icon="mdi mdi-flask-outline"
+          icon="circle"
           order="50"/>
 </menus>

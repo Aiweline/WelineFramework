@@ -52,7 +52,7 @@ moduleDescribe(test, MODULE, '后台全局颜色模式', () => {
         await selectModeWithKeyboard('system');
       await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-      await expect(page.locator('html')).toHaveAttribute('data-bs-theme', 'dark');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
       await installThemechangeCounter();
 

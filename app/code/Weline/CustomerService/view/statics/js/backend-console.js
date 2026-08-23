@@ -28,13 +28,13 @@ const CustomerServiceConsole = (function() {
     };
 
     function notify(type, message) {
-        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-            window.BackendToast[type](message);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') {
+            window.Weline.UI.toast[type](message);
             return;
         }
 
-        if (window.BackendToast && typeof window.BackendToast.info === 'function') {
-            window.BackendToast.info(message);
+        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.info === 'function') {
+            window.Weline.UI.toast.info(message);
             return;
         }
 
@@ -266,8 +266,8 @@ const CustomerServiceConsole = (function() {
             </div>
             <div class="chat-input-area">
                 <div class="chat-input-wrapper">
-                    <textarea class="chat-input" id="message-input" placeholder="${__('输入消息...')}"></textarea>
-                    <button class="btn-send" id="send-button">${__('发送')}</button>
+                    <textarea class="w-textarea chat-input" id="message-input" placeholder="${__('输入消息...')}"></textarea>
+                    <button type="button" class="w-button btn-send" id="send-button">${__('发送')}</button>
                 </div>
             </div>
         `;

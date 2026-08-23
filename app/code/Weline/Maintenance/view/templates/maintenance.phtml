@@ -1,5 +1,52 @@
+<?php
+/**
+ * Standalone maintenance document. It is included directly by MaintenanceInterceptor,
+ * so every asset URL is resolved here instead of relying on template post-processing.
+ *
+ * @var \Weline\Framework\View\Template|null $template
+ */
+
+use Weline\Framework\View\Data\DataInterface;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$asset = static function (string $source, string $fallback) use ($template): string {
+    try {
+        if ($template instanceof \Weline\Framework\View\Template) {
+            $url = $template->fetchTagSource(DataInterface::dir_type_STATICS, $source);
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        }
+    } catch (\Throwable) {
+    }
+    return $fallback;
+};
+
+$foundationCss = $asset('Weline_Theme::ui/weline-foundation.css', '/Weline/Theme/view/statics/ui/weline-foundation.css');
+$frontendCss = $asset('Weline_Theme::ui/weline-frontend.css', '/Weline/Theme/view/statics/ui/weline-frontend.css');
+$pageCss = $asset('Weline_Theme::ui/pages/weline-maintenance.css', '/Weline/Theme/view/statics/ui/pages/weline-maintenance.css');
+$uiJs = $asset('Weline_Theme::ui/weline-ui.js', '/Weline/Theme/view/statics/ui/weline-ui.js');
+$pageJs = $asset('Weline_Theme::ui/pages/weline-maintenance.js', '/Weline/Theme/view/statics/ui/pages/weline-maintenance.js');
+$currentLang = (string)($lang ?? 'zh_Hans_CN');
+$currentShort = strtoupper(substr($currentLang, 0, 2));
+if (str_starts_with($currentLang, 'zh_Hant')) {
+    $currentShort = 'TW';
+} elseif (str_starts_with($currentLang, 'zh_Hans')) {
+    $currentShort = 'ZH';
+}
+$languageOptions = [
+    'zh_Hans_CN' => '简体中文',
+    'en_US' => 'English',
+    'zh_Hant_TW' => '繁體中文',
+];
+?>
 <!DOCTYPE html>
-<html lang="<?= $htmlLang ?? 'zh-CN' ?>">
+<html
+    lang="<?= $escape($htmlLang ?? 'zh-CN') ?>"
+    data-w-area="frontend"
+    data-theme-preference="system"
+    data-theme="light"
+>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,594 +54,105 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title><?= $title ?? __('网站维护') ?></title>
-    <style>
-        :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --bg-gradient-start: #0f172a;
-            --bg-gradient-end: #1e1b4b;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --card-bg: rgba(30, 41, 59, 0.8);
-            --card-border: rgba(148, 163, 184, 0.1);
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-            color: var(--text-primary);
-            padding: 20px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        /* 背景装饰 */
-        body::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 70% 70%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
-            animation: rotate 30s linear infinite;
-        }
-        
-        @keyframes rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        
-        .container {
-            text-align: center;
-            max-width: 700px;
-            position: relative;
-            z-index: 1;
-            margin: 0 auto;
-        }
-        
-        /* 版心容器 - 用于右上角hook定位 */
-        .maintenance-wrapper {
-            max-width: 700px;
-            margin: 0 auto;
-            position: relative;
-            width: 100%;
-        }
-        
-        /* 右上角语言选择器容器 - 固定定位 */
-        .maintenance-header {
-            position: fixed;
-            top: 20px;
-            right: 40px;
-            z-index: 1000;
-        }
-        
-        @media (max-width: 700px) {
-            .maintenance-wrapper {
-                padding: 0 20px;
-            }
-            .maintenance-header {
-                right: 20px;
-            }
-        }
-        
-        .icon-container {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-radius: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.3);
-            animation: float 3s ease-in-out infinite;
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-        
-        .icon {
-            font-size: 56px;
-        }
-        
-        h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 16px;
-            background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .subtitle {
-            font-size: 1.25rem;
-            color: var(--text-secondary);
-            margin-bottom: 40px;
-            line-height: 1.6;
-        }
-        
-        /* 进度条 */
-        .progress-container {
-            margin: 40px 0;
-            padding: 0 40px;
-        }
-        
-        .progress {
-            height: 6px;
-            background: rgba(148, 163, 184, 0.2);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .progress-bar {
-            height: 100%;
-            width: 30%;
-            background: linear-gradient(90deg, var(--primary) 0%, #8b5cf6 100%);
-            border-radius: 3px;
-            animation: progress 2s ease-in-out infinite;
-        }
-
-        .recovery-notice {
-            color: #c7d2fe;
-            font-size: 0.95rem;
-            line-height: 1.6;
-            margin: -20px auto 36px;
-            max-width: 560px;
-        }
-        
-        @keyframes progress {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(400%); }
-        }
-        
-        /* 信息卡片 */
-        .info-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-top: 50px;
-        }
-        
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 16px;
-            padding: 24px;
-            text-align: left;
-            backdrop-filter: blur(10px);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        
-        .card-icon {
-            font-size: 28px;
-            margin-bottom: 12px;
-        }
-        
-        .card h3 {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--text-primary);
-        }
-        
-        .card p {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            line-height: 1.5;
-        }
-        
-        .card a {
-            color: var(--primary);
-            text-decoration: none;
-        }
-        
-        .card a:hover {
-            text-decoration: underline;
-        }
-        
-        /* 返回按钮 */
-        .back-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 40px;
-            padding: 12px 28px;
-            background: transparent;
-            border: 2px solid rgba(148, 163, 184, 0.3);
-            border-radius: 12px;
-            color: var(--text-secondary);
-            font-size: 1rem;
-            text-decoration: none;
-            transition: all 0.3s ease;
-        }
-        
-        .back-btn:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-            background: rgba(99, 102, 241, 0.1);
-        }
-        
-        /* 语言选择器样式 */
-        .maintenance-language-switcher {
-            position: relative;
-        }
-        
-        .maintenance-language-switcher .language-switcher {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            cursor: pointer;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            font-size: 0.875rem;
-        }
-        
-        .maintenance-language-switcher .language-switcher:hover {
-            background: rgba(99, 102, 241, 0.2);
-            border-color: var(--primary);
-        }
-        
-        .maintenance-language-switcher .language-switcher .action-line-1 {
-            display: none;
-        }
-        
-        .maintenance-language-switcher .language-switcher .action-line-2 {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        
-        .maintenance-language-switcher .language-switcher .current-language {
-            font-weight: 500;
-            min-width: 30px;
-            text-align: center;
-        }
-        
-        .maintenance-language-switcher .language-options {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            margin-top: 8px;
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 8px;
-            min-width: 150px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s ease;
-            z-index: 100;
-        }
-        
-        .maintenance-language-switcher .language-switcher:hover .language-options,
-        .maintenance-language-switcher .language-switcher:focus .language-options {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-        
-        .maintenance-language-switcher .language-option {
-            display: block;
-            padding: 10px 16px;
-            color: var(--text-primary);
-            text-decoration: none;
-            transition: background 0.2s ease;
-            border-bottom: 1px solid var(--card-border);
-        }
-        
-        .maintenance-language-switcher .language-option:last-child {
-            border-bottom: none;
-        }
-        
-        .maintenance-language-switcher .language-option:hover {
-            background: rgba(99, 102, 241, 0.2);
-        }
-        
-        .maintenance-language-switcher .language-option.active {
-            background: rgba(99, 102, 241, 0.3);
-            color: var(--primary);
-        }
-        
-        .maintenance-language-switcher .language-option .mdi.mdi-check {
-            float: right;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        }
-        
-        .maintenance-language-switcher .language-option.active .mdi.mdi-check {
-            opacity: 1;
-        }
-        
-        @media (max-width: 600px) {
-            h1 { font-size: 1.75rem; }
-            .subtitle { font-size: 1rem; }
-            .icon-container { width: 80px; height: 80px; border-radius: 20px; }
-            .icon { font-size: 40px; }
-            .info-cards { grid-template-columns: 1fr; }
-            .maintenance-header {
-                top: 10px;
-                right: 20px; /* 往版心内侧一点，避免贴边 */
-            }
-            .maintenance-language-switcher .language-switcher {
-                padding: 6px 12px;
-                font-size: 0.75rem;
-            }
-            /* 手机端下拉列表保持在版心内，居中展开 */
-            .maintenance-language-switcher .language-options {
-                left: 50%;
-                right: auto;
-                transform: translate(-50%, -10px);
-                max-width: calc(100vw - 40px);
-            }
-        }
-    </style>
-    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet" type="text/css">
-    <!-- 加载i18n.js以支持语言切换 -->
-    
-<script>
-(function(g){
-  if(g.__bqAdmin_maintenance) return;
-  g.__bqAdmin_maintenance=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['maintenance']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('maintenance').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script src="/Weline/I18n/view/statics/js/i18n.js"></script>
+    <title><?= $escape($title ?? __('网站维护')) ?></title>
+    <link rel="stylesheet" href="<?= $escape($foundationCss) ?>">
+    <link rel="stylesheet" href="<?= $escape($frontendCss) ?>">
+    <link rel="stylesheet" href="<?= $escape($pageCss) ?>">
+    <script type="module" src="<?= $escape($uiJs) ?>"></script>
+    <script type="module" src="<?= $escape($pageJs) ?>"></script>
 </head>
-<body>
-    <div class="maintenance-wrapper">
-        <!-- 右上角语言选择器Hook -->
-        <div class="maintenance-header">
-            <div class="maintenance-language-switcher">
-                <?php
-                // 尝试渲染hook
-                if (isset($template) && $template instanceof \Weline\Framework\View\Template) {
-                    ob_start();
-                    $returnedHookContent = $template->getHook('header-language-switcher');
-                    $printedHookContent = ob_get_clean();
-                    $hookContent = (string)$printedHookContent . (string)$returnedHookContent;
-                    if (!str_contains($hookContent, 'WelineHeaderChoiceSelector')) {
-                        $hookContent .= (string)$template->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
-                    }
-                    if (!empty(trim($hookContent))) {
-                        echo $hookContent;
-                    } else {
-                        // 如果没有hook实现，显示简单的语言选择器
-                        $currentLang = $lang ?? 'zh_Hans_CN';
-                        $langDisplay = strtoupper(explode('_', $currentLang)[0] ?? 'ZH');
-                        if ($langDisplay === 'ZH' && isset(explode('_', $currentLang)[1]) && explode('_', $currentLang)[1] === 'Hant') {
-                            $langDisplay = 'TW';
-                        }
-                        ?>
-                        <div class="language-switcher" role="button" tabindex="0">
-                            <span class="action-line-2">
-                                <i class="mdi mdi-web" aria-hidden="true"></i>
-                                <span class="current-language"><?= $langDisplay ?></span>
-                                <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
-                            </span>
-                            <div class="language-options" role="menu">
-                                <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
-                                    <span>简体中文</span>
-                                    <i class="mdi mdi-check" aria-hidden="true"></i>
-                                </a>
-                                <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
-                                    <span>English</span>
-                                    <i class="mdi mdi-check" aria-hidden="true"></i>
-                                </a>
-                                <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
-                                    <span>繁體中文</span>
-                                    <i class="mdi mdi-check" aria-hidden="true"></i>
-                                </a>
-                            </div>
-                        </div>
-                        <?php
-                    }
-                } else {
-                    // 如果Template不可用，显示简单的语言选择器
-                    $currentLang = $lang ?? 'zh_Hans_CN';
-                    $langDisplay = strtoupper(explode('_', $currentLang)[0] ?? 'ZH');
-                    if ($langDisplay === 'ZH' && isset(explode('_', $currentLang)[1]) && explode('_', $currentLang)[1] === 'Hant') {
-                        $langDisplay = 'TW';
-                    }
-                    ?>
-                    <div class="language-switcher" role="button" tabindex="0">
-                        <span class="action-line-2">
-                            <i class="mdi mdi-web" aria-hidden="true"></i>
-                            <span class="current-language"><?= $langDisplay ?></span>
-                            <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
-                        </span>
-                        <div class="language-options" role="menu">
-                            <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
-                                <span>简体中文</span>
-                                <i class="mdi mdi-check" aria-hidden="true"></i>
-                            </a>
-                            <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
-                                <span>English</span>
-                                <i class="mdi mdi-check" aria-hidden="true"></i>
-                            </a>
-                            <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
-                                <span>繁體中文</span>
-                                <i class="mdi mdi-check" aria-hidden="true"></i>
-                            </a>
-                        </div>
-                    </div>
-                    <?php
-                }
-                ?>
+<body class="w-maintenance-page">
+    <header class="w-maintenance-page__toolbar" aria-label="<?= $escape(__('页面工具')) ?>">
+        <div class="w-menu-root" data-w-component="menu" data-w-placement="bottom-end" data-w-anchor-mode="element">
+            <button
+                type="button"
+                class="w-button"
+                data-tone="neutral"
+                data-size="sm"
+                data-w-menu-trigger
+                aria-expanded="false"
+                aria-controls="w-maintenance-language-menu"
+                aria-label="<?= $escape(__('切换语言')) ?>"
+            >
+                <w-icon name="language" size="sm"></w-icon>
+                <span><?= $escape($currentShort) ?></span>
+                <w-icon name="chevron-down" size="xs"></w-icon>
+            </button>
+            <div id="w-maintenance-language-menu" class="w-menu" data-w-menu-panel role="menu" hidden>
+                <?php foreach ($languageOptions as $code => $label): ?>
+                    <a
+                        class="w-menu__item"
+                        role="menuitemradio"
+                        aria-checked="<?= $currentLang === $code ? 'true' : 'false' ?>"
+                        data-state="<?= $currentLang === $code ? 'active' : 'idle' ?>"
+                        href="?lang=<?= rawurlencode($code) ?>"
+                    >
+                        <w-icon name="<?= $currentLang === $code ? 'check' : 'circle' ?>" size="sm"></w-icon>
+                        <span><?= $escape($label) ?></span>
+                    </a>
+                <?php endforeach; ?>
             </div>
         </div>
-        <div class="container">
-            <div class="icon-container">
-                <?php if (!empty($maintenance_logo_url)): ?>
-                    <img src="<?= htmlspecialchars($maintenance_logo_url) ?>" alt="Logo" class="maintenance-logo" style="max-width:80px;max-height:80px;object-fit:contain">
-                <?php else: ?>
-                    <span class="icon">🔧</span>
-                <?php endif; ?>
+    </header>
+
+    <main class="w-container w-maintenance-page__main">
+        <section class="w-card w-maintenance-page__hero" aria-labelledby="w-maintenance-title">
+            <div class="w-card__body">
+                <div class="w-maintenance-page__mark" aria-hidden="true">
+                    <?php if (!empty($maintenance_logo_url)): ?>
+                        <img class="w-maintenance-page__logo" src="<?= $escape($maintenance_logo_url) ?>" alt="">
+                    <?php else: ?>
+                        <w-icon name="settings" size="xl"></w-icon>
+                    <?php endif; ?>
+                </div>
+                <p class="w-maintenance-page__eyebrow"><?= $escape(__('系统状态')) ?></p>
+                <h1 id="w-maintenance-title"><?= $escape($heading ?? __('系统升级维护中')) ?></h1>
+                <p class="w-maintenance-page__subtitle">
+                    <?= $escape($message1 ?? __('网站正在维护中...')) ?><br>
+                    <?= $escape($message2 ?? __('请稍等片刻')) ?>
+                </p>
+                <div class="w-progress w-maintenance-page__progress" aria-label="<?= $escape(__('恢复检测中')) ?>">
+                    <div class="w-progress__bar"></div>
+                </div>
+                <p class="w-maintenance-page__recovery" data-w-maintenance-status aria-live="polite">
+                    <?= $escape($recoveryNotice ?? __('系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。')) ?>
+                </p>
             </div>
-            
-            <h1><?= $heading ?? __('系统升级维护中') ?></h1>
-            <p class="subtitle"><?= $message1 ?? __('网站正在维护中...') ?><br><?= $message2 ?? __('请稍等片刻') ?></p>
-            
-            <div class="progress-container">
-                <div class="progress">
-                    <div class="progress-bar"></div>
+        </section>
+
+        <section class="w-maintenance-page__cards" aria-label="<?= $escape(__('维护说明')) ?>">
+            <article class="w-card w-maintenance-page__card">
+                <div class="w-card__body">
+                    <w-icon name="help" size="lg"></w-icon>
+                    <h2><?= $escape($whyTitle ?? __('为什么网站会处于维护模式？')) ?></h2>
+                    <p><?= $escape($whyContent ?? __('网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。')) ?></p>
                 </div>
-            </div>
-            <p class="recovery-notice" aria-live="polite"><?= $recoveryNotice ?? __('系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。') ?></p>
-            
-            <div class="info-cards">
-                <div class="card">
-                    <div class="card-icon">🤔</div>
-                    <h3><?= $whyTitle ?? __('为什么网站会处于维护模式？') ?></h3>
-                    <p><?= $whyContent ?? __('网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。') ?></p>
+            </article>
+            <article class="w-card w-maintenance-page__card">
+                <div class="w-card__body">
+                    <w-icon name="clock" size="lg"></w-icon>
+                    <h2><?= $escape($howLongTitle ?? __('多久能够恢复？')) ?></h2>
+                    <p><?= $escape($howLongContent ?? __('大部分的网站升级活动都只有几分钟甚至几秒钟的时间。')) ?></p>
                 </div>
-                
-                <div class="card">
-                    <div class="card-icon">⏱️</div>
-                    <h3><?= $howLongTitle ?? __('多久能够恢复？') ?></h3>
-                    <p><?= $howLongContent ?? __('大部分的网站升级活动都只有几分钟甚至几秒钟的时间。') ?></p>
+            </article>
+            <article class="w-card w-maintenance-page__card">
+                <div class="w-card__body">
+                    <w-icon name="message" size="lg"></w-icon>
+                    <h2><?= $escape($helpTitle ?? __('需要帮助吗？')) ?></h2>
+                    <p>
+                        <?= $escape($helpContent ?? __('如果你长期看到这个页面，对网站存在疑惑，请联系：')) ?>
+                        <a href="mailto:<?= $escape($contactEmail ?? 'support@example.com') ?>"><?= $escape($contactEmail ?? 'support@example.com') ?></a>
+                    </p>
                 </div>
-                
-                <div class="card">
-                    <div class="card-icon">💬</div>
-                    <h3><?= $helpTitle ?? __('需要帮助吗？') ?></h3>
-                    <p><?= $helpContent ?? __('如果你长期看到这个页面，对网站存在疑惑，请联系：') ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>
-                </div>
-            </div>
-            
-            <a href="/" class="back-btn">
-                <span>←</span>
-                <span><?= $backHome ?? __('返回首页') ?></span>
+            </article>
+        </section>
+
+        <div class="w-maintenance-page__actions">
+            <a href="/" class="w-button" data-tone="primary">
+                <w-icon name="home" size="sm"></w-icon>
+                <span><?= $escape($backHome ?? __('返回首页')) ?></span>
             </a>
         </div>
-    </div>
-    <script>
-        (function () {
-            var initialDelay = 5000;
-            var maxDelay = 30000;
-            var jitter = 1500;
-            var timer = 0;
-
-            if (!window.fetch || !window.URL) {
-                return;
-            }
-
-            function getProbeUrl() {
-                var url = new URL(window.location.href);
-                if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
-                    url = new URL('/', window.location.origin);
-                }
-                url.hash = '';
-                url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
-                return url.toString();
-            }
-
-            function schedule(delay) {
-                if (timer) {
-                    window.clearTimeout(timer);
-                }
-                timer = window.setTimeout(function () {
-                    timer = 0;
-                    check();
-                }, delay + Math.floor(Math.random() * jitter));
-            }
-
-            function probe(method) {
-                return window.fetch(getProbeUrl(), {
-                    method: method,
-                    cache: 'no-store',
-                    credentials: 'same-origin',
-                    redirect: 'follow',
-                    headers: {
-                        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
-                        'X-Maintenance-Recovery-Check': '1'
-                    }
-                });
-            }
-
-            function handleResponse(response) {
-                if (response.status === 200) {
-                    window.location.reload();
-                    return;
-                }
-                schedule(response.status === 503 ? initialDelay : maxDelay);
-            }
-
-            function check() {
-                if (document.hidden) {
-                    return;
-                }
-
-                probe('HEAD').then(function (response) {
-                    if (response.status === 405 || response.status === 501) {
-                        return probe('GET').then(handleResponse);
-                    }
-                    handleResponse(response);
-                }).catch(function () {
-                    schedule(maxDelay);
-                });
-            }
-
-            document.addEventListener('visibilitychange', function () {
-                if (document.hidden) {
-                    if (timer) {
-                        window.clearTimeout(timer);
-                        timer = 0;
-                    }
-                    return;
-                }
-                schedule(0);
-            });
-            schedule(initialDelay);
-        })();
-    </script>
+    </main>
 </body>
 </html>

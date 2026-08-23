@@ -225,17 +225,17 @@
             width: 90%;
         }
         
-        .form-group {
+        .w-field {
             margin-bottom: 15px;
         }
         
-        .form-group label {
+        .w-field label {
             display: block;
             margin-bottom: 5px;
             color: #333;
         }
         
-        .form-group input {
+        .w-field input {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -245,7 +245,7 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="w-container">
         <div class="header">
             <h1>🔐 双因素身份验证管理</h1>
             <p>增强您的账户安全性，使用标准TOTP协议（兼容所有主流验证器应用）</p>
@@ -274,8 +274,8 @@
                 <?php endif; ?>
 
                 <div class="action-buttons">
-                    <button class="btn btn-secondary" type="button" data-twofa-action="show-regenerate-modal">重新生成备份码</button>
-                    <button class="btn btn-danger" type="button" data-twofa-action="show-disable-modal">禁用2FA</button>
+                    <button class="w-button" type="button" data-twofa-action="show-regenerate-modal" data-tone="neutral">重新生成备份码</button>
+                    <button class="w-button" type="button" data-twofa-action="show-disable-modal" data-tone="danger">禁用2FA</button>
                 </div>
             <?php else: ?>
                 <span class="status-badge status-disabled">✗ 未启用</span>
@@ -283,7 +283,7 @@
                     您的账户尚未启用双因素身份验证。启用后，登录时需要额外提供动态验证码。
                 </p>
                 <div class="action-buttons">
-                    <a href="/two-factor-auth/frontend/setup" class="btn btn-primary">立即启用</a>
+                    <a href="/two-factor-auth/frontend/setup" class="w-button" data-tone="primary">立即启用</a>
                 </div>
             <?php endif; ?>
         </div>
@@ -291,7 +291,7 @@
         <div class="app-link">
             <h2>📱 使用我们自己的验证器APP</h2>
             <p>完全自主开发，无需依赖第三方应用</p>
-            <button type="button" data-twofa-action="show-authenticator-app-modal" class="btn" style="cursor: pointer;">打开验证器APP</button>
+            <button type="button" data-twofa-action="show-authenticator-app-modal" class="w-button" style="cursor: pointer;">打开验证器APP</button>
         </div>
 
         <div class="feature-list">
@@ -325,41 +325,37 @@
     </div>
 
     <!-- 禁用2FA模态框 -->
-    <div class="modal" id="disableModal">
-        <div class="modal-content">
+    <div class="w-dialog" id="disableModal" data-w-component="dialog" data-state="closed" hidden aria-hidden="true" tabindex="-1">
+        <div class="w-dialog__surface">
             <h2>禁用双因素身份验证</h2>
             <p style="color: #666; margin: 15px 0;">请输入当前验证码以确认操作</p>
-            <div class="form-group">
+            <div class="w-field">
                 <label>验证码</label>
                 <input type="text" id="disableCode" placeholder="输入6位验证码" maxlength="6">
             </div>
             <div class="action-buttons">
-                <button class="btn btn-secondary" type="button" data-twofa-action="close-disable-modal">取消</button>
-                <button class="btn btn-danger" type="button" data-twofa-action="disable-two-factor">确认禁用</button>
+                <button class="w-button" type="button" data-twofa-action="close-disable-modal" data-tone="neutral">取消</button>
+                <button class="w-button" type="button" data-twofa-action="disable-two-factor" data-tone="danger">确认禁用</button>
             </div>
         </div>
     </div>
 
     <!-- 重新生成备份码模态框 -->
-    <div class="modal" id="regenerateModal">
-        <div class="modal-content">
+    <div class="w-dialog" id="regenerateModal" data-w-component="dialog" data-state="closed" hidden aria-hidden="true" tabindex="-1">
+        <div class="w-dialog__surface">
             <h2>重新生成备份码</h2>
             <p style="color: #666; margin: 15px 0;">旧的备份码将失效，请输入验证码确认</p>
-            <div class="form-group">
+            <div class="w-field">
                 <label>验证码</label>
                 <input type="text" id="regenerateCode" placeholder="输入6位验证码" maxlength="6">
             </div>
             <div class="action-buttons">
-                <button class="btn btn-secondary" type="button" data-twofa-action="close-regenerate-modal">取消</button>
-                <button class="btn btn-primary" type="button" data-twofa-action="regenerate-backup-codes">确认生成</button>
+                <button class="w-button" type="button" data-twofa-action="close-regenerate-modal" data-tone="neutral">取消</button>
+                <button class="w-button" type="button" data-twofa-action="regenerate-backup-codes" data-tone="primary">确认生成</button>
             </div>
         </div>
     </div>
 
-    <!-- SweetAlert2 CSS -->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <!-- SweetAlert2 JS -->
-    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         document.addEventListener('click', function(e) {
             const trigger = e.target.closest('[data-twofa-action]');
@@ -410,16 +406,12 @@
         async function disableTwoFactor() {
             const code = document.getElementById('disableCode').value;
             if (!code || code.length !== 6) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请输入6位验证码') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('请输入6位验证码');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'warning',
+                    title: '<?= __('提示') ?>',
+                    message: '<?= __('请输入6位验证码') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 return;
             }
 
@@ -428,57 +420,40 @@
                 const result = await TwoFactorApi.disable({code: code}, {silent: true});
                 
                 if (result.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: result.message,
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(() => location.reload());
-                    } else {
-                        console.log(result.message);
-                        location.reload();
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: result.message,
+                        duration: 2000,
+                        confirmable: false
+                    }).then(() => location.reload());
                 } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('失败') ?>',
-                            text: result.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error(result.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('失败') ?>',
+                        message: result.message,
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
             } catch (error) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('操作失败') ?>',
-                        text: '<?= __('请重试') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('操作失败，请重试');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('操作失败') ?>',
+                    message: '<?= __('请重试') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             }
         }
 
         async function regenerateBackupCodes() {
             const code = document.getElementById('regenerateCode').value;
             if (!code || code.length !== 6) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请输入6位验证码') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('请输入6位验证码');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'warning',
+                    title: '<?= __('提示') ?>',
+                    message: '<?= __('请输入6位验证码') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
                 return;
             }
 
@@ -496,31 +471,23 @@
                     
                     const modal = document.getElementById('regenerateModal');
                     modal.querySelector('.modal-content').innerHTML = codesHtml + 
-                        '<button class="btn btn-primary" type="button" data-twofa-action="reload-page">完成</button>';
+                        '<button class="w-button" type="button" data-twofa-action="reload-page" data-tone="primary">完成</button>';
                 } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: result.message,
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                    } else {
-                        console.log(result.message);
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: result.message,
+                        duration: 2000,
+                        confirmable: false
+                    });
                 }
             } catch (error) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('操作失败') ?>',
-                        text: '<?= __('请重试') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('操作失败，请重试');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('操作失败') ?>',
+                    message: '<?= __('请重试') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             }
         }
 

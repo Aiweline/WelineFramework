@@ -7911,10 +7911,13 @@ while (true) {
         // FPC executes immediately after mandatory policy/static gates. The
         // fast-path service rejects SSE/upgrades and client cache bypasses, so
         // a hit never creates request scope, a Fiber, Session or Router state.
+        // Plaintext same-port admission (loopback allow) must keep http so FPC
+        // keys and framework Origin match the browser; TLS stays https.
+        $publicRequestScheme = $plaintextAction === 'allow' ? 'http' : 'https';
         if ($policyDecision->fpcCacheEnabled()
             && $fpcFastPath instanceof \Weline\Server\Service\WorkerFullPageCacheFastPath
         ) {
-            $fpcHit = $fpcFastPath->lookup($policyDecision, 'https');
+            $fpcHit = $fpcFastPath->lookup($policyDecision, $publicRequestScheme);
             if ($fpcHit !== null) {
                 $fastPathElapsedMs = (float)\round((wlsWorkerMonotonicNow() - $policyStartedAt) * 1000, 2);
                 $fastPathResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(
@@ -8222,6 +8225,7 @@ while (true) {
             $originTokenAllowLocal,
             $transportPeer,
             $policyDecision,
+            $publicRequestScheme,
             $asyncBizAdapters,
             $WLS_UOPZ_EXIT_GUARD,
             $fiberConn,
@@ -8243,10 +8247,12 @@ while (true) {
         ) {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
             try {
-                if ($isSseProtocolRequest) {
-                    if ($fiberHttp2StreamId > 0
-                        && $fiberHttp2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
-                    ) {
+                // Install a Fiber-owned bounded writer for every request.
+                // SSE uses it for events; DownloadException uses the same
+                // non-blocking queue for generic file response chunks.
+                if ($fiberHttp2StreamId > 0
+                    && $fiberHttp2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                ) {
                         \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
                             static function (string $data) use (
                                 $fiberConnId,
@@ -8302,7 +8308,7 @@ while (true) {
                                 );
                             },
                         );
-                    } else {
+                } else {
                         \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
                             static function (string $data) use (
                                 $fiberConnId,
@@ -8344,7 +8350,6 @@ while (true) {
                                 );
                             }
                         );
-                    }
                 }
                 return handleRequest(
                     $fiberRawRequest,
@@ -8367,6 +8372,7 @@ while (true) {
                     $longLivedConnections,
                     $http2ConnectionAdapters,
                     $connections,
+                    $publicRequestScheme,
                 );
             } catch (\Weline\Framework\Runtime\RequestExitException $e) {
                 throw $e;
@@ -10080,10 +10086,17 @@ function sslFinalizeHttpResponseAfterHandle(
     ?\Weline\Server\Protocol\Http2\ConnectionAdapter $http2Adapter = null,
     int $http2StreamId = 0,
 ): void {
-    $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
+    $streamedResponse = \Weline\Framework\Http\WlsStreamedResponse::parseMarker($response);
+    $isStreamedResponse = $streamedResponse !== null;
+    $response = $isStreamedResponse
+        ? ''
+        : wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
 
-    $responseStatus = 200;
-    if (!$trustedCacheHit && \preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
+    $responseStatus = $isStreamedResponse ? (int)$streamedResponse['status'] : 200;
+    if (!$isStreamedResponse
+        && !$trustedCacheHit
+        && \preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)
+    ) {
         $responseStatus = (int) $statusMatches[1];
     }
 
@@ -10131,7 +10144,7 @@ function sslFinalizeHttpResponseAfterHandle(
             $requestLine = (string) ($lineMatches[1] ?? '');
         }
     }
-    $responseBytes = 0;
+    $responseBytes = $isStreamedResponse ? (int)$streamedResponse['queued_bytes'] : 0;
     $requestHost = $precomputedRequestHost ?? (getHeaderValue($rawRequest, 'Host') ?? '');
     if (\str_contains($requestHost, ':')) {
         $requestHost = (string) \explode(':', $requestHost, 2)[0];
@@ -10140,7 +10153,7 @@ function sslFinalizeHttpResponseAfterHandle(
 
     $activeRequests = \max(0, $activeRequests - 1);
 
-    $responseLenPre = \strlen($response);
+    $responseLenPre = $isStreamedResponse ? $responseBytes : \strlen($response);
     if ($recordObservability) {
         WlsLogger::debug_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
     }
@@ -10165,7 +10178,9 @@ function sslFinalizeHttpResponseAfterHandle(
         );
     }
     // SSE 收尾兜底：上下文标记可能先于写队列排空被重置，此时仍必须按 SSE 分支处理。
-    $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
+    $isSseMode = $isStreamedResponse
+        || $actualSseStarted
+        || ($isSseProtocolRequest && $hasQueuedSsePayload);
     $isHttp2SseMode = $isSseMode && $http2StreamingStarted;
     $isHttp1SseMode = $isSseMode && !$isHttp2SseMode;
     $runtimeDrainPending = \Weline\Server\Service\WorkerResponseMemoryGuard::hasDrainAfterResponseRequest();
@@ -10311,7 +10326,7 @@ function sslFinalizeHttpResponseAfterHandle(
 
         ssl_finalize_skip_write:
     } else {
-        WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
+        WlsLogger::info_(($isStreamedResponse ? 'File' : 'SSE') . " 流式响应完成 (connId: {$connId})");
     }
 
     \Weline\Framework\Http\Sse\SseContext::reset();
@@ -10465,6 +10480,7 @@ function handleRequest(
     array $longLivedConnections = [],
     array $http2ConnectionAdapters = [],
     array $liveConnections = [],
+    string $publicRequestScheme = 'https',
 ): string {
     $policyDecision = $precomputedPolicyDecision
         ?? \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate($rawRequest, $transportPeer);
@@ -10613,17 +10629,45 @@ function handleRequest(
     }
     try {
         // 创建 WLS 请求对象（框架会自动处理维护模式）
+        // Create the framework request. Same-port cleartext admission
+        // (plaintextAction=allow) must report http so browser Origin matches
+        // QueryBin assertSameOrigin; TLS and HTTP/3 stay https.
+        $isPublicHttps = $publicRequestScheme !== 'http';
         $request = \Weline\Framework\Http\WlsRequest::fromEnvelope($policyDecision->requestEnvelope(), $policyServerInfo + [
             'WLS_INSTANCE' => $instanceName,
             'WLS_WORKER_ID' => $workerId,
             'WLS_PORT' => $port,
             'WLS_REQUEST_COUNT' => $requestCount,
-            'HTTPS' => 'on',
-            'REQUEST_SCHEME' => 'https',
+            'HTTPS' => $isPublicHttps ? 'on' : '',
+            'REQUEST_SCHEME' => $isPublicHttps ? 'https' : 'http',
         ]);
-        $result = $asyncBizAdapters->dispatch(
-            static fn() => $runtime->handle($request)
-        );
+        try {
+            $result = $asyncBizAdapters->dispatch(
+                static fn() => $runtime->handle($request)
+            );
+        } catch (\Throwable $runtimeFailure) {
+            $streamedMarker = $request->consumeStreamedResponseMarker();
+            if ($streamedMarker !== null) {
+                $runtime->consumePendingCookies();
+                $runtime->consumePendingHeaders();
+                $runtime->consumePendingResponseStatus();
+                if (\session_status() === PHP_SESSION_ACTIVE) {
+                    \session_write_close();
+                }
+                return $streamedMarker;
+            }
+            throw $runtimeFailure;
+        }
+        $streamedMarker = $request->consumeStreamedResponseMarker();
+        if ($streamedMarker !== null) {
+            $runtime->consumePendingCookies();
+            $runtime->consumePendingHeaders();
+            $runtime->consumePendingResponseStatus();
+            if (\session_status() === PHP_SESSION_ACTIVE) {
+                \session_write_close();
+            }
+            return $streamedMarker;
+        }
         wlsResetLongRunningExecutionLimit();
         
         // 释放 PHP Session 文件锁

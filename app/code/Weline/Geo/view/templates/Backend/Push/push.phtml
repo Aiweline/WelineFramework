@@ -11,9 +11,9 @@
 
 <div class="content-body">
     <w:form id="push-form" class="form-horizontal">
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('选择Feed') ?></label>
-            <select name="feed_id" class="form-control" required>
+            <select name="feed_id" class="w-input" required>
                 <option value=""><?= __('请选择Feed') ?></option>
                 <?php foreach ($feeds as $feed): ?>
                     <option value="<?= $feed['id'] ?>"><?= htmlspecialchars($feed['feed_name']) ?></option>
@@ -21,7 +21,7 @@
             </select>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('选择平台') ?></label>
             <div class="checkbox-group">
                 <?php foreach ($platforms as $platform): ?>
@@ -33,9 +33,9 @@
             </div>
         </div>
 
-        <div class="form-group">
-            <button type="submit" class="btn btn-primary">
-                <i class="mdi mdi-send"></i> <?= __('开始推送') ?>
+        <div class="w-field">
+            <button type="submit" class="w-button" data-tone="primary">
+                <w:icon name="arrow-right" size="sm"></w:icon> <?= __('开始推送') ?>
             </button>
         </div>
     </w:form>
@@ -43,39 +43,8 @@
     <div id="push-result" style="display: none; margin-top: 20px;"></div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
 
-<script>
-(function(g){
-  if(g.__bqAdmin_geo) return;
-  g.__bqAdmin_geo=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['geo']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('geo').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
 <script>
 function renderPushResult(resultDiv, type, message) {
     if (!resultDiv) {
@@ -98,16 +67,12 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
         .map(input => input.value);
     
     if (!formData.get('feed_id') || platformIds.length === 0) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请选择Feed和至少一个平台') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请选择Feed和至少一个平台') ?>');
-        }
+        Weline.UI.dialog.request({
+            tone: 'warning',
+            title: '<?= __('提示') ?>',
+            message: '<?= __('请选择Feed和至少一个平台') ?>',
+            confirmLabel: '<?= __('确定') ?>'
+        });
         return;
     }
     
@@ -115,7 +80,7 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
     
     var geoPushUrl = '<?= $this->getUrl('geo/backend/push/execute') ?>';
     var geoPushOpts = { method: 'POST', body: formData };
-    bqAdmin['geo'](geoPushUrl, geoPushOpts)
+    Weline.adminRequest('geo', geoPushUrl, geoPushOpts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         var resultDiv = document.getElementById('push-result');
@@ -129,16 +94,12 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
     })
     .catch(error => {
         console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('推送失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('推送失败') ?>');
-        }
+        Weline.UI.dialog.request({
+            tone: 'danger',
+            title: '<?= __('推送失败') ?>',
+            message: '<?= __('请重试') ?>',
+            confirmLabel: '<?= __('确定') ?>'
+        });
     });
 });
 </script>

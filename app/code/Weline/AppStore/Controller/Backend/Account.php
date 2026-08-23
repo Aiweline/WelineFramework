@@ -12,13 +12,13 @@ use Weline\AppStore\Service\AccountBindService;
 /**
  * 账户绑定控制器
  */
-#[Acl('Weline_AppStore::account', '账户绑定', 'bi-link-45deg', '绑定官网账户', 'Weline_AppStore::appstore')]
+#[Acl('Weline_AppStore::account', '账户绑定', 'link', '绑定官网账户', 'Weline_AppStore::appstore')]
 class Account extends BackendController
 {
     /**
      * 账户绑定页面
      */
-    #[Acl('Weline_AppStore::account_view', '查看账户', 'bi-person', '查看账户绑定状态')]
+    #[Acl('Weline_AppStore::account_view', '查看账户', 'user', '查看账户绑定状态')]
     public function index(): string
     {
         /** @var AccountBindService $accountService */
@@ -43,7 +43,7 @@ class Account extends BackendController
     /**
      * 跳转到官网授权页
      */
-    #[Acl('Weline_AppStore::account_authorize', '官网授权', 'bi-shield-check', '跳转官网授权当前终端')]
+    #[Acl('Weline_AppStore::account_authorize', '官网授权', 'check', '跳转官网授权当前终端')]
     public function authorize(): string
     {
         /** @var AccountBindService $accountService */
@@ -55,7 +55,7 @@ class Account extends BackendController
     /**
      * 官网 OAuth 回调
      */
-    #[Acl('Weline_AppStore::account_callback', '授权回调', 'bi-arrow-left-right', '接收官网授权回调')]
+    #[Acl('Weline_AppStore::account_callback', '授权回调', 'arrow-left', '接收官网授权回调')]
     public function callback(): string
     {
         /** @var AccountBindService $accountService */
@@ -81,7 +81,7 @@ class Account extends BackendController
     /**
      * 绑定账户
      */
-    #[Acl('Weline_AppStore::account_bind', '绑定账户', 'bi-link', '绑定官网账户')]
+    #[Acl('Weline_AppStore::account_bind', '绑定账户', 'link', '绑定官网账户')]
     public function bind(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -116,7 +116,7 @@ class Account extends BackendController
     /**
      * 解绑账户
      */
-    #[Acl('Weline_AppStore::account_unbind', '解绑账户', 'bi-link-break', '解绑官网账户')]
+    #[Acl('Weline_AppStore::account_unbind', '解绑账户', 'link', '解绑官网账户')]
     public function unbind(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -140,7 +140,7 @@ class Account extends BackendController
     /**
      * 获取绑定状态
      */
-    #[Acl('Weline_AppStore::account_status', '账户状态', 'bi-info-circle', '获取账户绑定状态')]
+    #[Acl('Weline_AppStore::account_status', '账户状态', 'info', '获取账户绑定状态')]
     public function status(): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');

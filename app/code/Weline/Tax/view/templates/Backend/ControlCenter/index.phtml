@@ -16,63 +16,95 @@ $display = static function (mixed $value) use ($escape): string {
     }
     return $escape($value);
 };
+$websiteSelectValue = '0';
+$websiteSelectOptions = [];
+try {
+    $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+    if (\is_array($queried)) {
+        $websiteSelectOptions = $queried;
+    }
+} catch (\Throwable) {
+    $websiteSelectOptions = [];
+}
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if (!\is_array($option)) {
+        continue;
+    }
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = \trim((string)($option['label'] ?? ''));
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
 <section class="commerce-control-center" data-testid="tax-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
-    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-        <h4 class="mb-sm-0"><?= $escape($title) ?></h4>
-        <span class="badge <?= $readOnly ? 'bg-info text-dark' : 'bg-success' ?>"><?= $readOnly ? __('只读诊断') : __('可配置') ?></span>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="end">
+        <span class="w-badge <?= $readOnly ? 'bg-info text-dark' : 'bg-success' ?>"><?= $readOnly ? __('只读诊断') : __('可配置') ?></span>
     </div>
-    <div class="alert <?= $readOnly ? 'alert-info' : 'alert-warning' ?>" role="status">
+    <div class="w-alert <?= $readOnly ? 'alert-info' : 'alert-warning' ?>" role="status">
         <?= $readOnly
             ? __('此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。')
             : __('配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。') ?>
     </div>
     <?php if ($form !== []): ?>
         <?php $kind = (string)($form['kind'] ?? ''); ?>
-        <div class="card mb-3" data-testid="tax-<?= $escape($code) ?>-create-form">
-            <div class="card-header"><h5 class="mb-0"><?= __('新增%{1}', $title) ?></h5></div>
-            <div class="card-body">
+        <div class="w-card" data-testid="tax-<?= $escape($code) ?>-create-form" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('新增%{1}', $title) ?></h5></div>
+            <div class="w-card__body">
                 <w:form method="post" action="@var($formActionUrl)">
-                    <div class="row g-3">
-                        <div class="col-md-2">
-                            <label class="form-label"><?= __('网站 ID') ?></label>
-                            <input class="form-control" type="number" min="0" name="website_id" value="0" required>
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
+                            <w:websites:website:select
+                                id="tax-cc-website"
+                                name="website_id"
+                                value="websiteSelectValue"
+                                display="websiteSelectDisplay"
+                                options="websiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择站点)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                            />
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label"><?= __('税类代码') ?></label>
-                            <input class="form-control" name="class_code" maxlength="64" pattern="[a-z0-9][a-z0-9_\-]{0,63}" required>
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label"><?= __('税类代码') ?></label>
+                            <input class="w-input" name="class_code" maxlength="64" pattern="[a-z0-9][a-z0-9_\-]{0,63}" required>
                         </div>
                         <?php if ($kind === 'class'): ?>
-                            <div class="col-md-4">
-                                <label class="form-label"><?= __('税类名称') ?></label>
-                                <input class="form-control" name="name" maxlength="255" required>
+                            <div style="--w-span-md:4;">
+                                <label class="w-field__label"><?= __('税类名称') ?></label>
+                                <input class="w-input" name="name" maxlength="255" required>
                             </div>
                         <?php else: ?>
-                            <div class="col-md-3">
-                                <label class="form-label"><?= __('管辖区') ?></label>
-                                <input class="form-control" name="jurisdiction_key" maxlength="64" placeholder="CN| 或 US|CA" required>
+                            <div style="--w-span-md:3;">
+                                <label class="w-field__label"><?= __('管辖区') ?></label>
+                                <input class="w-input" name="jurisdiction_key" maxlength="64" placeholder="CN| 或 US|CA" required>
                             </div>
-                            <div class="col-md-2">
-                                <label class="form-label"><?= __('税率（基点）') ?></label>
-                                <input class="form-control" type="number" min="0" max="10000" name="rate_bps" required>
+                            <div style="--w-span-md:2;">
+                                <label class="w-field__label"><?= __('税率（基点）') ?></label>
+                                <input class="w-input" type="number" min="0" max="10000" name="rate_bps" required>
                             </div>
                             <?php if ($kind === 'rule'): ?>
-                                <div class="col-md-2">
-                                    <label class="form-label"><?= __('规则版本') ?></label>
-                                    <input class="form-control" type="number" min="1" name="rule_version" value="1" required>
+                                <div style="--w-span-md:2;">
+                                    <label class="w-field__label"><?= __('规则版本') ?></label>
+                                    <input class="w-input" type="number" min="1" name="rule_version" value="1" required>
                                 </div>
-                                <div class="col-md-2">
-                                    <label class="form-label"><?= __('舍入模式') ?></label>
-                                    <select class="form-select" name="rounding"><option value="half_up">half_up</option></select>
+                                <div style="--w-span-md:2;">
+                                    <label class="w-field__label"><?= __('舍入模式') ?></label>
+                                    <select class="w-select" name="rounding"><option value="half_up">half_up</option></select>
                                 </div>
                             <?php endif; ?>
                         <?php endif; ?>
-                        <div class="col-md-2 d-flex align-items-end">
+                        <div class="w-cluster" data-align="end" style="--w-span-md:2;">
                             <input type="hidden" name="enabled" value="0">
-                            <label class="form-check mb-2"><input class="form-check-input" type="checkbox" name="enabled" value="1" checked> <span class="form-check-label"><?= __('启用') ?></span></label>
+                            <label class="w-check" style="--w-mb:var(--weline-space-2);"><input type="checkbox" name="enabled" value="1" checked> <span><?= __('启用') ?></span></label>
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button class="btn btn-primary w-100" type="submit" data-testid="tax-<?= $escape($code) ?>-submit"><?= __('创建') ?></button>
+                        <div class="w-cluster" data-align="end" style="--w-span-md:2;">
+                            <button class="w-button" type="submit" data-testid="tax-<?= $escape($code) ?>-submit" data-w-width="full" data-tone="primary"><?= __('创建') ?></button>
                         </div>
                     </div>
                 </w:form>
@@ -80,20 +112,20 @@ $display = static function (mixed $value) use ($escape): string {
         </div>
     <?php endif; ?>
     <?php if ($status !== []): ?>
-        <div class="card mb-3"><div class="card-body"><div class="row g-3">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
             <?php foreach ($status as $key => $value): ?>
-                <div class="col-md-4"><div class="text-muted small"><?= $escape($key) ?></div><div class="fw-semibold"><?= $display($value) ?></div></div>
+                <div style="--w-span-md:4;"><div class="w-text" data-tone="muted" data-size="sm"><?= $escape($key) ?></div><div class="w-text" data-weight="strong"><?= $display($value) ?></div></div>
             <?php endforeach; ?>
         </div></div></div>
     <?php endif; ?>
     <?php foreach ($datasets as $dataset): ?>
-        <div class="card mb-3"><div class="card-header"><h5 class="mb-0"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="card-body">
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="w-card__body">
             <?php if (!empty($dataset['error'])): ?>
-                <div class="alert alert-warning mb-0"><?= $escape($dataset['error']) ?></div>
+                <div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= $escape($dataset['error']) ?></div>
             <?php elseif (empty($dataset['rows'])): ?>
-                <div class="text-muted"><?= __('当前没有记录。') ?></div>
+                <div class="w-text" data-tone="muted"><?= __('当前没有记录。') ?></div>
             <?php else: ?>
-                <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr>
+                <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle" style="--w-mb:0;"><thead><tr>
                     <?php foreach (array_keys($dataset['rows'][0]) as $field): ?><th><?= $escape($field) ?></th><?php endforeach; ?>
                 </tr></thead><tbody>
                     <?php foreach ($dataset['rows'] as $row): ?><tr><?php foreach ($row as $value): ?><td><?= $display($value) ?></td><?php endforeach; ?></tr><?php endforeach; ?>

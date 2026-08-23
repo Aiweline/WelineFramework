@@ -11,15 +11,17 @@ $isAjax = $this->request->isAjax() || $this->request->getHeader('X-Requested-Wit
 ?>
 <?php if (!$isAjax): ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-w-area="backend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars(__('管理站点 SEO 账户启用'), ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($websiteName, ENT_QUOTES, 'UTF-8') ?></title>
-    <link href="@static(Weline_Admin::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
+    <w:block class="Weline\Backend\Block\Header\Base" template="Weline_Backend::header/base.phtml"/>
+    <link href="@static(Weline_Theme::ui/weline-foundation.css)" rel="stylesheet">
+    <link href="@static(Weline_Theme::ui/weline-backend.css)" rel="stylesheet">
+    <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
 </head>
-<body style="padding:20px;background:#f6f8fb;">
+<body><main class="w-container" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
 <?php endif; ?>
 
 <?= framework_view_process_block([
@@ -33,7 +35,6 @@ $isAjax = $this->request->isAjax() || $this->request->getHeader('X-Requested-Wit
 ]) ?>
 
 <?php if (!$isAjax): ?>
-<script src="@static(Weline_Admin::assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
-</body>
+</main></body>
 </html>
 <?php endif; ?>

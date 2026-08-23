@@ -19,7 +19,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 货币管理控制器
  */
-#[\Weline\Framework\Acl\Acl('Weline_Currency::currency_list', '货币管理', 'mdi mdi-currency-usd', '货币管理功能', 'Weline_Backend::currency_group')]
+#[\Weline\Framework\Acl\Acl('Weline_Currency::currency_list', '货币管理', 'cash', '货币管理功能', 'Weline_Backend::currency_group')]
 class Currency extends BackendController
 {
     /**
@@ -70,7 +70,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add', '添加货币', '', '添加货币界面')]
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add', '添加货币', 'mdi mdi-plus-circle-outline', '添加货币界面', 'Weline_Backend::currency_group')]
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add', '添加货币', 'plus', '添加货币界面', 'Weline_Backend::currency_group')]
     public function getAdd()
     {
         $currency = clone $this->currencyModel->clear();
@@ -85,7 +85,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit', '编辑货币', '', '编辑货币界面')]
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit', '编辑货币', 'mdi mdi-pencil', '编辑货币界面')]
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit', '编辑货币', 'edit', '编辑货币界面')]
     public function getEdit()
     {
         $currency = clone $this->currencyModel->clear()->load($this->request->getGet('id'));
@@ -104,7 +104,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add_post', '添加货币请求', '', '请求添加货币')]
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add_post', '添加货币请求', 'mdi mdi-content-save', '请求添加货币')]
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add_post', '添加货币请求', 'save', '请求添加货币')]
     public function postAdd()
     {
         return $this->postSave();
@@ -115,7 +115,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit_post', '编辑货币请求', '', '请求编辑货币')]
      */
-    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit_post', '编辑货币请求', 'mdi mdi-content-save-edit', '请求编辑货币')]
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit_post', '编辑货币请求', 'edit', '请求编辑货币')]
     public function postEdit()
     {
         return $this->postSave();

@@ -11,7 +11,7 @@ WelineFramework là framework PHP cho ứng dụng web dạng mô-đun, hệ th�
 - Thiết lập local mới: dùng trình cài đặt một bước.
 - Đã có PHP, Composer và database: dùng cài đặt sạch.
 - Kiến trúc: [kiến trúc Weline](../weline/README.md).
-- Công việc AI / Codex: bắt đầu từ [AI-ENTRY.md](../../AI-ENTRY.md).
+- Công việc AI / Codex: bắt đầu từ [AGENTS.md](../../AGENTS.md).
 
 ## Yêu Cầu
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [Tổng quan kiến trúc](../weline/架构总览.md)
 - [Hướng dẫn phát triển](../开发文档.md)
 - [Hướng dẫn triển khai](../部署文档.md)
-- [Lối vào trợ lý AI](../../AI-README.md)
+- [Lối vào trợ lý AI](../../AGENTS.md)
 
 ## Ghi Chú
 

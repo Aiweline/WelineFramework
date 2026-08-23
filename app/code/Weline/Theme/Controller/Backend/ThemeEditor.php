@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
@@ -12,9 +13,11 @@ use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\I18n\Api\Localization\LocaleCatalogInterface;
 use Weline\Theme\Service\EditorLockService;
+use Weline\Theme\Service\LayoutValueHydrationRegistry;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewNavigationResolver;
 use Weline\Theme\Service\PreviewTokenService;
@@ -22,6 +25,7 @@ use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutService;
+use Weline\Theme\Service\ThemeLayoutScopeNormalizer;
 use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\ThemeMetaIdentityService;
 use Weline\Theme\Service\ThemePageTypeResolver;
@@ -35,7 +39,6 @@ use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Api\Param\ParamFormRendererInterface;
 use Weline\Widget\Api\WidgetRegistryInterface;
 use Weline\Meta\Api\Data\MetaConfigIdentity;
-use Weline\Meta\Api\Data\MetaConfigWrite;
 use Weline\Meta\Api\MetaConfigRepositoryInterface;
 use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 use Weline\Theme\Helper\ComponentMetaParser;
@@ -46,10 +49,22 @@ use Weline\Theme\Observer\ControllerFetchFileBefore;
 use Weline\Theme\Service\PreviewThemeScopeService;
 use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeTargetTypeRegistry;
+use Weline\Theme\Service\Ui\ThemeEditorMarkupRenderer;
+use Weline\SystemConfig\Api\Scope\ScopeSelectorCatalogInterface;
+use Weline\Theme\Service\Scoped\ThemeScopedWorkspaceRequestService;
+use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
+use Weline\Theme\Service\Scoped\ThemeLayoutSnapshotNormalizer;
+use Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 
 /**
  * 主题编辑器控制器
  */
+#[Acl('Weline_Theme::theme_visual_editor', '可视化编辑', 'palette', '编辑网站、店铺与渠道主题')]
 class ThemeEditor extends BackendController
 {
     private const EVENT_THEME_EDITOR_RESULT_AFTER = 'Weline_Theme::theme_editor::result_after';
@@ -64,6 +79,7 @@ class ThemeEditor extends BackendController
     private PreviewTokenService $previewTokenService;
     private EditorLockService $editorLockService;
     private ParamFormRendererInterface $paramFormRenderer;
+    private ThemeEditorMarkupRenderer $editorMarkupRenderer;
 
     private function useFullscreenEditorLayout(): void
     {
@@ -93,6 +109,7 @@ class ThemeEditor extends BackendController
         ?PreviewTokenService $previewTokenService = null,
         ?EditorLockService $editorLockService = null,
         ?ParamFormRendererInterface $paramFormRenderer = null,
+        ?ThemeEditorMarkupRenderer $editorMarkupRenderer = null,
     ) {
         $this->welineTheme = $welineTheme;
         $this->layoutService = $layoutService;
@@ -107,6 +124,8 @@ class ThemeEditor extends BackendController
             ?? ObjectManager::getInstance(EditorLockService::class);
         $this->paramFormRenderer = $paramFormRenderer
             ?? ObjectManager::getInstance(ParamFormRendererInterface::class);
+        $this->editorMarkupRenderer = $editorMarkupRenderer
+            ?? ObjectManager::getInstance(ThemeEditorMarkupRenderer::class);
     }
 
     private function dispatchThemeEditorResultAfter(string $result, string $action): string
@@ -175,6 +194,45 @@ class ThemeEditor extends BackendController
         $editorArea = $previewContextService->normalizeArea(
             (string)$previewAreaParam
         );
+        $scopeCatalog = ObjectManager::getInstance(ScopeSelectorCatalogInterface::class)->build(
+            (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
+            null,
+            $this->themeScopeClaimsFromRequest(),
+        );
+        $scopeLegacyReadonly = !empty($scopeCatalog['legacy_readonly']);
+        $selectedScope = $scopeLegacyReadonly
+            ? (string)($scopeCatalog['legacy_scope'] ?? '')
+            : (string)$scopeCatalog['selected_scope'];
+        $scopeContext = null;
+        if (!$scopeLegacyReadonly) {
+            // For canonical scopes the binding is authoritative. Request theme
+            // ids are legacy navigation hints only and must not survive a
+            // failed/partial scoped-workspace read.
+            $requestedFrontendThemeId = 0;
+            $requestedBackendThemeId = 0;
+            try {
+                $selectedIdentity = ScopeIdentity::fromArray((array)$scopeCatalog['selected_identity']);
+                $scopeContext = ObjectManager::getInstance(ScopeHierarchyInterface::class)
+                    ->contextFromIdentity($selectedIdentity);
+                /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
+                $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+                $frontendBinding = $scopedWorkspace->load(new ThemeEditorContext(
+                    scope: $scopeContext,
+                    area: PreviewContextService::AREA_FRONTEND,
+                    resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
+                ));
+                $requestedFrontendThemeId = (int)($frontendBinding['draft_payload']['theme_id'] ?? 0);
+
+                $backendBinding = $scopedWorkspace->load(new ThemeEditorContext(
+                    scope: $scopeContext,
+                    area: PreviewContextService::AREA_BACKEND,
+                    resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
+                ));
+                $requestedBackendThemeId = (int)($backendBinding['draft_payload']['theme_id'] ?? 0);
+            } catch (\Throwable) {
+                // Setup may still be upgrading; legacy active-theme lookup remains the read fallback.
+            }
+        }
         $themeListUrl = $this->_url->getBackendUrl('theme/backend');
 
         $frontendTheme = $requestedFrontendThemeId > 0
@@ -219,7 +277,11 @@ class ThemeEditor extends BackendController
             'preview_mode' => (string)$this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE),
             'status' => (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
             'version_id' => (int)$this->request->getParam('version_id', 0) ?: null,
-            'scope' => (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
+            // The catalog is the authoritative Scope boundary. Keeping a raw
+            // request string here would let a stale/forged Scope leak into the
+            // preview token and legacy projection while the editor itself is
+            // already using a different canonical typed identity.
+            'scope' => $selectedScope !== '' ? $selectedScope : PreviewContextService::DEFAULT_SCOPE,
             'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
             'target_value' => $pageType,
         ]);
@@ -303,13 +365,49 @@ class ThemeEditor extends BackendController
             $layoutIdentity = [
                 'layout_option' => (string)($layoutEditorLock['layout_option'] ?? 'default'),
                 'scope' => (string)($layoutEditorLock['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
+                'locale_code' => (string)($layoutEditorLock['locale_code'] ?? $this->request->getParam('locale', '')),
                 'target_type' => (string)($layoutEditorLock['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
                 'target_id' => (int)($layoutEditorLock['target_id'] ?? 0),
             ];
         }
         if ($currentThemeId) {
+            $scopedLayoutMaterialized = false;
+            if ($scopeContext !== null) {
+                try {
+                    $typedLayoutContext = new ThemeEditorContext(
+                        scope: $scopeContext,
+                        area: $editorArea,
+                        resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+                        themeId: $currentThemeId,
+                        layoutType: $pageType,
+                        layoutOption: $layoutOption,
+                        locale: (string)($layoutIdentity['locale_code'] ?? '') !== ''
+                            ? (string)$layoutIdentity['locale_code']
+                            : 'default',
+                        targetType: (string)($layoutIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
+                        targetId: (int)($layoutIdentity['target_id'] ?? 0),
+                    );
+                    /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
+                    $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+                    $scopedState = $scopedWorkspace->load($typedLayoutContext, true);
+                    /** @var ThemeScopedResourceAdapterInterface $adapter */
+                    $adapter = ObjectManager::getInstance(ThemeScopedResourceAdapterInterface::class);
+                    $adapter->projectDraft(
+                        $typedLayoutContext,
+                        \is_array($scopedState['draft_payload'] ?? null) ? $scopedState['draft_payload'] : [],
+                    );
+                    $layoutIdentity = $this->layoutIdentityFromEditorContext($typedLayoutContext);
+                    $scopedLayoutMaterialized = true;
+                } catch (\Throwable) {
+                    // Setup upgrades retain the old draft initialization path.
+                }
+            }
             $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType, $layoutIdentity);
-            if (!$hasDraft && !$this->hasEmptyCurrentRestoreVersion($currentThemeId, $pageType, $layoutIdentity)) {
+            if (!$scopeLegacyReadonly
+                && !$scopedLayoutMaterialized
+                && !$hasDraft
+                && !$this->hasEmptyCurrentRestoreVersion($currentThemeId, $pageType, $layoutIdentity)
+            ) {
                 $this->layoutService->initDraftFromPublished($currentThemeId, $pageType, $layoutIdentity);
             }
             $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity);
@@ -318,7 +416,50 @@ class ThemeEditor extends BackendController
         // 部件库改为前端异步加载（页面与主预览就绪后再拉取），首屏不再同步渲染全部部件预览，
         // 避免阻塞编辑器首屏与主预览加载。前端通过 theme-editor/widgets 接口按当前主题获取。
         $availableWidgets = [];
-
+        $structureWidgetsHtml = [
+            'header' => '',
+            'content' => '',
+            'footer' => '',
+        ];
+        foreach (array_keys($structureWidgetsHtml) as $areaCode) {
+            $areaWidgets = $layout[$areaCode]['widgets'] ?? [];
+            if (!is_array($areaWidgets)) {
+                $areaWidgets = [];
+            }
+            foreach ($areaWidgets as $widget) {
+                if (!is_array($widget)) {
+                    continue;
+                }
+                $structureWidgetsHtml[$areaCode] .= (string)$this->getTemplate()->fetchTagHtml(
+                    'templates',
+                    'Weline_Theme::backend/ThemeEditor/widget-item.phtml',
+                    ['widget' => $widget]
+                );
+            }
+            if ($structureWidgetsHtml[$areaCode] === '') {
+                $structureWidgetsHtml[$areaCode] = $this->editorMarkupRenderer->renderStructurePlaceholder($areaCode);
+            }
+        }
+        $compactLayoutOptions = $this->compactEditorLayoutOptions($layoutOptionsByType);
+        $currentLayoutOptions = $compactLayoutOptions[$pageType] ?? [];
+        if ($currentLayoutOptions === []) {
+            $currentLayoutOptions = [[
+                'value' => $layoutOption,
+                'label' => $layoutOption === 'default' ? (string)__('Default') : $layoutOption,
+                'description' => '',
+                'file' => '',
+            ]];
+        }
+        $installedLocales = $this->getInstalledLocalesPayload();
+        $themeOptionsHtml = $this->editorMarkupRenderer->renderThemeOptions($themes, $currentThemeId);
+        $pageTypeOptionsHtml = $this->editorMarkupRenderer->renderPageTypeOptions($pageTypes, $pageType);
+        $layoutOptionsHtml = $this->editorMarkupRenderer->renderLayoutOptions($currentLayoutOptions, $layoutOption);
+        $editorAreaOptionsHtml = $this->editorMarkupRenderer->renderEditorAreaOptions(
+            $frontendHasBackend || $backendThemeId > 0,
+            $editorArea
+        );
+        $localeOptionsHtml = $this->editorMarkupRenderer->renderLocaleOptions($installedLocales);
+        $widgetLibraryHtml = $this->editorMarkupRenderer->renderWidgetLibrary($availableWidgets, $editorArea);
         $this->assign('theme_id', $currentThemeId);
         $this->assign('theme', $currentTheme);
         $this->assign('current_theme', $currentTheme);
@@ -330,7 +471,7 @@ class ThemeEditor extends BackendController
         $this->assign('page_type', $pageType);
         $this->assign('layout_option', $layoutOption);
         $this->assign('layout_identity', $layoutIdentity);
-        $this->assign('layout_options_by_type', $this->compactEditorLayoutOptions($layoutOptionsByType));
+        $this->assign('layout_options_by_type', $compactLayoutOptions);
         $this->assign('page_types', $pageTypes);
         $this->assign('areas', ThemeLayout::getAreas());
         $this->assign('editor_area', $editorArea);
@@ -338,11 +479,247 @@ class ThemeEditor extends BackendController
         $this->assign('preview_context', $context);
         $this->assign('layout_editor_lock', $layoutEditorLock);
         $this->assign('layout', $layout);
+        $this->assign('structure_widgets_html', $structureWidgetsHtml);
         $this->assign('available_widgets', $availableWidgets);
-        $this->assign('installed_locales', $this->getInstalledLocalesPayload());
+        $this->assign('installed_locales', $installedLocales);
+        $this->assign('theme_options_html', $themeOptionsHtml);
+        $this->assign('scope_identity', $scopeLegacyReadonly ? [] : $scopeCatalog['selected_identity']);
+        $this->assign('selected_scope', $selectedScope);
+        $this->assign('scope_legacy_readonly', $scopeLegacyReadonly);
+        $this->assign('page_type_options_html', $pageTypeOptionsHtml);
+        $this->assign('layout_options_html', $layoutOptionsHtml);
+        $this->assign('editor_area_options_html', $editorAreaOptionsHtml);
+        $this->assign('locale_options_html', $localeOptionsHtml);
+        $this->assign('widget_library_html', $widgetLibraryHtml);
         $this->assign('has_draft', $hasDraft);
 
         return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml');
+    }
+
+    /** Load the canonical draft/effective state for one typed Theme resource. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_read',
+        '查看主题 Scope 工作区',
+        'eye',
+        '读取主题 Scope 草稿、继承来源与冲突',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_READ,
+    )]
+    public function getScopedWorkspace()
+    {
+        return $this->fetchJson($this->scopedWorkspacePayload('load'));
+    }
+
+    /** Apply incremental per-path changes; legacy scope strings are never accepted here. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_edit',
+        '编辑主题 Scope 草稿',
+        'edit',
+        '写入主题 Scope 逐路径覆盖或恢复继承',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_EDIT,
+    )]
+    public function postScopedWorkspace()
+    {
+        return $this->fetchJson($this->scopedWorkspacePayload('apply'));
+    }
+
+    /** Publish one scoped resource and rebase existing descendant workspaces. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_publish',
+        '发布主题 Scope',
+        'upload',
+        '发布主题 Scope 并重算后代有效版本',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_EDIT,
+    )]
+    public function postPublishScopedWorkspace()
+    {
+        return $this->fetchJson($this->scopedWorkspacePayload('publish'));
+    }
+
+    /** @return array<string,mixed> */
+    private function scopedWorkspacePayload(string $operation): array
+    {
+        try {
+            $input = $this->getEditorJsonPayload();
+            /** @var ThemeScopedWorkspaceRequestService $service */
+            $service = ObjectManager::getInstance(ThemeScopedWorkspaceRequestService::class);
+            $data = match ($operation) {
+                'load' => $service->load($input),
+                'apply' => $service->apply(
+                    $input,
+                    'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                    (string)($this->session->getUsername() ?? ''),
+                ),
+                'publish' => $service->publish(
+                    $input,
+                    'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                    (string)($this->session->getUsername() ?? ''),
+                ),
+                default => throw new \InvalidArgumentException('theme_scope_operation_invalid'),
+            };
+
+            return ['success' => true, 'data' => $data];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Publish every dirty resource represented by the current typed preview context.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    private function publishPendingScopedResources(ThemeEditorContext $baseContext, string $reason): array
+    {
+        /** @var ThemeScopedWorkspaceInterface $workspace */
+        $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+        /** @var ThemeScopedWorkspaceRequestService $requests */
+        $requests = ObjectManager::getInstance(ThemeScopedWorkspaceRequestService::class);
+        $results = [];
+        foreach (ThemeEditorContext::RESOURCES as $resourceType) {
+            $context = $baseContext->withResource($resourceType);
+            $state = $workspace->load($context, true);
+            $draftRevisionId = (int)($state['draft_revision_id'] ?? 0);
+            $publishedRevisionId = (int)($state['published_revision_id'] ?? 0);
+            if ((int)($state['revision'] ?? 0) <= 0
+                || $draftRevisionId <= 0
+                || $draftRevisionId === $publishedRevisionId
+            ) {
+                continue;
+            }
+            $results[$resourceType] = $requests->publish([
+                'editor_context' => $context->toArray(),
+                'expected_revision' => (int)$state['revision'],
+                'expected_parent_release_id' => $state['expected_parent_release_id'] ?? null,
+                'reason' => $reason,
+            ], 'backend-user:' . (string)($this->session->getUserId() ?? 0), (string)($this->session->getUsername() ?? ''));
+        }
+
+        return $results;
+    }
+
+    /** @return array<string,mixed> */
+    private function replaceScopedLayoutDraftFromSnapshot(
+        ThemeEditorContext $context,
+        array $snapshot,
+        string $summary,
+    ): array {
+        /** @var ThemeScopedWorkspaceInterface $workspace */
+        $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+        /** @var ThemeLayoutSnapshotNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ThemeLayoutSnapshotNormalizer::class);
+        $scopedContext = $context->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        $state = $workspace->load($scopedContext, true);
+
+        try {
+            return $workspace->replaceEffectivePayload(
+                context: $scopedContext,
+                expectedRevision: (int)($state['revision'] ?? 0),
+                expectedParentReleaseId: isset($state['expected_parent_release_id'])
+                    ? (int)$state['expected_parent_release_id']
+                    : null,
+                effectivePayload: $normalizer->normalize($context, $snapshot),
+                actorId: 'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                actorName: (string)($this->session->getUsername() ?? ''),
+                summary: $summary,
+            );
+        } catch (\Throwable $e) {
+            // Legacy routes may already have updated their rebuildable draft
+            // projection. Restore it from the unchanged canonical workspace when
+            // semantic conversion or optimistic validation fails.
+            try {
+                $previousPayload = $state['draft_payload'] ?? null;
+                if (is_array($previousPayload)) {
+                    ObjectManager::getInstance(ThemeScopedResourceAdapterInterface::class)
+                        ->projectDraft($scopedContext, $previousPayload);
+                }
+            } catch (\Throwable $projectionError) {
+                \Weline\Framework\App\Env::log_error(
+                    'theme_scope_projection',
+                    'Theme layout compatibility compensation failed: ' . $projectionError->getMessage(),
+                );
+            }
+            throw $e;
+        }
+    }
+
+    private function saveScopedLayoutVersion(
+        ThemeEditorContext $context,
+        ?string $name,
+        ?string $description,
+    ): ThemeLayoutVersion {
+        $snapshot = $this->scopedLayoutSnapshot($context);
+
+        return $this->versionService->saveSnapshotVersion(
+            themeId: $context->themeId,
+            pageType: $context->layoutType,
+            snapshotData: $snapshot,
+            name: $name,
+            description: $description,
+            userId: (int)($this->session->getUserId() ?? 0) ?: null,
+            identity: $this->layoutIdentityFromEditorContext($context),
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function scopedLayoutSnapshot(ThemeEditorContext $context): array
+    {
+        /** @var ThemeScopedWorkspaceInterface $workspace */
+        $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+        /** @var ThemeLayoutSnapshotNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ThemeLayoutSnapshotNormalizer::class);
+        $state = $workspace->load($context->withResource(ThemeEditorContext::RESOURCE_LAYOUT), true);
+        if ((int)($state['draft_revision_id'] ?? 0) <= 0
+            && (int)($state['published_release_id'] ?? 0) <= 0
+        ) {
+            throw new \RuntimeException('theme_scoped_layout_workspace_missing');
+        }
+        $payload = is_array($state['draft_payload'] ?? null) ? $state['draft_payload'] : [];
+
+        return $normalizer->denormalize($context, $payload);
+    }
+
+    /** @return array<string,mixed> */
+    private function normalizeLegacyLayoutSnapshot(ThemeEditorContext $context, array $snapshot): array
+    {
+        /** @var ThemeLayoutSnapshotNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ThemeLayoutSnapshotNormalizer::class);
+
+        return $normalizer->denormalize($context, $normalizer->normalize($context, $snapshot));
+    }
+
+    /** @return array<string,mixed> */
+    private function themeScopeClaimsFromRequest(): array
+    {
+        if (trim((string)$this->request->getParam('scope_kind', '')) === '') {
+            return [];
+        }
+
+        return [
+            'scope_kind' => (string)$this->request->getParam('scope_kind'),
+            'website_id' => $this->nullableRequestInt('website_id'),
+            'website_code' => $this->nullableRequestString('website_code'),
+            'store_code' => $this->nullableRequestString('store_code'),
+            'channel_code' => $this->nullableRequestString('channel_code'),
+            'store_mode' => $this->nullableRequestString('store_mode'),
+            'context_version' => (string)$this->request->getParam('context_version', 'v1'),
+        ];
+    }
+
+    private function nullableRequestInt(string $key): ?int
+    {
+        $value = $this->request->getParam($key, null);
+
+        return $value === null || $value === '' ? null : (int)$value;
+    }
+
+    private function nullableRequestString(string $key): ?string
+    {
+        $value = trim((string)$this->request->getParam($key, ''));
+
+        return $value === '' ? null : $value;
     }
 
     /**
@@ -399,9 +776,16 @@ class ThemeEditor extends BackendController
             'layout_type' => $pageType,
             'layout_option' => $lockLayoutOption !== '' ? $lockLayoutOption : 'default',
             'scope' => (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
+            'locale_code' => (string)$this->request->getParam('locale_code', $this->request->getParam('locale', '')),
+            'store_mode' => (string)$this->request->getParam('store_mode', \Weline\Framework\Runtime\ScopeIdentity::MODE_NORMAL),
+            'website_id' => max(0, (int)$this->request->getParam('website_id', 0)),
+            'website_code' => (string)$this->request->getParam('website_code', ''),
+            'store_id' => max(0, (int)$this->request->getParam('store_id', 0)),
+            'store_code' => (string)$this->request->getParam('store_code', ''),
             'target_type' => $this->normalizeVirtualLayoutTargetType($lockTargetType),
             'target_id' => max(0, $lockTargetId),
             'source' => (string)$this->request->getParam('lock_source', 'external'),
+            'lock_source' => (string)$this->request->getParam('lock_source', 'external'),
         ];
     }
 
@@ -452,15 +836,7 @@ class ThemeEditor extends BackendController
             }
         }
 
-        $legacyTargetType = strtolower(trim((string)$this->request->getParam('target_type', '')));
-        $legacyTargetIdRaw = trim((string)$this->request->getParam('target_id', ''));
-        return $legacyTargetIdRaw !== ''
-            && $legacyTargetType !== ''
-            && !in_array($legacyTargetType, [
-                PreviewContextService::TARGET_TYPE_LAYOUT,
-                PreviewContextService::TARGET_TYPE_PAGE,
-                PreviewContextService::TARGET_TYPE_PATH,
-            ], true);
+        return false;
     }
 
     /**
@@ -484,102 +860,6 @@ class ThemeEditor extends BackendController
         }
 
         return $context;
-    }
-
-    public function legacyIndex()
-    {
-        $this->useFullscreenEditorLayout();
-
-        $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
-        $editorArea = $editorArea === 'backend' ? 'backend' : 'frontend';
-        
-        // 获取主题列表页面 URL（用于重定向）
-        $themeListUrl = $this->_url->getBackendUrl('theme/backend');
-
-        // 如果明确传入了 theme_id，必须验证其存在性
-        if ($requestedThemeId > 0) {
-            $this->welineTheme->reset()->load($requestedThemeId);
-            if (!$this->welineTheme->getId()) {
-                // 传入的主题 ID 不存在，报错并重定向到主题列表
-                $this->getMessageManager()->addError(__('主题 ID %{1} 不存在！请选择有效的主题。', $requestedThemeId));
-                return $this->redirect($themeListUrl);
-            }
-            $themeId = $requestedThemeId;
-        } else {
-            // 没有指定主题，尝试使用当前激活的主题
-            $activeTheme = $this->welineTheme->getActiveTheme($editorArea);
-            if ($activeTheme && $activeTheme->getId()) {
-                $themeId = (int)$activeTheme->getId();
-                $this->welineTheme->reset()->load($themeId);
-            } else {
-                // 没有激活的主题，报错并重定向到主题列表
-                $this->getMessageManager()->addError(__('系统没有激活的主题！请先选择或激活一个主题。'));
-                return $this->redirect($themeListUrl);
-            }
-        }
-        
-        // 双重检查：确保加载的主题有效
-        if (!$this->welineTheme->getId()) {
-            $this->getMessageManager()->addError(__('无法加载主题！请检查主题配置。'));
-            return $this->redirect($themeListUrl);
-        }
-        
-        // 获取所有主题列表（按 id 去重，避免重复显示）
-        $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
-        $themesById = [];
-        foreach ($themesCollection as $themeItem) {
-            $data = is_object($themeItem) ? $themeItem->getData() : (is_array($themeItem) ? $themeItem : []);
-            $tid = (int)($data['id'] ?? 0);
-            if ($tid && !isset($themesById[$tid])) {
-                $themesById[$tid] = $data;
-            }
-        }
-        $themes = array_values($themesById);
-
-        // 获取布局数据（编辑器读取草稿数据）
-        $layout = [];
-        $hasDraft = false;
-        if ($themeId) {
-            // 检查是否有草稿，如果没有则从已发布数据初始化草稿
-            $hasDraft = $this->layoutService->hasDraft($themeId, $pageType);
-            if (!$hasDraft && !$this->hasEmptyCurrentRestoreVersion($themeId, $pageType)) {
-                // 首次编辑，从已发布数据初始化草稿
-                $this->layoutService->initDraftFromPublished($themeId, $pageType);
-            }
-            // 读取草稿布局
-            $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
-        }
-
-        // 页面类型列表
-        $pageTypes = ThemeLayout::getPageTypes();
-
-        // 区域列表
-        $areas = ThemeLayout::getAreas();
-
-        // 编辑区域：默认前端；若主题目录无 backend 则仅前端
-        $themeHasBackend = $this->themeHasBackendDir($this->welineTheme);
-        if (!$themeHasBackend || ($editorArea !== 'frontend' && $editorArea !== 'backend')) {
-            $editorArea = 'frontend';
-        }
-
-        // 部件库改为前端异步加载，首屏不再同步渲染全部部件预览。
-        $availableWidgets = [];
-
-        $this->assign('theme_id', $themeId);
-        $this->assign('theme', $this->welineTheme);
-        $this->assign('themes', $themes);
-        $this->assign('page_type', $pageType);
-        $this->assign('page_types', $pageTypes);
-        $this->assign('areas', $areas);
-        $this->assign('editor_area', $editorArea);
-        $this->assign('theme_has_backend', $themeHasBackend);
-        $this->assign('layout', $layout);
-        $this->assign('available_widgets', $availableWidgets);
-        $this->assign('has_draft', $hasDraft);
-
-        return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml');
     }
 
     /**
@@ -606,13 +886,8 @@ class ThemeEditor extends BackendController
             ]);
         }
 
-        // 检查是否有草稿，如果没有则从已发布数据初始化
+        // GET 仅读取现有兼容投影；草稿初始化由 typed Scope 工作区负责。
         $identity = $this->resolveVersionLayoutIdentity();
-        if (!$this->layoutService->hasDraft($themeId, $pageType, $identity)
-            && !$this->hasEmptyCurrentRestoreVersion($themeId, $pageType, $identity)
-        ) {
-            $this->layoutService->initDraftFromPublished($themeId, $pageType, $identity);
-        }
 
         // 读取草稿布局（必须带 Dashboard view identity，否则会落到 default.default.default 空布局）
         $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType, $identity);
@@ -809,7 +1084,6 @@ class ThemeEditor extends BackendController
         $editorArea = $editorArea === PreviewContextService::AREA_BACKEND
             ? PreviewContextService::AREA_BACKEND
             : PreviewContextService::AREA_FRONTEND;
-        $identity = $this->resolveVersionLayoutIdentity($data);
         $applyScope = strtolower(trim((string)($data['apply_scope'] ?? $this->request->getParam('apply_scope', 'current'))));
         $applyScope = in_array($applyScope, ['all', 'all_identities', 'layout'], true) ? 'all' : 'current';
 
@@ -821,34 +1095,27 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $themeId = $context->themeId;
+            $pageType = $context->layoutType;
+            $editorArea = $context->area;
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            if ($applyScope === 'all') {
+                throw new \InvalidArgumentException('theme_editor_bulk_identity_write_forbidden');
+            }
             /** @var WidgetDefaultInjectionService $service */
             $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-            if ($applyScope === 'all') {
-                $applyResult = $service->applyInjectionByKeyForAllLayoutIdentities(
-                    $themeId,
-                    $pageType,
-                    $injectionKey,
-                    $identity,
-                    ThemeLayout::STATUS_DRAFT,
-                    $editorArea
-                );
-                $item = $applyResult['current_item'] ?? ($applyResult['items'][0] ?? null);
-                $appliedCount = (int)($applyResult['applied_count'] ?? 0);
-                $skippedCount = (int)($applyResult['skipped_count'] ?? 0);
-                $totalIdentities = (int)($applyResult['total_identities'] ?? 0);
-            } else {
-                $item = $service->applyInjectionByKey(
-                    $themeId,
-                    $pageType,
-                    $injectionKey,
-                    $identity,
-                    ThemeLayout::STATUS_DRAFT,
-                    $editorArea
-                );
-                $appliedCount = $item && !empty($item['layout_id']) ? 1 : 0;
-                $skippedCount = $appliedCount > 0 ? 0 : 1;
-                $totalIdentities = 1;
-            }
+            $item = $service->applyInjectionByKey(
+                $themeId,
+                $pageType,
+                $injectionKey,
+                $identity,
+                ThemeLayout::STATUS_DRAFT,
+                $editorArea
+            );
+            $appliedCount = $item && !empty($item['layout_id']) ? 1 : 0;
+            $skippedCount = $appliedCount > 0 ? 0 : 1;
+            $totalIdentities = 1;
 
             if ($appliedCount <= 0 || !$item || empty($item['layout_id'])) {
                 return $this->fetchJson([
@@ -861,11 +1128,26 @@ class ThemeEditor extends BackendController
 
             ObjectManager::getInstance(SlotRendererService::class)->clearCache();
             $previewHtml = $this->buildPreviewHtmlForLayoutId((int)$item['layout_id'], $item['config'] ?? []);
+            $savedLayout = clone $this->themeLayout;
+            $savedLayout->clearData()->clearQuery()->load((int)$item['layout_id']);
+            $item['node_uid'] = $savedLayout->getNodeUid();
+            $snapshot = $this->layoutService->getLayout(
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_DRAFT,
+                $identity,
+            );
+            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
+                $context,
+                $snapshot,
+                'Apply declared default widget injection',
+            );
 
             $item['apply_scope'] = $applyScope;
             $item['applied_count'] = $appliedCount;
             $item['skipped_count'] = $skippedCount;
             $item['total_identities'] = $totalIdentities;
+            $item['scoped_workspace'] = $scopedDraft;
             $response = [
                 'success' => true,
                 'message' => $applyScope === 'all' ? __('已应用到所有布局身份') : __('已应用推荐部件'),
@@ -1103,12 +1385,33 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            $context = $this->requireLayoutWriteContext(
+                $data,
+                (int)$data['theme_id'],
+                (string)($data['page_type'] ?? $data['layout_type'] ?? ''),
+            );
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $data['theme_id'] = $context->themeId;
+            $data['page_type'] = $context->layoutType;
+            $data['layout_option'] = $identity['layout_option'];
+            $data['scope'] = $identity['scope'];
+            $data['locale_code'] = $identity['locale_code'];
+            $data['target_type'] = $identity['target_type'];
+            $data['target_id'] = $identity['target_id'];
+            $data['editor_area'] = $context->area;
+            // Theme Editor 始终编辑草稿；已发布投影只能由 Scoped Release 产生。
+            $data['status'] = ThemeLayout::STATUS_DRAFT;
             $layoutId = $this->layoutService->saveWidget($data);
+            $savedLayout = clone $this->themeLayout;
+            $savedLayout->clearData()->clearQuery()->load($layoutId);
 
             $response = [
                 'success' => true,
                 'message' => __('保存成功'),
-                'data' => ['layout_id' => $layoutId],
+                'data' => [
+                    'layout_id' => $layoutId,
+                    'node_uid' => $savedLayout->getNodeUid(),
+                ],
             ];
 
             // T010: 保存成功后返回 preview_html
@@ -1175,12 +1478,16 @@ class ThemeEditor extends BackendController
         $config = $this->normalizeWidgetConfigForLayout($this->themeLayout, $config);
 
         try {
+            $context = $this->requireLayoutWriteContext($data);
+            $this->assertLayoutBelongsToEditorContext($this->themeLayout, $context);
+            $this->assertDraftLayout($this->themeLayout);
             $result = $this->layoutService->updateWidgetConfig($layoutId, $config);
 
             $response = [
                 'success' => $result,
                 'message' => $result ? __('配置已保存') : __('保存失败'),
                 'config' => $config,
+                'node_uid' => $this->themeLayout->getNodeUid(),
             ];
 
             // T009: 配置保存成功后返回 preview_html
@@ -1236,15 +1543,23 @@ class ThemeEditor extends BackendController
             $widgetType = (string)$widget->getData('widget_type');
             $widgetCode = (string)$widget->getData('widget_code');
             $widgetSortOrder = (int)$widget->getData('sort_order');
+            $nodeUid = $widget->getNodeUid();
             $layoutIdentity = [
                 'layout_option' => (string)($widget->getData('layout_option') ?: 'default'),
                 'scope' => (string)($widget->getData('scope') ?: 'default'),
+                'locale_code' => (string)$widget->getData(ThemeLayout::schema_fields_LOCALE_CODE),
                 'target_type' => (string)($widget->getData('target_type') ?: ThemeVirtualLayout::TARGET_GLOBAL),
                 'target_id' => (int)$widget->getData('target_id'),
             ];
             
             // 如果 DB 记录不存在，使用前端提供的 fallback 数据
             $recordExists = !empty($widget->getLayoutId());
+            $context = $this->requireLayoutWriteContext(
+                $data,
+                $themeId > 0 ? $themeId : null,
+                $recordExists ? (string)$widget->getData(ThemeLayout::schema_fields_PAGE_TYPE) : null,
+            );
+            $themeId = $context->themeId;
             if (!$recordExists) {
                 $slotId = $data['slot_id'] ?? null;
                 $area = $data['area'] ?? 'content';
@@ -1253,6 +1568,10 @@ class ThemeEditor extends BackendController
                 $widgetType = (string)($data['widget_type'] ?? $widgetType);
                 $widgetCode = (string)($data['widget_code'] ?? $widgetCode);
                 $layoutIdentity = $this->resolveVersionLayoutIdentity($data);
+            } else {
+                $this->assertLayoutBelongsToEditorContext($widget, $context);
+                $this->assertDraftLayout($widget);
+                $layoutIdentity = $this->layoutIdentityFromEditorContext($context);
             }
             
             // 尝试删除部件（如果记录存在）
@@ -1289,6 +1608,7 @@ class ThemeEditor extends BackendController
                 'success' => $result,
                 'message' => $result ? __('删除成功') : __('删除失败'),
                 'slot_id' => $slotId,
+                'node_uid' => $nodeUid,
             ];
             
             // 获取插槽的原始内容（无论记录是否存在，只要有足够信息就尝试恢复）
@@ -1334,11 +1654,9 @@ class ThemeEditor extends BackendController
         $slotIds = $data['slot_ids'] ?? $this->request->getParam('slot_ids', []);
         $pageType = (string)($data['page_type']
             ?? $this->request->getParam('page_type', $this->request->getParam('layout_type', ThemeLayout::PAGE_TYPE_HOME)));
-        $identity = $this->resolveVersionLayoutIdentity($data);
-        $status = (string)($data['status'] ?? $this->request->getParam('status', ThemeLayout::STATUS_DRAFT));
-        if ($status !== ThemeLayout::STATUS_DRAFT && $status !== ThemeLayout::STATUS_PUBLISHED) {
-            $status = ThemeLayout::STATUS_DRAFT;
-        }
+        $identity = [];
+        // 删除孤儿也是编辑操作，不允许客户端指定 published。
+        $status = ThemeLayout::STATUS_DRAFT;
         
         if (!$themeId || empty($slotIds)) {
             return $this->fetchJson([
@@ -1348,6 +1666,14 @@ class ThemeEditor extends BackendController
         }
         
         try {
+            $context = $this->requireLayoutWriteContext(
+                $data,
+                $themeId > 0 ? $themeId : null,
+                $pageType,
+            );
+            $themeId = $context->themeId;
+            $pageType = $context->layoutType;
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $deletedCount = 0;
             
             // 批量删除指定插槽的所有部件（包括 draft 和 published）
@@ -1361,6 +1687,7 @@ class ThemeEditor extends BackendController
                     ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId)
                     ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                     ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                    ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
                     ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
                     ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
                     ->select()
@@ -1374,6 +1701,7 @@ class ThemeEditor extends BackendController
                     ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId)
                     ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                     ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                    ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
                     ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
                     ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
                     ->delete()
@@ -1387,6 +1715,7 @@ class ThemeEditor extends BackendController
                     ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId)
                     ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                     ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                    ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
                     ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
                     ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
                     ->select()
@@ -1422,9 +1751,10 @@ class ThemeEditor extends BackendController
      */
     public function postMoveWidget()
     {
-        $layoutId = (int)$this->request->getParam('layout_id');
-        $newArea = $this->request->getParam('area');
-        $sortOrder = (int)$this->request->getParam('sort_order', 0);
+        $data = $this->getEditorJsonPayload();
+        $layoutId = (int)($data['layout_id'] ?? 0);
+        $newArea = $data['area'] ?? null;
+        $sortOrder = (int)($data['sort_order'] ?? 0);
 
         if (!$layoutId || !$newArea) {
             return $this->fetchJson([
@@ -1434,11 +1764,27 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data);
+            $layout = clone $this->themeLayout;
+            $layout->clearData()->clearQuery()->load($layoutId);
+            if (!$layout->getLayoutId()) {
+                throw new \RuntimeException((string)__('部件不存在'));
+            }
+            $this->assertLayoutBelongsToEditorContext($layout, $context);
+            $this->assertDraftLayout($layout);
             $result = $this->layoutService->moveWidget($layoutId, $newArea, $sortOrder);
 
             return $this->fetchJson([
                 'success' => $result,
                 'message' => $result ? __('移动成功') : __('移动失败'),
+                'data' => $result ? [
+                    'nodes' => [[
+                        'layout_id' => $layoutId,
+                        'node_uid' => $layout->getNodeUid(),
+                        'area' => (string)$newArea,
+                        'sort_order' => $sortOrder,
+                    ]],
+                ] : null,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -1456,6 +1802,7 @@ class ThemeEditor extends BackendController
         // 尝试从 JSON body 获取参数
         $bodyParams = $this->request->getBodyParams();
         $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
+        $body = is_array($body) ? $body : $this->getEditorJsonPayload();
         $sortData = $body['sort_data'] ?? $this->request->getParam('sort_data', []);
 
         if (empty($sortData)) {
@@ -1466,11 +1813,30 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($body);
+            $nodes = [];
+            foreach (array_keys($sortData) as $layoutId) {
+                $layout = clone $this->themeLayout;
+                $layout->clearData()->clearQuery()->load((int)$layoutId);
+                if (!$layout->getLayoutId()) {
+                    throw new \RuntimeException((string)__('部件不存在'));
+                }
+                $this->assertLayoutBelongsToEditorContext($layout, $context);
+                $this->assertDraftLayout($layout);
+                $nodes[] = [
+                    'layout_id' => (int)$layoutId,
+                    'node_uid' => $layout->getNodeUid(),
+                    'sort_order' => (int)$sortData[$layoutId],
+                ];
+            }
             $result = $this->layoutService->updateSortOrder($sortData);
+            usort($nodes, static fn(array $left, array $right): int =>
+                ((int)$left['sort_order']) <=> ((int)$right['sort_order']));
 
             return $this->fetchJson([
                 'success' => $result,
                 'message' => $result ? __('排序已更新') : __('更新失败'),
+                'data' => $result ? ['nodes' => $nodes] : null,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -1488,6 +1854,7 @@ class ThemeEditor extends BackendController
         // 尝试从 JSON body 获取参数
         $bodyParams = $this->request->getBodyParams();
         $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
+        $body = is_array($body) ? $body : $this->getEditorJsonPayload();
         $themeId = (int)($body['theme_id'] ?? $this->request->getParam('theme_id'));
         $layoutId1 = (int)($body['layout_id_1'] ?? $this->request->getParam('layout_id_1'));
         $layoutId2 = (int)($body['layout_id_2'] ?? $this->request->getParam('layout_id_2'));
@@ -1500,11 +1867,39 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($body, $themeId > 0 ? $themeId : null);
+            $layouts = [];
+            foreach ([$layoutId1, $layoutId2] as $layoutId) {
+                $layout = clone $this->themeLayout;
+                $layout->clearData()->clearQuery()->load($layoutId);
+                if (!$layout->getLayoutId()) {
+                    throw new \RuntimeException((string)__('部件不存在'));
+                }
+                $this->assertLayoutBelongsToEditorContext($layout, $context);
+                $this->assertDraftLayout($layout);
+                $layouts[] = $layout;
+            }
             $result = $this->layoutService->swapWidgetOrder($layoutId1, $layoutId2);
+            $nodes = [];
+            if ($result && count($layouts) === 2) {
+                $nodes = [
+                    [
+                        'layout_id' => $layoutId1,
+                        'node_uid' => $layouts[0]->getNodeUid(),
+                        'sort_order' => $layouts[1]->getSortOrder(),
+                    ],
+                    [
+                        'layout_id' => $layoutId2,
+                        'node_uid' => $layouts[1]->getNodeUid(),
+                        'sort_order' => $layouts[0]->getSortOrder(),
+                    ],
+                ];
+            }
 
             return $this->fetchJson([
                 'success' => $result,
                 'message' => $result ? __('位置已交换') : __('交换失败'),
+                'data' => $result ? ['nodes' => $nodes] : null,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -1519,10 +1914,10 @@ class ThemeEditor extends BackendController
      */
     public function postSaveLayout()
     {
-        $themeId = (int)$this->request->getParam('theme_id');
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $layoutData = $this->request->getParam('layout_data', []);
-        $identity = $this->resolveVersionLayoutIdentity();
+        $data = $this->getEditorJsonPayload();
+        $themeId = (int)($data['theme_id'] ?? 0);
+        $pageType = (string)($data['page_type'] ?? ThemeLayout::PAGE_TYPE_HOME);
+        $layoutData = $data['layout_data'] ?? [];
 
         if (!$themeId) {
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
@@ -1532,11 +1927,28 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $result = $this->layoutService->saveLayout($themeId, $pageType, $layoutData, ThemeLayout::STATUS_DRAFT, $identity);
+            $scopedDraft = null;
+            if ($result) {
+                $snapshot = $this->layoutService->getLayout(
+                    $themeId,
+                    $pageType,
+                    ThemeLayout::STATUS_DRAFT,
+                    $identity,
+                );
+                $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
+                    $context,
+                    $snapshot,
+                    'Convert legacy full layout form to semantic patch',
+                );
+            }
 
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => $result,
                 'message' => $result ? __('布局已保存') : __('保存失败'),
+                'data' => $result ? ['scoped_workspace' => $scopedDraft] : null,
             ]), 'save_layout');
         } catch (\Exception $e) {
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
@@ -1569,22 +1981,11 @@ class ThemeEditor extends BackendController
         ]);
     }
 
-    /**
-     * 恢复原始布局（旧 API - 已废弃，保留兼容性）
-     * 
-     * @deprecated 使用 postRestoreOriginal() 代替，支持版本控制和自动备份
-     */
-    public function postRestoreLayout()
-    {
-        // 委托给新的恢复原始布局 API
-        return $this->postRestoreOriginal();
-    }
-
     public function postPublish()
     {
-        $themeId = (int)$this->request->getParam('theme_id');
-        $pageType = $this->request->getParam('page_type'); // 可选，null表示发布所有页面类型
-        $identity = $this->resolveVersionLayoutIdentity();
+        $data = $this->getEditorJsonPayload();
+        $themeId = (int)($data['theme_id'] ?? 0);
+        $pageType = isset($data['page_type']) ? (string)$data['page_type'] : null;
 
         if (!$themeId) {
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
@@ -1594,32 +1995,31 @@ class ThemeEditor extends BackendController
         }
 
         try {
-            // 1. 发布前清理：删除草稿中的孤儿部件（slot_id 指向不存在的插槽）
-            $orphansCleaned = $this->layoutService->cleanOrphanWidgets($themeId, $pageType, $identity);
-            
-            // 2. 将草稿发布为正式版（复制 draft -> published，含去重）
-            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, $identity, true);
-            if (!$publishResult) {
-                return $this->dispatchThemeEditorResultAfter($this->fetchJson([
-                    'success' => false,
-                    'message' => __('发布布局失败'),
-                ]), 'publish_layout');
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $themeId = $context->themeId;
+            $pageType = $context->layoutType;
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $scopedReleasePublished = $this->hasScopedReleasePublishedClaim($data);
+            if ($scopedReleasePublished) {
+                // Scoped Release 已编译并投影有效快照，不得再用旧 draft 整表覆盖。
+                $this->assertCurrentScopedLayoutPublished($context);
+            } else {
+                // 保留旧路由，但发布必须收口到 typed Scope Release。
+                $this->publishPendingScopedResources($context, 'theme_editor_compat_publish');
+                $this->assertCurrentScopedLayoutPublished($context);
             }
             $this->publishEditorPreviewScope($themeId, (string)($identity['scope'] ?? PreviewContextService::DEFAULT_SCOPE));
 
-            // 3. 清除旧缓存（主题生成缓存）
+            // 清除旧缓存（主题生成缓存）
             $this->cacheGenerator->clearCache($themeId);
 
-            // 4. 清除全页面缓存（FPC）— 布局变更后旧的缓存 HTML 必须失效
+            // 清除全页面缓存（FPC）— 布局变更后旧的缓存 HTML 必须失效
             $this->flushFullPageCache();
 
-            // 5. 生成新缓存
+            // 生成新缓存
             $cacheResult = $this->cacheGenerator->generate($themeId);
 
             $message = $cacheResult ? __('主题已发布') : __('生成缓存失败，但布局已发布');
-            if ($orphansCleaned > 0) {
-                $message .= ' ' . __('（已清理 %{count} 个无效部件）', ['count' => $orphansCleaned]);
-            }
 
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => $cacheResult,
@@ -1638,9 +2038,9 @@ class ThemeEditor extends BackendController
      */
     public function postDiscardDraft()
     {
-        $themeId = (int)$this->request->getParam('theme_id');
-        $pageType = $this->request->getParam('page_type'); // 可选
-        $identity = $this->resolveVersionLayoutIdentity();
+        $data = $this->getEditorJsonPayload();
+        $themeId = (int)($data['theme_id'] ?? 0);
+        $pageType = isset($data['page_type']) ? (string)$data['page_type'] : null;
 
         if (!$themeId) {
             return $this->fetchJson([
@@ -1650,6 +2050,10 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $themeId = $context->themeId;
+            $pageType = $context->layoutType;
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $result = $this->layoutService->discardDraft($themeId, $pageType, $identity);
 
             return $this->fetchJson([
@@ -1662,30 +2066,6 @@ class ThemeEditor extends BackendController
                 'message' => $e->getMessage(),
             ]);
         }
-    }
-
-    /**
-     * 预览页面 - 读取草稿数据进行预览
-     */
-    public function preview()
-    {
-        $themeId = (int)$this->request->getParam('theme_id');
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
-            return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/preview-empty.phtml');
-        }
-
-        // 获取草稿布局数据
-        $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
-
-        $this->assign('theme_id', $themeId);
-        $this->assign('page_type', $pageType);
-        $this->assign('layout', $layout);
-        $this->assign('areas', ThemeLayout::getAreas());
-        $this->assign('preview_mode', true); // 标记为预览模式
-
-        return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/preview.phtml');
     }
 
     /**
@@ -1908,7 +2288,7 @@ class ThemeEditor extends BackendController
             ]);
         }
         
-        // 以 layout 已保存配置为 base（保证选择器等非翻译字段刷新后回填正确）
+        // 以已发布 layout 配置为 base（保证选择器等非翻译字段刷新后回填正确）
         $config = $this->ensureWidgetI18nInstance($widgetLayout);
         if (!is_array($config)) {
             $config = [];
@@ -1918,6 +2298,39 @@ class ThemeEditor extends BackendController
         // 仅在明确选择语言时合并翻译；默认（全语言）必须展示基础配置，不能被 Cookie 语言污染。
         if ($locale !== null) {
             $config = $this->mergeTranslatedPathsForLayout($config, $params, $identify, $locale, $slotArea, $area);
+        }
+        $editorPayload = $this->getEditorJsonPayload();
+        if (array_key_exists('editor_context', $editorPayload)) {
+            try {
+                /** @var ThemeEditorContextFactory $factory */
+                $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+                $typedContext = $factory->fromInput(
+                    $editorPayload,
+                    $locale === null ? ThemeEditorContext::RESOURCE_LAYOUT : ThemeEditorContext::RESOURCE_I18N,
+                );
+                $this->assertRawLayoutContextMatches($editorPayload, $typedContext);
+                $this->assertLayoutBelongsToEditorContext($widgetLayout, $typedContext);
+                /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
+                $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+                $scopedState = $scopedWorkspace->load($typedContext, true);
+                $draftPayload = is_array($scopedState['draft_payload'] ?? null)
+                    ? $scopedState['draft_payload']
+                    : [];
+                $nodeUid = strtolower((string)$widgetLayout->getNodeUid());
+                $draftConfig = $locale === null
+                    ? ($draftPayload['nodes'][$nodeUid]['config'] ?? null)
+                    : ($draftPayload['translations'][$nodeUid] ?? null);
+                if (is_array($draftConfig)) {
+                    $config = $locale === null
+                        ? $draftConfig
+                        : $this->materializeWidgetConfigPaths($draftConfig, $config);
+                }
+            } catch (\Throwable $e) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ]);
+            }
         }
 
         $previewHtml = $this->buildPreviewHtmlForLayoutId(
@@ -1930,6 +2343,7 @@ class ThemeEditor extends BackendController
             'success' => true,
             'data' => [
                 'layout_id' => $layoutId,
+                'node_uid' => $widgetLayout->getNodeUid(),
                 'widget_module' => $widgetModule,
                 'widget_type' => $widgetType,
                 'widget_code' => $widgetCode,
@@ -1957,6 +2371,13 @@ class ThemeEditor extends BackendController
     public function getLayoutOptionsPayload(): array
     {
         try {
+            $requestData = $this->getEditorJsonPayload();
+            $typedContext = null;
+            if (array_key_exists('editor_context', $requestData)) {
+                /** @var ThemeEditorContextFactory $factory */
+                $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+                $typedContext = $factory->fromInput($requestData, ThemeEditorContext::RESOURCE_LAYOUT);
+            }
             $editorArea = $this->resolveRequestedEditorArea(PreviewContextService::AREA_FRONTEND);
             $layoutType = $this->normalizeLayoutType((string)$this->request->getParam(
                 'layout_type',
@@ -1964,7 +2385,16 @@ class ThemeEditor extends BackendController
             ));
             $requestedLayoutOption = (string)$this->request->getParam('layout_option', '');
             $scope = (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE);
-            $theme = $this->resolveEditorRequestTheme($editorArea);
+            if ($typedContext instanceof ThemeEditorContext) {
+                $editorArea = $typedContext->area;
+                $layoutType = $typedContext->layoutType;
+                $requestedLayoutOption = $typedContext->layoutOption;
+                $scope = $this->legacyScopeForEditorContext($typedContext);
+            }
+            $theme = $this->resolveEditorRequestTheme(
+                $editorArea,
+                $typedContext instanceof ThemeEditorContext ? $typedContext->themeId : 0,
+            );
             $layoutOptionsByType = $this->getEditorLayoutOptionsByType($theme, $editorArea);
             $layoutOption = $this->resolveSelectedLayoutOption(
                 $theme,
@@ -2003,6 +2433,7 @@ class ThemeEditor extends BackendController
     {
         try {
             $payload = $this->getEditorJsonPayload();
+            $typedContext = $this->requireLayoutWriteContext($payload);
             $editorArea = $this->getPreviewContextService()->normalizeArea(
                 (string)($payload['editor_area'] ?? $payload['preview_area'] ?? PreviewContextService::AREA_FRONTEND),
                 PreviewContextService::AREA_FRONTEND
@@ -2014,22 +2445,30 @@ class ThemeEditor extends BackendController
             ));
             $layoutOption = $this->normalizeLayoutOption((string)($payload['layout_option'] ?? 'default'));
             $scope = (string)($payload['scope'] ?? $this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE));
-            $theme = $this->resolveEditorRequestTheme($editorArea, (int)($payload['theme_id'] ?? 0));
+            $editorArea = $typedContext->area;
+            $layoutType = $typedContext->layoutType;
+            $layoutOption = $typedContext->layoutOption;
+            $scope = $this->legacyScopeForEditorContext($typedContext);
+            $theme = $this->resolveEditorRequestTheme(
+                $editorArea,
+                $typedContext instanceof ThemeEditorContext
+                    ? $typedContext->themeId
+                    : (int)($payload['theme_id'] ?? 0),
+            );
             $layoutOptionsByType = $this->getEditorLayoutOptionsByType($theme, $editorArea);
 
             if (!$this->editorLayoutOptionExists($layoutOptionsByType, $layoutType, $layoutOption)) {
                 throw new \RuntimeException((string)__('Selected layout option is unavailable.'));
             }
 
-            $effectiveScope = $this->saveEditorLayoutOption($theme, $editorArea, $layoutType, $layoutOption, $scope);
-            ThemeData::clearCache();
-            ControllerFetchFileBefore::clearRuntimeCache();
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-            $this->cacheGenerator->clearCache((int)$theme->getId());
+            // Compatibility endpoint only validates the selection. The scoped
+            // workspace is the draft authority; legacy projection happens only
+            // after an immutable Release is published.
+            $effectiveScope = $scope;
 
             return [
                 'success' => true,
-                'message' => __('Layout option saved.'),
+                'message' => __('Layout option draft validated.'),
                 'data' => [
                     'theme_id' => (int)$theme->getId(),
                     'area' => $editorArea,
@@ -2056,19 +2495,41 @@ class ThemeEditor extends BackendController
     public function getLayoutConfigPayload(): array
     {
         try {
+            $writeInput = $this->getEditorJsonPayload();
+            $this->requireLayoutWriteContext($writeInput);
             [$theme, $editorArea, $layoutType, $layoutOption, $scope, $locale] = $this->resolveLayoutConfigContext();
             $layoutIdentify = $this->buildLayoutConfigIdentify($layoutType, $layoutOption);
             $targetIdentify = $this->buildTargetLayoutConfigIdentify($editorArea, $layoutType, $layoutOption);
             $identify = $targetIdentify !== '' ? $targetIdentify : $layoutIdentify;
             $definitions = $this->loadLayoutParamDefinitions($theme, $editorArea, $layoutType, $layoutOption, $layoutIdentify);
             $config = $this->getLayoutConfigValues($theme, $layoutIdentify, $scope, $locale, $definitions, $targetIdentify);
+            if (array_key_exists('editor_context', $writeInput)) {
+                /** @var ThemeEditorContextFactory $factory */
+                $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+                $typedContext = $factory->fromInput(
+                    $writeInput,
+                    $locale === null ? ThemeEditorContext::RESOURCE_META : ThemeEditorContext::RESOURCE_I18N,
+                );
+                /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
+                $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+                $scopedState = $scopedWorkspace->load($typedContext, true);
+                $draftPayload = is_array($scopedState['draft_payload'] ?? null)
+                    ? $scopedState['draft_payload']
+                    : [];
+                $draftConfig = $locale === null
+                    ? ($draftPayload['values'] ?? null)
+                    : ($draftPayload['translations']['layout'] ?? null);
+                if (is_array($draftConfig)) {
+                    $config = $draftConfig;
+                }
+            }
 
             $formHtml = $this->paramFormRenderer->renderForm($identify, $definitions, $config, [
                 'class' => 'w-param-form layout-config-form',
                 'auto_save' => false,
                 'delete_button' => false,
                 'empty_message' => (string)__('No configurable layout fields.'),
-                'actions_html' => '<button type="submit" class="w-param-btn w-param-btn-primary btn-save-layout-config">' . __('Save layout config') . '</button>',
+                'actions_html' => '<button type="submit" class="w-button btn-save-layout-config" data-tone="primary">' . __('Save layout config') . '</button>',
             ]);
 
             return [
@@ -2105,6 +2566,10 @@ class ThemeEditor extends BackendController
     public function saveLayoutConfigPayload(): array
     {
         try {
+            $writeInput = $this->getEditorJsonPayload();
+            if (!array_key_exists('editor_context', $writeInput)) {
+                throw new \InvalidArgumentException('theme_editor_typed_context_required');
+            }
             [$theme, $editorArea, $layoutType, $layoutOption, $scope, $locale] = $this->resolveLayoutConfigContext();
             $layoutIdentify = $this->buildLayoutConfigIdentify($layoutType, $layoutOption);
             $targetIdentify = $this->buildTargetLayoutConfigIdentify($editorArea, $layoutType, $layoutOption);
@@ -2122,29 +2587,18 @@ class ThemeEditor extends BackendController
                 }
             }
 
-            ThemeData::setCurrentTheme($theme);
-            ThemeData::setCurrentArea($editorArea);
+            $validatedConfig = [];
             foreach ($configData as $paramName => $value) {
                 $paramName = trim((string)$paramName);
                 if ($paramName === '' || !isset($definitions[$paramName])) {
                     continue;
                 }
-                $definition = $definitions[$paramName];
-                $value = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value;
-                /** @var ThemeMetaIdentityService $metaIdentityService */
-                $metaIdentityService = ObjectManager::getInstance(ThemeMetaIdentityService::class);
-                $metaIdentityService->setParamValue($theme, $editorArea, $identify, $paramName, $value, $definition, $scope, $locale);
-            }
-
-            ThemeData::clearCache();
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-            if ((int)$theme->getId() > 0) {
-                $this->cacheGenerator->clearCache((int)$theme->getId());
+                $validatedConfig[$paramName] = $value;
             }
 
             return [
                 'success' => true,
-                'message' => __('Layout config saved.'),
+                'message' => __('Layout config draft validated.'),
                 'data' => [
                     'theme_id' => (int)$theme->getId(),
                     'area' => $editorArea,
@@ -2155,7 +2609,7 @@ class ThemeEditor extends BackendController
                     'identify' => $identify,
                     'layout_identify' => $layoutIdentify,
                     'target_identify' => $targetIdentify,
-                    'config' => $this->getLayoutConfigValues($theme, $layoutIdentify, $scope, $locale, $definitions, $targetIdentify),
+                    'config' => $validatedConfig,
                 ],
             ];
         } catch (\Throwable $e) {
@@ -2257,9 +2711,10 @@ class ThemeEditor extends BackendController
 
     public function postSaveWidgetConfig()
     {
-        $layoutId = (int)$this->request->getParam('layout_id', 0);
-        $configData = $this->request->getParam('config', []);
-        $locale = $this->request->getParam('locale', null); // null表示保存为默认值
+        $data = $this->getEditorJsonPayload();
+        $layoutId = (int)($data['layout_id'] ?? 0);
+        $configData = $data['config'] ?? [];
+        $locale = $data['locale'] ?? null; // null表示保存为默认值
         $locale = is_string($locale) ? trim($locale) : $locale;
         if ($locale === '') {
             $locale = null;
@@ -2296,47 +2751,35 @@ class ThemeEditor extends BackendController
         $area = $this->normalizeThemeConfigArea($slotArea);
         
         try {
+            $context = $this->requireLayoutWriteContext($data);
+            $this->assertLayoutBelongsToEditorContext($widgetLayout, $context);
+            $this->assertDraftLayout($widgetLayout);
             // 获取参数定义以识别可翻译路径
             $paramDefs = $this->getWidgetParamDefinitions($widgetModule, $widgetCode, $area, $widgetType);
 
             $configData = $this->normalizeWidgetConfigValues($configData, $paramDefs);
             $existingConfig = $this->ensureWidgetI18nInstance($widgetLayout);
-            $identify = $this->resolveThemeConfigIdentifyForLayout($widgetLayout, $widgetModule, $widgetType, $widgetCode, $area, $existingConfig);
-
-            // 分离路径 key（如 slides.0.title）与普通 key，同时写入翻译存储
-            $normalConfig = ThemeData::saveTranslatablePaths($configData, $paramDefs, $identify, $locale);
-            $normalConfig = $this->preserveWidgetI18nInstance($normalConfig, $existingConfig);
-
+            $normalConfig = $locale === null
+                ? $this->materializeWidgetConfigPaths($configData, $existingConfig)
+                : $configData;
             if ($locale === null) {
-                // 默认语言：将完整普通 config 写入 m_theme_layout.config
-                $widgetLayout->setData('config', json_encode($normalConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-                $widgetLayout->save();
-
-                // 普通（非路径、非翻译）参数也写入 ThemeData 以保持兼容
-                $this->persistThemeDefaultConfig($widgetModule, $widgetType, $widgetCode, $normalConfig, null, $area);
-            } else {
-                // 特定语言：只写翻译层（普通可翻译字段）
-                $this->persistThemeDefaultConfig($widgetModule, $widgetType, $widgetCode, $normalConfig, $locale, $area);
-            }
-
-            ThemeData::clearCache();
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-            $themeId = (int)($widgetLayout->getData(ThemeLayout::schema_fields_THEME_ID) ?: $widgetLayout->getData('theme_id'));
-            if ($themeId > 0) {
-                $this->cacheGenerator->clearCache($themeId);
+                $normalConfig = $this->preserveWidgetI18nInstance($normalConfig, $existingConfig);
             }
 
             $previewHtml = $this->buildPreviewHtmlForLayoutId(
                 $layoutId,
                 $normalConfig,
-                $locale === null || $locale === '' ? null : (string)$locale
+                null,
             );
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => $locale ? __('已保存 %{locale} 语言的配置', ['locale' => $locale]) : __('配置已保存'),
+                'message' => $locale
+                    ? __('已校验 %{locale} 语言的 Scope 草稿', ['locale' => $locale])
+                    : __('Scope 草稿已校验'),
                 'config' => $normalConfig,
                 'locale' => $locale,
+                'node_uid' => $widgetLayout->getNodeUid(),
                 'preview_html' => $previewHtml,
             ]);
         } catch (\Exception $e) {
@@ -2449,90 +2892,11 @@ class ThemeEditor extends BackendController
         }
     }
 
-    public function legacyGetCompileLayout()
-    {
-        return $this->getCompileLayout();
-    }
-/*
-        $themeId = (int)$this->request->getParam('theme_id');
-        $layoutType = $this->request->getParam('layout_type', 'homepage');
-        $layoutOption = $this->request->getParam('layout_option', 'default');
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ]);
-        }
-
-        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
-        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
-        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-        $session->setData('preview_theme_id', $themeId);
-        $session->setData('preview_theme_area', 'frontend');
-
-        try {
-            // 获取主题信息
-            $this->welineTheme->load($themeId);
-            if (!$this->welineTheme->getId()) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('主题不存在'),
-                ]);
-            }
-
-            // 构建布局模板路径
-            $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
-
-            // 编译模板并获取 HTML
-            // 设置编辑模式标记
-            $this->assign('editor_mode', true);
-            $this->assign('theme_id', $themeId);
-            $this->assign('layout_type', $layoutType);
-            $this->assign('meta', [
-                'showHeader' => true,
-                'showFooter' => true,
-                'showStatistics' => true,
-                'showFeatures' => true,
-                'showProducts' => true,
-                'showTestimonials' => true,
-                'showNews' => true,
-                'showPartners' => true,
-            ]);
-
-            $this->welineTheme->load($themeId);
-            $html = $this->renderUnifiedLayoutPreview($themeId, (string)$layoutType, (string)$layoutOption, 'frontend');
-
-            // 提取所有插槽信息
-            $slots = $this->extractSlots($html);
-
-            return $this->fetchJson([
-                'success' => true,
-                'html' => $html,
-                'slots' => $slots,
-                'layout' => [
-                    'type' => $layoutType,
-                    'option' => $layoutOption,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * 从 HTML 中提取插槽信息
-     * 同时支持旧格式（widget-slot-area + data-slot-id）和新格式（data-wslot），
-     * 否则 footer/header 等仅使用 data-wslot 的插槽不会被返回，导致 footer 布局异常。
-     */
+    /** 从 HTML 中提取 Weline 插槽信息。 */
     private function extractSlots(string $html): array
     {
         $slots = [];
 
-        // 1. 新格式：data-wslot（header、footer 及子插槽 footer-links 等均用此格式）
         if (strpos($html, 'data-wslot') !== false) {
             $doc = new \DOMDocument();
             libxml_use_internal_errors(true);
@@ -2548,43 +2912,15 @@ class ThemeEditor extends BackendController
                 if ($slotId === '') {
                     continue;
                 }
-                $acceptAttr = $element->getAttribute('data-wslot-accept') ?: $element->getAttribute('data-slot-accept') ?: '';
+                $acceptAttr = $element->getAttribute('data-wslot-accept');
                 $slots[$slotId] = [
                     'id' => $slotId,
-                    'name' => $element->getAttribute('data-wslot-name') ?: $element->getAttribute('data-slot-name') ?: $slotId,
+                    'name' => $element->getAttribute('data-wslot-name') ?: $slotId,
                     'accept' => array_values(array_filter(array_map('trim', explode(',', $acceptAttr)))),
-                    'exclusive' => ($element->getAttribute('data-wslot-exclusive') ?: $element->getAttribute('data-slot-exclusive')) === 'true',
-                    'multiple' => ($element->getAttribute('data-wslot-multiple') ?: $element->getAttribute('data-slot-multiple')) !== 'false',
-                    'position' => $element->getAttribute('data-wslot-position') ?: $element->getAttribute('data-slot-position') ?: '',
+                    'exclusive' => $element->getAttribute('data-wslot-exclusive') === 'true',
+                    'multiple' => $element->getAttribute('data-wslot-multiple') !== 'false',
+                    'position' => $element->getAttribute('data-wslot-position'),
                 ];
-            }
-        }
-
-        // 2. 旧格式：widget-slot-area + data-slot-id（不覆盖已从 data-wslot 提取的插槽）
-        $pattern = '/<[^>]+class="[^"]*widget-slot-area[^"]*"[^>]*data-slot-id="([^"]+)"[^>]*>/i';
-        if (preg_match_all($pattern, $html, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $match) {
-                $fullTag = $match[0];
-                $slotId = $match[1];
-                if (isset($slots[$slotId])) {
-                    continue;
-                }
-                $slot = ['id' => $slotId];
-                if (preg_match('/data-slot-name="([^"]+)"/', $fullTag, $m)) {
-                    $slot['name'] = $m[1];
-                }
-                if (preg_match('/data-slot-accept="([^"]+)"/', $fullTag, $m)) {
-                    $slot['accept'] = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
-                } else {
-                    $slot['accept'] = [];
-                }
-                if (preg_match('/data-slot-position="([^"]+)"/', $fullTag, $m)) {
-                    $slot['position'] = $m[1];
-                }
-                if (preg_match('/data-slot-multiple="([^"]+)"/', $fullTag, $m)) {
-                    $slot['multiple'] = $m[1] === 'true';
-                }
-                $slots[$slotId] = $slot;
             }
         }
 
@@ -2844,6 +3180,28 @@ class ThemeEditor extends BackendController
             }
         }
 
+        $resolvedLocale = $locale !== ''
+            ? $locale
+            : trim((string)($layoutData['locale_code'] ?? RequestContext::getWelineUserLang()));
+        $scopeIdentity = null;
+        try {
+            $scopeIdentity = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class)
+                ->identityFromEncodedScope((string)($layoutData['scope'] ?? 'default'));
+        } catch (\Throwable) {
+            $scopeIdentity = RequestContext::scopeIdentity();
+        }
+        if (!$scopeIdentity instanceof ScopeIdentity) {
+            throw new \RuntimeException((string)__('主题预览缺少冻结的 ScopeIdentity。'));
+        }
+        $previewConfig = ObjectManager::getInstance(LayoutValueHydrationRegistry::class)->hydrate(
+            $previewConfig,
+            [
+                'scope_identity' => $scopeIdentity,
+                'locale_code' => $resolvedLocale,
+                'purpose' => 'preview',
+            ],
+        );
+
         if ($widgetModule === 'Weline_Theme' && ($widgetType === 'theme_component' || str_contains($widgetCode, '/'))) {
             /** @var \Weline\Theme\Service\ThemePlaceableRegistry $placeableRegistry */
             $placeableRegistry = ObjectManager::getInstance(\Weline\Theme\Service\ThemePlaceableRegistry::class);
@@ -3093,32 +3451,7 @@ class ThemeEditor extends BackendController
             return $config;
         }
 
-        $legacyIdentify = $this->legacySlotAreaWidgetInstanceIdentify($identify, $slotArea, $themeArea);
-        if ($legacyIdentify !== '') {
-            $config = ThemeData::mergeTranslatedPaths($config, $params, $legacyIdentify, $locale);
-        }
-
         return ThemeData::mergeTranslatedPaths($config, $params, $identify, $locale);
-    }
-
-    private function legacySlotAreaWidgetInstanceIdentify(string $identify, string $slotArea, string $themeArea): string
-    {
-        $themeArea = $this->normalizeThemeConfigArea($themeArea);
-        $slotArea = strtolower(trim($slotArea));
-        if ($slotArea === '' || $slotArea === $themeArea || $slotArea === PreviewContextService::AREA_FRONTEND || $slotArea === PreviewContextService::AREA_BACKEND) {
-            return '';
-        }
-
-        if (!preg_match('/^theme\.(frontend|backend)\.widget_instances\.([^\\s]+)$/', $identify, $matches)) {
-            return '';
-        }
-
-        $slotArea = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $slotArea) ?: '';
-        if ($slotArea === '') {
-            return '';
-        }
-
-        return 'theme.' . $matches[1] . '.' . $slotArea . '.widget_instances.' . $matches[2];
     }
 
     private function buildWidgetPreviewDefaultConfig(string $widgetCode): array
@@ -3128,7 +3461,7 @@ class ThemeEditor extends BackendController
                 'type' => 'info',
                 'title' => __('系统提示'),
                 'message' => __('这是一条状态提示信息。'),
-                'icon' => 'ri-information-line',
+                'icon' => 'info',
                 'dismissible' => false,
             ],
             'badge' => [
@@ -3139,7 +3472,7 @@ class ThemeEditor extends BackendController
                 'text' => __('主要操作'),
                 'type' => 'primary',
                 'size' => 'md',
-                'icon' => 'ri-flashlight-line',
+                'icon' => 'bolt',
             ],
             'card' => [
                 'title' => __('数据卡片'),
@@ -3151,10 +3484,10 @@ class ThemeEditor extends BackendController
                 'id' => 'component-preview-dropdown',
                 'trigger' => __('选择操作'),
                 'items' => [
-                    ['text' => __('查看详情'), 'icon' => 'ri-eye-line', 'url' => '#'],
-                    ['text' => __('复制视图'), 'icon' => 'ri-file-copy-line', 'url' => '#'],
+                    ['text' => __('查看详情'), 'icon' => 'eye', 'url' => '#'],
+                    ['text' => __('复制视图'), 'icon' => 'copy', 'url' => '#'],
                     ['divider' => true],
-                    ['text' => __('归档'), 'icon' => 'ri-archive-line', 'url' => '#'],
+                    ['text' => __('归档'), 'icon' => 'archive', 'url' => '#'],
                 ],
             ],
             'form-group' => [
@@ -3208,62 +3541,63 @@ class ThemeEditor extends BackendController
     {
         $code = $this->normalizeWidgetPreviewCode($widgetCode);
         $name = htmlspecialchars($widgetName !== '' ? $widgetName : $widgetCode, ENT_QUOTES, 'UTF-8');
+        $icons = ObjectManager::getInstance(\Weline\Theme\Service\Ui\IconRegistry::class);
 
         return match ($code) {
             'alert' => '<div class="te-component-preview te-component-preview-alert">'
-                . '<div class="w-alert w-alert-info" role="alert">'
-                . '<i class="ri-information-line me-2"></i>'
+                . '<div class="w-alert" data-tone="info" role="alert">'
+                . $icons->render('info', 'sm')
                 . '<strong>' . htmlspecialchars((string)__('系统提示'), ENT_QUOTES, 'UTF-8') . '</strong>'
                 . '<span>' . htmlspecialchars((string)__('这是一条状态提示信息。'), ENT_QUOTES, 'UTF-8') . '</span>'
                 . '</div></div>',
             'badge' => '<div class="te-component-preview te-component-preview-badge">'
-                . '<span class="w-badge w-badge-success">' . htmlspecialchars((string)__('已启用'), ENT_QUOTES, 'UTF-8') . '</span>'
-                . '<span class="w-badge w-badge-info">' . htmlspecialchars((string)__('后台'), ENT_QUOTES, 'UTF-8') . '</span>'
+                . '<span class="w-badge" data-tone="success">' . htmlspecialchars((string)__('已启用'), ENT_QUOTES, 'UTF-8') . '</span>'
+                . '<span class="w-badge" data-tone="info">' . htmlspecialchars((string)__('后台'), ENT_QUOTES, 'UTF-8') . '</span>'
                 . '</div>',
             'button' => '<div class="te-component-preview te-component-preview-button">'
-                . '<button type="button" class="w-btn w-btn-primary w-btn-md"><i class="ri-flashlight-line"></i> '
+                . '<button type="button" class="w-button">' . $icons->render('bolt', 'sm') . ' '
                 . htmlspecialchars((string)__('主要操作'), ENT_QUOTES, 'UTF-8') . '</button>'
-                . '<button type="button" class="w-btn w-btn-secondary w-btn-sm">' . htmlspecialchars((string)__('次要'), ENT_QUOTES, 'UTF-8') . '</button>'
+                . '<button type="button" class="w-button" data-tone="neutral" data-size="sm">' . htmlspecialchars((string)__('次要'), ENT_QUOTES, 'UTF-8') . '</button>'
                 . '</div>',
             'card' => '<div class="te-component-preview te-component-preview-card">'
-                . '<div class="w-card"><div class="w-card-header"><h3 class="w-card-title">' . htmlspecialchars((string)__('数据卡片'), ENT_QUOTES, 'UTF-8') . '</h3>'
-                . '<p class="w-card-subtitle">' . htmlspecialchars((string)__('用于组织内容'), ENT_QUOTES, 'UTF-8') . '</p></div>'
-                . '<div class="w-card-body">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div></div>'
+                . '<article class="w-card"><header class="w-card__header"><h3 class="w-card__title">' . htmlspecialchars((string)__('数据卡片'), ENT_QUOTES, 'UTF-8') . '</h3>'
+                . '<small>' . htmlspecialchars((string)__('用于组织内容'), ENT_QUOTES, 'UTF-8') . '</small></header>'
+                . '<div class="w-card__body">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div></article>'
                 . '</div>',
             'dropdown' => '<div class="te-component-preview te-component-preview-dropdown">'
-                . '<div class="w-dropdown dropdown"><button type="button" class="w-btn w-btn-secondary w-dropdown-toggle dropdown-toggle">'
+                . '<div class="w-menu-root" data-w-component="menu"><button type="button" class="w-button" data-tone="neutral" data-w-menu-trigger aria-haspopup="menu" aria-expanded="true">'
                 . htmlspecialchars((string)__('选择操作'), ENT_QUOTES, 'UTF-8') . '</button>'
-                . '<div class="w-dropdown-menu dropdown-menu show">'
-                . '<a class="w-dropdown-item dropdown-item" href="#">' . htmlspecialchars((string)__('查看详情'), ENT_QUOTES, 'UTF-8') . '</a>'
-                . '<a class="w-dropdown-item dropdown-item" href="#">' . htmlspecialchars((string)__('复制视图'), ENT_QUOTES, 'UTF-8') . '</a>'
+                . '<div class="w-menu" data-w-menu-panel role="menu">'
+                . '<a class="w-menu__item" role="menuitem" href="#">' . htmlspecialchars((string)__('查看详情'), ENT_QUOTES, 'UTF-8') . '</a>'
+                . '<a class="w-menu__item" role="menuitem" href="#">' . htmlspecialchars((string)__('复制视图'), ENT_QUOTES, 'UTF-8') . '</a>'
                 . '</div></div></div>',
             'form-group' => '<div class="te-component-preview te-component-preview-form-group">'
-                . '<label class="w-form-label">' . htmlspecialchars((string)__('字段名称'), ENT_QUOTES, 'UTF-8') . '</label>'
-                . '<input class="w-form-control" type="text" value="' . htmlspecialchars((string)__('管理员'), ENT_QUOTES, 'UTF-8') . '" placeholder="' . htmlspecialchars((string)__('请输入内容'), ENT_QUOTES, 'UTF-8') . '">'
+                . '<label class="w-field__label">' . htmlspecialchars((string)__('字段名称'), ENT_QUOTES, 'UTF-8') . '</label>'
+                . '<input class="w-input" type="text" value="' . htmlspecialchars((string)__('管理员'), ENT_QUOTES, 'UTF-8') . '" placeholder="' . htmlspecialchars((string)__('请输入内容'), ENT_QUOTES, 'UTF-8') . '">'
                 . '</div>',
             'loading' => '<div class="te-component-preview te-component-preview-loading">'
-                . '<span class="w-loading-spinner"></span><span>' . htmlspecialchars((string)__('正在同步数据'), ENT_QUOTES, 'UTF-8') . '</span>'
+                . '<span class="w-spinner" aria-hidden="true"></span><span>' . htmlspecialchars((string)__('正在同步数据'), ENT_QUOTES, 'UTF-8') . '</span>'
                 . '</div>',
             'message' => '<div class="te-component-preview te-component-preview-message">'
-                . '<div class="w-message w-message-success"><i class="ri-checkbox-circle-line"></i><div><strong>' . htmlspecialchars((string)__('操作完成'), ENT_QUOTES, 'UTF-8') . '</strong>'
+                . '<div class="w-alert" data-tone="success">' . $icons->render('check', 'sm') . '<div><strong>' . htmlspecialchars((string)__('操作完成'), ENT_QUOTES, 'UTF-8') . '</strong>'
                 . '<span>' . htmlspecialchars((string)__('数据已保存，可以继续编辑。'), ENT_QUOTES, 'UTF-8') . '</span></div></div>'
                 . '</div>',
             'modal' => '<div class="te-component-preview te-component-preview-modal">'
-                . '<div class="w-modal-preview"><div class="w-modal-header"><strong>' . htmlspecialchars((string)__('确认发布'), ENT_QUOTES, 'UTF-8') . '</strong><span aria-hidden="true">×</span></div>'
-                . '<div class="w-modal-body">' . htmlspecialchars((string)__('公开后同站点后台用户可见。'), ENT_QUOTES, 'UTF-8') . '</div>'
-                . '<div class="w-modal-footer"><button type="button" class="w-btn w-btn-secondary w-btn-sm">' . htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') . '</button>'
-                . '<button type="button" class="w-btn w-btn-primary w-btn-sm">' . htmlspecialchars((string)__('确认'), ENT_QUOTES, 'UTF-8') . '</button></div></div>'
+                . '<div class="w-card"><header class="w-card__header"><strong>' . htmlspecialchars((string)__('确认发布'), ENT_QUOTES, 'UTF-8') . '</strong></header>'
+                . '<div class="w-card__body">' . htmlspecialchars((string)__('公开后同站点后台用户可见。'), ENT_QUOTES, 'UTF-8') . '</div>'
+                . '<footer class="w-card__footer"><button type="button" class="w-button" data-tone="neutral" data-size="sm">' . htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') . '</button>'
+                . '<button type="button" class="w-button" data-size="sm">' . htmlspecialchars((string)__('确认'), ENT_QUOTES, 'UTF-8') . '</button></footer></div>'
                 . '</div>',
             'pagination' => '<div class="te-component-preview te-component-preview-pagination">'
-                . '<nav class="w-pagination"><a href="#">' . htmlspecialchars((string)__('上一页'), ENT_QUOTES, 'UTF-8') . '</a><a href="#">1</a><a class="active" href="#">2</a><a href="#">3</a><a href="#">' . htmlspecialchars((string)__('下一页'), ENT_QUOTES, 'UTF-8') . '</a></nav>'
+                . '<nav aria-label="' . htmlspecialchars((string)__('分页'), ENT_QUOTES, 'UTF-8') . '"><ul class="w-pagination"><li class="w-pagination__item"><a class="w-pagination__link" href="#">' . htmlspecialchars((string)__('上一页'), ENT_QUOTES, 'UTF-8') . '</a></li><li class="w-pagination__item"><a class="w-pagination__link" href="#">1</a></li><li class="w-pagination__item"><a class="w-pagination__link" aria-current="page" href="#">2</a></li><li class="w-pagination__item"><a class="w-pagination__link" href="#">3</a></li><li class="w-pagination__item"><a class="w-pagination__link" href="#">' . htmlspecialchars((string)__('下一页'), ENT_QUOTES, 'UTF-8') . '</a></li></ul></nav>'
                 . '</div>',
             'table' => '<div class="te-component-preview te-component-preview-table">'
-                . '<table class="w-table w-table-striped"><thead><tr><th>' . htmlspecialchars((string)__('指标'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('状态'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('趋势'), ENT_QUOTES, 'UTF-8') . '</th></tr></thead>'
+                . '<table class="w-table"><thead><tr><th>' . htmlspecialchars((string)__('指标'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('状态'), ENT_QUOTES, 'UTF-8') . '</th><th>' . htmlspecialchars((string)__('趋势'), ENT_QUOTES, 'UTF-8') . '</th></tr></thead>'
                 . '<tbody><tr><td>' . htmlspecialchars((string)__('订单'), ENT_QUOTES, 'UTF-8') . '</td><td>' . htmlspecialchars((string)__('正常'), ENT_QUOTES, 'UTF-8') . '</td><td>+12%</td></tr>'
                 . '<tr><td>' . htmlspecialchars((string)__('支付'), ENT_QUOTES, 'UTF-8') . '</td><td>' . htmlspecialchars((string)__('稳定'), ENT_QUOTES, 'UTF-8') . '</td><td>+4%</td></tr></tbody></table></div>',
             'tabs' => '<div class="te-component-preview te-component-preview-tabs">'
-                . '<div class="w-tabs"><div class="w-tab-list"><button type="button" class="active">' . htmlspecialchars((string)__('概览'), ENT_QUOTES, 'UTF-8') . '</button><button type="button">' . htmlspecialchars((string)__('设置'), ENT_QUOTES, 'UTF-8') . '</button></div>'
-                . '<div class="w-tab-panel">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div></div>'
+                . '<div class="w-tabs__list" role="tablist"><button type="button" class="w-tabs__tab" role="tab" aria-selected="true">' . htmlspecialchars((string)__('概览'), ENT_QUOTES, 'UTF-8') . '</button><button type="button" class="w-tabs__tab" role="tab" aria-selected="false">' . htmlspecialchars((string)__('设置'), ENT_QUOTES, 'UTF-8') . '</button></div>'
+                . '<div class="w-tabs__panel" role="tabpanel">' . htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') . '</div>'
                 . '</div>',
             default => '<div class="te-component-preview te-component-preview-generic"><strong>' . $name . '</strong><span>' . htmlspecialchars($widgetCode, ENT_QUOTES, 'UTF-8') . '</span></div>',
         };
@@ -3319,11 +3653,52 @@ class ThemeEditor extends BackendController
             return $config;
         }
 
-        $config[$key] = 'wi_' . bin2hex(random_bytes(8));
-        $widgetLayout->setData('config', json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        $widgetLayout->save();
+        $nodeUid = strtolower(trim((string)$widgetLayout->getNodeUid()));
+        if (preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+            $nodeUid = substr(hash('sha256', 'legacy-layout:' . (string)$widgetLayout->getLayoutId()), 0, 32);
+        }
+        $config[$key] = 'wi_' . $nodeUid;
 
         return $config;
+    }
+
+    /**
+     * Materialize legacy dotted field names (for example slides.0.title)
+     * into the visual schema without writing translation or layout storage.
+     */
+    private function materializeWidgetConfigPaths(array $configData, array $base = []): array
+    {
+        foreach ($configData as $key => $value) {
+            $key = (string)$key;
+            if ($key === '' || !str_contains($key, '.')) {
+                if ($key !== '') {
+                    $base[$key] = $value;
+                }
+                continue;
+            }
+            $segments = explode('.', $key);
+            if (in_array('', $segments, true)) {
+                continue;
+            }
+            $cursor =& $base;
+            $last = array_pop($segments);
+            foreach ($segments as $segment) {
+                $segment = preg_match('/^(?:0|[1-9][0-9]*)$/D', $segment) === 1
+                    ? (int)$segment
+                    : $segment;
+                if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+                    $cursor[$segment] = [];
+                }
+                $cursor =& $cursor[$segment];
+            }
+            $last = preg_match('/^(?:0|[1-9][0-9]*)$/D', (string)$last) === 1
+                ? (int)$last
+                : (string)$last;
+            $cursor[$last] = $value;
+            unset($cursor);
+        }
+
+        return $base;
     }
 
     private function preserveWidgetI18nInstance(array $config, array $existingConfig): array
@@ -3334,22 +3709,6 @@ class ThemeEditor extends BackendController
         }
 
         return $config;
-    }
-
-    private function persistThemeDefaultConfig(string $widgetModule, string $widgetType, string $widgetCode, array $config, ?string $locale, string $area): void
-    {
-        $area = $this->normalizeThemeConfigArea($area);
-        if ($widgetModule === 'Weline_Theme' && ($widgetType === 'theme_component' || str_contains($widgetCode, '/'))) {
-            ThemeData::setParamValues(
-                $this->resolveThemeConfigIdentify($widgetModule, $widgetType, $widgetCode, $area),
-                $config,
-                'default',
-                $locale
-            );
-            return;
-        }
-
-        ThemeData::setWidgetParams($widgetModule, $widgetCode, $config, $locale, $area);
     }
 
     /**
@@ -3486,11 +3845,13 @@ class ThemeEditor extends BackendController
         } else {
             $data = $this->request->getParams();
         }
+        $data = is_array($data) ? $data : [];
 
         $themeId = (int)($data['theme_id'] ?? 0);
         $layoutType = $data['layout_type'] ?? 'homepage';
         $layoutOption = $data['layout_option'] ?? 'default';
         $slotContents = $data['slot_contents'] ?? []; // 各插槽的部件内容
+        $editorArea = PreviewContextService::AREA_FRONTEND;
 
         if (!$themeId) {
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
@@ -3499,13 +3860,18 @@ class ThemeEditor extends BackendController
             ]), 'save_compiled_layout');
         }
 
-        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
-        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
-        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-        $session->setData('preview_theme_id', $themeId);
-        $session->setData('preview_theme_area', 'frontend');
-
         try {
+            $typedContext = $this->requireLayoutWriteContext($data, $themeId, (string)$layoutType);
+            $themeId = $typedContext->themeId;
+            $layoutType = $typedContext->layoutType;
+            $layoutOption = $typedContext->layoutOption;
+            $editorArea = $typedContext->area;
+
+            // Session 只用于受控预览渲染，不作为发布目标或运行时选择。
+            $session = ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+            $session->setData('preview_theme_id', $themeId);
+            $session->setData('preview_theme_area', $editorArea);
+
             // 获取原始编译后的 HTML
             $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
             
@@ -3527,20 +3893,12 @@ class ThemeEditor extends BackendController
             $this->assign('meta', $meta);
             
             $this->welineTheme->load($themeId);
-            $html = $this->renderUnifiedLayoutPreview($themeId, (string)$layoutType, (string)$layoutOption, 'frontend');
-
-            // 保存到生成目录
-            $savePath = $this->cacheGenerator->saveCompiledLayout(
-                $themeId,
-                $layoutType,
-                $layoutOption,
-                $html
-            );
+            $html = $this->renderUnifiedLayoutPreview($themeId, (string)$layoutType, (string)$layoutOption, $editorArea);
 
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => true,
-                'message' => __('布局已保存'),
-                'path' => $savePath,
+                'message' => __('Scope 草稿已编译预览，发布产物由 Release 生成'),
+                'preview_html' => $html,
             ]), 'save_compiled_layout');
         } catch (\Exception $e) {
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
@@ -3638,198 +3996,23 @@ class ThemeEditor extends BackendController
         );
     }
 
-    public function legacyGetLayoutPreview()
-    {
-        return $this->getLayoutPreview();
-    }
-/*
-        $this->layoutType = null; // 禁用后端布局，iframe 仅渲染前端内容
-
-        $themeId = (int)$this->request->getParam('theme_id');
-        $layoutType = $this->request->getParam('layout_type', 'homepage');
-        $layoutOption = $this->request->getParam('layout_option', 'default');
-        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
-        if ($editorArea !== 'backend') {
-            $editorArea = 'frontend';
-        }
-
-        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
-        // 这是主题编辑器切换主题后实时生效的关键
-        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
-        if ($themeId) {
-            $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-            $session->setData('preview_theme_id', $themeId);
-            $session->setData('preview_theme_area', $editorArea);
-        }
-        // 强制本次请求内 fetch 走 fetchFile 并触发 fetch_file（避免 view 缓存命中导致观察者不执行）
-        $this->request->setData('skip_view_file_cache', true);
-
-        // 主题编辑器预览：禁用一切相关缓存，确保每次解析到当前 theme_id 对应的主题目录
-        try {
-            w_cache('view')->clear();
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-            \Weline\Theme\Helper\ThemeData::clearCache();
-        } catch (\Throwable $e) {
-            // 忽略单类缓存清理失败，继续渲染
-        }
-
-        // 检查布局模板文件是否存在（按区域：frontend/backend）
-        $relativePath = "theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
-        $templateFile = BP . "app/code/Weline/Theme/view/{$relativePath}";
-        
-        if (!file_exists($templateFile)) {
-            // 布局文件不存在，返回错误页面
-            return $this->renderLayoutNotFoundError($layoutType, $layoutOption);
-        }
-
-        // 设置编辑/预览模式
-        $this->assign('editor_mode', true);
-        $this->assign('preview_mode', true); // 标记为预览模式，Observer 会读取草稿数据
-        $this->assign('theme_id', $themeId);
-        $this->assign('layout_type', $layoutType);
-        $this->assign('meta', [
-            'showHeader' => true,
-            'showFooter' => true,
-            'showStatistics' => true,
-            'showFeatures' => true,
-            'showProducts' => true,
-            'showTestimonials' => true,
-            'showNews' => true,
-            'showPartners' => true,
-        ]);
-
-        // 返回编译后的布局（在 iframe 中渲染，按 editor_area 使用前端或后端布局）
-        $templatePath = "Weline_Theme::theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
-        // 强制本次 fetch 走 fetchFile 并触发 fetch_file：删除该布局在 view 缓存中的键（与 Template 中 key 一致）
-        try {
-            $modulePath = $this->request->getRouterData('module_path');
-            if ($modulePath) {
-                $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
-                $layoutRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
-                $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
-                $templateContextKey = \Weline\Framework\Cache\KeyBuilder::environmentHash(['scope' => 'template-file-map']);
-                w_cache('view')->delete($viewDir . $layoutRel . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_tplFile' . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_comFileName' . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_tplFile|' . $templateContextKey);
-                w_cache('view')->delete($viewDir . $templatePath . '_comFileName|' . $templateContextKey);
-            }
-        } catch (\Throwable $e) {
-            // 忽略，继续 fetch
-        }
-
-        // 两阶段渲染：若布局模板依赖 base（setLayout('base')），先渲染内容再套 base，否则只渲染当前布局
-        $contentHtml = $this->fetch($templatePath);
-        $basePath = "Weline_Theme::theme/{$editorArea}/layouts/base.phtml";
-        $baseExists = $this->resolveThemeLayoutExists($themeId, $editorArea, 'base', 'default');
-        if ($baseExists) {
-            $this->getTemplate()->setData('child_html', ['content' => $contentHtml]);
-            try {
-                if ($modulePath = $this->request->getRouterData('module_path')) {
-                    $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
-                    $baseRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . 'base.phtml';
-                    $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
-                    $templateContextKey = \Weline\Framework\Cache\KeyBuilder::environmentHash(['scope' => 'template-file-map']);
-                    w_cache('view')->delete($viewDir . $baseRel . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_tplFile' . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_comFileName' . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_tplFile|' . $templateContextKey);
-                    w_cache('view')->delete($viewDir . $basePath . '_comFileName|' . $templateContextKey);
-                }
-            } catch (\Throwable $e) {
-                // 忽略
-            }
-            $html = $this->fetch($basePath);
-        } else {
-            $html = $contentHtml;
-        }
-
-        // 注入编辑模式的 CSS 和 JS
-        $html = $this->injectEditorModeAssets($html);
-
-        return $html;
-    }
-    
     /**
      * 注入编辑模式的 CSS 和 JS 到 HTML 中
      */
     private function injectEditorModeAssets(string $html): string
     {
-        // 使用框架的静态资源获取方法
-        $cssSrc = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
-        $cssUrl = $cssSrc . '?v=20260712-backend-real-preview';
-        $jsSrc = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
-        $jsUrl = $jsSrc . '?v=20260712-backend-real-preview';
-        $previewExitUrl = htmlspecialchars(
+        $injector = ObjectManager::getInstance(\Weline\Theme\Service\EditorModeAssetInjector::class);
+        return $injector->inject(
+            $html,
             (string)($this->getTemplate()->getData('preview_exit_url') ?? ''),
-            ENT_QUOTES,
-            'UTF-8'
         );
-        $previewModeLabel = htmlspecialchars((string)__('预览模式'), ENT_QUOTES, 'UTF-8');
-        $previewModeHint = htmlspecialchars(
-            (string)__('当前正在预览后台主题，页面操作不会离开主题编辑流程。'),
-            ENT_QUOTES,
-            'UTF-8'
-        );
-        $exitPreviewLabel = htmlspecialchars((string)__('退出预览'), ENT_QUOTES, 'UTF-8');
-
-        // 编辑模式 CSS
-        $editorCss = <<<HTML
-<!-- Theme Editor Mode CSS -->
-<link rel="stylesheet" href="{$cssUrl}">
-HTML;
-        
-        // 编辑模式 JS
-        $editorJs = <<<HTML
-<!-- Theme Editor Mode JS -->
-<script src="{$jsUrl}"></script>
-HTML;
-
-        $previewNotice = $previewExitUrl !== '' ? <<<HTML
-<!-- Theme Preview Mode Notice -->
-<aside class="theme-preview-mode-notice" data-editor-interactive aria-label="{$previewModeLabel}">
-    <span class="theme-preview-mode-notice__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M12 5c5.5 0 9.5 5.1 9.5 7s-4 7-9.5 7S2.5 13.9 2.5 12 6.5 5 12 5Zm0 2C8.2 7 5.1 10.1 4.5 12c.6 1.9 3.7 5 7.5 5s6.9-3.1 7.5-5c-.6-1.9-3.7-5-7.5-5Zm0 2.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z"/></svg>
-    </span>
-    <span class="theme-preview-mode-notice__copy">
-        <strong>{$previewModeLabel}</strong>
-        <small>{$previewModeHint}</small>
-    </span>
-    <a class="theme-preview-mode-notice__exit" href="{$previewExitUrl}" target="_top">
-        {$exitPreviewLabel}
-        <svg viewBox="0 0 24 24" width="16" height="16" focusable="false" aria-hidden="true"><path fill="currentColor" d="M13 5 20 12l-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z"/></svg>
-    </a>
-</aside>
-HTML : '';
-        
-        // 在 </head> 前注入 CSS
-        if (stripos($html, '</head>') !== false) {
-            $html = str_ireplace('</head>', $editorCss . "\n</head>", $html);
-        } else {
-            // 如果没有 </head>，在开头添加
-            $html = $editorCss . "\n" . $html;
-        }
-        
-        // 在 </body> 前注入 JS
-        if (stripos($html, '</body>') !== false) {
-            $html = str_ireplace('</body>', $previewNotice . "\n" . $editorJs . "\n</body>", $html);
-        } else {
-            // 如果没有 </body>，在末尾添加
-            $html .= "\n" . $previewNotice . "\n" . $editorJs;
-        }
-        
-        return $html;
     }
 
     private function injectBackendStructuralSlots(string $html): string
     {
         if ($html === ''
-            || (stripos($html, 'data-theme-area="backend"') === false
-                && stripos($html, "data-theme-area='backend'") === false
-                // Old custom layouts remain discoverable during the transition,
-                // but no canonical Weline output uses data-theme as an area flag.
-                && stripos($html, 'data-theme="backend"') === false
-                && stripos($html, "data-theme='backend'") === false)
+            || (stripos($html, 'data-w-area="backend"') === false
+                && stripos($html, "data-w-area='backend'") === false)
         ) {
             return $html;
         }
@@ -3895,66 +4078,30 @@ HTML : '';
             return '';
         }
 
-        $themeAssetBaseUrl = defined('DEV') && DEV
-            ? '/Weline/Theme/view/theme/'
-            : '/static/Weline/Theme/theme/';
-        $themeAssetVersion = '20260810-color-mode';
         $themePreference = $this->resolveBackendPreviewThemePreference();
         $resolvedThemeMode = $themePreference === 'dark' ? 'dark' : 'light';
+        $foundationUrl = $this->resolveUiAssetUrl('weline-foundation.css');
+        $backendUrl = $this->resolveUiAssetUrl('weline-backend.css');
+        $previewCssUrl = $this->resolveUiAssetUrl('pages/weline-theme-preview.css');
+        $uiUrl = $this->resolveUiAssetUrl('weline-ui.js');
+        $previewJsUrl = $this->resolveUiAssetUrl('pages/weline-theme-preview.js');
+        $title = htmlspecialchars((string)__('后台仪表盘预览'), ENT_QUOTES, 'UTF-8');
 
         return <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="{$resolvedThemeMode}" data-bs-theme="{$resolvedThemeMode}" data-theme-preference="{$themePreference}" data-theme-mode="{$resolvedThemeMode}" data-layout-mode="{$resolvedThemeMode}" data-theme-area="backend">
+<html lang="zh-CN" data-w-area="backend" data-theme-preference="{$themePreference}" data-theme="{$resolvedThemeMode}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Preview</title>
-    <script>(function(root){var preference=root.getAttribute('data-theme-preference')||'system';var media=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var mode=preference==='dark'||(preference==='system'&&media&&media.matches)?'dark':'light';root.setAttribute('data-theme',mode);root.setAttribute('data-bs-theme',mode);root.setAttribute('data-theme-mode',mode);root.setAttribute('data-layout-mode',mode);root.style.colorScheme=mode;})(document.documentElement);</script>
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_colors.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_typography.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_spacing.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_borders.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_shadows.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_light.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_dark.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/assets/css/theme.css?v={$themeAssetVersion}">
-    <script defer src="{$themeAssetBaseUrl}backend/assets/js/theme.js?v={$themeAssetVersion}"></script>
-    <style>
-        body { margin: 0; background: var(--backend-theme-surface-canvas); color: var(--backend-theme-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-        .dashboard-layout-wrapper { padding: 18px; box-sizing: border-box; min-height: 100vh; }
-        .w-dashboard-layout-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; align-items: start; }
-        .w-dashboard-region { min-width: 0; border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); background: var(--backend-theme-surface); padding: 14px; }
-        .w-dashboard-region-summary { grid-column: 1 / span 4; }
-        .w-dashboard-region-analysis { grid-column: 5 / span 5; }
-        .w-dashboard-region-side { grid-column: 10 / span 3; grid-row: 1 / span 2; }
-        .w-dashboard-region-detail { grid-column: 1 / span 9; }
-        .w-dashboard-region-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-        .w-dashboard-region-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
-        .w-dashboard-region-head p, .w-dashboard-region-head span { margin: 3px 0 0; color: var(--backend-theme-text-secondary); font-size: 12px; line-height: 1.35; }
-        .w-dashboard-slot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-        .w-dashboard-slot-summary > .w-dashboard-region-head, .w-dashboard-slot-summary > .widget-wrapper[data-widget-code="overview_kpi"] { grid-column: 1 / -1; }
-        .w-dashboard-slot-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-        .widget-wrapper { min-width: 0; }
-        .dashboard-widget { height: 100%; min-width: 0; border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); background: var(--backend-theme-surface); padding: 14px; box-sizing: border-box; overflow: hidden; }
-        .dashboard-widget header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-        .dashboard-widget h3 { margin: 0; font-size: 16px; font-weight: 700; }
-        .dashboard-widget header span, .dashboard-widget small { color: var(--backend-theme-text-secondary); font-size: 12px; white-space: nowrap; }
-        .w-dashboard-empty { min-height: 96px; border: var(--backend-theme-border-width) dashed var(--backend-theme-border-color); border-radius: var(--backend-theme-radius-lg); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; color: var(--backend-theme-text-secondary); text-align: center; }
-        .dashboard-widget-detail-snapshot table { width: 100%; border-collapse: collapse; }
-        .dashboard-widget-detail-snapshot th, .dashboard-widget-detail-snapshot td { border-bottom: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-theme-border-color); padding: 10px 0; text-align: left; font-size: 13px; line-height: 1.35; vertical-align: top; }
-        @media (max-width: 980px) {
-            .w-dashboard-layout-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
-            .w-dashboard-region-summary, .w-dashboard-region-analysis, .w-dashboard-region-detail { grid-column: 1 / span 5; }
-            .w-dashboard-region-side { grid-column: 6 / -1; grid-row: 1 / span 3; }
-        }
-        @media (max-width: 640px) {
-            .w-dashboard-layout-grid { grid-template-columns: minmax(0, 1fr); }
-            .w-dashboard-region-summary, .w-dashboard-region-analysis, .w-dashboard-region-side, .w-dashboard-region-detail { grid-column: 1 / -1; grid-row: auto; }
-        }
-    </style>
+    <title>{$title}</title>
+    <link rel="stylesheet" href="{$foundationUrl}">
+    <link rel="stylesheet" href="{$backendUrl}">
+    <link rel="stylesheet" href="{$previewCssUrl}" data-w-editor-preview-asset="style">
+    <script type="module" src="{$uiUrl}"></script>
+    <script type="module" src="{$previewJsUrl}" data-w-editor-preview-asset="script"></script>
 </head>
 <body>
-    <main class="dashboard-layout-wrapper">{$content}</main>
+    <main class="w-dashboard-preview">{$content}</main>
 </body>
 </html>
 HTML;
@@ -4007,6 +4154,15 @@ HTML;
      */
     private function getEditorJsonPayload(): array
     {
+        // ThemeQueryProvider dispatches an inner HTTP request inside the outer
+        // QueryBin request. For an inner GET, Request::getBodyParams() would
+        // otherwise fall back to the outer QueryBin JSON body and mix transport
+        // context (for example backend editor_area) into the typed editor input.
+        $syntheticParams = $this->request->getData('__theme_editor_request_params');
+        if (is_array($syntheticParams)) {
+            return $syntheticParams;
+        }
+
         $payload = [];
         $bodyParams = $this->request->getBodyParams();
         if (is_string($bodyParams) && trim($bodyParams) !== '') {
@@ -4018,7 +4174,8 @@ HTML;
             $payload = $bodyParams;
         }
 
-        foreach ($this->request->getParams() as $key => $value) {
+        $requestParams = $this->request->getParams();
+        foreach ($requestParams as $key => $value) {
             if (!array_key_exists((string)$key, $payload)) {
                 $payload[(string)$key] = $value;
             }
@@ -4177,33 +4334,6 @@ HTML;
         return is_scalar($value) ? $this->normalizeLayoutOption((string)$value) : '';
     }
 
-    private function saveEditorLayoutOption(
-        WelineTheme $theme,
-        string $editorArea,
-        string $layoutType,
-        string $layoutOption,
-        string $scope
-    ): string {
-        $editorArea = $this->getPreviewContextService()->normalizeArea($editorArea, PreviewContextService::AREA_FRONTEND);
-        $layoutType = $this->normalizeLayoutType($layoutType);
-        $layoutOption = $this->normalizeLayoutOption($layoutOption);
-        $effectiveScope = $this->resolveEditorEffectiveScope($theme, $editorArea, $scope);
-
-        $this->metaConfigRepository()->upsert(new MetaConfigWrite(
-            identity: new MetaConfigIdentity(
-                namespace: 'theme.' . $editorArea,
-                configKey: 'layouts.' . $layoutType . '.value',
-                scope: $effectiveScope,
-                locale: null,
-                identifyId: (string)$theme->getId(),
-                metaIdentify: 'theme.' . $editorArea . '.layouts.' . $layoutType,
-            ),
-            value: $layoutOption,
-        ));
-
-        return $effectiveScope;
-    }
-
     private function readEditorLayoutOption(
         WelineTheme $theme,
         string $editorArea,
@@ -4281,6 +4411,21 @@ HTML;
         $scope = (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE);
         $localeParam = $this->request->getParam('locale', null);
         $locale = $localeParam === null || $localeParam === '' ? null : (string)$localeParam;
+        $typedPayload = $this->getEditorJsonPayload();
+        $typedContext = null;
+        if (array_key_exists('editor_context', $typedPayload)) {
+            /** @var ThemeEditorContextFactory $factory */
+            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            $typedContext = $factory->fromInput(
+                $typedPayload,
+                $locale === null ? ThemeEditorContext::RESOURCE_META : ThemeEditorContext::RESOURCE_I18N,
+            );
+            $editorArea = $typedContext->area;
+            $layoutType = $typedContext->layoutType;
+            $layoutOption = $typedContext->layoutOption;
+            $scope = $this->legacyScopeForEditorContext($typedContext);
+            $locale = $typedContext->locale === 'default' ? null : $typedContext->locale;
+        }
 
         $context = $this->persistEditorContext([
             'frontend_theme_id' => (int)$this->request->getParam('frontend_theme_id', 0),
@@ -4289,7 +4434,9 @@ HTML;
             'scope' => $scope,
             'shell' => PreviewContextService::SHELL_THEME_EDITOR,
         ]);
-        $themeId = (int)$this->request->getParam('theme_id', 0);
+        $themeId = $typedContext instanceof ThemeEditorContext
+            ? $typedContext->themeId
+            : (int)$this->request->getParam('theme_id', 0);
         if (!$themeId) {
             $themeId = $previewContextService->getThemeIdForArea($editorArea, $context, true);
         }
@@ -4317,6 +4464,21 @@ HTML;
     private function buildTargetLayoutConfigIdentify(string $editorArea, string $layoutType, string $layoutOption): string
     {
         $payload = $this->getEditorJsonPayload();
+        if (array_key_exists('editor_context', $payload)) {
+            /** @var ThemeEditorContextFactory $factory */
+            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            $context = $factory->fromInput($payload, ThemeEditorContext::RESOURCE_META);
+            /** @var ThemeMetaIdentityService $metaIdentityService */
+            $metaIdentityService = ObjectManager::getInstance(ThemeMetaIdentityService::class);
+
+            return $metaIdentityService->targetIdentify(
+                $context->area,
+                $context->targetType,
+                $context->targetId,
+                $context->layoutType,
+                $context->layoutOption,
+            );
+        }
         $candidates = [
             ['target_type' => $payload['theme_layout_target_type'] ?? null, 'target_id' => $payload['theme_layout_target_id'] ?? null],
             ['target_type' => $payload['theme_layout_source_target_type'] ?? null, 'target_id' => $payload['theme_layout_source_target_id'] ?? null],
@@ -4606,10 +4768,10 @@ HTML;
 
     public function getVersionsPayload(): array
     {
-        $themeId = (int)$this->request->getParam('theme_id');
-        $pageType = (string)$this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $data = $this->getEditorJsonPayload();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id'));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $limit = (int)$this->request->getParam('limit', 20);
-        $identity = $this->resolveVersionLayoutIdentity();
 
         if (!$themeId) {
             return [
@@ -4619,8 +4781,11 @@ HTML;
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $themeId = $context->themeId;
+            $pageType = $context->layoutType;
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $this->versionService->initializeVersionIfNeeded($themeId, $pageType, null, $identity);
-
             $versions = $this->versionService->getVersions($themeId, $pageType, $limit, $identity);
             $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
             $publishedVersion = $this->versionService->getPublishedVersion($themeId, $pageType, $identity);
@@ -4648,7 +4813,6 @@ HTML;
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $versionName = $data['version_name'] ?? $this->request->getParam('version_name');
         $description = $data['description'] ?? $this->request->getParam('description');
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId) {
             return [
@@ -4658,12 +4822,11 @@ HTML;
         }
 
         try {
-            $version = $this->versionService->saveVersion(
-                themeId: $themeId,
-                pageType: $pageType,
-                name: $versionName !== null ? (string)$versionName : null,
-                description: $description !== null ? (string)$description : null,
-                identity: $identity,
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $version = $this->saveScopedLayoutVersion(
+                $context,
+                $versionName !== null ? (string)$versionName : null,
+                $description !== null ? (string)$description : null,
             );
             $this->clearVersionPreviewCaches($themeId);
 
@@ -4686,7 +4849,6 @@ HTML;
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId || !$versionId) {
             return [
@@ -4696,7 +4858,20 @@ HTML;
         }
 
         try {
-            $result = $this->versionService->switchToVersion($themeId, $pageType, $versionId, $identity);
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $targetVersion = $this->versionService->getVersion($themeId, $pageType, $versionId, $identity);
+            if (!$targetVersion instanceof ThemeLayoutVersion) {
+                throw new \RuntimeException('theme_layout_version_not_found');
+            }
+            $targetSnapshot = $this->normalizeLegacyLayoutSnapshot($context, $targetVersion->getSnapshotData());
+            $result = $this->versionService->switchToVersion(
+                $themeId,
+                $pageType,
+                $versionId,
+                $identity,
+                $targetSnapshot,
+            );
             if (!$result) {
                 return [
                     'success' => false,
@@ -4706,6 +4881,14 @@ HTML;
 
             $this->clearVersionPreviewCaches($themeId);
             $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
+            if (!$currentVersion instanceof ThemeLayoutVersion) {
+                throw new \RuntimeException('theme_layout_current_version_missing');
+            }
+            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
+                $context,
+                $targetSnapshot,
+                'Restore selected legacy layout version',
+            );
 
             return [
                 'success' => true,
@@ -4713,6 +4896,7 @@ HTML;
                 'data' => [
                     'current_version_id' => $currentVersion?->getVersionId(),
                     'version' => $currentVersion?->toArray(),
+                    'scoped_workspace' => $scopedDraft,
                 ],
             ];
         } catch (\Throwable $e) {
@@ -4728,7 +4912,6 @@ HTML;
         $data = $this->getVersionRequestData();
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId) {
             return [
@@ -4738,11 +4921,24 @@ HTML;
         }
 
         try {
-            $result = $this->versionService->restoreOriginal($themeId, $pageType, null, $identity);
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $result = $this->versionService->restoreOriginal(
+                $themeId,
+                $pageType,
+                null,
+                $identity,
+                $this->scopedLayoutSnapshot($context),
+            );
             $this->clearVersionPreviewCaches($themeId);
 
             $backupVersion = $result['backup_version'];
             $newVersion = $result['new_version'];
+            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
+                $context,
+                $newVersion->getSnapshotData(),
+                'Restore original layout snapshot',
+            );
 
             return [
                 'success' => true,
@@ -4750,6 +4946,7 @@ HTML;
                 'data' => [
                     'backup_version' => $backupVersion?->toArray(),
                     'new_version' => $newVersion->toArray(),
+                    'scoped_workspace' => $scopedDraft,
                 ],
             ];
         } catch (\Throwable $e) {
@@ -4787,7 +4984,6 @@ HTML;
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $versionId = isset($data['version_id']) ? (int)$data['version_id'] : null;
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId) {
             return [
@@ -4797,7 +4993,14 @@ HTML;
         }
 
         try {
-            $result = $this->versionService->publishVersion($themeId, $pageType, $versionId, $identity);
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $scopedReleasePublished = $this->hasScopedReleasePublishedClaim($data);
+            if (!$scopedReleasePublished) {
+                $this->publishPendingScopedResources($context, 'theme_editor_compat_version_publish');
+            }
+            $this->assertCurrentScopedLayoutPublished($context);
+            $result = $this->versionService->markVersionPublished($themeId, $pageType, $versionId, $identity);
             if (!$result) {
                 return [
                     'success' => false,
@@ -4829,9 +5032,7 @@ HTML;
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-        $identity = $this->resolveVersionLayoutIdentity($data);
-
-        if (!$versionId) {
+        if (!$versionId || !$themeId) {
             return [
                 'success' => false,
                 'message' => __('Missing version ID'),
@@ -4839,6 +5040,8 @@ HTML;
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $result = $this->versionService->deleteVersion(
                 $versionId,
                 $themeId > 0 ? $themeId : null,
@@ -4865,9 +5068,8 @@ HTML;
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
         $newName = \trim((string)($data['version_name'] ?? $this->request->getParam('version_name', '')));
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
-        if (!$versionId || $newName === '') {
+        if (!$versionId || !$themeId || $newName === '') {
             return [
                 'success' => false,
                 'message' => __('Missing required parameters'),
@@ -4875,6 +5077,8 @@ HTML;
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $result = $this->versionService->renameVersion(
                 $versionId,
                 $newName,
@@ -4913,12 +5117,33 @@ HTML;
 
     /**
      * @param array<string,mixed> $data
-     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string}
      */
     private function resolveVersionLayoutIdentity(array $data = []): array
     {
+        $typedInput = $data;
+        if (!array_key_exists('editor_context', $typedInput)) {
+            $requestContext = $this->request->getParam('editor_context', null);
+            if ($requestContext !== null && $requestContext !== '') {
+                $typedInput['editor_context'] = $requestContext;
+            }
+        }
+        if (array_key_exists('editor_context', $typedInput)) {
+            /** @var ThemeEditorContextFactory $factory */
+            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            $context = $factory->fromInput($typedInput, ThemeEditorContext::RESOURCE_LAYOUT);
+            $this->assertRawLayoutContextMatches($typedInput, $context);
+
+            return $this->layoutIdentityFromEditorContext($context);
+        }
+
         $layoutOption = trim((string)($data['layout_option'] ?? $this->request->getParam('layout_option', 'default')));
         $scope = trim((string)($data['scope'] ?? $this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE)));
+        $localeCode = trim((string)(
+            $data['locale_code']
+            ?? $data['locale']
+            ?? $this->request->getParam('locale_code', $this->request->getParam('locale', ''))
+        ));
         $targetType = trim((string)(
             $data['theme_layout_target_type']
             ?? $data['theme_layout_source_target_type']
@@ -4942,39 +5167,24 @@ HTML;
             $data['theme_layout_target_id']
             ?? $data['theme_layout_source_target_id']
             ?? $data['virtual_target_id']
-            ?? $data['target_id']
             ?? $this->request->getParam(
                 'theme_layout_target_id',
                 $this->request->getParam(
                     'theme_layout_source_target_id',
                     $this->request->getParam(
                         'virtual_target_id',
-                        $this->request->getParam('target_id', 0)
+                        $this->request->getParam('layout_lock_target_id', 0)
                     )
                 )
             )
         );
-        if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
-            $legacyTargetType = trim((string)($data['target_type'] ?? $this->request->getParam('target_type', '')));
-            $legacyTargetIdExplicit = array_key_exists('target_id', $data)
-                || trim((string)$this->request->getParam('target_id', '')) !== '';
-            if (($targetId > 0 || $legacyTargetIdExplicit)
-                && $legacyTargetType !== ''
-                && !in_array($legacyTargetType, [
-                    PreviewContextService::TARGET_TYPE_LAYOUT,
-                    PreviewContextService::TARGET_TYPE_PAGE,
-                    PreviewContextService::TARGET_TYPE_PATH,
-                ], true)
-            ) {
-                $targetType = $legacyTargetType;
-            }
-        }
 
         return [
             'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
             'scope' => $scope !== '' ? $scope : PreviewContextService::DEFAULT_SCOPE,
             'target_type' => $targetType !== '' ? $this->normalizeVirtualLayoutTargetType($targetType) : ThemeVirtualLayout::TARGET_GLOBAL,
             'target_id' => max(0, $targetId),
+            'locale_code' => $localeCode,
         ];
     }
 
@@ -4989,6 +5199,8 @@ HTML;
         $targetId = max(0, (int)($identity['target_id'] ?? 0));
         $params = [
             'scope' => $scope !== '' ? $scope : PreviewContextService::DEFAULT_SCOPE,
+            'locale' => trim((string)($identity['locale_code'] ?? '')),
+            'locale_code' => trim((string)($identity['locale_code'] ?? '')),
         ];
 
         if (!$this->hasConcreteThemeLayoutTarget($targetType, $targetId)) {
@@ -5186,6 +5398,13 @@ HTML;
                 $this->request->setGet('version_id', (string)$versionId);
             }
             $this->request->setData('skip_view_file_cache', true);
+            $typedEditorContext = $this->resolveControlledPreviewEditorContext(
+                $context,
+                $themeId,
+                $layoutType,
+                $layoutOption,
+                $editorArea,
+            );
 
             $this->assign('editor_mode', true);
             $this->assign('preview_mode', true);
@@ -5228,6 +5447,23 @@ HTML;
                 $slotRenderer = ObjectManager::getInstance(SlotRendererService::class);
                 $slotRenderer->clearCache();
 
+                if ($typedEditorContext instanceof ThemeEditorContext) {
+                    /** @var ThemeScopedPreviewResolver $scopedPreview */
+                    $scopedPreview = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
+                    $rendered = $slotRenderer->processSlotsWithLayout(
+                        $html,
+                        $scopedPreview->resolveLayout($typedEditorContext, $status),
+                        $status === ThemeLayout::STATUS_PUBLISHED,
+                        $themeId,
+                        PreviewContextService::AREA_BACKEND,
+                    );
+                    return $this->injectScopedPreviewAppearance(
+                        $rendered,
+                        $typedEditorContext,
+                        $status,
+                    );
+                }
+
                 return $slotRenderer->processSlots(
                     $html,
                     $themeId,
@@ -5244,7 +5480,8 @@ HTML;
                 $layoutType,
                 (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT),
                 $versionId > 0 ? $versionId : null,
-                $layoutIdentity
+                $layoutIdentity,
+                $typedEditorContext,
             );
             $this->assign('content', $previewPayload['content']);
 
@@ -5259,6 +5496,14 @@ HTML;
                 $layoutDefinitions,
                 $targetIdentify
             );
+            if ($typedEditorContext instanceof ThemeEditorContext) {
+                /** @var ThemeScopedPreviewResolver $scopedPreview */
+                $scopedPreview = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
+                $layoutMeta = $scopedPreview->resolveLayoutMeta(
+                    $typedEditorContext,
+                    (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT),
+                );
+            }
             $layoutMeta = array_merge([
                 'showHeader' => true,
                 'showSidebar' => true,
@@ -5277,7 +5522,14 @@ HTML;
                 ? 'Weline_Theme::templates/backend/theme-preview/content.phtml'
                 : 'Weline_Theme::templates/frontend/theme-preview/content.phtml';
 
-            return (string)$this->fetch($previewContentTemplate);
+            $html = (string)$this->fetch($previewContentTemplate);
+            return $typedEditorContext instanceof ThemeEditorContext
+                ? $this->injectScopedPreviewAppearance(
+                    $html,
+                    $typedEditorContext,
+                    (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT),
+                )
+                : $html;
         } catch (\Throwable $throwable) {
             \Weline\Framework\App\Env::getInstance()->getLogger()?->error('[Theme Editor Layout Preview Failed]', [
                 'theme_id' => $themeId,
@@ -5292,10 +5544,68 @@ HTML;
         }
     }
 
+    /**
+     * Resolve a server-validated typed context for controlled editor rendering.
+     * Legacy preview requests return null and keep their compatibility path.
+     */
+    private function resolveControlledPreviewEditorContext(
+        array $previewContext,
+        int $themeId,
+        string $layoutType,
+        string $layoutOption,
+        string $editorArea,
+    ): ?ThemeEditorContext {
+        $raw = $previewContext['editor_context'] ?? $this->request->getParam('editor_context', null);
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        /** @var ThemeEditorContextFactory $factory */
+        $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+        $context = $factory->fromInput(
+            ['editor_context' => $raw],
+            ThemeEditorContext::RESOURCE_LAYOUT,
+        );
+        if ($context->themeId !== $themeId
+            || $context->layoutType !== $layoutType
+            || $context->layoutOption !== $layoutOption
+            || $context->area !== $editorArea
+        ) {
+            throw new \InvalidArgumentException('theme_scoped_preview_context_mismatch');
+        }
+
+        return $context;
+    }
+
+    private function injectScopedPreviewAppearance(
+        string $html,
+        ThemeEditorContext $context,
+        string $status,
+    ): string {
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery()->load($context->themeId);
+        if ((int)$theme->getId() !== $context->themeId) {
+            return $html;
+        }
+        /** @var ThemeScopedPreviewResolver $resolver */
+        $resolver = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
+        $style = $resolver->renderAppearanceStyle($context, $theme, $status);
+        if ($style === '') {
+            return $html;
+        }
+        $headEnd = \stripos($html, '</head>');
+        if ($headEnd === false) {
+            return $style . $html;
+        }
+
+        return \substr($html, 0, $headEnd) . $style . \substr($html, $headEnd);
+    }
+
     private function applyThemeLayoutRuntimeContextToRequest(array $context): void
     {
         foreach ([
             'scope',
+            'locale',
+            'locale_code',
             'theme_layout_target_type',
             'theme_layout_target_id',
             'theme_layout_source_target_type',
@@ -5317,94 +5627,65 @@ HTML;
      */
     private function renderLayoutNotFoundError(string $layoutType, string $layoutOption): string
     {
-        $themeAssetBaseUrl = defined('DEV') && DEV
-            ? '/Weline/Theme/view/theme/'
-            : '/static/Weline/Theme/theme/';
-        $themeAssetVersion = '20260810-color-mode';
         $themePreference = $this->resolveBackendPreviewThemePreference();
         $resolvedThemeMode = $themePreference === 'dark' ? 'dark' : 'light';
         $safeLayoutType = htmlspecialchars($layoutType, ENT_QUOTES, 'UTF-8');
         $safeLayoutOption = htmlspecialchars($layoutOption, ENT_QUOTES, 'UTF-8');
+        $foundationUrl = $this->resolveUiAssetUrl('weline-foundation.css');
+        $backendUrl = $this->resolveUiAssetUrl('weline-backend.css');
+        $previewCssUrl = $this->resolveUiAssetUrl('pages/weline-theme-preview.css');
+        $uiUrl = $this->resolveUiAssetUrl('weline-ui.js');
+        $icons = ObjectManager::getInstance(\Weline\Theme\Service\Ui\IconRegistry::class);
+        $warningIcon = $icons->render('warning', 'xl', (string)__('警告'));
+        $title = htmlspecialchars((string)__('布局不存在'), ENT_QUOTES, 'UTF-8');
+        $description = htmlspecialchars((string)__('请求的布局模板文件未找到，请选择其他布局类型。'), ENT_QUOTES, 'UTF-8');
+        $typeLabel = htmlspecialchars((string)__('布局类型'), ENT_QUOTES, 'UTF-8');
+        $optionLabel = htmlspecialchars((string)__('布局选项'), ENT_QUOTES, 'UTF-8');
+        $hint = htmlspecialchars((string)__('请在主题编辑器中选择有效的布局。'), ENT_QUOTES, 'UTF-8');
         $html = <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="{$resolvedThemeMode}" data-bs-theme="{$resolvedThemeMode}" data-theme-preference="{$themePreference}" data-theme-mode="{$resolvedThemeMode}" data-layout-mode="{$resolvedThemeMode}" data-theme-area="backend">
+<html lang="zh-CN" data-w-area="backend" data-theme-preference="{$themePreference}" data-theme="{$resolvedThemeMode}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>布局不存在</title>
-    <script>(function(root){var preference=root.getAttribute('data-theme-preference')||'system';var media=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var mode=preference==='dark'||(preference==='system'&&media&&media.matches)?'dark':'light';root.setAttribute('data-theme',mode);root.setAttribute('data-bs-theme',mode);root.setAttribute('data-theme-mode',mode);root.setAttribute('data-layout-mode',mode);root.style.colorScheme=mode;})(document.documentElement);</script>
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_colors.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_typography.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_spacing.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_borders.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/variables/_shadows.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_light.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/colors/_dark.css?v={$themeAssetVersion}">
-    <link rel="stylesheet" href="{$themeAssetBaseUrl}backend/assets/css/theme.css?v={$themeAssetVersion}">
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: var(--backend-theme-surface-canvas);
-            color: var(--backend-theme-text);
-        }
-        .error-container {
-            text-align: center;
-            padding: 40px;
-            background: var(--backend-component-surface);
-            border: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-component-border);
-            border-radius: var(--backend-theme-radius-lg);
-            box-shadow: var(--backend-component-shadow-lg);
-            max-width: 500px;
-        }
-        .error-icon {
-            font-size: 64px;
-            color: var(--backend-theme-danger);
-            margin-bottom: 20px;
-        }
-        h1 {
-            margin: 0 0 10px;
-            color: var(--backend-theme-text);
-            font-size: 24px;
-        }
-        p {
-            color: var(--backend-theme-text-secondary);
-            margin: 0 0 20px;
-            line-height: 1.6;
-        }
-        .layout-info {
-            background: var(--backend-component-surface-subtle);
-            padding: 10px 15px;
-            border-radius: var(--backend-theme-radius-md);
-            font-family: monospace;
-            color: var(--backend-theme-text);
-            margin-bottom: 20px;
-        }
-        .hint {
-            font-size: 14px;
-            color: var(--backend-theme-text-muted);
-        }
-    </style>
+    <title>{$title}</title>
+    <link rel="stylesheet" href="{$foundationUrl}">
+    <link rel="stylesheet" href="{$backendUrl}">
+    <link rel="stylesheet" href="{$previewCssUrl}">
+    <script type="module" src="{$uiUrl}"></script>
 </head>
 <body>
-    <div class="error-container">
-        <div class="error-icon">⚠️</div>
-        <h1>布局文件不存在</h1>
-        <p>请求的布局模板文件未找到，请选择其他布局类型。</p>
-        <div class="layout-info">
-            布局类型: {$safeLayoutType}<br>
-            布局选项: {$safeLayoutOption}
-        </div>
-        <p class="hint">请在左侧面板选择一个有效的布局类型</p>
-    </div>
+    <main class="w-theme-preview-error-shell">
+        <article class="w-card w-theme-preview-error" role="alert">
+            <div class="w-card__body">
+                <span class="w-theme-preview-error__icon">{$warningIcon}</span>
+                <h1 class="w-card__title">{$title}</h1>
+                <p>{$description}</p>
+                <div class="w-theme-preview-error__identity">
+                    <strong>{$typeLabel}:</strong> {$safeLayoutType}<br>
+                    <strong>{$optionLabel}:</strong> {$safeLayoutOption}
+                </div>
+                <p>{$hint}</p>
+            </div>
+        </article>
+    </main>
 </body>
 </html>
 HTML;
         return $html;
+    }
+
+    private function resolveUiAssetUrl(string $relative): string
+    {
+        if (preg_match('#^[a-z0-9][a-z0-9/.-]+$#', $relative) !== 1 || str_contains($relative, '..')) {
+            throw new \InvalidArgumentException(__('Weline UI 资源路径无效'));
+        }
+
+        return htmlspecialchars(
+            $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative),
+            ENT_QUOTES,
+            'UTF-8',
+        );
     }
 
     /**
@@ -5536,7 +5817,7 @@ HTML;
             
             // 查找插槽元素
             $xpath = new \DOMXPath($dom);
-            $slotNodes = $xpath->query("//*[@data-wslot='{$slotId}' or @data-slot='{$slotId}']");
+            $slotNodes = $xpath->query("//*[@data-wslot='{$slotId}']");
             
             if ($slotNodes->length === 0) {
                 return '';
@@ -5566,10 +5847,10 @@ HTML;
      */
     public function getVersions()
     {
-        $themeId = (int)$this->request->getParam('theme_id');
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $data = $this->getEditorJsonPayload();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id'));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $limit = (int)$this->request->getParam('limit', 20);
-        $identity = $this->resolveVersionLayoutIdentity();
 
         if (!$themeId) {
             return $this->fetchJson([
@@ -5579,9 +5860,11 @@ HTML;
         }
 
         try {
-            // 初始化版本（如果是首次访问）
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $themeId = $context->themeId;
+            $pageType = $context->layoutType;
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $this->versionService->initializeVersionIfNeeded($themeId, $pageType, null, $identity);
-
             $versions = $this->versionService->getVersions($themeId, $pageType, $limit, $identity);
             $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
             $publishedVersion = $this->versionService->getPublishedVersion($themeId, $pageType, $identity);
@@ -5621,7 +5904,6 @@ HTML;
         $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
         $versionName = $data['version_name'] ?? $this->request->getParam('version_name');
         $description = $data['description'] ?? $this->request->getParam('description');
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId) {
             return $this->fetchJson([
@@ -5631,12 +5913,11 @@ HTML;
         }
 
         try {
-            $version = $this->versionService->saveVersion(
-                themeId: $themeId,
-                pageType: $pageType,
-                name: $versionName,
-                description: $description,
-                identity: $identity,
+            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
+            $version = $this->saveScopedLayoutVersion(
+                $context,
+                $versionName !== null ? (string)$versionName : null,
+                $description !== null ? (string)$description : null,
             );
 
             return $this->fetchJson([
@@ -5670,7 +5951,6 @@ HTML;
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
         $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId || !$versionId) {
             return $this->fetchJson([
@@ -5680,17 +5960,45 @@ HTML;
         }
 
         try {
-            $result = $this->versionService->switchToVersion($themeId, $pageType, $versionId, $identity);
+            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $targetVersion = $this->versionService->getVersion(
+                $themeId,
+                (string)$pageType,
+                $versionId,
+                $identity,
+            );
+            if (!$targetVersion instanceof ThemeLayoutVersion) {
+                throw new \RuntimeException('theme_layout_version_not_found');
+            }
+            $targetSnapshot = $this->normalizeLegacyLayoutSnapshot($context, $targetVersion->getSnapshotData());
+            $result = $this->versionService->switchToVersion(
+                $themeId,
+                (string)$pageType,
+                $versionId,
+                $identity,
+                $targetSnapshot,
+            );
 
             if ($result) {
                 // 获取更新后的布局数据
                 $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType, $identity);
+                $currentVersion = $this->versionService->getCurrentVersion($themeId, (string)$pageType, $identity);
+                if (!$currentVersion instanceof ThemeLayoutVersion) {
+                    throw new \RuntimeException('theme_layout_current_version_missing');
+                }
+                $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
+                    $context,
+                    $targetSnapshot,
+                    'Restore selected legacy layout version',
+                );
 
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('已切换到选定版本'),
                     'data' => [
                         'layout' => $layout,
+                        'scoped_workspace' => $scopedDraft,
                     ],
                 ]);
             }
@@ -5729,7 +6037,6 @@ HTML;
 
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId) {
             return $this->fetchJson([
@@ -5739,13 +6046,26 @@ HTML;
         }
 
         try {
-            $result = $this->versionService->restoreOriginal($themeId, $pageType, null, $identity);
+            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $result = $this->versionService->restoreOriginal(
+                $themeId,
+                (string)$pageType,
+                null,
+                $identity,
+                $this->scopedLayoutSnapshot($context),
+            );
 
             // 清除插槽渲染服务的布局缓存，否则 WLS 常驻进程会继续返回旧 draft 缓存，预览无法恢复为空白
             ObjectManager::getInstance(SlotRendererService::class)->clearCache();
 
             $backupVersion = $result['backup_version'];
             $newVersion = $result['new_version'];
+            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
+                $context,
+                $newVersion->getSnapshotData(),
+                'Restore original layout snapshot',
+            );
 
             $message = __('已恢复到原始布局');
             if ($backupVersion) {
@@ -5758,6 +6078,7 @@ HTML;
                 'data' => [
                     'backup_version' => $backupVersion?->toArray(),
                     'new_version' => $newVersion->toArray(),
+                    'scoped_workspace' => $scopedDraft,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -5786,7 +6107,6 @@ HTML;
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = $data['page_type'] ?? $this->request->getParam('page_type');
         $versionId = isset($data['version_id']) ? (int)$data['version_id'] : null;
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
         if (!$themeId) {
             return $this->fetchJson([
@@ -5796,8 +6116,19 @@ HTML;
         }
 
         try {
-            // 使用版本服务发布
-            $result = $this->versionService->publishVersion($themeId, (string)$pageType, $versionId, $identity);
+            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
+            $scopedReleasePublished = $this->hasScopedReleasePublishedClaim($data);
+            if (!$scopedReleasePublished) {
+                $this->publishPendingScopedResources($context, 'theme_editor_compat_version_publish');
+            }
+            $this->assertCurrentScopedLayoutPublished($context);
+            $result = $this->versionService->markVersionPublished(
+                $themeId,
+                (string)$pageType,
+                $versionId,
+                $identity,
+            );
 
             if ($result) {
                 $this->publishEditorPreviewScope($themeId, (string)($identity['scope'] ?? PreviewContextService::DEFAULT_SCOPE));
@@ -5844,9 +6175,8 @@ HTML;
         $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
-        if (!$versionId) {
+        if (!$versionId || !$themeId) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('缺少版本ID'),
@@ -5854,6 +6184,8 @@ HTML;
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $result = $this->versionService->deleteVersion(
                 $versionId,
                 $themeId > 0 ? $themeId : null,
@@ -5899,9 +6231,8 @@ HTML;
         $newName = $data['version_name'] ?? $this->request->getParam('version_name', '');
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $identity = $this->resolveVersionLayoutIdentity($data);
 
-        if (!$versionId || empty($newName)) {
+        if (!$versionId || !$themeId || empty($newName)) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('参数不完整'),
@@ -5909,6 +6240,8 @@ HTML;
         }
 
         try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $identity = $this->layoutIdentityFromEditorContext($context);
             $result = $this->versionService->renameVersion(
                 $versionId,
                 (string)$newName,
@@ -5955,11 +6288,18 @@ HTML;
         if (!$frontendThemeId) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缂哄皯鍓嶇涓婚ID'),
+                'message' => __('缺少前端主题ID'),
             ]);
         }
 
         try {
+            $typedEditorContext = null;
+            if (array_key_exists('editor_context', $data)) {
+                $typedEditorContext = $this->requireLayoutWriteContext($data, $frontendThemeId, $pageType);
+                $frontendThemeId = $typedEditorContext->themeId;
+                $pageType = $typedEditorContext->layoutType;
+                $layoutOption = $typedEditorContext->layoutOption;
+            }
             $context = $this->getPreviewContextService()->buildContext(array_replace([
                 'frontend_theme_id' => $frontendThemeId,
                 'backend_theme_id' => (int)($data['backend_theme_id'] ?? $this->request->getParam('backend_theme_id', 0)),
@@ -5971,6 +6311,8 @@ HTML;
                 'scope' => (string)($data['scope'] ?? $this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE)),
                 'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
                 'target_value' => $pageType,
+                'layout_option' => $layoutOption,
+                'editor_context' => $typedEditorContext?->toArray(),
             ], $this->buildThemeLayoutRuntimeParams($identity)));
             $context = $this->getPreviewContextService()->ensureThemeIds($context, true, true);
             $token = $this->previewTokenService->generateToken(
@@ -6038,78 +6380,6 @@ HTML;
         ]);
     }
 
-    public function legacyPostStartPreview()
-    {
-        return $this->postStartPreview();
-    }
-/*
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $versionId = isset($data['version_id']) ? (int)$data['version_id'] : null;
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ]);
-        }
-
-        try {
-            // 生成预览 Token
-            $token = $this->previewTokenService->generateToken($themeId, $pageType, $versionId);
-            
-            // 构建前端预览 URL
-            // 触发 hook 允许其他模块（如多站点模块）修改基础 URL
-            // 使用 getBaseHost() 获取仅主机部分（如 http://127.0.0.1:9981）
-            $baseUrl = $this->request->getBaseHost();
-            
-            // 分发事件获取自定义预览 URL
-            $eventData = [
-                'base_url' => $baseUrl,
-                'theme_id' => $themeId,
-                'page_type' => $pageType,
-            ];
-            $this->getEventManager()->dispatch('Weline_Theme::build_preview_url', $eventData);
-            
-            // 如果事件修改了 base_url，使用修改后的值
-            if (isset($eventData['base_url']) && $eventData['base_url'] !== $baseUrl) {
-                $baseUrl = $eventData['base_url'];
-            }
-            
-            // 根据页面类型构建预览路径
-            $previewPath = $this->getPreviewPathByPageType($pageType);
-            
-            // 构建完整预览 URL，携带 token 参数
-            $previewUrl = rtrim($baseUrl, '/') . $previewPath;
-            $previewUrl .= (strpos($previewUrl, '?') !== false ? '&' : '?') 
-                        . PreviewTokenService::TOKEN_KEY . '=' . urlencode($token);
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('预览已启动'),
-                'data' => [
-                    'token' => $token,
-                    'preview_url' => $previewUrl,
-                    'expires_in' => 3600, // 1 小时
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
     /**
      * 退出前端预览 (Query)
      * 路由: /backend/theme-editor/exit-preview (POST)
@@ -6131,20 +6401,21 @@ HTML;
         if (empty($token)) {
             $token = $this->previewTokenService->getTokenFromRequest();
         }
-
-        if (empty($token)) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('Missing preview token'),
-            ]);
-        }
+        $token = is_scalar($token) ? trim((string)$token) : '';
 
         try {
-            $tokenData = $this->previewTokenService->validateToken($token);
-            $context = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
+            $tokenData = $token !== '' ? $this->previewTokenService->validateToken($token) : null;
+            $tokenData = is_array($tokenData) ? $tokenData : [];
+            $context = is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
             $pageType = (string)($tokenData['page_type'] ?? ($context['target_value'] ?? ThemeLayout::PAGE_TYPE_HOME));
+            if ($pageType === '') {
+                $pageType = ThemeLayout::PAGE_TYPE_HOME;
+            }
 
-            $result = $this->previewTokenService->deleteToken($token);
+            // 退出预览是幂等的：token 已失效/缺失时仍清 Cookie 与会话态，避免前端卡在预览浮窗。
+            if ($token !== '') {
+                $this->previewTokenService->deleteToken($token);
+            }
             $this->previewTokenService->clearPreviewCookie();
             $this->getPreviewContextService()->clearContext();
             PreviewManager::clearPreviewConfig();
@@ -6164,78 +6435,33 @@ HTML;
                 'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
                 'target_value' => $pageType,
             ]), false);
-            $editorContext = $this->getPreviewContextService()->ensureThemeIds($editorContext, true, true);
+            try {
+                $editorContext = $this->getPreviewContextService()->ensureThemeIds($editorContext, true, true);
+            } catch (\Throwable) {
+                // theme_id 缺失时仍返回可跳转的编辑器壳 URL
+            }
 
             return $this->fetchJson([
-                'success' => $result,
-                'message' => $result ? __('Preview exited') : __('Failed to exit preview'),
+                'success' => true,
+                'message' => __('Preview exited'),
                 'data' => [
                     'editor_url' => $this->buildEditorShellUrl($editorContext, $pageType),
                     'context' => $editorContext,
                 ],
             ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    public function legacyPostExitPreview()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $token = $data['token'] ?? $this->request->getParam('token', '');
-
-        // 如果没有传入 token，尝试从请求中获取
-        if (empty($token)) {
-            $token = $this->previewTokenService->getTokenFromRequest();
-        }
-
-        if (empty($token)) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少预览 Token'),
-            ]);
-        }
-
-        try {
-            // 获取 token 数据用于返回编辑器 URL
-            $tokenData = $this->previewTokenService->validateToken($token);
-            
-            // 删除 token
-            $result = $this->previewTokenService->deleteToken($token);
-            PreviewManager::clearPreviewConfig();
-            $this->session->delete('preview_auto_login');
-
-            // 构建编辑器返回 URL
-            $editorUrl = $this->_url->getBackendUrl('theme-editor/index');
-            if ($tokenData) {
-                $editorUrl = $this->_url->getBackendUrl('theme-editor/index', [
-                    'theme_id' => $tokenData['theme_id'] ?? 0,
-                    'page_type' => $tokenData['page_type'] ?? 'homepage',
-                ]);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            // fetchJson 通过 Error 终止响应；不可被下方 Throwable 当成失败吞掉
+            throw $e;
+        } catch (\Throwable $e) {
+            // 即便服务端清理失败，也尽量清 Cookie，让前端能离开预览态
+            try {
+                $this->previewTokenService->clearPreviewCookie();
+            } catch (\Throwable) {
             }
 
             return $this->fetchJson([
-                'success' => $result,
-                'message' => $result ? __('已退出预览模式') : __('退出预览失败'),
-                'data' => [
-                    'editor_url' => $editorUrl,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('Failed to exit preview'),
             ]);
         }
     }
@@ -6289,13 +6515,22 @@ HTML;
                 ]);
             }
 
-            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, $identity, true);
-            if (!$publishResult) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('Failed to publish layout'),
-                ]);
+            $typedClaims = $previewContext['editor_context'] ?? null;
+            if (!is_array($typedClaims)) {
+                throw new \InvalidArgumentException('theme_preview_typed_context_required');
             }
+            /** @var ThemeEditorContextFactory $factory */
+            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            $typedContext = $factory->fromInput(
+                ['editor_context' => $typedClaims],
+                ThemeEditorContext::RESOURCE_LAYOUT,
+            );
+            if ($typedContext->themeId !== $themeId || $typedContext->layoutType !== $pageType) {
+                throw new \InvalidArgumentException('theme_preview_typed_context_mismatch');
+            }
+            $this->publishPendingScopedResources($typedContext, 'theme_preview_publish_and_exit');
+            $this->assertCurrentScopedLayoutPublished($typedContext);
+            $identity = $this->layoutIdentityFromEditorContext($typedContext);
             $this->publishEditorPreviewScope(
                 $themeId,
                 (string)($identity['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
@@ -6340,96 +6575,12 @@ HTML;
                     'context' => $editorContext,
                 ],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    public function legacyPostPublishAndExit()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $token = $data['token'] ?? $this->request->getParam('token', '');
-
-        // 如果没有传入 token，尝试从请求中获取
-        if (empty($token)) {
-            $token = $this->previewTokenService->getTokenFromRequest();
-        }
-
-        if (empty($token)) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少预览 Token'),
-            ]);
-        }
-
-        try {
-            // 验证 token 并获取数据
-            $tokenData = $this->previewTokenService->validateToken($token);
-            
-            if (!$tokenData) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('预览 Token 已过期或无效'),
-                ]);
-            }
-
-            $themeId = (int)($tokenData['theme_id'] ?? 0);
-            $pageType = $tokenData['page_type'] ?? ThemeLayout::PAGE_TYPE_HOME;
-
-            if (!$themeId) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('Token 中缺少主题信息'),
-                ]);
-            }
-
-            // 1. 发布布局
-            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, [], true);
-            if (!$publishResult) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('发布布局失败'),
-                ]);
-            }
-            $previewContext = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
-            $this->publishEditorPreviewScope($themeId, PreviewContextService::DEFAULT_SCOPE, $previewContext);
-
-            // 2. 清除并重建缓存
-            $this->cacheGenerator->clearCache($themeId);
-            $this->cacheGenerator->generate($themeId);
-            
-            $this->flushFullPageCache();
-
-            // 3. 删除预览 token
-            $this->previewTokenService->deleteToken($token);
-            PreviewManager::clearPreviewConfig();
-            $this->session->delete('preview_auto_login');
-
-            // 4. 获取前端首页 URL（非预览模式）
-            $frontendUrl = $this->request->getBaseHost() . '/';
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('主题已发布'),
-                'data' => [
-                    'redirect_url' => $frontendUrl,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('发布失败'),
             ]);
         }
     }
@@ -6556,13 +6707,12 @@ HTML;
 
     private function resolveRequestedEditorArea(string $default = PreviewContextService::AREA_FRONTEND): string
     {
-        $previewContextService = $this->getPreviewContextService();
         $rawEditorArea = (string)$this->request->getParam('editor_area', '');
         if ($rawEditorArea === '') {
             $rawEditorArea = (string)$this->request->getParam('preview_area', $default);
         }
 
-        return $previewContextService->normalizeArea($rawEditorArea, $default);
+        return $this->normalizeRequestedArea($rawEditorArea, $default);
     }
 
     private function resolveRequestedPreviewArea(string $default = PreviewContextService::AREA_FRONTEND): string
@@ -6572,7 +6722,17 @@ HTML;
             $rawPreviewArea = (string)$this->request->getParam('editor_area', $default);
         }
 
-        return $this->getPreviewContextService()->normalizeArea($rawPreviewArea, $default);
+        return $this->normalizeRequestedArea($rawPreviewArea, $default);
+    }
+
+    private function normalizeRequestedArea(string $rawArea, string $default): string
+    {
+        $area = \strtolower(\trim($rawArea));
+        if (\in_array($area, [PreviewContextService::AREA_FRONTEND, PreviewContextService::AREA_BACKEND], true)) {
+            return $area;
+        }
+
+        return $this->getPreviewContextService()->normalizeArea($default);
     }
 
     private function buildFrontendPreviewUrl(array $context, string $pageType, string $layoutOption = 'default'): string
@@ -6587,7 +6747,9 @@ HTML;
         $params['page_type'] = $pageType;
         $params['layout_type'] = $pageType;
         $params['layout_option'] = $this->normalizeLayoutOption($layoutOption) ?: 'default';
-        $params = array_replace($params, $this->buildThemeLayoutRuntimeParams($this->resolveVersionLayoutIdentity($context)));
+        $params = array_replace($params, $this->buildThemeLayoutRuntimeParams($this->resolveVersionLayoutIdentity(
+            $this->layoutIdentityInputForNavigationContext($context)
+        )));
         $params['_t'] = \time();
 
         return $this->_url->getFrontendUrl(
@@ -6614,11 +6776,24 @@ HTML;
         $params['theme_id'] = $themeId;
         $params['page_type'] = $pageType;
         $params['layout_type'] = $pageType;
-        $params = array_replace($params, $this->buildThemeLayoutEditorLockParams($this->resolveVersionLayoutIdentity($context)));
+        $params = array_replace($params, $this->buildThemeLayoutEditorLockParams($this->resolveVersionLayoutIdentity(
+            $this->layoutIdentityInputForNavigationContext($context)
+        )));
         $params['editor_area'] = $editorArea;
         $params['_t'] = \time();
 
         return $this->_url->getBackendUrl('theme/backend/theme-editor', $params);
+    }
+
+    /** @return array{editor_context:mixed}|array{} */
+    private function layoutIdentityInputForNavigationContext(array $context): array
+    {
+        $editorContext = $context['editor_context'] ?? null;
+        if ($editorContext === null || $editorContext === '') {
+            return [];
+        }
+
+        return ['editor_context' => $editorContext];
     }
 
     private function themeRecordHasBackendArea(array $themeData): bool
@@ -6672,9 +6847,20 @@ HTML;
         // 获取当前用户信息
         $userId = $this->session->getLoginUserID() ?: 0;
         $userName = $this->session->getLoginUsername() ?: '';
+        $lockContextKey = $this->resolveEditorLockContextKey(
+            $this->getEditorJsonPayload(),
+            $themeId,
+            (string)$pageType,
+        );
 
         // 尝试获取锁定
-        $result = $this->editorLockService->acquireLock($themeId, $pageType, $userId, $userName);
+        $result = $this->editorLockService->acquireLock(
+            $themeId,
+            (string)$pageType,
+            $userId,
+            $userName,
+            $lockContextKey,
+        );
 
         return $this->fetchJson([
             'success' => $result['success'],
@@ -6712,7 +6898,8 @@ HTML;
         }
 
         $userId = $this->session->getLoginUserID() ?: 0;
-        $result = $this->editorLockService->releaseLock($themeId, $pageType, $userId);
+        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
+        $result = $this->editorLockService->releaseLock($themeId, (string)$pageType, $userId, $lockContextKey);
 
         return $this->fetchJson([
             'success' => $result,
@@ -6748,7 +6935,8 @@ HTML;
         }
 
         $userId = $this->session->getLoginUserID() ?: 0;
-        $result = $this->editorLockService->updateActivity($themeId, $pageType, $userId);
+        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
+        $result = $this->editorLockService->updateActivity($themeId, (string)$pageType, $userId, $lockContextKey);
 
         return $this->fetchJson([
             'success' => $result,
@@ -6782,8 +6970,15 @@ HTML;
 
         $userId = $this->session->getLoginUserID() ?: 0;
         $userName = $this->session->getLoginUsername() ?: '';
+        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
 
-        $result = $this->editorLockService->requestTakeover($themeId, $pageType, $userId, $userName);
+        $result = $this->editorLockService->requestTakeover(
+            $themeId,
+            (string)$pageType,
+            $userId,
+            $userName,
+            $lockContextKey,
+        );
 
         return $this->fetchJson($result);
     }
@@ -6806,7 +7001,16 @@ HTML;
             ]);
         }
 
-        $takeoverRequest = $this->editorLockService->getTakeoverRequest($themeId, $pageType);
+        $lockContextKey = $this->resolveEditorLockContextKey(
+            $this->getEditorJsonPayload(),
+            $themeId,
+            (string)$pageType,
+        );
+        $takeoverRequest = $this->editorLockService->getTakeoverRequest(
+            $themeId,
+            (string)$pageType,
+            $lockContextKey,
+        );
 
         return $this->fetchJson([
             'success' => true,
@@ -6844,8 +7048,15 @@ HTML;
 
         $userId = $this->session->getLoginUserID() ?: 0;
         $userName = $this->session->getLoginUsername() ?: '';
+        $lockContextKey = $this->resolveEditorLockContextKey($data, $themeId, (string)$pageType);
 
-        $result = $this->editorLockService->forceTakeover($themeId, $pageType, $userId, $userName);
+        $result = $this->editorLockService->forceTakeover(
+            $themeId,
+            (string)$pageType,
+            $userId,
+            $userName,
+            $lockContextKey,
+        );
 
         return $this->fetchJson($result);
     }
@@ -6905,5 +7116,340 @@ HTML;
         }
 
         return $options;
+    }
+
+    /**
+     * Theme-level disk catalog + active state (整盘).
+     */
+    public function getThemeTokens()
+    {
+        try {
+            $theme = $this->resolveEditorThemeFromRequest();
+            if (!$theme || !(int)$theme->getId()) {
+                return $this->fetchJson(['success' => false, 'message' => __('请选择主题')]);
+            }
+            $input = $this->getEditorJsonPayload();
+            $area = $this->resolveRequestedEditorArea((string)($input['editor_area'] ?? 'frontend'));
+            $context = $this->validateLegacyEditorContext(
+                $input,
+                ThemeEditorContext::RESOURCE_APPEARANCE,
+                (int)$theme->getId(),
+                $area,
+            );
+            $scope = $this->legacyScopeForEditorContext($context);
+            /** @var \Weline\Theme\Service\Disk\ThemeDiskEditorService $editor */
+            $editor = ObjectManager::getInstance(\Weline\Theme\Service\Disk\ThemeDiskEditorService::class);
+            $payload = $editor->getTokensPayload($theme, $area, $scope);
+
+            return $this->fetchJson(['success' => true, 'data' => $payload]);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function postDiskSave()
+    {
+        return $this->handleDiskSave(false);
+    }
+
+    public function postDiskSaveAs()
+    {
+        return $this->handleDiskSave(true);
+    }
+
+    public function postDiskSelect()
+    {
+        try {
+            $theme = $this->resolveEditorThemeFromRequest();
+            if (!$theme || !(int)$theme->getId()) {
+                return $this->fetchJson(['success' => false, 'message' => __('请选择主题')]);
+            }
+            $data = $this->readJsonBody();
+            $area = $this->resolveRequestedEditorArea((string)($data['editor_area'] ?? $this->request->getParam('editor_area', 'frontend')));
+            $context = $this->validateLegacyEditorContext(
+                $data,
+                ThemeEditorContext::RESOURCE_APPEARANCE,
+                (int)$theme->getId(),
+                $area,
+            );
+            $panel = (string)($data['panel'] ?? 'color');
+            $ref = (string)($data['ref'] ?? '');
+            /** @var \Weline\Theme\Service\Disk\ThemeDiskEditorService $editor */
+            $editor = ObjectManager::getInstance(\Weline\Theme\Service\Disk\ThemeDiskEditorService::class);
+            $result = $editor->validateSelection($theme, $area, $panel, $ref);
+
+            return $this->fetchJson(['success' => true, 'data' => $result, 'message' => __('色盘 Scope 草稿已校验')]);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function postDiskDelete()
+    {
+        try {
+            $theme = $this->resolveEditorThemeFromRequest();
+            if (!$theme || !(int)$theme->getId()) {
+                return $this->fetchJson(['success' => false, 'message' => __('请选择主题')]);
+            }
+            $data = $this->readJsonBody();
+            $area = $this->resolveRequestedEditorArea((string)($data['editor_area'] ?? $this->request->getParam('editor_area', 'frontend')));
+            $context = $this->validateLegacyEditorContext(
+                $data,
+                ThemeEditorContext::RESOURCE_APPEARANCE,
+                (int)$theme->getId(),
+                $area,
+            );
+            $panel = (string)($data['panel'] ?? 'color');
+            $diskKey = (string)($data['disk_key'] ?? '');
+            /** @var \Weline\Theme\Service\Disk\ThemeDiskEditorService $editor */
+            $editor = ObjectManager::getInstance(\Weline\Theme\Service\Disk\ThemeDiskEditorService::class);
+            $result = $editor->validateDelete($area, $panel, $diskKey);
+
+            return $this->fetchJson(['success' => true, 'data' => $result, 'message' => __('删除 Scope 草稿已校验')]);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    private function handleDiskSave(bool $forceNewKey)
+    {
+        try {
+            $theme = $this->resolveEditorThemeFromRequest();
+            if (!$theme || !(int)$theme->getId()) {
+                return $this->fetchJson(['success' => false, 'message' => __('请选择主题')]);
+            }
+            $data = $this->readJsonBody();
+            $area = $this->resolveRequestedEditorArea((string)($data['editor_area'] ?? $this->request->getParam('editor_area', 'frontend')));
+            $context = $this->validateLegacyEditorContext(
+                $data,
+                ThemeEditorContext::RESOURCE_APPEARANCE,
+                (int)$theme->getId(),
+                $area,
+            );
+            $panel = (string)($data['panel'] ?? 'color');
+            $name = trim((string)($data['name'] ?? ''));
+            $baseFile = (string)($data['base_file'] ?? '');
+            $tokens = is_array($data['tokens'] ?? null) ? $data['tokens'] : [];
+            $diskKey = trim((string)($data['disk_key'] ?? ''));
+            if ($forceNewKey || $diskKey === '') {
+                $diskKey = 'disk-' . substr(bin2hex(random_bytes(4)), 0, 8);
+            }
+            if ($name === '') {
+                $name = $diskKey;
+            }
+            /** @var \Weline\Theme\Service\Disk\ThemeDiskEditorService $editor */
+            $editor = ObjectManager::getInstance(\Weline\Theme\Service\Disk\ThemeDiskEditorService::class);
+            $result = $editor->prepareCustom($theme, $area, $panel, $diskKey, $name, $baseFile, $tokens);
+
+            return $this->fetchJson([
+                'success' => true,
+                'data' => $result,
+                'message' => $forceNewKey ? __('另存 Scope 草稿已校验') : __('主题盘 Scope 草稿已校验'),
+            ]);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /** @param array<string,mixed> $input */
+    private function validateLegacyEditorContext(
+        array $input,
+        string $resourceType,
+        int $themeId,
+        string $area,
+    ): ThemeEditorContext {
+        /** @var ThemeEditorContextFactory $factory */
+        $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+        $context = $factory->fromInput($input, $resourceType);
+        if ($context->themeId !== $themeId || $context->area !== $area) {
+            throw new \InvalidArgumentException('theme_editor_legacy_context_mismatch');
+        }
+
+        return $context;
+    }
+
+    /** @param array<string,mixed> $input */
+    private function requireLayoutWriteContext(
+        array $input,
+        ?int $expectedThemeId = null,
+        ?string $expectedPageType = null,
+    ): ThemeEditorContext {
+        if (!array_key_exists('editor_context', $input)) {
+            $requestContext = $this->request->getParam('editor_context', null);
+            if ($requestContext !== null && $requestContext !== '') {
+                $input['editor_context'] = $requestContext;
+            }
+        }
+        /** @var ThemeEditorContextFactory $factory */
+        $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+        $context = $factory->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        $this->assertRawLayoutContextMatches($input, $context);
+        if (($expectedThemeId !== null && $expectedThemeId > 0 && $context->themeId !== $expectedThemeId)
+            || ($expectedPageType !== null && $expectedPageType !== '' && $context->layoutType !== $expectedPageType)
+        ) {
+            throw new \InvalidArgumentException('theme_editor_write_context_mismatch');
+        }
+
+        return $context;
+    }
+
+    /** @param array<string,mixed> $input */
+    private function assertRawLayoutContextMatches(array $input, ThemeEditorContext $context): void
+    {
+        $checks = [
+            'theme_id' => $context->themeId,
+            'page_type' => $context->layoutType,
+            'layout_type' => $context->layoutType,
+            'layout_option' => $context->layoutOption,
+            'editor_area' => $context->area,
+            'preview_area' => $context->area,
+            'target_type' => $context->targetType,
+            'target_id' => $context->targetId,
+            'theme_layout_target_type' => $context->targetType,
+            'theme_layout_target_id' => $context->targetId,
+            'theme_layout_source_target_type' => $context->targetType,
+            'theme_layout_source_target_id' => $context->targetId,
+            'virtual_target_type' => $context->targetType,
+            'virtual_target_id' => $context->targetId,
+            'layout_lock_target_type' => $context->targetType,
+            'layout_lock_target_id' => $context->targetId,
+        ];
+        foreach ($checks as $field => $expected) {
+            if (!array_key_exists($field, $input) || $input[$field] === '' || $input[$field] === null) {
+                continue;
+            }
+            $actual = is_int($expected) ? (int)$input[$field] : trim((string)$input[$field]);
+            if ($actual !== $expected) {
+                throw new \InvalidArgumentException('theme_editor_raw_context_mismatch:' . $field);
+            }
+        }
+        foreach (['locale', 'locale_code'] as $field) {
+            if (!array_key_exists($field, $input) || $input[$field] === null) {
+                continue;
+            }
+            $actual = trim((string)$input[$field]);
+            $expected = $context->locale === 'default' ? '' : $context->locale;
+            if ($actual !== $expected && !($actual === 'default' && $expected === '')) {
+                throw new \InvalidArgumentException('theme_editor_raw_context_mismatch:' . $field);
+            }
+        }
+        if (array_key_exists('scope', $input)
+            && trim((string)$input['scope']) !== ''
+            && trim((string)$input['scope']) !== $this->legacyScopeForEditorContext($context)
+        ) {
+            throw new \InvalidArgumentException('theme_editor_raw_context_mismatch:scope');
+        }
+    }
+
+    /** @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string} */
+    private function layoutIdentityFromEditorContext(ThemeEditorContext $context): array
+    {
+        return [
+            'layout_option' => $context->layoutOption,
+            'scope' => $this->legacyScopeForEditorContext($context),
+            'target_type' => $context->targetType,
+            'target_id' => $context->targetId,
+            'locale_code' => $context->locale === 'default' ? '' : $context->locale,
+        ];
+    }
+
+    private function assertLayoutBelongsToEditorContext(
+        ThemeLayout $layout,
+        ThemeEditorContext $context,
+    ): void {
+        $identity = $this->layoutIdentityFromEditorContext($context);
+        $matches = (int)$layout->getData(ThemeLayout::schema_fields_THEME_ID) === $context->themeId
+            && (string)$layout->getData(ThemeLayout::schema_fields_PAGE_TYPE) === $context->layoutType
+            && (string)$layout->getData(ThemeLayout::schema_fields_LAYOUT_OPTION) === $identity['layout_option']
+            && (string)$layout->getData(ThemeLayout::schema_fields_SCOPE) === $identity['scope']
+            && (string)$layout->getData(ThemeLayout::schema_fields_LOCALE_CODE) === $identity['locale_code']
+            && (string)$layout->getData(ThemeLayout::schema_fields_TARGET_TYPE) === $identity['target_type']
+            && (int)$layout->getData(ThemeLayout::schema_fields_TARGET_ID) === $identity['target_id'];
+        if (!$matches) {
+            throw new \InvalidArgumentException('theme_editor_layout_context_mismatch');
+        }
+    }
+
+    private function assertDraftLayout(ThemeLayout $layout): void
+    {
+        if ($layout->getStatus() !== ThemeLayout::STATUS_DRAFT) {
+            throw new \InvalidArgumentException('theme_editor_published_layout_write_forbidden');
+        }
+    }
+
+    /** @param array<string,mixed> $input */
+    private function hasScopedReleasePublishedClaim(array $input): bool
+    {
+        $value = $input['scoped_release_published'] ?? null;
+
+        return $value === true || $value === 1 || $value === '1' || $value === 'true';
+    }
+
+    private function assertCurrentScopedLayoutPublished(ThemeEditorContext $context): void
+    {
+        /** @var ThemeScopedWorkspaceInterface $workspace */
+        $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+        $state = $workspace->load($context->withResource(ThemeEditorContext::RESOURCE_LAYOUT), true);
+        $publishedReleaseId = (int)($state['published_release_id'] ?? 0);
+        $draftRevisionId = (int)($state['draft_revision_id'] ?? 0);
+        $publishedRevisionId = (int)($state['published_revision_id'] ?? 0);
+        if ($draftRevisionId <= 0) {
+            return;
+        }
+        if ($publishedReleaseId <= 0
+            || $draftRevisionId !== $publishedRevisionId
+            || (string)($state['status'] ?? '') !== 'active'
+        ) {
+            throw new \RuntimeException('theme_scoped_layout_publish_receipt_invalid');
+        }
+    }
+
+    /** @param array<string,mixed> $input */
+    private function resolveEditorLockContextKey(array $input, int $themeId, string $pageType): string
+    {
+        /** @var ThemeEditorContextFactory $factory */
+        $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+        $context = $factory->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        if ($context->themeId !== $themeId || $context->layoutType !== $pageType) {
+            throw new \InvalidArgumentException('theme_editor_lock_context_mismatch');
+        }
+
+        return $context->canonicalKey();
+    }
+
+    private function legacyScopeForEditorContext(ThemeEditorContext $context): string
+    {
+        /** @var ThemeLayoutScopeNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class);
+
+        return $normalizer->encodeStorageScope(
+            $context->scope->storageScope,
+            $context->scope->storeMode,
+        );
+    }
+
+    private function readJsonBody(): array
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $decoded = json_decode($bodyParams, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        if (is_array($bodyParams) && $bodyParams !== []) {
+            return $bodyParams;
+        }
+        $params = $this->request->getParams();
+
+        return is_array($params) ? $params : [];
     }
 }

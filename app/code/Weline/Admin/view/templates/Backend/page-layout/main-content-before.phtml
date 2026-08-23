@@ -47,14 +47,13 @@ $logStage('left_sidebar', $stageStartedAt, $leftSidebarHtml);
  *@Forum        https://bbs.aiweline.com
  *@DESC         鍚庡彴鍏辩敤澶撮儴
 -->
-<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<html lang="en" <?= $themeConfig->getThemeHtmlAttributes() ?><?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
 <head>
     <?= $headHtml ?>
-    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
-    <title><lang>Weline Admin 绠＄悊闈㈡澘</lang></title>
+    <title><lang>Weline Admin 管理面板</lang></title>
 </head>
 
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<body>
 <?= $loadingHtml ?>
 <div id="layout-wrapper">
     <?= $topbarHtml ?>

@@ -6,7 +6,8 @@
         "php": "^8.4",
         "weline/module-backend": "@dev",
         "weline/module-backend-activity": "@dev",
-        "weline/module-theme": "@dev"
+        "weline/module-theme": "@dev",
+        "weline/module-websites": "@dev"
     },
     "suggest": {
         "weline/module-seo": "Publishes CMS pages through the optional SEO URL and sitemap integration.",

@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 显示系统资源使用情况、性能指标等
  */
-#[Acl('Weline_Backend::system_monitor', '系统监控', 'mdi-monitor-dashboard', '系统监控', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Backend::system_monitor', '系统监控', 'grid', '系统监控', 'Weline_Backend::system_maintenance')]
 class Monitor extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class Monitor extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::system_monitor_index', '查看系统监控', 'mdi-monitor-dashboard', '查看系统监控')]
+    #[Acl('Weline_Backend::system_monitor_index', '查看系统监控', 'grid', '查看系统监控')]
     public function index(): string
     {
         try {

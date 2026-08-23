@@ -5,5 +5,5 @@
     <!--开发工作台-->
     <add source="Weline_Component::component" name="component" title="组件库"
          action="*/backend/components"
-         parent="Weline_Backend::dev_workspace" icon="mdi mdi-file-document-multiple" order="20"/>
+         parent="Weline_Backend::dev_workspace" icon="file" order="20"/>
 </menus>

@@ -12,7 +12,7 @@ use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Service\DomainPoolFlowLogService;
 use Weline\Websites\Model\DomainPoolFlowLog;
 
-#[Acl('Weline_Websites::rest_v1_domain_pool', '域名池REST接口', 'mdi-api', 'Websites 域名池 REST V1 接口', 'Weline_Websites::domain_service')]
+#[Acl('Weline_Websites::rest_v1_domain_pool', '域名池REST接口', 'code', 'Websites 域名池 REST V1 接口', 'Weline_Websites::domain_service')]
 class DomainPool extends BackendRestController
 {
     public function __construct(
@@ -21,7 +21,7 @@ class DomainPool extends BackendRestController
         parent::__construct();
     }
 
-    #[Acl('Weline_Websites::rest_v1_domain_pool_list', '域名池列表', 'mdi-format-list-bulleted')]
+    #[Acl('Weline_Websites::rest_v1_domain_pool_list', '域名池列表', 'list')]
     public function postList(): string
     {
         try {
@@ -130,7 +130,7 @@ class DomainPool extends BackendRestController
         }
     }
 
-    #[Acl('Weline_Websites::rest_v1_domain_pool_add', '新增域名池', 'mdi-plus')]
+    #[Acl('Weline_Websites::rest_v1_domain_pool_add', '新增域名池', 'plus')]
     public function postAdd(): string
     {
         try {
@@ -174,7 +174,7 @@ class DomainPool extends BackendRestController
         }
     }
 
-    #[Acl('Weline_Websites::rest_v1_domain_pool_delete', '删除域名池', 'mdi-delete')]
+    #[Acl('Weline_Websites::rest_v1_domain_pool_delete', '删除域名池', 'trash')]
     public function postDelete(): string
     {
         try {

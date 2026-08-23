@@ -2,15 +2,14 @@
 
 ## 当前有效入口
 
-如果你现在要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，先读：
+如果要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，先完成 `prepare_project`，调用 `resolve_task_context` 获取当前任务命中的 Theme 文档，然后按需阅读：
 
-1. [`AI-INDEX.md`](./AI-INDEX.md)
-2. [`需求.md`](./需求.md)
-3. [`开发日志.md`](./开发日志.md)
-4. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
-5. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
-6. [`../view/theme/README.md`](../view/theme/README.md)
-7. 按任务继续读：
+1. [`需求.md`](./需求.md)
+2. [`开发日志.md`](./开发日志.md)
+3. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
+4. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
+5. [`../view/theme/README.md`](../view/theme/README.md)
+6. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
@@ -36,7 +35,7 @@
 
 ### 全局颜色模式（`REQ-THEME-0001`）
 
-Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”三层。`data-theme-preference` 保存 `system|light|dark`，而 `data-theme`、`data-bs-theme` 与 `color-scheme` 始终是已解析的 `light|dark`。设计主题只能覆盖 palette Token；不能用同路径 `assets/css/theme.css` 或 `assets/js/theme.js` 重新实现组件和主题运行时，否则会遮蔽 Weline_Theme 的全局 adapter。
+Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”三层。`data-theme-preference` 保存 `system|light|dark`，而 `data-theme`、`data-theme` 与 `color-scheme` 始终是已解析的 `light|dark`。设计主题只能覆盖 palette Token；不能用同路径 `assets/css/theme.css` 或 `assets/js/theme.js` 重新实现组件和主题运行时，否则会遮蔽 Weline_Theme 的全局 adapter。
 
 通知能力的正式入口是 `Weline.Toast` 与 `Weline.BackendToast`。为兼容历史主题，运行时只会在全局名称尚未提供可用 `success()` 方法时，分别补充 `window.Toast` 与 `window.AdminToast` 别名；业务新代码不得依赖这两个旧名称。
 
@@ -83,11 +82,11 @@ Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”�
 - 禁止 `axios`
 - 禁止手写 `/api/framework/query-bin`
 
-### 4. 下拉浮层基座
+### 4. Weline UI 浮层基座
 
-Theme.js 前后端入口统一发布 `window.WelineSmartDropdown`，作为 Taglib、主题组件和页头选择器的浮层定位基座。业务控件只负责触发、选项、搜索与回填，并调用 `place()` 或 `mount()`；不得各自复制视口计算算法。
+前后台与前台主题统一使用 `Weline.UI` 的 `menu`、`popover`、`tooltip`、`combobox` 等声明式组件。调用方只声明组件、触发器、面板、语义 placement 与可选 viewport padding；不得计算 `left/top`、复制断点逻辑或发布旧全局定位对象。
 
-基座统一处理 `visualViewport`、四边 8px 安全边距、窄屏宽度夹取、上下方向选择和剩余高度约束。需要脱离裁剪容器时使用 `mount()` 的默认 body portal；必须保留父子 CSS/hover 关系时使用 `place()` 或 `portal: false`。Taglib 选择器浮层不得依赖本基座承载标签专属交互；标签侧使用 `FloatingDropdownEmitter` / `WelineTaglibFloatingDropdown` 自洽输出。
+共享内核统一处理 `visualViewport`、safe area、四边限界、自动翻转、可用宽高、滚动/缩放/旋转重排、重复开启稳定性与 portal 层级。非原生弹层的浮层挂到 body，原生模态框浮层留在 top layer；嵌套浮层保持逻辑父子关系，子层点击不误关父层，Escape 每次只关闭最上层并恢复焦点。窄屏尺寸和触控目标由组件自动降级，页面不得为同一组件另写移动端坐标算法。
 
 ### 5. 严格边界
 
@@ -171,11 +170,27 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 - Hook：[`Hook使用指南.md`](./Hook使用指南.md)
 - 元数据：[`主题元数据工作流程.md`](./主题元数据工作流程.md)
 - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
+- 字体加载（语言子集）：[`theme-font.md`](./theme-font.md)
 - Worker 视图预热贡献：[`worker-view-warmup-contributions.md`](./worker-view-warmup-contributions.md)
 - 运行时缓存失效与 IPC deadline：[`runtime-cache-invalidation.md`](./runtime-cache-invalidation.md)
+- Theme Editor Scope 逐值继承：[`visual-editor/scope-switching.md`](./visual-editor/scope-switching.md)
+- Theme Editor Scope 运营操作：[`运营/主题编辑器作用域切换.md`](./运营/主题编辑器作用域切换.md)
 - 默认主题目录规范：[`../view/theme/README.md`](../view/theme/README.md)
 
 ## 对外能力
+
+### Theme 资源标签族（`theme:css` / `theme:js` / `theme:font`）
+
+| 标签 | 作用 | 路径约定 | 算法归属 |
+|------|------|----------|----------|
+| `theme:css` | 主题样式 URL | `{Module}/view/theme/`，默认模块 `Weline_Theme` | 生产 minify：`Theme/Minify` |
+| `theme:js` | 主题脚本 URL | 同上 | 生产 minify：`Theme/Minify` |
+| `theme:font` | 语言子集 `@font-face` | `{Module}/view/fonts/`，默认模块 `Weline_Theme` | `Theme/Font` |
+
+三者路径同形：省略模块 → 默认 `Weline_Theme`；写 `Vendor_Module::相对路径` → 指定模块。模块 `view/statics` 继续用 `@static(...)`（或内置 `<css>` / `<js>`），不要改写成 theme 标签。
+
+- 字体约定与升级预热：[`theme-font.md`](./theme-font.md)
+- 生产静态压缩：[`theme-static-minify.md`](./theme-static-minify.md)
 
 ### `w:theme:template`
 
@@ -238,7 +253,7 @@ Theme 对外提供 `w_query('theme', 'copyTargetLayoutData', ...)`，供 CMS 等
 - [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
 - [`layout-discovery-guide.md`](./layout-discovery-guide.md)
 - [`../../Frontend/doc/Weline.Api使用指南.md`](../../Frontend/doc/Weline.Api使用指南.md)
-- `dev/ai/global-constraints.md`
+- `app/code/Weline/Ai/doc/AI开发治理.md`
 
 ## 前台只读契约
 

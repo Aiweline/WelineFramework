@@ -1,4 +1,4 @@
-> 警告：本文是历史主题设计资料，仅用于理解早期设计思路，不是当前开发规范。当前主题开发先读 `app/code/Weline/Theme/doc/AI-INDEX.md`、`app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`、`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`；浏览器业务请求只使用 `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`。
+> 警告：本文是历史主题设计资料，仅用于理解早期设计思路，不是当前开发规范。当前主题开发先调用 `resolve_task_context` 获取任务约束，再参考 `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`、`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`；浏览器业务请求只使用 `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`。
 
 ﻿# Weline Frontend theme/ 目录详细说明
 
@@ -161,4 +161,3 @@ echo $this->fetch('Weline_Frontend::theme/partials/header.phtml');
 - [partials/ 目录文档](./partials目录文档.md)
 - [assets/ 目录文档](./assets目录文档.md)
 - [config/ 目录文档](./config目录文档.md)
-

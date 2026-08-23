@@ -54,7 +54,7 @@
             align-items: center;
             justify-content: center;
             border-radius: var(--weline-layout-radius-full);
-            background: var(--weline-theme-primary-subtle);
+            background: var(--weline-theme-primary-surface);
             color: var(--weline-layout-link-color);
             font-size: var(--weline-layout-font-size-4xl);
         }
@@ -127,7 +127,7 @@
                 class="cart-empty-container">
             <div class="cart-empty-content">
                 <div class="cart-empty-icon">
-                    <i class="ri-shopping-cart-2-line"></i>
+                    <w:icon name="pin" size="sm"></w:icon>
                 </div>
                 <h2 class="cart-empty-title"><?= __('购物车是空的') ?></h2>
                 <p class="cart-empty-message"><?= htmlspecialchars($meta['message'] ?? __('您的购物车是空的')) ?></p>

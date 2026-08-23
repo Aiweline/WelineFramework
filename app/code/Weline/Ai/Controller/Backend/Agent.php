@@ -10,10 +10,10 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Ai::ai_agent_list', 'AI 智能体治理', 'mdi-robot-industrial-outline', 'AI 智能体目录与工具治理', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_agent_list', 'AI 智能体治理', 'circle', 'AI 智能体目录与工具治理', 'Weline_Backend::ai_group')]
 class Agent extends BackendController
 {
-    #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体', 'mdi-view-list', '查看 AI 智能体目录')]
+    #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体', 'list', '查看 AI 智能体目录')]
     public function index(): string
     {
         if ($this->request->getGet('embed') === '1') {
@@ -26,19 +26,19 @@ class Agent extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体目录', 'mdi-tag-multiple', '查看 AI 智能体目录')]
+    #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体目录', 'tag', '查看 AI 智能体目录')]
     public function getCatalog(): string
     {
         return $this->catalogResponse(false);
     }
 
-    #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体目录', 'mdi-tag-multiple', '查看 AI 智能体目录')]
+    #[Acl('Weline_Ai::ai_agent_index', '查看 AI 智能体目录', 'tag', '查看 AI 智能体目录')]
     public function postCatalog(): string
     {
         return $this->catalogResponse(true);
     }
 
-    #[Acl('Weline_Ai::ai_agent_save', '保存智能体覆盖', 'mdi-content-save', '保存智能体名称与描述覆盖')]
+    #[Acl('Weline_Ai::ai_agent_save', '保存智能体覆盖', 'save', '保存智能体名称与描述覆盖')]
     public function postSave(): string
     {
         $code = trim((string)$this->bodyValue('code', ''));
@@ -66,7 +66,7 @@ class Agent extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_agent_toggle', '切换智能体状态', 'mdi-toggle-switch', '启用或禁用 AI 智能体')]
+    #[Acl('Weline_Ai::ai_agent_toggle', '切换智能体状态', 'switch', '启用或禁用 AI 智能体')]
     public function postSetActive(): string
     {
         $code = trim((string)$this->bodyValue('code', ''));
@@ -90,7 +90,7 @@ class Agent extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_agent_save', '保存工具描述覆盖', 'mdi-content-save', '保存智能体工具描述覆盖')]
+    #[Acl('Weline_Ai::ai_agent_save', '保存工具描述覆盖', 'save', '保存智能体工具描述覆盖')]
     public function postSaveTool(): string
     {
         $agentCode = trim((string)$this->bodyValue('agent_code', $this->bodyValue('code', '')));
@@ -119,7 +119,7 @@ class Agent extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_agent_toggle', '切换工具状态', 'mdi-toggle-switch', '启用或禁用智能体工具')]
+    #[Acl('Weline_Ai::ai_agent_toggle', '切换工具状态', 'switch', '启用或禁用智能体工具')]
     public function postSetToolStatus(): string
     {
         $agentCode = trim((string)$this->bodyValue('agent_code', $this->bodyValue('code', '')));
@@ -148,13 +148,13 @@ class Agent extends BackendController
         }
     }
 
-    #[Acl('Weline_Ai::ai_agent_scan', '扫描 AI 智能体', 'mdi-radar', '扫描并注册 AI 智能体')]
+    #[Acl('Weline_Ai::ai_agent_scan', '扫描 AI 智能体', 'search', '扫描并注册 AI 智能体')]
     public function scan(): string
     {
         return $this->postScan();
     }
 
-    #[Acl('Weline_Ai::ai_agent_scan', '扫描 AI 智能体', 'mdi-radar', '扫描并注册 AI 智能体')]
+    #[Acl('Weline_Ai::ai_agent_scan', '扫描 AI 智能体', 'search', '扫描并注册 AI 智能体')]
     public function postScan(): string
     {
         try {

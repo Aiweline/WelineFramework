@@ -8,7 +8,9 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\MessageManager;
+use Weline\Framework\Ui\FormKey;
 use Weline\MediaManager\Service\AiDrawService;
+use Weline\MediaManager\Service\MediaFileAccessContextFactory;
 
 /**
  * AI 作图 HTTP 入口；QueryProvider `media_manager.generate/config/save` 的
@@ -18,7 +20,7 @@ use Weline\MediaManager\Service\AiDrawService;
 #[Acl(
     'Weline_MediaManager::query:ai_draw',
     'AI 作图',
-    'mdi-image-auto-adjust',
+    'image',
     '媒体管理 AI 作图（文生图/图生图/批量）',
     'Weline_MediaManager::file_manager'
 )]
@@ -26,7 +28,13 @@ class AiDraw extends BackendController
 {
     public function __construct(
         private readonly AiDrawService $aiDrawService,
+        private readonly MediaFileAccessContextFactory $fileAccessContexts,
     ) {
+    }
+
+    protected function csrf(): string
+    {
+        return FormKey::key_name;
     }
 
     /**
@@ -43,7 +51,7 @@ class AiDraw extends BackendController
                 $sse->close();
                 return;
             }
-            $input = $this->collectInput();
+            $input = $this->fileAccessContexts->freeze($this->collectInput(), $adminId);
             $this->aiDrawService->streamGenerate($sse, $adminId, $input);
         } catch (\Throwable $throwable) {
             if (!$sse->isStarted()) {
@@ -63,7 +71,7 @@ class AiDraw extends BackendController
     #[Acl(
         'Weline_MediaManager::query:ai_draw_save',
         'AI 作图保存',
-        'mdi-content-save',
+        'save',
         '保存 AI 作图结果到媒体库',
         'Weline_MediaManager::query:ai_draw'
     )]
@@ -74,7 +82,10 @@ class AiDraw extends BackendController
             if ($adminId <= 0) {
                 return $this->encodeJsonResponse($this->error((string)__('未登录'), '', 401));
             }
-            $result = $this->aiDrawService->save($adminId, $this->collectInput());
+            $result = $this->aiDrawService->save(
+                $adminId,
+                $this->fileAccessContexts->freeze($this->collectInput(), $adminId),
+            );
             MessageManager::success(__('图片保存成功'));
 
             return $this->encodeJsonResponse($this->success(__('保存成功'), $result));

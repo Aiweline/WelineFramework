@@ -15,7 +15,7 @@ use Weline\Deploy\Service\DeployWebhookRefResolver;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 
-#[Acl('Weline_Deploy::wls_deploy', 'WLS 部署发布', 'mdi mdi-rocket-launch-outline', 'WLS 面板部署发布入口', 'Weline_Backend::system_maintenance')]
+#[Acl('Weline_Deploy::wls_deploy', 'WLS 部署发布', 'circle', 'WLS 面板部署发布入口', 'Weline_Backend::system_maintenance')]
 class WlsDeploy extends BackendController
 {
     public function __construct(
@@ -29,7 +29,7 @@ class WlsDeploy extends BackendController
     ) {
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_index', '查看 WLS 部署发布', 'mdi mdi-rocket-launch', '查看 WLS 面板部署发布')]
+    #[Acl('Weline_Deploy::wls_deploy_index', '查看 WLS 部署发布', 'circle', '查看 WLS 面板部署发布')]
     public function getIndex(): string
     {
         $this->useStandaloneLayout();
@@ -85,49 +85,49 @@ class WlsDeploy extends BackendController
         return $this->fetch('index');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_overview', 'View WLS Deploy Overview', 'mdi mdi-view-dashboard-outline', 'View WLS Panel deploy overview')]
+    #[Acl('Weline_Deploy::wls_deploy_overview', 'View WLS Deploy Overview', 'grid', 'View WLS Panel deploy overview')]
     public function getOverview(): string
     {
         return $this->openPage('overview', 'deploy');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_release_path', 'View WLS Deploy Release Path', 'mdi mdi-source-branch-sync', 'View WLS Panel deploy release path')]
+    #[Acl('Weline_Deploy::wls_deploy_release_path', 'View WLS Deploy Release Path', 'branch', 'View WLS Panel deploy release path')]
     public function getReleasePath(): string
     {
         return $this->openPage('release-path', 'release-path');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_configuration', 'View WLS Deploy Configuration', 'mdi mdi-tune-variant', 'View WLS Panel deploy configuration')]
+    #[Acl('Weline_Deploy::wls_deploy_configuration', 'View WLS Deploy Configuration', 'settings', 'View WLS Panel deploy configuration')]
     public function getConfiguration(): string
     {
         return $this->openPage('configuration', 'configuration');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_project_profile', 'View WLS Deploy Project Profile', 'mdi mdi-clipboard-edit-outline', 'View WLS Panel deploy project profile')]
+    #[Acl('Weline_Deploy::wls_deploy_project_profile', 'View WLS Deploy Project Profile', 'edit', 'View WLS Panel deploy project profile')]
     public function getProjectProfile(): string
     {
         return $this->openPage('project-profile', 'project-profile');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_preflight', 'View WLS Deploy Preflight', 'mdi mdi-shield-check-outline', 'View WLS Panel deploy preflight')]
+    #[Acl('Weline_Deploy::wls_deploy_preflight', 'View WLS Deploy Preflight', 'check', 'View WLS Panel deploy preflight')]
     public function getPreflight(): string
     {
         return $this->openPage('preflight', 'preflight');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_webhooks', 'View WLS Deploy Webhooks', 'mdi mdi-replay', 'View WLS Panel deploy webhooks')]
+    #[Acl('Weline_Deploy::wls_deploy_webhooks', 'View WLS Deploy Webhooks', 'refresh', 'View WLS Panel deploy webhooks')]
     public function getWebhooks(): string
     {
         return $this->openPage('webhooks', 'webhook');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_releases', 'View WLS Deploy Releases', 'mdi mdi-history', 'View WLS Panel deploy releases')]
+    #[Acl('Weline_Deploy::wls_deploy_releases', 'View WLS Deploy Releases', 'history', 'View WLS Panel deploy releases')]
     public function getReleases(): string
     {
         return $this->openPage('releases', 'release-history');
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_manual_plan', 'View WLS Deploy Manual Plan', 'mdi mdi-clipboard-list-outline', 'View WLS Panel deploy manual plan')]
+    #[Acl('Weline_Deploy::wls_deploy_manual_plan', 'View WLS Deploy Manual Plan', 'list', 'View WLS Panel deploy manual plan')]
     public function getManualPlan(): string
     {
         return $this->openPage('manual-plan', 'manual-release-plan');
@@ -159,7 +159,7 @@ class WlsDeploy extends BackendController
         };
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_profile_save', '保存 WLS 项目发布 Profile', 'mdi mdi-content-save', '保存 WLS 面板项目发布 Profile')]
+    #[Acl('Weline_Deploy::wls_deploy_profile_save', '保存 WLS 项目发布 Profile', 'save', '保存 WLS 面板项目发布 Profile')]
     public function postProfileSave(): string
     {
         if (!$this->request->isPost()) {
@@ -186,7 +186,7 @@ class WlsDeploy extends BackendController
         return '';
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_preflight_run', '执行 WLS 项目发布预检', 'mdi mdi-shield-check', '执行 WLS 面板项目发布预检')]
+    #[Acl('Weline_Deploy::wls_deploy_preflight_run', '执行 WLS 项目发布预检', 'check', '执行 WLS 面板项目发布预检')]
     public function postPreflightRun(): string
     {
         if (!$this->request->isPost()) {
@@ -217,7 +217,7 @@ class WlsDeploy extends BackendController
         return '';
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_webhook_replay', '回放 WLS 发布 Webhook', 'mdi mdi-replay', '回放 WLS 面板 Webhook 触发策略')]
+    #[Acl('Weline_Deploy::wls_deploy_webhook_replay', '回放 WLS 发布 Webhook', 'refresh', '回放 WLS 面板 Webhook 触发策略')]
     public function postWebhookReplay(): string
     {
         if (!$this->request->isPost()) {
@@ -254,9 +254,9 @@ class WlsDeploy extends BackendController
     }
 
     /*
-    #[Acl('Weline_Deploy::wls_deploy_rollback_run', '执行 WLS 项目发布回滚', 'mdi mdi-restore', '执行 WLS 面板项目发布回滚')]
+    #[Acl('Weline_Deploy::wls_deploy_rollback_run', '执行 WLS 项目发布回滚', 'history', '执行 WLS 面板项目发布回滚')]
     */
-    #[Acl('Weline_Deploy::wls_deploy_manual_plan', 'Build WLS manual release plan', 'mdi mdi-clipboard-list-outline', 'Build read-only WLS Panel manual release execution plan')]
+    #[Acl('Weline_Deploy::wls_deploy_manual_plan', 'Build WLS manual release plan', 'list', 'Build read-only WLS Panel manual release execution plan')]
     public function postManualPlanRun(): string
     {
         if (!$this->request->isPost()) {
@@ -373,7 +373,7 @@ class WlsDeploy extends BackendController
         return '';
     }
 
-    #[Acl('Weline_Deploy::wls_deploy_rollback_run', 'Run WLS project rollback', 'mdi mdi-restore', 'Run WLS Panel project rollback')]
+    #[Acl('Weline_Deploy::wls_deploy_rollback_run', 'Run WLS project rollback', 'history', 'Run WLS Panel project rollback')]
     public function postRollbackRun(): string
     {
         if (!$this->request->isPost()) {

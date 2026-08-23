@@ -11,7 +11,7 @@ WelineFramework হলো modular web application, admin system এবং commer
 - নতুন local setup: one-click installer ব্যবহার করুন।
 - PHP, Composer ও database আগে থেকেই আছে: clean install ব্যবহার করুন।
 - Architecture: [Weline architecture](../weline/README.md).
-- AI / Codex কাজ: [AI-ENTRY.md](../../AI-ENTRY.md) থেকে শুরু করুন।
+- AI / Codex কাজ: [AGENTS.md](../../AGENTS.md) থেকে শুরু করুন।
 
 ## প্রয়োজনীয়তা
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [Architecture overview](../weline/架构总览.md)
 - [Development guide](../开发文档.md)
 - [Deployment guide](../部署文档.md)
-- [AI assistant entry](../../AI-README.md)
+- [AI assistant entry](../../AGENTS.md)
 
 ## Notes
 

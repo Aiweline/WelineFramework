@@ -1,0 +1,277 @@
+@layer page {
+    .w-datatable-demo {
+        min-block-size: 100dvh;
+        margin: 0;
+        background: var(--weline-theme-canvas);
+        color: var(--weline-theme-text);
+    }
+
+    .w-datatable-demo__main {
+        display: grid;
+        gap: var(--weline-space-6);
+        padding-block: clamp(var(--weline-space-6), 6vw, var(--weline-space-12));
+    }
+
+    .w-datatable-demo__heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--weline-space-4);
+    }
+
+    .w-datatable-demo__heading > div {
+        display: grid;
+        max-inline-size: 48rem;
+        gap: var(--weline-space-2);
+    }
+
+    .w-datatable-demo__heading h1,
+    .w-datatable-demo__heading p,
+    .w-datatable-demo__case h2,
+    .w-datatable-demo__case p {
+        margin: 0;
+    }
+
+    .w-datatable-demo__heading > div > p:last-child,
+    .w-datatable-demo__case .w-card__header p {
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-datatable-demo__eyebrow {
+        color: var(--weline-theme-primary);
+        font-size: var(--weline-font-size-xs);
+        font-weight: 750;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .w-datatable-demo__grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--weline-space-4);
+    }
+
+    .w-datatable-demo__split {
+        display: grid;
+        grid-template-columns: minmax(20rem, 26rem) minmax(0, 1fr);
+        align-items: start;
+        gap: var(--weline-space-5);
+    }
+
+    .w-datatable-demo__layout-switcher .w-card__header p {
+        margin: 0;
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-datatable-demo__case > h2,
+    .w-datatable-demo__case > p {
+        margin-inline: var(--weline-space-4);
+    }
+
+    .w-datatable-demo__case > h2 {
+        margin-block: var(--weline-space-4) var(--weline-space-2);
+    }
+
+    .w-datatable-demo__link {
+        color: inherit;
+        text-decoration: none;
+        transition: border-color var(--weline-motion-fast), translate var(--weline-motion-fast), box-shadow var(--weline-motion-fast);
+    }
+
+    .w-datatable-demo__link:hover,
+    .w-datatable-demo__link:focus-visible {
+        border-color: var(--weline-theme-primary);
+        box-shadow: var(--weline-theme-shadow-md);
+        translate: 0 calc(var(--weline-space-1) * -1);
+        outline: 0;
+    }
+
+    .w-datatable-demo__link .w-card__body {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--weline-space-4);
+    }
+
+    .w-datatable-demo__link .w-card__body > span:nth-child(2) {
+        display: grid;
+        min-width: 0;
+        gap: var(--weline-space-1);
+    }
+
+    .w-datatable-demo__link small {
+        color: var(--weline-theme-text-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .w-datatable-demo__link-icon {
+        display: grid;
+        inline-size: 3rem;
+        block-size: 3rem;
+        place-items: center;
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-primary);
+    }
+
+    .w-datatable-demo__link-icon[data-tone="success"] { color: var(--weline-theme-success); }
+    .w-datatable-demo__link-icon[data-tone="warning"] { color: var(--weline-theme-warning); }
+    .w-datatable-demo__link-icon[data-tone="info"] { color: var(--weline-theme-info); }
+    .w-datatable-demo__case > .w-card__body { min-width: 0; }
+    .w-datatable-demo__case fieldset { min-width: 0; margin: 0; padding: var(--weline-space-4); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); }
+    .w-datatable-demo__case fieldset + fieldset { margin-block-start: var(--weline-space-4); }
+    .w-datatable-demo__case legend { padding-inline: var(--weline-space-2); font-weight: 700; }
+
+    .w-datatable-demo__results {
+        display: grid;
+        gap: var(--weline-space-2);
+        margin: 0;
+        padding-inline-start: var(--weline-space-5);
+    }
+
+    .w-datatable-demo__results [data-state="passed"] { color: var(--weline-theme-success); }
+    .w-datatable-demo__results [data-state="failed"] { color: var(--weline-theme-danger); }
+
+    .w-datatable-demo__admin {
+        display: grid;
+        gap: var(--weline-space-6);
+        padding-block: var(--weline-space-6) var(--weline-space-12);
+    }
+
+    .w-datatable-demo__hero > .w-card__header {
+        align-items: flex-start;
+    }
+
+    .w-datatable-demo__summary,
+    .w-datatable-demo__catalog,
+    .w-datatable-demo__verification-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    }
+
+    .w-datatable-demo__summary p,
+    .w-datatable-demo__catalog p,
+    .w-datatable-demo__catalog small,
+    .w-datatable-demo__section-heading p,
+    .w-datatable-demo__verification-item p {
+        margin: 0;
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-datatable-demo__section-heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-4);
+    }
+
+    .w-datatable-demo__section-heading > div {
+        display: grid;
+        gap: var(--weline-space-2);
+    }
+
+    .w-datatable-demo__section-heading h1,
+    .w-datatable-demo__section-heading h2,
+    .w-datatable-demo__section-heading h3 {
+        margin: 0;
+    }
+
+    .w-datatable-demo__code-inline {
+        max-inline-size: 100%;
+        overflow-wrap: anywhere;
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-datatable-demo__docs {
+        display: grid;
+        grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
+        align-items: start;
+        gap: var(--weline-space-5);
+    }
+
+    .w-datatable-demo__docs-sidebar {
+        position: sticky;
+        inset-block-start: var(--weline-space-4);
+    }
+
+    .w-datatable-demo__doc-link {
+        display: grid;
+        gap: var(--weline-space-1);
+        padding: var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .w-datatable-demo__doc-link small {
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-datatable-demo__doc-link[data-state="active"],
+    .w-datatable-demo__doc-link:hover,
+    .w-datatable-demo__doc-link:focus-visible {
+        border-color: var(--weline-theme-primary);
+        background: var(--weline-theme-primary-surface);
+        outline: 0;
+    }
+
+    .w-datatable-demo__document {
+        box-sizing: border-box;
+        max-block-size: 70dvh;
+        margin: 0;
+        padding: var(--weline-space-4);
+        overflow: auto;
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+        font: inherit;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .w-datatable-demo__verification-item {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+        gap: var(--weline-space-3);
+        padding-block: var(--weline-space-2);
+        border-block-end: 1px solid var(--weline-theme-border);
+    }
+
+    .w-datatable-demo__verification-item:last-child {
+        border-block-end: 0;
+    }
+
+    .w-datatable-demo__verification-item[data-state="success"] > w-icon {
+        color: var(--weline-theme-success);
+    }
+
+    .w-datatable-demo__verification-item[data-state="error"] > w-icon {
+        color: var(--weline-theme-danger);
+    }
+}
+
+@media (max-width: 47.99rem) {
+    @layer page {
+        .w-datatable-demo__main { padding-inline: var(--weline-space-4); }
+        .w-datatable-demo__heading { display: grid; }
+        .w-datatable-demo__grid { grid-template-columns: minmax(0, 1fr); }
+        .w-datatable-demo__split { grid-template-columns: minmax(0, 1fr); }
+        .w-datatable-demo__docs { grid-template-columns: minmax(0, 1fr); }
+        .w-datatable-demo__docs-sidebar { position: static; }
+        .w-datatable-demo__section-heading { align-items: stretch; }
+        .w-datatable-demo__section-heading > .w-button { width: 100%; }
+        .w-datatable-demo__heading > .w-button { width: 100%; }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    @layer page {
+        .w-datatable-demo__link { transition: none; }
+        .w-datatable-demo__link:hover,
+        .w-datatable-demo__link:focus-visible { translate: none; }
+    }
+}

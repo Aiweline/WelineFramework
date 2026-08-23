@@ -1781,8 +1781,8 @@ public function $METHOD_NAME$($PARAMETERS$): array
 
 ## 十一、相关文档
 
-- [API注释文档规范设计方案](../../Weline/Api/doc/API注释文档规范设计方案.md)
-- [Weline API 模块需求文档](../../Weline/Api/doc/需求文档-完整版.md)
+- [API注释文档规范设计方案](../../../Api/doc/API注释文档规范设计方案.md)
+- [Weline API 模块需求文档](../../../Api/doc/需求文档-完整版.md)
 - [模块开发完整指南](./模块开发完整指南.md)
 
 ---

@@ -1742,7 +1742,7 @@ $panelType = $panelType ?? 'frontend';
         line-height: 1.25;
     }
 
-    #dev-tool-panel .dev-tool-performance-card-value {
+    #dev-tool-panel .dev-tool-performance-weline-card-value {
         margin-top: 7px;
         color: var(--dev-panel-ink);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -2990,16 +2990,16 @@ $panelType = $panelType ?? 'frontend';
 <!-- 开发工具面板HTML -->
 <div id="dev-tool-panel" class="collapsed">
     <div class="dev-tool-trigger" id="dev-tool-trigger">
-        <i class="fa fa-chevron-right"></i>
+        <w:icon name="chevron-right" size="sm"></w:icon>
     </div>
     <div class="dev-tool-container">
         <!-- 头部区域 -->
         <div class="dev-tool-header">
             <div class="dev-tool-header-row">
                 <h3>
-                    <i class="fa fa-code"></i>
+                    <w:icon name="code" size="sm"></w:icon>
                     Weline 面板
-                    <span class="badge badge-<?php echo $isBackend ? 'primary' : 'success'; ?>">
+                    <span class="w-badge badge-<?php echo $isBackend ? 'primary' : 'success'; ?>">
                         <?php echo $isBackend ? 'Backend' : 'Frontend'; ?>
                     </span>
                     <span class="dev-tool-header-hint" aria-hidden="true"></span>
@@ -3013,7 +3013,7 @@ $panelType = $panelType ?? 'frontend';
                 </div>
                 <div class="dev-tool-window-actions">
                     <button class="dev-tool-layout-btn" data-dev-tool-action="toggle-layout" title="缩小为紧凑面板" aria-label="缩小为紧凑面板">
-                        <i class="fa fa-compress"></i>
+                        <w:icon name="circle" size="sm"></w:icon>
                         <span class="dev-tool-layout-label">紧凑</span>
                     </button>
                     <button class="dev-tool-close-btn" data-dev-tool-action="close-panel" title="关闭开发工具面板" aria-label="关闭开发工具面板">
@@ -3023,10 +3023,10 @@ $panelType = $panelType ?? 'frontend';
             </div>
             <div class="dev-tool-quick-actions">
                 <a href="/dev/tool/docs" target="_blank" class="dev-tool-quick-btn">
-                    <i class="fa fa-book"></i> 完整文档
+                    <w:icon name="circle" size="sm"></w:icon> 完整文档
                 </a>
                 <a href="/dev/tool/docs?catalog=api" target="_blank" class="dev-tool-quick-btn">
-                    <i class="fa fa-code"></i> API文档
+                    <w:icon name="code" size="sm"></w:icon> API文档
                 </a>
             </div>
         </div>
@@ -3034,13 +3034,13 @@ $panelType = $panelType ?? 'frontend';
         <!-- 标签页 -->
         <div class="dev-tool-tabs">
             <button class="dev-tool-tab active" data-tab="performance" data-dev-tool-action="switch-main-tab">
-                <i class="fa fa-clock-o"></i> 耗时统计
+                <w:icon name="clock" size="sm"></w:icon> 耗时统计
             </button>
             <button class="dev-tool-tab" data-tab="framework" data-dev-tool-action="switch-main-tab">
-                <i class="fa fa-cubes"></i> 框架
+                <w:icon name="box" size="sm"></w:icon> 框架
             </button>
             <button class="dev-tool-tab" data-tab="docs" data-dev-tool-action="switch-main-tab">
-                <i class="fa fa-file-text"></i> 文档
+                <w:icon name="file" size="sm"></w:icon> 文档
             </button>
             <?= $extraTabsHtml ?? '' ?>
         </div>
@@ -3049,12 +3049,12 @@ $panelType = $panelType ?? 'frontend';
         <div class="dev-tool-search-area">
             <!-- 框架工具：路由 / 请求链路 -->
             <div id="framework-search-area" style="display: none;">
-                <div class="dev-tool-framework-tabs" role="tablist" aria-label="框架工具">
+                <div class="dev-tool-framework-tabs w-tabs__list" role="tablist" aria-label="框架工具" data-w-component="tabs">
                     <button type="button" class="dev-tool-framework-tab active" data-framework-tab="routes" data-dev-tool-action="switch-framework-tab" role="tab" aria-selected="true">
-                        <i class="fa fa-exchange"></i> 路由
+                        <w:icon name="circle" size="sm"></w:icon> 路由
                     </button>
                     <button type="button" class="dev-tool-framework-tab" data-framework-tab="trace" data-dev-tool-action="switch-framework-tab" role="tab" aria-selected="false">
-                        <i class="fa fa-list-alt"></i> 请求链路
+                        <w:icon name="list" size="sm"></w:icon> 请求链路
                     </button>
                 </div>
 
@@ -3074,7 +3074,7 @@ $panelType = $panelType ?? 'frontend';
                 <!-- 请求链路 (framework/trace subtab) -->
                 <div id="trace-search-area" class="dev-tool-framework-pane">
                     <div class="dev-tool-framework-hint">
-                        <i class="fa fa-info-circle"></i> 当前请求各阶段耗时（仅 DEV 且 HTML 响应）
+                        <w:icon name="info" size="sm"></w:icon> 当前请求各阶段耗时（仅 DEV 且 HTML 响应）
                     </div>
                 </div>
             </div>
@@ -3098,19 +3098,17 @@ $panelType = $panelType ?? 'frontend';
             <!-- 性能统计区域 (performance tab) -->
             <div id="performance-search-area" style="display: none;">
                 <div style="padding: 8px; font-size: 12px; color: #666;">
-                    <i class="fa fa-info-circle"></i> 实时性能监控和耗时统计
+                    <w:icon name="info" size="sm"></w:icon> 实时性能监控和耗时统计
                 </div>
             </div>
             <!-- 扩展注册 API：必须在扩展脚本（如 WLS）之前执行，避免扩展因脚本顺序无法就绪 -->
 
 <script>
 (function(g){
-  // Prefer the provider-backed bridge installed by dev-tool-panel-loader.js.
-  if(g.__bqAdmin_developer_workspace_rest) return;
-  g.__bqAdmin_developer_workspace=true;
-  g.__bqAdmin_developer_workspace_rest=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['developer_workspace']=function(url, options){
+  // Prefer the helper installed by dev-tool-panel-loader.js.
+  if(g.__welineDeveloperWorkspaceRequest) return;
+  var W = g.Weline = g.Weline || {};
+  W.developerWorkspaceRequest = function(url, options){
     options=options||{};
     var urlStr=String(url||'');
     var body=options.body;
@@ -3152,6 +3150,7 @@ $panelType = $panelType ?? 'frontend';
     }
     return g.Weline.load('api').then(run).then(toResp);
   };
+  g.__welineDeveloperWorkspaceRequest=true;
 })(window);
 </script>
 <script>
@@ -3171,7 +3170,7 @@ $panelType = $panelType ?? 'frontend';
         <!-- 内容区域 -->
         <div class="dev-tool-content" id="dev-tool-content">
             <div class="dev-tool-loading">
-                <i class="fa fa-spinner spinning"></i>
+                <w:icon name="pin" size="sm"></w:icon>
                 <div>加载中...</div>
             </div>
         </div>
@@ -3335,7 +3334,7 @@ const DevToolPanel = (function() {
         button.setAttribute('aria-label', title);
 
         if (icon) {
-            icon.className = isCompact ? 'fa fa-expand' : 'fa fa-compress';
+            icon.className = isCompact ? 'circle' : 'circle';
         }
         if (label) {
             label.textContent = isCompact ? '宽屏' : '紧凑';
@@ -4295,7 +4294,7 @@ const DevToolPanel = (function() {
             }
             if (extSearchArea) extSearchArea.style.display = 'block';
             const content = document.getElementById('dev-tool-content');
-            if (content) content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载中...</div></div>';
+            if (content) content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>加载中...</div></div>';
             setTimeout(function() {
                 if (state.activeMainTab !== tab) return;
                 switchMainTab(
@@ -4361,14 +4360,14 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         if (!content) return Promise.resolve();
         
-        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载路由...</div></div>';
+        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>加载路由...</div></div>';
         
         const url = getDevToolApiUrl('routes', { type });
         if (!url) {
             content.innerHTML = '<div class="dev-tool-empty">无法构建 API 地址（请从后台打开本页）</div>';
             return Promise.resolve();
         }
-        return bqAdmin['developer_workspace'](url)
+        return Weline.adminRequest('developer_workspace', url)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -4405,11 +4404,11 @@ const DevToolPanel = (function() {
             html += '<div class="module-group">';
             html += '<div class="module-header" data-dev-tool-action="toggle-module" role="button" tabindex="0">';
             html += '<div class="module-name">';
-            html += '<i class="fa fa-cube"></i>';
+            html += '<w:icon name="box" size="sm"></w:icon>';
             html += escapeHtml(module.name || '');
-            html += '<span class="badge badge-primary">' + module.routes.length + '</span>';
+            html += '<span class="w-badge" data-tone="primary">' + module.routes.length + '</span>';
             html += '</div>';
-            html += '<i class="fa fa-chevron-down module-toggle"></i>';
+            html += '<w:icon name="chevron-down" size="sm"></w:icon>';
             html += '</div>';
             html += '<div class="module-routes">';
             
@@ -4544,11 +4543,13 @@ const DevToolPanel = (function() {
     }
 
     function devToolFetchJson(url) {
-        var call = (window.bqAdmin && window.bqAdmin['developer_workspace'])
-            ? window.bqAdmin['developer_workspace']
-            : null;
+        var call = (window.Weline && typeof window.Weline.developerWorkspaceRequest === 'function')
+            ? window.Weline.developerWorkspaceRequest
+            : (window.Weline && typeof window.Weline.adminRequest === 'function'
+                ? function(u, o){ return window.Weline.adminRequest('developer_workspace', u, o); }
+                : null);
         if (!call) {
-            return Promise.reject(new Error('开发面板 bin-query 桥接不可用。'));
+            return Promise.reject(new Error('开发面板请求桥接不可用。'));
         }
         return call(url, {
             method: 'GET',
@@ -4612,12 +4613,12 @@ const DevToolPanel = (function() {
         const endpoint = url ? docApiEndpointLabel(url) : 'document API';
         content.innerHTML =
             '<div class="dev-tool-api-error-card">' +
-                '<div class="dev-tool-api-error-title"><i class="fa fa-exclamation-circle"></i>' + escapeHtml(title || '文档 API 不可用') + '</div>' +
+                '<div class="dev-tool-api-error-title"><w:icon name="warning" size="sm"></w:icon>' + escapeHtml(title || '文档 API 不可用') + '</div>' +
                 '<p class="dev-tool-api-error-desc">' + escapeHtml(message) + '</p>' +
                 '<div class="dev-tool-api-error-meta">' + escapeHtml(endpoint) + '</div>' +
                 '<div class="dev-tool-api-error-actions">' +
                     '<button type="button" class="dev-tool-api-error-btn" data-dev-tool-action="retry-doc-api">' +
-                        '<i class="fa fa-refresh"></i> 重试' +
+                        '<w:icon name="refresh" size="sm"></w:icon> 重试' +
                     '</button>' +
                 '</div>' +
             '</div>';
@@ -4679,7 +4680,7 @@ const DevToolPanel = (function() {
             }
             return Promise.resolve();
         }
-        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
+        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>加载文档...</div></div>';
         return (loadModules() || Promise.resolve()).then(function() {
             state.docsInitialized = true;
             restoreDocSearchState();
@@ -4747,7 +4748,7 @@ const DevToolPanel = (function() {
 
     function searchDocsAPI() {
         const content = document.getElementById('dev-tool-content');
-        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>搜索文档...</div></div>';
+        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>搜索文档...</div></div>';
         
         const query = {};
         if (state.docSearchKeyword) query.keyword = state.docSearchKeyword;
@@ -4810,7 +4811,7 @@ const DevToolPanel = (function() {
 
     function loadDocDetail(docId) {
         const content = document.getElementById('dev-tool-content');
-        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
+        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>加载文档...</div></div>';
         
         const url = getDevToolApiUrl('document/detail', { id: docId });
         if (!url) {
@@ -4855,7 +4856,7 @@ const DevToolPanel = (function() {
         content.innerHTML = '<div class="doc-content-view show">' +
             '<div class="doc-content-header">' +
                 '<button class="doc-back-btn" data-dev-tool-action="back-to-doc-list">' +
-                    '<i class="fa fa-arrow-left"></i> 返回列表' +
+                    '<w:icon name="arrow-left" size="sm"></w:icon> 返回列表' +
                 '</button>' +
             '</div>' +
                 '<div class="doc-content-title">' + escapeHtml(doc.title || '无标题') + '</div>' +
@@ -5094,7 +5095,7 @@ const DevToolPanel = (function() {
         var html = '<div class="performance-item trace-node" data-depth="' + depth + '"' + indent + '>';
         if (hasChildren) {
             html += '<span class="trace-toggle" data-expanded="0" role="button" tabindex="0" title="展开/折叠">';
-            html += '<i class="fa fa-caret-right"></i></span>';
+            html += '<w:icon name="circle" size="sm"></w:icon></span>';
         } else {
             html += '<span class="trace-toggle-placeholder"></span>';
         }
@@ -5371,7 +5372,7 @@ const DevToolPanel = (function() {
             });
         }
 
-        return bqAdmin['developer_workspace'](url.href, {
+        return Weline.adminRequest('developer_workspace', url.href, {
             method: 'HEAD',
             credentials: 'same-origin'
         }).then(function(response) {
@@ -5421,7 +5422,7 @@ const DevToolPanel = (function() {
     function buildTraceUnavailableHtml(message, requestId, fpcStatus) {
         var isFpcHit = Boolean(fpcStatus && fpcStatus.hit);
         var title = isFpcHit ? '命中 FPC，请求链路未重新执行' : '请求链路暂无数据';
-        var icon = isFpcHit ? 'fa-bolt' : 'fa-info-circle';
+        var icon = isFpcHit ? 'circle' : 'info';
         var desc = isFpcHit
             ? '当前 HTML 由 Full Page Cache 直接返回，控制器、模板、Hook、DB 等后端阶段被缓存短路，所以本次请求不会产生新的请求链路数据。'
             : normalizeTraceUnavailableMessage(message);
@@ -5459,7 +5460,7 @@ const DevToolPanel = (function() {
     }
 
     function renderTraceUnavailable(content, message, requestId) {
-        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>分析请求链路状态...</div></div>';
+        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>分析请求链路状态...</div></div>';
         probeCurrentPageFpcStatus().then(function(fpcStatus) {
             content.innerHTML = buildTraceUnavailableHtml(message, requestId, fpcStatus);
         });
@@ -5498,14 +5499,14 @@ const DevToolPanel = (function() {
             return;
         }
 
-        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载请求链路...</div></div>';
+        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>加载请求链路...</div></div>';
         const url = getDevToolApiUrl('trace', { id: requestId });
         if (!url) {
             content.innerHTML = '<div class="dev-tool-empty">无法构建 trace API 地址。</div>';
             return;
         }
 
-        bqAdmin['developer_workspace'](url)
+        Weline.adminRequest('developer_workspace', url)
             .then(function(response) {
                 if (!response.ok) {
                     throw new Error(response.status === 404 ? '请求链路不存在或已过期，请刷新页面重试' : ('HTTP ' + response.status));
@@ -5763,7 +5764,7 @@ const DevToolPanel = (function() {
         if (runtime.fpcHit) attention.push('FPC 命中');
         if (spans.length >= 300) attention.push('阶段数量偏多');
         if (attention.length > 0) {
-            html += '<div class="dev-tool-trace-attention"><i class="fa fa-exclamation-circle"></i>';
+            html += '<div class="dev-tool-trace-attention"><w:icon name="warning" size="sm"></w:icon>';
             attention.forEach(function(item) {
                 html += '<span>' + escapeHtml(item) + '</span>';
             });
@@ -5791,7 +5792,7 @@ const DevToolPanel = (function() {
 
         // 子 Tab：编码 / DB
         html += '<div class="dev-tool-trace-toolbar">';
-        html += '<div class="dev-tool-trace-view-tabs" role="tablist" aria-label="请求链路视图">';
+        html += '<div class="dev-tool-trace-view-tabs w-tabs__list" role="tablist" aria-label="请求链路视图" data-w-component="tabs">';
         html += '<button type="button" id="trace-subtab-code" class="dev-tool-trace-view-tab active" role="tab" aria-selected="true">编码</button>';
         html += '<button type="button" id="trace-subtab-db" class="dev-tool-trace-view-tab" role="tab" aria-selected="false">DB</button>';
         html += '</div>';
@@ -5806,7 +5807,7 @@ const DevToolPanel = (function() {
         if (codeSpans.length === 0) {
             html += '<div class="dev-tool-trace-panel-head">';
             html += '<div class="dev-tool-trace-panel-title">';
-            html += '<i class="fa fa-list-alt"></i> 请求生命周期链路（编码阶段）';
+            html += '<w:icon name="list" size="sm"></w:icon> 请求生命周期链路（编码阶段）';
             html += '</div>';
             html += '</div>';
             html += '<div class="dev-tool-trace-panel-body">';
@@ -5820,9 +5821,9 @@ const DevToolPanel = (function() {
             var allSpans = codeSpans.concat(dbSpans);
             html += '<div class="dev-tool-trace-panel-head">';
             html += '<div class="dev-tool-trace-panel-title">';
-            html += '<i class="fa fa-list-alt"></i> 请求生命周期链路';
+            html += '<w:icon name="list" size="sm"></w:icon> 请求生命周期链路';
             html += '</div>';
-            html += '<div id="trace-code-layout-tabs" class="dev-tool-trace-layout-tabs" role="tablist" aria-label="编码链路排序">';
+            html += '<div id="trace-code-layout-tabs" class="dev-tool-trace-layout-tabs w-tabs__list" role="tablist" aria-label="编码链路排序" data-w-component="tabs">';
             html += '<button type="button" id="trace-layout-graph" class="dev-tool-trace-layout-btn active" data-layout="graph" role="tab" aria-selected="true">生命周期图</button>';
             html += '<button type="button" id="trace-layout-tree" class="dev-tool-trace-layout-btn" data-layout="tree" role="tab" aria-selected="false">常规</button>';
             html += '<button type="button" id="trace-layout-duration" class="dev-tool-trace-layout-btn" data-layout="duration" role="tab" aria-selected="false">耗时倒序</button>';
@@ -5871,7 +5872,7 @@ const DevToolPanel = (function() {
         html += '<div id="trace-db-view" class="dev-tool-trace-panel" style="display:none;">';
         html += '<div class="dev-tool-trace-panel-head">';
         html += '<div class="dev-tool-trace-panel-title">';
-        html += '<i class="fa fa-database"></i> 数据库链路';
+        html += '<w:icon name="database" size="sm"></w:icon> 数据库链路';
         html += '</div>';
         if (dbSpans.length === 0) {
             html += '</div>';
@@ -5880,7 +5881,7 @@ const DevToolPanel = (function() {
             html += '</div>';
         } else {
             // DB视图切换按钮
-            html += '<div id="trace-db-layout-tabs" class="dev-tool-trace-layout-tabs" role="tablist" aria-label="数据库链路排序">';
+            html += '<div id="trace-db-layout-tabs" class="dev-tool-trace-layout-tabs w-tabs__list" role="tablist" aria-label="数据库链路排序" data-w-component="tabs">';
             html += '<button type="button" id="trace-db-layout-normal" class="dev-tool-trace-layout-btn active" data-layout="normal" role="tab" aria-selected="true">常规</button>';
             html += '<button type="button" id="trace-db-layout-duration" class="dev-tool-trace-layout-btn" data-layout="duration" role="tab" aria-selected="false">耗时倒序</button>';
             html += '</div>';
@@ -5998,7 +5999,7 @@ const DevToolPanel = (function() {
                     if (children && children.classList.contains('trace-children')) {
                         children.style.display = expanded ? 'none' : 'block';
                         btn.setAttribute('data-expanded', expanded ? '0' : '1');
-                        btn.querySelector('i').className = expanded ? 'fa fa-caret-right' : 'fa fa-caret-down';
+                        btn.querySelector('i').className = expanded ? 'circle' : 'circle';
                     }
                 });
             });
@@ -6146,7 +6147,7 @@ const DevToolPanel = (function() {
                     resultEl.style.display = 'block';
                     resultEl.innerHTML = '<span style="color:#888;">执行中…</span>';
                     target.disabled = true;
-                    bqAdmin['developer_workspace'](url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
+                    Weline.adminRequest('developer_workspace', url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
                             target.disabled = false;
@@ -6217,7 +6218,7 @@ const DevToolPanel = (function() {
             var klass = timeClass ? ' ' + timeClass : '';
             var html = '<div class="dev-tool-performance-card' + klass + '">';
             html += '<div class="dev-tool-performance-card-label">' + escapeHtml(label) + '</div>';
-            html += '<div class="dev-tool-performance-card-value">' + escapeHtml(String(value)) + '</div>';
+            html += '<div class="dev-tool-performance-weline-card-value">' + escapeHtml(String(value)) + '</div>';
             html += '</div>';
             return html;
         };
@@ -6293,7 +6294,7 @@ const DevToolPanel = (function() {
 
             html += '<div class="dev-tool-performance-hero">';
             html += '<div>';
-            html += '<div class="dev-tool-performance-kicker"><i class="fa fa-tachometer"></i> 实时性能</div>';
+            html += '<div class="dev-tool-performance-kicker"><w:icon name="home" size="sm"></w:icon> 实时性能</div>';
             html += '<div class="dev-tool-performance-title">页面加载性能</div>';
             html += '<div class="dev-tool-performance-subtitle">按浏览器 Performance Timing 拆分网络、DOM 和渲染阶段，阶段条越长越值得优先查看。</div>';
             html += '</div>';
@@ -6312,7 +6313,7 @@ const DevToolPanel = (function() {
 
             html += '<div class="dev-tool-performance-panel">';
             html += '<div class="dev-tool-performance-panel-head">';
-            html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-area-chart"></i> 加载阶段</div>';
+            html += '<div class="dev-tool-performance-panel-title"><w:icon name="chart" size="sm"></w:icon> 加载阶段</div>';
             html += '<div class="dev-tool-performance-panel-note">按阶段耗时排序观察瓶颈</div>';
             html += '</div>';
             html += '<div class="dev-tool-performance-panel-body">';
@@ -6337,7 +6338,7 @@ const DevToolPanel = (function() {
             if (wlsDuration != null) {
                 html += '<div class="dev-tool-performance-panel">';
                 html += '<div class="dev-tool-performance-panel-head">';
-                html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-server"></i> 服务端</div>';
+                html += '<div class="dev-tool-performance-panel-title"><w:icon name="server" size="sm"></w:icon> 服务端</div>';
                 html += '<div class="dev-tool-performance-panel-note">Server-Timing</div>';
                 html += '</div>';
                 html += '<div class="dev-tool-performance-panel-body">';
@@ -6364,7 +6365,7 @@ const DevToolPanel = (function() {
         // 资源加载统计
         html += '<div class="dev-tool-performance-panel">';
         html += '<div class="dev-tool-performance-panel-head">';
-        html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-cubes"></i> 资源加载统计</div>';
+        html += '<div class="dev-tool-performance-panel-title"><w:icon name="box" size="sm"></w:icon> 资源加载统计</div>';
         html += '<div class="dev-tool-performance-panel-note">' + (hasCurrentNavigationTiming ? '当前页面资源' : '未使用上一文档资源数据') + '</div>';
         html += '</div>';
 
@@ -6435,7 +6436,7 @@ const DevToolPanel = (function() {
         // API请求统计
         html += '<div class="dev-tool-performance-panel">';
         html += '<div class="dev-tool-performance-panel-head">';
-        html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-exchange"></i> API 请求统计</div>';
+        html += '<div class="dev-tool-performance-panel-title"><w:icon name="circle" size="sm"></w:icon> API 请求统计</div>';
         html += '<div class="dev-tool-performance-panel-note">最近 ' + state.apiRequests.length + ' 条</div>';
         html += '</div>';
         html += '<div class="dev-tool-performance-panel-body">';

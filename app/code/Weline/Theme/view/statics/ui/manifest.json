@@ -1,0 +1,1131 @@
+{
+    "areas": {
+        "backend": [
+            "foundation",
+            "backend",
+            "ui-core"
+        ],
+        "frontend": [
+            "foundation",
+            "frontend",
+            "ui-core"
+        ]
+    },
+    "build_id": "0439553e8b7c01e17ac83c27161fd7b93e687a9201904adc701cac91e613f379",
+    "bundles": {
+        "acl-role-assign-css": {
+            "bytes": 2931,
+            "file": "pages/weline-acl-role-assign.css",
+            "gzip_bytes": 840,
+            "sha256": "9ec4a68c1a42acef12c506865256d7fa10f23a37be1793d91545ebabbc0c0605",
+            "type": "css"
+        },
+        "acl-role-assign-js": {
+            "bytes": 11230,
+            "file": "pages/weline-acl-role-assign.js",
+            "gzip_bytes": 2614,
+            "sha256": "bf67451e198e1dbc13b0bdf06d5ef06c826bb901d5692f97aecae31347512f09",
+            "type": "js"
+        },
+        "acl-role-index-js": {
+            "bytes": 1376,
+            "file": "pages/weline-acl-role-index.js",
+            "gzip_bytes": 539,
+            "sha256": "87f3965bf5ba576dad7634f514d6d73c308afcd30a5c14c728f6aaee554efc68",
+            "type": "js"
+        },
+        "ai-default-model-css": {
+            "bytes": 1993,
+            "file": "pages/weline-ai-default-model.css",
+            "gzip_bytes": 668,
+            "sha256": "7cf8c04a96f1ba7dbbf11627edd503a2c1712bc9a1f73c04158eef9d0a86d17c",
+            "type": "css"
+        },
+        "ai-default-model-js": {
+            "bytes": 16813,
+            "file": "pages/weline-ai-default-model.js",
+            "gzip_bytes": 3809,
+            "sha256": "beaee58cbba7bcb1199e214c129954cad82f4b450a6e2641c9b06d6b72765044",
+            "type": "js"
+        },
+        "api-worker-smoke-css": {
+            "bytes": 579,
+            "file": "pages/weline-api-worker-smoke.css",
+            "gzip_bytes": 310,
+            "sha256": "e4fe58fb916642d5c7f499d184c8e59b41379670cfb1df8f93eade5a127de008",
+            "type": "css"
+        },
+        "api-worker-smoke-js": {
+            "bytes": 2184,
+            "file": "pages/weline-api-worker-smoke.js",
+            "gzip_bytes": 895,
+            "sha256": "eba1f34023789961d8a88d943430a1e1d219aecfd5e96d53dffefcccbf5229e8",
+            "type": "js"
+        },
+        "backend": {
+            "bytes": 21023,
+            "file": "weline-backend.css",
+            "gzip_bytes": 3758,
+            "sha256": "944c3bd8e40589e5ac9be6261808998cdcdf50297ed3ad49d4687dee8e9b567f",
+            "type": "css"
+        },
+        "choice-selector-css": {
+            "bytes": 1662,
+            "file": "components/weline-choice-selector.css",
+            "gzip_bytes": 630,
+            "sha256": "5f6810ce411caf5bd5bc1f4dec9dc972a005737bc0744f4591ad519e9662318e",
+            "type": "css"
+        },
+        "choice-selector-js": {
+            "bytes": 2678,
+            "file": "components/weline-choice-selector.js",
+            "gzip_bytes": 926,
+            "sha256": "225b3b97cda4f4b4e87598f807f5df97a68a8d6bfe30923e1b29568c9626fa73",
+            "type": "js"
+        },
+        "customer-account-recovery-css": {
+            "bytes": 2089,
+            "file": "pages/weline-customer-account-recovery.css",
+            "gzip_bytes": 708,
+            "sha256": "4a8cdfadd3f6a35b9a540c489a2acbb9f7ecb634a06e965f4117a570842d511c",
+            "type": "css"
+        },
+        "customer-account-recovery-js": {
+            "bytes": 6145,
+            "file": "pages/weline-customer-account-recovery.js",
+            "gzip_bytes": 1858,
+            "sha256": "737d42cc43e4b498b309a381ede9a990cef640bd3c4ef13f25ec33c381fbf550",
+            "type": "js"
+        },
+        "datatable-common-js": {
+            "bytes": 8724,
+            "file": "components/datatable-common.js",
+            "gzip_bytes": 2791,
+            "sha256": "6b1e4ac74b27ff3d263b831aeba0900064d1196d1b099e43d0317c298c4fe349",
+            "type": "js"
+        },
+        "datatable-css": {
+            "bytes": 7868,
+            "file": "components/weline-datatable.css",
+            "gzip_bytes": 1450,
+            "sha256": "29a993ea33d6b4f26dec89e328d0f4bde691273aa5fecdd4b1b45fc863d10b6f",
+            "type": "css"
+        },
+        "datatable-demo-admin-js": {
+            "bytes": 2767,
+            "file": "pages/weline-datatable-demo-admin.js",
+            "gzip_bytes": 985,
+            "sha256": "f2febbb87689d925c0796644df79370317c4170dc4f2d9560b09b677a78c76b5",
+            "type": "js"
+        },
+        "datatable-demo-checks-js": {
+            "bytes": 3280,
+            "file": "pages/weline-datatable-demo-checks.js",
+            "gzip_bytes": 1191,
+            "sha256": "8a0f5f4e465dc3c4e04d5937944e0186f14a84c0f686ac1cbb5aec48f2a2880d",
+            "type": "js"
+        },
+        "datatable-demo-css": {
+            "bytes": 8643,
+            "file": "pages/weline-datatable-demo.css",
+            "gzip_bytes": 1537,
+            "sha256": "71e92d84a9e740b3e94e9f63ab9aa3be04c7dbdee4552b39b7ad3efd2eda8e23",
+            "type": "css"
+        },
+        "datatable-demo-index-js": {
+            "bytes": 2840,
+            "file": "pages/weline-datatable-demo-index.js",
+            "gzip_bytes": 1244,
+            "sha256": "2b0bf0cbd960cf56856459b655de251ab85bbc9b1c9bb6b4b2865679528b7a09",
+            "type": "js"
+        },
+        "datatable-form-js": {
+            "bytes": 16667,
+            "file": "components/weline-datatable-form.js",
+            "gzip_bytes": 3955,
+            "sha256": "afd9f92d9ba1183f08c2d50753770d301df71253c0dbf8a03a974802bf6c52ea",
+            "type": "js"
+        },
+        "datatable-js": {
+            "bytes": 29032,
+            "file": "components/weline-datatable.js",
+            "gzip_bytes": 6184,
+            "sha256": "fd582e5450f24e5812e190779793a83c907e7429a671a6e641eda259cb66d02d",
+            "type": "js"
+        },
+        "developer-api-css": {
+            "bytes": 17525,
+            "file": "pages/weline-developer-api.css",
+            "gzip_bytes": 2697,
+            "sha256": "b969dd883f73e7fd057a39a06d263db240791839014da0db771c3a47e520bc6a",
+            "type": "css"
+        },
+        "developer-api-js": {
+            "bytes": 69177,
+            "file": "pages/weline-developer-api.js",
+            "gzip_bytes": 15672,
+            "sha256": "92e14cf1728afa25a64a1a7e324665a51bc40ba74bc4516f68fccf46105a8ec7",
+            "type": "js"
+        },
+        "developer-catalogs-css": {
+            "bytes": 3242,
+            "file": "pages/weline-developer-catalogs.css",
+            "gzip_bytes": 813,
+            "sha256": "f6c4f42f3c4c78c37fc54c1ef661f36d585bccbd3b708d54e6f179e2b62a95b3",
+            "type": "css"
+        },
+        "developer-catalogs-js": {
+            "bytes": 4799,
+            "file": "pages/weline-developer-catalogs.js",
+            "gzip_bytes": 1411,
+            "sha256": "a7764f4cf093d85b382c6b18bdb97204810e143ed1250ac88bed176fcdab2a6a",
+            "type": "js"
+        },
+        "developer-docs-css": {
+            "bytes": 5553,
+            "file": "pages/weline-developer-docs.css",
+            "gzip_bytes": 1264,
+            "sha256": "7c8864a8a1cbe86c71efc7369209632b474188e33c04f5a8e6424a2631f3d3f1",
+            "type": "css"
+        },
+        "developer-docs-js": {
+            "bytes": 22805,
+            "file": "pages/weline-developer-docs.js",
+            "gzip_bytes": 6026,
+            "sha256": "49deda5cbc268701421d447a75a1dd33a7c917284111797ae5bf73102dff8147",
+            "type": "js"
+        },
+        "developer-document-config-css": {
+            "bytes": 1315,
+            "file": "pages/weline-developer-document-config.css",
+            "gzip_bytes": 469,
+            "sha256": "eb2aa8bbe696d8179d8de7a51e4190dc0cd287e129fc83284eae8e67b89587c5",
+            "type": "css"
+        },
+        "developer-document-config-js": {
+            "bytes": 5440,
+            "file": "pages/weline-developer-document-config.js",
+            "gzip_bytes": 1572,
+            "sha256": "7b7d1595a5b5eede51cf70501b4270d6671fdb72845d75d989ac900a5f835c28",
+            "type": "js"
+        },
+        "developer-document-editor-js": {
+            "bytes": 4330,
+            "file": "pages/weline-developer-document-editor.js",
+            "gzip_bytes": 1355,
+            "sha256": "d7329ffd09495dd76d91f30eb84ed9b068bf0ce0d8b0e85b75f051cb6ae73512",
+            "type": "js"
+        },
+        "developer-documents-css": {
+            "bytes": 4660,
+            "file": "pages/weline-developer-documents.css",
+            "gzip_bytes": 1071,
+            "sha256": "8c42f07e937b0533d8184b0659e59223118d66e2cfd271dc9f416c31e1c11a48",
+            "type": "css"
+        },
+        "developer-documents-js": {
+            "bytes": 8733,
+            "file": "pages/weline-developer-documents.js",
+            "gzip_bytes": 2519,
+            "sha256": "02a6339be1ffb15e4ccbb1368bdec0fbb4b65c38cdf12d94c7da0a221d28f989",
+            "type": "js"
+        },
+        "eav-manager-css": {
+            "bytes": 4847,
+            "file": "pages/weline-eav-manager.css",
+            "gzip_bytes": 1152,
+            "sha256": "9bf63710a37b3a13f0d448cb5f9284e57f387bd2818daee26c6aa544c62e1887",
+            "type": "css"
+        },
+        "eav-manager-js": {
+            "bytes": 26816,
+            "file": "pages/weline-eav-manager.js",
+            "gzip_bytes": 5691,
+            "sha256": "69bc9de5b5dc8aa44fac9cfd3bcc840664b53dd5e419f728fe4ba69e281ffb36",
+            "type": "js"
+        },
+        "file-picker-css": {
+            "bytes": 3359,
+            "file": "components/weline-file-picker.css",
+            "gzip_bytes": 933,
+            "sha256": "eaeb5d947e97d264921920e139f277ee26d3b3c09484ff6b2825369286a0c623",
+            "type": "css"
+        },
+        "file-picker-js": {
+            "bytes": 12645,
+            "file": "components/weline-file-picker.js",
+            "gzip_bytes": 2974,
+            "sha256": "08864527a2814e8660d4348dc6bd4431fc4b80bc90da0f4ae6fa77767588ed83",
+            "type": "js"
+        },
+        "foundation": {
+            "bytes": 73215,
+            "file": "weline-foundation.css",
+            "gzip_bytes": 11298,
+            "sha256": "1b68a39cb538d98ce2809d720792bd4905c294ea7ae4d752bfa029eadf0dfaaf",
+            "type": "css"
+        },
+        "frontend": {
+            "bytes": 9047,
+            "file": "weline-frontend.css",
+            "gzip_bytes": 1845,
+            "sha256": "12cbfc0b0576c0e0ea18b2f3c1bce6654cb626289b371209db11f033d05f4734",
+            "type": "css"
+        },
+        "icons": {
+            "bytes": 29373,
+            "file": "weline-icons.svg",
+            "gzip_bytes": 4105,
+            "sha256": "e73c2f17e06caf55e7b98159abc1024adfc54e7b83d5500793333dd31cd56ca3",
+            "type": "svg"
+        },
+        "language-select-css": {
+            "bytes": 10835,
+            "file": "components/weline-language-select.css",
+            "gzip_bytes": 1865,
+            "sha256": "8a5d910587150712a536fef8c1a5dc353aacbf299ad5c550a7cbc550dd9beca8",
+            "type": "css"
+        },
+        "language-select-js": {
+            "bytes": 20121,
+            "file": "components/weline-language-select.js",
+            "gzip_bytes": 4555,
+            "sha256": "93ed475d1582ee2769dc6f961aa6c0ad2463cf435b8357396ddba0fe1e0405e2",
+            "type": "js"
+        },
+        "language-switcher-js": {
+            "bytes": 28607,
+            "file": "components/weline-language-switcher.js",
+            "gzip_bytes": 6883,
+            "sha256": "046bc55a7540c25be52b89ab8ed9d0ae044ffc9ec68224c8821cc6d8c55dc324",
+            "type": "js"
+        },
+        "local-translation-js": {
+            "bytes": 2573,
+            "file": "components/weline-local-translation.js",
+            "gzip_bytes": 802,
+            "sha256": "23fe05e42e19a3bf6635262fcde9d8c540725fbeeeaaa1c1ef7c08eeea68bdbb",
+            "type": "js"
+        },
+        "maintenance-page-css": {
+            "bytes": 4833,
+            "file": "pages/weline-maintenance.css",
+            "gzip_bytes": 1149,
+            "sha256": "89ec4fca9afc8f14261fcb8e465140ce02983c6312e334767d5e69cfa00e9249",
+            "type": "css"
+        },
+        "maintenance-page-js": {
+            "bytes": 1534,
+            "file": "pages/weline-maintenance.js",
+            "gzip_bytes": 703,
+            "sha256": "91ddc29aaf787ac29610c15999c930b3bf41db8fc50ada50bf8d4d87e253d7aa",
+            "type": "js"
+        },
+        "offcanvas-result-js": {
+            "bytes": 2797,
+            "file": "pages/weline-offcanvas-result.js",
+            "gzip_bytes": 974,
+            "sha256": "86ab3575b576e25c9ed67f0c3e39cbb6266ca9b5e881b58098166a0c5a6044e1",
+            "type": "js"
+        },
+        "online-translation-collector-js": {
+            "bytes": 1490,
+            "file": "components/weline-online-translation-collector.js",
+            "gzip_bytes": 577,
+            "sha256": "b86c234f19314b4104fc5401e3ab914b0ea4d4dd594d5c6018b0cd1ffb98d54e",
+            "type": "js"
+        },
+        "queue-admin-css": {
+            "bytes": 12784,
+            "file": "pages/weline-queue-admin.css",
+            "gzip_bytes": 2012,
+            "sha256": "97c8490665297c3a60a417b0d0a5418367f67d07865bbc9b6b6c6484726e6753",
+            "type": "css"
+        },
+        "queue-content-js": {
+            "bytes": 1372,
+            "file": "pages/weline-queue-content.js",
+            "gzip_bytes": 544,
+            "sha256": "1ff30304f7e166605904cbaeb213f15429db6ffee7662b0f2b3812f406990bcf",
+            "type": "js"
+        },
+        "queue-form-css": {
+            "bytes": 7159,
+            "file": "pages/weline-queue-form.css",
+            "gzip_bytes": 1448,
+            "sha256": "971354806cb659b4d30d6cb3a8e42138acb6a1cc49dd28537c2895cde537d913",
+            "type": "css"
+        },
+        "queue-form-js": {
+            "bytes": 32783,
+            "file": "pages/weline-queue-form.js",
+            "gzip_bytes": 6617,
+            "sha256": "62b4eb34e63d80db09a9fcb418891ae657cc3c9911a567a8db2821b86f76bee5",
+            "type": "js"
+        },
+        "queue-index-js": {
+            "bytes": 17173,
+            "file": "pages/weline-queue-index.js",
+            "gzip_bytes": 3916,
+            "sha256": "2f1e3ef3db5cab9e428236d319c8c98af27e0c0ec3d28183fafd63872932f98e",
+            "type": "js"
+        },
+        "queue-type-js": {
+            "bytes": 4333,
+            "file": "pages/weline-queue-type.js",
+            "gzip_bytes": 1414,
+            "sha256": "00a2cd0d24029c5a4b233a0391c25ce901eecbda52ed0a4919552020b5b817a0",
+            "type": "js"
+        },
+        "scope-persistence-js": {
+            "bytes": 6844,
+            "file": "components/weline-scope-persistence.js",
+            "gzip_bytes": 1895,
+            "sha256": "c604380fa766eefd5b80e195d130fc496d6623e8d01e21e3151c13f924d4a954",
+            "type": "js"
+        },
+        "seo-embed-css": {
+            "bytes": 1666,
+            "file": "pages/weline-seo-embed.css",
+            "gzip_bytes": 538,
+            "sha256": "557e2bfbe3b3eba92113cceeec36f3d136d8847b24dbc3b1dcc4fe23a83db082",
+            "type": "css"
+        },
+        "seo-embed-detail-js": {
+            "bytes": 3777,
+            "file": "pages/weline-seo-embed-detail.js",
+            "gzip_bytes": 1266,
+            "sha256": "a576bb1f554724beba02a40a83ca7f0f787f2f3df78b0b101b570589d917747b",
+            "type": "js"
+        },
+        "seo-embed-index-js": {
+            "bytes": 2525,
+            "file": "pages/weline-seo-embed-index.js",
+            "gzip_bytes": 972,
+            "sha256": "2029c71256490c9ef36e8723943aee0ebd18ebd845571779c640e9ee1325e514",
+            "type": "js"
+        },
+        "theme-editor-css": {
+            "bytes": 144055,
+            "file": "pages/weline-theme-editor.css",
+            "gzip_bytes": 20859,
+            "sha256": "8bd3652bd14b2bca745efe9136aad022f5a74d567baf57ae9bb4d15642d1205f",
+            "type": "css"
+        },
+        "theme-editor-js": {
+            "bytes": 744970,
+            "file": "pages/weline-theme-editor.js",
+            "gzip_bytes": 148586,
+            "sha256": "ce565b8f83d23697798875e1f4ea48f4eb4f2cfb6e31fc2907837eac81a852b1",
+            "type": "js"
+        },
+        "theme-editor-overlay-css": {
+            "bytes": 4502,
+            "file": "pages/weline-theme-editor-overlay.css",
+            "gzip_bytes": 1070,
+            "sha256": "1d9d5058146d26bad768cd647508b570b371a2e755a94df090ea55bdb273780e",
+            "type": "css"
+        },
+        "theme-editor-widget-config-css": {
+            "bytes": 45716,
+            "file": "pages/weline-theme-editor-widget-config.css",
+            "gzip_bytes": 6673,
+            "sha256": "494a0e0bf810331b1d58ff1ac77d969cea7ea41622749dc3e7f72298fa8c8d72",
+            "type": "css"
+        },
+        "theme-editor-widget-param-css": {
+            "bytes": 20166,
+            "file": "pages/weline-theme-editor-widget-param.css",
+            "gzip_bytes": 3612,
+            "sha256": "aadd560627fb829c097ccb87f6540dc3e239871976583a41f95557d8ce1b309c",
+            "type": "css"
+        },
+        "theme-editor-widget-param-js": {
+            "bytes": 78569,
+            "file": "pages/weline-theme-editor-widget-param.js",
+            "gzip_bytes": 16091,
+            "sha256": "02d4a22491330d93d3dacd059be278b00127c7497e914f5d2033254bb674dfd0",
+            "type": "js"
+        },
+        "theme-prepaint": {
+            "bytes": 755,
+            "file": "weline-theme-prepaint.js",
+            "gzip_bytes": 375,
+            "sha256": "8fb5edfe4d9c2fa0fe6570b235a8d3f8b337cbb4156cc1b611e7a03ef70140b4",
+            "type": "js"
+        },
+        "theme-preview-css": {
+            "bytes": 26826,
+            "file": "pages/weline-theme-preview.css",
+            "gzip_bytes": 5483,
+            "sha256": "5f1c23e9bd975882fa3b76cd7ade3a8bad252853be4895219c0beded162bee62",
+            "type": "css"
+        },
+        "theme-preview-js": {
+            "bytes": 42890,
+            "file": "pages/weline-theme-preview.js",
+            "gzip_bytes": 10626,
+            "sha256": "479b3a5668eff350af72915bd59be0679424e4bb9a61c4580231b65d9cd5ca1c",
+            "type": "js"
+        },
+        "ui-advanced": {
+            "bytes": 29519,
+            "file": "weline-ui-advanced.js",
+            "gzip_bytes": 6012,
+            "sha256": "c5533efa36614aeabb5f74c398f86481e7ec96eaacc89f6f5e131bc2c92706cb",
+            "type": "js"
+        },
+        "ui-core": {
+            "bytes": 89297,
+            "file": "weline-ui.js",
+            "gzip_bytes": 19122,
+            "sha256": "2c215d137240c7b85816aafe5c9d3b463bbd740697a01955fd11fdd98cd4619d",
+            "type": "js"
+        },
+        "websites-admin-css": {
+            "bytes": 4662,
+            "file": "pages/weline-websites-admin.css",
+            "gzip_bytes": 967,
+            "sha256": "0a630919bc926bfa59416de84c242c6c500f17d2218ec6d4a2bb7e6e9181091e",
+            "type": "css"
+        },
+        "websites-form-js": {
+            "bytes": 3795,
+            "file": "pages/weline-websites-form.js",
+            "gzip_bytes": 1163,
+            "sha256": "9ca62deb54b90e8fd3ce697c1710574bee41f31f3e596d53aa482569bdbe26cf",
+            "type": "js"
+        }
+    },
+    "component_assets": {
+        "account-recovery": {
+            "bundles": [
+                "customer-account-recovery-css",
+                "customer-account-recovery-js"
+            ],
+            "components": [
+                "account-recovery"
+            ],
+            "owner": "Weline_Customer"
+        },
+        "choice-filter": {
+            "bundles": [
+                "choice-selector-css",
+                "choice-selector-js"
+            ],
+            "components": [
+                "choice-filter"
+            ],
+            "owner": "Weline_I18n"
+        },
+        "data-table": {
+            "bundles": [
+                "datatable-css",
+                "datatable-common-js",
+                "datatable-js"
+            ],
+            "components": [
+                "data-table"
+            ],
+            "owner": "Weline_DataTable"
+        },
+        "data-table-form": {
+            "bundles": [
+                "datatable-css",
+                "datatable-common-js",
+                "datatable-form-js"
+            ],
+            "components": [
+                "data-table-form"
+            ],
+            "owner": "Weline_DataTable"
+        },
+        "file-picker": {
+            "bundles": [
+                "file-picker-css",
+                "file-picker-js"
+            ],
+            "components": [
+                "file-preview",
+                "file-picker"
+            ],
+            "owner": "Weline_FileManager"
+        },
+        "language-select": {
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "components": [
+                "language-select"
+            ],
+            "owner": "Weline_I18n"
+        },
+        "language-switcher": {
+            "bundles": [
+                "language-switcher-js"
+            ],
+            "components": [
+                "language-switcher"
+            ],
+            "owner": "Weline_I18n"
+        },
+        "local-translation": {
+            "bundles": [
+                "local-translation-js"
+            ],
+            "components": [
+                "local-translation"
+            ],
+            "owner": "Weline_I18n"
+        },
+        "online-translation-collector": {
+            "bundles": [
+                "online-translation-collector-js"
+            ],
+            "components": [
+                "online-translation-collector"
+            ],
+            "owner": "Weline_I18n"
+        },
+        "scope-persistence": {
+            "bundles": [
+                "scope-persistence-js"
+            ],
+            "components": [
+                "scope-persistence"
+            ],
+            "owner": "Weline_Taglib"
+        }
+    },
+    "lazy_components": {
+        "customer-account-recovery-js": [
+            "account-recovery"
+        ],
+        "datatable-form-js": [
+            "data-table-form"
+        ],
+        "datatable-js": [
+            "data-table"
+        ],
+        "file-picker-js": [
+            "file-preview",
+            "file-picker"
+        ],
+        "language-select-js": [
+            "language-select"
+        ],
+        "language-switcher-js": [
+            "language-switcher"
+        ],
+        "local-translation-js": [
+            "local-translation"
+        ],
+        "online-translation-collector-js": [
+            "online-translation-collector"
+        ],
+        "scope-persistence-js": [
+            "scope-persistence"
+        ],
+        "ui-advanced": [
+            "combobox",
+            "tree",
+            "transfer-list",
+            "reorder-list",
+            "icon-picker"
+        ]
+    },
+    "routes": {
+        "acl.role.assign": {
+            "area": "backend",
+            "bundles": [
+                "acl-role-assign-css",
+                "acl-role-assign-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Acl/view/templates/Backend/Acl/Role/assign.phtml"
+            ]
+        },
+        "acl.role.index": {
+            "area": "backend",
+            "bundles": [
+                "acl-role-index-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Acl/view/templates/Backend/Acl/Role/index.phtml"
+            ]
+        },
+        "admin.dashboard": {
+            "area": "backend",
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Admin/view/templates/Index/index.phtml"
+            ]
+        },
+        "ai.default-model.index": {
+            "area": "backend",
+            "bundles": [
+                "ai-default-model-css",
+                "ai-default-model-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Ai/view/templates/Backend/DefaultModel/index.phtml"
+            ]
+        },
+        "api.user.permissions": {
+            "area": "backend",
+            "bundles": [
+                "acl-role-assign-css",
+                "acl-role-assign-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Api/view/templates/Backend/User/assign_permissions.phtml"
+            ]
+        },
+        "api.worker-smoke": {
+            "area": "frontend",
+            "bundles": [
+                "api-worker-smoke-css",
+                "api-worker-smoke-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Api/view/templates/framework/worker-smoke.phtml"
+            ]
+        },
+        "backend.settings.basic": {
+            "area": "backend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Backend/view/templates/Backend/Settings/Basic/index.phtml"
+            ]
+        },
+        "cms.page.edit": {
+            "area": "backend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Cms/view/templates/Backend/Page/edit.phtml"
+            ]
+        },
+        "component.offcanvas.result": {
+            "area": "backend",
+            "bundles": [
+                "offcanvas-result-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Component/view/templates/Offcanvas/result.phtml"
+            ]
+        },
+        "customer-service.agent": {
+            "area": "backend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/CustomerService/view/templates/Backend/Agent/index.phtml"
+            ]
+        },
+        "customer.account.recovery": {
+            "area": "frontend",
+            "bundles": [
+                "customer-account-recovery-css",
+                "customer-account-recovery-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Customer/view/templates/frontend/account/forgot-password.phtml"
+            ]
+        },
+        "datatable.backend.demo": {
+            "area": "backend",
+            "bundles": [
+                "datatable-demo-css",
+                "datatable-demo-index-js",
+                "datatable-demo-admin-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/DataTable/view/backend/templates/test/index.phtml",
+                "app/code/Weline/DataTable/view/backend/templates/test/doc.phtml",
+                "app/code/Weline/DataTable/view/backend/templates/test/tag-test.phtml",
+                "app/code/Weline/DataTable/view/backend/templates/test/layout-switcher.phtml",
+                "app/code/Weline/DataTable/view/templates/Test/Comprehensive/index.phtml",
+                "app/code/Weline/DataTable/view/templates/Test/Comprehensive/inheritance.phtml"
+            ]
+        },
+        "datatable.frontend.demo": {
+            "area": "frontend",
+            "bundles": [
+                "datatable-css",
+                "datatable-common-js",
+                "datatable-js",
+                "datatable-form-js",
+                "datatable-demo-css",
+                "datatable-demo-index-js",
+                "datatable-demo-checks-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/DataTable/view/templates/frontend/test/index.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/basic.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/join.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/form.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/upload.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/transaction.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/dependency.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/cascade.phtml",
+                "app/code/Weline/DataTable/view/templates/frontend/test/performance.phtml"
+            ]
+        },
+        "developer.api.manager": {
+            "area": "backend",
+            "bundles": [
+                "developer-api-css",
+                "developer-api-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/api-manager.phtml"
+            ]
+        },
+        "developer.docs": {
+            "area": "backend",
+            "bundles": [
+                "developer-docs-css",
+                "developer-docs-js"
+            ],
+            "engines": [
+                "marked"
+            ],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/index.phtml"
+            ]
+        },
+        "developer.documents.catalogs": {
+            "area": "backend",
+            "bundles": [
+                "developer-catalogs-css",
+                "developer-catalogs-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/Catalog/index.phtml"
+            ]
+        },
+        "developer.documents.config": {
+            "area": "backend",
+            "bundles": [
+                "developer-document-config-css",
+                "developer-document-config-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/config.phtml"
+            ]
+        },
+        "developer.documents.edit": {
+            "area": "backend",
+            "bundles": [
+                "developer-document-editor-js"
+            ],
+            "engines": [
+                "tinymce"
+            ],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/add.phtml"
+            ]
+        },
+        "developer.documents.index": {
+            "area": "backend",
+            "bundles": [
+                "developer-documents-css",
+                "developer-documents-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/index.phtml"
+            ]
+        },
+        "eav.manager.index": {
+            "area": "backend",
+            "bundles": [
+                "eav-manager-css",
+                "eav-manager-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Eav/view/templates/Backend/Manager/index.phtml"
+            ]
+        },
+        "editor-manager.ckeditor": {
+            "area": "backend",
+            "engines": [
+                "ckeditor"
+            ],
+            "templates": [
+                "app/code/Weline/CKEditorEditorManager/view/blocks/ckeditor.html"
+            ]
+        },
+        "i18n.dictionary": {
+            "area": "backend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/I18n/view/templates/Backend/Dictionary.phtml"
+            ]
+        },
+        "i18n.language-support-request": {
+            "area": "frontend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/I18n/view/templates/Frontend/language-support-request.phtml"
+            ]
+        },
+        "maintenance.frontend": {
+            "area": "frontend",
+            "bundles": [
+                "maintenance-page-css",
+                "maintenance-page-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Maintenance/view/templates/maintenance.phtml"
+            ]
+        },
+        "queue.content": {
+            "area": "backend",
+            "bundles": [
+                "queue-admin-css",
+                "queue-content-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Queue/view/templates/Backend/Queue/content.phtml"
+            ]
+        },
+        "queue.diagnostics": {
+            "area": "backend",
+            "bundles": [
+                "queue-admin-css"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Queue/view/templates/Backend/Diagnostics/index.phtml"
+            ]
+        },
+        "queue.form": {
+            "area": "backend",
+            "bundles": [
+                "queue-form-css",
+                "queue-form-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Queue/view/templates/Backend/Queue/form.phtml"
+            ]
+        },
+        "queue.index": {
+            "area": "backend",
+            "bundles": [
+                "queue-admin-css",
+                "queue-index-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Queue/view/templates/Backend/Queue/index.phtml",
+                "app/code/Weline/Queue/view/templates/Backend/Queue/partials/stats.phtml",
+                "app/code/Weline/Queue/view/templates/Backend/Queue/partials/listing.phtml"
+            ]
+        },
+        "queue.show": {
+            "area": "backend",
+            "bundles": [
+                "queue-admin-css"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Queue/view/templates/Backend/Queue/show.phtml"
+            ]
+        },
+        "queue.type.index": {
+            "area": "backend",
+            "bundles": [
+                "queue-admin-css",
+                "queue-type-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Queue/view/templates/Backend/Type/index.phtml"
+            ]
+        },
+        "queue.type.show": {
+            "area": "backend",
+            "bundles": [
+                "queue-admin-css"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Queue/view/templates/Backend/Type/show.phtml"
+            ]
+        },
+        "seo.embed.detail": {
+            "area": "backend",
+            "bundles": [
+                "seo-embed-css",
+                "seo-embed-detail-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Seo/view/templates/Backend/Embed/detail.phtml"
+            ]
+        },
+        "seo.embed.index": {
+            "area": "backend",
+            "bundles": [
+                "seo-embed-css",
+                "seo-embed-index-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Seo/view/templates/Backend/Embed/index.phtml"
+            ]
+        },
+        "system-config.index": {
+            "area": "backend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/SystemConfig/view/templates/backend/config/index.phtml"
+            ]
+        },
+        "theme.editor": {
+            "area": "backend",
+            "bundles": [
+                "theme-editor-css",
+                "theme-editor-widget-config-css",
+                "theme-editor-widget-param-css",
+                "theme-editor-widget-param-js",
+                "theme-editor-js",
+                "theme-editor-overlay-css"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml"
+            ]
+        },
+        "theme.editor.preview": {
+            "area": "backend",
+            "bundles": [
+                "theme-preview-css",
+                "theme-preview-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Theme/view/templates/backend/theme-preview/content.phtml",
+                "app/code/Weline/Theme/view/templates/frontend/theme-preview/content.phtml"
+            ]
+        },
+        "websites.acl.edit": {
+            "area": "backend",
+            "bundles": [
+                "acl-role-assign-css",
+                "acl-role-assign-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Websites/view/templates/Backend/WebsiteAclGrant/edit.phtml"
+            ]
+        },
+        "websites.site-builder.v1": {
+            "area": "backend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/index-v1.phtml"
+            ]
+        },
+        "websites.site-builder.workspace": {
+            "area": "backend",
+            "bundles": [
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/workspace.phtml"
+            ]
+        },
+        "websites.website.form": {
+            "area": "backend",
+            "bundles": [
+                "websites-admin-css",
+                "websites-form-js",
+                "language-select-css",
+                "language-select-js"
+            ],
+            "engines": [],
+            "templates": [
+                "app/code/Weline/Websites/view/templates/Admin/Website/form.phtml"
+            ]
+        }
+    },
+    "schema_version": "weline-ui-assets.v1",
+    "specialized_engines": {
+        "ckeditor": {
+            "consumers": [
+                "app/code/Weline/CKEditorEditorManager/EditorManager/CKEditor.php",
+                "app/code/Weline/CKEditorEditorManager/view/blocks/ckeditor.html"
+            ],
+            "owner": "Weline_CKEditorEditorManager",
+            "paths": [
+                "app/code/Weline/CKEditorEditorManager/view/statics/build/"
+            ]
+        },
+        "marked": {
+            "consumers": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Docs/index.phtml"
+            ],
+            "owner": "Weline_DeveloperWorkspace",
+            "paths": [
+                "app/code/Weline/DeveloperWorkspace/view/statics/libs/marked/11.1.1/"
+            ]
+        },
+        "tinymce": {
+            "consumers": [
+                "app/code/Weline/DeveloperWorkspace/view/templates/Admin/Document/add.phtml"
+            ],
+            "owner": "Weline_DeveloperWorkspace",
+            "paths": [
+                "app/code/Weline/DeveloperWorkspace/view/statics/engines/tinymce/"
+            ]
+        }
+    }
+}

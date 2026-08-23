@@ -62,12 +62,12 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
 </style>
 
 <div class="cache-policy-page">
-    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-        <h4 class="mb-sm-0"><?= __('缓存策略') ?></h4>
-        <div class="page-title-right">
-            <ol class="breadcrumb m-0">
-                <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin/system/cache') ?>"><?= __('缓存管理') ?></a></li>
-                <li class="breadcrumb-item active"><?= __('缓存策略') ?></li>
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <h4 style="--w-mb-sm:0;"><?= __('缓存策略') ?></h4>
+        <div class="w-cluster">
+            <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('admin/system/cache') ?>"><?= __('缓存管理') ?></a></li>
+                <li class="w-breadcrumb__item" data-state="active"><?= __('缓存策略') ?></li>
             </ol>
         </div>
     </div>
@@ -149,34 +149,7 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
 </div>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_cache_manager) return;
-  g.__bqAdmin_cache_manager=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['cache_manager']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('cache_manager').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
     (function () {
         var form = document.getElementById('cache-policy-form');
@@ -190,7 +163,7 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
             button.disabled = true;
             message.className = 'cache-policy-message';
             message.textContent = '<?= __('正在保存...') ?>';
-            bqAdmin['cache_manager'](form.action, {
+            Weline.adminRequest('cache_manager', form.action, {
                 method: 'POST',
                 body: new FormData(form),
                 credentials: 'same-origin',

@@ -1,0 +1,52 @@
+<?php
+/**
+ * AI 管理页头（置于 Tab 之上）
+ * 隐藏主题布局先渲染的模块名标题（如 Weline_Ai），避免双页头。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var string $pageHeading
+ * @var list<array{title:string,active?:bool}> $pageBreadcrumbs
+ */
+$pageHeading = trim((string)($pageHeading ?? ''));
+$pageBreadcrumbs = is_array($pageBreadcrumbs ?? null) ? $pageBreadcrumbs : [];
+$h = static function ($s): string {
+    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+};
+$headingText = $h($pageHeading);
+$breadcrumbAria = $h(__('面包屑'));
+$breadcrumbHtml = '';
+foreach ($pageBreadcrumbs as $crumb) {
+    $crumbTitle = $h((string)($crumb['title'] ?? ''));
+    if ($crumbTitle === '') {
+        continue;
+    }
+    if (!empty($crumb['active'])) {
+        $breadcrumbHtml .= '<li class="w-breadcrumb__item" data-state="active"><span aria-current="page">'
+            . $crumbTitle . '</span></li>';
+    } else {
+        $breadcrumbHtml .= '<li class="w-breadcrumb__item"><span>' . $crumbTitle . '</span></li>';
+    }
+}
+?>
+<?php if ($pageHeading !== ''): ?>
+<style>
+/* 主题 main-content 已输出模块名页头；本页用真实标题替换，故隐藏前者 */
+main.w-backend-page > header.w-backend-page__heading:first-of-type {
+    display: none !important;
+}
+</style>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h1 style="--w-mb-sm:0;"><?= $headingText ?></h1>
+            <?php if ($breadcrumbHtml !== ''): ?>
+                <nav aria-label="<?= $breadcrumbAria ?>">
+                    <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                        <?php echo $breadcrumbHtml; ?>
+                    </ol>
+                </nav>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>

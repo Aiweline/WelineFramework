@@ -63,6 +63,14 @@ class ThemeEditorUpdateConfigContractTest extends TestCore
         $themeLayout->method('load')->willReturnCallback(function (int|string $layoutId) use ($themeLayout): AbstractModel {
             $themeLayout->setData([
                 'layout_id' => (int)$layoutId,
+                'theme_id' => 1,
+                'page_type' => 'homepage',
+                'status' => ThemeLayout::STATUS_DRAFT,
+                'layout_option' => 'default',
+                'scope' => 'default.default.default',
+                'locale_code' => '',
+                'target_type' => 'global',
+                'target_id' => 0,
                 'widget_module' => 'Weline_Theme',
                 'widget_code' => 'demo',
                 'area' => 'frontend',
@@ -97,17 +105,40 @@ class ThemeEditorUpdateConfigContractTest extends TestCore
 
     public function testUpdateConfigReturnsPreviewHtml(): void
     {
-        self::initRequest('/theme/backend/theme-editor/update-config');
+        $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        self::assertNotSame('', $backendPrefix);
+        $requestPath = '/' . $backendPrefix . '/theme/backend/theme-editor/update-config';
+        self::initRequest($requestPath);
         $request = ObjectManager::getInstance(Request::class);
+        \Weline\Framework\Runtime\RequestContext::setId('theme-editor-update-config-contract');
+        $request->getServer();
+        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $requestPath);
+        $request->setServer('REQUEST_URI', $requestPath);
         $request->setPost('layout_id', 10);
         $request->setPost('config', ['title' => 'demo']);
+        $request->setPost('editor_context', $this->layoutEditorContext(1, 'homepage'));
 
         $controller = $this->buildController(true);
         $response = $controller->postUpdateConfig();
         $payload = json_decode(is_string($response) ? $response : '', true);
 
         $this->assertIsArray($payload);
-        $this->assertTrue($payload['success'] ?? false);
+        $this->assertTrue($payload['success'] ?? false, json_encode($payload, JSON_UNESCAPED_UNICODE) ?: 'invalid response');
         $this->assertArrayHasKey('preview_html', $payload);
+    }
+
+    private function layoutEditorContext(int $themeId, string $layoutType): array
+    {
+        return [
+            'scope' => ['identity' => \Weline\Framework\Runtime\ScopeIdentity::global()->toArray()],
+            'area' => 'frontend',
+            'resource_type' => 'layout',
+            'theme_id' => $themeId,
+            'layout_type' => $layoutType,
+            'layout_option' => 'default',
+            'locale' => 'default',
+            'target_type' => 'global',
+            'target_id' => 0,
+        ];
     }
 }

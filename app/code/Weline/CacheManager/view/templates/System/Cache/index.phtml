@@ -108,21 +108,21 @@ $cachePageConfigJson = \json_encode(
 <link rel="stylesheet" href="<?= $this->getStaticUrl('Weline_CacheManager/system/cache-admin.css') ?>">
 
 <div class="weline-cache-admin">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0"><?= __('缓存管理') ?></h4>
-                <div class="page-title-right">
-                    <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><span><?= __('系统') ?></span></li>
-                        <li class="breadcrumb-item active"><?= __('缓存管理') ?></li>
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                <h4 style="--w-mb-sm:0;"><?= __('缓存管理') ?></h4>
+                <div class="w-cluster">
+                    <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                        <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
+                        <li class="w-breadcrumb__item" data-state="active"><?= __('缓存管理') ?></li>
                     </ol>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row mb-3">
+    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
         <template>Weline_Component::message.phtml</template>
     </div>
 
@@ -131,11 +131,11 @@ $cachePageConfigJson = \json_encode(
             <div class="weline-cache-hero__layout">
                 <div>
                     <span class="weline-cache-hero__eyebrow">
-                        <i class="ri-radar-line"></i>
+                        <w:icon name="search" size="sm"></w:icon>
                         <lang>运行时统一缓存视图</lang>
                     </span>
                     <div class="weline-cache-hero__title">
-                        <span class="weline-cache-hero__title-icon"><i class="ri-database-2-line"></i></span>
+                        <span class="weline-cache-hero__title-icon"><w:icon name="database" size="sm"></w:icon></span>
                         <div>
                             <h2><?= htmlspecialchars((string)($runtime['label'] ?? __('未知运行态'))) ?></h2>
                             <p><?= htmlspecialchars((string)($runtime['description'] ?? '')) ?></p>
@@ -167,7 +167,7 @@ $cachePageConfigJson = \json_encode(
                             <h3><lang>底层兼容状态</lang></h3>
                             <p><lang>后台清理入口会尽量统一 WLS、共享内存和 FPM 下的表现。</lang></p>
                         </div>
-                        <span class="weline-cache-runtime-mode"><i class="ri-cpu-line"></i><?= htmlspecialchars(\strtoupper((string)($runtime['mode'] ?? 'unknown'))) ?></span>
+                        <span class="weline-cache-runtime-mode"><w:icon name="circle" size="sm"></w:icon><?= htmlspecialchars(\strtoupper((string)($runtime['mode'] ?? 'unknown'))) ?></span>
                     </div>
                     <div class="weline-cache-runtime-grid">
                         <div class="weline-cache-runtime-item"><span><lang>持久化运行时</lang></span><strong><?= !empty($runtime['persistent']) ? __('是') : __('否') ?></strong></div>
@@ -187,11 +187,11 @@ $cachePageConfigJson = \json_encode(
         </section>
 
         <section class="weline-cache-metrics">
-            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--primary"><i class="ri-stack-line"></i></span><div class="weline-cache-metric__content"><span><lang>缓存池总数</lang></span><strong id="cache-summary-total"><?= $formatCount($summary['total'] ?? 0) ?></strong></div></article>
-            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--success"><i class="ri-checkbox-circle-line"></i></span><div class="weline-cache-metric__content"><span><lang>已启用</lang></span><strong id="cache-summary-enabled"><?= $formatCount($summary['enabled'] ?? 0) ?></strong></div></article>
-            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--danger"><i class="ri-close-circle-line"></i></span><div class="weline-cache-metric__content"><span><lang>已禁用</lang></span><strong id="cache-summary-disabled"><?= $formatCount($summary['disabled'] ?? 0) ?></strong></div></article>
-            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--warning"><i class="ri-lock-line"></i></span><div class="weline-cache-metric__content"><span><lang>持久缓存</lang></span><strong id="cache-summary-permanent"><?= $formatCount($summary['permanent'] ?? 0) ?></strong></div></article>
-            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--primary"><i class="ri-server-line"></i></span><div class="weline-cache-metric__content"><span><lang>WLS 托管池</lang></span><strong id="cache-summary-wls"><?= $formatCount($summary['wls_backed'] ?? 0) ?></strong></div></article>
+            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--primary"><w:icon name="circle" size="sm"></w:icon></span><div class="weline-cache-metric__content"><span><lang>缓存池总数</lang></span><strong id="cache-summary-total"><?= $formatCount($summary['total'] ?? 0) ?></strong></div></article>
+            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--success"><w:icon name="check" size="sm"></w:icon></span><div class="weline-cache-metric__content"><span><lang>已启用</lang></span><strong id="cache-summary-enabled"><?= $formatCount($summary['enabled'] ?? 0) ?></strong></div></article>
+            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--danger"><w:icon name="close" size="sm"></w:icon></span><div class="weline-cache-metric__content"><span><lang>已禁用</lang></span><strong id="cache-summary-disabled"><?= $formatCount($summary['disabled'] ?? 0) ?></strong></div></article>
+            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--warning"><w:icon name="lock" size="sm"></w:icon></span><div class="weline-cache-metric__content"><span><lang>持久缓存</lang></span><strong id="cache-summary-permanent"><?= $formatCount($summary['permanent'] ?? 0) ?></strong></div></article>
+            <article class="weline-cache-metric"><span class="weline-cache-metric__icon weline-cache-metric__icon--primary"><w:icon name="server" size="sm"></w:icon></span><div class="weline-cache-metric__content"><span><lang>WLS 托管池</lang></span><strong id="cache-summary-wls"><?= $formatCount($summary['wls_backed'] ?? 0) ?></strong></div></article>
         </section>
 
         <section class="weline-cache-panel">
@@ -233,8 +233,8 @@ $cachePageConfigJson = \json_encode(
                     </select>
                 </div>
                 <div class="weline-cache-filter-actions">
-                    <button type="submit" class="weline-cache-btn weline-cache-btn--primary"><i class="ri-search-line"></i><lang>应用筛选</lang></button>
-                    <a class="weline-cache-btn weline-cache-btn--secondary" href="<?= $this->getBackendUrl('admin/system/cache') ?>"><i class="ri-restart-line"></i><lang>重置</lang></a>
+                    <button type="submit" class="weline-cache-btn weline-cache-btn--primary"><w:icon name="search" size="sm"></w:icon><lang>应用筛选</lang></button>
+                    <a class="weline-cache-btn weline-cache-btn--secondary" href="<?= $this->getBackendUrl('admin/system/cache') ?>"><w:icon name="star" size="sm"></w:icon><lang>重置</lang></a>
                 </div>
             </w:form>
         </section>
@@ -249,16 +249,16 @@ $cachePageConfigJson = \json_encode(
             <div class="weline-cache-toolbar">
                 <div class="weline-cache-toolbar__selection">
                     <label class="weline-cache-switch-wrap"><input id="cache-select-all" type="checkbox" class="weline-cache-check"><span class="weline-cache-switch-label"><lang>选择当前结果</lang></span></label>
-                    <span class="weline-cache-selection-count"><i class="ri-checkbox-multiple-line"></i><span id="cache-selected-count">0</span><lang>个已选</lang></span>
+                    <span class="weline-cache-selection-count"><w:icon name="check" size="sm"></w:icon><span id="cache-selected-count">0</span><lang>个已选</lang></span>
                 </div>
                 <div class="weline-cache-toolbar__actions">
-                    <button type="button" class="weline-cache-btn weline-cache-btn--success" id="cache-enable-selected" disabled><i class="ri-toggle-line"></i><lang>启用所选</lang></button>
-                    <button type="button" class="weline-cache-btn weline-cache-btn--warning" id="cache-disable-selected" disabled><i class="ri-toggle-fill"></i><lang>禁用所选</lang></button>
-                    <button type="button" class="weline-cache-btn weline-cache-btn--danger" id="cache-clear-selected" disabled><i class="ri-delete-bin-6-line"></i><lang>清理所选</lang></button>
-                    <button type="button" class="weline-cache-btn weline-cache-btn--danger" id="cache-clear-all"><i class="ri-brush-3-line"></i><lang>清理全部非持久缓存</lang></button>
-                    <button type="button" class="weline-cache-btn weline-cache-btn--secondary" id="cache-force-flush-all"><i class="ri-delete-bin-line"></i><lang>强制清理全部</lang></button>
-                    <button type="button" class="weline-cache-btn weline-cache-btn--primary" id="cache-run-cron"><i class="ri-play-circle-line"></i><lang>执行清理定时任务</lang></button>
-                    <button type="button" class="weline-cache-btn weline-cache-btn--secondary" id="cache-refresh-page"><i class="ri-refresh-line"></i><lang>刷新页面</lang></button>
+                    <button type="button" class="weline-cache-btn weline-cache-btn--success" id="cache-enable-selected" disabled><w:icon name="circle" size="sm"></w:icon><lang>启用所选</lang></button>
+                    <button type="button" class="weline-cache-btn weline-cache-btn--warning" id="cache-disable-selected" disabled><w:icon name="circle" size="sm"></w:icon><lang>禁用所选</lang></button>
+                    <button type="button" class="weline-cache-btn weline-cache-btn--danger" id="cache-clear-selected" disabled><w:icon name="trash" size="sm"></w:icon><lang>清理所选</lang></button>
+                    <button type="button" class="weline-cache-btn weline-cache-btn--danger" id="cache-clear-all"><w:icon name="circle" size="sm"></w:icon><lang>清理全部非持久缓存</lang></button>
+                    <button type="button" class="weline-cache-btn weline-cache-btn--secondary" id="cache-force-flush-all"><w:icon name="trash" size="sm"></w:icon><lang>强制清理全部</lang></button>
+                    <button type="button" class="weline-cache-btn weline-cache-btn--primary" id="cache-run-cron"><w:icon name="play" size="sm"></w:icon><lang>执行清理定时任务</lang></button>
+                    <button type="button" class="weline-cache-btn weline-cache-btn--secondary" id="cache-refresh-page"><w:icon name="refresh" size="sm"></w:icon><lang>刷新页面</lang></button>
                 </div>
             </div>
         </section>
@@ -291,20 +291,20 @@ $cachePageConfigJson = \json_encode(
                             </div>
 
                             <div class="weline-cache-pool__meta">
-                                <span class="weline-cache-pill <?= $enabled ? 'weline-cache-pill--status-on' : 'weline-cache-pill--status-off' ?>" data-role="status-badge"><i class="<?= $enabled ? 'ri-checkbox-circle-line' : 'ri-close-circle-line' ?>"></i><span data-role="status-text"><?= $enabled ? __('已启用') : __('已禁用') ?></span></span>
-                                <span class="weline-cache-pill weline-cache-pill--type"><i class="ri-apps-2-line"></i><?= htmlspecialchars((string)($item['type_label'] ?? __('系统'))) ?></span>
-                                <?php if ($permanent): ?><span class="weline-cache-pill weline-cache-pill--permanent"><i class="ri-lock-line"></i><lang>持久缓存</lang></span><?php endif; ?>
-                                <?php if (!empty($item['wls_backed'])): ?><span class="weline-cache-pill weline-cache-pill--neutral"><i class="ri-server-line"></i><lang>WLS 共享存储</lang></span><?php endif; ?>
-                                <?php if (!empty($item['taggable'])): ?><span class="weline-cache-pill weline-cache-pill--neutral"><i class="ri-price-tag-3-line"></i><lang>支持标签失效</lang></span><?php endif; ?>
+                                <span class="weline-cache-pill <?= $enabled ? 'weline-cache-pill--status-on' : 'weline-cache-pill--status-off' ?>" data-role="status-badge"><i class="<?= $enabled ? 'check' : 'close' ?>"></i><span data-role="status-text"><?= $enabled ? __('已启用') : __('已禁用') ?></span></span>
+                                <span class="weline-cache-pill weline-cache-pill--type"><w:icon name="grid" size="sm"></w:icon><?= htmlspecialchars((string)($item['type_label'] ?? __('系统'))) ?></span>
+                                <?php if ($permanent): ?><span class="weline-cache-pill weline-cache-pill--permanent"><w:icon name="lock" size="sm"></w:icon><lang>持久缓存</lang></span><?php endif; ?>
+                                <?php if (!empty($item['wls_backed'])): ?><span class="weline-cache-pill weline-cache-pill--neutral"><w:icon name="server" size="sm"></w:icon><lang>WLS 共享存储</lang></span><?php endif; ?>
+                                <?php if (!empty($item['taggable'])): ?><span class="weline-cache-pill weline-cache-pill--neutral"><w:icon name="circle" size="sm"></w:icon><lang>支持标签失效</lang></span><?php endif; ?>
                             </div>
 
                             <p class="weline-cache-pool__description"><?= htmlspecialchars((string)($item['description'] ?? $identity)) ?></p>
 
                             <div class="weline-cache-chip-list">
-                                <span class="weline-cache-chip"><i class="ri-hard-drive-3-line"></i><strong data-role="storage-label"><?= htmlspecialchars((string)($item['storage_label'] ?? __('未知存储'))) ?></strong></span>
-                                <span class="weline-cache-chip"><i class="ri-cpu-line"></i><strong data-role="adapter-label"><?= htmlspecialchars((string)($item['adapter_label'] ?? __('未知适配器'))) ?></strong></span>
-                                <span class="weline-cache-chip"><i class="ri-time-line"></i><strong data-role="ttl-label" data-ttl="<?= (int)($item['default_ttl'] ?? 0) ?>"><?= htmlspecialchars($formatTtl($item['default_ttl'] ?? 0)) ?></strong></span>
-                                <span class="weline-cache-chip"><i class="ri-folder-shared-line"></i><strong data-role="shared-label"><?= !empty($item['shared_keys']) ? __('共享键 %{1}', (int)$item['shared_keys']) : __('无共享键') ?></strong></span>
+                                <span class="weline-cache-chip"><w:icon name="circle" size="sm"></w:icon><strong data-role="storage-label"><?= htmlspecialchars((string)($item['storage_label'] ?? __('未知存储'))) ?></strong></span>
+                                <span class="weline-cache-chip"><w:icon name="circle" size="sm"></w:icon><strong data-role="adapter-label"><?= htmlspecialchars((string)($item['adapter_label'] ?? __('未知适配器'))) ?></strong></span>
+                                <span class="weline-cache-chip"><w:icon name="clock" size="sm"></w:icon><strong data-role="ttl-label" data-ttl="<?= (int)($item['default_ttl'] ?? 0) ?>"><?= htmlspecialchars($formatTtl($item['default_ttl'] ?? 0)) ?></strong></span>
+                                <span class="weline-cache-chip"><w:icon name="share" size="sm"></w:icon><strong data-role="shared-label"><?= !empty($item['shared_keys']) ? __('共享键 %{1}', (int)$item['shared_keys']) : __('无共享键') ?></strong></span>
                             </div>
 
                             <div class="weline-cache-stats-grid">
@@ -316,7 +316,7 @@ $cachePageConfigJson = \json_encode(
 
                             <?php if (!empty($sampleKeys)): ?>
                                 <div>
-                                    <div class="weline-cache-muted mb-2"><lang>共享键示例</lang></div>
+                                    <div class="weline-cache-muted" style="--w-mb:var(--weline-space-2);"><lang>共享键示例</lang></div>
                                     <div class="weline-cache-keys" data-role="sample-keys">
                                         <?php foreach ($sampleKeys as $sampleKey): ?><span class="weline-cache-key"><?= htmlspecialchars((string)$sampleKey) ?></span><?php endforeach; ?>
                                     </div>
@@ -329,8 +329,8 @@ $cachePageConfigJson = \json_encode(
                                     <span class="weline-cache-switch-label<?= $enabled ? '' : ' is-off' ?>" data-role="toggle-label"><?= $enabled ? __('已启用') : __('已禁用') ?></span>
                                 </div>
                                 <div class="weline-cache-pool__actions">
-                                    <button type="button" class="weline-cache-mini-btn weline-cache-refresh-pool"><i class="ri-bar-chart-horizontal-line"></i><lang>刷新统计</lang></button>
-                                    <button type="button" class="weline-cache-mini-btn weline-cache-mini-btn--danger weline-cache-clear-pool"><i class="ri-delete-bin-line"></i><span data-role="clear-label"><?= $permanent ? __('强制清理') : __('清理') ?></span></button>
+                                    <button type="button" class="weline-cache-mini-btn weline-cache-refresh-pool"><w:icon name="chart" size="sm"></w:icon><lang>刷新统计</lang></button>
+                                    <button type="button" class="weline-cache-mini-btn weline-cache-mini-btn--danger weline-cache-clear-pool"><w:icon name="trash" size="sm"></w:icon><span data-role="clear-label"><?= $permanent ? __('强制清理') : __('清理') ?></span></button>
                                 </div>
                             </div>
                         </article>
@@ -338,7 +338,7 @@ $cachePageConfigJson = \json_encode(
                 </div>
             <?php else: ?>
                 <div class="weline-cache-empty">
-                    <i class="ri-database-2-line"></i>
+                    <w:icon name="database" size="sm"></w:icon>
                     <h3><lang>当前没有匹配的缓存池</lang></h3>
                     <p><lang>可以先调整筛选条件；如果这是首次安装模块，也可以运行 `php bin/w setup:upgrade` 重新收集缓存池与后台元数据。</lang></p>
                 </div>
@@ -354,7 +354,7 @@ $cachePageConfigJson = \json_encode(
             </div>
 
             <?php if (!empty($cronTasks)): ?>
-                <div class="table-responsive">
+                <div class="w-table-wrap">
                     <table class="weline-cache-cron-table">
                         <thead>
                         <tr><th>#</th><th><lang>任务代码</lang></th><th><lang>任务名称</lang></th><th><lang>执行频率</lang></th><th><lang>说明</lang></th></tr>
@@ -374,7 +374,7 @@ $cachePageConfigJson = \json_encode(
                 </div>
             <?php else: ?>
                 <div class="weline-cache-empty">
-                    <i class="ri-time-line"></i>
+                    <w:icon name="clock" size="sm"></w:icon>
                     <h3><lang>暂无缓存定时任务</lang></h3>
                     <p><lang>如果你希望后台自动清理过期缓存，可以在 Cron 模块里补充计划任务，或者继续使用上面的手动清理入口。</lang></p>
                 </div>

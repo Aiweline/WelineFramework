@@ -22,7 +22,7 @@ use Weline\Seo\Service\SitemapUrlSyncService;
  * - 支持分割（超过50000条URL时分割）
  * - 生成sitemap索引文件
  */
-#[Acl('Weline_Seo::sitemap_management', 'Sitemap管理', 'mdi-sitemap', 'Sitemap管理', 'Weline_Backend::seo_group')]
+#[Acl('Weline_Seo::sitemap_management', 'Sitemap管理', 'tree', 'Sitemap管理', 'Weline_Backend::seo_group')]
 class Sitemap extends BackendController
 {
     const MAX_URLS_PER_SITEMAP = 50000;
@@ -33,7 +33,7 @@ class Sitemap extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::sitemap_management_index', '查看Sitemap管理', 'mdi-sitemap', '查看Sitemap管理')]
+    #[Acl('Weline_Seo::sitemap_management_index', '查看Sitemap管理', 'tree', '查看Sitemap管理')]
     public function index(): string
     {
         try {
@@ -69,7 +69,7 @@ class Sitemap extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Seo::sitemap_management_generate', '生成Sitemap', 'mdi-refresh', '生成Sitemap')]
+    #[Acl('Weline_Seo::sitemap_management_generate', '生成Sitemap', 'refresh', '生成Sitemap')]
     public function generate(): string
     {
         if (!$this->request->isPost()) {

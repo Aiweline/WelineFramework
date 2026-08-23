@@ -4,217 +4,247 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Service;
 
-use Weline\MediaManager\Helper\MimeTypes;
+use Weline\FileManager\Api\Data\FileAccessContext;
+use Weline\FileManager\Api\FileAssetLibraryInterface;
+use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Storage\Api\Data\StorageObjectReference;
+use Weline\Storage\Api\Runtime\StorageRequestResourceFactoryInterface;
+use Weline\Storage\Api\StorageDirectoryManagerInterface;
+use Weline\Storage\Api\StorageManagerInterface;
 
-/**
- * 媒体根目录路径解析与写盘（供 AI 作图等能力复用 connector 安全契约）。
- */
-class MediaStorageService
+/** Unified FileAsset/Storage boundary used by AI-draw and trusted media consumers. */
+final class MediaStorageService
 {
-    public function getRootContext(): array
-    {
-        $rootPath = \rtrim(PUB, '/\\') . \DIRECTORY_SEPARATOR . 'media' . \DIRECTORY_SEPARATOR;
-        if (!\is_dir($rootPath) && !@\mkdir($rootPath, 0755, true)) {
-            throw new \RuntimeException(__('媒体根目录无效'));
-        }
-        $rootReal = \realpath($rootPath);
-        if ($rootReal === false) {
-            throw new \RuntimeException(__('媒体根目录无效'));
-        }
+    public const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+    private const STREAM_CHUNK_BYTES = 1024 * 1024;
+    private const ALLOWED_IMAGE_MIMES = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'image/avif',
+    ];
 
-        return [
-            'root_path' => $this->normalizeRootPath($rootPath),
-            'root_real' => $this->normalizeAbsolutePath($rootReal),
-        ];
+    public function __construct(
+        private readonly FileAssetLibraryInterface $assets,
+        private readonly StorageManagerInterface $storage,
+        private readonly StorageDirectoryManagerInterface $directories,
+        private readonly StorageRequestResourceFactoryInterface $resourceFactory,
+    ) {
     }
 
     public function encodeHash(string $relativePath): string
     {
-        $relativePath = \trim(\str_replace('\\', '/', $relativePath), '/');
+        $relativePath = trim(str_replace('\\', '/', $relativePath), '/');
         if ($relativePath === '') {
             $relativePath = '/';
+        } else {
+            StorageObjectReference::assertObjectKey($relativePath);
         }
-        $b64 = \rtrim(\strtr(\base64_encode($relativePath), '+/', '-_'), '=');
+        $encoded = rtrim(strtr(base64_encode($relativePath), '+/', '-_'), '=');
 
-        return 'mm_' . $b64;
+        return 'mm_' . $encoded;
     }
 
     public function decodeHash(string $hash): ?string
     {
-        if (!\str_starts_with($hash, 'mm_')) {
+        if (!str_starts_with($hash, 'mm_')) {
             return null;
         }
-        $b64 = \substr($hash, 3);
-        $b64 .= \str_repeat('=', (4 - \strlen($b64) % 4) % 4);
-        $decoded = \base64_decode(\strtr($b64, '-_', '+/'));
-        if ($decoded === false) {
+        $encoded = substr($hash, 3);
+        if ($encoded === '' || preg_match('/^[A-Za-z0-9_-]+$/D', $encoded) !== 1) {
+            return null;
+        }
+        $padded = $encoded . str_repeat('=', (4 - strlen($encoded) % 4) % 4);
+        $decoded = base64_decode(strtr($padded, '-_', '+/'), true);
+        if ($decoded === false || rtrim(strtr(base64_encode($decoded), '+/', '-_'), '=') !== $encoded) {
             return null;
         }
         if ($decoded === '/') {
             return '';
         }
+        $decoded = trim(str_replace('\\', '/', $decoded), '/');
+        try {
+            StorageObjectReference::assertObjectKey($decoded);
+        } catch (\Throwable) {
+            return null;
+        }
 
-        return \trim(\str_replace('\\', '/', $decoded), '/');
+        return $decoded;
     }
 
-    /**
-     * @return array{0:string,1:string,2:bool} relative, absolute, exists
-     */
-    public function resolveHash(string $hash): array
+    public function objectKeyFromHash(string $hash, bool $allowRoot = false): string
     {
-        $ctx = $this->getRootContext();
-        $relative = $hash === '' ? '' : ($this->decodeHash($hash) ?? '');
-        $relative = $this->normalizeRelativePath($relative);
-        $abs = $this->joinRootPath($ctx['root_path'], $relative);
-        $real = \realpath($abs);
-        if ($real === false) {
-            $checked = $this->assertWriteTargetInRoot($abs, $ctx['root_real']);
-            if (!$this->isPathInsideRoot($checked, $ctx['root_real'])) {
-                throw new \RuntimeException(__('无效路径'));
+        $objectKey = $this->decodeHash($hash);
+        if ($objectKey === null || (!$allowRoot && $objectKey === '')) {
+            throw new \InvalidArgumentException((string)__('媒体文件目标无效。'));
+        }
+
+        return $objectKey;
+    }
+
+    /** @return array<string,mixed> */
+    public function readFileBytes(
+        string $diskCode,
+        string $hash,
+        FileAccessContext $access,
+        int $maxBytes = self::MAX_IMAGE_BYTES,
+    ): array {
+        $disk = $this->storage->disk($diskCode);
+        $objectKey = $this->objectKeyFromHash($hash);
+        $descriptor = $this->assets->describe(
+            $disk->diskCode(),
+            $objectKey,
+            $access->localeCode,
+            $access,
+        );
+        if (empty($descriptor['asset_id']) || empty($descriptor['asset_ready'])) {
+            throw new \RuntimeException((string)__('参考文件尚未建立可用的 FileAsset。'));
+        }
+        $declaredBytes = max(0, (int)($descriptor['size'] ?? 0));
+        $maxBytes = max(1, min(self::MAX_IMAGE_BYTES, $maxBytes));
+        if ($declaredBytes > $maxBytes) {
+            throw new \RuntimeException((string)__('参考图片超过大小限制。'));
+        }
+
+        $handle = $disk->openRead($objectKey);
+        $bytes = '';
+        $emptyReads = 0;
+        try {
+            while (!$handle->eof()) {
+                if (function_exists('connection_aborted') && connection_aborted()) {
+                    throw new \RuntimeException((string)__('客户端已断开，图片读取已取消。'));
+                }
+                $chunk = $handle->read(self::STREAM_CHUNK_BYTES);
+                if ($chunk === '') {
+                    if (++$emptyReads >= 3) {
+                        throw new \RuntimeException((string)__('读取图片时连续无数据进展。'));
+                    }
+                    SchedulerSystem::yield();
+                    continue;
+                }
+                $emptyReads = 0;
+                if (strlen($bytes) + strlen($chunk) > $maxBytes) {
+                    throw new \RuntimeException((string)__('参考图片超过大小限制。'));
+                }
+                $bytes .= $chunk;
+                SchedulerSystem::yield();
             }
-
-            return [$relative, $abs, false];
-        }
-        $checked = $this->normalizeAbsolutePath($real);
-        if (!$this->isPathInsideRoot($checked, $ctx['root_real'])) {
-            throw new \RuntimeException(__('无效路径'));
+        } finally {
+            $handle->close();
         }
 
-        return [$relative, $checked, true];
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    public function buildFileInfo(string $relative): array
-    {
-        $ctx = $this->getRootContext();
-        $relative = \trim(\str_replace('\\', '/', $relative), '/');
-        $abs = $this->joinRootPath($ctx['root_path'], $relative);
-        $isDir = \is_dir($abs);
-        $name = $relative === '' ? 'Media Files' : \basename($relative);
-        $hash = $this->encodeHash($relative);
-        if ($relative === '') {
-            $phash = null;
-        } else {
-            $dirRel = \trim(\dirname(\str_replace('\\', '/', $relative)), '/.');
-            $phash = $this->encodeHash($dirRel);
-        }
-        $mime = $isDir ? 'directory' : $this->detectMime($abs);
-        $size = $isDir ? 0 : ((@\filesize($abs)) ?: 0);
-        $ts = @\filemtime($abs) ?: \time();
-
+        $mime = $this->detectImageMime($bytes);
         return [
-            'hash' => $hash,
-            'name' => $name,
-            'phash' => $phash,
-            'mime' => $mime,
-            'size' => $size,
-            'ts' => $ts,
-            'path' => $relative,
-        ];
-    }
-
-    public function readFileBytes(string $hash): array
-    {
-        [$relative, $abs, $exists] = $this->resolveHash($hash);
-        if (!$exists || !\is_file($abs)) {
-            throw new \RuntimeException(__('参考文件不存在'));
-        }
-        $bytes = @\file_get_contents($abs);
-        if ($bytes === false) {
-            throw new \RuntimeException(__('无法读取参考文件'));
-        }
-        $mime = $this->detectMime($abs);
-
-        return [
-            'relative' => $relative,
-            'absolute' => $abs,
+            'asset_id' => (string)$descriptor['asset_id'],
+            'disk_code' => $disk->diskCode(),
+            'object_key' => $objectKey,
+            'relative' => $objectKey,
             'bytes' => $bytes,
             'mime' => $mime,
             'hash' => $hash,
+            'url' => $this->assets->resolveResourceUrl($disk->diskCode(), $objectKey, $access),
         ];
     }
 
     /**
+     * @param array<string,mixed> $localeMetadata
+     * @param array<string,mixed> $assetMetadata
      * @return array<string,mixed>
      */
-    public function writeNewFile(string $directoryHash, string $filename, string $bytes): array
-    {
-        $filename = $this->sanitizeLeafName($filename);
-        if ($filename === null) {
-            throw new \RuntimeException(__('文件名无效'));
+    public function writeNewFile(
+        string $diskCode,
+        string $directoryHash,
+        string $filename,
+        string $bytes,
+        string $mimeType,
+        FileAccessContext $access,
+        array $localeMetadata,
+        string $visibility = FileAssetLibraryInterface::VISIBILITY_PUBLIC,
+        array $assetMetadata = [],
+    ): array {
+        $filename = $this->sanitizeLeafName($filename)
+            ?? throw new \InvalidArgumentException((string)__('文件名无效。'));
+        $byteCount = strlen($bytes);
+        if ($byteCount < 1 || $byteCount > self::MAX_IMAGE_BYTES) {
+            throw new \InvalidArgumentException((string)__('生成图片超过保存大小限制。'));
         }
-        $ctx = $this->getRootContext();
-        [$dirRelative, $dirAbs, $dirExists] = $this->resolveHash($directoryHash);
-        if (!$dirExists || !\is_dir($dirAbs)) {
-            throw new \RuntimeException(__('目标目录不存在'));
-        }
-        $rel = \trim(($dirRelative === '' ? '' : $dirRelative . '/') . $filename, '/');
-        $dest = $this->joinRootPath($ctx['root_path'], $rel);
-        $this->assertWriteTargetInRoot($dest, $ctx['root_real']);
-        if (\file_exists($dest)) {
-            throw new \RuntimeException(__('同名文件已存在，请更换文件名'));
-        }
-        if (!$this->ensureParentDir($dest, $ctx['root_real'])) {
-            throw new \RuntimeException(__('无法写入目标目录'));
-        }
-        if (@\file_put_contents($dest, $bytes) === false) {
-            throw new \RuntimeException(__('保存文件失败'));
+        $disk = $this->storage->disk($diskCode);
+        $directory = $this->objectKeyFromHash($directoryHash, true);
+        $this->assertDirectoryExists($disk->diskCode(), $directory);
+        $objectKey = trim(($directory === '' ? '' : $directory . '/') . $filename, '/');
+        StorageObjectReference::assertObjectKey($objectKey);
+        if ($disk->exists($objectKey)) {
+            throw new \RuntimeException((string)__('同名文件已存在，请更换文件名。'));
         }
 
-        return $this->buildFileInfo($rel);
-    }
+        $detectedMime = $this->detectImageMime($bytes);
+        $claimedMime = strtolower(trim($mimeType));
+        if ($claimedMime !== '' && $claimedMime !== 'application/octet-stream' && $claimedMime !== $detectedMime) {
+            throw new \InvalidArgumentException((string)__('生成图片声明类型与实际内容不一致。'));
+        }
+        $metadata = MediaAssetUploadService::normalizeMetadata($localeMetadata, $filename);
+        $imageInfo = @getimagesizefromstring($bytes);
+        $width = is_array($imageInfo) ? max(0, (int)($imageInfo[0] ?? 0)) : 0;
+        $height = is_array($imageInfo) ? max(0, (int)($imageInfo[1] ?? 0)) : 0;
 
-    /**
-     * @return array<string,mixed>
-     */
-    public function overwriteFile(string $sourceFileHash, string $bytes, ?string $newFilename = null): array
-    {
-        [$relative, $abs, $exists] = $this->resolveHash($sourceFileHash);
-        if (!$exists || !\is_file($abs)) {
-            throw new \RuntimeException(__('源文件不存在'));
+        $stream = fopen('php://temp/maxmemory:2097152', 'w+b');
+        if ($stream === false) {
+            throw new \RuntimeException((string)__('无法创建图片保存流。'));
         }
-        $mime = $this->detectMime($abs);
-        if ($mime === 'image/svg+xml') {
-            throw new \RuntimeException(__('不允许覆盖 SVG 矢量文件'));
-        }
-        $ctx = $this->getRootContext();
-        $targetAbs = $abs;
-        $targetRelative = $relative;
-        if ($newFilename !== null && $newFilename !== '') {
-            $clean = $this->sanitizeLeafName($newFilename);
-            if ($clean === null) {
-                throw new \RuntimeException(__('文件名无效'));
+        $source = $this->resourceFactory->stream($stream);
+        try {
+            $this->writeAll($source->stream(), $bytes);
+            if (!rewind($source->stream())) {
+                throw new \RuntimeException((string)__('无法重置图片保存流。'));
             }
-            $dirRelative = \trim(\dirname(\str_replace('\\', '/', $relative)), '/.');
-            if ($dirRelative === '.') {
-                $dirRelative = '';
+            if ($visibility === FileAssetLibraryInterface::VISIBILITY_PRIVATE) {
+                $assetMetadata['access_policy'] = [
+                    'owner_actor_id' => $access->actorId,
+                    'policy_revision' => $access->policyRevision,
+                ];
             }
-            $targetRelative = \trim(($dirRelative === '' ? '' : $dirRelative . '/') . $clean, '/');
-            $targetAbs = $this->joinRootPath($ctx['root_path'], $targetRelative);
-            $this->assertWriteTargetInRoot($targetAbs, $ctx['root_real']);
-        }
-        if (@\file_put_contents($targetAbs, $bytes) === false) {
-            throw new \RuntimeException(__('覆盖原图失败'));
-        }
-        if ($targetAbs !== $abs && \is_file($abs)) {
-            @\unlink($abs);
+            $asset = $this->assets->upload(
+                $disk->diskCode(),
+                $objectKey,
+                $source->stream(),
+                $filename,
+                $detectedMime,
+                $access->localeCode,
+                $access,
+                $metadata,
+                $visibility,
+                array_replace(['upload_source' => 'media_manager_ai_draw'], $assetMetadata),
+                $width > 0 ? $width : null,
+                $height > 0 ? $height : null,
+            );
+        } finally {
+            $source->close();
         }
 
-        return $this->buildFileInfo($targetRelative);
+        return array_replace($asset, [
+            'hash' => $this->encodeHash($objectKey),
+            'phash' => $this->encodeHash(trim(dirname($objectKey), '/.')),
+            'name' => $filename,
+            'mime' => $detectedMime,
+            'size' => $byteCount,
+            'width' => $width > 0 ? $width : null,
+            'height' => $height > 0 ? $height : null,
+            'ts' => time(),
+            'path' => $objectKey,
+        ]);
     }
 
     public function sanitizeLeafName(string $name): ?string
     {
-        $name = \trim($name);
-        if ($name === '' || $name === '.' || $name === '..') {
-            return null;
-        }
-        if (\str_contains($name, '/') || \str_contains($name, '\\') || \preg_match('/[\x00-\x1F\x7F]/', $name)) {
-            return null;
-        }
-        if (\basename($name) !== $name) {
+        $name = trim($name);
+        $length = function_exists('mb_strlen') ? mb_strlen($name, 'UTF-8') : strlen($name);
+        if ($name === '' || $name === '.' || $name === '..' || $length > 255
+            || preg_match('//u', $name) !== 1
+            || str_contains($name, '/') || str_contains($name, '\\')
+            || preg_match('/[\x00-\x1F\x7F]/', $name) === 1
+            || basename($name) !== $name
+        ) {
             return null;
         }
 
@@ -223,117 +253,80 @@ class MediaStorageService
 
     public function extensionForFormat(string $format): string
     {
-        return match (\strtolower(\trim($format))) {
+        return match (strtolower(trim($format))) {
             'jpeg', 'jpg' => 'jpg',
             'webp' => 'webp',
             default => 'png',
         };
     }
 
-    private function normalizeRootPath(string $path): string
+    public function defaultVisibility(string $diskCode): string
     {
-        return \rtrim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $path), \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
+        $visibility = $this->storage->disk($diskCode)->snapshot()->visibility();
+        if (!in_array($visibility, [
+            FileAssetLibraryInterface::VISIBILITY_PUBLIC,
+            FileAssetLibraryInterface::VISIBILITY_PRIVATE,
+        ], true)) {
+            throw new \RuntimeException((string)__('存储磁盘可见性配置无效。'));
+        }
+
+        return $visibility;
     }
 
-    private function normalizeRelativePath(string $relative): string
+    public function deleteFile(string $diskCode, string $hash, FileAccessContext $access): void
     {
-        $relative = \trim(\str_replace('\\', '/', $relative), '/');
-        if ($relative === '') {
-            return '';
+        $this->assets->deleteObject(
+            $this->storage->canonicalizeDiskCode($diskCode),
+            $this->objectKeyFromHash($hash),
+            $access,
+        );
+    }
+
+    private function assertDirectoryExists(string $diskCode, string $directory): void
+    {
+        if ($directory === '') {
+            return;
         }
-        if (\preg_match('/[\x00-\x1F\x7F]/', $relative)) {
-            throw new \RuntimeException(__('无效路径'));
-        }
-        $segments = [];
-        foreach (\explode('/', $relative) as $segment) {
-            if ($segment === '' || $segment === '.' || $segment === '..') {
-                throw new \RuntimeException(__('无效路径'));
+        $parent = trim(dirname($directory), '/.');
+        foreach ($this->directories->list($diskCode, $parent, false) as $entry) {
+            if (($entry['type'] ?? null) === 'directory' && ($entry['path'] ?? null) === $directory) {
+                return;
             }
-            $segments[] = $segment;
         }
-
-        return \implode('/', $segments);
+        throw new \RuntimeException((string)__('目标目录不存在。'));
     }
 
-    private function joinRootPath(string $rootPath, string $relative): string
+    private function detectImageMime(string $bytes): string
     {
-        return \rtrim($rootPath, \DIRECTORY_SEPARATOR)
-            . ($relative === '' ? '' : \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, $relative));
-    }
-
-    private function ensureParentDir(string $filePath, string $rootReal): bool
-    {
+        $mime = '';
         try {
-            $this->assertWriteTargetInRoot($filePath, $rootReal);
+            $detected = (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+            $mime = is_string($detected) ? strtolower(trim($detected)) : '';
         } catch (\Throwable) {
-            return false;
         }
-        $dir = \dirname($filePath);
+        if (!in_array($mime, self::ALLOWED_IMAGE_MIMES, true)) {
+            $imageInfo = @getimagesizefromstring($bytes);
+            $mime = is_array($imageInfo) ? strtolower(trim((string)($imageInfo['mime'] ?? ''))) : '';
+        }
+        if (!in_array($mime, self::ALLOWED_IMAGE_MIMES, true)) {
+            throw new \InvalidArgumentException((string)__('文件不是受支持的位图图片。'));
+        }
 
-        return \is_dir($dir) || @\mkdir($dir, 0755, true);
+        return $mime;
     }
 
-    private function assertWriteTargetInRoot(string $targetPath, string $rootReal): string
+    /** @param resource $stream */
+    private function writeAll(mixed $stream, string $bytes): void
     {
-        $real = \realpath($targetPath);
-        if ($real !== false) {
-            $real = $this->normalizeAbsolutePath($real);
-            if (!$this->isPathInsideRoot($real, $rootReal)) {
-                throw new \RuntimeException(__('无效路径'));
+        $length = strlen($bytes);
+        for ($offset = 0; $offset < $length;) {
+            $chunk = substr($bytes, $offset, self::STREAM_CHUNK_BYTES);
+            $written = fwrite($stream, $chunk);
+            if ($written === false || $written === 0) {
+                throw new \RuntimeException((string)__('写入图片保存流失败。'));
             }
-
-            return $real;
+            $offset += $written;
+            SchedulerSystem::yield();
         }
-        $parent = \dirname($targetPath);
-        while (!\file_exists($parent)) {
-            $next = \dirname($parent);
-            if ($next === $parent) {
-                throw new \RuntimeException(__('无效路径'));
-            }
-            $parent = $next;
-        }
-        $parentReal = \realpath($parent);
-        if ($parentReal === false) {
-            throw new \RuntimeException(__('无效路径'));
-        }
-        $parentReal = $this->normalizeAbsolutePath($parentReal);
-        if (!$this->isPathInsideRoot($parentReal, $rootReal)) {
-            throw new \RuntimeException(__('无效路径'));
-        }
-
-        return $this->normalizeAbsolutePath($targetPath);
-    }
-
-    private function normalizeAbsolutePath(string $path): string
-    {
-        $path = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $path);
-        while (\str_contains($path, \DIRECTORY_SEPARATOR . \DIRECTORY_SEPARATOR)) {
-            $path = \str_replace(\DIRECTORY_SEPARATOR . \DIRECTORY_SEPARATOR, \DIRECTORY_SEPARATOR, $path);
-        }
-
-        return \rtrim($path, \DIRECTORY_SEPARATOR);
-    }
-
-    private function isPathInsideRoot(string $path, string $rootReal): bool
-    {
-        $path = $this->normalizeAbsolutePath($path);
-        $root = $this->normalizeAbsolutePath($rootReal);
-        if (\defined('IS_WIN') && IS_WIN) {
-            $path = \strtolower($path);
-            $root = \strtolower($root);
-        }
-
-        return $path === $root || \str_starts_with($path, $root . \DIRECTORY_SEPARATOR);
-    }
-
-    private function detectMime(string $path): string
-    {
-        $ext = \strtolower(\pathinfo($path, \PATHINFO_EXTENSION));
-        $mimes = $ext !== '' ? MimeTypes::getMimeTypes($ext) : [];
-        if ($mimes) {
-            return $mimes[0];
-        }
-
-        return 'application/octet-stream';
     }
 }

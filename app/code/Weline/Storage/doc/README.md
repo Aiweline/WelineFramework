@@ -1,17 +1,11 @@
 <!-- weline:module-readme:auto-generated -->
 # Weline_Storage 模块文档
 
-> 本 README 由 `dev/ai/scripts/generate-missing-module-readmes.php` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
+> 本 README 由 `prepare_project 文档修复流程` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
 
 ## 当前入口
 
-开发前先读：
-
-1. `app/code/Weline/Storage/doc/AI-INDEX.md`
-2. `dev/ai/diagrams/08-module-docs-index.txt`
-3. `dev/ai/global-constraints.md`
-4. `app/code/Weline/Theme/doc/AI-INDEX.md`
-5. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+开发前先调用项目 MCP `prepare_project`；返回 `ready` 后，使用 `resolve_task_context` 按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取得必要上下文。
 
 ## 模块定位
 
@@ -44,12 +38,16 @@
 
 ## 本模块文档资产
 
-- 当前除 `AI-INDEX.md` 外没有其他模块文档。后续一旦涉及稳定行为、接口或配置约定，请把长期说明补到本目录。
+- 本模块长期知识由当前 `doc/` 文档维护；新增稳定行为、接口或配置约定时继续补到本目录，由 MCP 动态索引。
 
 ## 维护规则
 
-- 跨模块只通过 `StorageCatalogInterface` 获取数据化存储源清单；`StorageManager` 和驱动实例不跨模块暴露。
+- 跨模块通过 `StorageCatalogInterface` 获取数据化存储源清单；通过
+  `StorageDirectoryManagerInterface` 执行经过路径校验的目录/文件管理命令。
+  `StorageManager`、驱动实例和凭据不跨模块暴露。
 - `StorageCatalog::all(?ScopeIdentity $scope)`：目录 `info` 脱敏（去掉 credentials/secret 等）；传入 Scope 时附加 COW `media_base_url`（软依赖 `Weline_Cdn`）。
+- `StorageDirectoryManager`：只接受存储源名称和相对路径，提供 capability、list、makeDirectory、move、delete；拒绝根目录变更、路径穿越和覆盖式重命名。
+- OSS/S3 的空目录以目录标记对象表示；整目录重命名先完成目标复制再清理源，清理失败时保留目标副本以便恢复。
 - 凭据密封全局约定：`app/code/Weline/Framework/doc/3-开发/secret_ref凭据密封.md`。
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。

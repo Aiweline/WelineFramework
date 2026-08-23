@@ -9,13 +9,15 @@ $models = $this->getData('models') ?? [];
 $adapterCount = $this->getData('adapter_count') ?? 0;
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI助手平台 - 科技赋能未来</title>
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet">
+    <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
+    <css>Weline_Theme::ui/weline-foundation.css</css>
+    <css>Weline_Theme::ui/weline-frontend.css</css>
+    <js type="module">Weline_Theme::ui/weline-ui.js</js>
     <style>
         * {
             margin: 0;
@@ -137,7 +139,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         /* 科技感按钮 */
-        .btn-tech {
+        .weline-btn-tech {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             color: white;
@@ -150,7 +152,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
         }
 
-        .btn-tech::before {
+        .weline-btn-tech::before {
             content: '';
             position: absolute;
             top: 50%;
@@ -163,12 +165,12 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             transition: width 0.6s, height 0.6s;
         }
 
-        .btn-tech:hover {
+        .weline-btn-tech:hover {
             transform: translateY(-3px);
             box-shadow: 0 0 40px rgba(102, 126, 234, 0.8), 0 5px 20px rgba(0, 0, 0, 0.3);
         }
 
-        .btn-tech:hover::before {
+        .weline-btn-tech:hover::before {
             width: 300px;
             height: 300px;
         }
@@ -393,28 +395,28 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
     <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg">
-        <div class="container">
+        <div class="w-container">
             <a class="navbar-brand" href="<?= $this->getUrl('*/frontend/index') ?>">
-                <i class="mdi mdi-robot-excited"></i> AI助手平台
+                <w:icon name="circle" size="sm"></w:icon> AI助手平台
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-w-target="#navbarNav" data-w-action="disclosure.toggle">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
+            <div class="w-disclosure__panel navbar-collapse" id="navbarNav" data-w-disclosure-panel hidden>
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="<?= $this->getUrl('*/frontend/index') ?>">
-                            <i class="mdi mdi-home"></i> 首页
+                    <li>
+                        <a href="<?= $this->getUrl('*/frontend/index') ?>" data-state="active">
+                            <w:icon name="home" size="sm"></w:icon> 首页
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="<?= $this->getUrl('*/frontend/chat') ?>">
-                            <i class="mdi mdi-message-processing"></i> AI聊天
+                    <li>
+                        <a href="<?= $this->getUrl('*/frontend/chat') ?>">
+                            <w:icon name="message" size="sm"></w:icon> AI聊天
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="<?= $this->getUrl('*/frontend/center') ?>">
-                            <i class="mdi mdi-account-circle"></i> 个人中心
+                    <li>
+                        <a href="<?= $this->getUrl('*/frontend/center') ?>">
+                            <w:icon name="user" size="sm"></w:icon> 个人中心
                         </a>
                     </li>
                 </ul>
@@ -424,35 +426,35 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
     <!-- 英雄区域 -->
     <div class="hero-section">
-        <div class="container text-center">
+        <div class="w-container w-text" data-align="center">
             <h1 class="hero-title fade-in">AI助手工具平台</h1>
             <p class="hero-subtitle fade-in">智能对话 · 场景适配 · 多模型支持</p>
-            <a href="<?= $this->getUrl('*/frontend/chat') ?>" class="btn btn-tech fade-in">
-                <i class="mdi mdi-rocket-launch"></i> 立即开始
+            <a href="<?= $this->getUrl('*/frontend/chat') ?>" class="w-button weline-btn-tech fade-in">
+                <w:icon name="circle" size="sm"></w:icon> 立即开始
             </a>
         </div>
     </div>
 
     <!-- 统计卡片 -->
-    <div class="container">
+    <div class="w-container">
         <div class="stats-container">
             <div class="stat-card fade-in">
                 <div class="stat-icon">
-                    <i class="mdi mdi-robot-excited"></i>
+                    <w:icon name="puzzle" size="sm"></w:icon>
                 </div>
                 <div class="stat-number"><?= $totalModels ?></div>
                 <div class="stat-label">AI模型</div>
             </div>
             <div class="stat-card fade-in">
                 <div class="stat-icon">
-                    <i class="mdi mdi-puzzle"></i>
+                    <w:icon name="puzzle" size="sm"></w:icon>
                 </div>
                 <div class="stat-number"><?= $adapterCount ?></div>
                 <div class="stat-label">场景适配器</div>
             </div>
             <div class="stat-card fade-in">
                 <div class="stat-icon">
-                    <i class="mdi mdi-flash"></i>
+                    <w:icon name="circle" size="sm"></w:icon>
                 </div>
                 <div class="stat-number">24/7</div>
                 <div class="stat-label">在线服务</div>
@@ -462,12 +464,12 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
     <!-- AI模型展示 -->
     <div class="models-section">
-        <div class="container">
+        <div class="w-container">
             <h2 class="section-title fade-in">🤖 可用AI模型</h2>
             <div class="models-grid">
                 <?php if (empty($models)): ?>
-                    <div class="col-12 text-center" style="color: #a8b2d1;">
-                        <i class="mdi mdi-robot-dead" style="font-size: 4rem; opacity: 0.3;"></i>
+                    <div class="w-text" style="color: #a8b2d1;" data-align="center">
+                        <w:icon name="circle" size="sm"></w:icon>
                         <p>暂无可用模型</p>
                     </div>
                 <?php else: ?>
@@ -492,13 +494,12 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
     <!-- 页脚 -->
     <div class="footer">
-        <div class="container">
+        <div class="w-container">
             <p>&copy; 2025 AI助手平台. All rights reserved.</p>
             <p>由 <span style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">WelineFramework</span> 驱动</p>
         </div>
     </div>
 
-    <script src="@static(Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
     <script>
         // 创建粒子背景
         function createParticles() {

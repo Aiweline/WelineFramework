@@ -8,29 +8,29 @@
     <!-- 本地化 -->
     <menu source="Weline_I18n::i18n_localization" name="i18n_localization" title="本地化" action="/i18n/backend/localization"
           parent="Weline_Backend::i18n_group"
-          icon="mdi mdi-earth"
+          icon="globe"
           order="10"/>
     
     <!-- 国家 -->
     <menu source="Weline_I18n::i18n_countries" name="i18n_countries" title="国家" action="/i18n/backend/countries"
           parent="Weline_Backend::i18n_group"
-          icon="mdi mdi-flag-outline"
+          icon="circle"
           order="20"/>
     
     <!-- 词典 -->
     <menu source="Weline_I18n::i18n_dictionaries" name="i18n_dictionaries" title="词典" action="/i18n/backend/dictionary"
           parent="Weline_Backend::i18n_group"
-          icon="mdi mdi-book-open-page-variant-outline"
+          icon="circle"
           order="30"/>
 
     <!-- AI缈昏瘧 -->
     <menu source="Weline_I18n::i18n_ai_translation" name="i18n_ai_translation" title="AI翻译" action="/i18n/backend/ai-translation"
           parent="Weline_Backend::i18n_group"
-          icon="mdi mdi-translate"
+          icon="language"
           order="40"/>
 
     <menu source="Weline_I18n::i18n_language_requests" name="i18n_language_requests" title="语言申请" action="/i18n/backend/language-requests"
           parent="Weline_Backend::i18n_group"
-          icon="mdi mdi-translate-variant"
+          icon="language"
           order="50"/>
 </menus>

@@ -1,156 +1,32 @@
 <?php
-/**
- * 队列内容/结果详情页面
- * @var \Weline\Framework\View\Template $this
- */
+/** @var \Weline\Framework\View\Template $this */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$content = (string)($data ?? '');
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
+$config = ['messages' => [
+    'copied' => (string)__('内容已复制到剪贴板'),
+    'copyFailed' => (string)__('复制失败，请手动复制'),
+]];
 ?>
-<style>
-.weline-queue-content {
-    background: var(--backend-color-card-bg, #fff);
-}
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-admin.css)">
 
-.weline-queue-content-body {
-    padding: var(--backend-spacing-md, 16px);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-radius: var(--backend-border-radius-md, 8px);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    max-height: 70vh;
-    overflow-y: auto;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.875rem;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-all;
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.weline-queue-content-empty {
-    text-align: center;
-    padding: var(--backend-spacing-xl, 40px);
-    color: var(--backend-color-text-tertiary, #adb5bd);
-}
-
-.weline-queue-content-empty i {
-    font-size: 3rem;
-    margin-bottom: var(--backend-spacing-md, 16px);
-    display: block;
-    opacity: 0.5;
-}
-
-.weline-queue-content-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: var(--backend-spacing-md, 16px);
-}
-
-.weline-queue-content-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border: none;
-    border-radius: var(--backend-border-radius, 6px);
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.weline-queue-content-btn--copy {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-queue-content-btn--copy:hover {
-    background: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-text-inverse, #fff);
-}
-</style>
-
-<!-- start page message -->
-<div class='row'>
+<main class="w-queue-content w-stack" data-w-component="queue-content" data-testid="queue-content-detail">
     <template>Weline_Component::message.phtml</template>
-</div>
-<!-- end message -->
-
-<div class='row'>
-    <div class='col-12'>
-        <div class='card weline-queue-content'>
-            <div class='card-body'>
-                <notempty name="data">
-                    <div class="weline-queue-content-body" id="queueContentBody">{{data}}</div>
-                    <div class="weline-queue-content-actions">
-                        <button type="button" class="weline-queue-content-btn weline-queue-content-btn--copy" data-queue-content-copy="1">
-                            <i class="mdi mdi-content-copy"></i>
-                            <lang>复制内容</lang>
-                        </button>
-                    </div>
-                <else/>
-                    <div class="weline-queue-content-empty">
-                        <i class="mdi mdi-text-box-remove-outline"></i>
-                        <p><lang>暂无内容数据</lang></p>
-                    </div>
-                </notempty>
-            </div>
+    <section class="w-card">
+        <div class="w-card__body w-stack">
+            <?php if ($content !== ''): ?>
+                <pre class="w-queue-content__body" data-w-queue-content-body><?= $escape($content) ?></pre>
+                <div class="w-queue-content__actions">
+                    <button type="button" class="w-button" data-tone="primary" data-variant="outline" data-w-queue-copy-content>
+                        <w:icon name="copy" size="sm" /> <?= $escape(__('复制内容')) ?>
+                    </button>
+                </div>
+            <?php else: ?>
+                <div class="w-empty"><w:icon name="minus" size="lg" /><p><?= $escape(__('暂无内容数据')) ?></p></div>
+            <?php endif; ?>
         </div>
-    </div>
-</div>
+    </section>
+</main>
 
-<script>
-(function() {
-    'use strict';
-    
-    window.WelineQueueContent = {
-        copyContent: function() {
-            var contentEl = document.getElementById('queueContentBody');
-            if (!contentEl) return;
-            
-            var text = contentEl.innerText || contentEl.textContent;
-            
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(function() {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.success('@lang(内容已复制到剪贴板)');
-                    }
-                }).catch(function() {
-                    WelineQueueContent.fallbackCopy(text);
-                });
-            } else {
-                WelineQueueContent.fallbackCopy(text);
-            }
-        },
-        
-        fallbackCopy: function(text) {
-            var textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px';
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                document.execCommand('copy');
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.success('@lang(内容已复制到剪贴板)');
-                }
-            } catch (err) {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error('@lang(复制失败，请手动复制)');
-                }
-            }
-            document.body.removeChild(textarea);
-        }
-    };
-
-    document.addEventListener('click', function(event) {
-        var target = event.target;
-        if (!(target instanceof Element)) {
-            return;
-        }
-
-        if (target.closest('[data-queue-content-copy]')) {
-            event.preventDefault();
-            window.WelineQueueContent.copyContent();
-        }
-    });
-})();
-</script>
+<script type="application/json" data-w-queue-content-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-queue-content.js)"></script>

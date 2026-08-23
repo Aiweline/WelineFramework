@@ -47,7 +47,7 @@ moduleDescribe(test, MODULE, 'async event delivery operations', () => {
       await expect(page.getByRole('heading', { name: '异步事件死信运维' })).toBeVisible();
       await expect(page.getByLabel('Delivery 摘要')).toBeVisible();
       await expect(page.locator('#ed-status')).toHaveValue('dead');
-      await expect(page.locator('#ed-website')).toHaveAttribute('min', '0');
+      await expect(page.locator('#ed-website_value')).toBeAttached();
       await expect(page.locator('#ed-replay-reason')).toHaveAttribute('maxlength', '500');
       expect(pageErrors, pageErrors.join('\n')).toEqual([]);
     },

@@ -33,15 +33,16 @@ final class PageTranslationTaskHandler implements ResumableTaskStartHandlerInter
     {
         $this->assertBackendOwner($owner);
         $pageId = (int)($input['page_id'] ?? 0);
+        $storeId = (int)($input['store_id'] ?? 0);
         $requestId = trim((string)($input['request_id'] ?? ''));
-        $frozen = $this->processor->freezeInput($pageId, $requestId);
+        $frozen = $this->processor->freezeInput($pageId, $requestId, $storeId > 0 ? $storeId : null);
         if ($owner->websiteId !== null && $owner->websiteId !== (int)$frozen['website_id']) {
             throw new ResumableTaskAccessDeniedException('CMS page translation website scope mismatch.');
         }
 
         return new TaskStartRequest(
             input: $frozen,
-            businessKey: self::TYPE_CODE . ':' . $owner->principal . ':' . $frozen['request_id'],
+            businessKey: self::TYPE_CODE . ':' . $owner->principal . ':' . $frozen['store_id'] . ':' . $frozen['request_id'],
             policy: TaskPolicy::defaults(),
         );
     }
@@ -147,6 +148,7 @@ final class PageTranslationTaskHandler implements ResumableTaskStartHandlerInter
         return [
             'page_id' => (int)$input['page_id'],
             'website_id' => (int)$input['website_id'],
+            'store_id' => (int)$input['store_id'],
             'source_locale' => (string)$input['source_locale'],
             'target_locales' => array_values((array)$input['target_locales']),
             'next_index' => $nextIndex,

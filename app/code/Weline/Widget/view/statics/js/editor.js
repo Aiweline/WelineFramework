@@ -1,28 +1,5 @@
 
-(function(g){
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['widget']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('widget').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(typeof window!=='undefined'?window:globalThis);
+
 /**
  * 可视化编辑器核心 JavaScript
  */
@@ -44,7 +21,7 @@ class WidgetEditor {
     }
 
     notify(type, message) {
-        const toast = window.BackendToast;
+        const toast = window.Weline.UI.toast;
         if (toast && typeof toast[type] === 'function') {
             toast[type](message);
             return;
@@ -241,16 +218,16 @@ class WidgetEditor {
                 <div class="widget-container" data-widget-id="${widgetId}" data-index="${index}">
                     <div class="widget-actions">
                         <button type="button" class="btn btn-sm btn-primary" data-widget-action="edit" data-index="${index}">
-                            <i class="ri-edit-line"></i>
+                            <w:icon name="edit" size="sm"></w:icon>
                         </button>
                         <button type="button" class="btn btn-sm btn-danger" data-widget-action="remove" data-index="${index}">
-                            <i class="ri-delete-bin-line"></i>
+                            <w:icon name="trash" size="sm"></w:icon>
                         </button>
                     </div>
                     <div class="widget-content">
                         <div class="widget-preview" data-widget-id="${widgetId}">
                             <div class="text-muted p-3 text-center">
-                                <i class="ri-widget-line" style="font-size: 24px;"></i>
+                                <w:icon name="grid" size="sm"></w:icon>
                                 <div class="mt-2">${widgetTitle}</div>
                                 <small class="text-muted">加载中...</small>
                             </div>
@@ -433,7 +410,7 @@ class WidgetEditor {
 
         try {
             const paramsJson = JSON.stringify(widget.params);
-            const response = await bqAdmin['widget'](
+            const response = await Weline.adminRequest('widget', 
                 `${this.previewUrl}?type=${encodeURIComponent(widget.type)}&name=${encodeURIComponent(widget.name)}&params=${encodeURIComponent(paramsJson)}`
             );
             const result = await response.json();
@@ -511,8 +488,7 @@ class WidgetEditor {
         const codeEditor = document.getElementById('code-editor');
         if (codeEditor) {
             codeEditor.value = code;
-            const modal = new bootstrap.Modal(document.getElementById('code-editor-modal'));
-            modal.show();
+            Weline.UI.dialog.open('#code-editor-modal');
         }
     }
 
@@ -534,7 +510,7 @@ class WidgetEditor {
             this.selectedWidget = null;
             document.getElementById('widget-properties').innerHTML = `
                 <div class="text-muted text-center py-5">
-                    <i class="ri-settings-3-line" style="font-size: 48px;"></i>
+                    <w:icon name="settings" size="sm"></w:icon>
                     <p>${__('选择一个部件进行配置')}</p>
                 </div>
             `;
@@ -742,4 +718,3 @@ class WidgetEditor {
 
 // 全局实例
 let widgetEditor;
-

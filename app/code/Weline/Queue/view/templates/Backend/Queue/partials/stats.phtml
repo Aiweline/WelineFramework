@@ -1,69 +1,26 @@
-<!-- 统计卡片 -->
-<div class="row weline-queue-stats">
-    <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('queue/backend/queue')" class="weline-queue-stat-card weline-queue-stat-all">
-            <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-format-list-bulleted"></i>
-            </div>
-            <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number"><?= (int)($stats['all'] ?? 0) ?></div>
-                <div class="weline-queue-stat-label"><lang>全部</lang></div>
-            </div>
+<?php
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\Ui\IconRegistry;
+
+$queueStatsIconRegistry = ObjectManager::getInstance(IconRegistry::class);
+$queueStats = is_array($stats ?? null) ? $stats : [];
+$queueStatItems = [
+    ['key' => 'all', 'status' => '', 'label' => __('全部'), 'icon' => 'list', 'tone' => 'primary'],
+    ['key' => 'pending', 'status' => 'pending', 'label' => __('等待中'), 'icon' => 'clock', 'tone' => 'neutral'],
+    ['key' => 'running', 'status' => 'running', 'label' => __('运行中'), 'icon' => 'play', 'tone' => 'info'],
+    ['key' => 'done', 'status' => 'done', 'label' => __('已完成'), 'icon' => 'check', 'tone' => 'success'],
+    ['key' => 'error', 'status' => 'error', 'label' => __('出错'), 'icon' => 'warning', 'tone' => 'danger'],
+    ['key' => 'stop', 'status' => 'stop', 'label' => __('已暂停'), 'icon' => 'pause', 'tone' => 'warning'],
+];
+?>
+<div class="w-queue-admin__stats">
+    <?php foreach ($queueStatItems as $item): ?>
+        <a class="w-queue-admin__stat" data-tone="<?= $item['tone'] ?>" href="@backend-url('queue/backend/queue')<?= $item['status'] !== '' ? '?status=' . urlencode($item['status']) : '' ?>">
+            <span class="w-queue-admin__stat-icon"><?= $queueStatsIconRegistry->render((string)$item['icon'], 'sm') ?></span>
+            <span class="w-queue-admin__stat-copy">
+                <strong class="w-queue-admin__stat-value"><?= (int)($queueStats[$item['key']] ?? 0) ?></strong>
+                <span class="w-queue-admin__stat-label"><?= htmlspecialchars((string)$item['label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></span>
+            </span>
         </a>
-    </div>
-    <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('queue/backend/queue')?status=pending" class="weline-queue-stat-card weline-queue-stat-pending">
-            <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-clock-outline"></i>
-            </div>
-            <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number"><?= (int)($stats['pending'] ?? 0) ?></div>
-                <div class="weline-queue-stat-label"><lang>等待中</lang></div>
-            </div>
-        </a>
-    </div>
-    <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('queue/backend/queue')?status=running" class="weline-queue-stat-card weline-queue-stat-running">
-            <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-play-circle-outline"></i>
-            </div>
-            <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number"><?= (int)($stats['running'] ?? 0) ?></div>
-                <div class="weline-queue-stat-label"><lang>运行中</lang></div>
-            </div>
-        </a>
-    </div>
-    <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('queue/backend/queue')?status=done" class="weline-queue-stat-card weline-queue-stat-done">
-            <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-check-circle-outline"></i>
-            </div>
-            <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number"><?= (int)($stats['done'] ?? 0) ?></div>
-                <div class="weline-queue-stat-label"><lang>已完成</lang></div>
-            </div>
-        </a>
-    </div>
-    <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('queue/backend/queue')?status=error" class="weline-queue-stat-card weline-queue-stat-error">
-            <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-alert-circle-outline"></i>
-            </div>
-            <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number"><?= (int)($stats['error'] ?? 0) ?></div>
-                <div class="weline-queue-stat-label"><lang>出错</lang></div>
-            </div>
-        </a>
-    </div>
-    <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('queue/backend/queue')?status=stop" class="weline-queue-stat-card weline-queue-stat-stop">
-            <div class="weline-queue-stat-icon">
-                <i class="mdi mdi-pause-circle-outline"></i>
-            </div>
-            <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number"><?= (int)($stats['stop'] ?? 0) ?></div>
-                <div class="weline-queue-stat-label"><lang>已暂停</lang></div>
-            </div>
-        </a>
-    </div>
+    <?php endforeach; ?>
 </div>

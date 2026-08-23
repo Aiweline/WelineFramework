@@ -6,7 +6,9 @@
         module.exports = api;
     }
     if (root) {
-        root.WelineCmsPageEditor = api;
+        root.Weline = root.Weline || {};
+        root.Weline.Cms = root.Weline.Cms || {};
+        root.Weline.Cms.PageEditor = api;
     }
 })(typeof window !== 'undefined' ? window : globalThis, function () {
     'use strict';
@@ -171,6 +173,7 @@
                 type_code: 'cms.page_translation',
                 input: {
                     page_id: Number(settings.pageId || 0),
+                    store_id: Number(settings.storeId || 0),
                     request_id: String(settings.requestId || ''),
                 },
             }, { silent: true }));
@@ -252,25 +255,25 @@
         return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
     }
 
-    function translationStorageKey(pageId) {
-        return 'weline:cms:page-translation:' + Number(pageId || 0);
+    function translationStorageKey(pageId, storeId) {
+        return 'weline:cms:page-translation:' + Number(pageId || 0) + ':' + Number(storeId || 0);
     }
 
-    function persistTranslationTask(pageId, task, host) {
+    function persistTranslationTask(pageId, storeId, task, host) {
         try {
-            host.sessionStorage.setItem(translationStorageKey(pageId), JSON.stringify(task));
+            host.sessionStorage.setItem(translationStorageKey(pageId, storeId), JSON.stringify(task));
         } catch (error) {
             // Storage is optional; the server task remains recoverable independently.
         }
     }
 
-    function loadTranslationTask(pageId, host) {
+    function loadTranslationTask(pageId, storeId, host) {
         try {
-            const raw = host.sessionStorage.getItem(translationStorageKey(pageId));
+            const raw = host.sessionStorage.getItem(translationStorageKey(pageId, storeId));
             return raw ? normalizeRuntimeTaskHandle(JSON.parse(raw)) : null;
         } catch (error) {
             try {
-                host.sessionStorage.removeItem(translationStorageKey(pageId));
+                host.sessionStorage.removeItem(translationStorageKey(pageId, storeId));
             } catch (ignored) {
                 // Storage is optional.
             }
@@ -278,9 +281,9 @@
         }
     }
 
-    function clearTranslationTask(pageId, host) {
+    function clearTranslationTask(pageId, storeId, host) {
         try {
-            host.sessionStorage.removeItem(translationStorageKey(pageId));
+            host.sessionStorage.removeItem(translationStorageKey(pageId, storeId));
         } catch (error) {
             // Storage is optional.
         }
@@ -299,6 +302,10 @@
         }));
     }
 
+    function translateUi(message) {
+        return typeof __ !== 'undefined' && typeof __ === 'function' ? __(message) : message;
+    }
+
     function init() {
         if (typeof document === 'undefined') {
             return null;
@@ -313,7 +320,7 @@
         try {
             payload = JSON.parse(stateNode.textContent || '{}');
         } catch (error) {
-            notify('CMS 编辑器语言数据无效。', 'error');
+            notify(translateUi('CMS 编辑器语言数据无效。'), 'error');
             return null;
         }
 
@@ -325,6 +332,9 @@
         const slugModeInput = form.querySelector('[name="slug_mode"]');
         const frame = document.querySelector('.cms-theme-editor-frame');
         const layoutInput = form.querySelector('[name="layout_option"]');
+        const storeInput = form.querySelector('[name="store_id"]');
+        const storeCodeInput = form.querySelector('[name="store_code"]');
+        const storeModeInput = form.querySelector('[name="store_mode"]');
         const translateButton = form.querySelector('[data-cms-translate-missing]');
         const translationLabel = form.querySelector('[data-cms-translation-label]');
         const translationStatus = form.querySelector('[data-cms-translation-status]');
@@ -337,12 +347,14 @@
         const persistedSourceTitle = buffer.value(sourceLocale);
         const supportedLocales = Array.isArray(payload.supported_locales) ? payload.supported_locales : [];
         const pageId = Number(payload.page_id || 0);
+        const currentStoreId = Number(storeInput ? storeInput.value : payload.storeId || 0);
         const translationConfig = payload.translation && typeof payload.translation === 'object' ? payload.translation : {};
         const translationMessages = translationConfig.messages && typeof translationConfig.messages === 'object'
             ? translationConfig.messages
             : {};
         let translationRunning = false;
         let translationDetached = false;
+        let cmsFormDirty = false;
         sourceLocaleInput.value = sourceLocale;
         localeInput.value = buffer.currentLocale();
         titleInput.value = buffer.value(buffer.currentLocale());
@@ -363,22 +375,12 @@
         }
 
         let bridge = null;
-        if (frame && window.WelineCmsPreviewBridge) {
-            bridge = window.WelineCmsPreviewBridge.createParentBridge({
+        const previewBridge = window.Weline?.Theme?.CmsPreviewBridge;
+        if (frame && previewBridge) {
+            bridge = previewBridge.createParentBridge({
                 hostWindow: window,
                 targetWindow: frame.contentWindow,
-                timeoutMs: 2000,
-                onFallback(context) {
-                    const url = new URL(frame.dataset.editorUrl || frame.src, window.location.href);
-                    if (context.locale) {
-                        url.searchParams.set('locale', context.locale);
-                    }
-                    if (context.layoutOption) {
-                        url.searchParams.set('layout_option', context.layoutOption);
-                    }
-                    url.searchParams.set('_cms_context', String(Date.now()));
-                    frame.src = url.toString();
-                },
+                timeoutMs: 10000,
             });
             bridge.start();
         }
@@ -388,21 +390,59 @@
             return String(field ? field.value : payload.layout_option || 'default');
         }
 
-        function syncPreviewContext() {
-            if (!bridge) {
-                return Promise.resolve({ ok: true });
-            }
-            return bridge.setContext({
+        function selectedStoreContext() {
+            const option = storeInput && storeInput.selectedOptions ? storeInput.selectedOptions[0] : null;
+            return {
+                storeId: Number(storeInput ? storeInput.value : payload.storeId || 0),
+                storeCode: String(option?.dataset?.storeCode || storeCodeInput?.value || payload.storeCode || ''),
+                storeMode: String(option?.dataset?.storeMode || storeModeInput?.value || payload.storeMode || 'normal'),
+                canonicalScope: String(option?.dataset?.canonicalScope || payload.scope || ''),
+            };
+        }
+
+        function buildPreviewContext(overrides) {
+            const store = selectedStoreContext();
+            const context = Object.assign({
+                pageId: Number(payload.pageId || pageId || 0),
+                websiteId: Number(payload.websiteId || 0),
+                websiteCode: String(payload.websiteCode || ''),
+                storeId: store.storeId,
+                storeCode: store.storeCode,
+                storeMode: store.storeMode,
+                scope: store.canonicalScope,
                 locale: buffer.currentLocale(),
                 layoutOption: currentLayoutOption(),
-            }).then(function (result) {
+            }, overrides || {});
+            if (overrides && 'canonicalScope' in overrides) {
+                context.scope = String(overrides.canonicalScope || '');
+            }
+            return context;
+        }
+
+        function syncPreviewContext(overrides) {
+            if (!bridge) {
+                // A loaded Theme iframe without the v2 bridge cannot prove its
+                // dirty state. Fail closed so Store/Locale/Layout changes never
+                // discard an editor session merely because an asset failed to
+                // initialize. New pages without an iframe remain switchable.
+                return Promise.resolve({
+                    ok: !frame,
+                    fallback: false,
+                    reason: frame ? 'bridge-unavailable' : 'no-theme-frame',
+                });
+            }
+            return bridge.setContext(buildPreviewContext(overrides)).then(function (result) {
                 if (result.dirty) {
-                    notify('Theme 编辑器有未保存修改，请先保存后再切换语言或布局。', 'warning');
+                    notify(translateUi('Theme 编辑器有未保存修改，请先保存后再切换语言或布局。'), 'warning');
                 } else if (!result.ok && !result.fallback && result.reason !== 'superseded') {
-                    notify('Theme 预览同步失败，已保留 CMS 表单内容。', 'warning');
+                    notify(translateUi('Theme 预览同步失败，已保留 CMS 表单内容。'), 'warning');
                 }
                 return result;
             });
+        }
+
+        function contextSwitchAccepted(result) {
+            return Boolean(result && result.ok === true);
         }
 
         function translationMessage(key, fallback) {
@@ -456,7 +496,7 @@
                 return;
             }
             const remaining = remainingTranslationLocales();
-            const storedTask = loadTranslationTask(pageId, window);
+            const storedTask = loadTranslationTask(pageId, currentStoreId, window);
             if (storedTask) {
                 translationLabel.textContent = translationMessage('continue', '继续查看翻译任务');
                 setTranslationBusy(false);
@@ -491,7 +531,7 @@
                 return;
             }
             syncTitles();
-            const task = taskToResume || loadTranslationTask(pageId, window);
+            const task = taskToResume || loadTranslationTask(pageId, currentStoreId, window);
             const remaining = remainingTranslationLocales();
             if (pageId < 1 || (!task && remaining.length === 0)) {
                 refreshTranslationButton();
@@ -521,10 +561,11 @@
                     api,
                     task,
                     pageId,
+                    storeId: Number(storeInput ? storeInput.value : payload.storeId || 0),
                     requestId: createTranslationRequestId(pageId, window),
                     isStopped: function () { return translationDetached; },
                     onTask: function (runningTask) {
-                        persistTranslationTask(pageId, runningTask, window);
+                        persistTranslationTask(pageId, currentStoreId, runningTask, window);
                     },
                     onUpdate: renderTranslationProgress,
                 });
@@ -533,7 +574,7 @@
                 }
 
                 const status = String(outcome.snapshot && outcome.snapshot.status || '').toLowerCase();
-                clearTranslationTask(pageId, window);
+                clearTranslationTask(pageId, currentStoreId, window);
                 if (status !== 'completed') {
                     setTranslationStatus(translationMessage('failed', '翻译任务未完成，请稍后重试。'), 'error');
                     return;
@@ -568,17 +609,65 @@
             }
         }
 
-        localeInput.addEventListener('change', function () {
+        localeInput.addEventListener('change', async function () {
             const nextLocale = String(localeInput.value || '');
-            if (!nextLocale || nextLocale === buffer.currentLocale()) {
+            const previousLocale = buffer.currentLocale();
+            if (!nextLocale || nextLocale === previousLocale) {
+                return;
+            }
+            const result = await syncPreviewContext({ locale: nextLocale });
+            if (result && result.reason === 'superseded') {
+                return;
+            }
+            if (!contextSwitchAccepted(result)) {
+                localeInput.value = previousLocale;
                 return;
             }
             titleInput.value = buffer.switchTo(nextLocale, titleInput.value);
             syncTitles();
             syncAutoSlug();
-            syncPreviewContext();
             refreshTranslationButton();
         });
+
+        if (storeInput) {
+            let previousStoreId = String(storeInput.value || '');
+            storeInput.addEventListener('change', async function () {
+                if (cmsFormDirty) {
+                    storeInput.value = previousStoreId;
+                    notify(translateUi('CMS 表单有未保存修改，请先保存后再切换店铺。'), 'warning');
+                    return;
+                }
+                const option = storeInput.selectedOptions ? storeInput.selectedOptions[0] : null;
+                const nextStoreId = String(storeInput.value || '');
+                const nextStoreCode = String(option?.dataset?.storeCode || '');
+                const nextStoreMode = String(option?.dataset?.storeMode || 'normal');
+                const nextCanonicalScope = String(option?.dataset?.canonicalScope || '');
+                const result = await syncPreviewContext({
+                    storeId: Number(nextStoreId || 0),
+                    storeCode: nextStoreCode,
+                    storeMode: nextStoreMode,
+                    canonicalScope: nextCanonicalScope,
+                });
+                if (result && result.reason === 'superseded') {
+                    return;
+                }
+                if (!contextSwitchAccepted(result)) {
+                    storeInput.value = previousStoreId;
+                    return;
+                }
+                if (storeCodeInput) {
+                    storeCodeInput.value = nextStoreCode;
+                }
+                if (storeModeInput) {
+                    storeModeInput.value = nextStoreMode;
+                }
+                previousStoreId = nextStoreId;
+                const url = new URL(window.location.href);
+                url.searchParams.set('store_id', nextStoreId);
+                url.searchParams.set('locale_code', buffer.currentLocale());
+                window.location.assign(url.toString());
+            });
+        }
 
         titleInput.addEventListener('input', function () {
             syncTitles();
@@ -591,23 +680,46 @@
             slugModeInput.value = 'manual';
         });
         form.querySelector('[data-cms-slug-auto]')?.addEventListener('click', function () {
+            cmsFormDirty = true;
             slugModeInput.value = 'auto';
             const sourceTitle = buffer.value(sourceLocale) || (buffer.currentLocale() === sourceLocale ? titleInput.value : '');
             slugInput.value = slugifyEnglish(sourceTitle);
             slugInput.focus();
         });
-        form.addEventListener('change', function (event) {
-            const target = event.target;
-            if (target && target !== layoutInput && target.matches && target.matches('[name="layout_option"]')) {
-                syncPreviewContext();
+        if (layoutInput) {
+            let previousLayoutOption = currentLayoutOption();
+            layoutInput.addEventListener('change', async function () {
+                const nextLayoutOption = currentLayoutOption();
+                if (!nextLayoutOption || nextLayoutOption === previousLayoutOption) {
+                    return;
+                }
+                const wasDirty = cmsFormDirty;
+                cmsFormDirty = true;
+                const result = await syncPreviewContext({ layoutOption: nextLayoutOption });
+                if (result && result.reason === 'superseded') {
+                    return;
+                }
+                if (!contextSwitchAccepted(result)) {
+                    layoutInput.value = previousLayoutOption;
+                    cmsFormDirty = wasDirty;
+                    return;
+                }
+                previousLayoutOption = nextLayoutOption;
+            });
+        }
+        form.addEventListener('input', function (event) {
+            if (event.target !== storeInput && event.target !== localeInput && event.target !== layoutInput) {
+                cmsFormDirty = true;
             }
         });
-        if (layoutInput) {
-            layoutInput.addEventListener('change', syncPreviewContext);
-        }
+        form.addEventListener('change', function (event) {
+            if (event.target !== storeInput && event.target !== localeInput && event.target !== layoutInput) {
+                cmsFormDirty = true;
+            }
+        });
         if (translateButton) {
             translateButton.addEventListener('click', function () {
-                startOrResumeTranslation(loadTranslationTask(pageId, window));
+                startOrResumeTranslation(loadTranslationTask(pageId, currentStoreId, window));
             });
             window.addEventListener('pagehide', function () {
                 translationDetached = true;
@@ -619,7 +731,7 @@
         syncAutoSlug();
         syncPreviewContext();
         refreshTranslationButton();
-        const storedTranslationTask = loadTranslationTask(pageId, window);
+        const storedTranslationTask = loadTranslationTask(pageId, currentStoreId, window);
         if (storedTranslationTask) {
             Promise.resolve().then(function () {
                 return startOrResumeTranslation(storedTranslationTask);

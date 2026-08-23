@@ -1292,6 +1292,11 @@ class AccountService
             return false;
         }
 
+        // 本地/自定义 OpenAI 兼容供应商：允许手工登记任意模型代码
+        if (VendorConfigManager::isCustomProvider($providerCode)) {
+            return true;
+        }
+
         $models = $this->getProviderModels($providerCode);
         foreach ($models as $model) {
             if (is_string($model) && trim($model) === $modelCode) {

@@ -20,6 +20,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\StateManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
@@ -48,6 +49,7 @@ final class ControllerFetchFileBeforeRequestCacheState
 class ControllerFetchFileBefore implements ObserverInterface
 {
     private const RUNTIME_CACHE_TTL = 86400;
+    private const MAX_RUNTIME_CACHE_ENTRIES = 2048;
 
     private static ?ControllerFetchFileBeforeRequestCacheState $mainRequestCache = null;
     /** @var \WeakMap<\Fiber, ControllerFetchFileBeforeRequestCacheState>|null */
@@ -98,6 +100,11 @@ class ControllerFetchFileBefore implements ObserverInterface
     {
         self::$runtimeCache = [];
         self::resetCurrentRequestCacheState();
+    }
+
+    public static function processCacheItemCount(): int
+    {
+        return count(self::$runtimeCache);
     }
 
     private function resolveFastAccountAuthLayout(DataObject $eventData, Template $template, string $contentTemplateFileName): void
@@ -184,7 +191,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         $requestPath = strtolower(trim((string)($request?->getUrlPath() ?? '')));
         $isThemeEditorPreviewRoute = $requestPath !== ''
             && (
-                str_contains($requestPath, '/theme/backend/theme-editor/')
+                str_contains(rtrim($requestPath, '/') . '/', '/theme/backend/theme-editor/')
                 || str_contains($requestPath, '/theme/backend/config/layout/preview')
                 || str_contains($requestPath, '/theme/backend/index/preview')
             );
@@ -220,9 +227,11 @@ class ControllerFetchFileBefore implements ObserverInterface
             }
 
             // 先解析 scope 和 configCacheKey，再按需 performanceLoad（有 layoutConfig 缓存则跳过）
-            $scope = $this->themeContext->resolveCurrentScope(
+            $scope = $this->resolveRequestLayoutScope(
                 $area,
-                $this->resolveExplicitScopeParam($request, $area)
+                $this->resolveExplicitScopeParam($request, $area),
+                $isBackendRequest,
+                $isThemeEditorPreviewRoute,
             );
 
             self::registerStateManager();
@@ -238,7 +247,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             } else {
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
-                ThemeData::performanceLoad();
+                ThemeData::performanceLoad(scope: $scope);
                 $didPerformanceLoad = true;
                 $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
                 $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
@@ -385,7 +394,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
                 if (!$didPerformanceLoad) {
-                    ThemeData::performanceLoad();
+                    ThemeData::performanceLoad(scope: $scope);
                 }
 
                 // 将原模板路径保存为变量，供布局模板使用
@@ -533,7 +542,12 @@ class ControllerFetchFileBefore implements ObserverInterface
             $template->setData('layoutOption', $layoutOption);
 
             if (!isset($scope)) {
-                $scope = $this->themeContext->resolveCurrentScope($area);
+                $scope = $this->resolveRequestLayoutScope(
+                    $area,
+                    null,
+                    $isBackendRequest,
+                    $isThemeEditorPreviewRoute,
+                );
             }
             // 性能极客模式：在事件中统一读取所有CSS颜色变量，转换为colors数组，供所有模板直接使用
             $colors = self::loadThemeColors($area, $scope, $theme);
@@ -542,6 +556,27 @@ class ControllerFetchFileBefore implements ObserverInterface
             // 保持原路径，不影响原有功能
             return;
         }
+    }
+
+    private function resolveRequestLayoutScope(
+        string $area,
+        ?string $explicitScope,
+        bool $isBackendRequest,
+        bool $requiresFrozenScope,
+    ): string {
+        // Ordinary backend chrome is global and does not pass through storefront
+        // website detection. Keep that layout lookup explicit without installing a
+        // synthetic request identity that ACL or business code could mistake as real.
+        // Scope-aware editor/preview routes still use the fail-closed resolver below.
+        if ($area === ThemeContextService::AREA_BACKEND
+            && $isBackendRequest
+            && !$requiresFrozenScope
+            && RequestContext::scopeIdentity() === null
+        ) {
+            return ThemeContextService::DEFAULT_SCOPE;
+        }
+
+        return $this->themeContext->resolveCurrentScope($area, $explicitScope);
     }
 
     private function resolveExplicitLayoutOption(DataObject $eventData, ?Request $request): string
@@ -609,7 +644,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $themeId,
                 $area,
                 $scope,
-                $this->resolveVirtualLayoutTargets($request)
+                $this->resolveVirtualLayoutTargets($request),
+                RequestContext::locale(),
             );
         } catch (\Throwable) {
             return null;
@@ -1156,15 +1192,37 @@ class ControllerFetchFileBefore implements ObserverInterface
             return [false, null];
         }
 
+        // Refresh insertion order so bounded eviction approximates LRU.
+        unset(self::$runtimeCache[$key]);
+        self::$runtimeCache[$key] = $entry;
         return [true, $entry['value'] ?? null];
     }
 
     private static function runtimeCacheSet(string $key, mixed $value): void
     {
+        self::pruneRuntimeCache();
+        unset(self::$runtimeCache[$key]);
         self::$runtimeCache[$key] = [
             'expires_at' => microtime(true) + self::runtimeCacheTtl(),
             'value' => $value,
         ];
+    }
+
+    private static function pruneRuntimeCache(): void
+    {
+        $now = microtime(true);
+        foreach (self::$runtimeCache as $key => $entry) {
+            if (!is_array($entry) || (float)($entry['expires_at'] ?? 0.0) < $now) {
+                unset(self::$runtimeCache[$key]);
+            }
+        }
+        while (count(self::$runtimeCache) >= self::MAX_RUNTIME_CACHE_ENTRIES) {
+            $oldest = array_key_first(self::$runtimeCache);
+            if ($oldest === null) {
+                break;
+            }
+            unset(self::$runtimeCache[$oldest]);
+        }
     }
 
     private static function runtimeCacheTtl(): int

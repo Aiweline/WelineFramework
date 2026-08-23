@@ -723,7 +723,7 @@ class PcController extends Core
 
     /**
      * 成功结果，配合 redirect() 使用。
-     * 结果桥接页地址由事件 Weline_Framework_Manager::result_bridge_url 返回（默认 Component Offcanvas getResult），iframe 时自动跳转该页显示 BackendToast。
+     * 结果桥接页地址由事件 Weline_Framework_Manager::result_bridge_url 返回（默认 Component Offcanvas getResult），iframe 时自动跳转该页显示 Weline.UI.toast。
      */
     protected function resultSuccess(string $message, bool $reload = true): void
     {

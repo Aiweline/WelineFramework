@@ -15,6 +15,9 @@ class DataInterface
 
     public const view_STATICS_DIR = 'statics';
 
+    /** Module font sources under `{module}/view/fonts/` (ttf/otf/woff/woff2). */
+    public const view_FONTS_DIR = 'fonts';
+
     public const view_BASE = 'base';
 
     public const view_TEMPLATE_DIR = 'templates';
@@ -25,6 +28,8 @@ class DataInterface
     public const dir_type_BLOCKS = 'blocks';
 
     public const dir_type_STATICS = 'statics';
+
+    public const dir_type_FONTS = 'fonts';
 
     public const dir_type_BASE = 'base';
 

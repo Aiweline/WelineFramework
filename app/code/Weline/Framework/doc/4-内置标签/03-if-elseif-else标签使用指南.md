@@ -357,6 +357,6 @@
 ## 相关文档
 
 - [var 标签使用指南](02-var标签使用指南.md)
-- [foreach 标签使用指南](05-foreach标签使用指南.md)
+- [foreach 标签使用指南](04-foreach标签使用指南.md)
 - [empty/notempty/has 标签使用指南](08-empty-notempty-has标签使用指南.md)
 

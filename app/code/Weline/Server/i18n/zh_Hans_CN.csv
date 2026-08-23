@@ -16,38 +16,44 @@
 "由 Framework 触发，用于查询 WLS 运行时维护模式状态。","由 Framework 触发，用于查询 WLS 运行时维护模式状态。"
 维护模式状态设置,维护模式状态设置
 "由 Framework 触发，用于在 WLS 运行时设置维护模式状态。","由 Framework 触发，用于在 WLS 运行时设置维护模式状态。"
-"Session query provider unsupported operation: %{1}","Session query provider unsupported operation: %{1}"
-"Session Query","Session Query"
-"Unified shared session facade query entry","Unified shared session facade query entry"
-"Read session data","Read session data"
-"Write full session payload","Write full session payload"
-"Destroy session","Destroy session"
-"Check session exists","Check session exists"
-"Touch session ttl","Touch session ttl"
-"List sessions","List sessions"
-"Run session gc","Run session gc"
-"Persist session store","Persist session store"
-"Ping session service","Ping session service"
-"Get session stats","Get session stats"
-"Get session runtime","Get session runtime"
-"Memory query provider unsupported operation: %{1}","Memory query provider unsupported operation: %{1}"
-"Memory Query","Memory Query"
-"Unified shared memory facade query entry","Unified shared memory facade query entry"
-"Multi get","Multi get"
-"Multi set","Multi set"
-"Clear namespace","Clear namespace"
-"Increment value","Increment value"
-"Decrement value","Decrement value"
-"Append value","Append value"
-"Compare and set","Compare and set"
-"List namespaces","List namespaces"
-"Run memory gc","Run memory gc"
-"Persist memory store","Persist memory store"
-"Ping memory service","Ping memory service"
-"Get memory stats","Get memory stats"
-"Get memory runtime","Get memory runtime"
+"Session query provider unsupported operation: %{1}",会话查询提供程序不支持的操作：%{1}
+"Session Query",会话查询
+"Unified shared session facade query entry",统一共享会话门面查询入口
+"Read session data",读取会话数据
+"Write full session payload",写入完整的会话负载
+"Destroy session",销毁会话
+"Check session exists",检查会话是否存在
+"Touch session ttl","触摸会话 TTL"
+"List sessions",列出会话
+"Run session gc",运行会话GC
+"Persist session store",持久会话存储
+"Ping session service","Ping 会话服务"
+"Get session stats",获取会话统计信息
+"Get session runtime",获取会话运行时间
+"Memory query provider unsupported operation: %{1}",内存查询提供程序不支持的操作：%{1}
+"Memory Query",内存查询
+"Unified shared memory facade query entry",统一共享内存门面查询入口
+"Multi get",多获取
+"Multi set",多套
+"Clear namespace",清除命名空间
+"Increment value",增量值
+"Decrement value",递减值
+"Append value",附加值
+"Compare and set",比较并设定
+"List namespaces",列出命名空间
+"Run memory gc",运行内存GC
+"Persist memory store",持久化内存存储
+"Ping memory service","Ping 内存服务"
+"Get memory stats",获取内存统计数据
+"Get memory runtime",获取内存运行时间
+"不支持的 WLS 面板生命周期操作：%{1}","不支持的 WLS 面板生命周期操作：%{1}"
+"WLS 面板生命周期","WLS 面板生命周期"
+"在后台权限与项目边界内控制 WLS 重载和重启","在后台权限与项目边界内控制 WLS 重载和重启"
+请先登录后台,请先登录后台
+后台操作员不可用,后台操作员不可用
+"无权执行 WLS 面板生命周期操作","无权执行 WLS 面板生命周期操作"
 "Server 查询器不支持的操作：%{1}","Server 查询器不支持的操作：%{1}"
-"Server 查询","Server 查询"
+"Server 查询",服务器查询
 "提供 SSL 证书申请等能力","提供 SSL 证书申请等能力"
 "申请 SSL 证书","申请 SSL 证书"
 域名,域名
@@ -62,9 +68,9 @@
 "根域名 ID，DNS-01 时用于解析 DNS 账户","根域名 ID，DNS-01 时用于解析 DNS 账户"
 "手动导入 SSL 证书（支持 PEM/PFX）","手动导入 SSL 证书（支持 PEM/PFX）"
 "证书提供商标记，默认 manual","证书提供商标记，默认 manual"
-"fullchain PEM 文本","fullchain PEM 文本"
-"private key PEM 文本","private key PEM 文本"
-"chain PEM 文本","chain PEM 文本"
+"fullchain PEM 文本","全链 PEM 文本"
+"private key PEM 文本","私钥 PEM 文本"
+"chain PEM 文本","链 PEM 文本"
 "pfx/p12 文件 base64 内容","pfx/p12 文件 base64 内容"
 "pfx/p12 文件密码","pfx/p12 文件密码"
 "校验域名 URL 可达性及是否命中期望 IP","校验域名 URL 可达性及是否命中期望 IP"
@@ -95,14 +101,14 @@
 "通知各 Worker 立即释放闲置 Fiber","通知各 Worker 立即释放闲置 Fiber"
 "读取 WLS 攻击统计","读取 WLS 攻击统计"
 统计天数,统计天数
-"Resolve a WLS Panel managed project for plugin context","Resolve a WLS Panel managed project for plugin context"
-"Managed project ID","Managed project ID"
-"Managed project domain","Managed project domain"
-"Read WLS performance summary for the development panel","Read WLS performance summary for the development panel"
-"Read recent WLS performance requests for the development panel","Read recent WLS performance requests for the development panel"
-"Read one WLS performance request detail","Read one WLS performance request detail"
-"Read SessionServer and MemoryServer timing snapshots","Read SessionServer and MemoryServer timing snapshots"
-"Clear short-lived WLS performance panel traces","Clear short-lived WLS performance panel traces"
+"Resolve a WLS Panel managed project for plugin context","解析插件上下文的 WLS Panel 托管项目"
+"Managed project ID","托管项目 ID"
+"Managed project domain",托管项目域
+"Read WLS performance summary for the development panel","阅读开发面板的 WLS 性能摘要"
+"Read recent WLS performance requests for the development panel","阅读开发小组最近的 WLS 性能请求"
+"Read one WLS performance request detail","阅读一份 WLS 性能请求详细信息"
+"Read SessionServer and MemoryServer timing snapshots",读取SessionServer和MemoryServer时序快照
+"Clear short-lived WLS performance panel traces","清除短暂的 WLS 性能面板痕迹"
 "为当前后台浏览器设置 WLS 健康检查放行 Cookie","为当前后台浏览器设置 WLS 健康检查放行 Cookie"
 域名不能为空,域名不能为空
 "PFX 文件内容无效（Base64 解码失败）","PFX 文件内容无效（Base64 解码失败）"
@@ -117,28 +123,27 @@
 停止命令已发送,停止命令已发送
 重启命令已发送,重启命令已发送
 热重载命令已发送,热重载命令已发送
-"Only local/dev/test environment may write hosts entries","Only local/dev/test environment may write hosts entries"
-"Domain is required","Domain is required"
-"Only managed local WLS domains may be injected into local hosts","Only managed local WLS domains may be injected into local hosts"
-"The requested .localhost domain resolves to loopback and does not require a hosts entry","The requested .localhost domain resolves to loopback and does not require a hosts entry"
-"The requested domain is not a valid local hostname","The requested domain is not a valid local hostname"
-"Only managed local wildcard domains are allowed for local wildcard certificate issuance","Only managed local wildcard domains are allowed for local wildcard certificate issuance"
-"Failed to ensure the managed local wildcard certificate","Failed to ensure the managed local wildcard certificate"
+"Only local/dev/test environment may write hosts entries",只有本地/开发/测试环境可以写入主机条目
+"Domain is required",域名为必填项
+"Only managed local WLS domains may be injected into local hosts","仅受管理的本地 WLS 域可以注入本地主机"
+"The requested .localhost domain resolves to loopback and does not require a hosts entry","请求的 .localhost 域解析为环回并且不需要主机条目"
+"The requested domain is not a valid local hostname",请求的域不是有效的本地主机名
+"Only managed local wildcard domains are allowed for local wildcard certificate issuance",仅允许托管本地通配符域进行本地通配符证书颁发
+"Failed to ensure the managed local wildcard certificate",无法确保托管本地通配符证书
 维护模式已启用,维护模式已启用
 维护模式已禁用,维护模式已禁用
-请先登录后台,请先登录后台
-"Managed project context is empty.","Managed project context is empty."
-"Managed project was not found.","Managed project was not found."
-"Managed project context resolved.","Managed project context resolved."
-"Invalid request id","Invalid request id"
-"WLS request trace loaded","WLS request trace loaded"
-"WLS request trace was not found","WLS request trace was not found"
+"Managed project context is empty.",托管项目上下文为空。
+"Managed project was not found.",未找到托管项目。
+"Managed project context resolved.",托管项目上下文已解决。
+"Invalid request id","请求 ID 无效"
+"WLS request trace loaded","已加载 WLS 请求跟踪"
+"WLS request trace was not found","未找到 WLS 请求跟踪"
 请指定域名,请指定域名
 未找到证书记录,未找到证书记录
 本地域名证书不允许删除,本地域名证书不允许删除
 "Session 列表加载完成","Session 列表加载完成"
 "缺少 Session ID","缺少 Session ID"
-"Session 已销毁","Session 已销毁"
+"Session 已销毁",会议已回顾
 "Session 销毁失败，请稍后重试","Session 销毁失败，请稍后重试"
 "Session 数据已持久化","Session 数据已持久化"
 "Session 持久化失败","Session 持久化失败"
@@ -156,7 +161,7 @@
 内存服务持久化失败,内存服务持久化失败
 内存服务垃圾回收已执行,内存服务垃圾回收已执行
 内存服务垃圾回收执行失败,内存服务垃圾回收执行失败
-"WLS performance panel is only available in development or authorized debug mode","WLS performance panel is only available in development or authorized debug mode"
+"WLS performance panel is only available in development or authorized debug mode","WLS 性能面板仅在开发或授权调试模式下可用"
 包太大：%{1},包太大：%{1}
 "onMessage 错误：%{1}","onMessage 错误：%{1}"
 "onClose 错误：%{1}","onClose 错误：%{1}"
@@ -190,8 +195,9 @@
 %{1}：%{2},%{1}：%{2}
 续签失败,续签失败
 "续签完成：成功 %{1} 个，失败 %{2} 个","续签完成：成功 %{1} 个，失败 %{2} 个"
-"Legacy WLS Plugin Marketplace Redirect","Legacy WLS Plugin Marketplace Redirect"
-"Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace.","Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace."
+"Legacy WLS Plugin Marketplace Redirect","旧版 WLS 插件市场重定向"
+store,店铺
+"Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace.","将旧的 WLS 市场条目重定向到独立的 WLS Panel 市场。"
 "WLS 面板","WLS 面板"
 "WLS 项目","WLS 项目"
 "Nginx 公网入口","Nginx 公网入口"
@@ -212,27 +218,47 @@
 托管项目已删除。,托管项目已删除。
 安全规则已保存。,安全规则已保存。
 面板插件能力已刷新。,面板插件能力已刷新。
+grid,网格
 "访问 WLS 面板","访问 WLS 面板"
 "查看 WLS 面板仪表盘","查看 WLS 面板仪表盘"
 "查看 WLS 面板项目","查看 WLS 面板项目"
+server,服务器
 "查看 WLS 面板托管项目","查看 WLS 面板托管项目"
+"查看 WLS 项目运行状态","查看 WLS 项目运行状态"
+heart,心
+"查看项目 WLS 实例和 Ready 状态","查看项目 WLS 实例和 Ready 状态"
+"重载 WLS 项目","重载 WLS 项目"
+refresh,刷新
+"滚动重载项目 WLS 工作进程","滚动重载项目 WLS 工作进程"
+"重启 WLS 项目","重启 WLS 项目"
+star,星星
+"保持 Master 在线并重建项目全部 WLS 工作进程","保持 Master 在线并重建项目全部 WLS 工作进程"
 "查看 WLS 面板网关","查看 WLS 面板网关"
+circle,圆圈
 "查看 WLS 面板插件","查看 WLS 面板插件"
+puzzle,谜
 "查看 WLS 面板插件页面","查看 WLS 面板插件页面"
 "查看 WLS 插件商城","查看 WLS 插件商城"
 "刷新 WLS 面板插件能力","刷新 WLS 面板插件能力"
 "查看 WLS 安全","查看 WLS 安全"
+shield,盾
 "查看 WLS 攻击日志","查看 WLS 攻击日志"
+search,搜索
 "查看 WLS 安全规则","查看 WLS 安全规则"
+settings,设置
 "查看 WLS 项目安全策略","查看 WLS 项目安全策略"
 "查看 WLS 安全策略审计","查看 WLS 安全策略审计"
+clock,钟
 "保存 WLS 面板项目","保存 WLS 面板项目"
+save,节省
 "保存 WLS 面板托管项目","保存 WLS 面板托管项目"
 "删除 WLS 面板项目","删除 WLS 面板项目"
+trash,trash
 "删除 WLS 面板托管项目","删除 WLS 面板托管项目"
 "保存 WLS 安全规则","保存 WLS 安全规则"
-"Weline Server 管理","Weline Server 管理"
-"Session 管理","Session 管理"
+check,查看
+"Weline Server 管理",微线服务器管理
+"Session 管理",会话管理
 内存服务管理,内存服务管理
 访问被拒绝：仅允许本地请求,访问被拒绝：仅允许本地请求
 实例名称不合法,实例名称不合法
@@ -245,31 +271,36 @@
 "命名空间清理失败，请检查 Memory Service 状态","命名空间清理失败，请检查 Memory Service 状态"
 命名空间或键名参数不合法,命名空间或键名参数不合法
 "内存服务垃圾回收执行失败，请检查 Memory Service 连接状态","内存服务垃圾回收执行失败，请检查 Memory Service 连接状态"
-"启动 Weline Server","启动 Weline Server"
+"启动 Weline Server",启动Weline服务器
+play,玩
 "启动 Weline Server 实例","启动 Weline Server 实例"
-"停止 Weline Server","停止 Weline Server"
+"停止 Weline Server",停止Weline服务器
+stop,停止
 "停止 Weline Server 实例","停止 Weline Server 实例"
-"重启 Weline Server","重启 Weline Server"
+"重启 Weline Server",重启Weline服务器
 "强制重启 Weline Server 实例","强制重启 Weline Server 实例"
 "热重载 Weline Server","热重载 Weline Server"
 "热重载 Weline Server 代码","热重载 Weline Server 代码"
 "切换 Weline Server 维护模式","切换 Weline Server 维护模式"
 "启用 Weline Server 维护模式","启用 Weline Server 维护模式"
 "禁用 Weline Server 维护模式","禁用 Weline Server 维护模式"
-"查看 Weline Server Session","查看 Weline Server Session"
+"查看 Weline Server Session","查看Weline 服务器会话"
+list,列表
 "查看 Weline Server Session 列表","查看 Weline Server Session 列表"
 "查看 Weline Server Session 详情","查看 Weline Server Session 详情"
-"销毁 Weline Server Session","销毁 Weline Server Session"
+"销毁 Weline Server Session","回顾 Weline 服务器会话"
 "销毁指定 Weline Server Session","销毁指定 Weline Server Session"
-"持久化 Weline Server Session","持久化 Weline Server Session"
+"持久化 Weline Server Session","持久化 Weline 服务器会话"
 "持久化 Weline Server Session 数据","持久化 Weline Server Session 数据"
-"回收 Weline Server Session","回收 Weline Server Session"
+"回收 Weline Server Session",恢复Weline服务器会话
 "执行 Weline Server Session 垃圾回收","执行 Weline Server Session 垃圾回收"
 "查看 Weline Server 内存服务","查看 Weline Server 内存服务"
+eye,眼睛
 "查看 Weline Server 内存命名空间","查看 Weline Server 内存命名空间"
 "查看 Weline Server 内存命名空间详情","查看 Weline Server 内存命名空间详情"
 "清理 Weline Server 内存命名空间","清理 Weline Server 内存命名空间"
 "删除 Weline Server 内存键","删除 Weline Server 内存键"
+minus,减
 "删除 Weline Server 内存服务键","删除 Weline Server 内存服务键"
 "持久化 Weline Server 内存服务","持久化 Weline Server 内存服务"
 "持久化 Weline Server 内存服务数据","持久化 Weline Server 内存服务数据"
@@ -296,9 +327,9 @@
 热重载,热重载
 触发代码热重载（仅本地访问）,触发代码热重载（仅本地访问）
 状态查询,状态查询
-"Dispatcher 状态","Dispatcher 状态"
+"Dispatcher 状态",调度员状态
 "获取 Dispatcher 分流器状态（仅显式兼容/诊断拓扑）","获取 Dispatcher 分流器状态（仅显式兼容/诊断拓扑）"
-"Workers 列表","Workers 列表"
+"Workers 列表",工人列表
 "获取所有 Worker 进程列表","获取所有 Worker 进程列表"
 调试工具,调试工具
 请求回显,请求回显
@@ -321,9 +352,9 @@
 无效的监听地址：%{1},无效的监听地址：%{1}
 "Windows 模式：单进程运行","Windows 模式：单进程运行"
 "Weline Server 只能在 CLI 模式下运行","Weline Server 只能在 CLI 模式下运行"
-"用法：php yourfile.php {start|stop|restart|reload|status}","用法：php yourfile.php {start|stop|restart|reload|status}"
-"Fork 失败","Fork 失败"
-"setsid 失败","setsid 失败"
+"用法：php yourfile.php {start|stop|restart|reload|status}","格式：php yourfile.php {start|stop|restart|reload|status}"
+"Fork 失败",分叉失败
+"setsid 失败",设置失败
 "二次 Fork 失败","二次 Fork 失败"
 "无法保存 PID 到 %{1}","无法保存 PID 到 %{1}"
 高性能异步常驻内存服务器,高性能异步常驻内存服务器
@@ -401,7 +432,7 @@ HTTPS,HTTPS
 中间证书,中间证书
 请确保域名已正确解析到本服务器,请确保域名已正确解析到本服务器
 证书提供商,证书提供商
-LiteSSL,LiteSSL
+LiteSSL,精简版SSL
 取消,取消
 请重启服务器使配置生效,请重启服务器使配置生效
 请重启或热重载服务器使策略生效,请重启或热重载服务器使策略生效
@@ -488,7 +519,7 @@ LiteSSL,LiteSSL
 实例名称,实例名称
 监听地址,监听地址
 端口范围,端口范围
-"Worker 数","Worker 数"
+"Worker 数",工人数
 已停止,已停止
 服务器操作,服务器操作
 重启,重启
@@ -505,13 +536,13 @@ LiteSSL,LiteSSL
 不可用,不可用
 共享状态管理,共享状态管理
 "覆盖 Session 与 Memory Service 的状态、检索、清理能力","覆盖 Session 与 Memory Service 的状态、检索、清理能力"
-"Session 数","Session 数"
+"Session 数",会话数
 客户端,客户端
 内存,内存
 刷新列表,刷新列表
 立即持久化,立即持久化
 "GC 清理","GC 清理"
-"Session ID","Session ID"
+"Session ID",会话ID
 字段数,字段数
 预览,预览
 "点击「查看详情」可查看该 Session 的全部字段信息","点击「查看详情」可查看该 Session 的全部字段信息"
@@ -531,7 +562,7 @@ LiteSSL,LiteSSL
 销毁,销毁
 加载失败：,加载失败：
 "确认销毁该 Session 吗？此操作会让对应用户立即失效。","确认销毁该 Session 吗？此操作会让对应用户立即失效。"
-"销毁 Session","销毁 Session"
+"销毁 Session",调研会议
 确认销毁,确认销毁
 操作失败,操作失败
 销毁失败,销毁失败
@@ -757,7 +788,7 @@ LiteSSL,LiteSSL
 已变更规则区域,已变更规则区域
 公共规则编辑器,公共规则编辑器
 "可视化字段会更新公共 AttackDetector 规则键，再保存合并后的 JSON。","可视化字段会更新公共 AttackDetector 规则键，再保存合并后的 JSON。"
-AttackDetector,AttackDetector
+AttackDetector,攻击检测器
 最大唯一路径数,最大唯一路径数
 受保护路径列表,受保护路径列表
 没有待保存的规则变更。,没有待保存的规则变更。
@@ -781,7 +812,7 @@ AttackDetector,AttackDetector
 项目范围,项目范围
 实例,实例
 全部实例,全部实例
-IP,IP
+IP,知识产权
 严重级别,严重级别
 全部严重级别,全部严重级别
 攻击类型,攻击类型
@@ -833,7 +864,7 @@ IP,IP
 "由 %{1} 提供","由 %{1} 提供"
 未声明二级菜单,未声明二级菜单
 插件页面,插件页面
-"+%{1} more","+%{1} more"
+"+%{1} more","+%{1} 更多"
 打开,打开
 "使用 WLS 侧边栏菜单和原生外壳。","使用 WLS 侧边栏菜单和原生外壳。"
 未声明面板入口,未声明面板入口
@@ -880,24 +911,53 @@ IP,IP
 "搜索 WLS 实例","搜索 WLS 实例"
 搜索名称、域名、路径或状态,搜索名称、域名、路径或状态
 每页行数,每页行数
+WLS,世界LS
 可编辑运行时档案,可编辑运行时档案
 点击配置档案,点击配置档案
+不可控制,不可控制
+"当前项目无法从此面板控制 WLS。","当前项目无法从此面板控制 WLS。"
 托管,托管
+实例：%{1},实例：%{1}
+未绑定实例,未绑定实例
 详情,详情
+重载,重载
 数据库,数据库
 PHP,PHP
+"WLS 生命周期控制","WLS 生命周期控制"
+"WLS 生命周期","WLS 生命周期"
+"重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。","重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。"
+"Worker 代际","Worker 代际"
+"Ready Worker",就绪工人
+重载项目,重载项目
+重启工作进程,重启工作进程
+打开项目面板,打开项目面板
 "PHP 配置","PHP 配置"
 数据库配置,数据库配置
 文件,文件
 部署,部署
 编辑,编辑
-"运行中 Workers","运行中 Workers"
+高风险操作,高风险操作
+"重启 WLS 工作进程","重启 WLS 工作进程"
+"重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。","重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。"
+输入项目名称以确认,输入项目名称以确认
+输入上方项目名称,输入上方项目名称
+确认重启,确认重启
+"WLS 后台业务 API 尚未加载。","WLS 后台业务 API 尚未加载。"
+"WLS 生命周期操作失败。","WLS 生命周期操作失败。"
+正在提交项目重载…,正在提交项目重载…
+正在提交项目重启…,正在提交项目重启…
+"操作已提交，正在等待实例恢复到 Ready…","操作已提交，正在等待实例恢复到 Ready…"
+"项目重载完成，实例已恢复到 Ready。","项目重载完成，实例已恢复到 Ready。"
+"项目重启完成，Master 保持在线且工作进程已恢复到 Ready。","项目重启完成，Master 保持在线且工作进程已恢复到 Ready。"
+"操作已提交，但等待 Ready 超时；请继续查看实例状态。","操作已提交，但等待 Ready 超时；请继续查看实例状态。"
+输入的项目名称不匹配。,输入的项目名称不匹配。
+"运行中 Workers","运行中 工人"
 总连接数,总连接数
 总请求数,总请求数
 攻击拦截,攻击拦截
 进程状态,进程状态
 管理,管理
-"Master 进程","Master 进程"
+"Master 进程",掌握进程
 主控进程,主控进程
 "Dispatcher 进程","Dispatcher 进程"
 分流器（Windows）,分流器（Windows）
@@ -914,7 +974,7 @@ PHP,PHP
 PID,PID
 运行时长,运行时长
 连接/活跃,连接/活跃
-Fiber,Fiber
+Fiber,纤维
 总请求,总请求
 心跳,心跳
 等待状态刷新...,等待状态刷新...
@@ -936,10 +996,10 @@ Fiber,Fiber
 "CDN 通知","CDN 通知"
 按类型分布,按类型分布
 按严重程度,按严重程度
-"Top 攻击 IP","Top 攻击 IP"
+"Top 攻击 IP",热门攻击IP
 流量与压测,流量与压测
 "Host 分组流量（最近5分钟）","Host 分组流量（最近5分钟）"
-Host,Host
+Host,主持人
 平均延迟(ms),平均延迟(ms)
 暂无流量数据,暂无流量数据
 "压测目标 URL，例如 http://127.0.0.1:9981/_wls/health","压测目标 URL，例如 http://127.0.0.1:9981/_wls/health"
@@ -955,7 +1015,7 @@ Host,Host
 "展开 Fiber 列表","展开 Fiber 列表"
 闲,闲
 忙,忙
-"无 Fiber","无 Fiber"
+"无 Fiber",无纤维
 "连接 ID","连接 ID"
 协议,协议
 暂无状态日志,暂无状态日志
@@ -982,10 +1042,10 @@ Host,Host
 封禁(秒),封禁(秒)
 白名单（ip_whitelist）,白名单（ip_whitelist）
 "新增 IP/CIDR","新增 IP/CIDR"
-"CDN 信任 IP（cdn_trusted_ips）","CDN 信任 IP（cdn_trusted_ips）"
+"CDN 信任 IP（cdn_trusted_ips）",CDN信任IP（cdn_trusted_ips）
 恶意特征（malicious_patterns）,恶意特征（malicious_patterns）
 新增正则,新增正则
-"恶意 UA（bad_user_agents）","恶意 UA（bad_user_agents）"
+"恶意 UA（bad_user_agents）",恶意UA（bad_user_agents）
 "新增 UA 正则","新增 UA 正则"
 敏感路径（protected_paths）,敏感路径（protected_paths）
 新增敏感路径,新增敏感路径
@@ -1011,7 +1071,7 @@ Host,Host
 CDN通知,CDN通知
 攻击日志列表,攻击日志列表
 "共 %{1} 条","共 %{1} 条"
-URI,URI
+URI,统一资源标识符
 严重程度,严重程度
 未拦截,未拦截
 缓存清理未返回可等待的操作编号。,缓存清理未返回可等待的操作编号。
@@ -1030,50 +1090,50 @@ URI,URI
 "子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书","子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书"
 "HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
 使用已有证书,使用已有证书
-"[SslCertificateService] Failed to persist reusable global local CA files to %{1}","[SslCertificateService] Failed to persist reusable global local CA files to %{1}"
-"[SslCertificateService] Local CA is now reusable across projects from %{1}","[SslCertificateService] Local CA is now reusable across projects from %{1}"
-"[SslCertificateService] Failed to restore project local CA files from global reusable CA","[SslCertificateService] Failed to restore project local CA files from global reusable CA"
-"[SslCertificateService] Reusing global Weline local CA for this project","[SslCertificateService] Reusing global Weline local CA for this project"
+"[SslCertificateService] Failed to persist reusable global local CA files to %{1}","[SslCertificateService] 无法将可重用的全局本地 CA 文件持久保存到 %{1}"
+"[SslCertificateService] Local CA is now reusable across projects from %{1}","[SslCertificateService] 本地 CA 现在可以在 %{1} 的项目之间重复使用"
+"[SslCertificateService] Failed to restore project local CA files from global reusable CA","[SslCertificateService] 无法从全局可重用 CA 恢复项目本地 CA 文件"
+"[SslCertificateService] Reusing global Weline local CA for this project","[SslCertificateService] 为该项目重用全球 Weline 本地 CA"
 "[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key","[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key"
-"Failed to generate local CA private key","Failed to generate local CA private key"
-"Failed to generate local CA CSR","Failed to generate local CA CSR"
-"Failed to sign local CA certificate","Failed to sign local CA certificate"
-"Failed to export local CA private key","Failed to export local CA private key"
-"Failed to persist local CA material: %{1}","Failed to persist local CA material: %{1}"
-"Published local CA certificate and key did not verify","Published local CA certificate and key did not verify"
-"Failed to prepare local CA","Failed to prepare local CA"
-"Local CA is already trusted by the Linux system store","Local CA is already trusted by the Linux system store"
-"Local CA was generated, but no supported Linux trust tool was found. Import %{1} into the system trust store manually","Local CA was generated, but no supported Linux trust tool was found. Import %{1} into the system trust store manually"
-"Local CA was generated. Run manually: %{1}","Local CA was generated. Run manually: %{1}"
-"Local CA imported into Linux system trust store","Local CA imported into Linux system trust store"
-"Local CA install command completed, but trust verification did not confirm it yet","Local CA install command completed, but trust verification did not confirm it yet"
-"Local CA was generated, but automatic Linux trust import failed. Run manually: %{1}. Output: %{2}","Local CA was generated, but automatic Linux trust import failed. Run manually: %{1}. Output: %{2}"
-"Local CA was generated, but macOS security tool was not found. Import %{1} into Keychain Access manually","Local CA was generated, but macOS security tool was not found. Import %{1} into Keychain Access manually"
-"Local CA is already trusted by macOS Keychain","Local CA is already trusted by macOS Keychain"
-"Local CA imported into macOS System Keychain","Local CA imported into macOS System Keychain"
-"Local CA imported into macOS login Keychain","Local CA imported into macOS login Keychain"
-"macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate.","macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate."
-"Run the command below to approve Keychain trust.","Run the command below to approve Keychain trust."
-"Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}","Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}"
-"Local CA certificate file is missing: %{1}","Local CA certificate file is missing: %{1}"
-"Local CA generated; Windows trust-store import skipped during WLS startup. Import %{1} manually or set WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 to opt in.","Local CA generated; Windows trust-store import skipped during WLS startup. Import %{1} manually or set WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 to opt in."
-"Local CA is already trusted by the current Windows user","Local CA is already trusted by the current Windows user"
-"Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually","Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually"
-"Local CA imported into Current User Root store","Local CA imported into Current User Root store"
-"Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually","Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually"
-"Local CA was generated. Trust it manually in your OS/browser with %{1}","Local CA was generated. Trust it manually in your OS/browser with %{1}"
-"Domain cannot be empty","Domain cannot be empty"
-"Failed to generate local leaf private key","Failed to generate local leaf private key"
-"Failed to generate local leaf CSR","Failed to generate local leaf CSR"
-"Local CA material is unsafe or unreadable","Local CA material is unsafe or unreadable"
-"Failed to load local CA certificate or private key","Failed to load local CA certificate or private key"
-"Failed to sign local certificate with local CA","Failed to sign local certificate with local CA"
-"Failed to export local certificate private key","Failed to export local certificate private key"
-"Failed to persist local fullchain certificate","Failed to persist local fullchain certificate"
-"Failed to export local certificate CSR","Failed to export local certificate CSR"
-"Local certificate files were generated, but saving the certificate record failed","Local certificate files were generated, but saving the certificate record failed"
-"Local CA-signed certificate generated and trusted successfully","Local CA-signed certificate generated and trusted successfully"
-"Local CA-signed certificate generated successfully","Local CA-signed certificate generated successfully"
+"Failed to generate local CA private key",生成本地CA私钥失败
+"Failed to generate local CA CSR","无法生成本地 CA CSR"
+"Failed to sign local CA certificate","本地 CA 证书签名失败"
+"Failed to export local CA private key",导出本地CA私钥失败
+"Failed to persist local CA material: %{1}","无法保留本地 CA 材料：%{1}"
+"Published local CA certificate and key did not verify","发布的本地 CA 证书和密钥未验证"
+"Failed to prepare local CA",本地CA准备失败
+"Local CA is already trusted by the Linux system store","本地 CA 已被 Linux 系统存储信任"
+"Local CA was generated, but no supported Linux trust tool was found. Import %{1} into the system trust store manually","已生成本地 CA，但未找到受支持的 Linux 信任工具。手动将 %{1} 导入系统信任存储"
+"Local CA was generated. Run manually: %{1}",本地CA已生成。手动运行：%{1}
+"Local CA imported into Linux system trust store","本地 CA 导入 Linux 系统信任存储"
+"Local CA install command completed, but trust verification did not confirm it yet","本地 CA 安装命令已完成，但信任验证尚未确认"
+"Local CA was generated, but automatic Linux trust import failed. Run manually: %{1}. Output: %{2}","已生成本地 CA，但自动 Linux 信任导入失败。手动运行：%{1}。输出：%{2}"
+"Local CA was generated, but macOS security tool was not found. Import %{1} into Keychain Access manually","已生成本地 CA，但未找到 macOS 安全工具。手动将 %{1} 导入钥匙串访问"
+"Local CA is already trusted by macOS Keychain","本地 CA 已被 macOS 钥匙串信任"
+"Local CA imported into macOS System Keychain","导入到 macOS 系统钥匙串的本地 CA"
+"Local CA imported into macOS login Keychain","本地 CA 导入 macOS 登录钥匙串"
+"macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate.","macOS 系统钥匙串信任需要交互式终端批准； WLS已经尝试过用户登录Keychain。如果浏览器仍然拒绝证书，请从终端运行以下命令。"
+"Run the command below to approve Keychain trust.",运行以下命令以批准钥匙串信任。
+"Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}","已生成本地 CA，但自动 macOS 信任导入失败。 %{1} 手动命令：%{2}。输出：%{3}"
+"Local CA certificate file is missing: %{1}","本地 CA 证书文件丢失：%{1}"
+"Local CA generated; Windows trust-store import skipped during WLS startup. Import %{1} manually or set WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 to opt in.","本地CA生成； WLS 启动期间跳过 Windows 信任存储导入。手动导入 %{1} 或设置 WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 以选择加入。"
+"Local CA is already trusted by the current Windows user","本地 CA 已被当前 Windows 用户信任"
+"Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually","找不到 certutil.exe；手动将 %{1} 导入当前用户 > 受信任的根证书颁发机构"
+"Local CA imported into Current User Root store","本地 CA 导入到当前用户根存储中"
+"Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually","已生成本地 CA，但自动信任导入失败。手动将 %{1} 导入当前用户 > 受信任的根证书颁发机构"
+"Local CA was generated. Trust it manually in your OS/browser with %{1}","本地CA已生成。使用 %{1} 在您的操作系统/浏览器中手动信任它"
+"Domain cannot be empty",域名不能为空
+"Failed to generate local leaf private key",生成本地叶子私钥失败
+"Failed to generate local leaf CSR","无法生成本地叶 CSR"
+"Local CA material is unsafe or unreadable","本地 CA 材料不安全或不可读"
+"Failed to load local CA certificate or private key",加载本地CA证书或私钥失败
+"Failed to sign local certificate with local CA","无法使用本地 CA 签署本地证书"
+"Failed to export local certificate private key",导出本地证书私钥失败
+"Failed to persist local fullchain certificate",无法保存本地全链证书
+"Failed to export local certificate CSR","导出本地证书 CSR 失败"
+"Local certificate files were generated, but saving the certificate record failed",已生成本地证书文件，但保存证书记录失败
+"Local CA-signed certificate generated and trusted successfully","已成功生成并信任本地 CA 签名证书"
+"Local CA-signed certificate generated successfully","本地 CA 签名证书已成功生成"
 "[SslCertificateService] 库中的 %{1} 通配证书已过期，将重新签发","[SslCertificateService] 库中的 %{1} 通配证书已过期，将重新签发"
 "[SslCertificateService] 复用 %{1} 通配证书时写回磁盘失败，将尝试重新签发","[SslCertificateService] 复用 %{1} 通配证书时写回磁盘失败，将尝试重新签发"
 已复用现有本地通配证书，跳过重复签发,已复用现有本地通配证书，跳过重复签发
@@ -1098,7 +1158,7 @@ URI,URI
 "域名 %{1} 的证书已过期","域名 %{1} 的证书已过期"
 "过期时间：%{1}。请续签证书以恢复 HTTPS 服务。","过期时间：%{1}。请续签证书以恢复 HTTPS 服务。"
 证书已过期,证书已过期
-"[SslCertificateService] Failed to recover local CA certificate to %{1}","[SslCertificateService] Failed to recover local CA certificate to %{1}"
+"[SslCertificateService] Failed to recover local CA certificate to %{1}","[SslCertificateService] 无法将本地 CA 证书恢复到 %{1}"
 "[SslCertificateService] 已从等价域 %{1} 的 PEM 恢复到 %{2}","[SslCertificateService] 已从等价域 %{1} 的 PEM 恢复到 %{2}"
 "[SslCertificateService] 已从数据库恢复证书到磁盘：%{1}","[SslCertificateService] 已从数据库恢复证书到磁盘：%{1}"
 "[SslCertificateService] 从数据库恢复证书失败：%{1} - %{2}","[SslCertificateService] 从数据库恢复证书失败：%{1} - %{2}"
@@ -1211,7 +1271,7 @@ URI,URI
 证书管理中没有可重载的证书记录,证书管理中没有可重载的证书记录
 "server:ssl:reload --clear 清理","server:ssl:reload --clear 清理"
 证书清理失败,证书清理失败
-"WLS performance panel traces were cleared","WLS performance panel traces were cleared"
+"WLS performance panel traces were cleared","WLS 性能面板痕迹已清除"
 秒,秒
 分,分
 小时,小时
@@ -1264,7 +1324,7 @@ URI,URI
 "已触发 SSL 延迟重试：%{1}（pid=%{2}）","已触发 SSL 延迟重试：%{1}（pid=%{2}）"
 "已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）","已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）"
 未找到,未找到
-"Event 扩展","Event 扩展"
+"Event 扩展",事件扩展
 "基于 libevent 的高性能事件循环","基于 libevent 的高性能事件循环"
 "pcntl_fork 函数","pcntl_fork 函数"
 "真正的进程分叉，共享内存，性能最优（仅 Linux/Mac）","真正的进程分叉，共享内存，性能最优（仅 Linux/Mac）"
@@ -1282,7 +1342,7 @@ URI,URI
 "编译执行，接近 C 语言性能","编译执行，接近 C 语言性能"
 "Sockets 扩展","Sockets 扩展"
 "底层 Socket 操作，更精细的控制","底层 Socket 操作，更精细的控制"
-"使用 stream_socket","使用 stream_socket"
+"使用 stream_socket",使用stream_socket
 "使用原生 socket","使用原生 socket"
 "proc_open 函数","proc_open 函数"
 "进程控制核心函数，支持精确的 PID 管理","进程控制核心函数，支持精确的 PID 管理"
@@ -1336,7 +1396,7 @@ URI,URI
 五、生产环境建议,五、生产环境建议
 "使用 443 端口（标准 HTTPS 端口）","使用 443 端口（标准 HTTPS 端口）"
 "配置 HTTP 到 HTTPS 重定向","配置 HTTP 到 HTTPS 重定向"
-"启用 HSTS（HTTP Strict Transport Security）","启用 HSTS（HTTP Strict Transport Security）"
+"启用 HSTS（HTTP Strict Transport Security）","启用 HSTS（HTTP 严格传输安全）"
 "使用 TLS 1.2 或更高版本","使用 TLS 1.2 或更高版本"
 "1. 下载扩展","1. 下载扩展"
 "访问 PECL 下载对应版本","访问 PECL 下载对应版本"
@@ -1354,7 +1414,7 @@ URI,URI
 "在 php.ini 中添加","在 php.ini 中添加"
 "pcntl 扩展不支持 Windows 平台，系统将自动使用备用方案","pcntl 扩展不支持 Windows 平台，系统将自动使用备用方案"
 "1. 编辑 php.ini","1. 编辑 php.ini"
-"从 disable_functions 中移除 pcntl_fork","从 disable_functions 中移除 pcntl_fork"
+"从 disable_functions 中移除 pcntl_fork",从disable_functions中删除pcntl_fork
 "找到 disable_functions 行，删除 pcntl_fork","找到 disable_functions 行，删除 pcntl_fork"
 "2. 重启 PHP-FPM（如有）","2. 重启 PHP-FPM（如有）"
 "pcntl_fork 已可用","pcntl_fork 已可用"
@@ -1374,8 +1434,30 @@ URI,URI
 "1. 安装扩展","1. 安装扩展"
 已可用,已可用
 "proc_open 函数已启用","proc_open 函数已启用"
-"从 disable_functions 中移除 proc_open","从 disable_functions 中移除 proc_open"
+"从 disable_functions 中移除 proc_open",从disable_functions中删除proc_open
 "找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
+"当前项目不支持从此面板控制 WLS。","当前项目不支持从此面板控制 WLS。"
+"WLS Master 控制通道不可用。","WLS Master 控制通道不可用。"
+Ready,准备好
+重载中,重载中
+恢复中,恢复中
+"WLS 实例已就绪。","WLS 实例已就绪。"
+"WLS 正在重载，请等待恢复到 Ready。","WLS 正在重载，请等待恢复到 Ready。"
+"WLS 尚未完全就绪。","WLS 尚未完全就绪。"
+该项目不可控制。,该项目不可控制。
+"WLS Master 未运行，无法提交操作。","WLS Master 未运行，无法提交操作。"
+该实例已有生命周期操作正在执行。,该实例已有生命周期操作正在执行。
+项目名称确认不匹配，已取消重启。,项目名称确认不匹配，已取消重启。
+该实例的生命周期操作正在提交，请稍后重试。,该实例的生命周期操作正在提交，请稍后重试。
+"WLS 重启已提交；Master 保持在线，正在重建全部工作进程。","WLS 重启已提交；Master 保持在线，正在重建全部工作进程。"
+"WLS 重载已提交，正在滚动更新工作进程。","WLS 重载已提交，正在滚动更新工作进程。"
+"WLS 生命周期操作提交失败。","WLS 生命周期操作提交失败。"
+"Current Project",当前项目
+"WLS 项目标识无效。","WLS 项目标识无效。"
+托管项目不存在。,托管项目不存在。
+"托管项目已停用，不能执行 WLS 生命周期操作。","托管项目已停用，不能执行 WLS 生命周期操作。"
+"该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。","该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。"
+"无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。","无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。"
 缓存命名空间失效帧包含未知字段。,缓存命名空间失效帧包含未知字段。
 缓存命名空间失效帧不完整。,缓存命名空间失效帧不完整。
 不支持该缓存命名空间失效协议版本。,不支持该缓存命名空间失效协议版本。
@@ -1445,27 +1527,27 @@ URI,URI
 "已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效","已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效"
 "Security rules JSON cannot be empty.","安全规则 JSON 不能为空。"
 "Security rules JSON is invalid.","安全规则 JSON 格式无效。"
-"Security rules saved. WLS workers will reload the committed generation.","Security rules saved. WLS workers will reload the committed generation."
-"The rules are committed, but one post-commit notification is pending.","The rules are committed, but one post-commit notification is pending."
+"Security rules saved. WLS workers will reload the committed generation.","已保存安全规则。 WLS 工作人员将重新加载已提交的一代。"
+"The rules are committed, but one post-commit notification is pending.",规则已提交，但一项提交后通知正在等待处理。
 "Security rules JSON is invalid. Visual fields were not saved.","安全规则 JSON 格式无效，可视化字段未保存。"
-"Security rules JSON is invalid. Project policy was not saved.","Security rules JSON is invalid. Project policy was not saved."
-"Select one managed project before saving a project security policy.","Select one managed project before saving a project security policy."
-"Project security policy removed.","Project security policy removed."
-"Project security policy saved.","Project security policy saved."
+"Security rules JSON is invalid. Project policy was not saved.","安全规则 JSON 无效。项目政策未保存。"
+"Select one managed project before saving a project security policy.",在保存项目安全策略之前选择一个托管项目。
+"Project security policy removed.",项目安全策略已删除。
+"Project security policy saved.",项目安全策略已保存。
 "No events",暂无事件
 "No attacks",暂无攻击
 "All managed projects",全部托管项目
 "Current project: %{1}",当前项目：%{1}
 "%{1} (%{2})",%{1}（%{2}）
 "Rate Limit",限流
-Enabled,已启用
+Enabled,启用
 "Window Seconds",窗口秒数
 "Max Requests",最大请求数
 "Block Seconds",封禁秒数
 "Path Rate Limits",路径级限流
 Rules,规则
 "Path Scan",路径扫描
-"Unique Paths","Unique Paths"
+"Unique Paths",独特的路径
 "SSL Handshake","SSL 握手"
 "Max Failures",最大失败次数
 "Fast Close Threshold",快速关闭阈值
@@ -1475,15 +1557,15 @@ Rules,规则
 "IP Whitelist","IP 白名单"
 "Whitelisted IPs","白名单 IP"
 "Protected Paths",受保护路径
-Paths,Paths
+Paths,路径
 "%{1} overrides / %{2} inherited","%{1} 项覆盖 / %{2} 项继承"
 "Project override",项目覆盖
 "Custom equals global",自定义与全局一致
-Inherited,继承
-Disabled,已停用
+Inherited,遗传
+Disabled,已禁用
 "%{1} (%{2}/%{3}s)",%{1}（%{2}/%{3}秒）
-"%{1} entries: %{2}","%{1} entries: %{2}"
-"0 entries","0 entries"
+"%{1} entries: %{2}","%{1} 条目：%{2}"
+"0 entries","0 条记录"
 "Global rules",全局规则
 "Common rules saved",通用规则已保存
 "Project policy saved",项目策略已保存
@@ -1493,10 +1575,9 @@ Disabled,已停用
 "Visual editor",可视化编辑器
 "Project policy editor",项目策略编辑器
 "Advanced JSON","高级 JSON"
-"WLS Panel","WLS 面板"
+"WLS Panel",WLS面板
 Configured,已配置
 "%{1} entries","%{1} 条"
-"Current Project",当前项目
 Local,本地
 Path,路径
 请求处理错误：%{1},请求处理错误：%{1}
@@ -1520,11 +1601,11 @@ Installed,已安装
 "Installed Plugin",已安装插件
 "Install Plugin",安装插件
 "Plugin Panel",插件面板
-"Panel plugin module list refresh failed: %{1}","Panel plugin module list refresh failed: %{1}"
+"Panel plugin module list refresh failed: %{1}",面板插件模块列表刷新失败：%{1}
 "Panel plugin registry refresh completed with warnings.",面板插件注册表刷新完成，但存在警告。
 "Panel plugin registry refresh failed: %{1}",面板插件注册表刷新失败：%{1}
 "Panel plugin route refresh failed: %{1}",面板插件路由刷新失败：%{1}
-"Status loaded","Status loaded"
+"Status loaded",状态已加载
 "可用 WLS 实例已接收缓存命名空间失效操作。","可用 WLS 实例已接收缓存命名空间失效操作。"
 "部分目标 WLS 实例未接收缓存命名空间失效操作。","部分目标 WLS 实例未接收缓存命名空间失效操作。"
 "启用 Dispatcher 维护分流","启用 Dispatcher 维护分流"
@@ -1564,7 +1645,6 @@ Installed,已安装
 "All WLS operation plugins are installed.","所有 WLS 操作插件均已安装。"
 "%{1} WLS operation plugins need installation.","还有 %{1} 个 WLS 操作插件需要安装。"
 "Security Scope",安全范围
-Ready,就绪
 Review,检查
 "Policy and attack-log links can be scoped safely.",策略和攻击日志链接可以安全限定范围。
 "Security links need project identity first.",安全链接需要先识别项目身份。
@@ -1577,7 +1657,7 @@ Review,检查
 "%{1} core checks need setup before this project is fully manageable.","该项目还有 %{1} 个核心检查需要设置后才能完全管理。"
 "Project context needs review before it is fully ready.",项目上下文需要检查后才能完全就绪。
 "Scoped editor",项目编辑器
-Marketplace,商城
+Marketplace,市场
 "Install plugin",安装插件
 "Current project",当前项目
 "Registered project",已登记项目
@@ -1627,7 +1707,7 @@ WLS错误扫描,WLS错误扫描
 "请指定域名：--domain example.com","请指定域名：--domain example.com"
 "正在为 %{1} 申请 SSL 证书...","正在为 %{1} 申请 SSL 证书..."
 联系邮箱：%{1},联系邮箱：%{1}
-Webroot：%{1},Webroot：%{1}
+Webroot：%{1},网站根目录：%{1}
 检测到本地域名，将生成自签证书,检测到本地域名，将生成自签证书
 "✓ 自签证书生成成功！","✓ 自签证书生成成功！"
 证书路径：%{1},证书路径：%{1}
@@ -1673,7 +1753,7 @@ Webroot：%{1},Webroot：%{1}
 "✓ %{1}","✓ %{1}"
 重要：请重启服务器使配置生效,重要：请重启服务器使配置生效
 "✗ %{1}","✗ %{1}"
-操作：status/list/request/renew/sync/enable/disable,操作：status/list/request/renew/sync/enable/disable
+操作：status/list/request/renew/sync/enable/disable,操作：状态/列表/​​请求/更新/同步/启用/禁用
 指定域名,指定域名
 "Webroot 路径（默认：pub/）","Webroot 路径（默认：pub/）"
 证书提供商（letsencrypt/litessl）,证书提供商（letsencrypt/litessl）
@@ -1740,7 +1820,7 @@ Webroot：%{1},Webroot：%{1}
 实例名称（默认：default）,实例名称（默认：default）
 滚动重启,滚动重启
 "按拓扑使用维护池或 Worker 本地门禁，分批替换 Worker","按拓扑使用维护池或 Worker 本地门禁，分批替换 Worker"
-"维护 Worker","维护 Worker"
+"维护 Worker",维护工人
 "仅 Dispatcher 拓扑使用；Direct 的维护 Worker 目标数固定为 0","仅 Dispatcher 拓扑使用；Direct 的维护 Worker 目标数固定为 0"
 自动管理,自动管理
 "rolling 命令会自动启用/禁用维护模式，无需手动操作","rolling 命令会自动启用/禁用维护模式，无需手动操作"
@@ -1765,7 +1845,7 @@ Webroot：%{1},Webroot：%{1}
 "Master 进程不存在 (PID: %{1})","Master 进程不存在 (PID: %{1})"
 "Master PID 缺失但控制端口仍可用，先尝试通过 IPC 自停...","Master PID 缺失但控制端口仍可用，先尝试通过 IPC 自停..."
 "控制端口已接受 STOP，继续复核残留进程 ✓","控制端口已接受 STOP，继续复核残留进程 ✓"
-"Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.","Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup."
+"Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.","实例 [%{1}] 仍有残留的 WLS 进程；保留实例元数据以便继续清理。"
 "实例元数据已标记停止并保留 ✓","实例元数据已标记停止并保留 ✓"
 "实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。"
 "实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。","实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。"
@@ -1776,12 +1856,12 @@ Webroot：%{1},Webroot：%{1}
 "-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...","-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程..."
 "发送 STOP 命令给 Master (通过 IPC)...","发送 STOP 命令给 Master (通过 IPC)..."
 "所有子进程已完整退出 ✓","所有子进程已完整退出 ✓"
-"Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.","Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup."
+"Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.",CLI等待结束后，停止流仍在Master中运行；保留实例元数据并跳过本地清理。
 "IPC 超时，按受保护进程出生身份清理该实例下所有进程...","IPC 超时，按受保护进程出生身份清理该实例下所有进程..."
 "实例 [%{1}] 已停止 ✓","实例 [%{1}] 已停止 ✓"
 停止服务器实例,停止服务器实例
 实例名称：,实例名称：
-"Master PID：","Master PID："
+"Master PID：",主控PID：
 (未运行),(未运行)
 控制端口：,控制端口：
 (未配置),(未配置)
@@ -1804,9 +1884,10 @@ Webroot：%{1},Webroot：%{1}
 "Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）...","Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）..."
 "已发送终止信号 %{1} 个已知子进程","已发送终止信号 %{1} 个已知子进程"
 "精确身份清理仍有 %{1} 项未确认释放：%{2}","精确身份清理仍有 %{1} 项未确认释放：%{2}"
-"Fast-local cleanup still has residual process ids: %{1}","Fast-local cleanup still has residual process ids: %{1}"
-"Fast-local cleanup terminated %{1} residual processes.","Fast-local cleanup terminated %{1} residual processes."
-"Fast-local cleanup found no verified residual processes.","Fast-local cleanup found no verified residual processes."
+"Fast-local cleanup still has residual process ids: %{1}","快速本地清理仍然有残留进程 ID：%{1}"
+"Fast-local cleanup still has recoverable ports listening: %{1}",快速本地清理仍然具有可恢复端口侦听：%{1}
+"Fast-local cleanup terminated %{1} residual processes.","快速本地清理终止了 %{1} 残留进程。"
+"Fast-local cleanup found no verified residual processes.",快速本地清理未发现经过验证的残留进程。
 "STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。","STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。"
 "Master STOP 追踪文件末条事件：%{1}","Master STOP 追踪文件末条事件：%{1}"
 没有正在运行的实例,没有正在运行的实例
@@ -1911,11 +1992,11 @@ Webroot：%{1},Webroot：%{1}
 "纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}","纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}"
 未验证,未验证
 无,无
-"纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}","纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}"
+"纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}","纯WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}"
 已验证,已验证
 "纯 WLS HTTP/3：不可用；需要项目托管 Nginx。","纯 WLS HTTP/3：不可用；需要项目托管 Nginx。"
-"纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}","纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}"
-pending,pending
+"纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}","纯WLS TLS会话：configured=%{1}，live Reused=%{2}，cross Worker=%{3}"
+pending,等待中
 "TLS Session 说明：%{1}","TLS Session 说明：%{1}"
 "运行端点协议或 Managed Nginx owner 尚未完整绑定；下面不会把配置值提升为运行验证。","运行端点协议或 Managed Nginx owner 尚未完整绑定；下面不会把配置值提升为运行验证。"
 "当前为配置预览；运行验证只有在实例与 Managed Nginx owner 绑定后才归因。","当前为配置预览；运行验证只有在实例与 Managed Nginx owner 绑定后才归因。"
@@ -1937,12 +2018,12 @@ pending,pending
 "Nginx TLS 1.3：二进制能力=%{1}，仅允许 TLS 1.3=%{2}，真实握手=%{3}","Nginx TLS 1.3：二进制能力=%{1}，仅允许 TLS 1.3=%{2}，真实握手=%{3}"
 "Nginx TLS Session：shared cache=%{1}，tickets=%{2}，共享 ticket keys=%{3}，真实恢复握手=%{4}","Nginx TLS Session：shared cache=%{1}，tickets=%{2}，共享 ticket keys=%{3}，真实恢复握手=%{4}"
 已配置,已配置
-"Nginx TLS Session 证据：evidence-bound=%{1}，Master PID match=%{2}，resumed handshake P95=%{3}","Nginx TLS Session 证据：evidence-bound=%{1}，Master PID match=%{2}，resumed handshake P95=%{3}"
+"Nginx TLS Session 证据：evidence-bound=%{1}，Master PID match=%{2}，resumed handshake P95=%{3}","Nginx TLS Session 证据：evidence-bound=%{1}，Master PID match=%{2}，恢复握手 P95=%{3}"
 "Nginx TLS Session 样本：总数=%{1}，完成=%{2}，失败=%{3}，fresh=%{4}，resumed=%{5}","Nginx TLS Session 样本：总数=%{1}，完成=%{2}，失败=%{3}，fresh=%{4}，resumed=%{5}"
 不适用,不适用
 待验证,待验证
-"Nginx TLS Session Worker：observed=%{1}，effective=%{2}；same=%{3}（resumed=%{4}），cross=%{5}（resumed=%{6}）","Nginx TLS Session Worker：observed=%{1}，effective=%{2}；same=%{3}（resumed=%{4}），cross=%{5}（resumed=%{6}）"
-"Nginx TLS Session Reload：同一 Session 跨 reload=%{1}，旧 Worker PID=%{2}，新 Worker PID=%{3}，恢复握手=%{4}","Nginx TLS Session Reload：同一 Session 跨 reload=%{1}，旧 Worker PID=%{2}，新 Worker PID=%{3}，恢复握手=%{4}"
+"Nginx TLS Session Worker：observed=%{1}，effective=%{2}；same=%{3}（resumed=%{4}），cross=%{5}（resumed=%{6}）","Nginx TLS Session Worker：观察=%{1}，有效=%{2}；相同=%{3}（恢复=%{4}），交叉=%{5}（恢复=%{6}）"
+"Nginx TLS Session Reload：同一 Session 跨 reload=%{1}，旧 Worker PID=%{2}，新 Worker PID=%{3}，恢复握手=%{4}","Nginx TLS Session Reload：同一个Session跨reload=%{1}，旧Worker PID=%{2}，新Worker PID=%{3}，恢复握手=%{4}"
 "共享 Session Cache/Ticket Key 只是配置事实；尚无新连接恢复握手的实测证据。","共享 Session Cache/Ticket Key 只是配置事实；尚无新连接恢复握手的实测证据。"
 "WLS 内部回源：角色=%{1}，协议=%{2}，公网 TLS/ALPN 证据不从 PHP/WLS 推导","WLS 内部回源：角色=%{1}，协议=%{2}，公网 TLS/ALPN 证据不从 PHP/WLS 推导"
 "未找到实例 [%{1}]","未找到实例 [%{1}]"
@@ -1954,26 +2035,28 @@ pending,pending
 "连接实例控制端口并发送 status，输出耗时与占用 PID","连接实例控制端口并发送 status，输出耗时与占用 PID"
 "实例名（默认 default）","实例名（默认 default）"
 探测默认实例,探测默认实例
-"Session Server %{1}","Session Server %{1}"
-"Memory Service %{1}","Memory Service %{1}"
-"Memory Service disabled by configuration.","Memory Service disabled by configuration."
+"Session Server stopped",会话服务器已停止
+"Session Server stop was not confirmed; runtime identity was retained for retry/repair.",未确认会话服务器停止；保留运行时身份以进行重试/修复。
+"Memory Service stopped",内存服务已停止
+"Memory Service stop was not confirmed; runtime identity was retained for retry/repair.",未确认内存服务停止；保留运行时身份以进行重试/修复。
+"Memory Service disabled by configuration.",内存服务已被配置禁用。
 "停止全局共享 Session/Memory 服务","停止全局共享 Session/Memory 服务"
 停止共享服务,停止共享服务
 "查看全局共享 Session/Memory 服务状态","查看全局共享 Session/Memory 服务状态"
 查看共享服务状态,查看共享服务状态
-"%{1}: %{2} %{3}:%{4} (pid=%{5}, token=%{6})","%{1}: %{2} %{3}:%{4} (pid=%{5}, token=%{6})"
+"%{1}: %{2} %{3}:%{4} (pid=%{5}, token=%{6})","%{1}: %{2} %{3}:%{4} (pid=%{5}, 令牌=%{6})"
 %{1},%{1}
 "启动全局共享 Session/Memory 服务","启动全局共享 Session/Memory 服务"
 "启动或重启全局共享 Session/Memory 服务","启动或重启全局共享 Session/Memory 服务"
 行为,行为
 "共享服务独立于实例 Master；此命令只管理全局 Session/Memory。","共享服务独立于实例 Master；此命令只管理全局 Session/Memory。"
 启动共享服务,启动共享服务
-"%{1} ready: %{2}:%{3} (pid=%{4}, token=%{5})","%{1} ready: %{2}:%{3} (pid=%{4}, token=%{5})"
-"Weline Server","Weline Server"
+"%{1} ready: %{2}:%{3} (pid=%{4}, token=%{5})","%{1} 准备就绪：%{2}:%{3}（pid=%{4}，令牌=%{5}）"
+"Weline Server",微线服务器
 服务器实例列表,服务器实例列表
 没有找到运行中的服务器实例,没有找到运行中的服务器实例
 没有找到任何服务器实例,没有找到任何服务器实例
-"总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}"
+"总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计： %{total} |  关注热线：●%{wrun} ○%{wstop} |  CLI：●%{clirun}"
 "[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)"
 ═══════════════════════════════════════════════════════════════════════════════,═══════════════════════════════════════════════════════════════════════════════
 服务器实例详细列表,服务器实例详细列表
@@ -1982,7 +2065,7 @@ pending,pending
 "[%{1}] ○ 已停止","[%{1}] ○ 已停止"
 "├─ 服务类型   : %{1}","├─ 服务类型   : %{1}"
 "├─ 监听地址   : %{1}:%{2}","├─ 监听地址   : %{1}:%{2}"
-"├─ Worker 数  : %{1}","├─ Worker 数  : %{1}"
+"├─ Worker 数  : %{1}","├─ 工人人数：%{1}"
 "├─ 运行模式   : %{1}","├─ 运行模式   : %{1}"
 守护进程,守护进程
 前台模式,前台模式
@@ -1996,7 +2079,7 @@ pending,pending
 "按类型过滤：weline 或 cli","按类型过滤：weline 或 cli"
 "以 JSON 格式输出","以 JSON 格式输出"
 显示所有实例,显示所有实例
-"仅 Weline Server","仅 Weline Server"
+"仅 Weline Server",一台Weline服务器
 "仅 CLI 服务器","仅 CLI 服务器"
 仅运行中,仅运行中
 详细信息,详细信息
@@ -2016,6 +2099,8 @@ pending,pending
 "公网域名或展示主机；WLS 回源始终监听 127.0.0.1","公网域名或展示主机；WLS 回源始终监听 127.0.0.1"
 "WLS 明文 HTTP/1.1 回源端口；Nginx 公网端口由 wls.edge.nginx 配置","WLS 明文 HTTP/1.1 回源端口；Nginx 公网端口由 wls.edge.nginx 配置"
 "Worker 进程数（默认：4）","Worker 进程数（默认：4）"
+"与 server:start -r -f 区别","与 server:start -r -f 区别"
+"server:restart -r -f 仅单批次重载 Worker 且 Master 保持；server:start -r -f 会停 Master 做完整代际重启","server:restart -r -f 仅单批次重载 Worker 且 Master 保持；server:start -r -f 会停 Master 做完整代际重启"
 确保服务器运行,确保服务器运行
 强制重启服务器,强制重启服务器
 强制单批次重启,强制单批次重启
@@ -2028,7 +2113,7 @@ pending,pending
 "server:doctor 读取 nginx -V；真实 QUIC 请求通过前不会宣称 HTTP/3 已验证","server:doctor 读取 nginx -V；真实 QUIC 请求通过前不会宣称 HTTP/3 已验证"
 "每 3 秒刷新","每 3 秒刷新"
 退出,退出
-"Weline Server 状态","Weline Server 状态"
+"Weline Server 状态",Weline服务器状态
 "已拒绝 %{1} 份非 v4 endpoint；以下最多显示 10 份，文件保持不变。","已拒绝 %{1} 份非 v4 endpoint；以下最多显示 10 份，文件保持不变。"
 "[%{1}] %{2}","[%{1}] %{2}"
 "其余 %{1} 份已省略。","其余 %{1} 份已省略。"
@@ -2038,17 +2123,17 @@ pending,pending
 "● 运行中","● 运行中"
 "◐ 部分运行","◐ 部分运行"
 "○ 已停止","○ 已停止"
-workers,workers
+workers,工人
 端口范围：,端口范围：
 服务：,服务：
 "使用 server:status <name> 查看详细状态","使用 server:status <name> 查看详细状态"
 "使用 server:stop <name> 停止实例","使用 server:stop <name> 停止实例"
 "如有残留 endpoint 文件，可执行 server:clean 清理未运行记录","如有残留 endpoint 文件，可执行 server:clean 清理未运行记录"
 "实例 [%{1}] 状态","实例 [%{1}] 状态"
-"Worker 数：","Worker 数："
-unknown,unknown
-"Master 状态：","Master 状态："
-"Master 自愈：","Master 自愈："
+"Worker 数：",工人人数：
+unknown,未知
+"Master 状态：",主人状态：
+"Master 自愈：",自愈大师：
 进程架构：,进程架构：
 内存：,内存：
 "状态：全部运行中 (%{1}/%{2})","状态：全部运行中 (%{1}/%{2})"
@@ -2068,7 +2153,7 @@ unknown,unknown
 拓扑：,拓扑：
 数据面：,数据面：
 策略：,策略：
-Endpoint：,Endpoint：
+Endpoint：,端点：
 共享网关：,共享网关：
 边缘降级：,边缘降级：
 选择原因：,选择原因：
@@ -2086,8 +2171,8 @@ Endpoint：,Endpoint：
 回源内部地址（公网状态未知）,回源内部地址（公网状态未知）
 回源内部地址,回源内部地址
 "● on (默认)","● on (默认)"
-"● on (env.php)","● on (env.php)"
-"○ off (env.php)","○ off (env.php)"
+"● on (env.php)","● 在（env.php）上"
+"○ off (env.php)","○ 关闭（env.php）"
 端口：,端口：
 首页预热：,首页预热：
 动态首渲染测量：,动态首渲染测量：
@@ -2135,10 +2220,10 @@ Endpoint：,Endpoint：
 "每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压","每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压"
 "未配置时使用 8080/8443 + projectPortOffset","未配置时使用 8080/8443 + projectPortOffset"
 macOS,macOS
-"需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2","需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2"
+"需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2","需 Xcode CLT、OpenSSL 3 与 PCRE2；执行brew install openssl@3 pcre2"
 Linux,Linux
 "需 gcc/make 与 OpenSSL/PCRE 头文件（apt/dnf/apk 对应 *-devel/*-dev）","需 gcc/make 与 OpenSSL/PCRE 头文件（apt/dnf/apk 对应 *-devel/*-dev）"
-Windows,Windows
+Windows,视窗
 "下载官方 nginx.zip 到本机项目隔离目录；需 ZipArchive 或 PowerShell/tar","下载官方 nginx.zip 到本机项目隔离目录；需 ZipArchive 或 PowerShell/tar"
 安装,安装
 "本项目托管 Nginx 状态","本项目托管 Nginx 状态"
@@ -2173,7 +2258,7 @@ Windows,Windows
 "未指定 --path，默认使用轻量端点 %{1} 测 WLS 吞吐；压业务页请显式传 --path /xxx","未指定 --path，默认使用轻量端点 %{1} 测 WLS 吞吐；压业务页请显式传 --path /xxx"
 "业务路径压测会执行完整安全策略；X-WLS-Benchmark-Worker 仅用于 Worker 归因，不绕过 Origin Token、封禁、限流或攻击规则。高压前请仅为专用测试源 IP 显式配置 whitelist CIDR。","业务路径压测会执行完整安全策略；X-WLS-Benchmark-Worker 仅用于 Worker 归因，不绕过 Origin Token、封禁、限流或攻击规则。高压前请仅为专用测试源 IP 显式配置 whitelist CIDR。"
 内容编码探针失败：%{1},内容编码探针失败：%{1}
-"内容编码探针：Content-Encoding=%{encoding}，Vary=%{vary}，wire body=%{wire}B，logical body=%{logical}B","内容编码探针：Content-Encoding=%{encoding}，Vary=%{vary}，wire body=%{wire}B，logical body=%{logical}B"
+"内容编码探针：Content-Encoding=%{encoding}，Vary=%{vary}，wire body=%{wire}B，logical body=%{logical}B",内容编码元素：Content-Encoding=%{encoding}，Vary=%{vary}，线体=%{wire}B，逻辑体=%{logical}B
 服务器连接成功，开始压测...,服务器连接成功，开始压测...
 "检测到多个运行中的 WLS 实例，已拒绝自动选择，避免误压生产实例。","检测到多个运行中的 WLS 实例，已拒绝自动选择，避免误压生产实例。"
 "请使用 --instance <name> 明确指定实例：%{1}","请使用 --instance <name> 明确指定实例：%{1}"
@@ -2285,8 +2370,8 @@ P99：%{1},P99：%{1}
 "HTTP/2 协商验证","HTTP/2 协商验证"
 "HTTP/2 单物理连接多路复用","HTTP/2 单物理连接多路复用"
 "HTTP/3 协商验证","HTTP/3 协商验证"
-"TLS 1.3 fresh connection","TLS 1.3 fresh connection"
-"--accept-encoding 仅允许：auto、br,gzip、gzip、identity。","--accept-encoding 仅允许：auto、br,gzip、gzip、identity。"
+"TLS 1.3 fresh connection","TLS 1.3 新连接"
+"--accept-encoding 仅允许：auto、br,gzip、gzip、identity。","--accept-encoding 只允许：auto、br,gzip、gzip、identity。"
 "当前 PHP 未安装 curl 扩展。","当前 PHP 未安装 curl 扩展。"
 "无法初始化内容编码 cURL 探针。","无法初始化内容编码 cURL 探针。"
 内容编码探针失败。,内容编码探针失败。
@@ -2319,7 +2404,7 @@ P99：%{1},P99：%{1}
 该端口被非框架进程占用，出于安全考虑不会自动杀死,该端口被非框架进程占用，出于安全考虑不会自动杀死
 "如果确定要杀死该进程，请使用 -f 参数:","如果确定要杀死该进程，请使用 -f 参数:"
 或手动执行:,或手动执行:
-"taskkill /F /PID %{1}","taskkill /F /PID %{1}"
+"taskkill /F /PID %{1}","任务终止 /F /PID %{1}"
 "拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。","拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。"
 "如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。","如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。"
 "警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。","警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。"
@@ -2342,7 +2427,7 @@ P99：%{1},P99：%{1}
 "发送 stop_test，输出 Orchestrator 诊断 JSON","发送 stop_test，输出 Orchestrator 诊断 JSON"
 诊断默认实例,诊断默认实例
 "WLS 运行时策略校验通过。","WLS 运行时策略校验通过。"
-Digest：%{1},Digest：%{1}
+Digest：%{1},摘要：%{1}
 规则：%{1},规则：%{1}
 "校验 WLS 编译型运行时策略","校验 WLS 编译型运行时策略"
 "WLS 运行时策略编译完成。","WLS 运行时策略编译完成。"
@@ -2350,12 +2435,11 @@ Digest：%{1},Digest：%{1}
 "WLS 运行时策略回滚已受理。","WLS 运行时策略回滚已受理。"
 "回滚 WLS 运行时策略","回滚 WLS 运行时策略"
 "WLS 运行时策略状态","WLS 运行时策略状态"
-实例：%{1},实例：%{1}
-Active：%{1},Active：%{1}
-Staged：%{1},Staged：%{1}
-Previous：%{1},Previous：%{1}
+Active：%{1},活跃：%{1}
+Staged：%{1},上演：%{1}
+Previous：%{1},上一篇：%{1}
 "查看 WLS 运行时策略状态","查看 WLS 运行时策略状态"
-"topology 必须是 both、direct 或 dispatcher。","topology 必须是 both、direct 或 dispatcher。"
+"topology 必须是 both、direct 或 dispatcher。","拓扑必须是both、direct 或dispatcher。"
 "Master 拒绝了策略发布。","Master 拒绝了策略发布。"
 所有关键进程已完成运行时策略提交。,所有关键进程已完成运行时策略提交。
 运行时策略在所有关键进程提交前失败。,运行时策略在所有关键进程提交前失败。
@@ -2381,7 +2465,7 @@ Previous：%{1},Previous：%{1}
 "WLS 2.0 Gateway 自包含包和系统服务安装完成。","WLS 2.0 Gateway 自包含包和系统服务安装完成。"
 "显式安装签名、自包含的宿主级 WLS 2.0 Gateway","显式安装签名、自包含的宿主级 WLS 2.0 Gateway"
 签名自包含包目录,签名自包含包目录
-"default（IPv4+IPv6）或 ipv4-only","default（IPv4+IPv6）或 ipv4-only"
+"default（IPv4+IPv6）或 ipv4-only",默认（IPv4+IPv6）或仅ipv4
 确认写入系统信任根并安装系统服务,确认写入系统信任根并安装系统服务
 安全边界,安全边界
 "普通 server:start/auto 不会调用本命令；未知 80/443 owner 永不被终止。","普通 server:start/auto 不会调用本命令；未知 80/443 owner 永不被终止。"
@@ -2510,7 +2594,7 @@ Previous：%{1},Previous：%{1}
 "强制重载模式：批量杀死所有 Worker 后重新启动","强制重载模式：批量杀死所有 Worker 后重新启动"
 "注意：-f 强制重载属于停机型更新，建议先开启维护模式；滚动重载不需要。","注意：-f 强制重载属于停机型更新，建议先开启维护模式；滚动重载不需要。"
 执行滚动重启（优雅重载）...,执行滚动重启（优雅重载）...
-"Worker 数：%{1}","Worker 数：%{1}"
+"Worker 数：%{1}",工人编号：%{1}
 "✓ 热重载命令已发送","✓ 热重载命令已发送"
 "等待实例 [%{1}] 的 Orchestrator 完成滚动重启...","等待实例 [%{1}] 的 Orchestrator 完成滚动重启..."
 "控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果","控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果"
@@ -2525,7 +2609,7 @@ Previous：%{1},Previous：%{1}
 "从 Dispatcher 摘除","从 Dispatcher 摘除"
 停止中,停止中
 回加运行路由池,回加运行路由池
-"Worker #%{1} %{2} (%{3}/%{4})","Worker #%{1} %{2} (%{3}/%{4})"
+"Worker #%{1} %{2} (%{3}/%{4})","工人 #%{1} %{2} (%{3}/%{4})"
 "第 %{1}/%{2} 批：并发启动 Worker [%{3}]","第 %{1}/%{2} 批：并发启动 Worker [%{3}]"
 "第 %{1}/%{2} 批：Worker [%{3}] 正在排水","第 %{1}/%{2} 批：Worker [%{3}] 正在排水"
 "第 %{1}/%{2} 批：等待 Worker [%{3}] 就绪","第 %{1}/%{2} 批：等待 Worker [%{3}] 就绪"
@@ -2568,6 +2652,8 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+"Session Server %{1}","会话服务器 %{1}"
+"Memory Service %{1}","内存服务 %{1}"
 请输入后端主机,请输入后端主机
 "端口必须在 1-65535 范围内","端口必须在 1-65535 范围内"
 连接成功,连接成功
@@ -2622,21 +2708,21 @@ Previous：%{1},Previous：%{1}
 "Runtime action skipped.",已跳过运行时动作。
 "Select a target WLS instance before applying runtime changes.","应用运行时变更前请选择目标 WLS 实例。"
 "WLS runtime reload requested.","已请求 WLS 运行时重载。"
-"Selected WLS instance %{1} was not found.","Selected WLS instance %{1} was not found."
+"Selected WLS instance %{1} was not found.","未找到选定的 WLS 实例 %{1}。"
 "WLS restart command was submitted but no valid PID was returned.","WLS 重启命令已提交，但未返回有效 PID。"
 "WLS restart command submitted for %{1}. Master PID: %{2}","已为 %{1} 提交 WLS 重启命令。Master PID：%{2}"
-Unknown,Unknown
-Direct,Direct
-Dispatcher,Dispatcher
-Auto,Auto
+Unknown,未知
+Direct,直接的
+Dispatcher,调度员
+Auto,汽车
 "所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。","所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。"
 "仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。","仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。"
 "所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。","所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。"
-"Direct listener supported","Direct listener supported"
-"Direct listener unavailable","Direct listener unavailable"
-"This runtime supports the native direct listener selected by WLS.","This runtime supports the native direct listener selected by WLS."
-"Direct listener dependencies are not ready; server:start will run the authoritative dependency bootstrap and capability probe.","Direct listener dependencies are not ready; server:start will run the authoritative dependency bootstrap and capability probe."
-"Direct listener capability unknown","Direct listener capability unknown"
+"Direct listener supported",支持直接监听
+"Direct listener unavailable",直接侦听器不可用
+"This runtime supports the native direct listener selected by WLS.","此运行时支持 WLS 选择的本机直接侦听器。"
+"Direct listener dependencies are not ready; server:start will run the authoritative dependency bootstrap and capability probe.","直接侦听器依赖项尚未准备好； server:start 将运行权威依赖引导程序和功能探测。"
+"Direct listener capability unknown",直接监听器能力未知
 "Gateway listen port must be between 1 and 65535.","网关监听端口必须在 1 到 65535 之间。"
 "Gateway listen host is invalid.",网关监听主机无效。
 "Gateway rule is disabled for this project.",该项目的网关规则已停用。
@@ -2652,7 +2738,7 @@ Auto,Auto
 证书路由和源文件已撤销，但数据库清理未完成：%{1},证书路由和源文件已撤销，但数据库清理未完成：%{1}
 "Security rules saved. WLS workers will reload rules from the update flag.","安全规则已保存。WLS Worker 会通过更新标记重载规则。"
 "检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…","检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…"
-"ROOT PID: %{1}","ROOT PID: %{1}"
+"ROOT PID: %{1}",根PID：%{1}
 "IPC 超时，验证 Master 实时身份后清理该实例下所有进程...","IPC 超时，验证 Master 实时身份后清理该实例下所有进程..."
 "强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc","强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc"
 "与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略","与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略"
@@ -2724,9 +2810,9 @@ proc_open不可用，使用传统方式启动后台进程,proc_open不可用，�
 "端口 %{1} 被占用但无法获取进程ID，请手动停止后重试","端口 %{1} 被占用但无法获取进程ID，请手动停止后重试"
 "端口 %{1} 多次尝试后仍被占用，CLI 可能无法正常监听","端口 %{1} 多次尝试后仍被占用，CLI 可能无法正常监听"
 "若仍无法结束，请以管理员身份运行 CMD 或 PowerShell 后执行上述命令。","若仍无法结束，请以管理员身份运行 CMD 或 PowerShell 后执行上述命令。"
-"Failed to persist local CA certificate","Failed to persist local CA certificate"
-"Failed to persist local CA private key","Failed to persist local CA private key"
-"Failed to persist local certificate private key","Failed to persist local certificate private key"
+"Failed to persist local CA certificate","无法保留本地 CA 证书"
+"Failed to persist local CA private key","保存本地 CA 私钥失败"
+"Failed to persist local certificate private key",无法保存本地证书私钥
 保存私钥文件失败,保存私钥文件失败
 "证书内容格式无效，请上传/粘贴 PEM 证书链","证书内容格式无效，请上传/粘贴 PEM 证书链"
 "私钥内容格式无效，请上传/粘贴 PEM 私钥","私钥内容格式无效，请上传/粘贴 PEM 私钥"
@@ -2761,7 +2847,7 @@ proc_open不可用，使用传统方式启动后台进程,proc_open不可用，�
 "当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。","当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。"
 "为复制项目显式生成新 UUID；必须配合 --confirm","为复制项目显式生成新 UUID；必须配合 --confirm"
 "WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。","WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。"
-"Conflicting WLS topology CLI options: --direct and --dispatcher.","Conflicting WLS topology CLI options: --direct and --dispatcher."
+"Conflicting WLS topology CLI options: --direct and --dispatcher.","冲突的 WLS 拓扑 CLI 选项：--direct 和 --dispatcher。"
 "--no-nginx 只能与 --edge=wls 一起使用。","--no-nginx 只能与 --edge=wls 一起使用。"
 "WLS 启动不使用 PHP 内置 CLI 服务器；需要纯 WLS 时请使用 --no-nginx。","WLS 启动不使用 PHP 内置 CLI 服务器；需要纯 WLS 时请使用 --no-nginx。"
 "检测到 Windows ARM64 上运行 x64 PHP 仿真；WLS 已对后续 PHP 子进程关闭 CLI OPcache 与 JIT，避免已确认的原生访问冲突；请使用原生 ARM64 PHP 恢复字节码缓存。","检测到 Windows ARM64 上运行 x64 PHP 仿真；WLS 已对后续 PHP 子进程关闭 CLI OPcache 与 JIT，避免已确认的原生访问冲突；请使用原生 ARM64 PHP 恢复字节码缓存。"
@@ -2872,9 +2958,9 @@ PID：%{1},PID：%{1}
 维护状态已恢复到重启前配置（端口检查未通过）。,维护状态已恢复到重启前配置（端口检查未通过）。
 "HTTP Redirect 端口 %{1} 已被实例 [%{2}] 占用: %{3}","HTTP Redirect 端口 %{1} 已被实例 [%{2}] 占用: %{3}"
 "请先停止实例 [%{1}]，或改用非 443 主端口启动。","请先停止实例 [%{1}]，或改用非 443 主端口启动。"
-"HTTP Redirect port %{1} is occupied by %{2}","HTTP Redirect port %{1} is occupied by %{2}"
-"HTTP Redirect port %{1} could not be released; HTTP to HTTPS redirect will be disabled.","HTTP Redirect port %{1} could not be released; HTTP to HTTPS redirect will be disabled."
-"Tip: start on a non-443 main port to run without a dedicated HTTP redirect worker.","Tip: start on a non-443 main port to run without a dedicated HTTP redirect worker."
+"HTTP Redirect port %{1} is occupied by %{2}","HTTP 重定向端口 %{1} 被 %{2} 占用"
+"HTTP Redirect port %{1} could not be released; HTTP to HTTPS redirect will be disabled.","HTTP 重定向端口 %{1} 无法释放； HTTP 到 HTTPS 重定向将被禁用。"
+"Tip: start on a non-443 main port to run without a dedicated HTTP redirect worker.","提示：在非 443 主端口上启动，无需专用的 HTTP 重定向工作程序即可运行。"
 "HTTP Redirect 端口 %{1} 被占用: %{2}","HTTP Redirect 端口 %{1} 被占用: %{2}"
 是否强制停用该进程以释放端口？[y/N]:,是否强制停用该进程以释放端口？[y/N]:
 "已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。","已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。"
@@ -2909,10 +2995,10 @@ PID：%{1},PID：%{1}
 日志目录：%{1},日志目录：%{1}
 启动准备,启动准备
 启动服务,启动服务
-"Master 已退出","Master 已退出"
+"Master 已退出",大师已退出
 ╔══════════════════════════════════════════════════════════════════════════════╗,╔══════════════════════════════════════════════════════════════════════════════╗
 ╚══════════════════════════════════════════════════════════════════════════════╝,╚══════════════════════════════════════════════════════════════════════════════╝
-"Master PID: %{1}","Master PID: %{1}"
+"Master PID: %{1}",主控PID：%{1}
 "HTTP 重定向: 端口 %{1} → HTTPS（不计入 Worker 数）","HTTP 重定向: 端口 %{1} → HTTPS（不计入 Worker 数）"
 "健康检查间隔: 5 秒","健康检查间隔: 5 秒"
 "按 Ctrl+C 停止服务","按 Ctrl+C 停止服务"
@@ -2926,7 +3012,7 @@ PID：%{1},PID：%{1}
 "WLS 维护模式同步失败：%{1}","WLS 维护模式同步失败：%{1}"
 默认值,默认值
 "已保存实例配置 (%{1})","已保存实例配置 (%{1})"
-env.wls,env.wls
+env.wls,环境文件
 env.wls.servers.%{1},env.wls.servers.%{1}
 命令行参数,命令行参数
 "命令行参数 --edge","命令行参数 --edge"
@@ -2971,7 +3057,7 @@ env.wls.servers.%{1},env.wls.servers.%{1}
 "已为 %{1} 生成自签证书","已为 %{1} 生成自签证书"
 无效的实例名称：%{1}，只允许字母开头，包含字母、数字、下划线和横线,无效的实例名称：%{1}，只允许字母开头，包含字母、数字、下划线和横线
 内部拓扑,内部拓扑
-TLS,TLS
+TLS,传输层安全协议
 "TLS 会话恢复","TLS 会话恢复"
 "跨连接/跨 Worker Reused pending","跨连接/跨 Worker Reused pending"
 HTTP/3,HTTP/3
@@ -2985,11 +3071,11 @@ HTTP/3,HTTP/3
 网关公网端点未验证,网关公网端点未验证
 "WLS 私网回源","WLS 私网回源"
 网关状态,网关状态
-"网关 epoch","网关 epoch"
+"网关 epoch",网关时代
 "Nginx 公网端点未验证","Nginx 公网端点未验证"
-"HTTP/3 QUIC pending","HTTP/3 QUIC pending"
-"shared cache/tickets；live Reused 已验证：%{1}","shared cache/tickets；live Reused 已验证：%{1}"
-"shared cache/tickets 已配置；live Reused pending","shared cache/tickets 已配置；live Reused pending"
+"HTTP/3 QUIC pending","HTTP/3 QUIC 待处理"
+"shared cache/tickets；live Reused 已验证：%{1}","共享缓存/票证；live Reused 已验证：%{1}"
+"shared cache/tickets 已配置；live Reused pending","共享缓存/票证已配置；live Reused待定"
 未配置或未验证,未配置或未验证
 "检测到特权端口 %{1}，当前用户无法直接绑定。","检测到特权端口 %{1}，当前用户无法直接绑定。"
 "未找到 setcap 命令，跳过 setcap 方式。","未找到 setcap 命令，跳过 setcap 方式。"
@@ -3066,16 +3152,16 @@ HTTP/3,HTTP/3
 "在 php.ini 设置 memory_limit = 256M","在 php.ini 设置 memory_limit = 256M"
 "OPCache CLI 模式未启用","OPCache CLI 模式未启用"
 "启用后可提升 CLI 脚本执行速度","启用后可提升 CLI 脚本执行速度"
-"在 php.ini 设置 opcache.enable_cli = 1","在 php.ini 设置 opcache.enable_cli = 1"
+"在 php.ini 设置 opcache.enable_cli = 1","在 php.ini 中设置 opcache.enable_cli = 1"
 "JIT 编译器未启用","JIT 编译器未启用"
 "PHP 8 JIT 可提升 CPU 密集型任务性能 2-3 倍","PHP 8 JIT 可提升 CPU 密集型任务性能 2-3 倍"
-"在 php.ini 设置 opcache.jit = tracing","在 php.ini 设置 opcache.jit = tracing"
+"在 php.ini 设置 opcache.jit = tracing","在 php.ini 中设置 opcache.jit = 跟踪"
 "未安装 event 扩展，使用 stream_select 回退方案","未安装 event 扩展，使用 stream_select 回退方案"
 "安装后将使用 libevent 事件循环；实际收益以 server:benchmark 同机对比为准","安装后将使用 libevent 事件循环；实际收益以 server:benchmark 同机对比为准"
 "Windows: 下载 php_event.dll 并在 php.ini 中添加 extension=event","Windows: 下载 php_event.dll 并在 php.ini 中添加 extension=event"
 "可选：安装 ev 扩展可获得更高性能","可选：安装 ev 扩展可获得更高性能"
 "基于 libev，比 libevent 更轻量","基于 libev，比 libevent 更轻量"
-"pecl install ev","pecl install ev"
+"pecl install ev","pecl 安装 ev"
 "✅ 当前配置已达最佳性能！","✅ 当前配置已达最佳性能！"
 "📊 性能优化建议","📊 性能优化建议"
 "🚨 关键性能问题（强烈建议解决）：","🚨 关键性能问题（强烈建议解决）："
@@ -3119,7 +3205,7 @@ HTTP/3,HTTP/3
 "WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）","WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）"
 "兼容别名，等价于 --edge=wls","兼容别名，等价于 --edge=wls"
 "兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用","兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用"
-"Supervisor：auto/true/false（默认 auto）","Supervisor：auto/true/false（默认 auto）"
+"Supervisor：auto/true/false（默认 auto）",Supervisor：auto/true/false（默认auto）
 "直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用","直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用"
 "Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断","Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断"
 配置优先级,配置优先级
@@ -3151,16 +3237,16 @@ HTTP/3,HTTP/3
 "Nginx 会话缓存与 Ticket 需 live Reused 验收；纯 WLS 跨连接/跨 Worker Session Ticket 仍为 pending","Nginx 会话缓存与 Ticket 需 live Reused 验收；纯 WLS 跨连接/跨 Worker Session Ticket 仍为 pending"
 "持续监控 Worker 状态并自动恢复；Nginx 模式的公网 HTTP→HTTPS 重定向由 Nginx 负责","持续监控 Worker 状态并自动恢复；Nginx 模式的公网 HTTP→HTTPS 重定向由 Nginx 负责"
 "Nginx 模式下 -p 指定 loopback 回源端口；--no-nginx 时 -p 指定纯 WLS 公网端口","Nginx 模式下 -p 指定 loopback 回源端口；--no-nginx 时 -p 指定纯 WLS 公网端口"
-"Worker 内存","Worker 内存"
+"Worker 内存",工人内存
 "可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker","可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker"
 "显式安装 Nginx","显式安装 Nginx"
 启动默认实例,启动默认实例
 强制加入共享网关,强制加入共享网关
-"纯 WLS HTTPS","纯 WLS HTTPS"
+"纯 WLS HTTPS","纯WLS HTTPS"
 启动命名实例（首次指定回源端口）,启动命名实例（首次指定回源端口）
 再次启动已配置实例,再次启动已配置实例
-"Direct 模式","Direct 模式"
-"Dispatcher 模式","Dispatcher 模式"
+"Direct 模式",直接模式
+"Dispatcher 模式",调度员模式
 显式安装依赖后启动,显式安装依赖后启动
 "Windows 可见窗口","Windows 可见窗口"
 平滑重启,平滑重启
@@ -3216,8 +3302,8 @@ HTTP/3,HTTP/3
 "当前项目已授权到 WLS 2.0 宿主网关。","当前项目已授权到 WLS 2.0 宿主网关。"
 "确认项目 UUID 轮换","确认项目 UUID 轮换"
 "是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:","是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:"
-"- Windows: taskkill /F /PID %{1}","- Windows: taskkill /F /PID %{1}"
-"- Linux/macOS: kill -9 %{1}","- Linux/macOS: kill -9 %{1}"
+"- Windows: taskkill /F /PID %{1}","- Windows：taskkill /F /PID %{1}"
+"- Linux/macOS: kill -9 %{1}","- Linux/macOS：kill -9 %{1}"
 "3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
 "正在强制结束占用端口 %{1} 的进程 (PID: %{2})...","正在强制结束占用端口 %{1} 的进程 (PID: %{2})..."
 "提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试","提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试"
@@ -3236,12 +3322,12 @@ HTTP/3,HTTP/3
 "WLS 与托管 Nginx 均已就绪，启动完成。","WLS 与托管 Nginx 均已就绪，启动完成。"
 "当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker","当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker"
 "Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制","Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制"
-"移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","移除 --dispatcher，或配置 wls.runtime.topology = auto/direct"
+"移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","删除 --dispatcher，或配置 wls.runtime.topology = auto/direct"
 "Nginx 公网 TLS 证书文件路径","Nginx 公网 TLS 证书文件路径"
 "Nginx 公网 TLS 私钥文件路径","Nginx 公网 TLS 私钥文件路径"
 "直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd","直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd"
 "显式兼容/诊断拓扑；所有平台的 auto 均不启动 Dispatcher","显式兼容/诊断拓扑；所有平台的 auto 均不启动 Dispatcher"
-Nginx-only,Nginx-only
+Nginx-only,"仅限 Nginx"
 "普通 start/reload/restart 不下载、不编译；缺少 Nginx 时失败并提示显式 server:nginx:install","普通 start/reload/restart 不下载、不编译；缺少 Nginx 时失败并提示显式 server:nginx:install"
 多实例支持,多实例支持
 "可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例","可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例"
@@ -3272,62 +3358,9 @@ Nginx-only,Nginx-only
 "默认由 Nginx 终结；--no-nginx 时由纯 WLS 默认启用 TLS 1.3","默认由 Nginx 终结；--no-nginx 时由纯 WLS 默认启用 TLS 1.3"
 "公网访问由宿主级 WLS 2.0 Gateway 提供。","公网访问由宿主级 WLS 2.0 Gateway 提供。"
 "公网访问必须经过项目托管 Nginx。","公网访问必须经过项目托管 Nginx。"
-"不支持的 WLS 面板生命周期操作：%{1}","不支持的 WLS 面板生命周期操作：%{1}"
-"WLS 面板生命周期","WLS 面板生命周期"
-"在后台权限与项目边界内控制 WLS 重载和重启","在后台权限与项目边界内控制 WLS 重载和重启"
-后台操作员不可用,后台操作员不可用
-"无权执行 WLS 面板生命周期操作","无权执行 WLS 面板生命周期操作"
-WLS,WLS
-不可控制,不可控制
-"当前项目无法从此面板控制 WLS。","当前项目无法从此面板控制 WLS。"
-未绑定实例,未绑定实例
-重载,重载
-"WLS 生命周期控制","WLS 生命周期控制"
-"WLS 生命周期","WLS 生命周期"
-"重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。","重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。"
-"Worker 代际","Worker 代际"
-"Ready Worker","Ready Worker"
-重载项目,重载项目
-重启工作进程,重启工作进程
-打开项目面板,打开项目面板
-高风险操作,高风险操作
-"重启 WLS 工作进程","重启 WLS 工作进程"
-"重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。","重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。"
-输入项目名称以确认,输入项目名称以确认
-输入上方项目名称,输入上方项目名称
-确认重启,确认重启
-"WLS 后台业务 API 尚未加载。","WLS 后台业务 API 尚未加载。"
-"WLS 生命周期操作失败。","WLS 生命周期操作失败。"
-正在提交项目重载…,正在提交项目重载…
-正在提交项目重启…,正在提交项目重启…
-"操作已提交，正在等待实例恢复到 Ready…","操作已提交，正在等待实例恢复到 Ready…"
-"项目重载完成，实例已恢复到 Ready。","项目重载完成，实例已恢复到 Ready。"
-"项目重启完成，Master 保持在线且工作进程已恢复到 Ready。","项目重启完成，Master 保持在线且工作进程已恢复到 Ready。"
-"操作已提交，但等待 Ready 超时；请继续查看实例状态。","操作已提交，但等待 Ready 超时；请继续查看实例状态。"
-输入的项目名称不匹配。,输入的项目名称不匹配。
-"当前项目不支持从此面板控制 WLS。","当前项目不支持从此面板控制 WLS。"
-"WLS Master 控制通道不可用。","WLS Master 控制通道不可用。"
-重载中,重载中
-恢复中,恢复中
-"WLS 实例已就绪。","WLS 实例已就绪。"
-"WLS 正在重载，请等待恢复到 Ready。","WLS 正在重载，请等待恢复到 Ready。"
-"WLS 尚未完全就绪。","WLS 尚未完全就绪。"
-该项目不可控制。,该项目不可控制。
-"WLS Master 未运行，无法提交操作。","WLS Master 未运行，无法提交操作。"
-该实例已有生命周期操作正在执行。,该实例已有生命周期操作正在执行。
-项目名称确认不匹配，已取消重启。,项目名称确认不匹配，已取消重启。
-该实例的生命周期操作正在提交，请稍后重试。,该实例的生命周期操作正在提交，请稍后重试。
-"WLS 重启已提交；Master 保持在线，正在重建全部工作进程。","WLS 重启已提交；Master 保持在线，正在重建全部工作进程。"
-"WLS 重载已提交，正在滚动更新工作进程。","WLS 重载已提交，正在滚动更新工作进程。"
-"WLS 生命周期操作提交失败。","WLS 生命周期操作提交失败。"
-"WLS 项目标识无效。","WLS 项目标识无效。"
-托管项目不存在。,托管项目不存在。
-"托管项目已停用，不能执行 WLS 生命周期操作。","托管项目已停用，不能执行 WLS 生命周期操作。"
-"该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。","该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。"
-"无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。","无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。"
 "滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）","滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）"
 "与 -r 同用时强制完整重启（停 Master，跳过排水等待）","与 -r 同用时强制完整重启（停 Master，跳过排水等待）"
 "检测到端口/拓扑/Worker/SSL 等启动参数变更，start -r 将自动切换为完整重启。","检测到端口/拓扑/Worker/SSL 等启动参数变更，start -r 将自动切换为完整重启。"
 "检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...","检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空..."
-"滚动排水重启","滚动排水重启"
-"强制完整重启","强制完整重启"
+滚动排水重启,滚动排水重启
+强制完整重启,强制完整重启

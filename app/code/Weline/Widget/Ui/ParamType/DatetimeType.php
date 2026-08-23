@@ -30,7 +30,7 @@ class DatetimeType extends AbstractParamType
         };
         $formattedValue = $this->formatValueForInput((string)$currentValue, $mode);
         $inputHtml = '<div class="w-param-datetime"><div class="w-param-input-group">';
-        $inputHtml .= '<input type="' . $inputType . '" class="w-param-input" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($formattedValue) . '"';
+        $inputHtml .= '<input type="' . $inputType . '" class="w-input" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($formattedValue) . '"';
         if ($min !== null) {
             $inputHtml .= ' min="' . htmlspecialchars($this->formatValueForInput($min, $mode)) . '"';
         }
@@ -42,14 +42,14 @@ class DatetimeType extends AbstractParamType
         }
         $inputHtml .= '>';
         if (!$required && !empty($currentValue)) {
-            $inputHtml .= '<button type="button" class="w-param-btn w-param-btn-outline-secondary w-param-datetime-clear" data-target="' . htmlspecialchars($fieldId) . '" title="' . __('清除') . '">×</button>';
+            $inputHtml .= '<button type="button" class="w-button w-param-datetime-clear" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" data-target="' . htmlspecialchars($fieldId) . '" aria-label="' . __('清除') . '">×</button>';
         }
         $inputHtml .= '</div>';
         if ($mode === 'date' || $mode === 'datetime') {
             $inputHtml .= '<div class="w-param-datetime-shortcuts">';
-            $inputHtml .= '<button type="button" class="w-param-btn" data-action="today" data-target="' . htmlspecialchars($fieldId) . '">' . __('今天') . '</button>';
-            $inputHtml .= '<button type="button" class="w-param-btn" data-action="tomorrow" data-target="' . htmlspecialchars($fieldId) . '">' . __('明天') . '</button>';
-            $inputHtml .= '<button type="button" class="w-param-btn" data-action="next_week" data-target="' . htmlspecialchars($fieldId) . '">' . __('下周') . '</button>';
+            $inputHtml .= '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-action="today" data-target="' . htmlspecialchars($fieldId) . '">' . __('今天') . '</button>';
+            $inputHtml .= '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-action="tomorrow" data-target="' . htmlspecialchars($fieldId) . '">' . __('明天') . '</button>';
+            $inputHtml .= '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-action="next_week" data-target="' . htmlspecialchars($fieldId) . '">' . __('下周') . '</button>';
             $inputHtml .= '</div>';
         }
         if ($format !== null) {

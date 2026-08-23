@@ -1,500 +1,220 @@
 <?php
 /**
- * 通知详情页面（支持上一条/下一条翻页、键盘快捷键）
- *
  * @var \Weline\Framework\View\Template $this
- * @var array $notification 通知详情
- * @var int|null $prev_id 上一条通知 ID
- * @var string|null $prev_title 上一条标题（用于 tooltip）
- * @var int|null $next_id 下一条通知 ID
- * @var string|null $next_title 下一条标题（用于 tooltip）
+ * @var array $notification
+ * @var int|null $prev_id
+ * @var string|null $prev_title
+ * @var int|null $next_id
+ * @var string|null $next_title
  */
-$notification = $notification ?? [];
-$prevId = $prev_id ?? null;
-$prevTitle = $prev_title ?? '';
-$nextId = $next_id ?? null;
-$nextTitle = $next_title ?? '';
-$typeColor = $notification['type_color'] ?? 'var(--backend-color-info)';
-$typeLabel = $notification['type_label'] ?? __('信息');
-$typeIcon = $notification['avatar'] ?? 'ri-notification-line';
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\Ui\IconRegistry;
+
+$h = static fn(mixed $value): string => \htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$notification = \is_array($notification ?? null) ? $notification : [];
+$prevId = !empty($prev_id) ? \max(0, (int)$prev_id) : 0;
+$prevTitle = (string)($prev_title ?? '');
+$nextId = !empty($next_id) ? \max(0, (int)$next_id) : 0;
+$nextTitle = (string)($next_title ?? '');
+$type = \strtolower((string)($notification['type'] ?? 'info'));
+$tone = \in_array($type, ['info', 'success', 'warning'], true) ? $type : 'danger';
+$typeIcon = (string)($notification['type_icon'] ?? 'bell');
+$typeLabel = (string)($notification['type_label'] ?? __('信息'));
+$title = (string)($notification['title'] ?? '');
+$content = (string)($notification['content'] ?? '');
+$contentHtml = \nl2br($h($content));
+$notificationTime = (string)($notification['notification_time'] ?? '');
+$displayTime = \preg_replace('/\.\d+$/', '', $notificationTime) ?? $notificationTime;
+$isRead = !empty($notification['is_read']);
+$readTone = $isRead ? 'success' : 'info';
+$readIcon = $isRead ? 'check' : 'circle';
+$readLabel = $isRead ? (string)__('已读') : (string)__('未读');
+$topicCode = (string)($notification['topic_code'] ?? '');
+$topicName = (string)($notification['topic_name'] ?? $topicCode);
+$hasTopicCode = $topicCode !== '';
+$showTopicInMeta = $topicName !== '' && $topicName !== $topicCode;
+$metadata = (!empty($notification['metadata']) && \is_array($notification['metadata']))
+    ? $notification['metadata']
+    : [];
+$channels = (!empty($notification['external_channels']) && \is_array($notification['external_channels']))
+    ? $notification['external_channels']
+    : [];
+// Avoid `|` in template source: Taglib compiler may treat it as a filter and leak PHP.
+$jsonFlags = \JSON_UNESCAPED_UNICODE + \JSON_UNESCAPED_SLASHES;
+$metadataRows = [];
+foreach ($metadata as $metaKey => $metaValue) {
+    $metadataRows[] = [
+        'key' => (string)$metaKey,
+        'value' => \is_array($metaValue)
+            ? (string)\json_encode($metaValue, $jsonFlags)
+            : (string)$metaValue,
+    ];
+}
+if ($hasTopicCode && !$showTopicInMeta) {
+    $metadataRows[] = [
+        'key' => (string)__('主题'),
+        'value' => $topicCode,
+    ];
+}
+$channelLabels = [];
+foreach ($channels as $channel) {
+    $channelLabels[] = (string)$channel;
+}
+
 $listUrl = $this->getBackendUrl('system/backend/notification');
 $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
-$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
-    | JSON_UNESCAPED_SLASHES
-    | JSON_HEX_TAG
-    | JSON_HEX_AMP
-    | JSON_HEX_APOS
-    | JSON_HEX_QUOT
-    | JSON_INVALID_UTF8_SUBSTITUTE;
+$subscriptionUrl = $this->getBackendUrl('system/backend/notificationsubscription');
+$markTopicUrl = $this->getBackendUrl('system/backend/notification/markTopicRead');
+$prevUrl = $prevId > 0 ? $detailUrlBase . '?' . \http_build_query(['id' => $prevId]) : '';
+$nextUrl = $nextId > 0 ? $detailUrlBase . '?' . \http_build_query(['id' => $nextId]) : '';
+
+$icons = ObjectManager::getInstance(IconRegistry::class);
+$iconArrowLeft = $icons->render('arrow-left', 'sm');
+$iconArrowRight = $icons->render('arrow-right', 'sm');
+$iconTag = $icons->render('tag', 'sm');
+$iconClock = $icons->render('clock', 'sm');
+$iconInfo = $icons->render('info', 'sm');
+$iconShare = $icons->render('share', 'sm');
+$iconKey = $icons->render('key', 'sm');
+$iconCheck = $icons->render('check', 'sm');
+$iconSettings = $icons->render('settings', 'sm');
+$iconType = $icons->render($typeIcon, 'md');
+$iconRead = $icons->render($readIcon, 'sm');
+
+$attrPrevUrl = $h($prevUrl);
+$attrNextUrl = $h($nextUrl);
+$attrMarkTopicUrl = $h($markTopicUrl);
+$attrConfirmTopic = $h((string)__('确定要将「%{name}」类的所有通知标记为已读吗？'));
+$attrSuccessMessage = $h((string)__('已标记为已读'));
+$attrFailureMessage = $h((string)__('操作失败'));
+$attrRequestFailureMessage = $h((string)__('网络错误，请重试'));
+$attrAdjacentNav = $h((string)__('相邻通知'));
+$attrPrevTitle = $h($prevTitle);
+$attrNextTitle = $h($nextTitle);
+$attrFirstTitle = $h((string)__('已是第一条'));
+$attrLastTitle = $h((string)__('已是最后一条'));
+$attrTone = $h($tone);
+$attrTypeLabel = $h($typeLabel);
+$attrTopicName = $h($topicName);
+$attrTopicCode = $h($topicCode);
+$attrTitle = $h($title);
+$attrTime = $h($displayTime);
+$attrReadTone = $h($readTone);
+$attrReadLabel = $h($readLabel);
+$attrListUrl = $h($listUrl);
+$attrSubscriptionUrl = $h($subscriptionUrl);
+
+$hasPrev = $prevId > 0;
+$hasNext = $nextId > 0;
+$hasMetadata = $metadataRows !== [];
+$hasChannels = $channelLabels !== [];
 ?>
+<link rel="stylesheet" href="@static(Weline_Backend::css/notification-center.css)">
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
-                <a href="<?= $listUrl ?>" class="text-muted me-2" title="<?= __('返回列表') ?>">
-                    <i class="ri-arrow-left-line"></i>
-                </a>
-                <lang>通知详情</lang>
-            </h4>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <?php if ($prevId): ?>
-                <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="btn btn-outline-secondary btn-sm weline-nd-nav-btn" title="<?= htmlspecialchars($prevTitle) ?>">
-                    <i class="ri-arrow-up-line me-1"></i><lang>上一条</lang>
-                </a>
-                <?php else: ?>
-                <span class="btn btn-outline-secondary btn-sm disabled weline-nd-nav-btn" title="<lang>已是第一条</lang>">
-                    <i class="ri-arrow-up-line me-1"></i><lang>上一条</lang>
-                </span>
-                <?php endif; ?>
-                <a href="<?= $listUrl ?>" class="btn btn-outline-secondary btn-sm">
-                    <i class="ri-list-unordered me-1"></i><lang>返回列表</lang>
-                </a>
-                <?php if ($nextId): ?>
-                <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="btn btn-outline-secondary btn-sm weline-nd-nav-btn" title="<?= htmlspecialchars($nextTitle) ?>">
-                    <lang>下一条</lang><i class="ri-arrow-down-line ms-1"></i>
-                </a>
-                <?php else: ?>
-                <span class="btn btn-outline-secondary btn-sm disabled weline-nd-nav-btn" title="<?= __('已是最后一条') ?>">
-                    <lang>下一条</lang><i class="ri-arrow-down-line ms-1"></i>
-                </span>
-                <?php endif; ?>
-            </div>
+<section
+    class="w-notification-detail w-stack"
+    data-w-component="notification-center"
+    data-w-mode="detail"
+    data-w-prev-url="<?= $attrPrevUrl ?>"
+    data-w-next-url="<?= $attrNextUrl ?>"
+    data-w-mark-topic-url="<?= $attrMarkTopicUrl ?>"
+    data-w-confirm-topic="<?= $attrConfirmTopic ?>"
+    data-w-success-message="<?= $attrSuccessMessage ?>"
+    data-w-failure-message="<?= $attrFailureMessage ?>"
+    data-w-request-failure-message="<?= $attrRequestFailureMessage ?>"
+>
+    <header class="w-notification-detail__chrome">
+        <a href="<?= $attrListUrl ?>" class="w-notification-detail__back"><?php echo $iconArrowLeft; ?><lang>返回通知中心</lang></a>
+        <nav class="w-notification-detail__pager" aria-label="<?= $attrAdjacentNav ?>">
+<?php if ($hasPrev) { ?>
+            <a href="<?= $attrPrevUrl ?>" class="w-button" title="<?= $attrPrevTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                <?php echo $iconArrowLeft; ?><lang>上一条</lang>
+            </a>
+<?php } else { ?>
+            <span class="w-button" title="<?= $attrFirstTitle ?>" aria-disabled="true" data-tone="neutral" data-variant="outline" data-size="sm">
+                <?php echo $iconArrowLeft; ?><lang>上一条</lang>
+            </span>
+<?php } ?>
+<?php if ($hasNext) { ?>
+            <a href="<?= $attrNextUrl ?>" class="w-button" title="<?= $attrNextTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+                <lang>下一条</lang><?php echo $iconArrowRight; ?>
+            </a>
+<?php } else { ?>
+            <span class="w-button" title="<?= $attrLastTitle ?>" aria-disabled="true" data-tone="neutral" data-variant="outline" data-size="sm">
+                <lang>下一条</lang><?php echo $iconArrowRight; ?>
+            </span>
+<?php } ?>
+        </nav>
+    </header>
+
+    <article class="w-card w-notification-detail__card">
+        <div class="w-card__body w-notification-detail__body">
+            <header class="w-notification-detail__headline">
+                <span class="w-notification-detail__type-icon" data-tone="<?= $attrTone ?>"><?php echo $iconType; ?></span>
+                <div class="w-notification-detail__headline-main">
+                    <h1 class="w-notification-detail__title"><?= $attrTitle ?></h1>
+                    <div class="w-notification-detail__meta">
+                        <span class="w-badge" data-tone="<?= $attrTone ?>"><?= $attrTypeLabel ?></span>
+                        <span class="w-badge" data-tone="<?= $attrReadTone ?>"><?php echo $iconRead; ?><?= $attrReadLabel ?></span>
+                        <span class="w-notification-detail__time"><?php echo $iconClock; ?><?= $attrTime ?></span>
+<?php if ($showTopicInMeta) { ?>
+                        <span class="w-notification-detail__topic"><?php echo $iconTag; ?><?= $attrTopicName ?></span>
+<?php } ?>
+                    </div>
+                </div>
+            </header>
+
+            <div class="w-notification-detail__content"><?php echo $contentHtml; ?></div>
+
+<?php if ($hasMetadata) { ?>
+            <section class="w-notification-detail__supplement" aria-labelledby="w-notification-metadata-title">
+                <h2 id="w-notification-metadata-title"><?php echo $iconInfo; ?><lang>附加信息</lang></h2>
+                <div class="w-notification-detail__metadata">
+<?php foreach ($metadataRows as $row) {
+    $metaKeyHtml = $h($row['key']);
+    $metaValueHtml = $h($row['value']);
+?>
+                    <div class="w-notification-detail__metadata-row">
+                        <div class="w-notification-detail__metadata-key"><?= $metaKeyHtml ?></div>
+                        <div class="w-notification-detail__metadata-value"><?= $metaValueHtml ?></div>
+                    </div>
+<?php } ?>
+                </div>
+            </section>
+<?php } ?>
+
+<?php if ($hasChannels) { ?>
+            <section class="w-notification-detail__supplement" aria-labelledby="w-notification-channels-title">
+                <h2 id="w-notification-channels-title"><?php echo $iconShare; ?><lang>已推送渠道</lang></h2>
+                <div class="w-notification-detail__channels">
+<?php foreach ($channelLabels as $channelLabel) {
+    $channelHtml = $h($channelLabel);
+?>
+                    <span class="w-badge" data-tone="neutral"><?= $channelHtml ?></span>
+<?php } ?>
+                </div>
+            </section>
+<?php } ?>
         </div>
-    </div>
-</div>
 
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        <div class="card weline-nd-card">
-            <div class="card-body p-0">
-                <div class="weline-nd-header" style="background: <?= $typeColor ?>">
-                    <div class="weline-nd-header-icon">
-                        <i class="<?= htmlspecialchars($typeIcon) ?>"></i>
-                    </div>
-                    <div class="weline-nd-header-info">
-                        <span class="weline-nd-type-badge"><?= $typeLabel ?></span>
-                        <?php if (!empty($notification['topic_name'])): ?>
-                        <span class="weline-nd-topic">
-                            <i class="mdi mdi-tag-outline me-1"></i><?= htmlspecialchars($notification['topic_name']) ?>
-                        </span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div class="weline-nd-body">
-                    <h2 class="weline-nd-title"><?= htmlspecialchars($notification['title'] ?? '') ?></h2>
-                    
-                    <div class="weline-nd-meta">
-                        <span class="weline-nd-time">
-                            <i class="mdi mdi-clock-outline me-1"></i>
-                            <?= $notification['notification_time'] ?? '' ?>
-                        </span>
-                        <?php if ($notification['is_read'] ?? false): ?>
-                        <span class="weline-nd-read-status weline-nd-read">
-                            <i class="mdi mdi-check-circle me-1"></i><lang>已读</lang>
-                        </span>
-                        <?php else: ?>
-                        <span class="weline-nd-read-status weline-nd-unread">
-                            <i class="mdi mdi-circle me-1"></i><lang>未读</lang>
-                        </span>
-                        <?php endif; ?>
-                    </div>
-
-                    <hr class="weline-nd-divider">
-
-                    <div class="weline-nd-content">
-                        <?= nl2br(htmlspecialchars($notification['content'] ?? '')) ?>
-                    </div>
-
-                    <?php if (!empty($notification['metadata'])): ?>
-                    <div class="weline-nd-metadata mt-4">
-                        <h6 class="weline-nd-metadata-title">
-                            <i class="mdi mdi-information-outline me-1"></i><lang>附加信息</lang>
-                        </h6>
-                        <div class="weline-nd-metadata-content">
-                            <?php foreach ($notification['metadata'] as $key => $value): ?>
-                            <div class="weline-nd-metadata-item">
-                                <span class="weline-nd-metadata-key"><?= htmlspecialchars((string)$key) ?>:</span>
-                                <span class="weline-nd-metadata-value">
-                                    <?= is_array($value) ? htmlspecialchars(json_encode($value, JSON_UNESCAPED_UNICODE)) : htmlspecialchars((string)$value) ?>
-                                </span>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-
-                    <?php if (!empty($notification['external_channels'])): ?>
-                    <div class="weline-nd-channels mt-4">
-                        <h6 class="weline-nd-channels-title">
-                            <i class="mdi mdi-broadcast me-1"></i><lang>已推送渠道</lang>
-                        </h6>
-                        <div class="weline-nd-channels-list">
-                            <?php foreach ($notification['external_channels'] as $channel): ?>
-                            <span class="weline-nd-channel-tag">
-                                <?= htmlspecialchars((string)$channel) ?>
-                            </span>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                </div>
-
-                <div class="weline-nd-footer">
-                    <div class="weline-nd-footer-nav">
-                        <?php if ($prevId): ?>
-                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="btn btn-outline-secondary btn-sm weline-nd-footer-prev" title="<?= htmlspecialchars($prevTitle) ?>">
-                            <i class="ri-arrow-left-s-line me-1"></i><lang>上一条</lang>
-                        </a>
-                        <?php else: ?>
-                        <span class="btn btn-outline-secondary btn-sm disabled"><i class="ri-arrow-left-s-line me-1"></i><lang>上一条</lang></span>
-                        <?php endif; ?>
-                        <a href="<?= $listUrl ?>" class="btn btn-light btn-sm">
-                            <i class="ri-home-4-line me-1"></i><lang>返回通知中心</lang>
-                        </a>
-                        <?php if ($nextId): ?>
-                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="btn btn-outline-secondary btn-sm weline-nd-footer-next" title="<?= htmlspecialchars($nextTitle) ?>">
-                            <lang>下一条</lang><i class="ri-arrow-right-s-line ms-1"></i>
-                        </a>
-                        <?php else: ?>
-                        <span class="btn btn-outline-secondary btn-sm disabled"><lang>下一条</lang><i class="ri-arrow-right-s-line ms-1"></i></span>
-                        <?php endif; ?>
-                    </div>
-                    <div class="weline-nd-footer-actions">
-                        <span class="weline-nd-keyboard-hint text-muted small">
-                            <i class="ri-keyboard-line me-1"></i><lang>使用 ← → 方向键可切换上/下一条</lang>
-                        </span>
-                        <?php if (!empty($notification['topic_code'])): ?>
-                        <button type="button" class="btn btn-outline-secondary btn-sm weline-nd-mark-topic-read" data-topic-code="<?= htmlspecialchars($notification['topic_code']) ?>" data-topic-name="<?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>">
-                            <i class="ri-checkbox-multiple-line me-1"></i><lang>此类全部已读</lang>
-                        </button>
-                        <?php endif; ?>
-                        <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="btn btn-outline-primary btn-sm">
-                            <i class="mdi mdi-cog me-1"></i><lang>订阅设置</lang>
-                        </a>
-                    </div>
-                </div>
+        <footer class="w-notification-detail__footer">
+            <div class="w-notification-detail__footer-actions">
+<?php if ($hasTopicCode) { ?>
+                <button
+                    type="button"
+                    class="w-button"
+                    data-w-notification-action="mark-topic-read"
+                    data-w-topic-code="<?= $attrTopicCode ?>"
+                    data-w-topic-name="<?= $attrTopicName ?>"
+                    data-tone="neutral"
+                    data-variant="outline"
+                    data-size="sm"
+                ><?php echo $iconCheck; ?><lang>此类全部已读</lang></button>
+<?php } ?>
+                <a href="<?= $attrSubscriptionUrl ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm"><?php echo $iconSettings; ?><lang>订阅设置</lang></a>
             </div>
-        </div>
-    </div>
-</div>
-
-<style>
-/* ============================================
-   组件：Backend Notification Detail
-   模块：Weline_Backend
-   前缀：weline-nd-
-   ============================================ */
-.weline-nd-card {
-    border: none;
-    border-radius: var(--backend-border-radius-lg, 12px);
-    box-shadow: var(--backend-shadow-lg, 0 8px 32px rgba(0,0,0,0.1));
-    overflow: hidden;
-}
-
-.weline-nd-header {
-    padding: 32px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.weline-nd-header-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: var(--backend-border-radius-md, 8px);
-    background: rgba(255, 255, 255, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--backend-color-text-inverse, #fff);
-    font-size: 1.75rem;
-}
-
-.weline-nd-header-info {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.weline-nd-type-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 12px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: var(--backend-border-radius-sm, 4px);
-    color: var(--backend-color-text-inverse, #fff);
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.weline-nd-topic {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 0.85rem;
-}
-
-.weline-nd-body {
-    padding: 32px;
-}
-
-.weline-nd-title {
-    margin: 0 0 16px 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-    line-height: 1.4;
-}
-
-.weline-nd-meta {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    font-size: 0.875rem;
-    color: var(--backend-color-text-tertiary, #adb5bd);
-}
-
-.weline-nd-time {
-    display: inline-flex;
-    align-items: center;
-}
-
-.weline-nd-read-status {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 10px;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.weline-nd-read {
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
-}
-
-.weline-nd-unread {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-nd-divider {
-    margin: 24px 0;
-    border-color: var(--backend-color-border-light, #e9ecef);
-}
-
-.weline-nd-content {
-    font-size: 1rem;
-    line-height: 1.8;
-    color: var(--backend-color-text-secondary, #495057);
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.weline-nd-metadata,
-.weline-nd-channels {
-    padding: 16px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-radius: var(--backend-border-radius-md, 8px);
-}
-
-.weline-nd-metadata-title,
-.weline-nd-channels-title {
-    margin: 0 0 12px 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-    display: flex;
-    align-items: center;
-}
-
-.weline-nd-metadata-content {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.weline-nd-metadata-item {
-    display: flex;
-    gap: 8px;
-    font-size: 0.85rem;
-}
-
-.weline-nd-metadata-key {
-    color: var(--backend-color-text-tertiary, #adb5bd);
-    font-weight: 500;
-}
-
-.weline-nd-metadata-value {
-    color: var(--backend-color-text-secondary, #495057);
-    word-break: break-all;
-}
-
-.weline-nd-channels-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.weline-nd-channel-tag {
-    padding: 4px 12px;
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-sm, 4px);
-    font-size: 0.8rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-.weline-nd-footer {
-    padding: 20px 32px;
-    background: var(--backend-color-bg-secondary);
-    border-top: 1px solid var(--backend-color-border-light);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-}
-
-.weline-nd-footer-nav {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.weline-nd-footer-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.weline-nd-keyboard-hint {
-    color: var(--backend-color-text-tertiary);
-    font-size: 0.8rem;
-}
-
-.weline-nd-nav-btn.disabled {
-    cursor: not-allowed;
-    opacity: 0.65;
-}
-
-@media (max-width: 576px) {
-    .weline-nd-header {
-        padding: 24px;
-    }
-    
-    .weline-nd-body {
-        padding: 24px;
-    }
-    
-    .weline-nd-header-icon {
-        width: 48px;
-        height: 48px;
-        font-size: 1.25rem;
-    }
-    
-    .weline-nd-title {
-        font-size: 1.25rem;
-    }
-    
-    .weline-nd-meta {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-    }
-    
-    .weline-nd-footer {
-        flex-direction: column;
-        gap: 12px;
-        align-items: stretch;
-    }
-    
-    .weline-nd-footer-nav {
-        justify-content: space-between;
-    }
-    
-    .weline-nd-footer-actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .weline-nd-keyboard-hint {
-        text-align: center;
-    }
-}
-</style>
-
-<script>
-(function(g){
-  if(g.__bqAdmin_backend_admin) return;
-  g.__bqAdmin_backend_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['backend_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('backend_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script>
-(function() {
-    'use strict';
-    var prevUrl = <?= $prevId ? json_encode($detailUrlBase . '?id=' . (int)$prevId, $jsonForScriptFlags) : 'null' ?>;
-    var nextUrl = <?= $nextId ? json_encode($detailUrlBase . '?id=' . (int)$nextId, $jsonForScriptFlags) : 'null' ?>;
-    var markTopicReadUrl = <?= json_encode($this->getBackendUrl('system/backend/notification/markTopicRead'), $jsonForScriptFlags) ?>;
-    var confirmMsgTemplate = <?= json_encode((string)__('确定要将「%{name}」类的所有通知标记为已读吗？'), $jsonForScriptFlags) ?>;
-
-    document.addEventListener('keydown', function(e) {
-        if (/input|textarea|select/i.test(document.activeElement && document.activeElement.tagName || '')) {
-            return;
-        }
-        if (e.key === 'ArrowLeft' && prevUrl) {
-            window.location.href = prevUrl;
-        } else if (e.key === 'ArrowRight' && nextUrl) {
-            window.location.href = nextUrl;
-        }
-    });
-
-    var btn = document.querySelector('.weline-nd-mark-topic-read');
-    if (btn) {
-        btn.addEventListener('click', function() {
-            var topicCode = btn.getAttribute('data-topic-code');
-            var topicName = btn.getAttribute('data-topic-name') || topicCode;
-            var msg = confirmMsgTemplate.replace('%{name}', topicName || topicCode || '');
-            BackendConfirm.show(msg).then(function(confirmed) {
-                if (!confirmed) return;
-                var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic_code: topicCode }) };
-                bqAdmin['backend_admin'](markTopicReadUrl, opts)
-                    .then(function(res) {
-                        var data = (res && res.data) !== undefined ? res.data : res;
-                        if (data.success) {
-                            BackendToast.success(data.message || '<?= __('已标记为已读') ?>');
-                            setTimeout(function() { window.location.reload(); }, 800);
-                        } else {
-                            BackendToast.error(data.message || '<?= __('操作失败') ?>');
-                        }
-                    })
-                    .catch(function(err) {
-                        BackendToast.error('<?= __('网络错误，请重试') ?>');
-                    });
-            });
-        });
-    }
-})();
-</script>
+            <span class="w-notification-detail__keyboard-hint w-text" data-tone="muted" data-size="sm"><?php echo $iconKey; ?><lang>使用 ← → 方向键切换</lang></span>
+        </footer>
+    </article>
+</section>

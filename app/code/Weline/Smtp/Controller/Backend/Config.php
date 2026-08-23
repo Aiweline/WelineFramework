@@ -19,7 +19,7 @@ use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
 use Weline\Framework\App\Controller\BackendController;
 
-#[Acl('Weline_Smtp::system_smtp_config', 'SMTP 配置', 'mdi-email-send-outline', 'SMTP 邮件服务配置', 'Weline_Smtp::system_smtp')]
+#[Acl('Weline_Smtp::system_smtp_config', 'SMTP 配置', 'mail', 'SMTP 邮件服务配置', 'Weline_Smtp::system_smtp')]
 class Config extends BackendController
 {
     /**
@@ -32,7 +32,7 @@ class Config extends BackendController
         $this->data = $data;
     }
 
-    #[Acl('Weline_Smtp::smtp_config_index', '配置页', 'mdi-cog', '查看 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    #[Acl('Weline_Smtp::smtp_config_index', '配置页', 'settings', '查看 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
     public function index(): string
     {
         $senders = $this->data->getSenders('Weline_Smtp');
@@ -58,7 +58,7 @@ class Config extends BackendController
         return $this->index();
     }
 
-    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'mdi-content-save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
     public function post(): string
     {
         $smtp_configs = array_intersect_key($this->request->getPost(), array_flip(Data::keys));
@@ -80,7 +80,7 @@ class Config extends BackendController
         $this->redirect($this->_url->getBackendUrl('smtp/backend/config'));
     }
 
-    #[Acl('Weline_Smtp::smtp_config_test', '测试发送', 'mdi-send', '测试 SMTP 发送', 'Weline_Smtp::system_smtp_config')]
+    #[Acl('Weline_Smtp::smtp_config_test', '测试发送', 'arrow-right', '测试 SMTP 发送', 'Weline_Smtp::system_smtp_config')]
     public function postTest(): string
     {
         $test_email = $this->request->getPost('smtp_test_address');
@@ -122,7 +122,7 @@ class Config extends BackendController
     }
 
     /** 保存多发件人配置（JSON）及联系人 */
-    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'mdi-content-save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
     public function saveSenders(): string
     {
         if (!$this->request->isPost()) {

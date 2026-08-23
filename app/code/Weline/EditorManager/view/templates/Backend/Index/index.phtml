@@ -6,30 +6,30 @@
  */
 ?>
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">
-                        <i class="mdi mdi-content-save-edit me-2"></i>
+<div class="w-container">
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__header">
+                    <h4 class="w-card__title" style="--w-mb:0;">
+                        <w:icon name="edit" size="sm"></w:icon>
                         <?= $title ?>
                     </h4>
                 </div>
-                <div class="card-body">
-                    <p class="text-muted mb-4">
+                <div class="w-card__body">
+                    <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-6);">
                         <?= __('管理系统中可用的富文本编辑器。编辑器管理器允许您在不同的编辑器之间切换。') ?>
                     </p>
                     
                     <?php if (empty($editors)): ?>
-                        <div class="alert alert-info">
-                            <i class="mdi mdi-information-outline me-2"></i>
+                        <div class="w-alert" data-tone="info">
+                            <w:icon name="info" size="sm"></w:icon>
                             <?= __('暂无已注册的编辑器管理器。') ?>
                         </div>
                     <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover">
-                                <thead class="table-light">
+                        <div class="w-table-wrap">
+                            <table class="w-table">
+                                <thead>
                                     <tr>
                                         <th style="width: 50px;">#</th>
                                         <th style="width: 150px;"><?= __('编辑器名称') ?></th>
@@ -42,12 +42,12 @@
                                         <tr>
                                             <td><?= $index + 1 ?></td>
                                             <td>
-                                                <span class="badge bg-primary">
+                                                <span class="w-badge" data-w-background="primary">
                                                     <?= htmlspecialchars($editor['name']) ?>
                                                 </span>
                                             </td>
                                             <td>
-                                                <code class="text-muted small">
+                                                <code class="w-text" data-tone="muted" data-size="sm">
                                                     <?= htmlspecialchars($editor['class']) ?>
                                                 </code>
                                             </td>
@@ -61,14 +61,14 @@
                         </div>
                     <?php endif; ?>
                     
-                    <div class="mt-4">
-                        <div class="alert alert-secondary">
-                            <h6 class="alert-heading">
-                                <i class="mdi mdi-lightbulb-outline me-2"></i>
+                    <div style="--w-mt:var(--weline-space-6);">
+                        <div class="w-alert" data-tone="muted">
+                            <h6 class="weline-alert-heading">
+                                <w:icon name="circle" size="sm"></w:icon>
                                 <?= __('安装更多编辑器') ?>
                             </h6>
-                            <p class="mb-2"><?= __('您可以通过 Composer 安装额外的编辑器管理器模块：') ?></p>
-                            <code class="d-block bg-dark text-light p-2 rounded">
+                            <p style="--w-mb:var(--weline-space-2);"><?= __('您可以通过 Composer 安装额外的编辑器管理器模块：') ?></p>
+                            <code class="w-text" data-w-display="block" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">
                                 composer require weline/module-ckeditor-editor-manager
                             </code>
                         </div>

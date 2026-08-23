@@ -6,6 +6,8 @@
  * @meta.name {default="账户认证变量",name="账户认证变量",description="账户认证变量，用于描述变量的名称"}
  * @meta.description {default="定义账户登录、注册、仪表盘等认证相关页面的CSS变量，包括容器宽度、间距、圆角等",name="定义账户认证相关CSS变量",description="定义账户登录、注册、仪表盘等认证相关页面的CSS变量，包括容器宽度、间距、圆角等，用于描述变量的用途"}
  * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
+ * @meta.panel {default="auth",name="panel",description="panel"}
+ * @meta.disk_kind {default="variables",name="disk_kind",description="disk_kind"}
  */
 
 :root {

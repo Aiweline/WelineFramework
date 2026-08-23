@@ -1,0 +1,18 @@
+@layer reset, tokens, base, layout, components, utilities, page;
+
+@layer components {
+    .w-currency-switcher { position: relative; }
+    .w-currency-switcher__trigger { max-inline-size: min(12rem, 42vw); }
+    .w-currency-switcher__current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .w-currency-switcher__panel { inline-size: min(26rem, calc(100vw - 2rem)); max-block-size: min(34rem, calc(100vh - 5rem)); overflow: hidden; }
+    .w-currency-switcher__search { padding: var(--weline-space-2); }
+    .w-currency-switcher__items { max-block-size: min(24rem, 58vh); overflow: auto; overscroll-behavior: contain; }
+    .w-currency-switcher__option { justify-content: flex-start; }
+    .w-currency-switcher__symbol { display: inline-flex; min-inline-size: 2.25rem; min-block-size: 1.75rem; flex: 0 0 auto; align-items: center; justify-content: center; border-radius: var(--weline-radius-sm); background: var(--weline-theme-surface-muted); font-size: var(--weline-font-size-xs); font-weight: 700; }
+    .w-currency-switcher__copy { display: grid; min-inline-size: 0; flex: 1 1 auto; gap: var(--weline-space-1); }
+    .w-currency-switcher__copy small { color: var(--weline-theme-text-muted); }
+    .w-currency-switcher__check { visibility: hidden; }
+    .w-currency-switcher__option[aria-current="true"] .w-currency-switcher__check { visibility: visible; }
+    .w-currency-switcher__empty { padding: var(--weline-space-4); color: var(--weline-theme-text-muted); text-align: center; }
+    .w-currency-switcher__more { inline-size: 100%; margin-block-start: var(--weline-space-2); }
+}

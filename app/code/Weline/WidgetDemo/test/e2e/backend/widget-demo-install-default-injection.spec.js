@@ -256,9 +256,9 @@ moduleDescribe(test, MODULE, 'widget install default injection', () => {
         expect(prepared.view_id).toBeGreaterThan(0);
         expect(prepared.identity).toMatchObject({
           layout_option: 'default',
-          scope: `dashboard_view:${prepared.view_id}`,
-          target_type: 'website',
-          target_id: prepared.website_id,
+          scope: expect.stringMatching(/\.default\.default$/),
+          target_type: 'dashboard_view',
+          target_id: prepared.view_id,
         });
         expect(demoRows(prepared.layout)).toHaveLength(0);
 

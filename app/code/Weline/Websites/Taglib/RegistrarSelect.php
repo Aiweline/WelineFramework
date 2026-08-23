@@ -88,7 +88,7 @@ class RegistrarSelect implements TaglibInterface
             $html[] = '<div class="weline-registrar-select ' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '" style="' . htmlspecialchars($style, ENT_QUOTES, 'UTF-8') . '" id="<?= htmlspecialchars($Taglib__id, ENT_QUOTES, \'UTF-8\') ?>_wrapper" data-multiple="' . $multiFlag . '">';
             $html[] = '  <button type="button" class="weline-registrar-trigger" id="<?= htmlspecialchars($Taglib__id, ENT_QUOTES, \'UTF-8\') ?>_trigger">';
             $html[] = '      <div class="weline-registrar-tags" id="<?= htmlspecialchars($Taglib__id, ENT_QUOTES, \'UTF-8\') ?>_tags"><span id="<?= htmlspecialchars($Taglib__id, ENT_QUOTES, \'UTF-8\') ?>_display"><?= htmlspecialchars(trim((string)$Taglib__display, "\'\"") !== \'\' ? trim((string)$Taglib__display, "\'\"") : \'' . addslashes($emptyLabel) . '\', ENT_QUOTES, \'UTF-8\') ?></span></div>';
-            $html[] = '      <i class="mdi mdi-chevron-down"></i>';
+            $html[] = '      <w-icon name="chevron-down" size="sm"></w-icon>';
             $html[] = '  </button>';
             $html[] = '  <input type="hidden" id="<?= htmlspecialchars($Taglib__id, ENT_QUOTES, \'UTF-8\') ?>_value" name="<?= htmlspecialchars($Taglib__name, ENT_QUOTES, \'UTF-8\') ?>" value="<?= htmlspecialchars((string)$Taglib__value, ENT_QUOTES, \'UTF-8\') ?>">';
             $html[] = '  <div class="weline-registrar-dropdown" id="<?= htmlspecialchars($Taglib__id, ENT_QUOTES, \'UTF-8\') ?>_dropdown" style="display:none;">';

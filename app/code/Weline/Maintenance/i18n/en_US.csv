@@ -13,15 +13,25 @@
 备份删除失败,"Failed to delete backup"
 删除失败：%{1},"Deletion failed: %{1}"
 备份管理,"Backup Management"
-查看备份列表,查看备份列表
+store,store
+查看备份列表,"View backup list"
+list,list
 创建备份,"Create Backup"
-下载备份,下载备份
-删除备份,删除备份
+save,save
+下载备份,"Download backup"
+download,download
+删除备份,"Delete backup"
+trash,trash
 网站维护,"Site Maintenance"
+页面工具,"Page tools"
+切换语言,"switch language"
+系统状态,"System status"
 系统升级维护中,"System Upgrade in Progress"
 网站正在维护中...,"The site is currently under maintenance..."
 请稍等片刻,"Please wait a moment"
+恢复检测中,"Restoring detection"
 系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。,"The system will automatically check the recovery status and refresh this page when service is restored. You do not need to keep clicking refresh."
+维护说明,"Maintenance instructions"
 为什么网站会处于维护模式？,"Why is the site in maintenance mode?"
 网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The site may be undergoing a system upgrade or a large content update. Our team is maintaining or upgrading data to provide better service."
 多久能够恢复？,"How long will recovery take?"

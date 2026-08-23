@@ -15,9 +15,8 @@ use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
  * - Darwin/Linux: build from official source tarball into project prefix
  * - Windows: extract official nginx.zip (nginx.exe at install root)
  *
- * Installation is explicit. Ordinary server:start remains pure PHP and never
- * downloads or compiles Nginx. server:nginx:install performs the opt-in install
- * or force reinstall.
+ * Installation is performed by server:nginx:install or automatically by
+ * server:start when the Nginx public edge is selected and the binary is missing.
  */
 final class ManagedNginxInstaller
 {
@@ -1071,6 +1070,7 @@ final class ManagedNginxInstaller
                     'platform' => \PHP_OS_FAMILY,
                 ];
             }
+            $this->tryGrantNetBindCapability($candidateBinary);
             $binarySha256 = $this->sha256RegularFile(
                 $candidateBinary,
                 self::MAX_TREE_BYTES,
@@ -2155,6 +2155,31 @@ final class ManagedNginxInstaller
         }
 
         return \hash_final($digest);
+    }
+
+    /**
+     * Non-root WLS cannot bind 80/443 unless the nginx inode has
+     * cap_net_bind_service (same pattern as the managed PHP binary).
+     * Best-effort: passwordless sudo -n, never fail the compile.
+     */
+    private function tryGrantNetBindCapability(string $binary): void
+    {
+        if (\PHP_OS_FAMILY !== 'Linux' || $binary === '') {
+            return;
+        }
+        $setcap = '/usr/sbin/setcap';
+        if (!\is_file($setcap) || !\is_executable($setcap)) {
+            $setcap = '/sbin/setcap';
+        }
+        if (!\is_file($setcap) || !\is_executable($setcap)) {
+            return;
+        }
+        $this->runTool(
+            ['/usr/bin/sudo', '-n', $setcap, 'cap_net_bind_service=+ep', $binary],
+            8.0,
+            null,
+            false,
+        );
     }
 
     private function detectCc(): ?string

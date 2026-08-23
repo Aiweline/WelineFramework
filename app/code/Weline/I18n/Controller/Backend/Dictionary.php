@@ -573,13 +573,13 @@ class Dictionary extends BaseController
         $localeCode = $this->request->getParam('locale_code', '');
         $search = $this->request->getParam('search', '');
         
-        $html = '<nav aria-label="Page navigation"><ul class="pagination justify-content-center">';
+        $html = '<nav aria-label="Page navigation"><ul class="w-pagination" data-justify="center">';
         
         // 上一页
         if ($currentPage > 1) {
             $prevPage = $currentPage - 1;
             $url = "@backend-url('*/backend/dictionary')?page={$prevPage}&locale_code={$localeCode}&search={$search}";
-            $html .= '<li class="page-item"><a class="page-link" href="' . $url . '">上一页</a></li>';
+            $html .= '<li class="w-pagination__item"><a class="w-pagination__link" href="' . $url . '">上一页</a></li>';
         }
         
         // 页码
@@ -588,10 +588,10 @@ class Dictionary extends BaseController
         
         for ($i = $start; $i <= $end; $i++) {
             if ($i == $currentPage) {
-                $html .= '<li class="page-item active"><span class="page-link">' . $i . '</span></li>';
+                $html .= '<li class="w-pagination__item" data-state="active"><span class="w-pagination__link">' . $i . '</span></li>';
             } else {
                 $url = "@backend-url('*/backend/dictionary')?page={$i}&locale_code={$localeCode}&search={$search}";
-                $html .= '<li class="page-item"><a class="page-link" href="' . $url . '">' . $i . '</a></li>';
+                $html .= '<li class="w-pagination__item"><a class="w-pagination__link" href="' . $url . '">' . $i . '</a></li>';
             }
         }
         
@@ -599,7 +599,7 @@ class Dictionary extends BaseController
         if ($currentPage < $totalPages) {
             $nextPage = $currentPage + 1;
             $url = "@backend-url('*/backend/dictionary')?page={$nextPage}&locale_code={$localeCode}&search={$search}";
-            $html .= '<li class="page-item"><a class="page-link" href="' . $url . '">下一页</a></li>';
+            $html .= '<li class="w-pagination__item"><a class="w-pagination__link" href="' . $url . '">下一页</a></li>';
         }
         
         $html .= '</ul></nav>';

@@ -6,8 +6,8 @@
 "Triggered when a GEO feed item is deleted.","Triggered when a GEO feed item is deleted."
 "GEO feed submit request","GEO feed submit request"
 "Unified entrypoint for syncing new or updated URLs into GEO feeds.","Unified entrypoint for syncing new or updated URLs into GEO feeds."
-"website_id 必须是非负整数","website_id 必须是非负整数"
-"website_id 不能为负数","website_id 不能为负数"
+"website_id 必须是非负整数","website_id must be a non-negative integer"
+"website_id 不能为负数","website_id cannot be negative"
 加载Feed列表失败：%{1},"Failed to load Feed list: %{1}"
 Feed不存在,"Feed does not exist"
 内容,Content
@@ -29,10 +29,14 @@ API,API
 生成成功,"Generate successful"
 生成失败：%{1},"Generate failed: %{1}"
 Feed管理,"Feed Management"
-查看Feed列表,查看Feed列表
+circle,circle
+查看Feed列表,"View feed list"
 编辑Feed,"Edit Feed"
-保存Feed,保存Feed
-生成Feed,生成Feed
+edit,edit
+保存Feed,"Save feed"
+save,save
+生成Feed,"Generate feed"
+refresh,refresh
 加载平台列表失败：%{1},"Failed to load platform list: %{1}"
 平台不存在,"Platform does not exist"
 加载平台失败：%{1},"Failed to load platform: %{1}"
@@ -47,20 +51,26 @@ Feed管理,"Feed Management"
 连接失败,"Connection failed"
 测试失败：%{1},"Test failed: %{1}"
 平台管理,"Platform Management"
-查看平台列表,查看平台列表
+cloud,cloud
+查看平台列表,"View platform list"
 编辑平台,"Edit Platform"
-保存平台,保存平台
+保存平台,"save platform"
 平台账户管理,"Platform Account Management"
-保存账户,保存账户
+user,user
+保存账户,"save account"
 测试连接,"Test Connection"
+link,link
 加载推送历史失败：%{1},"Failed to load push history: %{1}"
 加载推送页面失败：%{1},"Failed to load push page: %{1}"
 请选择推送平台,"Please select push platform"
 推送失败：%{1},"Push failed: %{1}"
-推送管理,推送管理
-查看推送历史,查看推送历史
+推送管理,"Push management"
+arrow-right,arrow-right
+查看推送历史,"View push history"
+history,history
 一键推送,"One-Click Push"
-执行推送,执行推送
+执行推送,"Execute push"
+play,play
 "GEO 协议与 AI 搜索发现","GEO protocol and AI search discovery"
 "llms.txt / ai.txt","llms.txt / ai.txt"
 "启用 AI 搜索发现文件","Enable AI search to discover files"
@@ -147,5 +157,6 @@ Feed类型,"Feed Type"
 数据源配置（JSON）,"Source Config (JSON)"
 "Feed URL","Feed URL"
 启用自动推送,"Enable Auto Push"
-创建队列失败。,创建队列失败。
+创建队列失败。,"Failed to create queue."
 """GEO feed item add""","GEO feed item add"
+生成式搜索引擎优化,"Generative engine optimization"

@@ -9,11 +9,22 @@ use Weline\Framework\View\TemplateCacheManager;
 
 class RuntimeTemplateMaterializer
 {
+    private const MAX_COMPILED_CACHE_ENTRIES = 512;
     /** @var array L1 memory cache: hash => compiled_path */
     private array $compiledCache = [];
 
     /** @var array<string, string> Worker L1 cache shared by materializer instances */
     private static array $workerCompiledCache = [];
+
+    public static function clearProcessCache(): void
+    {
+        self::$workerCompiledCache = [];
+    }
+
+    public static function processCacheItemCount(): int
+    {
+        return count(self::$workerCompiledCache);
+    }
 
     public function __construct(
         private readonly Template $template,
@@ -36,7 +47,7 @@ class RuntimeTemplateMaterializer
             return self::$workerCompiledCache[$hash];
         }
         if (isset($this->compiledCache[$hash]) && is_file($this->compiledCache[$hash])) {
-            self::$workerCompiledCache[$hash] = $this->compiledCache[$hash];
+            $this->rememberCompiled($hash, $this->compiledCache[$hash]);
             return $this->compiledCache[$hash];
         }
 
@@ -54,8 +65,7 @@ class RuntimeTemplateMaterializer
                 // Verify hash matches
                 if (preg_match('/^\<\?php \/\* hash:([a-f0-9]+) \*\//', $content, $matches)) {
                     if ($matches[1] === $hash) {
-                        self::$workerCompiledCache[$hash] = $compiledPath;
-                        $this->compiledCache[$hash] = $compiledPath;
+                        $this->rememberCompiled($hash, $compiledPath);
                         return $compiledPath;
                     }
                 }
@@ -69,8 +79,7 @@ class RuntimeTemplateMaterializer
         $hashHeader = "<?php /* hash:{$hash} */ ?>\n";
         file_put_contents($compiledPath, $hashHeader . $compiled);
 
-        self::$workerCompiledCache[$hash] = $compiledPath;
-        $this->compiledCache[$hash] = $compiledPath;
+        $this->rememberCompiled($hash, $compiledPath);
 
         return $compiledPath;
     }
@@ -100,7 +109,7 @@ class RuntimeTemplateMaterializer
             return self::$workerCompiledCache[$hash];
         }
         if (isset($this->compiledCache[$hash]) && is_file($this->compiledCache[$hash])) {
-            self::$workerCompiledCache[$hash] = $this->compiledCache[$hash];
+            $this->rememberCompiled($hash, $this->compiledCache[$hash]);
             return $this->compiledCache[$hash];
         }
 
@@ -109,8 +118,7 @@ class RuntimeTemplateMaterializer
             $cacheManager = TemplateCacheManager::getInstance();
             $cachedFile = $cacheManager->getCachedFile($filePath, DEV);
             if ($cachedFile !== null && is_file($cachedFile)) {
-                self::$workerCompiledCache[$hash] = $cachedFile;
-                $this->compiledCache[$hash] = $cachedFile;
+                $this->rememberCompiled($hash, $cachedFile);
                 return $cachedFile;
             }
         } catch (\Throwable) {
@@ -139,8 +147,7 @@ class RuntimeTemplateMaterializer
             }
         }
 
-        self::$workerCompiledCache[$hash] = $compiledPath;
-        $this->compiledCache[$hash] = $compiledPath;
+        $this->rememberCompiled($hash, $compiledPath);
 
         return $compiledPath;
     }
@@ -164,5 +171,26 @@ class RuntimeTemplateMaterializer
     private function getRuntimeDirectory(): string
     {
         return BP . 'var' . DS . 'runtime' . DS . 'theme-components';
+    }
+
+    private function rememberCompiled(string $hash, string $compiledPath): void
+    {
+        unset(self::$workerCompiledCache[$hash], $this->compiledCache[$hash]);
+        while (count(self::$workerCompiledCache) >= self::MAX_COMPILED_CACHE_ENTRIES) {
+            $oldest = array_key_first(self::$workerCompiledCache);
+            if ($oldest === null) {
+                break;
+            }
+            unset(self::$workerCompiledCache[$oldest]);
+        }
+        while (count($this->compiledCache) >= self::MAX_COMPILED_CACHE_ENTRIES) {
+            $oldest = array_key_first($this->compiledCache);
+            if ($oldest === null) {
+                break;
+            }
+            unset($this->compiledCache[$oldest]);
+        }
+        self::$workerCompiledCache[$hash] = $compiledPath;
+        $this->compiledCache[$hash] = $compiledPath;
     }
 }

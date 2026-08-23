@@ -52,12 +52,20 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
 
     public function testRemoveOrphanWidgetsScopesDeleteToCurrentPageTypeAndStatus(): void
     {
-        self::initRequest('/theme/backend/theme-editor/remove-orphan-widgets');
+        $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        self::assertNotSame('', $backendPrefix);
+        $requestPath = '/' . $backendPrefix . '/theme/backend/theme-editor/remove-orphan-widgets';
+        self::initRequest($requestPath);
         $request = ObjectManager::getInstance(Request::class);
-        $request->setPost('theme_id', 9);
+        \Weline\Framework\Runtime\RequestContext::setId('theme-editor-remove-orphan-contract');
+        $request->getServer();
+        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $requestPath);
+        $request->setServer('REQUEST_URI', $requestPath);
+        $request->setPost('theme_id', 1);
         $request->setPost('slot_ids', ['header']);
         $request->setPost('page_type', 'category');
         $request->setPost('status', ThemeLayout::STATUS_DRAFT);
+        $request->setPost('editor_context', $this->layoutEditorContext(1, 'category'));
 
         $whereCalls = [];
         $fetchArrayCalls = 0;
@@ -87,7 +95,7 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
         $payload = json_decode(is_string($response) ? $response : '', true);
 
         self::assertIsArray($payload);
-        self::assertTrue($payload['success'] ?? false);
+        self::assertTrue($payload['success'] ?? false, json_encode($payload, JSON_UNESCAPED_UNICODE) ?: 'invalid response');
         self::assertSame(1, $payload['deleted_count'] ?? 0);
         self::assertTrue($this->containsWhereCall($whereCalls, 'page_type', 'category'));
         self::assertTrue($this->containsWhereCall($whereCalls, 'status', ThemeLayout::STATUS_DRAFT));
@@ -102,5 +110,20 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
         }
 
         return false;
+    }
+
+    private function layoutEditorContext(int $themeId, string $layoutType): array
+    {
+        return [
+            'scope' => ['identity' => \Weline\Framework\Runtime\ScopeIdentity::global()->toArray()],
+            'area' => 'frontend',
+            'resource_type' => 'layout',
+            'theme_id' => $themeId,
+            'layout_type' => $layoutType,
+            'layout_option' => 'default',
+            'locale' => 'default',
+            'target_type' => 'global',
+            'target_id' => 0,
+        ];
     }
 }

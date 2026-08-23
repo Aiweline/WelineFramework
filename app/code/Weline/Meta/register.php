@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Meta',
     __DIR__,
-    '1.0.1',
+    '1.1.0',
     '元数据管理模块，统一管理系统中各种文件的元数据，支持多语言翻译',
-    ['Weline_Framework', 'Weline_Backend', 'Weline_I18n']
+    ['Weline_Framework', 'Weline_Backend', 'Weline_I18n', 'Weline_SystemConfig']
 );

@@ -41,17 +41,17 @@
 </style>
 
 <!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <i class="mdi mdi-puzzle me-2"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
+                <w:icon name="puzzle" size="sm"></w:icon>
                 <lang>适配器详情</lang>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='<?= $this->_url->getBackendUrl('*/backend/adapter') ?>'><lang>场景适配器</lang></a></li>
-                    <li class='breadcrumb-item active'><lang>详情</lang></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href='<?= $this->_url->getBackendUrl('*/backend/adapter') ?>'><lang>场景适配器</lang></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>详情</lang></li>
                 </ol>
             </div>
         </div>
@@ -61,12 +61,12 @@
 
 <div class="weline-adapter-detail-container">
     <!-- 基本信息 -->
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('基本信息') ?></h5>
         </div>
-        <div class="card-body">
-            <table class="table table-bordered">
+        <div class="w-card__body">
+            <table class="w-table">
                 <tr>
                     <th width="200"><?= __('适配器ID') ?></th>
                     <td><?= $adapter->getId() ?></td>
@@ -91,9 +91,9 @@
                     <th><?= __('状态') ?></th>
                     <td>
                         <?php if ($adapter->getData('is_active')): ?>
-                            <span class="badge badge-success"><?= __('激活') ?></span>
+                            <span class="w-badge" data-tone="success"><?= __('激活') ?></span>
                         <?php else: ?>
-                            <span class="badge badge-secondary"><?= __('未激活') ?></span>
+                            <span class="w-badge" data-tone="muted"><?= __('未激活') ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -103,19 +103,19 @@
 
     <!-- 支持的模型类型 -->
     <?php if (!empty($supportedModels)): ?>
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('支持的模型类型') ?></h5>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <?php if (is_array($supportedModels)): ?>
-                <div class="d-flex flex-wrap gap-2">
+                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                     <?php foreach ($supportedModels as $model): ?>
-                        <span class="badge bg-info"><?= $model ?></span>
+                        <span class="w-badge" data-w-background="info"><?= $model ?></span>
                     <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <pre class="p-3"><?= json_encode($supportedModels, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+                <pre style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);"><?= json_encode($supportedModels, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
             <?php endif; ?>
         </div>
     </div>
@@ -123,36 +123,36 @@
 
     <!-- 参数模板 -->
     <?php if (!empty($paramTemplate)): ?>
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('参数模板') ?></h5>
         </div>
-        <div class="card-body">
-            <pre class="p-3"><?= json_encode($paramTemplate, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+        <div class="w-card__body">
+            <pre style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);"><?= json_encode($paramTemplate, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
 
     <!-- 使用示例 -->
     <?php if (!empty($examples)): ?>
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('使用示例') ?></h5>
         </div>
-        <div class="card-body">
-            <pre class="p-3"><?= json_encode($examples, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+        <div class="w-card__body">
+            <pre style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);"><?= json_encode($examples, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
 
     <!-- 适配器实例信息 -->
     <?php if ($adapterInstance): ?>
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('实例信息') ?></h5>
         </div>
-        <div class="card-body">
-            <table class="table table-bordered">
+        <div class="w-card__body">
+            <table class="w-table">
                 <tr>
                     <th width="200"><?= __('类名') ?></th>
                     <td><code><?= get_class($adapterInstance) ?></code></td>
@@ -169,12 +169,12 @@
     <?php endif; ?>
 
     <!-- 时间信息 -->
-    <div class="card mb-3">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header">
             <h5><?= __('时间信息') ?></h5>
         </div>
-        <div class="card-body">
-            <table class="table table-bordered">
+        <div class="w-card__body">
+            <table class="w-table">
                 <tr>
                     <th width="200"><?= __('创建时间') ?></th>
                     <td><?= date('Y-m-d H:i:s', $adapter->getData('created_time')) ?></td>
@@ -188,29 +188,25 @@
     </div>
 
     <!-- 操作按钮 -->
-    <div class="mb-3">
-        <a href="<?= $this->_url->getBackendUrl('*/backend/adapter') ?>" class="btn btn-secondary">
-            <i class="mdi mdi-arrow-left me-1"></i>
+    <div style="--w-mb:var(--weline-space-4);">
+        <a href="<?= $this->_url->getBackendUrl('*/backend/adapter') ?>" class="w-button" data-tone="neutral">
+            <w:icon name="arrow-left" size="sm"></w:icon>
             <lang>返回列表</lang>
         </a>
         <?php if ($adapter->getData('is_active')): ?>
-            <button type="button" class="btn btn-warning" data-adapter-action="toggle-status" data-adapter-id="<?= (int)$adapter->getId() ?>">
-                <i class="mdi mdi-power me-1"></i>
+            <button type="button" class="w-button" data-adapter-action="toggle-status" data-adapter-id="<?= (int)$adapter->getId() ?>" data-tone="warning">
+                <w:icon name="circle" size="sm"></w:icon>
                 <lang>禁用</lang>
             </button>
         <?php else: ?>
-            <button type="button" class="btn btn-success" data-adapter-action="toggle-status" data-adapter-id="<?= (int)$adapter->getId() ?>">
-                <i class="mdi mdi-power me-1"></i>
+            <button type="button" class="w-button" data-adapter-action="toggle-status" data-adapter-id="<?= (int)$adapter->getId() ?>" data-tone="success">
+                <w:icon name="circle" size="sm"></w:icon>
                 <lang>启用</lang>
             </button>
         <?php endif; ?>
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
 <script>
 (function() {
@@ -218,38 +214,30 @@
     
     var WelineAdapter = {
         confirmAction: function(message, onConfirm) {
-            if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                window.BackendConfirm.show(message).then(function(confirmed) {
-                    if (confirmed) {
-                        onConfirm();
-                    }
-                });
-                return;
-            }
-            if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-                window.BackendToast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
+            Weline.UI.dialog.confirm(message).then(function(confirmed) {
+                if (confirmed) {
+                    onConfirm();
+                }
+            });
+            return;
+            if (window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
+                window.Weline.UI.toast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
             }
         },
 
         toggleStatus: function(id) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: '<?= __('确认切换状态') ?>',
-                    text: '<?= __('确定要切换适配器状态吗？') ?>',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: '<?= __("确定切换") ?>',
-                    cancelButtonText: '<?= __("取消") ?>'
-                }).then(function(result) {
-                    if (result.isConfirmed) {
-                        WelineAdapter.performToggleStatus(id);
-                    }
-                });
-            } else {
-                WelineAdapter.confirmAction('<?= __('确定要切换适配器状态吗？') ?>', function() {
+            Weline.UI.dialog.request({
+                title: '<?= __('确认切换状态') ?>',
+                message: '<?= __('确定要切换适配器状态吗？') ?>',
+                tone: 'info',
+                cancelable: true,
+                confirmLabel: '<?= __("确定切换") ?>',
+                cancelLabel: '<?= __("取消") ?>'
+            }).then(function(result) {
+                if (result.confirmed) {
                     WelineAdapter.performToggleStatus(id);
-                });
-            }
+                }
+            });
         },
         
         performToggleStatus: function(id) {
@@ -257,42 +245,30 @@
             req.then(function(res) {
                 var data = (res && res.data) || res;
                 if (data && data.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: '<?= __('状态已切换') ?>',
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(function() { location.reload(); });
-                    } else {
-                        location.reload();
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'success',
+                        title: '<?= __('成功') ?>',
+                        message: '<?= __('状态已切换') ?>',
+                        duration: 2000,
+                        confirmable: false
+                    }).then(function() { location.reload(); });
                 } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('操作失败') ?>',
-                            text: data.message || '<?= __('未知错误') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error('<?= __('操作失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
-                    }
+                    Weline.UI.dialog.request({
+                        tone: 'danger',
+                        title: '<?= __('操作失败') ?>',
+                        message: data.message || '<?= __('未知错误') ?>',
+                        confirmLabel: '<?= __('确定') ?>'
+                    });
                 }
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('网络错误') ?>',
-                        text: '<?= __('请稍后重试') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('网络错误，请稍后重试') ?>');
-                }
+                Weline.UI.dialog.request({
+                    tone: 'danger',
+                    title: '<?= __('网络错误') ?>',
+                    message: '<?= __('请稍后重试') ?>',
+                    confirmLabel: '<?= __('确定') ?>'
+                });
             });
         }
     };

@@ -1,1799 +1,242 @@
 <?php
-/**
- * 内容模板
- * @var \Weline\Framework\View\Template $this
- */
-
-$statistics = $this->getData('tree_statistics') ?: [];
+/** @var \Weline\Framework\View\Template $this */
+$trees = is_iterable($this->getData('trees')) ? $this->getData('trees') : [];
+$tagTree = is_array($this->getData('tag_tree')) ? $this->getData('tag_tree') : [];
+$statistics = is_array($this->getData('tree_statistics')) ? $this->getData('tree_statistics') : [];
+$selectedIds = is_array($this->getData('selected_source_ids')) ? $this->getData('selected_source_ids') : [];
+$selected = array_fill_keys(array_map('strval', $selectedIds), true);
+$tagGrants = array_fill_keys(array_map('strval', is_array($this->getData('tag_grants')) ? $this->getData('tag_grants') : []), true);
+$assignRole = is_array($this->getData('assign_role')) ? $this->getData('assign_role') : [];
+$userRole = $this->getData('user_role');
+$assignmentMode = (string)($this->getData('assignment_mode') ?: 'role');
+$assignmentAction = (string)($this->getData('assignment_action') ?: $this->getBackendUrl('*/backend/acl/role/assign'));
+$assignmentIdentifierName = (string)($this->getData('assignment_identifier_name') ?: 'role_id');
+$assignmentIdentifierValue = max(0, (int)($this->getData('assignment_identifier_value') ?: ($assignRole['role_id'] ?? 0)));
+$assignmentTitle = (string)($this->getData('assignment_title') ?: __('角色权限配置'));
+$assignmentDescription = (string)($this->getData('assignment_description') ?: __('使用原生权限树控制菜单、接口、任务和运维能力'));
+$assignmentBackUrl = (string)($this->getData('assignment_back_url') ?: $this->getBackendUrl('*/backend/acl/role'));
+$assignmentBackLabel = (string)($this->getData('assignment_back_label') ?: __('返回列表'));
+$assignmentSubjectLabel = (string)($this->getData('assignment_subject_label') ?: __('配置角色'));
+$assignmentSubjectName = (string)($this->getData('assignment_subject_name') ?: ($assignRole['role_name'] ?? ''));
+$assignmentSubjectIcon = (string)($this->getData('assignment_subject_icon') ?: 'shield');
+$assignmentContextLabel = (string)($this->getData('assignment_context_label') ?: __('操作者'));
+$assignmentContextIcon = (string)($this->getData('assignment_context_icon') ?: 'user');
+$showTagDimension = $this->getData('assignment_show_tags') !== false;
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$roleValue = static function (mixed $role, string $key, mixed $default = ''): mixed {
+    if (is_array($role)) {
+        return $role[$key] ?? $default;
+    }
+    if (is_object($role) && method_exists($role, 'getData')) {
+        $value = $role->getData($key);
+        return $value === null ? $default : $value;
+    }
+    return $default;
+};
+$assignmentContextName = (string)($this->getData('assignment_context_name') ?: $roleValue($userRole, 'role_name', __('未知')));
 $totalAll = 0;
 $selectedAll = 0;
 foreach ($statistics as $stat) {
-    $totalAll += $stat['total'];
-    $selectedAll += $stat['selected'];
+    $totalAll += max(0, (int)($stat['total'] ?? 0));
+    $selectedAll += max(0, (int)($stat['selected'] ?? 0));
 }
-$selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
+$selectedPercent = $totalAll > 0 ? min(100, (int)round(($selectedAll / $totalAll) * 100)) : 0;
+$typeLabel = static fn(string $type): string => \Weline\Acl\Service\Resource\AclResourcePresentation::typeLabel($type);
+$typeIcon = static fn(string $type): string => \Weline\Acl\Service\Resource\AclResourcePresentation::typeIcon($type);
+
+$renderPermissionNodes = function (iterable $nodes, int $depth = 0) use (&$renderPermissionNodes, $selected, $escape, $typeLabel, $typeIcon, $statistics): void {
+    echo '<ul class="w-tree w-acl-tree__list">';
+    foreach ($nodes as $node) {
+        if (!is_object($node) || !method_exists($node, 'getSourceId')) {
+            continue;
+        }
+        $sourceId = trim((string)$node->getSourceId());
+        if ($sourceId === '') {
+            continue;
+        }
+        $children = is_iterable($node->getSub()) ? $node->getSub() : [];
+        $children = is_array($children) ? $children : iterator_to_array($children);
+        $hasChildren = $children !== [];
+        $name = (string)$node->getSourceName();
+        $type = (string)$node->getType();
+        $module = (string)$node->getModule();
+        if ($module === '') {
+            $module = (string)(explode('::', $sourceId)[0] ?? '');
+        }
+        $method = strtoupper(trim((string)$node->getMethod()));
+        $description = trim((string)$node->getDocument());
+        $checked = !$hasChildren && isset($selected[$sourceId]);
+        $search = trim($name . ' ' . $sourceId . ' ' . $description);
+        echo '<li class="w-acl-tree__node" data-acl-node data-module="' . $escape($module) . '" data-type="' . $escape($type) . '" data-search="' . $escape($search) . '">';
+        if ($hasChildren) {
+            echo '<details class="w-acl-tree__branch"' . ($depth < 2 ? ' open' : '') . '>';
+            echo '<summary class="w-acl-tree__row">';
+        } else {
+            echo '<div class="w-acl-tree__row">';
+        }
+        echo '<label class="w-check w-acl-tree__check" title="' . $escape($description !== '' ? $description : $sourceId) . '">';
+        echo '<input type="checkbox" name="ids[]" value="' . $escape($sourceId) . '" data-acl-source="' . $escape($sourceId) . '"' . ($checked ? ' checked' : '') . '>';
+        echo '<w-icon name="' . $escape($typeIcon($type)) . '" size="sm"></w-icon>';
+        echo '<span class="w-acl-tree__name">' . $escape($name !== '' ? $name : $sourceId) . '</span>';
+        if ($method !== '') {
+            echo '<span class="w-badge" data-tone="neutral">' . $escape($method) . '</span>';
+        }
+        echo '<span class="w-badge" data-tone="info">' . $escape($typeLabel($type)) . '</span>';
+        if (isset($statistics[$sourceId])) {
+            $stat = $statistics[$sourceId];
+            echo '<span class="w-badge" data-tone="neutral">' . max(0, (int)($stat['selected'] ?? 0)) . '/' . max(0, (int)($stat['total'] ?? 0)) . '</span>';
+        }
+        echo '</label>';
+        if ($hasChildren) {
+            echo '</summary>';
+            $renderPermissionNodes($children, $depth + 1);
+            echo '</details>';
+        } else {
+            echo '</div>';
+        }
+        echo '</li>';
+    }
+    echo '</ul>';
+};
+
+$renderTagNodes = function (array $nodes, int $depth = 0, bool $ancestorGranted = false) use (&$renderTagNodes, $tagGrants, $selected, $escape, $typeLabel): void {
+    echo '<ul class="w-tree w-acl-tree__list">';
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $path = trim((string)($node['tag_path'] ?? ''));
+        if ($path === '') {
+            continue;
+        }
+        $name = (string)($node['name'] ?? $path);
+        $explicitGrant = isset($tagGrants[$path]);
+        $covered = $ancestorGranted || $explicitGrant;
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+        $leaves = is_array($node['leaves'] ?? null) ? $node['leaves'] : [];
+        echo '<li class="w-acl-tree__node" data-acl-node data-tag-node data-search="' . $escape($name . ' ' . $path) . '">';
+        echo '<details class="w-acl-tree__branch"' . ($depth < 2 ? ' open' : '') . '>';
+        echo '<summary class="w-acl-tree__row">';
+        echo '<label class="w-check w-acl-tree__check" title="' . $escape($path) . '">';
+        echo '<input type="checkbox" name="tag_paths[]" value="' . $escape($path) . '" data-acl-tag="' . $escape($path) . '"' . ($explicitGrant ? ' checked' : '') . '>';
+        echo '<w-icon name="tag" size="sm"></w-icon><span class="w-acl-tree__name">' . $escape($name) . '</span><span class="w-badge" data-tone="info">' . $escape(__('标签包')) . '</span>';
+        echo '</label></summary>';
+        if ($children !== []) {
+            $renderTagNodes($children, $depth + 1, $covered);
+        }
+        if ($leaves !== []) {
+            echo '<ul class="w-tree w-acl-tree__list">';
+            foreach ($leaves as $leaf) {
+                if (!is_array($leaf)) {
+                    continue;
+                }
+                $sourceId = trim((string)($leaf['source_id'] ?? $leaf['id'] ?? ''));
+                if ($sourceId === '') {
+                    continue;
+                }
+                $leafName = (string)($leaf['name'] ?? $sourceId);
+                $leafType = (string)($leaf['type'] ?? '');
+                $leafModule = (string)($leaf['module'] ?? (explode('::', $sourceId)[0] ?? ''));
+                $leafChecked = $covered || isset($selected[$sourceId]) || !empty($leaf['selected']);
+                echo '<li class="w-acl-tree__node" data-acl-node data-module="' . $escape($leafModule) . '" data-type="' . $escape($leafType) . '" data-search="' . $escape($leafName . ' ' . $sourceId) . '">';
+                echo '<div class="w-acl-tree__row"><label class="w-check w-acl-tree__check" title="' . $escape($sourceId) . '">';
+                echo '<input type="checkbox" name="ids[]" value="' . $escape($sourceId) . '" data-acl-source="' . $escape($sourceId) . '" data-parent-tag-path="' . $escape($path) . '"' . ($leafChecked ? ' checked' : '') . '>';
+                echo '<w-icon name="key" size="sm"></w-icon><span class="w-acl-tree__name">' . $escape($leafName) . '</span><span class="w-badge" data-tone="neutral">' . $escape($typeLabel($leafType)) . '</span>';
+                echo '</label></div></li>';
+            }
+            echo '</ul>';
+        }
+        echo '</details></li>';
+    }
+    echo '</ul>';
+};
 ?>
-<link rel='stylesheet' href='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)'/>
-
-<style>
-.weline-acl-page {
-    --acl-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.weline-acl-header {
-    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-info, #50a5f1) 100%);
-    border-radius: var(--backend-border-radius-lg, 12px);
-    padding: var(--backend-spacing-lg, 24px);
-    margin-bottom: var(--backend-spacing-lg, 24px);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-acl-header h2 {
-    margin: 0 0 var(--backend-spacing-xs, 4px) 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-}
-
-.weline-acl-header-subtitle {
-    opacity: 0.9;
-    font-size: 0.95rem;
-}
-
-.weline-acl-role-info {
-    display: flex;
-    align-items: center;
-    gap: var(--backend-spacing-sm, 8px);
-    margin-top: var(--backend-spacing-md, 16px);
-    flex-wrap: wrap;
-}
-
-.weline-acl-role-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(4px);
-    padding: 8px 16px;
-    border-radius: var(--backend-border-radius-pill, 50rem);
-    font-weight: 500;
-}
-
-.weline-acl-role-badge i {
-    font-size: 1.1rem;
-}
-
-.weline-acl-role-arrow {
-    font-size: 1.2rem;
-    opacity: 0.7;
-}
-
-.weline-acl-stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--backend-spacing-md, 16px);
-    margin-bottom: var(--backend-spacing-lg, 24px);
-}
-
-.weline-acl-stat-card {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-md, 8px);
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
-    display: flex;
-    align-items: center;
-    gap: var(--backend-spacing-md, 16px);
-    transition: all 0.2s ease;
-    box-shadow: var(--acl-card-shadow);
-}
-
-.weline-acl-stat-card:hover {
-    border-color: var(--backend-color-border-default, #dee2e6);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.weline-acl-stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--backend-border-radius, 6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    flex-shrink: 0;
-}
-
-.weline-acl-stat-icon.primary {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-acl-stat-icon.success {
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
-}
-
-.weline-acl-stat-icon.info {
-    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
-    color: var(--backend-color-info, #50a5f1);
-}
-
-.weline-acl-stat-icon.warning {
-    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
-    color: var(--backend-color-warning, #f1b44c);
-}
-
-.weline-acl-stat-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.weline-acl-stat-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--backend-color-text-primary, #212529);
-    line-height: 1.2;
-}
-
-.weline-acl-stat-label {
-    font-size: 0.85rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-    margin-top: 2px;
-}
-
-.weline-acl-progress-card {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-md, 8px);
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
-    box-shadow: var(--acl-card-shadow);
-}
-
-.weline-acl-progress-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--backend-spacing-sm, 8px);
-}
-
-.weline-acl-progress-title {
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.weline-acl-progress-percent {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-acl-progress-bar {
-    height: 8px;
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    border-radius: var(--backend-border-radius-pill, 50rem);
-    overflow: hidden;
-}
-
-.weline-acl-progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--backend-color-primary, #556ee6), var(--backend-color-success, #34c38f));
-    border-radius: var(--backend-border-radius-pill, 50rem);
-    transition: width 0.5s ease;
-}
-
-.weline-acl-toolbar {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-md, 8px);
-    padding: var(--backend-spacing-md, 16px);
-    margin-bottom: var(--backend-spacing-md, 16px);
-    box-shadow: var(--acl-card-shadow);
-}
-
-.weline-acl-toolbar-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--backend-spacing-md, 16px);
-    align-items: center;
-}
-
-.weline-acl-search-box {
-    flex: 1;
-    min-width: 280px;
-    max-width: 400px;
-}
-
-.weline-acl-search-input {
-    position: relative;
-}
-
-.weline-acl-search-input i {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--backend-color-text-tertiary, #adb5bd);
-    font-size: 1.1rem;
-}
-
-.weline-acl-search-input input {
-    width: 100%;
-    padding: 10px 40px 10px 40px;
-    border: 2px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-color-input-bg, #fff);
-    color: var(--backend-color-text-primary, #212529);
-    font-size: 0.95rem;
-    transition: all 0.2s ease;
-}
-
-.weline-acl-search-input input:focus {
-    outline: none;
-    border-color: var(--backend-color-primary, #556ee6);
-    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.15));
-}
-
-.weline-acl-search-input input::placeholder {
-    color: var(--backend-color-text-tertiary, #adb5bd);
-}
-
-.weline-acl-search-clear {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    padding: 4px 8px;
-    cursor: pointer;
-    color: var(--backend-color-text-tertiary, #adb5bd);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.weline-acl-search-input input:not(:placeholder-shown) + .weline-acl-search-clear {
-    opacity: 1;
-}
-
-.weline-acl-search-clear:hover {
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-.weline-acl-filters {
-    display: flex;
-    gap: var(--backend-spacing-sm, 8px);
-    flex-wrap: wrap;
-    align-items: center;
-}
-
-.weline-acl-filters .weline-module-select,
-.weline-acl-filters .weline-acl-module-filter {
-    min-width: 240px;
-}
-
-.weline-acl-filter-select {
-    min-width: 140px;
-    padding: 8px 32px 8px 12px;
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-color-input-bg, #fff);
-    color: var(--backend-color-text-primary, #212529);
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.weline-acl-filter-select:focus {
-    outline: none;
-    border-color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-acl-actions {
-    display: flex;
-    gap: var(--backend-spacing-xs, 4px);
-    flex-wrap: wrap;
-}
-
-.weline-acl-action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-color-card-bg, #fff);
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.weline-acl-action-btn:hover {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #212529);
-    border-color: var(--backend-color-border-emphasis, #adb5bd);
-}
-
-.weline-acl-action-btn.primary {
-    background: var(--backend-color-primary, #556ee6);
-    border-color: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-acl-action-btn.primary:hover {
-    background: var(--backend-color-primary-hover, #4857d4);
-    border-color: var(--backend-color-primary-hover, #4857d4);
-}
-
-.weline-acl-action-btn.success {
-    background: var(--backend-color-success, #34c38f);
-    border-color: var(--backend-color-success, #34c38f);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-acl-action-btn.success:hover {
-    filter: brightness(0.95);
-}
-
-.weline-acl-search-result {
-    display: none;
-    padding: 10px 16px;
-    margin-bottom: var(--backend-spacing-md, 16px);
-    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
-    border: 1px solid var(--backend-color-info, #50a5f1);
-    border-radius: var(--backend-border-radius, 6px);
-    color: var(--backend-color-info, #50a5f1);
-    font-size: 0.9rem;
-}
-
-.weline-acl-search-result.visible {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.weline-acl-tree-card {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-md, 8px);
-    box-shadow: var(--acl-card-shadow);
-    overflow: hidden;
-}
-
-.weline-acl-tree-header {
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.weline-acl-tree-title {
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.weline-acl-tree-title i {
-    color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-acl-tree-body {
-    padding: var(--backend-spacing-md, 16px);
-    max-height: 600px;
-    overflow-y: auto;
-}
-
-.weline-acl-save-form {
-    position: sticky;
-    bottom: 0;
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
-    background: var(--backend-color-card-bg, #fff);
-    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--backend-spacing-sm, 8px);
-}
-
-/* ============================================
-   权限树节点样式美化
-   ============================================ */
-
-/* 顶级节点分组样式 - 卡片化设计 */
-#acl > .jstree-container-ul > .jstree-node, #acl-tag > .jstree-container-ul > .jstree-node {
-    margin-bottom: var(--backend-spacing-md, 12px);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-md, 8px);
-    background: var(--backend-color-card-bg, #fff);
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-    transition: box-shadow 0.2s ease;
-}
-
-/* 顶级节点标题 - 渐变背景 */
-#acl > .jstree-container-ul > .jstree-node > .jstree-anchor, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-anchor {
-    display: inline-flex;
-    align-items: center;
-    width: calc(100% - 32px);
-    box-sizing: border-box;
-    vertical-align: middle;
-    padding: var(--backend-spacing-md, 12px) var(--backend-spacing-lg, 16px);
-    background: linear-gradient(135deg, var(--backend-color-bg-secondary, #f8f9fa) 0%, var(--backend-color-bg-tertiary, #e9ecef) 100%);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--backend-color-text-primary, #212529);
-    transition: all 0.2s ease;
-}
-
-#acl > .jstree-container-ul > .jstree-node > .jstree-anchor:hover, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-anchor:hover {
-    background: linear-gradient(135deg, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.08)) 0%, var(--backend-color-bg-secondary, #f8f9fa) 100%);
-}
-
-/* 顶级节点选中状态 */
-#acl > .jstree-container-ul > .jstree-node > .jstree-anchor.jstree-clicked, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-anchor.jstree-clicked {
-    background: linear-gradient(135deg, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15)) 0%, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) 100%) !important;
-    color: var(--backend-color-primary, #556ee6) !important;
-    border-bottom-color: var(--backend-color-primary, #556ee6);
-}
-
-/* 顶级节点的子节点容器 */
-#acl > .jstree-container-ul > .jstree-node > .jstree-children, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-children {
-    padding: var(--backend-spacing-sm, 8px);
-    background: transparent;
-}
-
-/* 子节点样式：必须保持 block+relative。
-   display:flex 会打乱 jstree-wholerow 的绝对定位（static position），
-   父行高亮条会盖到子行，看起来像重叠。 */
-#acl .jstree-node, #acl-tag .jstree-node {
-    display: block;
-    position: relative;
-    margin-bottom: 2px;
-    min-width: 0;
-    background-image: none !important;
-    background-color: transparent;
-}
-
-#acl .jstree-node > .jstree-ocl, #acl-tag .jstree-node > .jstree-ocl {
-    display: inline-block;
-    width: 18px;
-    height: 24px;
-    margin: 0 4px 0 2px;
-    vertical-align: middle;
-    background: none !important;
-    background-image: none !important;
-    position: relative;
-    cursor: pointer;
-}
-
-#acl .jstree-closed > .jstree-ocl::before,
-#acl-tag .jstree-closed > .jstree-ocl::before,
-#acl .jstree-open > .jstree-ocl::before,
-#acl-tag .jstree-open > .jstree-ocl::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 5px;
-    height: 5px;
-    border-right: 1.5px solid var(--backend-color-text-secondary, #8b95a7);
-    border-bottom: 1.5px solid var(--backend-color-text-secondary, #8b95a7);
-    box-sizing: border-box;
-}
-
-#acl .jstree-closed > .jstree-ocl::before,
-#acl-tag .jstree-closed > .jstree-ocl::before {
-    transform: translate(-35%, -55%) rotate(-45deg);
-}
-
-#acl .jstree-open > .jstree-ocl::before,
-#acl-tag .jstree-open > .jstree-ocl::before {
-    transform: translate(-55%, -70%) rotate(45deg);
-}
-
-#acl .jstree-leaf > .jstree-ocl::before,
-#acl-tag .jstree-leaf > .jstree-ocl::before {
-    content: none;
-}
-
-#acl .jstree-node > .jstree-anchor, #acl-tag .jstree-node > .jstree-anchor {
-    display: inline-flex;
-    vertical-align: middle;
-    min-width: 0;
-}
-
-#acl .jstree-node > .jstree-children, #acl-tag .jstree-node > .jstree-children {
-    display: block;
-}
-
-#acl .jstree-anchor, #acl-tag .jstree-anchor {
-    padding: 8px 12px;
-    border-radius: var(--backend-border-radius, 6px);
-    color: var(--backend-color-text-primary, #212529);
-    text-shadow: none !important;
-    transition: all 0.15s ease;
-    display: flex;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 6px;
-    min-width: 0;
-}
-
-#acl .jstree-anchor > .jstree-checkbox, #acl-tag .jstree-anchor > .jstree-checkbox,
-#acl .jstree-anchor > .jstree-themeicon, #acl-tag .jstree-anchor > .jstree-themeicon,
-#acl .weline-acl-type-badge, #acl-tag .weline-acl-type-badge,
-#acl .weline-acl-module-badge, #acl-tag .weline-acl-module-badge {
-    flex-shrink: 0;
-}
-
-#acl .jstree-anchor:hover, #acl-tag .jstree-anchor:hover,
-#acl .jstree-hovered, #acl-tag .jstree-hovered,
-#acl .jstree-context, #acl-tag .jstree-context {
-    background: var(--backend-color-bg-secondary, rgba(148, 163, 184, 0.12)) !important;
-    box-shadow: none !important;
-    color: var(--backend-color-text-primary, inherit) !important;
-    transform: none;
-}
-
-#acl .jstree-anchor:hover, #acl-tag .jstree-anchor:hover {
-    transform: translateX(2px);
-}
-
-/* 选中节点样式 - 左侧强调边；暗色不要用高饱和主色当字色，否则像发光 */
-#acl .jstree-clicked, #acl-tag .jstree-clicked {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.12)) !important;
-    color: var(--backend-color-text-primary, #212529) !important;
-    font-weight: 500;
-    box-shadow: inset 3px 0 0 var(--backend-color-primary, #556ee6);
-    text-shadow: none !important;
-}
-
-/* wholerow 行样式 */
-#acl .jstree-wholerow, #acl-tag .jstree-wholerow {
-    border-radius: var(--backend-border-radius, 6px);
-    transition: all 0.15s ease;
-    background: transparent;
-    box-shadow: none !important;
-}
-
-#acl .jstree-wholerow-clicked, #acl-tag .jstree-wholerow-clicked {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
-    border-radius: var(--backend-border-radius, 6px);
-    box-shadow: none !important;
-}
-
-#acl .jstree-wholerow-hovered, #acl-tag .jstree-wholerow-hovered {
-    background: var(--backend-color-bg-secondary, #f8f9fa) !important;
-    border-radius: var(--backend-border-radius, 6px);
-}
-
-/* 复选框样式美化 */
-#acl .jstree-checkbox, #acl-tag .jstree-checkbox {
-    width: 18px;
-    height: 18px;
-    margin-right: 6px;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    border: 2px solid var(--backend-color-border-emphasis, #adb5bd);
-    background: var(--backend-color-input-bg, #fff);
-    transition: all 0.15s ease;
-    position: relative;
-}
-
-#acl .jstree-checkbox:hover, #acl-tag .jstree-checkbox:hover {
-    border-color: var(--backend-color-primary, #556ee6);
-}
-
-#acl .jstree-clicked > .jstree-checkbox, #acl-tag .jstree-clicked > .jstree-checkbox {
-    background: var(--backend-color-primary, #556ee6);
-    border-color: var(--backend-color-primary, #556ee6);
-}
-
-#acl .jstree-checkbox::after, #acl-tag .jstree-checkbox::after {
-    content: '';
-    position: absolute;
-    left: 5px;
-    top: 2px;
-    width: 5px;
-    height: 9px;
-    border: solid #fff;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-
-#acl .jstree-clicked > .jstree-checkbox::after, #acl-tag .jstree-clicked > .jstree-checkbox::after {
-    opacity: 1;
-}
-
-/* 部分选中状态 */
-#acl .jstree-checkbox.jstree-undetermined, #acl-tag .jstree-checkbox.jstree-undetermined {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15));
-    border-color: var(--backend-color-primary, #556ee6);
-}
-
-#acl .jstree-checkbox.jstree-undetermined::after, #acl-tag .jstree-checkbox.jstree-undetermined::after {
-    content: '';
-    opacity: 1;
-    left: 3px;
-    top: 6px;
-    width: 10px;
-    height: 2px;
-    border: none;
-    background: var(--backend-color-primary, #556ee6);
-    transform: none;
-    border-radius: 1px;
-}
-
-/* jstree 自定义图标使用 MDI 字体时需覆盖默认 background */
-#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom.mdi, #acl-tag .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom.mdi,
-#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom[class*="mdi-"], #acl-tag .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom[class*="mdi-"] {
-    background: none !important;
-    background-image: none !important;
-    font-size: 1.15em;
-    width: auto;
-    min-width: 1.2em;
-    height: auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--backend-color-primary, #556ee6);
-    margin-right: 2px;
-}
-
-.weline-acl-module-badge{
-    line-height: 1;
-    background: var(--backend-color-bg-secondary, #f8f9fa) !important;
-    color: var(--backend-color-text-tertiary, #adb5bd) !important;
-}
-
-/* 统计徽章样式 - 简洁数字显示 */
-.weline-acl-module-badge {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.7rem;
-    padding: 0;
-    margin-left: 6px;
-    font-weight: 500;
-    color: var(--backend-color-text-tertiary, #adb5bd);
-}
-
-.weline-acl-module-badge.bg-success {
-    color: var(--backend-color-success, #34c38f) !important;
-}
-
-.weline-acl-module-badge.bg-warning {
-    color: var(--backend-color-warning, #f1b44c) !important;
-}
-
-.weline-acl-module-badge.bg-secondary {
-    color: var(--backend-color-text-tertiary, #adb5bd) !important;
-}
-
-.weline-acl-type-badge {
-    display: inline-flex;
-    align-items: center;
-    margin-left: 8px;
-    padding: 2px 6px;
-    border-radius: var(--backend-border-radius-pill, 50rem);
-    font-size: 0.7rem;
-    line-height: 1.2;
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-secondary, #6c757d);
-    vertical-align: middle;
-}
-
-.weline-acl-type-badge.is-menu {
-    border-color: var(--backend-color-info, #50a5f1);
-    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
-    color: var(--backend-color-info, #50a5f1);
-}
-
-.weline-acl-type-badge.is-acl {
-    border-color: var(--backend-color-success, #34c38f);
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
-}
-
-.weline-acl-type-badge.is-tag {
-    border-color: var(--backend-color-warning, #f1b44c);
-    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.12));
-    color: var(--backend-color-warning, #f1b44c);
-}
-
-/* 悬停时的节点阴影效果 */
-#acl > .jstree-container-ul > .jstree-node:hover, #acl-tag > .jstree-container-ul > .jstree-node:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-/* 搜索匹配高亮 */
-#acl .jstree-search, #acl-tag .jstree-search {
-    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.2)) !important;
-    color: var(--backend-color-text-primary, inherit) !important;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    padding: 2px 4px;
-    font-weight: 500;
-    font-style: normal;
-}
-
-[data-theme="dark"] #acl .jstree-closed > .jstree-ocl::before,
-[data-theme-mode="dark"] #acl .jstree-closed > .jstree-ocl::before,
-[data-bs-theme="dark"] #acl .jstree-closed > .jstree-ocl::before,
-[data-layout-mode="dark"] #acl .jstree-closed > .jstree-ocl::before,
-[data-theme="dark"] #acl .jstree-open > .jstree-ocl::before,
-[data-theme-mode="dark"] #acl .jstree-open > .jstree-ocl::before,
-[data-bs-theme="dark"] #acl .jstree-open > .jstree-ocl::before,
-[data-layout-mode="dark"] #acl .jstree-open > .jstree-ocl::before,
-[data-theme="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
-[data-theme-mode="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
-[data-bs-theme="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
-[data-layout-mode="dark"] #acl-tag .jstree-closed > .jstree-ocl::before,
-[data-theme="dark"] #acl-tag .jstree-open > .jstree-ocl::before,
-[data-theme-mode="dark"] #acl-tag .jstree-open > .jstree-ocl::before,
-[data-bs-theme="dark"] #acl-tag .jstree-open > .jstree-ocl::before,
-[data-layout-mode="dark"] #acl-tag .jstree-open > .jstree-ocl::before {
-    border-color: var(--backend-color-text-secondary, #94a3b8);
-}
-
-[data-theme="dark"] #acl > .jstree-container-ul > .jstree-node,
-[data-theme-mode="dark"] #acl > .jstree-container-ul > .jstree-node,
-[data-bs-theme="dark"] #acl > .jstree-container-ul > .jstree-node,
-[data-layout-mode="dark"] #acl > .jstree-container-ul > .jstree-node,
-[data-theme="dark"] #acl-tag > .jstree-container-ul > .jstree-node,
-[data-theme-mode="dark"] #acl-tag > .jstree-container-ul > .jstree-node,
-[data-bs-theme="dark"] #acl-tag > .jstree-container-ul > .jstree-node,
-[data-layout-mode="dark"] #acl-tag > .jstree-container-ul > .jstree-node {
-    background: var(--backend-color-card-bg, #172033);
-    border-color: var(--backend-color-border-light, rgba(148, 163, 184, 0.18));
-}
-
-[data-theme="dark"] #acl .jstree-anchor,
-[data-theme-mode="dark"] #acl .jstree-anchor,
-[data-bs-theme="dark"] #acl .jstree-anchor,
-[data-layout-mode="dark"] #acl .jstree-anchor,
-[data-theme="dark"] #acl-tag .jstree-anchor,
-[data-theme-mode="dark"] #acl-tag .jstree-anchor,
-[data-bs-theme="dark"] #acl-tag .jstree-anchor,
-[data-layout-mode="dark"] #acl-tag .jstree-anchor,
-[data-theme="dark"] #acl .jstree-clicked,
-[data-theme-mode="dark"] #acl .jstree-clicked,
-[data-bs-theme="dark"] #acl .jstree-clicked,
-[data-layout-mode="dark"] #acl .jstree-clicked,
-[data-theme="dark"] #acl-tag .jstree-clicked,
-[data-theme-mode="dark"] #acl-tag .jstree-clicked,
-[data-bs-theme="dark"] #acl-tag .jstree-clicked,
-[data-layout-mode="dark"] #acl-tag .jstree-clicked {
-    color: var(--backend-color-text-primary, #e6eef8) !important;
-    text-shadow: none !important;
-}
-
-[data-theme="dark"] #acl .jstree-checkbox,
-[data-theme-mode="dark"] #acl .jstree-checkbox,
-[data-bs-theme="dark"] #acl .jstree-checkbox,
-[data-layout-mode="dark"] #acl .jstree-checkbox,
-[data-theme="dark"] #acl-tag .jstree-checkbox,
-[data-theme-mode="dark"] #acl-tag .jstree-checkbox,
-[data-bs-theme="dark"] #acl-tag .jstree-checkbox,
-[data-layout-mode="dark"] #acl-tag .jstree-checkbox {
-    background: var(--backend-color-input-bg, #0f172a);
-    border-color: var(--backend-color-border-emphasis, rgba(148, 163, 184, 0.45));
-}
-
-/* 动画效果 */
-@keyframes acl-node-select {
-    0% { transform: scale(1); }
-    50% { transform: scale(0.98); }
-    100% { transform: scale(1); }
-}
-
-#acl .jstree-clicked, #acl-tag .jstree-clicked {
-    animation: acl-node-select 0.2s ease;
-}
-
-@media (max-width: 768px) {
-    .weline-acl-toolbar-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .weline-acl-search-box {
-        max-width: 100%;
-    }
-    
-    .weline-acl-stats-row {
-        grid-template-columns: 1fr 1fr;
-    }
-    
-    .weline-acl-role-info {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-}
-</style>
-
-<!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>权限分配</lang>
-            </h4>
-
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
-                        <span>
-                            <lang>系统配置</lang>
-                        </span>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/acl/role')">
-                            <lang>角色管理</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item active'>
-                        <lang>权限分配</lang>
-                    </li>
-                </ol>
-            </div>
-
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-acl-role-assign.css)">
+
+<form
+    class="w-backend-page w-acl-assign"
+    method="post"
+    action="<?= $escape($assignmentAction) ?>"
+    data-acl-assign
+    data-assignment-mode="<?= $escape($assignmentMode) ?>"
+    data-total-permissions="<?= $totalAll ?>"
+    data-text-selected="<?= $escape(__('已选择 %{1} 项权限')) ?>"
+    data-text-empty="<?= $escape(__('没有匹配的权限')) ?>"
+    data-text-save="<?= $escape(__('保存权限配置')) ?>"
+    data-text-saving="<?= $escape(__('保存中…')) ?>"
+>
+    <input type="hidden" name="form_key" value="<?= $escape($this->getFormKeyValue()) ?>">
+    <input type="hidden" name="<?= $escape($assignmentIdentifierName) ?>" value="<?= $assignmentIdentifierValue ?>">
+
+    <header class="w-backend-page__heading">
+        <div class="w-stack">
+            <h1><w-icon name="<?= $escape($assignmentSubjectIcon) ?>" size="md"></w-icon><?= $escape($assignmentTitle) ?></h1>
+            <p class="w-text" data-tone="muted"><?= $escape($assignmentDescription) ?></p>
         </div>
-    </div>
-</div>
-<!-- end page title -->
+        <nav class="w-cluster" aria-label="<?= $escape(__('权限配置操作')) ?>">
+            <a class="w-button" data-tone="neutral" href="<?= $escape($assignmentBackUrl) ?>"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape($assignmentBackLabel) ?></a>
+            <button class="w-button" type="submit" data-tone="primary" data-acl-save><w:icon name="save" size="sm"></w:icon><span><?= $escape(__('保存权限配置')) ?></span></button>
+        </nav>
+    </header>
 
-<div class="weline-acl-page">
-    <!-- 顶部信息卡片 -->
-    <div class="weline-acl-header">
-        <h2><i class="mdi mdi-shield-key-outline"></i> <lang>角色权限配置</lang></h2>
-        <p class="weline-acl-header-subtitle"><lang>为角色分配系统访问权限，控制菜单和功能的可见性</lang></p>
-        <div class="weline-acl-role-info">
-            <span class="weline-acl-role-badge">
-                <i class="mdi mdi-account-circle"></i>
-                <lang>操作者</lang>: {{user_role.role_name}}
-            </span>
-            <span class="weline-acl-role-arrow"><i class="mdi mdi-arrow-right"></i></span>
-            <span class="weline-acl-role-badge" style="background: rgba(255, 255, 255, 0.35);">
-                <i class="mdi mdi-account-edit"></i>
-                <lang>配置角色</lang>: <strong>{{assign_role.role_name}}</strong>
-            </span>
+    <section class="w-card w-acl-assign__role" aria-label="<?= $escape(__('当前角色')) ?>">
+        <div class="w-card__body w-cluster" data-align="center">
+            <span class="w-badge" data-tone="neutral"><w-icon name="<?= $escape($assignmentContextIcon) ?>" size="sm"></w-icon><?= $escape($assignmentContextLabel) ?>: <?= $escape($assignmentContextName) ?></span>
+            <w:icon name="arrow-right" size="sm"></w:icon>
+            <span class="w-badge" data-tone="info"><w-icon name="<?= $escape($assignmentSubjectIcon) ?>" size="sm"></w-icon><?= $escape($assignmentSubjectLabel) ?>: <?= $escape($assignmentSubjectName) ?></span>
         </div>
-    </div>
+    </section>
 
-    <!-- 统计卡片 -->
-    <div class="weline-acl-stats-row">
-        <div class="weline-acl-stat-card">
-            <div class="weline-acl-stat-icon success">
-                <i class="mdi mdi-checkbox-marked-circle-outline"></i>
+    <section class="w-acl-stats" aria-label="<?= $escape(__('权限统计')) ?>">
+        <article class="w-card"><div class="w-card__body"><span class="w-text" data-tone="muted"><?= $escape(__('已授权权限')) ?></span><strong data-acl-selected-count><?= $selectedAll ?></strong></div></article>
+        <article class="w-card"><div class="w-card__body"><span class="w-text" data-tone="muted"><?= $escape(__('权限总数')) ?></span><strong><?= $totalAll ?></strong></div></article>
+        <article class="w-card"><div class="w-card__body"><span class="w-text" data-tone="muted"><?= $escape(__('权限分组')) ?></span><strong><?= count($statistics) ?></strong></div></article>
+        <article class="w-card w-acl-progress-card">
+            <div class="w-card__body w-stack">
+                <div class="w-cluster" data-justify="between"><span><?= $escape(__('授权进度')) ?></span><strong data-acl-progress-label><?= $selectedPercent ?>%</strong></div>
+                <div class="w-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $selectedPercent ?>"><span class="w-progress__bar" data-acl-progress style="--w-progress:<?= $selectedPercent ?>%"></span></div>
             </div>
-            <div class="weline-acl-stat-content">
-                <div class="weline-acl-stat-value" id="stat-selected"><?php echo $selectedAll; ?></div>
-                <div class="weline-acl-stat-label"><lang>已授权权限</lang></div>
-            </div>
-        </div>
-        <div class="weline-acl-stat-card">
-            <div class="weline-acl-stat-icon primary">
-                <i class="mdi mdi-format-list-bulleted"></i>
-            </div>
-            <div class="weline-acl-stat-content">
-                <div class="weline-acl-stat-value"><?php echo $totalAll; ?></div>
-                <div class="weline-acl-stat-label"><lang>权限总数</lang></div>
-            </div>
-        </div>
-        <div class="weline-acl-stat-card">
-            <div class="weline-acl-stat-icon info">
-                <i class="mdi mdi-folder-multiple-outline"></i>
-            </div>
-            <div class="weline-acl-stat-content">
-                <div class="weline-acl-stat-value"><?php echo count($statistics); ?></div>
-                <div class="weline-acl-stat-label"><lang>权限分组</lang></div>
-            </div>
-        </div>
-        <div class="weline-acl-progress-card">
-            <div class="weline-acl-progress-header">
-                <span class="weline-acl-progress-title"><lang>授权进度</lang></span>
-                <span class="weline-acl-progress-percent" id="stat-percent"><?php echo $selectedPercent; ?>%</span>
-            </div>
-            <div class="weline-acl-progress-bar">
-                <div class="weline-acl-progress-fill" id="stat-progress" style="width: <?php echo $selectedPercent; ?>%;"></div>
-            </div>
-        </div>
-    </div>
+        </article>
+    </section>
 
-    <!-- 工具栏 -->
-    <div class="weline-acl-toolbar">
-        <div class="weline-acl-toolbar-row">
-            <!-- 搜索框 -->
-            <div class="weline-acl-search-box">
-                <div class="weline-acl-search-input">
-                    <i class="mdi mdi-magnify"></i>
-                    <input type="text" id="acl-search" placeholder="<?php echo __('搜索权限名称、ID 或描述...'); ?>">
-                    <button type="button" class="weline-acl-search-clear" id="acl-search-clear">
-                        <i class="mdi mdi-close"></i>
-                    </button>
+    <section class="w-card w-acl-tools" aria-label="<?= $escape(__('权限树工具')) ?>">
+        <div class="w-card__body w-stack">
+            <div class="w-toolbar">
+                <label class="w-field w-acl-tools__search"><span class="w-visually-hidden"><?= $escape(__('搜索权限')) ?></span><input class="w-input" type="search" data-acl-search placeholder="<?= $escape(__('搜索权限名称、ID 或描述…')) ?>" autocomplete="off"></label>
+                <div class="w-cluster">
+                    <label class="w-field"><span class="w-visually-hidden"><?= $escape(__('模块')) ?></span><select class="w-select" data-acl-module><option value=""><?= $escape(__('所有模块')) ?></option><?php foreach ((array)$this->getData('module_list') as $module): ?><option value="<?= $escape($module) ?>"><?= $escape($module) ?></option><?php endforeach; ?></select></label>
+                    <label class="w-field"><span class="w-visually-hidden"><?= $escape(__('类型')) ?></span><select class="w-select" data-acl-type><option value=""><?= $escape(__('所有类型')) ?></option><?php foreach ((array)$this->getData('type_list') as $type): ?><option value="<?= $escape($type) ?>"><?= $escape($typeLabel((string)$type)) ?></option><?php endforeach; ?></select></label>
                 </div>
             </div>
-            
-            <!-- 筛选器 -->
-            <div class="weline-acl-filters">
-                <?php
-                $acl_module_filter_empty = __('所有模块');
-                $acl_module_filter_placeholder = __('搜索模块名称');
-                $acl_module_filter_value = '';
-                $acl_module_filter_options = [];
-                foreach ($this->getData('module_list') ?: [] as $module) {
-                    $moduleName = \trim((string)$module);
-                    if ($moduleName === '') {
-                        continue;
-                    }
-                    $acl_module_filter_options[] = [
-                        'value' => $moduleName,
-                        'label' => $moduleName,
-                    ];
-                }
-                $acl_module_filter_options_json = \json_encode($acl_module_filter_options, JSON_UNESCAPED_UNICODE);
-                ?>
-                <w:module-manager:module:select
-                    id="acl-filter-module"
-                    name="acl_filter_module"
-                    value="acl_module_filter_value"
-                    options="acl_module_filter_options_json"
-                    allow-empty="true"
-                    clearable="true"
-                    empty-label="acl_module_filter_empty"
-                    placeholder="acl_module_filter_placeholder"
-                    class="weline-acl-module-filter"
-                    on-change="if (window.__aclApplyFilters) { window.__aclApplyFilters(); }"
-                />
-                <select id="acl-filter-type" class="weline-acl-filter-select" title="<?php echo __('按类型筛选'); ?>">
-                    <option value=""><?php echo __('所有类型'); ?></option>
-                    <?php foreach ($this->getData('type_list') ?: [] as $type): ?>
-                    <option value="<?php echo htmlspecialchars($type); ?>"><?php echo htmlspecialchars(\Weline\Acl\Service\Resource\AclResourcePresentation::typeLabel((string)$type)); ?></option>
-                    <?php endforeach; ?>
-                </select>
+            <div class="w-toolbar">
+                <?php if ($showTagDimension): ?>
+                    <div class="w-tabs__list" role="tablist" aria-label="<?= $escape(__('权限视图')) ?>">
+                        <button class="w-tabs__tab" type="button" role="tab" aria-selected="true" data-acl-view="menu"><w:icon name="menu" size="sm"></w:icon><?= $escape(__('菜单维度')) ?></button>
+                        <button class="w-tabs__tab" type="button" role="tab" aria-selected="false" data-acl-view="tag"><w:icon name="tag" size="sm"></w:icon><?= $escape(__('标签维度')) ?></button>
+                    </div>
+                <?php endif; ?>
+                <div class="w-cluster">
+                    <button class="w-button" type="button" data-tone="quiet" data-acl-command="expand"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('展开')) ?></button>
+                    <button class="w-button" type="button" data-tone="quiet" data-acl-command="collapse"><w:icon name="minus" size="sm"></w:icon><?= $escape(__('折叠')) ?></button>
+                    <button class="w-button" type="button" data-tone="quiet" data-acl-command="select"><w:icon name="check" size="sm"></w:icon><?= $escape(__('全选')) ?></button>
+                    <button class="w-button" type="button" data-tone="quiet" data-acl-command="clear"><w:icon name="close" size="sm"></w:icon><?= $escape(__('清空')) ?></button>
+                </div>
             </div>
-            
-            <!-- 操作按钮 -->
-            <div class="weline-acl-actions">
-                <button type="button" class="weline-acl-action-btn" id="acl-expand-all" title="<?php echo __('展开所有'); ?>">
-                    <i class="mdi mdi-unfold-more-horizontal"></i> <lang>展开</lang>
-                </button>
-                <button type="button" class="weline-acl-action-btn" id="acl-collapse-all" title="<?php echo __('折叠所有'); ?>">
-                    <i class="mdi mdi-unfold-less-horizontal"></i> <lang>折叠</lang>
-                </button>
-                <button type="button" class="weline-acl-action-btn" id="acl-select-all" title="<?php echo __('全选'); ?>">
-                    <i class="mdi mdi-checkbox-multiple-marked"></i> <lang>全选</lang>
-                </button>
-                <button type="button" class="weline-acl-action-btn" id="acl-deselect-all" title="<?php echo __('清空'); ?>">
-                    <i class="mdi mdi-checkbox-multiple-blank-outline"></i> <lang>清空</lang>
-                </button>
-            </div>
+            <p class="w-text" data-tone="muted" data-acl-result aria-live="polite"></p>
         </div>
-    </div>
+    </section>
 
-    <!-- 搜索结果提示 -->
-    <div id="acl-search-result" class="weline-acl-search-result">
-        <i class="mdi mdi-information-outline"></i>
-        <span id="acl-search-result-text"></span>
-    </div>
+    <section class="w-card w-acl-panel" data-acl-panel="menu" aria-labelledby="acl-menu-heading">
+        <header class="w-card__header"><div><h2 class="w-card__title" id="acl-menu-heading"><w:icon name="menu" size="sm"></w:icon><?= $escape(__('菜单与功能权限')) ?></h2><p class="w-text" data-tone="muted"><?= $escape(__('勾选父节点会授予整个子树；取消父节点会收回整个子树。')) ?></p></div></header>
+        <div class="w-card__body w-acl-tree" data-acl-tree="menu"><?php $renderPermissionNodes($trees); ?></div>
+    </section>
 
-    <!-- 双视图切换 + 标签树（D-12） -->
-    <div class="weline-acl-toolbar" style="margin-bottom:12px;">
-        <div class="weline-acl-actions">
-            <button type="button" class="weline-acl-action-btn active" id="acl-view-menu"><i class="mdi mdi-menu"></i> <lang>菜单维度</lang></button>
-            <button type="button" class="weline-acl-action-btn" id="acl-view-tag"><i class="mdi mdi-tag-multiple"></i> <lang>标签维度</lang></button>
-        </div>
-        <p class="text-muted mb-0" style="font-size:0.85rem;"><lang>取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。</lang></p>
-    </div>
+    <?php if ($showTagDimension): ?>
+        <section class="w-card w-acl-panel" data-acl-panel="tag" aria-labelledby="acl-tag-heading" hidden>
+            <header class="w-card__header"><div><h2 class="w-card__title" id="acl-tag-heading"><w:icon name="tag" size="sm"></w:icon><?= $escape(__('标签权限包')) ?></h2><p class="w-text" data-tone="muted"><?= $escape(__('标签包适合批量授权；取消包内单项时会自动取消覆盖它的标签包。')) ?></p></div></header>
+            <div class="w-card__body w-acl-tree" data-acl-tree="tag"><?php $renderTagNodes($tagTree); ?></div>
+        </section>
+    <?php endif; ?>
+</form>
 
-    <div class="weline-acl-tree-card" id="acl-tag-panel" style="display:none;margin-bottom:16px;">
-        <div class="weline-acl-tree-header">
-            <span class="weline-acl-tree-title"><i class="mdi mdi-tag-multiple-outline"></i> <lang>标签权限树</lang></span>
-            <span style="font-size: 0.85rem; color: var(--backend-color-text-secondary);">
-                <lang>勾选标签可整包授权；叶子也可单独勾选或取消</lang>
-            </span>
-        </div>
-        <div class="weline-acl-tree-body">
-            <?php
-            $tagTreeData = $this->getData('tag_tree') ?: [];
-            $tagGrantFlip = array_flip($this->getData('tag_grants') ?: []);
-            $renderTagNodeLi = function (array $node) use (&$renderTagNodeLi, $tagGrantFlip): void {
-                $path = (string)($node['tag_path'] ?? '');
-                $name = (string)($node['name'] ?? $path);
-                $tagSelected = isset($tagGrantFlip[$path]);
-                $tagId = 'tag:' . $path;
-                $tagAttr = " class='show_tooltip' title='" . htmlspecialchars($path, ENT_QUOTES) . "' data-node-kind='tag' data-tag-path='"
-                    . htmlspecialchars($path, ENT_QUOTES) . "' data-jstree='{\"disabled\":false,\"opened\":true,\"selected\":"
-                    . ($tagSelected ? 'true' : 'false') . ",\"icon\":\"mdi mdi-tag-outline\"}' ";
-                echo '<li id="' . htmlspecialchars($tagId, ENT_QUOTES) . '" ' . $tagAttr . '>'
-                    . htmlspecialchars($name)
-                    . " <span class='weline-acl-type-badge is-tag'><lang>标签</lang></span>";
-                $children = $node['children'] ?? [];
-                $leaves = $node['leaves'] ?? [];
-                if ($children || $leaves) {
-                    echo '<ul>';
-                    foreach ($children as $child) {
-                        if (\is_array($child)) {
-                            $renderTagNodeLi($child);
-                        }
-                    }
-                    foreach ($leaves as $leaf) {
-                        if (!\is_array($leaf)) {
-                            continue;
-                        }
-                        $sourceId = (string)($leaf['source_id'] ?? $leaf['id'] ?? '');
-                        if ($sourceId === '') {
-                            continue;
-                        }
-                        $leafName = (string)($leaf['name'] ?? $sourceId);
-                        $leafType = (string)($leaf['type'] ?? '');
-                        $leafModule = (string)($leaf['module'] ?? '');
-                        if ($leafModule === '') {
-                            $leafModule = explode('::', $sourceId)[0] ?? '';
-                        }
-                        $leafSelected = $tagSelected || !empty($leaf['selected']);
-                        $typeLabel = match ($leafType) {
-                            'query' => 'Query',
-                            'task' => (string)__('任务'),
-                            'operation' => (string)__('运维'),
-                            default => ($leafType !== '' ? $leafType : 'ACL'),
-                        };
-                        $leafAttr = " class='show_tooltip' title='" . htmlspecialchars($sourceId, ENT_QUOTES)
-                            . "' data-node-kind='leaf' data-parent-tag-path='" . htmlspecialchars($path, ENT_QUOTES)
-                            . "' data-module='" . htmlspecialchars($leafModule, ENT_QUOTES)
-                            . "' data-type='" . htmlspecialchars($leafType, ENT_QUOTES)
-                            . "' data-jstree='{\"disabled\":false,\"opened\":false,\"selected\":"
-                            . ($leafSelected ? 'true' : 'false') . ",\"icon\":\"mdi mdi-key-outline\"}' ";
-                        echo '<li id="' . htmlspecialchars($sourceId, ENT_QUOTES) . '" ' . $leafAttr . '>'
-                            . htmlspecialchars($leafName)
-                            . " <span class='weline-acl-type-badge is-acl'>" . htmlspecialchars($typeLabel) . '</span>'
-                            . '</li>';
-                    }
-                    echo '</ul>';
-                }
-                echo '</li>';
-            };
-            ?>
-            <div id="acl-tag" class="acl-container">
-                <ul>
-                    <?php foreach ($tagTreeData as $tagNode): ?>
-                        <?php if (\is_array($tagNode)) { $renderTagNodeLi($tagNode); } ?>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <!-- 权限树卡片 -->
-    <div class="weline-acl-tree-card" id="acl-menu-panel">
-        <div class="weline-acl-tree-header">
-            <span class="weline-acl-tree-title">
-                <i class="mdi mdi-file-tree-outline"></i>
-                <lang>权限列表</lang>
-            </span>
-            <span style="font-size: 0.85rem; color: var(--backend-color-text-secondary);">
-                <lang>勾选需要授予的权限，子权限会自动关联父权限</lang>
-            </span>
-        </div>
-        <div class="weline-acl-tree-body">
-                
-<?php
-            /**
-             * 使用闭包替代全局函数，避免 WLS 常驻内存模式下 "Cannot redeclare function" 错误
-             */
-            $getLiAttr = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $acl): string {
-                $type = $acl->getType() ?: '';
-                $icon = $acl->getIcon();
-                if (empty($icon)) {
-                    $icon = match ($type) {
-                        'menus' => 'mdi mdi-menu',
-                        'pc' => 'mdi mdi-link-variant',
-                        default => ''
-                    };
-                }
-                if (empty($icon)) {
-                    if ($acl->getMethod()) {
-                        $icon = match (strtolower($acl->getMethod())) {
-                            'get' => 'mdi mdi-eye-outline',
-                            'post' => 'mdi mdi-content-save-outline',
-                            'delete' => 'mdi mdi-delete-outline',
-                            'put' => 'mdi mdi-pencil-outline',
-                            'update' => 'mdi mdi-refresh',
-                            default => 'mdi mdi-key-outline'
-                        };
-                    } else {
-                        $icon = 'mdi mdi-key-outline';
-                    }
-                }
-                $desc = $acl->getDocument() ? htmlspecialchars(__($acl->getDocument()), ENT_QUOTES) : '';
-                if (empty($desc)) {
-                    $desc = match ($type) {
-                        'menus' => __('菜单权限'),
-                        'pc' => __('接口权限'),
-                        default => __('访问权限')
-                    };
-                }
-                $sourceId = htmlspecialchars($acl->getSourceId(), ENT_QUOTES);
-                $desc .= " ({$sourceId})";
-                $access = \Weline\Acl\Service\Resource\AclResourcePresentation::assignmentNodePreselected(
-                    (bool)$acl->getData('role_id'),
-                    !empty($acl->getSub()),
-                ) ? 'true' : 'false';
-                return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":false,\"selected\":{$access},\"icon\":\"$icon\"}' ";
-            };
-
-            $getTreeNode = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $tree) use (&$getTreeNode, $getLiAttr): string {
-                $result = '';
-                if ($tree->getSub()) {
-                    $result .= '<ul>';
-                    foreach ($tree->getSub() as $sub) {
-                        $method = $sub->getMethod() ? "({$sub->getMethod()})" : '';
-                        $type = $sub->getType();
-                        $typeLabel = match ($type) {
-                            'menus' => __('菜单'),
-                            'pc' => 'ACL',
-                            default => __('未知')
-                        };
-                        $typeClass = match ($type) {
-                            'menus' => 'is-menu',
-                            'pc' => 'is-acl',
-                            default => ''
-                        };
-                        $typeBadge = " <span class='weline-acl-type-badge {$typeClass}'>" . htmlspecialchars((string)$typeLabel) . '</span>';
-                        $attr = $getLiAttr($sub);
-                        $sourceName = htmlspecialchars($sub->getSourceName());
-                        $result .= "<li id='{$sub->getSourceId()}' {$attr}>{$sourceName}{$method}{$typeBadge}";
-                        $result .= $getTreeNode($sub);
-                        $result .= '</li>';
-                    }
-                    $result .= '</ul>';
-                }
-                return $result;
-            };
-            ?>
-            <div id='acl' class='acl-container'>
-                <ul>
-                    <foreach name='trees' item='tree'>
-                        <?php 
-                        $attr = $getLiAttr($tree);
-                        $sourceId = $tree->getSourceId();
-                        $stat = $statistics[$sourceId] ?? null;
-                        $type = $tree->getType();
-                        $typeLabel = match ($type) {
-                            'menus' => __('菜单'),
-                            'pc' => 'ACL',
-                            default => __('未知')
-                        };
-                        $typeClass = match ($type) {
-                            'menus' => 'is-menu',
-                            'pc' => 'is-acl',
-                            default => ''
-                        };
-                        $typeBadge = "<span class='weline-acl-type-badge {$typeClass}'>" . htmlspecialchars((string)$typeLabel) . "</span>";
-                        $statBadge = '';
-                        if ($stat) {
-                            $selectedCount = $stat['selected'];
-                            $totalCount = $stat['total'];
-                            $badgeClass = $selectedCount === $totalCount ? 'bg-success' : ($selectedCount > 0 ? 'bg-warning text-dark' : 'bg-secondary');
-                            $statBadge = " <span class='weline-acl-module-badge {$badgeClass}'>{$selectedCount}/{$totalCount}</span>";
-                        }
-                        ?>
-                        <li id='{{tree.source_id}}' {{attr}} data-module="<?php echo htmlspecialchars($tree->getModule()); ?>" data-type="<?php echo htmlspecialchars($tree->getType()); ?>">{{tree.source_name}}
-                            <if condition="tree.method">
-                                ({{tree.method}})
-                            </if>
-                            <?php echo $typeBadge; ?>
-                            <?php echo $statBadge; ?>
-                            <?php echo $getTreeNode($tree); ?>
-                        </li>
-                    </foreach>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <!-- 保存表单（菜单维/标签维共用） -->
-    <div class="weline-acl-save-form">
-        <w:form action="@backend-url('*/backend/acl/role/assign')" id="aclForm" method="post" style="display: flex; gap: 8px;">
-            <input type="hidden" name="role_id" value="{{assign_role.role_id}}">
-            <a href="@backend-url('*/backend/acl/role')" class="weline-acl-action-btn">
-                <i class="mdi mdi-arrow-left"></i> <lang>返回列表</lang>
-            </a>
-            <button type='submit' id='save_button' class='weline-acl-action-btn success'>
-                <i class="mdi mdi-content-save-outline"></i> <lang>保存权限配置</lang>
-            </button>
-        </w:form>
-    </div>
-</div>
-
-<script src='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)'></script>
-<script>
-(function() {
-    'use strict';
-
-    window.__aclSharedSourceIds = new Set(<?php echo json_encode(array_values($this->getData('selected_source_ids') ?: []), JSON_UNESCAPED_UNICODE); ?>);
-    window.__aclTagGrants = new Set(<?php echo json_encode(array_values($this->getData('tag_grants') ?: []), JSON_UNESCAPED_UNICODE); ?>);
-    window.__aclTagPathLeaves = <?php echo json_encode($this->getData('tag_path_leaves') ?: [], JSON_UNESCAPED_UNICODE); ?>;
-    window.__aclSourceDescendants = <?php echo json_encode($this->getData('source_descendants') ?: new \stdClass(), JSON_UNESCAPED_UNICODE); ?>;
-    window.__aclSyncing = false;
-    window.__aclActiveView = 'menu';
-
-    var searchTimeout = null;
-    var totalPermissions = <?php echo $totalAll; ?>;
-    var initialSelected = <?php echo json_encode(array_values($this->getData('selected_source_ids') ?: []), JSON_UNESCAPED_UNICODE); ?>;
-    var initialTagGrants = <?php echo json_encode(array_values($this->getData('tag_grants') ?: []), JSON_UNESCAPED_UNICODE); ?>;
-
-    var jstreeCommon = {
-        core: {
-            themes: { responsive: true },
-            animation: 150
-        },
-        checkbox: {
-            keep_selected_style: false,
-            // jstree forces cascade to up+down+undetermined when three_state is true.
-            // Do not programmatically select_node() parents: that re-checks whole subtrees
-            // (e.g. 应用商城) even when only the ancestor is stored via expandMenusAncestors.
-            three_state: true,
-            cascade: 'up'
-        },
-        search: {
-            show_only_matches: true,
-            show_only_matches_children: true,
-            search_leaves_only: false,
-            fuzzy: true
-        },
-        plugins: ['wholerow', 'checkbox', 'search']
-    };
-
-    function activeTreeSelector() {
-        return window.__aclActiveView === 'tag' ? '#acl-tag' : '#acl';
-    }
-
-    function activeTree() {
-        return $(activeTreeSelector()).jstree(true);
-    }
-
-    function isTagNodeId(id) {
-        return String(id || '').indexOf('tag:') === 0;
-    }
-
-    function tagPathFromId(id) {
-        return String(id || '').slice(4);
-    }
-
-    function updateStatistics() {
-        var shared = window.__aclSharedSourceIds || new Set();
-        var selectedCount = shared.size;
-        var percent = totalPermissions > 0 ? Math.round((selectedCount / totalPermissions) * 100) : 0;
-        $('#stat-selected').text(selectedCount);
-        $('#stat-percent').text(percent + '%');
-        $('#stat-progress').css('width', percent + '%');
-    }
-
-    function addLeavesToShared(path) {
-        var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
-        leaves.forEach(function(id) { window.__aclSharedSourceIds.add(id); });
-        return leaves;
-    }
-
-    function removeLeavesFromShared(path) {
-        var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
-        leaves.forEach(function(id) { window.__aclSharedSourceIds.delete(id); });
-        return leaves;
-    }
-
-    function removeTagGrantsForPath(path) {
-        var next = new Set();
-        window.__aclTagGrants.forEach(function(p) {
-            if (p === path || String(p).indexOf(path + ':') === 0) {
-                return;
-            }
-            next.add(p);
-        });
-        window.__aclTagGrants = next;
-    }
-
-    function removeTagGrantsCoveringLeaf(sourceId) {
-        var next = new Set();
-        window.__aclTagGrants.forEach(function(path) {
-            var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
-            if (leaves.indexOf(sourceId) >= 0) {
-                return;
-            }
-            next.add(path);
-        });
-        window.__aclTagGrants = next;
-    }
-
-    function rebuildTagGrantsFromTree() {
-        var tree = $('#acl-tag').jstree(true);
-        var grants = new Set();
-        if (!tree) {
-            window.__aclTagGrants = grants;
-            return;
-        }
-        tree.get_selected().forEach(function(id) {
-            if (isTagNodeId(id)) {
-                grants.add(tagPathFromId(id));
-            }
-        });
-        window.__aclTagGrants = grants;
-        grants.forEach(function(path) { addLeavesToShared(path); });
-    }
-
-    function isTreeLeaf(tree, id) {
-        var node = tree && tree.get_node(id);
-        return Boolean(node && (!node.children || node.children.length === 0));
-    }
-
-    function syncMenuTreeFromShared() {
-        var tree = $('#acl').jstree(true);
-        if (!tree) return;
-        window.__aclSyncing = true;
-        try {
-            window.__aclSharedSourceIds.forEach(function(id) {
-                if (!isTreeLeaf(tree, id)) {
-                    return;
-                }
-                if (tree.get_node(id) && !tree.is_selected(id)) {
-                    tree.select_node(id, true, true);
-                }
-            });
-            tree.get_selected().forEach(function(id) {
-                if (!isTreeLeaf(tree, id)) {
-                    return;
-                }
-                if (!window.__aclSharedSourceIds.has(id)) {
-                    tree.deselect_node(id, true);
-                }
-            });
-        } finally {
-            window.__aclSyncing = false;
-        }
-    }
-
-    function syncTagTreeFromShared() {
-        var tree = $('#acl-tag').jstree(true);
-        if (!tree) return;
-        window.__aclSyncing = true;
-        try {
-            tree.deselect_all(true);
-            window.__aclSharedSourceIds.forEach(function(id) {
-                if (tree.get_node(id)) {
-                    tree.select_node(id, true, true);
-                }
-            });
-            window.__aclTagGrants.forEach(function(path) {
-                var id = 'tag:' + path;
-                if (tree.get_node(id)) {
-                    tree.select_node(id, true, true);
-                }
-                addLeavesToShared(path);
-            });
-        } finally {
-            window.__aclSyncing = false;
-        }
-    }
-
-    function applyMenuDeselectCascade(tree, node) {
-        if (node.parent !== '#') {
-            var parentNode = tree.get_node(node.parent);
-            var hasSelectedChildren = parentNode.children.some(function(childId) {
-                return tree.is_selected(childId);
-            });
-            if (!hasSelectedChildren) {
-                tree.deselect_node(parentNode);
-            }
-        }
-        if (node.children.length > 0) {
-            node.children.forEach(function(childId) {
-                tree.deselect_node(childId);
-            });
-        }
-    }
-
-    function grantMenuSubtree(tree, node) {
-        var seen = {};
-        var ids = [];
-        [node.id].concat(node.children_d || [], (window.__aclSourceDescendants && window.__aclSourceDescendants[node.id]) || []).forEach(function(id) {
-            if (!id || seen[id]) return;
-            seen[id] = true;
-            ids.push(id);
-        });
-        window.__aclSyncing = true;
-        try {
-            ids.forEach(function(id) {
-                if (!isTagNodeId(id)) {
-                    window.__aclSharedSourceIds.add(id);
-                }
-                if (tree.get_node(id) && !tree.is_selected(id)) {
-                    tree.select_node(id, true, true);
-                }
-            });
-        } finally {
-            window.__aclSyncing = false;
-        }
-    }
-
-    function revokeMenuSubtree(tree, node) {
-        var seen = {};
-        var ids = [];
-        [node.id].concat(node.children_d || [], (window.__aclSourceDescendants && window.__aclSourceDescendants[node.id]) || []).forEach(function(id) {
-            if (!id || seen[id]) return;
-            seen[id] = true;
-            ids.push(id);
-        });
-        window.__aclSyncing = true;
-        try {
-            var tagTree = $('#acl-tag').jstree(true);
-            ids.forEach(function(id) {
-                if (!isTagNodeId(id)) {
-                    window.__aclSharedSourceIds.delete(id);
-                    removeTagGrantsCoveringLeaf(id);
-                }
-                if (tree.get_node(id) && tree.is_selected(id)) {
-                    tree.deselect_node(id, true);
-                }
-                if (tagTree && tagTree.get_node(id) && tagTree.is_selected(id)) {
-                    tagTree.deselect_node(id, true);
-                }
-            });
-        } finally {
-            window.__aclSyncing = false;
-        }
-    }
-
-    $('#acl').jstree(jstreeCommon);
-    $('#acl-tag').jstree(jstreeCommon);
-
-    $('#acl').on('ready.jstree', function() {
-        syncMenuTreeFromShared();
-        updateStatistics();
-    });
-
-    $('#acl-tag').on('ready.jstree', function() {
-        syncTagTreeFromShared();
-        updateStatistics();
-    });
-
-    $('#acl').on('select_node.jstree', function(e, data) {
-        if (window.__aclSyncing) return;
-        grantMenuSubtree($('#acl').jstree(true), data.node);
-        updateStatistics();
-    });
-
-    $('#acl').on('deselect_node.jstree', function(e, data) {
-        if (window.__aclSyncing) return;
-        var tree = $('#acl').jstree(true);
-        revokeMenuSubtree(tree, data.node);
-        updateStatistics();
-    });
-
-    $('#acl-tag').on('select_node.jstree', function(e, data) {
-        if (window.__aclSyncing) return;
-        var id = data.node.id;
-        if (isTagNodeId(id)) {
-            var path = tagPathFromId(id);
-            window.__aclTagGrants.add(path);
-            addLeavesToShared(path);
-        } else {
-            window.__aclSharedSourceIds.add(id);
-        }
-        updateStatistics();
-    });
-
-    $('#acl-tag').on('deselect_node.jstree', function(e, data) {
-        if (window.__aclSyncing) return;
-        var tree = $('#acl-tag').jstree(true);
-        var node = data.node;
-        var id = node.id;
-
-        if (isTagNodeId(id)) {
-            var path = tagPathFromId(id);
-            // D-1: cancel tag = remove ALL leaves under this tag path prefix
-            removeTagGrantsForPath(path);
-            removeLeavesFromShared(path);
-            if (node.children.length > 0) {
-                node.children.forEach(function(childId) {
-                    tree.deselect_node(childId);
-                });
-            }
-        } else {
-            window.__aclSharedSourceIds.delete(id);
-            removeTagGrantsCoveringLeaf(id);
-            applyMenuDeselectCascade(tree, node);
-        }
-        updateStatistics();
-    });
-
-    $('#acl-view-menu').on('click', function() {
-        // flush tag tree into shared/grants before leaving
-        rebuildTagGrantsFromTree();
-        $('#acl-tag').jstree(true) && $('#acl-tag').jstree('get_selected').forEach(function(id) {
-            if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
-        });
-        window.__aclActiveView = 'menu';
-        $('#acl-menu-panel').show();
-        $('#acl-tag-panel').hide();
-        $(this).addClass('active');
-        $('#acl-view-tag').removeClass('active');
-        syncMenuTreeFromShared();
-        updateStatistics();
-        applyFilters();
-    });
-
-    $('#acl-view-tag').on('click', function() {
-        // flush menu tree selection into shared
-        var menuTree = $('#acl').jstree(true);
-        if (menuTree) {
-            menuTree.get_selected().forEach(function(id) {
-                if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
-            });
-            // Do not subtract shared grants from jstree selection: three_state
-            // only selects leaves, so parents and hidden matches would be dropped.
-        }
-        window.__aclActiveView = 'tag';
-        $('#acl-menu-panel').hide();
-        $('#acl-tag-panel').show();
-        $(this).addClass('active');
-        $('#acl-view-menu').removeClass('active');
-        syncTagTreeFromShared();
-        updateStatistics();
-        applyFilters();
-    });
-
-    $('#save_button').on('click', function() {
-        // Shared grant set is the save source of truth. jstree three_state,
-        // search and filters must not subtract still-checked grants.
-        var shared = window.__aclSharedSourceIds || new Set(initialSelected);
-        var menuTree = $('#acl').jstree(true);
-        var tagTree = $('#acl-tag').jstree(true);
-
-        if (menuTree) {
-            menuTree.get_selected().forEach(function(id) {
-                if (!isTagNodeId(id)) {
-                    shared.add(id);
-                }
-            });
-        }
-
-        if (tagTree && window.__aclActiveView === 'tag') {
-            tagTree.get_selected().forEach(function(id) {
-                if (!isTagNodeId(id)) shared.add(id);
-            });
-            rebuildTagGrantsFromTree();
-            var keptTagGrants = new Set();
-            window.__aclTagGrants.forEach(function(path) {
-                var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
-                var stillGranted = leaves.some(function(id) { return shared.has(id); });
-                if (!stillGranted) {
-                    return;
-                }
-                keptTagGrants.add(path);
-                leaves.forEach(function(id) { shared.add(id); });
-            });
-            window.__aclTagGrants = keptTagGrants;
-        } else if (window.__aclTagGrants && window.__aclTagGrants.size) {
-            var keptTagGrants = new Set();
-            window.__aclTagGrants.forEach(function(path) {
-                var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
-                var stillGranted = leaves.some(function(id) { return shared.has(id); });
-                if (!stillGranted) {
-                    return;
-                }
-                keptTagGrants.add(path);
-                leaves.forEach(function(id) { shared.add(id); });
-            });
-            window.__aclTagGrants = keptTagGrants;
-        }
-
-        window.__aclSharedSourceIds = shared;
-
-        $('#aclForm input[name="ids[]"]').remove();
-        $('#aclForm input[name="tag_paths[]"]').remove();
-        shared.forEach(function(id) {
-            $('#aclForm').append('<input type="hidden" name="ids[]" value="' + id + '">');
-        });
-        (window.__aclTagGrants || new Set(initialTagGrants)).forEach(function(path) {
-            $('#aclForm').append('<input type="hidden" name="tag_paths[]" value="' + path + '">');
-        });
-
-        var $btn = $(this);
-        $btn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin"></i> <?php echo __("保存中..."); ?>');
-        setTimeout(function() {
-            $btn.closest('form').submit();
-        }, 100);
-    });
-
-    function runSearch(searchVal) {
-        var sel = activeTreeSelector();
-        if (searchVal.length > 0) {
-            $(sel).jstree('search', searchVal);
-        } else {
-            $(sel).jstree('clear_search');
-            $('#acl-search-result').removeClass('visible');
-        }
-    }
-
-    $('#acl-search').on('keyup', function() {
-        var searchVal = $(this).val().trim();
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(function() { runSearch(searchVal); }, 300);
-    });
-
-    $('#acl, #acl-tag').on('search.jstree', function(e, data) {
-        var count = data.nodes.length;
-        var $result = $('#acl-search-result');
-        var $text = $('#acl-search-result-text');
-        if (count > 0) {
-            $text.text('<?php echo __("找到"); ?> ' + count + ' <?php echo __("个匹配权限"); ?>');
-            $result.addClass('visible');
-        } else if ($('#acl-search').val().trim().length > 0) {
-            $text.text('<?php echo __("未找到匹配的权限，请尝试其他关键词"); ?>');
-            $result.addClass('visible');
-        }
-    });
-
-    $('#acl, #acl-tag').on('clear_search.jstree', function() {
-        $('#acl-search-result').removeClass('visible');
-    });
-
-    $('#acl-search-clear').on('click', function() {
-        $('#acl-search').val('').focus();
-        $('#acl').jstree('clear_search');
-        $('#acl-tag').jstree('clear_search');
-        $('#acl-search-result').removeClass('visible');
-    });
-
-    $('#acl-select-all').on('click', function() {
-        var sel = activeTreeSelector();
-        $(sel).jstree('select_all');
-        if (sel === '#acl-tag') {
-            rebuildTagGrantsFromTree();
-            $('#acl-tag').jstree('get_selected').forEach(function(id) {
-                if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
-            });
-        } else {
-            $('#acl').jstree('get_selected').forEach(function(id) {
-                if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
-            });
-        }
-        updateStatistics();
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("已全选所有权限"); ?>');
-        }
-    });
-
-    $('#acl-deselect-all').on('click', function() {
-        var sel = activeTreeSelector();
-        $(sel).jstree('deselect_all');
-        if (sel === '#acl-tag') {
-            // clear tag grants and their leaves; keep menu-only shared ids not in tag tree
-            var tagLeafIds = {};
-            $('#acl-tag li[data-node-kind="leaf"]').each(function() { tagLeafIds[this.id] = true; });
-            Object.keys(tagLeafIds).forEach(function(id) { window.__aclSharedSourceIds.delete(id); });
-            window.__aclTagGrants = new Set();
-        } else {
-            var menuIds = {};
-            $('#acl li').each(function() { menuIds[this.id] = true; });
-            Object.keys(menuIds).forEach(function(id) {
-                if (!isTagNodeId(id)) window.__aclSharedSourceIds.delete(id);
-            });
-        }
-        updateStatistics();
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("已清空所有选择"); ?>');
-        }
-    });
-
-    $('#acl-expand-all').on('click', function() {
-        $(activeTreeSelector()).jstree('open_all');
-    });
-
-    $('#acl-collapse-all').on('click', function() {
-        $(activeTreeSelector()).jstree('close_all');
-    });
-
-    function applyFilters() {
-        var moduleApi = window.WelineModuleSelect && window.WelineModuleSelect['acl-filter-module'];
-        var moduleFilter = moduleApi
-            ? String(moduleApi.getValue() || '')
-            : String($('#acl-filter-module').val() || '');
-        var typeFilter = String($('#acl-filter-type').val() || '');
-        var tree = activeTree();
-        if (!tree) return;
-        var rootSel = activeTreeSelector();
-        var hasFilter = !!(moduleFilter || typeFilter);
-
-        window.__aclSyncing = true;
-        try {
-            if (rootSel === '#acl-tag') {
-                applyTagFilters(tree, moduleFilter, typeFilter, hasFilter);
-            } else {
-                applyMenuFilters(tree, moduleFilter, typeFilter, hasFilter);
-            }
-        } finally {
-            window.__aclSyncing = false;
-        }
-    }
-
-    // 菜单维度：按顶层分组（li[data-module]）进行模块/类型过滤
-    function applyMenuFilters(tree, moduleFilter, typeFilter, hasFilter) {
-        var visibleCount = 0;
-        $('#acl li[data-module]').each(function() {
-            var $node = $(this);
-            var nodeModule = $node.attr('data-module') || '';
-            var nodeType = $node.attr('data-type') || '';
-            var nodeId = $node.attr('id');
-            var moduleMatch = !moduleFilter || nodeModule.indexOf(moduleFilter) !== -1;
-            var typeMatch = !typeFilter || nodeType === typeFilter;
-            if (moduleMatch && typeMatch) {
-                tree.show_node(nodeId);
-                visibleCount++;
-            } else {
-                tree.hide_node(nodeId);
-            }
-        });
-        if (hasFilter && typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("筛选结果"); ?>: ' + visibleCount + ' <?php echo __("个分组"); ?>');
-        }
-    }
-
-    // 标签维度：先按模块/类型过滤叶子，再按“是否含可见叶子”上卷父标签节点
-    function applyTagFilters(tree, moduleFilter, typeFilter, hasFilter) {
-        var leafVisible = 0;
-        $('#acl-tag li[data-node-kind="leaf"]').each(function() {
-            var $leaf = $(this);
-            var nodeModule = $leaf.attr('data-module') || '';
-            var nodeType = $leaf.attr('data-type') || '';
-            var nodeId = this.id;
-            var moduleMatch = !moduleFilter || nodeModule.indexOf(moduleFilter) !== -1;
-            var typeMatch = !typeFilter || nodeType === typeFilter;
-            if (moduleMatch && typeMatch) {
-                tree.show_node(nodeId);
-                leafVisible++;
-            } else {
-                tree.hide_node(nodeId);
-            }
-        });
-        // 标签父节点：只要其下仍有可见叶子就显示，否则隐藏（支持多级标签）
-        $('#acl-tag li[data-node-kind="tag"]').each(function() {
-            var $tag = $(this);
-            var hasVisibleLeaf = $tag.find('li[data-node-kind="leaf"]').filter(function() {
-                return !$(this).hasClass('jstree-hidden');
-            }).length > 0;
-            if (hasVisibleLeaf) {
-                tree.show_node(this.id);
-            } else {
-                tree.hide_node(this.id);
-            }
-        });
-        if (hasFilter && typeof BackendToast !== 'undefined') {
-            BackendToast.info('<?php echo __("筛选结果"); ?>: ' + leafVisible + ' <?php echo __("项权限"); ?>');
-        }
-    }
-
-    window.__aclApplyFilters = applyFilters;
-
-    $('#acl-filter-module, #acl-filter-type').on('change', function() {
-        applyFilters();
-    });
-
-    $(document).on('keydown', function(e) {
-        if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'f' || e.key === 'F') {
-                e.preventDefault();
-                $('#acl-search').focus();
-            } else if (e.key === 's' || e.key === 'S') {
-                e.preventDefault();
-                $('#save_button').click();
-            }
-        }
-    });
-})();
-</script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-acl-role-assign.js)"></script>

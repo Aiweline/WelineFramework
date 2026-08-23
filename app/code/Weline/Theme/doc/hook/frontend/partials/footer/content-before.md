@@ -85,6 +85,6 @@ view/hooks/Weline_Theme--frontend--partials--footer--content-before.phtml
 
 ## 相关资源
 
-- [Weline Framework Hook 系统文档](../../../../../Framework/doc/hook/README.md)
-- [主题开发指南](../../README.md)
-- [Partials 配置系统使用指南](../../Partials配置系统使用指南.md)
+- [Weline Framework Hook 系统文档](../../../../../../Framework/Hook/doc/Hook优先级和排序顺序使用指南.md)
+- [主题开发指南](../../../../README.md)
+- [Partials 配置系统使用指南](../../../../Partials配置系统使用指南.md)

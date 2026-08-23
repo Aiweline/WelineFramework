@@ -1,7 +1,7 @@
 <form class='app-search' data-app-search-keydown method='{{method}}' action='{{action}}'>
-    <div class='position-relative'>
-        <input type='text' id='{{id}}' name='{{keyword}}' class='form-control' placeholder='{{placeholder}}' value='{{value}}'>
-        <span class='ri-search-line'></span>
+    <div data-w-position="relative">
+        <input type='text' id='{{id}}' name='{{keyword}}' class="w-input" placeholder='{{placeholder}}' value='{{value}}'>
+        <w:icon name="search" size="sm"></w:icon>
     </div>
     <notempty name="params">
         <foreach name="params" key="key">

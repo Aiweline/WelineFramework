@@ -13,23 +13,23 @@ $originToken = (string)($this->getData('originToken') ?? '');
 ?>
 
 <!-- 消息提示 -->
-<div class='row mb-3'>
+<div class="w-grid" style="--w-mb:var(--weline-space-4);">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 表单 -->
-<div class="card">
-    <div class="card-body">
+<div class="w-card">
+    <div class="w-card__body">
         <w:form id="accountForm" method="post" action="@backend-url('*/backend/account/save')" data-testid="cdn-account-editor-form" data-state="idle" data-message="">
             <input type="hidden" name="id" value="<?= ($account && $account->getData('account_id')) ? (string)$account->getData('account_id') : '' ?>">
             <?php if ($this->request->isIframe()): ?>
                 <input type="hidden" name="isIframe" value="1">
             <?php endif; ?>
             
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('适配器') ?> <span class="text-danger">*</span></label>
-                <div class="col-md-10">
-                    <select name="adapter" id="adapterSelect" class="form-select" required>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('适配器') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <div style="--w-span-md:10;">
+                    <select name="adapter" id="adapterSelect" class="w-select" required>
                         <option value=""><?= __('请选择适配器') ?></option>
                         <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
                             <option value="<?= $adapterCode ?>" 
@@ -42,26 +42,24 @@ $originToken = (string)($this->getData('originToken') ?? '');
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('账户名称') ?> <span class="text-danger">*</span></label>
-                <div class="col-md-10">
-                    <input type="text" name="name" id="accountNameInput" class="form-control" 
-                           value="<?= htmlspecialchars($account && $account->getData('name') ? (string)$account->getData('name') : '') ?>" 
-                           required>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('账户名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <div style="--w-span-md:10;">
+                    <input type="text" name="name" id="accountNameInput" class="w-input" value="<?= htmlspecialchars($account && $account->getData('name') ? (string)$account->getData('name') : '') ?>" required>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('描述') ?></label>
-                <div class="col-md-10">
-                    <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($account && $account->getData('description') ? (string)$account->getData('description') : '') ?></textarea>
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('描述') ?></label>
+                <div style="--w-span-md:10;">
+                    <textarea name="description" class="w-textarea" rows="3"><?= htmlspecialchars($account && $account->getData('description') ? (string)$account->getData('description') : '') ?></textarea>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('状态') ?></label>
-                <div class="col-md-10">
-                    <select name="status" class="form-select">
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('状态') ?></label>
+                <div style="--w-span-md:10;">
+                    <select name="status" class="w-select">
                         <option value="active" <?= ($account && $account->getData('status') === 'active') ? 'selected' : '' ?>>
                             <?= __('激活') ?>
                         </option>
@@ -72,79 +70,69 @@ $originToken = (string)($this->getData('originToken') ?? '');
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('凭据配置') ?></label>
-                <div class="col-md-10">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-3">
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('凭据配置') ?></label>
+                <div style="--w-span-md:10;">
+                    <div class="w-card">
+                        <div class="w-card__body">
+                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);">
                                 <?= __('请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。') ?>
                             </p>
                             <div id="adapterPermissionsInfo" style="display: none;">
-                                <div class="alert alert-info mb-3">
-                                    <i class="mdi mdi-information"></i>
+                                <div class="w-alert" data-tone="info" style="--w-mb:var(--weline-space-4);">
+                                    <w:icon name="info" size="sm"></w:icon>
                                     <strong><?= __('Cloudflare API Token 权限要求：') ?></strong>
-                                    <ul class="mb-0 mt-2">
+                                    <ul style="--w-mb:0;--w-mt:var(--weline-space-2);">
                                         <li><code>Zone:Read</code> - <?= __('读取Zone信息') ?></li>
                                         <li><code>Zone:Cache Purge:Edit</code> - <?= __('清理缓存') ?></li>
                                         <li><code>Zone:Cache Rules:Read</code> - <?= __('读取缓存规则') ?></li>
                                         <li><code>Zone:Cache Rules:Edit</code> - <?= __('编辑缓存规则') ?></li>
                                     </ul>
-                                    <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
-                                        <i class="mdi mdi-open-in-new"></i> <?= __('前往Cloudflare创建Token') ?>
+                                    <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                        <w:icon name="circle" size="sm"></w:icon> <?= __('前往Cloudflare创建Token') ?>
                                     </a>
                                 </div>
                             </div>
                             <div id="credentialsConfig">
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('API Token') ?></label>
-                                    <input type="text" name="credentials[api_token]" 
-                                           id="apiTokenInput"
-                                           class="form-control" 
-                                           value="<?= htmlspecialchars($credentials['api_token'] ?? '') ?>"
-                                           placeholder="<?= __('请输入API Token') ?>">
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><?= __('API Token') ?></label>
+                                    <input type="text" name="credentials[api_token]" id="apiTokenInput" class="w-input" value="<?= htmlspecialchars($credentials['api_token'] ?? '') ?>" placeholder="<?= __('请输入API Token') ?>">
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('Account ID') ?></label>
-                                    <input type="text" name="credentials[account_id]"
-                                           class="form-control"
-                                           value="<?= htmlspecialchars($credentials['account_id'] ?? '') ?>"
-                                           placeholder="<?= __('请输入Account ID（Cloudflare）') ?>">
-                                    <small class="form-text text-muted"><?= __('Cloudflare Zone 创建需要 Account ID') ?></small>
+                                <div style="--w-mb:var(--weline-space-4);">
+                                    <label class="w-field__label"><?= __('Account ID') ?></label>
+                                    <input type="text" name="credentials[account_id]" class="w-input" value="<?= htmlspecialchars($credentials['account_id'] ?? '') ?>" placeholder="<?= __('请输入Account ID（Cloudflare）') ?>">
+                                    <small class="w-field__hint w-text" data-tone="muted"><?= __('Cloudflare Zone 创建需要 Account ID') ?></small>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label"><?= __('回源 Origin Token（只读）') ?></label>
-                                <input type="text" class="form-control" readonly
-                                       value="<?= htmlspecialchars($originToken) ?>"
-                                       placeholder="<?= __('请在 app/etc/env.php 的 server.origin_token 中配置') ?>">
-                                <small class="form-text text-muted"><?= __('CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。') ?></small>
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><?= __('回源 Origin Token（只读）') ?></label>
+                                <input type="text" class="w-input" readonly value="<?= htmlspecialchars($originToken) ?>" placeholder="<?= __('请在 app/etc/env.php 的 server.origin_token 中配置') ?>">
+                                <small class="w-field__hint w-text" data-tone="muted"><?= __('CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。') ?></small>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <label class="col-md-2 col-form-label"><?= __('默认账户') ?></label>
-                <div class="col-md-10">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="is_default" value="1" 
-                               id="isDefault" <?= ($account && $account->getData('is_default')) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="isDefault">
+            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <label class="w-field__label" style="--w-span-md:2;"><?= __('默认账户') ?></label>
+                <div style="--w-span-md:10;">
+                    <div class="w-switch">
+                        <input type="checkbox" name="is_default" value="1" id="isDefault" <?= ($account && $account->getData('is_default')) ? 'checked' : '' ?>>
+                        <label for="isDefault">
                             <?= __('设置为该适配器的默认账户') ?>
                         </label>
                     </div>
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-md-10 offset-md-2">
-                    <button type="submit" class="btn btn-primary" data-testid="cdn-account-editor-submit">
-                        <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+            <div class="w-grid">
+                <div class="offset-md-2" style="--w-span-md:10;">
+                    <button type="submit" class="w-button" data-testid="cdn-account-editor-submit" data-tone="primary">
+                        <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                     </button>
-                    <a href="@backend-url('*/backend/account/index')" class="btn btn-secondary">
-                        <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                    <a href="@backend-url('*/backend/account/index')" class="w-button" data-tone="neutral">
+                        <w:icon name="close" size="sm"></w:icon> <?= __('取消') ?>
                     </a>
                 </div>
             </div>

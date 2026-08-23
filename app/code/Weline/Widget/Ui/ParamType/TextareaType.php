@@ -26,7 +26,7 @@ class TextareaType extends AbstractParamType
         $autoResize = $param['auto_resize'] ?? false;
         $currentValue = $value ?? $this->getDefaultValue($param) ?? '';
         $inputHtml = '<div class="w-param-textarea">';
-        $textareaClass = 'w-param-input' . ($autoResize ? ' w-param-auto-resize' : '') . ($mode === 'code' ? ' w-param-code' : '');
+        $textareaClass = 'w-textarea' . ($autoResize ? ' w-param-auto-resize' : '') . ($mode === 'code' ? ' w-param-code' : '');
         $inputHtml .= '<textarea class="' . $textareaClass . '" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" rows="' . (int)$rows . '"';
         if (!empty($placeholder)) {
             $inputHtml .= ' placeholder="' . htmlspecialchars($placeholder) . '"';

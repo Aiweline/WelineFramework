@@ -169,10 +169,14 @@ class CssVariableInjector
     }
 
     /**
-     * Layout CSS is injected after the mode palettes.  Brand/status tokens can
-     * legitimately come from an explicit ThemeData configuration, but canvas,
-     * surface, text and border defaults must stay owned by light/dark palettes.
+     * Whether an explicit override token is safe to emit after mode palettes.
+     * Brand/status tokens may override; canvas/surface/text/border stay on light/dark.
      */
+    public function isLateSafeToken(string $name): bool
+    {
+        return $this->isLateSafeExplicitToken($name);
+    }
+
     private function isLateSafeExplicitToken(string $name): bool
     {
         if (!str_starts_with($name, '--color-') && !str_starts_with($name, '--backend-color-')) {

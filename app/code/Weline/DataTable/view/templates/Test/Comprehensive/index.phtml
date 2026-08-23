@@ -1,189 +1,148 @@
-<style>
-    .dt-backend-shell{max-width:1400px;margin:0 auto;padding:32px 20px 64px;display:flex;flex-direction:column;gap:24px}
-    .dt-backend-hero{display:grid;gap:18px;padding:28px;border:1px solid #d9e2f1;border-radius:24px;background:linear-gradient(135deg,#f7fafc,#eef6ff);position:relative;z-index:2}
-    .dt-backend-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-    .dt-backend-status{min-height:24px;color:#166534}
-    .dt-backend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-    .dt-backend-card{display:block;padding:20px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;color:#1f2937;text-decoration:none}
-    .dt-backend-card h3,.dt-backend-summary h3{margin:0 0 10px}
-    .dt-backend-card p,.dt-backend-summary p{margin:0;color:#526071}
-    .dt-backend-section{display:grid;gap:16px}
-    .dt-backend-section-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
-    .dt-backend-summary{padding:20px;border:1px solid #dfe7ef;border-radius:18px;background:#fff}
-    .dt-backend-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
-    .dt-backend-pill{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;background:#eef4ff;color:#274690;font-size:12px}
-    .dt-backend-code{padding:18px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;white-space:pre-wrap;word-break:break-word;pointer-events:none}
-</style>
+<?php
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+$scenarioGroups = [];
+foreach (($scenarios ?? []) as $scenario) {
+    $group = (string) ($scenario['group'] ?? __('Other'));
+    $scenarioGroups[$group][] = $scenario;
+}
+$demoConfig = json_encode([
+    'apiProvider' => 'datatable',
+    'clearConfirm' => (string) __('Clear all DataTable demo data?'),
+    'requestFailed' => (string) __('Request failed.'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+$adminConfig = json_encode([
+    'verifyUrl' => (string) ($verifyTagsUrl ?? ''),
+    'requestFailed' => (string) __('Verification request failed.'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-index-js', 'datatable-demo-admin-js']) ?>
 
-<div class="dt-backend-shell" data-testid="datatable-comprehensive-page">
-    <section class="dt-backend-hero">
-        <div>
-            <h1><?= __('DataTable Comprehensive Test') ?></h1>
-            <p><?= __('Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404.') ?></p>
+<main class="w-container w-datatable-demo__admin" data-w-datatable-admin data-testid="datatable-comprehensive-page">
+    <section class="w-card w-datatable-demo__hero">
+        <header class="w-card__header w-datatable-demo__heading">
+            <div>
+                <p class="w-datatable-demo__eyebrow"><?= __('DataTable') ?></p>
+                <h1 class="w-card__title"><?= __('DataTable Comprehensive Test') ?></h1>
+                <p><?= __('Use this backend entry to seed demo data, open every direct and alternate route, and run the complete tag verification report.') ?></p>
+            </div>
+            <div class="w-cluster" data-justify="end">
+                <a class="w-button" data-tone="neutral" href="<?= $escape($dashboardUrl ?? '') ?>"><w-icon name="arrow-left" size="sm"></w-icon><span><?= __('Back To Dashboard') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($docUrl ?? '') ?>"><w-icon name="book" size="sm"></w-icon><span><?= __('Open Documentation') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($tagTestUrl ?? '') ?>"><w-icon name="check-circle" size="sm"></w-icon><span><?= __('Open Tag Verification') ?></span></a>
+                <a class="w-button" data-tone="neutral" href="<?= $escape($frontendDemoUrl ?? '') ?>" target="_blank" rel="noreferrer"><w-icon name="external-link" size="sm"></w-icon><span><?= __('Open Frontend Demo') ?></span></a>
+            </div>
+        </header>
+        <div class="w-card__body w-stack">
+            <div class="w-cluster">
+                <button type="button" class="w-button" data-testid="backend-demo-init" data-w-demo-action="init"><w-icon name="database" size="sm"></w-icon><span><?= __('Init Demo Data') ?></span></button>
+                <button type="button" class="w-button" data-tone="danger" data-testid="backend-demo-clear" data-w-demo-action="clear"><w-icon name="trash" size="sm"></w-icon><span><?= __('Clear Demo Data') ?></span></button>
+            </div>
+            <div class="w-alert" data-tone="info" data-w-demo-status data-testid="backend-demo-status" role="status" aria-live="polite" hidden></div>
         </div>
-        <div class="dt-backend-actions">
-            <a class="btn btn-outline-secondary" href="<?= $dashboardUrl ?>"><?= __('Back To Dashboard') ?></a>
-            <a class="btn btn-outline-secondary" href="<?= $docUrl ?>"><?= __('Open Documentation') ?></a>
-            <a class="btn btn-outline-secondary" href="<?= $tagTestUrl ?>"><?= __('Open Tag Verification') ?></a>
-            <a class="btn btn-outline-secondary" href="<?= $frontendDemoUrl ?>" target="_blank" rel="noreferrer"><?= __('Open Frontend Demo') ?></a>
-        </div>
-        <div class="dt-backend-actions">
-            <button type="button" class="btn btn-primary" data-testid="backend-demo-init" data-datatable-test-action="backend-demo" data-url="<?= htmlspecialchars((string) $demoInitUrl, ENT_QUOTES, 'UTF-8') ?>"><?= __('Init Demo Data') ?></button>
-            <button type="button" class="btn btn-outline-danger" data-testid="backend-demo-clear" data-datatable-test-action="backend-demo" data-url="<?= htmlspecialchars((string) $demoClearUrl, ENT_QUOTES, 'UTF-8') ?>"><?= __('Clear Demo Data') ?></button>
-        </div>
-        <div id="backend-demo-status" class="dt-backend-status" data-testid="backend-demo-status"></div>
     </section>
 
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
-    <section class="dt-backend-grid">
-        <article class="dt-backend-summary">
-            <h3><?= __('Scenario Coverage') ?></h3>
-            <p><?= (int) ($summary['scenario_count'] ?? 0) ?> <?= __('routes available') ?></p>
-            <div class="dt-backend-pills">
-                <span class="dt-backend-pill"><?= (int) ($summary['direct_demo_count'] ?? 0) ?> <?= __('direct demos') ?></span>
-                <span class="dt-backend-pill"><?= (int) ($summary['compatibility_route_count'] ?? 0) ?> <?= __('compatibility routes') ?></span>
+    <section class="w-grid w-datatable-demo__summary" aria-label="<?= $escape(__('Coverage Summary')) ?>">
+        <article class="w-card">
+            <header class="w-card__header"><h2 class="w-card__title"><?= __('Scenario Coverage') ?></h2></header>
+            <div class="w-card__body w-stack">
+                <strong><?= (int) ($summary['scenario_count'] ?? 0) ?> <?= __('routes available') ?></strong>
+                <div class="w-cluster">
+                    <span class="w-badge" data-tone="info"><?= (int) ($summary['direct_demo_count'] ?? 0) ?> <?= __('direct demos') ?></span>
+                    <span class="w-badge" data-tone="neutral"><?= (int) ($summary['compatibility_route_count'] ?? 0) ?> <?= __('alternate routes') ?></span>
+                </div>
             </div>
         </article>
-        <article class="dt-backend-summary">
-            <h3><?= __('Model Coverage') ?></h3>
-            <p><?= (int) ($summary['model_count'] ?? 0) ?> <?= __('demo models') ?></p>
-            <div class="dt-backend-pills">
-                <?php foreach (($models ?? []) as $model): ?>
-                    <span class="dt-backend-pill"><?= htmlspecialchars((string) ($model['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                <?php endforeach; ?>
+        <article class="w-card">
+            <header class="w-card__header"><h2 class="w-card__title"><?= __('Model Coverage') ?></h2></header>
+            <div class="w-card__body w-stack">
+                <strong><?= (int) ($summary['model_count'] ?? 0) ?> <?= __('demo models') ?></strong>
+                <div class="w-cluster">
+                    <?php foreach (($models ?? []) as $model): ?>
+                        <span class="w-badge" data-tone="neutral"><?= $escape($model['label'] ?? '') ?></span>
+                    <?php endforeach; ?>
+                </div>
             </div>
         </article>
-        <article class="dt-backend-summary">
-            <h3><?= __('Documentation Coverage') ?></h3>
-            <p><?= (int) ($summary['doc_count'] ?? 0) ?> <?= __('documents linked from backend') ?></p>
-            <div class="dt-backend-pills">
-                <?php foreach (($docs ?? []) as $doc): ?>
-                    <span class="dt-backend-pill"><?= htmlspecialchars((string) ($doc['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                <?php endforeach; ?>
+        <article class="w-card">
+            <header class="w-card__header"><h2 class="w-card__title"><?= __('Documentation Coverage') ?></h2></header>
+            <div class="w-card__body w-stack">
+                <strong><?= (int) ($summary['doc_count'] ?? 0) ?> <?= __('documents linked from backend') ?></strong>
+                <div class="w-cluster">
+                    <?php foreach (($docs ?? []) as $doc): ?>
+                        <span class="w-badge" data-tone="neutral"><?= $escape($doc['title'] ?? '') ?></span>
+                    <?php endforeach; ?>
+                </div>
             </div>
         </article>
     </section>
 
-    <?php
-    $scenarioGroups = [];
-    foreach (($scenarios ?? []) as $scenario) {
-        $group = (string) ($scenario['group'] ?? __('Other'));
-        $scenarioGroups[$group][] = $scenario;
-    }
-    ?>
     <?php foreach ($scenarioGroups as $groupName => $groupScenarios): ?>
-        <section class="dt-backend-section">
-            <div>
-                <h2><?= htmlspecialchars((string) $groupName, ENT_QUOTES, 'UTF-8') ?></h2>
-                <p><?= $groupName === 'Direct demos'
-                    ? __('These routes render working DataTable demo pages directly in the backend.')
-                    : __('These routes exist to repair legacy menu links and old bookmarks without keeping the broken standalone templates.') ?></p>
+        <section class="w-stack" aria-labelledby="w-datatable-group-<?= $escape(hash('crc32b', (string) $groupName)) ?>">
+            <div class="w-datatable-demo__section-heading">
+                <div>
+                    <h2 id="w-datatable-group-<?= $escape(hash('crc32b', (string) $groupName)) ?>"><?= $escape($groupName) ?></h2>
+                    <p><?= $groupName === 'Direct demos'
+                        ? __('These routes render full DataTable demo capabilities directly in the backend.')
+                        : __('These alternate entries map to the same complete feature scenarios and remain available for existing navigation.') ?></p>
+                </div>
             </div>
-            <div class="dt-backend-grid">
+            <div class="w-grid w-datatable-demo__catalog">
                 <?php foreach ($groupScenarios as $scenario): ?>
-                    <a class="dt-backend-card" href="<?= htmlspecialchars((string) ($scenario['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-testid="scenario-link-<?= htmlspecialchars((string) ($scenario['route'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                        <h3><?= htmlspecialchars((string) ($scenario['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
-                        <p><?= htmlspecialchars((string) ($scenario['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                    <a class="w-card w-datatable-demo__link" href="<?= $escape($scenario['url'] ?? '') ?>" data-testid="scenario-link-<?= $escape($scenario['route'] ?? '') ?>">
+                        <span class="w-card__body">
+                            <span class="w-datatable-demo__link-icon"><w-icon name="table" size="md"></w-icon></span>
+                            <span>
+                                <strong><?= $escape($scenario['title'] ?? '') ?></strong>
+                                <small><?= $escape($scenario['description'] ?? '') ?></small>
+                            </span>
+                            <w-icon name="chevron-right" size="sm"></w-icon>
+                        </span>
                     </a>
                 <?php endforeach; ?>
             </div>
         </section>
     <?php endforeach; ?>
 
-    <section class="dt-backend-section">
-        <div>
-            <h2><?= __('Demo Model Relations') ?></h2>
-            <p><?= __('The demo service now exposes a fuller relation set so backend routes can seed user, order, product, profile, and address data together.') ?></p>
+    <section class="w-stack" aria-labelledby="w-datatable-relations-title">
+        <div class="w-datatable-demo__section-heading">
+            <div>
+                <h2 id="w-datatable-relations-title"><?= __('Demo Model Relations') ?></h2>
+                <p><?= __('The demo service exposes user, order, product, profile, and address data with their original relation scenarios.') ?></p>
+            </div>
         </div>
-        <div class="dt-backend-grid">
+        <div class="w-grid w-datatable-demo__catalog">
             <?php foreach (($models ?? []) as $model): ?>
-                <article class="dt-backend-summary">
-                    <h3><?= htmlspecialchars((string) ($model['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
-                    <p><code><?= htmlspecialchars((string) ($model['class'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></p>
-                    <p><?= htmlspecialchars((string) ($model['purpose'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-                    <div class="dt-backend-pills">
-                        <?php foreach (($model['relations'] ?? []) as $relation): ?>
-                            <span class="dt-backend-pill"><?= htmlspecialchars((string) $relation, ENT_QUOTES, 'UTF-8') ?></span>
-                        <?php endforeach; ?>
+                <article class="w-card">
+                    <header class="w-card__header"><h3 class="w-card__title"><?= $escape($model['label'] ?? '') ?></h3></header>
+                    <div class="w-card__body w-stack">
+                        <code class="w-datatable-demo__code-inline"><?= $escape($model['class'] ?? '') ?></code>
+                        <p><?= $escape($model['purpose'] ?? '') ?></p>
+                        <div class="w-cluster">
+                            <?php foreach (($model['relations'] ?? []) as $relation): ?>
+                                <span class="w-badge" data-tone="neutral"><?= $escape($relation) ?></span>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                 </article>
             <?php endforeach; ?>
         </div>
     </section>
 
-    <section class="dt-backend-section">
-        <div class="dt-backend-section-head">
+    <section class="w-card">
+        <header class="w-card__header w-datatable-demo__section-heading">
             <div>
-                <h2><?= __('Verification Output') ?></h2>
-                <p><?= __('Run the backend verification route here and inspect the JSON output for taglib regressions.') ?></p>
+                <h2 class="w-card__title"><?= __('Verification Output') ?></h2>
+                <p><?= __('Run the backend verification route and inspect its JSON output for Taglib regressions.') ?></p>
             </div>
-            <button type="button" class="btn btn-outline-primary" data-testid="backend-demo-verify" data-datatable-test-action="verify-backend-tags"><?= __('Run Tag Verification') ?></button>
+            <button type="button" class="w-button" data-testid="backend-demo-verify" data-w-datatable-verify><w-icon name="check-circle" size="sm"></w-icon><span><?= __('Run Tag Verification') ?></span></button>
+        </header>
+        <div class="w-card__body">
+            <pre id="backend-verify-output" class="w-datatable-demo__document" data-w-datatable-verify-output data-testid="backend-verify-output" tabindex="0"><?= $escape(__('No verification run yet.')) ?></pre>
         </div>
-        <div id="backend-verify-output" class="dt-backend-code" data-testid="backend-verify-output"><?= __('No verification run yet.') ?></div>
     </section>
-</div>
 
-<script>
-    function resolveBackendRoute(route) {
-        var normalizedRoute = String(route || '').replace(/^\/+/, '');
-        var currentPath = String(window.location && window.location.pathname || '');
-        var basePath = '<?= htmlspecialchars((string) ($backendBasePath ?? ''), ENT_QUOTES, 'UTF-8') ?>'.replace(/\/+$/, '');
-
-        if (currentPath.indexOf('/@backend') === 0) {
-            return '/@backend/' + normalizedRoute;
-        }
-
-        return basePath + '/' + normalizedRoute;
-    }
-
-    async function runBackendDemoAction(route) {
-        const status = document.getElementById('backend-demo-status');
-        status.textContent = 'Working...';
-        try {
-            const endpoint = typeof window.frontend_api === 'function' ? window.frontend_api(route) : route;
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-                credentials: 'same-origin',
-                body: JSON.stringify({})
-            });
-            const payload = await response.json();
-            status.textContent = payload.message || payload.msg || 'Done';
-        } catch (error) {
-            status.textContent = error.message || 'Request failed';
-        }
-    }
-
-    async function verifyBackendTags() {
-        const output = document.getElementById('backend-verify-output');
-        output.textContent = 'Working...';
-        try {
-            const response = await fetch(resolveBackendRoute('<?= htmlspecialchars((string) $verifyTagsUrl, ENT_QUOTES, 'UTF-8') ?>'), {
-                method: 'GET',
-                headers: {'X-Requested-With': 'XMLHttpRequest'},
-                credentials: 'same-origin'
-            });
-            const payload = await response.json();
-            output.textContent = JSON.stringify(payload, null, 2);
-        } catch (error) {
-            output.textContent = error.message || 'Verification request failed';
-        }
-    }
-
-    document.addEventListener('click', function (event) {
-        const trigger = event.target.closest('[data-datatable-test-action]');
-        if (!trigger) {
-            return;
-        }
-
-        const action = trigger.getAttribute('data-datatable-test-action');
-        if (action === 'backend-demo') {
-            event.preventDefault();
-            runBackendDemoAction(trigger.getAttribute('data-url') || '');
-        } else if (action === 'verify-backend-tags') {
-            event.preventDefault();
-            verifyBackendTags();
-        }
-    });
-</script>
+    <script type="application/json" id="w-datatable-demo-config"><?= $demoConfig ?: '{}' ?></script>
+    <script type="application/json" id="w-datatable-admin-config"><?= $adminConfig ?: '{}' ?></script>
+</main>

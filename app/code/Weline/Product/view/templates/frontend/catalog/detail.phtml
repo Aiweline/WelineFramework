@@ -11,9 +11,44 @@ $minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
 $productId = max(0, (int)($offer['product_id'] ?? 0));
 $stock = max(0, (int)($offer['stock'] ?? 0));
 $sellable = !empty($offer['sellable']);
+$quoteOnly = !empty($offer['quote_only']);
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
 $name = trim((string)($offer['name'] ?? ''));
 $image = trim((string)($offer['image'] ?? ''));
+$images = array_values(array_filter(
+    array_map(static fn(mixed $value): string => trim((string)$value), (array)($offer['images'] ?? [])),
+    static fn(string $value): bool => $value !== '',
+));
+if ($image !== '' && !in_array($image, $images, true)) {
+    array_unshift($images, $image);
+}
+$image = $images[0] ?? $image;
+$shortDescription = trim((string)($offer['short_description'] ?? ''));
+$description = trim((string)($offer['description'] ?? ''));
+$specifications = array_values(array_filter(
+    (array)($offer['specifications'] ?? []),
+    static fn(mixed $specification): bool => is_array($specification)
+        && trim((string)($specification['code'] ?? '')) !== ''
+        && trim((string)($specification['value'] ?? '')) !== '',
+));
+$specificationLabels = [
+    'product_type' => __('车型类别'),
+    'brand' => __('品牌'),
+    'series' => __('系列'),
+    'engine' => __('发动机'),
+    'displacement' => __('排量'),
+    'max_power' => __('最大功率'),
+    'max_torque' => __('最大扭矩'),
+    'dimensions' => __('整车尺寸'),
+    'seat_height' => __('座高'),
+    'ground_clearance' => __('离地间隙'),
+    'fuel_tank' => __('油箱容量'),
+    'curb_weight' => __('整备质量'),
+    'tyres' => __('轮胎'),
+];
+$specificationLabel = static function (string $code) use ($specificationLabels): string {
+    return (string)($specificationLabels[$code] ?? ucwords(str_replace('_', ' ', $code)));
+};
 ?>
 <section class="product-native-detail"
          data-testid="storefront-product-detail"
@@ -25,9 +60,23 @@ $image = trim((string)($offer['image'] ?? ''));
     <div class="product-native-detail__grid">
         <div class="product-native-detail__media">
             <?php if ($image !== ''): ?>
-                <img src="<?= $escape($image) ?>" alt="<?= $escape($name) ?>">
+                <img class="product-native-detail__primary-image"
+                     src="<?= $escape($image) ?>"
+                     alt="<?= $escape($name) ?>">
             <?php else: ?>
                 <span aria-hidden="true">FCDC</span>
+            <?php endif; ?>
+            <?php if (count($images) > 1): ?>
+                <div class="product-native-detail__thumbnails" aria-label="<?= $escape(__('商品图片')) ?>">
+                    <?php foreach ($images as $index => $galleryImage): ?>
+                        <button type="button"
+                                class="product-native-detail__thumbnail<?= $index === 0 ? ' is-active' : '' ?>"
+                                data-gallery-src="<?= $escape($galleryImage) ?>"
+                                aria-label="<?= $escape(__('查看商品图片 %{1}', [$index + 1])) ?>">
+                            <img src="<?= $escape($galleryImage) ?>" alt="">
+                        </button>
+                    <?php endforeach; ?>
+                </div>
             <?php endif; ?>
         </div>
 
@@ -35,22 +84,29 @@ $image = trim((string)($offer['image'] ?? ''));
             <p class="product-native-detail__eyebrow"><?= __('当前网站已发布车型') ?></p>
             <h1><?= $escape($name) ?></h1>
             <p class="product-native-detail__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></p>
+            <?php if ($shortDescription !== ''): ?>
+                <p class="product-native-detail__summary"><?= $escape($shortDescription) ?></p>
+            <?php endif; ?>
             <p class="product-native-detail__price">
-                <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
+                <?php if ($quoteOnly): ?>
+                    <?= __('联系询价') ?>
+                <?php else: ?>
+                    <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
+                <?php endif; ?>
             </p>
 
             <dl class="product-native-detail__facts">
                 <div>
                     <dt><?= __('库存') ?></dt>
-                    <strong><?= $stock ?></strong>
+                    <strong><?= $quoteOnly ? __('按项目确认') : $stock ?></strong>
                 </div>
                 <div>
                     <dt><?= __('销售状态') ?></dt>
-                    <strong><?= $sellable ? __('可购买') : __('暂不可售') ?></strong>
+                    <strong><?= $quoteOnly ? __('需询价') : ($sellable ? __('可购买') : __('暂不可售')) ?></strong>
                 </div>
             </dl>
 
-            <?php if (!$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
+            <?php if (!$quoteOnly && !$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
                 <p class="product-native-detail__unavailable"><?= $escape($offer['message']) ?></p>
             <?php endif; ?>
 
@@ -62,7 +118,7 @@ $image = trim((string)($offer['image'] ?? ''));
                         data-product-id="<?= $productId ?>"
                         data-global-offer-uuid="<?= $escape($offerUuid) ?>"
                         <?= $sellable && $offerUuid !== '' ? '' : 'disabled' ?>>
-                    <?= $sellable ? __('加入购物车') : __('暂不可售') ?>
+                    <?= $quoteOnly ? __('仅询价') : ($sellable ? __('加入购物车') : __('暂不可售')) ?>
                 </button>
                 <a class="product-native-detail__cart"
                    href="<?= $escape($this->getUrl('cart')) ?>"
@@ -72,19 +128,64 @@ $image = trim((string)($offer['image'] ?? ''));
             <p class="product-native-detail__message" data-testid="detail-message" aria-live="polite"></p>
         </div>
     </div>
+
+    <?php if ($description !== '' || $specifications !== []): ?>
+        <div class="product-native-detail__content-grid">
+            <?php if ($description !== ''): ?>
+                <section class="product-native-detail__description"
+                         data-testid="product-description"
+                         weline-code="product.frontend.detail.description">
+                    <p class="product-native-detail__section-kicker"><?= __('车型资料') ?></p>
+                    <h2><?= __('商品详情') ?></h2>
+                    <p><?= nl2br($escape($description), false) ?></p>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($specifications !== []): ?>
+                <section class="product-native-detail__specifications"
+                         data-testid="product-specifications"
+                         weline-code="product.frontend.detail.specifications">
+                    <p class="product-native-detail__section-kicker"><?= __('技术数据') ?></p>
+                    <h2><?= __('规格参数') ?></h2>
+                    <dl>
+                        <?php foreach ($specifications as $specification): ?>
+                            <?php
+                            $code = strtolower(trim((string)$specification['code']));
+                            $value = trim((string)$specification['value']);
+                            if ($code === 'product_type' && preg_match('/^[a-z0-9_]+$/D', $value)) {
+                                $value = ucwords(str_replace('_', ' ', $value));
+                            }
+                            ?>
+                            <div>
+                                <dt><?= $escape($specificationLabel($code)) ?></dt>
+                                <div class="product-native-detail__specification-value"><?= $escape($value) ?></div>
+                            </div>
+                        <?php endforeach; ?>
+                    </dl>
+                </section>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <w:hook name="Weline_Review::frontend::layouts::product-reviews::content"/>
 </section>
 
 <style>
     .product-native-detail { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:48px 0 72px; }
     .product-native-detail__back { display:inline-flex; align-items:center; gap:8px; margin-bottom:24px; font-weight:800; }
     .product-native-detail__grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr); border:1px solid #d1d5db; background:#fff; }
-    .product-native-detail__media { display:grid; min-height:560px; place-items:center; overflow:hidden; background:#f3f4f6; color:#9ca3af; font-size:56px; font-weight:900; }
-    .product-native-detail__media img { width:100%; height:100%; max-height:680px; object-fit:contain; }
+    .product-native-detail__media { position:relative; display:grid; min-height:560px; place-items:center; overflow:hidden; background:#f3f4f6; color:#9ca3af; font-size:56px; font-weight:900; }
+    .product-native-detail__primary-image { width:100%; height:100%; max-height:680px; object-fit:contain; }
+    .product-native-detail__thumbnails { position:absolute; right:18px; bottom:18px; left:18px; display:flex; gap:10px; overflow:auto; }
+    .product-native-detail__thumbnail { width:72px; height:58px; flex:0 0 auto; padding:4px; border:2px solid transparent; background:#fff; cursor:pointer; }
+    .product-native-detail__thumbnail.is-active { border-color:#dc2626; }
+    .product-native-detail__thumbnail img { width:100%; height:100%; object-fit:contain; }
     .product-native-detail__body { align-content:center; display:grid; gap:18px; padding:52px; }
     .product-native-detail__body h1,.product-native-detail__body p { margin:0; }
     .product-native-detail__eyebrow { color:#b91c1c; font-weight:800; text-transform:uppercase; }
     .product-native-detail__body h1 { font-size:clamp(36px,5vw,68px); line-height:1; }
     .product-native-detail__sku { color:#6b7280; }
+    .product-native-detail__summary { color:#4b5563; font-size:17px; line-height:1.7; }
     .product-native-detail__price { font-size:32px; font-weight:900; }
     .product-native-detail__facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin:8px 0 0; border-block:1px solid #d1d5db; }
     .product-native-detail__facts div { padding:16px 0; }
@@ -97,10 +198,23 @@ $image = trim((string)($offer['image'] ?? ''));
     .product-native-detail__message { min-height:26px; color:#166534; }
     .product-native-detail__message.is-error { color:#991b1b; }
     .product-native-detail__unavailable { color:#991b1b; }
+    .product-native-detail__content-grid { display:grid; grid-template-columns:minmax(0,.9fr) minmax(420px,1.1fr); gap:24px; margin-top:24px; }
+    .product-native-detail__description,.product-native-detail__specifications { padding:40px; border:1px solid #d1d5db; background:#fff; }
+    .product-native-detail__content-grid h2,.product-native-detail__content-grid p { margin:0; }
+    .product-native-detail__content-grid h2 { margin-top:8px; font-size:32px; }
+    .product-native-detail__description > p:last-child { margin-top:24px; color:#4b5563; line-height:1.8; }
+    .product-native-detail__section-kicker { color:#b91c1c; font-size:13px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+    .product-native-detail__specifications dl { margin:24px 0 0; }
+    .product-native-detail__specifications dl div { display:grid; grid-template-columns:minmax(130px,.72fr) minmax(0,1.28fr); gap:20px; padding:14px 0; border-top:1px solid #e5e7eb; }
+    .product-native-detail__specifications dt { color:#6b7280; font-weight:800; }
+    .product-native-detail__specification-value { margin:0; font-weight:700; }
     @media (max-width: 840px) {
         .product-native-detail__grid { grid-template-columns:1fr; }
         .product-native-detail__media { min-height:340px; }
         .product-native-detail__body { padding:32px 24px; }
+        .product-native-detail__content-grid { grid-template-columns:1fr; }
+        .product-native-detail__description,.product-native-detail__specifications { padding:28px 24px; }
+        .product-native-detail__specifications dl div { grid-template-columns:1fr; gap:6px; }
     }
 </style>
 
@@ -112,6 +226,16 @@ $image = trim((string)($offer['image'] ?? ''));
     const button = root.querySelector('[data-action="add-v2"]');
     const message = root.querySelector('[data-testid="detail-message"]');
     const cartLink = root.querySelector('[data-testid="view-cart"]');
+    const primaryImage = root.querySelector('.product-native-detail__primary-image');
+    root.querySelectorAll('[data-gallery-src]').forEach(function (thumbnail) {
+        thumbnail.addEventListener('click', function () {
+            if (!primaryImage) return;
+            primaryImage.src = thumbnail.dataset.gallerySrc || primaryImage.src;
+            root.querySelectorAll('[data-gallery-src]').forEach(function (item) {
+                item.classList.toggle('is-active', item === thumbnail);
+            });
+        });
+    });
     const guestTokenStorageKey = 'weline.cart.guest_token';
     let cartApi = null;
     let guestToken = '';

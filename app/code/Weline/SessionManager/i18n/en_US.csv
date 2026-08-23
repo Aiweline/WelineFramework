@@ -9,9 +9,11 @@
 当前认证会话无效。,"The current authenticated session is invalid."
 分页列出当前身份的有效登录设备。,"List active login devices for the current identity."
 下线当前身份的一个非当前设备。,"Sign out a non-current device for the current identity."
-"mdi mdi-devices","mdi mdi-devices"
+circle,circle
 管理当前后台管理员自己的登录设备,"Manage the current administrator's own login devices"
 查看与下线登录设备,"Review and sign out devices"
+系统,system
+用户与权限,"Users and permissions"
 账户安全,"Account security"
 查看当前身份仍可登录的设备，并让不再使用的设备下线。,"Review devices that can still access this identity and sign out devices you no longer use."
 仅显示本账号,"Only this account"
@@ -48,6 +50,7 @@
 当前设备请使用正常退出登录。,"Use normal sign-out on the current device."
 不支持的认证区域。,"The authentication area is not supported."
 设备不存在或不可操作。,"The device does not exist or cannot be managed."
+"mdi mdi-devices","mdi mdi-devices"
 认证设备登记失败。,"Authenticated device registration failed."
 "认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。","Authenticated device registration failed: device table is not ready. Run setup:upgrade first."
 认证设备服务不可用。,"Authenticated device service is unavailable."

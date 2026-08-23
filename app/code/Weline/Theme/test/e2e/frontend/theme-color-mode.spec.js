@@ -50,7 +50,7 @@ moduleDescribe(test, MODULE, '前台全局颜色模式', () => {
 
       await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-      await expect(page.locator('html')).toHaveAttribute('data-bs-theme', 'dark');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
       await page.evaluate(() => {
         window.__themechangeCount = 0;

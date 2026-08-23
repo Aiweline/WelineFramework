@@ -52,7 +52,7 @@ $widgetId = 'cross-sell-' . uniqid();
 
 <div class="widget-cross-sell" id="<?= $widgetId ?>">
     <h3 class="widget-title">
-        <i class="ri-links-line"></i>
+        <w:icon name="link" size="sm"></w:icon>
         <?= htmlspecialchars($title) ?>
     </h3>
     
@@ -107,8 +107,8 @@ $widgetId = 'cross-sell-' . uniqid();
             
             <?php if ($showAddAllButton): ?>
                 <button class="btn-add-all" type="button">
-                    <i class="ri-shopping-cart-2-line"></i>
-                    <?= __('全部加入购物车') ?>
+                    <w:icon name="cart" size="sm"></w:icon>
+                    <span data-cross-sell-label><?= __('全部加入购物车') ?></span>
                 </button>
             <?php endif; ?>
             <div class="cross-sell-status" role="status" aria-live="polite"></div>
@@ -324,8 +324,8 @@ $widgetId = 'cross-sell-' . uniqid();
     const totalEl = widget.querySelector('.total-price .value');
 
     function showCrossSellNotice(message, type) {
-        if (window.Weline && window.Weline.Toast && typeof window.Weline.Toast.show === 'function') {
-            window.Weline.Toast.show({ message: message, type: type || 'info' });
+        if (window.Weline && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
+            window.Weline.UI.toast.show(message, {tone: type || 'info'});
             return;
         }
         const status = widget.querySelector('.cross-sell-status');
@@ -337,12 +337,10 @@ $widgetId = 'cross-sell-' . uniqid();
         console.info(message);
     }
 
-    function setAddAllButtonState(button, iconClass, label) {
-        button.textContent = '';
-        const icon = document.createElement('i');
-        icon.className = iconClass;
-        button.appendChild(icon);
-        button.appendChild(document.createTextNode(' ' + label));
+    function setAddAllButtonState(button, state, label) {
+        button.dataset.state = state;
+        const labelNode = button.querySelector('[data-cross-sell-label]');
+        if (labelNode) labelNode.textContent = label;
     }
     
     function updateTotal() {
@@ -383,11 +381,11 @@ $widgetId = 'cross-sell-' . uniqid();
             
             // 显示成功状态
             showCrossSellNotice(crossSellMessages.added, 'success');
-            setAddAllButtonState(this, 'ri-check-line', crossSellMessages.added);
+            setAddAllButtonState(this, 'saved', crossSellMessages.added);
             this.style.background = 'var(--success-color, #28a745)';
             
             setTimeout(() => {
-                setAddAllButtonState(this, 'ri-shopping-cart-2-line', crossSellMessages.addAll);
+                setAddAllButtonState(this, 'idle', crossSellMessages.addAll);
                 this.style.background = '';
             }, 2000);
         });

@@ -2,10 +2,10 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '1.0.8',
+    "version" => '2.1.2',
     "requires" => [
         'Weline_Backend' => '*',
-        'Weline_Framework' => '*',
+        'Weline_Framework' => '>=2.5.0',
         'Weline_I18n' => '*',
         'Weline_Meta' => '*',
         'Weline_SystemConfig' => '*',
@@ -22,6 +22,8 @@ return [
         'Weline_Websites' => '*',
     ],
     "provides" => [
+        \Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface::class => \Weline\Theme\Service\Scoped\ThemeLegacyResourceAdapter::class,
+        \Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class => \Weline\Theme\Service\Scoped\ThemeScopedWorkspace::class,
         \Weline\Widget\Api\WidgetLibraryProviderInterface::class => \Weline\Theme\Integration\Widget\ThemeWidgetLibraryProvider::class,
         'theme.target_type.website' => \Weline\Theme\Integration\Websites\WebsiteTargetTypeProvider::class,
         \Weline\Websites\Api\AiWorkbench\VirtualThemeStoreInterface::class => \Weline\Theme\Integration\Websites\VirtualThemeStore::class,
@@ -32,6 +34,7 @@ return [
         \Weline\Framework\View\BackendLayoutProviderInterface::class => \Weline\Theme\Api\View\BackendLayoutProvider::class,
         \Weline\Theme\Api\Asset\StaticAssetPublisherInterface::class => \Weline\Theme\Api\Asset\StaticAssetPublisher::class,
         \Weline\Theme\Api\Layout\LayoutWorkspaceInterface::class => \Weline\Theme\Service\LayoutWorkspace::class,
+        \Weline\Theme\Api\Layout\LayoutScopeNormalizerInterface::class => \Weline\Theme\Service\ThemeLayoutScopeNormalizer::class,
         \Weline\Theme\Api\View\PreviewThemeModeResolverInterface::class => \Weline\Theme\Service\PreviewThemeModeResolver::class,
         \Weline\Theme\Api\View\ComponentMetaReaderInterface::class => \Weline\Theme\Service\ComponentMetaReader::class,
         \Weline\Framework\View\CompileStateResetterInterface::class => \Weline\Theme\Api\Runtime\CompileStateResetter::class,
@@ -39,7 +42,9 @@ return [
         'process_cache_resetter.Weline_Theme' => \Weline\Theme\Api\Runtime\ProcessCacheResetter::class,
         'resource_compiler.less' => \Weline\Theme\Console\Resource\Compiler\Less::class,
         'resource_compiler.welineModules' => \Weline\Theme\Console\Resource\Compiler\WelineModules::class,
+        'resource_compiler.welineUi' => \Weline\Theme\Console\Resource\Compiler\WelineUi::class,
         'template_cache_policy.Weline_Theme' => \Weline\Theme\Api\View\TemplateCachePolicyProvider::class,
+        'theme.layout_content_validator.widget_images' => \Weline\Theme\Service\WidgetImageContentContractValidator::class,
         'i18n.javascript_module_config.Weline_Theme' => \Weline\Theme\Api\I18n\ThemeJavascriptModuleConfigProvider::class,
     ],
 ];

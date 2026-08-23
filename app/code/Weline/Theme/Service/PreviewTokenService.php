@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Session\SessionCookieNameResolver;
 
 /**
  * 预览 Token 管理服务
@@ -32,9 +34,16 @@ class PreviewTokenService
     
     /** Token 有效期（秒）：默认 1 小时 */
     private const TOKEN_TTL = 3600;
+
+    /** Sliding renewal can never extend a bearer capability beyond this lifetime. */
+    private const TOKEN_MAX_LIFETIME = 8 * 3600;
     
     /** Cookie 有效期（秒）：默认 1 小时 */
     private const COOKIE_TTL = 3600;
+
+    private const MAX_CONTEXT_BYTES = 32768;
+    private const MAX_CONTEXT_DEPTH = 8;
+    private const MAX_CONTEXT_ENTRIES = 128;
 
     private const REQUEST_STATE_KEY = 'theme.preview_token.state.v1';
 
@@ -61,13 +70,28 @@ class PreviewTokenService
      */
     public function generateToken(int $themeId, string $pageType, ?int $versionId = null, array $context = []): string
     {
-        // 生成唯一 token：主题ID + 时间戳 + 随机数
-        $token = sprintf(
-            'pv_%d_%d_%s',
-            $themeId,
-            time(),
-            bin2hex(random_bytes(8))
+        if ($themeId < 1) {
+            throw new \InvalidArgumentException((string)__('Theme 预览主题标识无效。'));
+        }
+        $pageType = trim($pageType);
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D', $pageType) !== 1) {
+            throw new \InvalidArgumentException((string)__('Theme 预览页面类型无效。'));
+        }
+        if ($versionId !== null && $versionId < 1) {
+            throw new \InvalidArgumentException((string)__('Theme 预览版本标识无效。'));
+        }
+        unset(
+            $context['preview_token'],
+            $context[self::TOKEN_KEY],
+            $context['file_access_actor_id'],
+            $context['file_access_policy_revision'],
         );
+        $context = $this->bindAuthenticatedFileAccessActor($context);
+        $context = $this->boundedContext($context);
+
+        // 256-bit opaque capability. Identity is retained only in the protected
+        // cache payload; it is not encoded into the bearer token.
+        $token = 'pv_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         
         // 存储 token 数据
         $tokenData = [
@@ -81,7 +105,12 @@ class PreviewTokenService
         ];
         
         $cacheKey = self::CACHE_PREFIX . $token;
-        $this->cache->set($cacheKey, $tokenData, self::TOKEN_TTL);
+        if (!$this->cache->set($cacheKey, $tokenData, self::TOKEN_TTL)) {
+            // A bearer token is usable only after its capability payload is
+            // visible in the shared cache. Never return a token that another
+            // WLS Worker is guaranteed to reject.
+            throw new \RuntimeException((string)__('Theme 预览 Token 无法写入共享缓存。'));
+        }
         
         return $token;
     }
@@ -90,14 +119,15 @@ class PreviewTokenService
      * 验证 Token 有效性（含自动续期）
      * 
      * 每次验证时自动延长 Token 有效期，实现"有动作自动续期"。
-     * 若缓存未命中但 URL 传入的 token 格式正确且时间戳在有效期内，则重建并写入缓存（解决前后端/多进程缓存不一致）。
+     * 缓存未命中必须视为无效；Token 中的时间戳和主题 ID 不是授权凭据。
      * 
      * @param string $token Token 字符串
      * @return array|null Token 数据，无效返回 null
      */
     public function validateToken(string $token): ?array
     {
-        if (empty($token)) {
+        $token = trim($token);
+        if (!$this->isTokenFormatValid($token)) {
             return null;
         }
         
@@ -105,63 +135,28 @@ class PreviewTokenService
         $tokenData = $this->cache->get($cacheKey);
         
         if (is_array($tokenData)) {
+            if (!$this->isTokenPayloadValid($token, $tokenData)) {
+                $this->deleteToken($token);
+                return null;
+            }
             // 检查是否过期
             if (isset($tokenData['expires_at']) && $tokenData['expires_at'] < time()) {
                 $this->deleteToken($token);
                 return null;
             }
-            // 自动续期
-            $tokenData['expires_at'] = time() + self::TOKEN_TTL;
+            $absoluteExpiry = (int)$tokenData['created_at'] + self::TOKEN_MAX_LIFETIME;
+            if ($absoluteExpiry <= time()) {
+                $this->deleteToken($token);
+                return null;
+            }
+            // 自动续期，但不能让 bearer capability 无限存活。
+            $tokenData['expires_at'] = min(time() + self::TOKEN_TTL, $absoluteExpiry);
             $tokenData['last_activity'] = time();
             $this->cache->set($cacheKey, $tokenData, self::TOKEN_TTL);
             return $tokenData;
         }
         
-        // 缓存未命中：若 token 格式为 pv_themeId_timestamp_hex 且时间戳在有效期内，则接受并写回缓存
-        $restored = $this->restoreTokenFromUrlFormat($token);
-        if ($restored !== null) {
-            $this->cache->set($cacheKey, $restored, self::TOKEN_TTL);
-            return $restored;
-        }
-        
         return null;
-    }
-    
-    /**
-     * 从 URL 格式的 token 解析并校验（格式 + 时间戳 1 小时内），用于缓存未命中时的兜底
-     * 
-     * @param string $token 如 pv_5_1770086319_df322eb2dd5fec1e
-     * @return array|null 含 theme_id, page_type 等；无效返回 null
-     */
-    private function restoreTokenFromUrlFormat(string $token): ?array
-    {
-        if (!preg_match('/^pv_(\d+)_(\d+)_([a-f0-9]{16})$/', $token, $m)) {
-            return null;
-        }
-        $themeId = (int) $m[1];
-        $createdAt = (int) $m[2];
-        $now = time();
-        if ($createdAt > $now || ($now - $createdAt) > self::TOKEN_TTL) {
-            return null;
-        }
-        return [
-            'token' => $token,
-            'theme_id' => $themeId,
-            'page_type' => 'homepage',
-            'version_id' => null,
-            'context' => [
-                'frontend_theme_id' => $themeId,
-                'shell' => 'preview',
-                'preview_mode' => 'live',
-                'status' => 'draft',
-                'target_type' => 'layout',
-                'target_value' => 'homepage',
-                'preview_token' => $token,
-            ],
-            'created_at' => $createdAt,
-            'expires_at' => $now + self::TOKEN_TTL,
-            'last_activity' => $now,
-        ];
     }
 
     /**
@@ -172,7 +167,8 @@ class PreviewTokenService
      */
     public function deleteToken(string $token): bool
     {
-        if (empty($token)) {
+        $token = trim($token);
+        if (!$this->isTokenFormatValid($token)) {
             return false;
         }
         
@@ -190,7 +186,10 @@ class PreviewTokenService
      */
     public function setPreviewCookie(string $token): void
     {
-        Cookie::set(self::TOKEN_KEY, $token, self::COOKIE_TTL, ['path' => '/']);
+        if (!$this->isTokenFormatValid($token)) {
+            throw new \InvalidArgumentException((string)__('Theme 预览 token 无效。'));
+        }
+        Cookie::set(self::TOKEN_KEY, $token, self::COOKIE_TTL, $this->cookieOptions());
     }
 
     /**
@@ -200,8 +199,7 @@ class PreviewTokenService
      */
     public function clearPreviewCookie(): void
     {
-        // 通过设置过期时间为过去来删除 Cookie
-        Cookie::set(self::TOKEN_KEY, '', -3600, ['path' => '/']);
+        Cookie::delete(self::TOKEN_KEY, $this->cookieOptions());
     }
 
     /**
@@ -215,22 +213,21 @@ class PreviewTokenService
     {
         // 1. URL 参数（优先级最高，便于分享预览链接）
         $token = $this->request->getParam(self::TOKEN_KEY);
-        if (!empty($token)) {
-            return $token;
+        if (is_scalar($token) && $this->isTokenFormatValid((string)$token)) {
+            return trim((string)$token);
         }
         
         // 2. HTTP Header
-        $headerKey = 'HTTP_' . str_replace('-', '_', strtoupper(self::TOKEN_HEADER));
-        $token = \w_env("server.{$headerKey}", null);
-        if (!empty($token)) {
-            return $token;
+        $token = $this->request->getHeader(str_replace('-', '_', self::TOKEN_HEADER));
+        if (is_scalar($token) && $this->isTokenFormatValid((string)$token)) {
+            return trim((string)$token);
         }
 
         // 3. Cookie
         if ($allowCookie && $this->previewRequestInspector->shouldAllowPreviewTokenCookie()) {
             $token = Cookie::get(self::TOKEN_KEY);
-            if (!empty($token)) {
-                return $token;
+            if (is_scalar($token) && $this->isTokenFormatValid((string)$token)) {
+                return trim((string)$token);
             }
         }
         
@@ -379,5 +376,110 @@ class PreviewTokenService
     {
         $separator = strpos($baseUrl, '?') !== false ? '&' : '?';
         return $baseUrl . $separator . self::TOKEN_KEY . '=' . urlencode($token);
+    }
+
+    /** @return array{path:string,secure:bool,httponly:bool,samesite:string} */
+    private function cookieOptions(): array
+    {
+        $secure = $this->request->isSecure();
+        return [
+            'path' => '/',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => SessionCookieNameResolver::resolveSameSite($secure),
+        ];
+    }
+
+    private function isTokenFormatValid(string $token): bool
+    {
+        // Keep already-issued pre-2.1 tokens valid until their one-hour cache
+        // entry expires; all newly issued tokens use the 43-character branch.
+        return preg_match(
+            '/^pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})$/D',
+            trim($token),
+        ) === 1;
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function isTokenPayloadValid(string $token, array $payload): bool
+    {
+        if (!is_string($payload['token'] ?? null)
+            || !hash_equals($token, (string)$payload['token'])
+            || (int)($payload['theme_id'] ?? 0) < 1
+            || preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D', (string)($payload['page_type'] ?? '')) !== 1
+            || !is_int($payload['created_at'] ?? null)
+            || !is_int($payload['expires_at'] ?? null)
+            || (int)$payload['expires_at'] < (int)$payload['created_at']
+            || (int)$payload['created_at'] > time() + 60
+            || (int)$payload['created_at'] < time() - self::TOKEN_MAX_LIFETIME
+            || (int)$payload['expires_at'] > time() + self::TOKEN_TTL + 60
+            || (int)$payload['expires_at'] > (int)$payload['created_at'] + self::TOKEN_MAX_LIFETIME
+            || !is_array($payload['context'] ?? null)
+        ) {
+            return false;
+        }
+        try {
+            $this->boundedContext($payload['context']);
+        } catch (\Throwable) {
+            return false;
+        }
+        return true;
+    }
+
+    /** @param array<string,mixed> $context @return array<string,mixed> */
+    private function bindAuthenticatedFileAccessActor(array $context): array
+    {
+        try {
+            $user = ObjectManager::getInstance(BackendUserContextProviderInterface::class)->current();
+            if ($user !== null && $user->getIsEnabled() && $user->getId() > 0) {
+                $context['file_access_actor_id'] = $user->getId();
+                // The actor and role are resolved again on every preview request;
+                // this field is only a bounded policy-snapshot contract version.
+                $context['file_access_policy_revision'] = 1;
+            }
+        } catch (\Throwable) {
+            // A token without an authenticated actor remains valid for public
+            // content, while private FileAsset policy fails closed.
+        }
+
+        return $context;
+    }
+
+    /** @param array<string,mixed> $context @return array<string,mixed> */
+    private function boundedContext(array $context): array
+    {
+        $entries = 0;
+        $walk = function (mixed $value, int $depth) use (&$walk, &$entries): mixed {
+            if ($depth > self::MAX_CONTEXT_DEPTH || ++$entries > self::MAX_CONTEXT_ENTRIES) {
+                throw new \InvalidArgumentException((string)__('Theme 预览上下文超过上限。'));
+            }
+            if (is_array($value)) {
+                $result = [];
+                foreach ($value as $key => $item) {
+                    if ((!is_int($key) && !is_string($key))
+                        || (is_string($key) && (strlen($key) > 128 || preg_match('/[\x00-\x1F\x7F]/', $key) === 1))
+                    ) {
+                        throw new \InvalidArgumentException((string)__('Theme 预览上下文字段无效。'));
+                    }
+                    $result[$key] = $walk($item, $depth + 1);
+                }
+                return $result;
+            }
+            if (!is_scalar($value) && $value !== null) {
+                throw new \InvalidArgumentException((string)__('Theme 预览上下文值无效。'));
+            }
+            if (is_string($value)
+                && (strlen($value) > 8192 || preg_match('/\x00/', $value) === 1)
+            ) {
+                throw new \InvalidArgumentException((string)__('Theme 预览上下文值超过上限。'));
+            }
+            return $value;
+        };
+        $normalized = $walk($context, 0);
+        $encoded = json_encode($normalized, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (strlen($encoded) > self::MAX_CONTEXT_BYTES) {
+            throw new \InvalidArgumentException((string)__('Theme 预览上下文超过大小上限。'));
+        }
+        return $normalized;
     }
 }

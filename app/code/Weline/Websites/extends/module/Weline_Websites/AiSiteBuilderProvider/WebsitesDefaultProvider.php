@@ -118,7 +118,7 @@ class WebsitesDefaultProvider implements AiSiteBuilderWorkbenchProviderInterface
                     'label' => (string)__('打开快速建站'),
                     'description' => (string)__('回到 Websites 默认的一键建站入口。'),
                     'type' => 'link',
-                    'icon' => 'mdi mdi-rocket-launch-outline',
+                    'icon' => 'circle',
                     'button_class' => 'btn-primary',
                     'url' => $entryUrl,
                 ],
@@ -127,7 +127,7 @@ class WebsitesDefaultProvider implements AiSiteBuilderWorkbenchProviderInterface
                     'label' => (string)__('回到信息准备'),
                     'description' => (string)__('把当前工作区重新聚焦到域名和准备动作。'),
                     'type' => 'scope_patch',
-                    'icon' => 'mdi mdi-earth',
+                    'icon' => 'globe',
                     'button_class' => 'btn-outline-primary',
                     'stage' => 'prepare',
                     'scope_patch' => [

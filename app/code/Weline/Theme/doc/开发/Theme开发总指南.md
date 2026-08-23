@@ -6,8 +6,8 @@
 
 建议按下面顺序建立上下文，再动源码：
 
-1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
+1. `AGENTS.md`
+2. `app/code/Weline/Ai/doc/AI开发治理.md`
 3. `app/code/Weline/Theme/doc/README.md`
 4. `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
 5. `app/code/Weline/Theme/view/theme/README.md`
@@ -104,6 +104,29 @@
 - 需要把一套模板规则编译成统一输出时
 
 不要为了一个普通布局片段就创建 Taglib。能用 layout / partial / component / widget 解决的，优先不用 Taglib。
+
+### 可视化编辑器与 Weline UI 2.0
+
+Theme Editor 不是演示壳。Weline UI 迁移只统一主题 token、通用组件、浮层和编辑器 chrome，不得删除或降级布局预览、部件库、结构视图、拖拽排序、inside/before/after 插入、嵌套 slot、版本/发布、锁、AI 与配置能力。重写成本接近独立项目的拖拽、富文本等专用引擎可继续保留，但必须由 Theme 模块持有、通过适配器接入，并且不能向全局输出第三方 UI 主题。
+
+可视化拖拽固定采用双层协议：
+
+- `theme-editor.js` 创建唯一 `session_id`，持有待拖部件、候选、取消态和提交去重状态。
+- `editor-mode.js` 依据 iframe 内真实指针实时计算 `inside|before|after`、`sort_order` 与参考块，只通过 `drop-candidate` 上报。
+- 父页复用与结构视图相同的 slot accept、exclusive、multiple、max 和保存链路；iframe 不拥有最终业务判定。
+- 原生 iframe `drop` 丢失时，父页只能用同一 session 的最新短时候选兜底一次；Escape、离开边界、切换视图、刷新和 pagehide 必须清理，不得误插入或重复保存。
+- 根内容 slot 的额外高度、绿色接纳边、前后插入线与状态标签只在 `body.editor-mode` 生效；正式前台布局不受影响。
+- 每次变更同时回归结构视图和可视化视图，并在 375/768/1024/1440 下验证命中、边界、滚动、键盘取消和插入后实际渲染。
+
+### 通用浮层与移动端自适应
+
+菜单、Popover、Tooltip、Combobox、图标选择器和主题工具栏统一复用 `Weline.UI` 浮层原语。模板只声明 `data-w-component`、触发器、面板、语义 placement 与可选 `data-w-viewport-padding`，不要写 `left/top`、视口宽度补丁或独立 portal。共享内核会根据 visual viewport 与 safe area 自动翻转、限界、收缩、滚动并在缩放、滚动和旋转后重排；嵌套子层属于父层的逻辑交互区域，Escape 一次只关闭最上层并恢复焦点。移动端控件触控目标和面板宽高由 foundation 自动适配，业务主题只使用语义 token 调整视觉。
+
+右键菜单仍使用同一 `data-w-component="menu"` 契约；可用不参与 Tab 顺序的微型虚拟触发器记录点击位置，但面板必须使用 `.w-menu` / `.w-menu__item` / `.w-menu__divider` 和 `data-tone` / `data-state`，不得在业务 CSS 重复背景、边框、阴影、hover 或视口定位。
+
+### 表单控件与容器宽度
+
+Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为上限并允许在 flex/grid 中收缩；`.w-input`、`.w-select`、`.w-textarea` 默认填满可用宽度。不得依靠 modal 的 `overflow: hidden` 掩盖越界，也不要为单个页面重复添加宽度补丁。checkbox、radio、button、submit 等固有尺寸控件保持内容或组件定义的尺寸，不应用 full-width 规则。至少在普通表单、modal 和 375px 视口验证无表单控件导致的横向滚动。
 
 ### 2.6 Browser API / Theme.js
 

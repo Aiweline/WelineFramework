@@ -10,22 +10,22 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
 
 <div class="api-doc-page">
     <!-- 面包屑 -->
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="<?= $monitorUrl ?>"><?= __('服务器监控') ?></a></li>
-            <li class="breadcrumb-item active"><?= __('API 文档') ?></li>
+    <nav aria-label="breadcrumb" style="--w-mb:var(--weline-space-4);">
+        <ol class="w-breadcrumb">
+            <li class="w-breadcrumb__item"><a href="<?= $monitorUrl ?>"><?= __('服务器监控') ?></a></li>
+            <li class="w-breadcrumb__item" data-state="active"><?= __('API 文档') ?></li>
         </ol>
     </nav>
     
     <!-- 概述 -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i><?= __('概述') ?></h5>
+    <div class="w-card" style="--w-mb:var(--weline-space-6);">
+        <div class="w-card__header">
+            <h5 style="--w-mb:0;"><w:icon name="info" size="sm"></w:icon><?= __('概述') ?></h5>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <p><?= __('WLS (Weline Server) 提供了一系列内部 API 接口，用于健康检查、进程管理和调试。') ?></p>
-            <div class="alert alert-warning mb-0">
-                <i class="bi bi-exclamation-triangle me-2"></i>
+            <div class="w-alert" data-tone="warning" style="--w-mb:0;">
+                <w:icon name="warning" size="sm"></w:icon>
                 <strong><?= __('安全提示') ?>：</strong>
                 <?= __('以下接口仅允许本地访问（127.0.0.1 或 ::1），外部访问会返回 403 错误。') ?>
             </div>
@@ -34,26 +34,26 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
     
     <!-- API 分类 -->
     <?php foreach ($apiDocs as $category): ?>
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><?= $category['category'] ?></h5>
+        <div class="w-card" style="--w-mb:var(--weline-space-6);">
+            <div class="w-card__header">
+                <h5 style="--w-mb:0;"><?= $category['category'] ?></h5>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <?php foreach ($category['apis'] as $api): ?>
-                    <div class="api-item mb-4">
-                        <div class="d-flex align-items-center mb-2">
-                            <span class="badge bg-<?= strpos($api['method'], 'POST') !== false ? 'warning' : 'success' ?> me-2">
+                    <div class="api-item" style="--w-mb:var(--weline-space-6);">
+                        <div class="w-cluster" data-align="center" style="--w-mb:var(--weline-space-2);">
+                            <span class="w-badge bg-<?= strpos($api['method'], 'POST') !== false ? 'warning' : 'success' ?> me-2">
                                 <?= $api['method'] ?>
                             </span>
-                            <h6 class="mb-0"><?= $api['name'] ?></h6>
+                            <h6 style="--w-mb:0;"><?= $api['name'] ?></h6>
                         </div>
-                        <div class="mb-2">
+                        <div style="--w-mb:var(--weline-space-2);">
                             <code class="fs-6"><?= htmlspecialchars($api['path']) ?></code>
                         </div>
-                        <p class="text-muted mb-2"><?= $api['description'] ?></p>
-                        <div class="bg-dark text-light p-3 rounded">
-                            <small class="text-muted d-block mb-1"><?= __('响应示例') ?>：</small>
-                            <pre class="mb-0 text-success"><code><?= htmlspecialchars(json_encode(json_decode($api['response']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></code></pre>
+                        <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= $api['description'] ?></p>
+                        <div class="w-text" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                            <small class="w-text" data-w-display="block" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('响应示例') ?>：</small>
+                            <pre class="w-text" data-tone="success" style="--w-mb:0;"><code><?= htmlspecialchars(json_encode(json_decode($api['response']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></code></pre>
                         </div>
                     </div>
                     <?php if ($api !== end($category['apis'])): ?>
@@ -65,14 +65,14 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
     <?php endforeach; ?>
     
     <!-- 使用示例 -->
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0"><i class="bi bi-code-slash me-2"></i><?= __('使用示例') ?></h5>
+    <div class="w-card">
+        <div class="w-card__header">
+            <h5 style="--w-mb:0;"><w:icon name="code" size="sm"></w:icon><?= __('使用示例') ?></h5>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <h6><?= __('cURL 示例') ?></h6>
-            <div class="bg-dark text-light p-3 rounded mb-4">
-                <pre class="mb-0"><code class="text-info"># <?= __('健康检查') ?>
+            <div class="w-text" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+                <pre style="--w-mb:0;"><code class="w-text" data-tone="info"># <?= __('健康检查') ?>
 curl http://127.0.0.1:9981/_wls/health
 
 # <?= __('详细状态') ?>
@@ -83,8 +83,8 @@ curl -X POST http://127.0.0.1:9981/_wls/reload</code></pre>
             </div>
             
             <h6><?= __('PHP 示例') ?></h6>
-            <div class="bg-dark text-light p-3 rounded">
-                <pre class="mb-0"><code class="text-info">&lt;?php
+            <div class="w-text" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                <pre style="--w-mb:0;"><code class="w-text" data-tone="info">&lt;?php
 // <?= __('检查 WLS 是否运行') ?>
 $response = @file_get_contents('http://127.0.0.1:9981/_wls/health');
 if ($response !== false) {

@@ -31,6 +31,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <?php
                 $minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
                 $sellable = !empty($offer['sellable']);
+                $quoteOnly = !empty($offer['quote_only']);
                 $uuid = trim((string)($offer['global_offer_uuid'] ?? ''));
                 $productId = max(0, (int)($offer['product_id'] ?? 0));
                 $productName = trim((string)($offer['name'] ?? ''));
@@ -66,7 +67,11 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                         </h2>
                         <p class="product-storefront__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></p>
                         <p class="product-storefront__price">
-                            <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
+                            <?php if ($quoteOnly): ?>
+                                <?= __('联系询价') ?>
+                            <?php else: ?>
+                                <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
+                            <?php endif; ?>
                         </p>
                         <button type="button"
                                 class="product-storefront__add"
@@ -75,9 +80,9 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                                 data-product-id="<?= $productId ?>"
                                 data-global-offer-uuid="<?= $escape($uuid) ?>"
                                 <?= $sellable ? '' : 'disabled' ?>>
-                            <?= $sellable ? __('加入购物车') : __('暂不可售') ?>
+                            <?= $quoteOnly ? __('仅询价') : ($sellable ? __('加入购物车') : __('暂不可售')) ?>
                         </button>
-                        <?php if (!$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
+                        <?php if (!$quoteOnly && !$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
                             <small><?= $escape($offer['message']) ?></small>
                         <?php endif; ?>
                     </div>

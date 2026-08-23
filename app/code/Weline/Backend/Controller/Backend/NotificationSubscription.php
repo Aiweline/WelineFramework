@@ -13,7 +13,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::notification_subscription', '消息订阅', 'mdi-bell-cog', '管理消息订阅', 'Weline_Backend::notification_settings')]
+#[Acl('Weline_Backend::notification_subscription', '消息订阅', 'settings', '管理消息订阅', 'Weline_Backend::notification_settings')]
 class NotificationSubscription extends BackendController
 {
     private TopicCollector $topicCollector;
@@ -29,7 +29,7 @@ class NotificationSubscription extends BackendController
         $this->adapterCollector = ObjectManager::getInstance(ChannelAdapterCollector::class);
     }
 
-    #[Acl('Weline_Backend::notification_subscription_index', '我的订阅', 'mdi-bell', '查看我的消息订阅')]
+    #[Acl('Weline_Backend::notification_subscription_index', '我的订阅', 'bell', '查看我的消息订阅')]
     public function index(): string
     {
         $userId = (int) $this->session->getLoginUserId();
@@ -58,7 +58,7 @@ class NotificationSubscription extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Backend::notification_subscription_save', '保存订阅', 'mdi-content-save', '保存订阅设置')]
+    #[Acl('Weline_Backend::notification_subscription_save', '保存订阅', 'save', '保存订阅设置')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -100,7 +100,7 @@ class NotificationSubscription extends BackendController
         return $this->jsonSuccess(__('保存成功'));
     }
 
-    #[Acl('Weline_Backend::notification_subscription_toggle', '切换订阅', 'mdi-toggle-switch', '切换订阅状态')]
+    #[Acl('Weline_Backend::notification_subscription_toggle', '切换订阅', 'circle', '切换订阅状态')]
     public function toggle(): string
     {
         if (!$this->request->isPost()) {
@@ -144,7 +144,7 @@ class NotificationSubscription extends BackendController
     private function getAvailableChannels(): array
     {
         $channels = [
-            'backend' => ['name' => __('后台通知'), 'icon' => 'mdi-desktop-mac'],
+            'backend' => ['name' => __('后台通知'), 'icon' => 'monitor'],
         ];
 
         foreach ($this->adapterCollector->getAdapters() as $adapter) {
@@ -161,12 +161,12 @@ class NotificationSubscription extends BackendController
     private function getChannelIcon(string $channelCode): string
     {
         return match ($channelCode) {
-            'email' => 'mdi-email',
-            'feishu' => 'mdi-message',
-            'dingtalk' => 'mdi-message-text',
-            'webhook' => 'mdi-webhook',
-            'telegram' => 'mdi-telegram',
-            default => 'mdi-bell-outline',
+            'email' => 'mail',
+            'feishu' => 'message',
+            'dingtalk' => 'message',
+            'webhook' => 'circle',
+            'telegram' => 'circle',
+            default => 'bell',
         };
     }
 

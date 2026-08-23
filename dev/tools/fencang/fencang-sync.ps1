@@ -215,8 +215,8 @@ function Test-FencangFilesDiffer {
         return $true
     }
 
-    $sourceInfo = Get-Item -LiteralPath $SourceFile
-    $destinationInfo = Get-Item -LiteralPath $DestinationFile
+    $sourceInfo = Get-Item -LiteralPath $SourceFile -Force
+    $destinationInfo = Get-Item -LiteralPath $DestinationFile -Force
     if ($sourceInfo.Length -ne $destinationInfo.Length) {
         return $true
     }

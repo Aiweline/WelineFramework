@@ -31,12 +31,12 @@ $userAvatar = '';
 // 默认下拉菜单
 if (empty($dropdownItems)) {
     $dropdownItems = [
-        ['label' => __('我的账户'), 'url' => '/account', 'icon' => 'ri-user-line'],
-        ['label' => __('我的订单'), 'url' => '/customer/account/index#orders', 'icon' => 'ri-file-list-line'],
-        ['label' => __('我的收藏'), 'url' => '/account/wishlist', 'icon' => 'ri-heart-line'],
-        ['label' => __('地址管理'), 'url' => '/account/addresses', 'icon' => 'ri-map-pin-line'],
+        ['label' => __('我的账户'), 'url' => '/account', 'icon' => 'user'],
+        ['label' => __('我的订单'), 'url' => '/customer/account/index#orders', 'icon' => 'list'],
+        ['label' => __('我的收藏'), 'url' => '/account/wishlist', 'icon' => 'heart'],
+        ['label' => __('地址管理'), 'url' => '/account/addresses', 'icon' => 'pin'],
         ['type' => 'divider'],
-        ['label' => __('退出登录'), 'url' => '/account/logout', 'icon' => 'ri-logout-box-line'],
+        ['label' => __('退出登录'), 'url' => '/account/logout', 'icon' => 'box'],
     ];
 }
 ?>
@@ -51,7 +51,7 @@ if (empty($dropdownItems)) {
                         <?php if ($userAvatar): ?>
                             <img src="<?= htmlspecialchars($userAvatar) ?>" alt="<?= htmlspecialchars($userName) ?>">
                         <?php else: ?>
-                            <i class="ri-user-line"></i>
+                            <w:icon name="user" size="sm"></w:icon>
                         <?php endif; ?>
                     </span>
                 <?php endif; ?>
@@ -60,16 +60,16 @@ if (empty($dropdownItems)) {
                     <span class="account-name"><?= htmlspecialchars($userName) ?></span>
                 <?php endif; ?>
                 
-                <i class="ri-arrow-down-s-line dropdown-arrow"></i>
+                <w:icon name="arrow-down" size="sm"></w:icon>
             </a>
             
             <!-- 下拉菜单 -->
             <div class="account-dropdown">
-                <div class="dropdown-header">
+                <div class="w-menu__header">
                     <span class="welcome-text"><?= __('欢迎回来') ?></span>
                     <span class="user-name"><?= htmlspecialchars($userName) ?></span>
                 </div>
-                <ul class="dropdown-menu">
+                <ul class="w-menu" data-w-menu-panel role="menu" hidden>
                     <?php foreach ($dropdownItems as $item): ?>
                         <?php if (($item['type'] ?? '') === 'divider'): ?>
                             <li class="divider"></li>
@@ -92,7 +92,7 @@ if (empty($dropdownItems)) {
         <div class="account-guest">
             <a href="/account/login" class="account-link">
                 <span class="account-avatar">
-                    <i class="ri-user-line"></i>
+                    <w:icon name="user" size="sm"></w:icon>
                 </span>
                 <span class="account-text">
                     <span class="login-text"><?= __('登录') ?></span>

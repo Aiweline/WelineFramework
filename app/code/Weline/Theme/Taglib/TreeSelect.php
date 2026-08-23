@@ -45,6 +45,7 @@ class TreeSelect implements TaglibInterface
             'label-field' => false,     // 显示字段名，默认 'label'
             'children-field' => false,  // 子节点字段名，默认 'children'
             'placeholder' => false,     // 占位文本
+            'aria-label' => false,      // 无障碍名称
             'multiple' => false,        // 是否多选
             'checkable' => false,       // 是否显示复选框
             'check-strictly' => false,  // 父子节点是否不关联
@@ -69,7 +70,8 @@ class TreeSelect implements TaglibInterface
             $valueField = $attributes['value-field'] ?? 'value';
             $labelField = $attributes['label-field'] ?? 'label';
             $childrenField = $attributes['children-field'] ?? 'children';
-            $placeholder = $attributes['placeholder'] ?? __('请选择');
+            $placeholder = (string)__($attributes['placeholder'] ?? '请选择');
+            $ariaLabel = (string)__($attributes['aria-label'] ?? $placeholder);
             $multiple = isset($attributes['multiple']) && ($attributes['multiple'] === 'true' || $attributes['multiple'] === '1');
             $checkable = isset($attributes['checkable']) && ($attributes['checkable'] === 'true' || $attributes['checkable'] === '1');
             $checkStrictly = isset($attributes['check-strictly']) && ($attributes['check-strictly'] === 'true' || $attributes['check-strictly'] === '1');
@@ -117,6 +119,8 @@ class TreeSelect implements TaglibInterface
             $t_loading = addslashes(__('加载中...'));
             $t_clear = addslashes(__('清空'));
             $t_search = addslashes(__('搜索...'));
+            $t_expand = (string)__('展开');
+            $t_collapse = (string)__('折叠');
 
             $disabledAttr = $disabled ? 'disabled' : '';
             $requiredAttr = $required ? 'required' : '';
@@ -125,27 +129,27 @@ class TreeSelect implements TaglibInterface
             $html[] = '<?php ' . $code . ' ?>';
 
             // 组件容器
-            $html[] = '<div class="w-tree-select ' . htmlspecialchars($class) . '" id="<?= htmlspecialchars($Taglib__id) ?>_container" style="' . htmlspecialchars($style) . '" data-component="tree-select">';
+            $html[] = '<div class="w-tree-select ' . htmlspecialchars($class) . '" id="<?= htmlspecialchars($Taglib__id) ?>_container" style="' . htmlspecialchars($style) . '" data-component="tree-select" data-value="">';
             
             // 隐藏字段
             $html[] = '  <input type="hidden" id="<?= htmlspecialchars($Taglib__id) ?>_value" name="<?= htmlspecialchars($Taglib__name) ?>" value="" ' . $requiredAttr . '>';
             
             // 触发器
-            $html[] = '  <div class="w-tree-select-trigger" id="<?= htmlspecialchars($Taglib__id) ?>_trigger">';
+            $html[] = '  <div class="w-tree-select-trigger" id="<?= htmlspecialchars($Taglib__id) ?>_trigger" role="combobox" tabindex="0" aria-haspopup="tree" aria-expanded="false" aria-disabled="false" aria-controls="<?= htmlspecialchars($Taglib__id) ?>_tree" aria-label="' . htmlspecialchars($ariaLabel) . '">';
             if ($searchable) {
-                $html[] = '    <input type="text" class="w-tree-select-search" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off" ' . $disabledAttr . '>';
+                $html[] = '    <input type="text" class="w-tree-select-search" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off" role="searchbox" tabindex="-1" aria-label="' . htmlspecialchars($ariaLabel) . '" ' . $disabledAttr . '>';
             }
             $html[] = '    <div class="w-tree-select-tags" id="<?= htmlspecialchars($Taglib__id) ?>_tags"></div>';
             $html[] = '    <span class="w-tree-select-display" id="<?= htmlspecialchars($Taglib__id) ?>_display">' . htmlspecialchars($placeholder) . '</span>';
             if ($clearable) {
                 $html[] = '    <span class="w-tree-select-clear" id="<?= htmlspecialchars($Taglib__id) ?>_clear" title="' . $t_clear . '">&times;</span>';
             }
-            $html[] = '    <span class="w-tree-select-arrow">&#9662;</span>';
+            $html[] = '    <span class="w-tree-select-arrow" aria-hidden="true">&#9662;</span>';
             $html[] = '  </div>';
             
             // 下拉面板
             $html[] = '  <div class="w-tree-select-dropdown" id="<?= htmlspecialchars($Taglib__id) ?>_dropdown" style="display:none;">';
-            $html[] = '    <div class="w-tree-select-tree" id="<?= htmlspecialchars($Taglib__id) ?>_tree"></div>';
+            $html[] = '    <div class="w-tree-select-tree" id="<?= htmlspecialchars($Taglib__id) ?>_tree" role="tree" aria-label="' . htmlspecialchars($ariaLabel) . '"></div>';
             $html[] = '  </div>';
             $html[] = '</div>';
 
@@ -189,19 +193,24 @@ class TreeSelect implements TaglibInterface
             $html[] = 'const id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'const fieldName = <?= json_encode($Taglib__name) ?>;';
             $html[] = 'const apiUrl = ' . json_encode($apiUrl) . ';';
-            $html[] = 'const staticOptions = ' . json_encode($staticOptions) . ';';
-            $html[] = 'const initialValue = ' . json_encode($initialValue) . ';';
+            $html[] = 'const staticOptionsInput = <?= json_encode($Taglib__options ?? "") ?>;';
+            $html[] = 'const initialValueInput = <?= json_encode($Taglib__value ?? "") ?>;';
+            $html[] = 'const disabledInput = <?= json_encode($Taglib__disabled ?? false) ?>;';
+            $html[] = 'const staticOptions = (() => { if (Array.isArray(staticOptionsInput)) return staticOptionsInput; const raw = String(staticOptionsInput ?? "").trim(); if (!raw) return []; try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : []; } catch (error) { return []; } })();';
+            $html[] = 'const initialValue = (() => { if (Array.isArray(initialValueInput)) return initialValueInput.map(value => String(value)); const raw = String(initialValueInput ?? "").trim(); if (!raw) return []; if (raw.startsWith("[")) { try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed.map(value => String(value)) : []; } catch (error) { return []; } } return raw.split(",").map(value => value.trim()).filter(Boolean); })();';
             $html[] = 'const valueField = ' . json_encode($valueField) . ';';
             $html[] = 'const labelField = ' . json_encode($labelField) . ';';
             $html[] = 'const childrenField = ' . json_encode($childrenField) . ';';
             $html[] = 'const placeholder = ' . json_encode($placeholder) . ';';
+            $html[] = 'const expandLabel = ' . json_encode($t_expand, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+            $html[] = 'const collapseLabel = ' . json_encode($t_collapse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
             $html[] = 'const multiple = ' . ($multiple ? 'true' : 'false') . ';';
             $html[] = 'const checkable = ' . ($checkable ? 'true' : 'false') . ';';
             $html[] = 'const checkStrictly = ' . ($checkStrictly ? 'true' : 'false') . ';';
             $html[] = 'const defaultExpandAll = ' . ($defaultExpandAll ? 'true' : 'false') . ';';
             $html[] = 'const searchable = ' . ($searchable ? 'true' : 'false') . ';';
             $html[] = 'const clearable = ' . ($clearable ? 'true' : 'false') . ';';
-            $html[] = 'const disabled = ' . ($disabled ? 'true' : 'false') . ';';
+            $html[] = 'const disabled = disabledInput === true || disabledInput === 1 || ["true", "1"].includes(String(disabledInput ?? "").toLowerCase());';
 
             $html[] = <<<JS
 const container = document.getElementById(id + '_container');
@@ -214,8 +223,13 @@ const treeContainer = document.getElementById(id + '_tree');
 const clearBtn = document.getElementById(id + '_clear');
 const searchInput = document.getElementById(id + '_search');
 
-if (disabled) {
-    container.setAttribute('data-disabled', 'true');
+container.setAttribute('data-disabled', String(disabled));
+trigger.setAttribute('aria-disabled', String(disabled));
+trigger.tabIndex = disabled ? -1 : 0;
+hidden.disabled = disabled;
+if (searchInput) {
+    searchInput.disabled = disabled;
+    searchInput.tabIndex = -1;
 }
 
 let options = staticOptions || [];
@@ -235,6 +249,17 @@ function escapeAttr(text) {
 function findNodeByValue(value) {
     const target = String(value ?? '');
     return Array.from(treeContainer.querySelectorAll('.w-tree-select-node')).find(node => node.dataset.value === target) || null;
+}
+
+function setNodeExpanded(node, expanded) {
+    if (!node || node.dataset.hasChildren !== 'true') return;
+    node.classList.toggle('expanded', expanded);
+    node.setAttribute('aria-expanded', String(expanded));
+    const expand = node.querySelector(':scope > .w-tree-select-node-content .w-tree-select-node-expand');
+    if (expand) {
+        expand.setAttribute('aria-expanded', String(expanded));
+        expand.setAttribute('aria-label', expanded ? collapseLabel : expandLabel);
+    }
 }
 
 // 加载数据
@@ -284,95 +309,89 @@ function renderTree() {
 
 // 递归渲染节点
 function renderNodes(nodes, level) {
-    if (!nodes || !nodes.length) return '';
-    
+    if (!Array.isArray(nodes) || !nodes.length) return '';
+
     let html = '';
     nodes.forEach(node => {
         const val = String(node[valueField] || node.value || '');
         const lbl = String(node[labelField] || node.label || node.name || val);
-        const children = node[childrenField] || node.children || [];
+        const displayLabel = String(node.display_label || node.displayLabel || lbl);
+        const kind = String(node.kind || '');
+        const children = Array.isArray(node[childrenField] || node.children)
+            ? (node[childrenField] || node.children)
+            : [];
         const hasChildren = children.length > 0;
-        
-        const isSelected = multiple 
+        const isSelected = multiple
             ? (Array.isArray(selectedValues) && selectedValues.includes(val))
             : selectedValues === val;
-        
-        const expandedClass = defaultExpandAll ? 'expanded' : '';
+        const expanded = defaultExpandAll && hasChildren;
+        const expandedClass = expanded ? 'expanded' : '';
         const selectedClass = isSelected ? 'selected' : '';
-        
-        html += '<div class="w-tree-select-node ' + expandedClass + ' ' + selectedClass + '" data-value="' + escapeAttr(val) + '" data-label="' + escapeAttr(lbl) + '">';
-        html += '<div class="w-tree-select-node-content">';
-        
-        // 展开图标
+        const expandedAria = hasChildren ? ' aria-expanded="' + String(expanded) + '"' : '';
+
+        html += '<div class="w-tree-select-node ' + expandedClass + ' ' + selectedClass + '"'
+            + ' role="treeitem" tabindex="-1" aria-level="' + String(level + 1) + '"'
+            + ' aria-selected="' + String(isSelected) + '"' + expandedAria
+            + ' data-value="' + escapeAttr(val) + '" data-label="' + escapeAttr(lbl) + '"'
+            + ' data-display-label="' + escapeAttr(displayLabel) + '" data-kind="' + escapeAttr(kind) + '"'
+            + ' data-has-children="' + String(hasChildren) + '">';
+        html += '<div class="w-tree-select-node-content" title="' + escapeAttr(displayLabel) + '">';
+
         if (hasChildren) {
-            html += '<span class="w-tree-select-node-expand">&#9656;</span>';
+            html += '<span class="w-tree-select-node-expand" role="button" tabindex="-1"'
+                + ' aria-expanded="' + String(expanded) + '" aria-label="'
+                + escapeAttr(expanded ? collapseLabel : expandLabel) + '">&#9656;</span>';
         } else {
-            html += '<span class="w-tree-select-node-expand"></span>';
+            html += '<span class="w-tree-select-node-expand" aria-hidden="true"></span>';
         }
-        
-        // 复选框
+
         if (checkable && multiple) {
             const checked = isSelected ? 'checked' : '';
-            html += '<input type="checkbox" class="w-tree-select-node-checkbox" ' + checked + '>';
+            html += '<input type="checkbox" class="w-tree-select-node-checkbox" tabindex="-1" ' + checked + '>';
         }
-        
-        // 标签
+
         html += '<span class="w-tree-select-node-label">' + escapeHtml(lbl) + '</span>';
         html += '</div>';
-        
-        // 子节点
+
         if (hasChildren) {
-            html += '<div class="w-tree-select-node-children">';
+            html += '<div class="w-tree-select-node-children" role="group">';
             html += renderNodes(children, level + 1);
             html += '</div>';
         }
-        
+
         html += '</div>';
     });
-    
+
     return html;
 }
 
 // 绑定节点事件
 function bindNodeEvents() {
-    // 展开/折叠
     treeContainer.querySelectorAll('.w-tree-select-node-expand').forEach(el => {
         el.addEventListener('click', function(e) {
             e.stopPropagation();
             const node = this.closest('.w-tree-select-node');
-            node.classList.toggle('expanded');
+            setNodeExpanded(node, !node.classList.contains('expanded'));
         });
     });
-    
-    // 选择节点
+
     treeContainer.querySelectorAll('.w-tree-select-node-content').forEach(el => {
         el.addEventListener('click', function(e) {
-            if (e.target.classList.contains('w-tree-select-node-checkbox') || 
-                e.target.classList.contains('w-tree-select-node-expand')) {
+            if (e.target.classList.contains('w-tree-select-node-checkbox')
+                || e.target.classList.contains('w-tree-select-node-expand')) {
                 return;
             }
-            
-            const node = this.closest('.w-tree-select-node');
-            const val = node.dataset.value;
-            const lbl = node.dataset.label;
-            
-            if (multiple) {
-                toggleSelect(val, lbl, node);
-            } else {
-                selectSingle(val, lbl, node);
-            }
+            activateNode(this.closest('.w-tree-select-node'));
         });
     });
-    
-    // 复选框
+
     if (checkable && multiple) {
         treeContainer.querySelectorAll('.w-tree-select-node-checkbox').forEach(el => {
             el.addEventListener('change', function(e) {
                 e.stopPropagation();
                 const node = this.closest('.w-tree-select-node');
                 const val = node.dataset.value;
-                const lbl = node.dataset.label;
-                
+
                 if (this.checked) {
                     if (!selectedValues.includes(val)) {
                         selectedValues.push(val);
@@ -385,12 +404,11 @@ function bindNodeEvents() {
                     }
                     node.classList.remove('selected');
                 }
-                
-                // 处理父子联动
+
                 if (!checkStrictly) {
                     handleCheckRelation(node, this.checked);
                 }
-                
+
                 updateUI();
             });
         });
@@ -425,6 +443,7 @@ function selectSingle(val, lbl, node) {
     selectedValues = val;
     updateUI();
     closeDropdown();
+    trigger.focus({ preventScroll: true });
 }
 
 // 处理父子联动
@@ -453,6 +472,16 @@ function handleCheckRelation(node, checked) {
 
 // 更新UI
 function updateUI() {
+    treeContainer.querySelectorAll('.w-tree-select-node').forEach(node => {
+        const selected = multiple
+            ? (Array.isArray(selectedValues) && selectedValues.includes(node.dataset.value))
+            : selectedValues === node.dataset.value;
+        node.classList.toggle('selected', selected);
+        node.setAttribute('aria-selected', String(selected));
+        const checkbox = node.querySelector(':scope > .w-tree-select-node-content .w-tree-select-node-checkbox');
+        if (checkbox) checkbox.checked = selected;
+    });
+
     if (multiple) {
         // 多选模式
         if (selectedValues.length) {
@@ -463,7 +492,7 @@ function updateUI() {
             const labels = [];
             selectedValues.forEach(val => {
                 const node = findNodeByValue(val);
-                if (node) labels.push(node.dataset.label);
+                if (node) labels.push(node.dataset.displayLabel || node.dataset.label);
             });
             
             tagsContainer.innerHTML = labels.map((lbl, idx) => {
@@ -503,7 +532,7 @@ function updateUI() {
         if (selectedValues) {
             container.classList.add('has-value');
             const node = findNodeByValue(selectedValues);
-            display.textContent = node ? node.dataset.label : selectedValues;
+            display.textContent = node ? (node.dataset.displayLabel || node.dataset.label) : selectedValues;
             hidden.value = selectedValues;
         } else {
             container.classList.remove('has-value');
@@ -512,6 +541,7 @@ function updateUI() {
         }
     }
     
+    container.dataset.value = hidden.value;
     hidden.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
@@ -520,7 +550,7 @@ function filterTree(keyword) {
     keyword = (keyword || '').toLowerCase();
     
     treeContainer.querySelectorAll('.w-tree-select-node').forEach(node => {
-        const lbl = (node.dataset.label || '').toLowerCase();
+        const lbl = ((node.dataset.label || '') + ' ' + (node.dataset.displayLabel || '')).toLowerCase();
         const match = lbl.includes(keyword);
         
         if (keyword) {
@@ -529,7 +559,7 @@ function filterTree(keyword) {
                 // 展开父节点
                 let parent = node.parentElement.closest('.w-tree-select-node');
                 while (parent) {
-                    parent.classList.add('expanded');
+                    setNodeExpanded(parent, true);
                     parent.classList.remove('hidden');
                     parent = parent.parentElement.closest('.w-tree-select-node');
                 }
@@ -545,15 +575,31 @@ function openDropdown() {
     if (disabled) return;
     dropdown.style.display = 'block';
     container.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
     isOpen = true;
-    loadOptions();
+    loadOptions().then(() => {
+        requestAnimationFrame(() => {
+            if (searchInput) {
+                searchInput.tabIndex = 0;
+                searchInput.focus({ preventScroll: true });
+            } else {
+                focusSelectedOrFirst();
+            }
+        });
+    });
 }
 
 // 关闭下拉
 function closeDropdown() {
     dropdown.style.display = 'none';
     container.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
     isOpen = false;
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.tabIndex = -1;
+        filterTree('');
+    }
 }
 
 // 清空选择
@@ -571,6 +617,41 @@ function clearSelection() {
     updateUI();
 }
 
+function getVisibleNodes() {
+    return Array.from(treeContainer.querySelectorAll('.w-tree-select-node'))
+        .filter(node => !node.classList.contains('hidden') && node.offsetParent !== null);
+}
+
+function focusSelectedOrFirst() {
+    const nodes = getVisibleNodes();
+    const selected = nodes.find(node => node.classList.contains('selected'));
+    (selected || nodes[0] || trigger).focus({ preventScroll: true });
+}
+
+function activateNode(node) {
+    if (!node) return;
+    const val = node.dataset.value;
+    const lbl = node.dataset.displayLabel || node.dataset.label;
+    if (multiple) {
+        toggleSelect(val, lbl, node);
+    } else {
+        selectSingle(val, lbl, node);
+    }
+}
+
+function parentTreeNode(node) {
+    const group = node ? node.parentElement : null;
+    return group && group.classList.contains('w-tree-select-node-children')
+        ? group.closest('.w-tree-select-node')
+        : null;
+}
+
+function firstChildTreeNode(node) {
+    return node
+        ? node.querySelector(':scope > .w-tree-select-node-children > .w-tree-select-node:not(.hidden)')
+        : null;
+}
+
 // 事件绑定
 trigger.addEventListener('click', function(e) {
     if (disabled) return;
@@ -583,12 +664,74 @@ trigger.addEventListener('click', function(e) {
     }
 });
 
+trigger.addEventListener('keydown', function(e) {
+    if (disabled) return;
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        openDropdown();
+    } else if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        closeDropdown();
+    }
+});
+
+treeContainer.addEventListener('keydown', function(e) {
+    const node = e.target.closest('.w-tree-select-node');
+    if (!node) return;
+    const nodes = getVisibleNodes();
+    const index = nodes.indexOf(node);
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const offset = e.key === 'ArrowDown' ? 1 : -1;
+        const next = nodes[Math.max(0, Math.min(nodes.length - 1, index + offset))];
+        if (next) next.focus({ preventScroll: true });
+    } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        const next = e.key === 'Home' ? nodes[0] : nodes[nodes.length - 1];
+        if (next) next.focus({ preventScroll: true });
+    } else if (e.key === 'ArrowRight' && node.dataset.hasChildren === 'true') {
+        e.preventDefault();
+        if (!node.classList.contains('expanded')) {
+            setNodeExpanded(node, true);
+        } else {
+            const child = firstChildTreeNode(node);
+            if (child) child.focus({ preventScroll: true });
+        }
+    } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (node.dataset.hasChildren === 'true' && node.classList.contains('expanded')) {
+            setNodeExpanded(node, false);
+        } else {
+            const parent = parentTreeNode(node);
+            if (parent) parent.focus({ preventScroll: true });
+        }
+    } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        activateNode(node);
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeDropdown();
+        trigger.focus({ preventScroll: true });
+    }
+});
+
 if (searchInput) {
     searchInput.addEventListener('input', function() {
         filterTree(this.value);
     });
     searchInput.addEventListener('click', function(e) {
         e.stopPropagation();
+    });
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            focusSelectedOrFirst();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeDropdown();
+            trigger.focus({ preventScroll: true });
+        }
     });
 }
 
@@ -604,6 +747,9 @@ document.addEventListener('click', function(e) {
         closeDropdown();
     }
 });
+
+// 首屏即解析静态树和当前值，确保主要 Scope 控件不以占位符状态出现。
+loadOptions();
 JS;
             $html[] = '})();</script>';
 
@@ -644,6 +790,7 @@ JS;
     <li><code>label-field</code>：显示字段名，默认 'label'</li>
     <li><code>children-field</code>：子节点字段名，默认 'children'</li>
     <li><code>placeholder</code>：占位文本</li>
+    <li><code>aria-label</code>：无障碍名称</li>
     <li><code>multiple</code>：是否多选</li>
     <li><code>checkable</code>：是否显示复选框（多选时生效）</li>
     <li><code>check-strictly</code>：父子节点是否不关联</li>

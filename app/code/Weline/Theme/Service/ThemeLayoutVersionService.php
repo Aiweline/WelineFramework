@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
@@ -37,7 +38,7 @@ readonly class ThemeLayoutVersionService
 
     /**
      * @param array<string,mixed> $identity
-     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,store_mode?:string,storage_scope?:string}
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,locale_code:string,store_mode?:string,storage_scope?:string}
      */
     private function normalizeLayoutIdentity(array $identity = []): array
     {
@@ -61,6 +62,7 @@ readonly class ThemeLayoutVersionService
         return $query
             ->where(ThemeLayoutVersion::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
             ->where(ThemeLayoutVersion::schema_fields_SCOPE, $identity['scope'])
+            ->where(ThemeLayoutVersion::schema_fields_LOCALE_CODE, $identity['locale_code'])
             ->where(ThemeLayoutVersion::schema_fields_TARGET_TYPE, $identity['target_type'])
             ->where(ThemeLayoutVersion::schema_fields_TARGET_ID, $identity['target_id']);
     }
@@ -88,22 +90,39 @@ readonly class ThemeLayoutVersionService
         $draftData = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
         $draftData = $this->attachTranslationSnapshot($draftData);
 
-        // 2. 获取当前版本作为父版本
+        return $this->saveSnapshotVersion(
+            $themeId,
+            $pageType,
+            $draftData,
+            $name,
+            $description,
+            $userId,
+            $identity,
+        );
+    }
+
+    /** Save an already-normalized compatibility snapshot without rereading mutable draft rows. */
+    public function saveSnapshotVersion(
+        int $themeId,
+        string $pageType,
+        array $snapshotData,
+        ?string $name = null,
+        ?string $description = null,
+        ?int $userId = null,
+        array $identity = [],
+    ): ThemeLayoutVersion {
+        $identity = $this->normalizeLayoutIdentity($identity);
+
         $currentVersion = $this->getCurrentVersion($themeId, $pageType, $identity);
         $parentVersionId = $currentVersion?->getVersionId();
-
-        // 3. 获取下一个版本号
         $nextVersionNumber = $this->getNextVersionNumber($themeId, $pageType, $identity);
-
-        // 4. 取消旧版本的 is_current 标记
         $this->unsetCurrentVersion($themeId, $pageType, $identity);
 
-        // 5. 创建新版本
-        $version = $this->createVersion(
+        return $this->createVersion(
             themeId: $themeId,
             pageType: $pageType,
             versionNumber: $nextVersionNumber,
-            snapshotData: $draftData,
+            snapshotData: $snapshotData,
             type: ThemeLayoutVersion::TYPE_MANUAL,
             name: $name ?: "v{$nextVersionNumber}",
             description: $description,
@@ -113,8 +132,6 @@ readonly class ThemeLayoutVersionService
             userId: $userId,
             identity: $identity,
         );
-
-        return $version;
     }
 
     /**
@@ -125,7 +142,13 @@ readonly class ThemeLayoutVersionService
      * @param int $versionId 目标版本ID
      * @return bool
      */
-    public function switchToVersion(int $themeId, string $pageType, int $versionId, array $identity = []): bool
+    public function switchToVersion(
+        int $themeId,
+        string $pageType,
+        int $versionId,
+        array $identity = [],
+        ?array $snapshotOverride = null,
+    ): bool
     {
         $identity = $this->normalizeLayoutIdentity($identity);
         // 1. 加载目标版本
@@ -139,13 +162,14 @@ readonly class ThemeLayoutVersionService
             || $version->getPageType() !== $pageType
             || $version->getLayoutOption() !== $identity['layout_option']
             || $version->getScope() !== $identity['scope']
+            || $version->getLocaleCode() !== $identity['locale_code']
             || $version->getTargetType() !== $identity['target_type']
             || $version->getTargetId() !== $identity['target_id']) {
             return false;
         }
 
         // 2. 获取版本快照数据
-        $snapshotData = $version->getSnapshotData();
+        $snapshotData = $snapshotOverride ?? $version->getSnapshotData();
 
         // 3. 清空当前 draft
         $this->clearDraft($themeId, $pageType, $identity);
@@ -176,34 +200,45 @@ readonly class ThemeLayoutVersionService
      * @param int|null $userId 操作用户ID
      * @return array ['backup_version' => ThemeLayoutVersion, 'new_version' => ThemeLayoutVersion]
      */
-    public function restoreOriginal(int $themeId, string $pageType, ?int $userId = null, array $identity = []): array
+    public function restoreOriginal(
+        int $themeId,
+        string $pageType,
+        ?int $userId = null,
+        array $identity = [],
+        ?array $currentSnapshot = null,
+    ): array
     {
         $identity = $this->normalizeLayoutIdentity($identity);
         // 1. 获取当前版本
         $currentVersion = $this->getCurrentVersion($themeId, $pageType, $identity);
         
-        // 2. 获取当前 draft 数据
-        $currentDraftData = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
-
-        // 3. 确定备份数据来源：优先使用 draft，如果 draft 为空则使用当前版本的快照
         $backupData = null;
         $backupSource = null;
-        
-        // 检查 draft 是否有 widgets
-        $draftHasWidgets = false;
-        foreach ($currentDraftData as $area => $areaData) {
-            if (!empty($areaData['widgets'])) {
-                $draftHasWidgets = true;
-                break;
+        if ($currentSnapshot !== null) {
+            foreach ($currentSnapshot as $areaData) {
+                if (!empty($areaData['widgets'])) {
+                    $backupData = $currentSnapshot;
+                    $backupSource = 'scoped';
+                    break;
+                }
+            }
+        } else {
+            // 旧路径优先使用 draft，如果 draft 为空则使用当前版本快照。
+            $currentDraftData = $this->layoutService->getLayout(
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_DRAFT,
+                $identity,
+            );
+            foreach ($currentDraftData as $areaData) {
+                if (!empty($areaData['widgets'])) {
+                    $backupData = $currentDraftData;
+                    $backupSource = 'draft';
+                    break;
+                }
             }
         }
-        
-        if ($draftHasWidgets) {
-            // Draft 有数据，使用 draft 作为备份
-            $backupData = $currentDraftData;
-            $backupSource = 'draft';
-        } elseif ($currentVersion) {
-            // Draft 为空，但有当前版本，使用当前版本的快照作为备份
+        if ($backupData === null && $currentSnapshot === null && $currentVersion) {
             $versionSnapshot = $currentVersion->getSnapshotData();
             $versionHasWidgets = false;
             if (is_array($versionSnapshot)) {
@@ -281,18 +316,108 @@ readonly class ThemeLayoutVersionService
      * @param int|null $versionId 要发布的版本ID，null则发布当前版本
      * @return bool
      */
-    public function publishVersion(int $themeId, string $pageType, ?int $versionId = null, array $identity = []): bool
+    public function publishVersion(
+        int $themeId,
+        string $pageType,
+        ?int $versionId = null,
+        array $identity = [],
+        array $publicationContext = [],
+    ): bool
     {
-        $identity = $this->normalizeLayoutIdentity($identity);
-        // 获取要发布的版本
-        if ($versionId) {
-            $version = $this->versionModel->reset()->load($versionId);
-        } else {
-            $version = $this->getCurrentVersion($themeId, $pageType, $identity);
+        try {
+            return $this->atomicLegacyPublish(function () use (
+                $themeId,
+                $pageType,
+                $versionId,
+                $identity,
+                $publicationContext,
+            ): bool {
+                $identity = $this->normalizeLayoutIdentity($identity);
+                $version = $this->resolvePublishVersion($themeId, $pageType, $versionId, $identity);
+                if (!$version instanceof ThemeLayoutVersion) {
+                    throw new \RuntimeException((string)__('待发布的 Theme 布局版本不存在。'));
+                }
+
+                // 兼容路径：将目标版本快照写入 draft，再由旧布局服务发布。
+                // 整条路径必须位于同一写事务中；否则验证或投影失败会留下
+                // 已替换的 draft 或半完成的 published 行。
+                $snapshotData = $version->getSnapshotData();
+                $this->clearDraft($themeId, $pageType, $identity);
+                $this->restoreSnapshotToDraft($themeId, $pageType, $snapshotData, $identity);
+                $this->restoreSnapshotTranslations($snapshotData);
+                $this->clearRenderCaches();
+
+                $result = $this->layoutService->publishLayout(
+                    $themeId,
+                    $pageType,
+                    $identity,
+                    true,
+                    $publicationContext,
+                );
+                if (!$result) {
+                    throw new \RuntimeException((string)__('Theme 旧版本发布校验或投影失败。'));
+                }
+
+                $this->markPublishedVersion($themeId, $pageType, $identity, $version);
+                $this->updateStaticVersion($themeId);
+
+                return true;
+            });
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /** @template T @param callable():T $operation @return T */
+    private function atomicLegacyPublish(callable $operation): mixed
+    {
+        /** @var WriteIntentTransactionCoordinatorInterface $transactions */
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        $connection = $this->themeLayout->getConnection();
+        if ($transactions->isActive($connection)) {
+            if (!$transactions->isWriteIntent($connection)) {
+                throw new \LogicException((string)__('Theme 旧版本发布必须位于写意图事务内。'));
+            }
+            return $transactions->withSavepoint($connection, 'theme_legacy_version_publish', $operation);
         }
 
+        return $transactions->runWrite($connection, $operation);
+    }
+
+    /**
+     * Scoped Release 已成为运行时权威后，仅同步旧版本列表的发布标记。
+     *
+     * 该方法不恢复快照、不写 theme_layout published，避免完整快照反向覆盖逐路径继承结果。
+     */
+    public function markVersionPublished(
+        int $themeId,
+        string $pageType,
+        ?int $versionId = null,
+        array $identity = [],
+    ): bool {
+        $identity = $this->normalizeLayoutIdentity($identity);
+        $version = $this->resolvePublishVersion($themeId, $pageType, $versionId, $identity);
+        if (!$version instanceof ThemeLayoutVersion) {
+            return false;
+        }
+
+        $this->markPublishedVersion($themeId, $pageType, $identity, $version);
+        $this->updateStaticVersion($themeId);
+
+        return true;
+    }
+
+    /** @param array<string,mixed> $identity */
+    private function resolvePublishVersion(
+        int $themeId,
+        string $pageType,
+        ?int $versionId,
+        array $identity,
+    ): ?ThemeLayoutVersion {
+        $version = $versionId
+            ? $this->versionModel->reset()->load($versionId)
+            : $this->getCurrentVersion($themeId, $pageType, $identity);
         if (!$version || !$version->getVersionId()) {
-            // 如果没有版本，先保存当前工作区为新版本
             $version = $this->saveVersion($themeId, $pageType, null, __('发布时自动创建'), null, $identity);
         }
 
@@ -300,34 +425,24 @@ readonly class ThemeLayoutVersionService
             || $version->getPageType() !== $pageType
             || $version->getLayoutOption() !== $identity['layout_option']
             || $version->getScope() !== $identity['scope']
+            || $version->getLocaleCode() !== $identity['locale_code']
             || $version->getTargetType() !== $identity['target_type']
             || $version->getTargetId() !== $identity['target_id']) {
-            return false;
+            return null;
         }
 
-        // 1. 取消旧的 is_published 标记
+        return $version;
+    }
+
+    /** @param array<string,mixed> $identity */
+    private function markPublishedVersion(
+        int $themeId,
+        string $pageType,
+        array $identity,
+        ThemeLayoutVersion $version,
+    ): void {
         $this->unsetPublishedVersion($themeId, $pageType, $identity);
-
-        // 2. 标记当前版本为已发布
         $version->setIsPublished(true)->save();
-
-        // 2.1 发布前将目标版本快照写入 draft，确保 published 与版本记录一致
-        // （否则可能出现版本表 is_published=1，但 theme_layout published 仍是旧快照）
-        $snapshotData = $version->getSnapshotData();
-        $this->clearDraft($themeId, $pageType, $identity);
-        $this->restoreSnapshotToDraft($themeId, $pageType, $snapshotData, $identity);
-        $this->restoreSnapshotTranslations($snapshotData);
-        $this->clearRenderCaches();
-
-        // 3. 使用现有的发布逻辑（draft -> published）
-        $result = $this->layoutService->publishLayout($themeId, $pageType, $identity, true);
-        
-        // 4. 更新静态资源版本号
-        if ($result) {
-            $this->updateStaticVersion($themeId);
-        }
-
-        return $result;
     }
     
     /**
@@ -408,6 +523,7 @@ readonly class ThemeLayoutVersionService
             || (string)$version->getPageType() !== $pageType
             || $version->getLayoutOption() !== $identity['layout_option']
             || $version->getScope() !== $identity['scope']
+            || $version->getLocaleCode() !== $identity['locale_code']
             || $version->getTargetType() !== $identity['target_type']
             || $version->getTargetId() !== $identity['target_id']) {
             return null;
@@ -614,6 +730,7 @@ readonly class ThemeLayoutVersionService
             ->setPageType($pageType)
             ->setLayoutOption($identity['layout_option'])
             ->setScope($identity['scope'])
+            ->setLocaleCode($identity['locale_code'])
             ->setTargetType($identity['target_type'])
             ->setTargetId($identity['target_id'])
             ->setVersionNumber($versionNumber)
@@ -718,6 +835,7 @@ readonly class ThemeLayoutVersionService
                 ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_DRAFT)
                 ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
                 ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
                 ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id']);
 
@@ -755,6 +873,7 @@ readonly class ThemeLayoutVersionService
                     'page_type' => $pageType,
                     'layout_option' => $identity['layout_option'],
                     'scope' => $identity['scope'],
+                    'locale_code' => $identity['locale_code'],
                     'target_type' => $identity['target_type'],
                     'target_id' => $identity['target_id'],
                     'area' => $area,
@@ -762,6 +881,7 @@ readonly class ThemeLayoutVersionService
                     'widget_module' => $widget['widget_module'] ?? '',
                     'widget_type' => $widget['widget_type'] ?? '',
                     'slot_id' => $widget['slot_id'] ?? null,
+                    'node_uid' => $widget['node_uid'] ?? null,
                     'config' => $widget['config'] ?? [],
                     'sort_order' => $widget['sort_order'] ?? 0,
                     'is_active' => true,

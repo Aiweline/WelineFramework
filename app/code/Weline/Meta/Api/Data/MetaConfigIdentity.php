@@ -10,7 +10,7 @@ final readonly class MetaConfigIdentity
 
     public const NAMESPACE_MAX_CHARS = 100;
     public const CONFIG_KEY_MAX_CHARS = 255;
-    public const CONFIG_VALUE_MAX_CHARS = 255;
+    public const CONFIG_VALUE_MAX_CHARS = 65535;
     public const SCOPE_MAX_CHARS = 100;
     public const LOCALE_MAX_CHARS = 20;
     public const OWNER_MAX_CHARS = 255;

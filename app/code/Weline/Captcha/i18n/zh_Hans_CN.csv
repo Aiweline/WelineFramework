@@ -3,7 +3,7 @@
 收集人机验证允许域名,收集人机验证允许域名
 "由 Websites 等域名所有者补充 reCAPTCHA hostname 白名单，Captcha 不反向依赖业务模块。","由 Websites 等域名所有者补充 reCAPTCHA hostname 白名单，Captcha 不反向依赖业务模块。"
 "Google Captcha 查询器不支持的操作：%{1}","Google Captcha 查询器不支持的操作：%{1}"
-"Google reCAPTCHA Enterprise 授权","Google reCAPTCHA Enterprise 授权"
+"Google reCAPTCHA Enterprise 授权","Google reCAPTCHA 企业授权"
 "选择授权账户可访问的 Project，并为当前网站域名创建 Enterprise Key。","选择授权账户可访问的 Project，并为当前网站域名创建 Enterprise Key。"
 请先登录后台,请先登录后台
 "Google 授权已撤销","Google 授权已撤销"
@@ -11,26 +11,25 @@
 在后台登录页面显示验证码，允许其他模块自定义验证码显示方式。,在后台登录页面显示验证码，允许其他模块自定义验证码显示方式。
 请输入图片中的验证码,请输入图片中的验证码
 "此表单受 Google reCAPTCHA Enterprise 保护","此表单受 Google reCAPTCHA Enterprise 保护"
-"Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}","Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}"
+"Google reCAPTCHA Enterprise 验证失败：HTTP %{1} %{2}","Google reCAPTCHA Enterprise验证失败：HTTP %{1} %{2}"
 "Google reCAPTCHA Enterprise 返回了无效响应","Google reCAPTCHA Enterprise 返回了无效响应"
 "无法初始化 Google 验证请求","无法初始化 Google 验证请求"
 需要验证码验证,需要验证码验证
 验证码错误,验证码错误
 人机验证配置,人机验证配置
-"mdi mdi-shield-check","mdi mdi-shield-check"
+check,查看
 系统配置,系统配置
 "Google 授权成功","Google 授权成功"
 "Google 连接测试成功","Google 连接测试成功"
 "授权 Google reCAPTCHA Enterprise","授权 Google reCAPTCHA Enterprise"
-"mdi mdi-google","mdi mdi-google"
+circle,圆圈
 "处理 Google reCAPTCHA Enterprise 回调","处理 Google reCAPTCHA Enterprise 回调"
-"mdi mdi-login-variant","mdi mdi-login-variant"
-"选择 Google Cloud Project","选择 Google Cloud Project"
-"mdi mdi-cloud-outline","mdi mdi-cloud-outline"
+login,登录
+"选择 Google Cloud Project",选择谷歌云项目
+cloud,云
 "测试 Google reCAPTCHA Enterprise 连接","测试 Google reCAPTCHA Enterprise 连接"
-"mdi mdi-connection","mdi mdi-connection"
+link,关联
 "撤销 Google reCAPTCHA Enterprise 授权","撤销 Google reCAPTCHA Enterprise 授权"
-"mdi mdi-link-off","mdi mdi-link-off"
 "撤销 Google 授权","撤销 Google 授权"
 "此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。","此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。"
 确认撤销授权,确认撤销授权
@@ -38,20 +37,20 @@
 "正在撤销 Google 授权…","正在撤销 Google 授权…"
 "选择后将为当前配置范围的网站域名创建并绑定 reCAPTCHA Enterprise Key。","选择后将为当前配置范围的网站域名创建并绑定 reCAPTCHA Enterprise Key。"
 返回人机验证配置,返回人机验证配置
-"Google Cloud Project","Google Cloud Project"
+"Google Cloud Project",谷歌云项目
 "正在加载可访问的 Project…","正在加载可访问的 Project…"
 "创建并绑定 Enterprise Key","创建并绑定 Enterprise Key"
-"请选择 Project","请选择 Project"
+"请选择 Project",请选择项目
 "当前账户没有可访问的 Project","当前账户没有可访问的 Project"
 "正在创建并绑定 Enterprise Key…","正在创建并绑定 Enterprise Key…"
 "Google Project 已绑定","Google Project 已绑定"
 "请先在统一配置中心填写 Google OAuth Client ID","请先在统一配置中心填写 Google OAuth Client ID"
 "Google 授权状态无效或已过期，请重新发起授权","Google 授权状态无效或已过期，请重新发起授权"
 "Google 授权回调缺少授权码","Google 授权回调缺少授权码"
-"Google OAuth 未返回 Access Token","Google OAuth 未返回 Access Token"
+"Google OAuth 未返回 Access Token","Google OAuth 未返回 访问令牌"
 "Google 授权成功，并已为当前网站创建 reCAPTCHA Enterprise Key","Google 授权成功，并已为当前网站创建 reCAPTCHA Enterprise Key"
 "Google 授权已过期，请重新授权","Google 授权已过期，请重新授权"
-"Google Project ID 无效","Google Project ID 无效"
+"Google Project ID 无效","Google 项目 ID 无效"
 "当前授权账户无权访问所选 Google Project","当前授权账户无权访问所选 Google Project"
 "Google Project 已绑定，但 Enterprise Key 创建失败","Google Project 已绑定，但 Enterprise Key 创建失败"
 "Google Project 与当前网站域名已绑定","Google Project 与当前网站域名已绑定"
@@ -62,7 +61,14 @@
 "Google OAuth 请求失败：HTTP %{1} %{2}","Google OAuth 请求失败：HTTP %{1} %{2}"
 验证码提供者未注册：%{1},验证码提供者未注册：%{1}
 "不支持的验证码类型: %{1}","不支持的验证码类型: %{1}"
+"mdi mdi-shield-check","mdi mdi 屏蔽检查"
+"mdi mdi-google","mdi mdi-google"
+"mdi mdi-login-variant","mdi mdi 登录变体"
+"mdi mdi-cloud-outline","mdi mdi-cloud-outline"
+"mdi mdi-connection","mdi mdi-connection"
+"mdi mdi-link-off","mdi mdi-link-off"
 当前表单要求人机验证，但验证码模块已关闭,当前表单要求人机验证，但验证码模块已关闭
 "Google reCAPTCHA Enterprise 已启用但配置不完整","Google reCAPTCHA Enterprise 已启用但配置不完整"
 "人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。","人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。"
 未启用或配置不完整时使用本地图形验证码；完整启用后远端失败会拒绝提交，不会静默降级。,未启用或配置不完整时使用本地图形验证码；完整启用后远端失败会拒绝提交，不会静默降级。
+验证码配置,验证码配置

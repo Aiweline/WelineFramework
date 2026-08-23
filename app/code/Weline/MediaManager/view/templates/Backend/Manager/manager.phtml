@@ -1,67 +1,73 @@
-<notempty name="is_iframe">
 <css>Weline_MediaManager::css/backend-theme-vars.css</css>
-<script>(function(){var d=document.documentElement,p='{{$theme_preference|default:"system"}}';if(['system','light','dark'].indexOf(p)<0)p='system';var q=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var applyFallback=function(){var m=p==='dark'||(p==='system'&&q&&q.matches)?'dark':'light';d.setAttribute('data-theme-area','backend');d.setAttribute('data-theme-preference',p);d.setAttribute('data-theme',m);d.setAttribute('data-bs-theme',m);d.setAttribute('data-theme-mode',m);d.setAttribute('data-layout-mode',m);d.style.colorScheme=m;};applyFallback();document.addEventListener('DOMContentLoaded',function(){var runtime=window.__WelineBackendThemeRuntime;if(runtime&&typeof runtime.apply==='function'){runtime.apply(p);return;}if(p==='system'&&q){if(q.addEventListener)q.addEventListener('change',applyFallback);else if(q.addListener)q.addListener(applyFallback);}}, {once:true});})();</script>
+<notempty name="is_iframe">
+<script>(function(){var d=document.documentElement,p='{{$theme_preference|default:"system"}}';if(['system','light','dark'].indexOf(p)<0)p='system';var q=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var applyFallback=function(){var m=p==='dark'||(p==='system'&&q&&q.matches)?'dark':'light';d.setAttribute('data-w-area','backend');d.setAttribute('data-theme-preference',p);d.setAttribute('data-theme',m);d.style.colorScheme=m;};applyFallback();document.addEventListener('DOMContentLoaded',function(){var runtime=window.__WelineBackendThemeRuntime;if(runtime&&typeof runtime.apply==='function'){runtime.apply(p);return;}if(p==='system'&&q){if(q.addEventListener)q.addEventListener('change',applyFallback);else if(q.addListener)q.addListener(applyFallback);}}, {once:true});})();</script>
 </notempty>
 <css>Weline_MediaManager::css/manager.css</css>
 <js>Weline_MediaManager::js/manager.js</js>
 
 <div class="mmf-wrap<notempty name="is_iframe"> mmf-iframe-mode</notempty>">
+    <div class="mmf-chrome-backdrop" data-mmf-chrome-backdrop hidden aria-hidden="true"></div>
     <!-- 侧边树 -->
-    <div class="mmf-sidebar">
-        <div class="mmf-storage-selector">
-            <label class="mmf-storage-label"><lang>Storage</lang></label>
-            <select class="mmf-storage-select" id="mmf-storage-select">
-                <option value="local" selected><lang>Local Storage</lang></option>
-            </select>
+    <div class="mmf-sidebar" id="mmf-sidebar" data-mmf-sidebar>
+        <div class="mmf-sidebar-head">
+            <div class="mmf-storage-selector">
+                <label class="mmf-storage-label"><lang>Storage</lang></label>
+                <select class="mmf-storage-select" id="mmf-storage-select">
+                    <option value="local::filesystem::media" selected><lang>Local Storage</lang></option>
+                </select>
+            </div>
+            <button type="button" class="mmf-chrome-close" data-mmf-close-sidebar aria-label="@lang{关闭}">&times;</button>
         </div>
         <div class="mmf-sidebar-title"><lang>Folders</lang></div>
-        <ul class="mmf-tree"></ul>
+        <ul class="mmf-tree" role="tree"></ul>
     </div>
 
     <!-- 主区域 -->
     <div class="mmf-main">
         <!-- 工具栏 -->
         <div class="mmf-toolbar">
-            <button class="mmf-btn mmf-btn-primary" id="mmf-btn-upload" title="Upload">
+            <button type="button" class="mmf-btn mmf-btn-chrome" id="mmf-btn-folders" data-mmf-toggle-sidebar title="@lang{目录}" aria-expanded="false" aria-controls="mmf-sidebar">
+                &#x1F4C1; <lang>目录</lang>
+            </button>
+            <button type="button" class="mmf-btn mmf-btn-primary" id="mmf-btn-upload" title="@lang{Upload}">
                 &#x2B06; <lang>Upload</lang>
             </button>
-            <button class="mmf-btn" id="mmf-btn-newfolder" title="New Folder">
+            <button type="button" class="mmf-btn" id="mmf-btn-newfolder" title="@lang{New Folder}">
                 &#x1F4C1; <lang>New Folder</lang>
             </button>
             <span class="mmf-toolbar-sep"></span>
-            <button class="mmf-btn" id="mmf-btn-rename" title="Rename">
+            <button type="button" class="mmf-btn" id="mmf-btn-rename" title="@lang{Rename}">
                 &#x270F;&#xFE0F; <lang>Rename</lang>
             </button>
-            <button class="mmf-btn" id="mmf-btn-download" title="Download">
+            <button type="button" class="mmf-btn" id="mmf-btn-download" title="@lang{Download}">
                 &#x1F4E5; <lang>Download</lang>
             </button>
-            <button class="mmf-btn mmf-btn-danger" id="mmf-btn-delete" title="Delete">
+            <button type="button" class="mmf-btn mmf-btn-danger" id="mmf-btn-delete" title="@lang{Delete}">
                 &#x1F5D1;&#xFE0F; <lang>Delete</lang>
             </button>
             <span class="mmf-toolbar-sep"></span>
-            <button class="mmf-btn" id="mmf-btn-refresh" title="Refresh">
+            <button type="button" class="mmf-btn" id="mmf-btn-refresh" title="@lang{Refresh}">
                 &#x1F504; <lang>Refresh</lang>
             </button>
-            <button class="mmf-btn mmf-btn-ai" id="mmf-btn-ai-draw" title="AI Draw">
+            <button type="button" class="mmf-btn mmf-btn-ai" id="mmf-btn-ai-draw" title="@lang{AI 作图}">
                 &#x2728; <lang>AI 作图</lang>
             </button>
-            <notempty name="is_iframe">
-            <button class="mmf-btn mmf-btn-primary" id="mmf-btn-select" title="Select" style="margin-left:auto;">
+            <button type="button" class="mmf-btn mmf-btn-primary mmf-iframe-confirm" id="mmf-btn-select" title="@lang{Select}">
                 &#x2714; <lang>Select</lang>
             </button>
-            </notempty>
         </div>
         <div class="mmf-path"></div>
 
-        <!-- 上传区 -->
-        <div class="mmf-upload-drop"><lang>Drop files here to upload</lang></div>
-        <div class="mmf-upload-progress">
+        <!-- 上传进度与无障碍状态 -->
+        <div class="mmf-upload-progress" role="progressbar" aria-label="@lang{文件上传进度}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-hidden="true">
             <div class="mmf-progress-bar-wrap"><div class="mmf-progress-bar"></div></div>
             <div class="mmf-progress-text">0%</div>
         </div>
+        <div class="mmf-interaction-status mmf-sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
         <!-- 文件列表 -->
         <div class="mmf-content">
+            <div class="mmf-upload-drop" aria-hidden="true"><lang>松开即可上传到当前文件夹</lang></div>
             <div class="mmf-grid" style="display:none;"></div>
             <div class="mmf-loading"><span class="mmf-spinner"></span><lang>Loading...</lang></div>
         </div>
@@ -72,57 +78,50 @@
             <span class="mmf-status-size"></span>
         </div>
         
-        <notempty name="is_iframe">
         <!-- iframe 模式下的多选工具栏 -->
         <div class="mmf-select-bar" id="mmf-select-bar" style="display:none;">
             <div class="mmf-select-bar-left">
                 <span class="mmf-select-count"><lang>已选择</lang> <span id="mmf-select-count-num">0</span> <lang>个文件</lang></span>
             </div>
             <div class="mmf-select-bar-right">
-                <button class="mmf-btn" id="mmf-btn-clear-select"><lang>取消全选</lang></button>
-                <button class="mmf-btn" id="mmf-btn-invert-select"><lang>反选</lang></button>
-                <button class="mmf-btn" id="mmf-btn-cancel"><lang>取消</lang></button>
-                <button class="mmf-btn mmf-btn-primary" id="mmf-btn-confirm-select"><lang>确认选择</lang></button>
+                <button type="button" class="mmf-btn" id="mmf-btn-clear-select"><lang>取消全选</lang></button>
+                <button type="button" class="mmf-btn" id="mmf-btn-invert-select"><lang>反选</lang></button>
+                <button type="button" class="mmf-btn" id="mmf-btn-cancel"><lang>取消</lang></button>
+                <button type="button" class="mmf-btn mmf-btn-primary" id="mmf-btn-confirm-select"><lang>确认选择</lang></button>
             </div>
         </div>
-        </notempty>
     </div>
 
     <!-- 右侧预览面板 -->
-    <div class="mmf-preview">
-        <div class="mmf-preview-title"><lang>Preview</lang></div>
+    <div class="mmf-preview" id="mmf-preview" data-mmf-preview>
+        <div class="mmf-preview-title">
+            <span><lang>文件详情</lang></span>
+            <button type="button" class="mmf-chrome-close" data-mmf-close-preview aria-label="@lang{关闭}">&times;</button>
+        </div>
         <div class="mmf-preview-content">
             <div class="mmf-preview-empty">
                 <span class="mmf-preview-empty-icon">&#x1F5BC;&#xFE0F;</span>
                 <span><lang>Select a file to preview</lang></span>
             </div>
             <div class="mmf-preview-image" style="display:none;">
-                <img class="mmf-preview-img" src="" alt="">
+                <img class="mmf-preview-img" alt="">
             </div>
             <div class="mmf-preview-info" style="display:none;">
-                <div class="mmf-preview-name"></div>
-                <div class="mmf-preview-meta">
-                    <div class="mmf-preview-meta-item">
-                        <span class="mmf-preview-meta-label"><lang>Type</lang></span>
-                        <span class="mmf-preview-meta-value mmf-preview-type"></span>
-                    </div>
-                    <div class="mmf-preview-meta-item">
-                        <span class="mmf-preview-meta-label"><lang>Size</lang></span>
-                        <span class="mmf-preview-meta-value mmf-preview-size"></span>
-                    </div>
-                    <div class="mmf-preview-meta-item mmf-preview-dimensions-row" style="display:none;">
-                        <span class="mmf-preview-meta-label"><lang>Dimensions</lang></span>
-                        <span class="mmf-preview-meta-value mmf-preview-dimensions"></span>
-                    </div>
+                <div class="mmf-preview-info-scroll">
+                    <div class="mmf-preview-name"></div>
+                    <dl class="mmf-preview-meta" data-mmf-preview-meta></dl>
                 </div>
                 <div class="mmf-preview-actions">
-                    <button class="mmf-btn mmf-btn-ai mmf-preview-btn-ai-edit" title="AI Edit" style="display:none;">
+                    <button type="button" class="mmf-btn mmf-preview-btn-details" title="@lang{查看详情}">
+                        &#x2139;&#xFE0F; <lang>查看详情</lang>
+                    </button>
+                    <button type="button" class="mmf-btn mmf-btn-ai mmf-preview-btn-ai-edit" title="@lang{AI 修图}" style="display:none;">
                         &#x2728; <lang>AI 修图</lang>
                     </button>
-                    <button class="mmf-btn mmf-btn-primary mmf-preview-btn-open" title="Open/Preview">
+                    <button type="button" class="mmf-btn mmf-btn-primary mmf-preview-btn-open" title="@lang{预览}">
                         &#x1F50D; <lang>Preview</lang>
                     </button>
-                    <button class="mmf-btn mmf-preview-btn-download" title="Download">
+                    <button type="button" class="mmf-btn mmf-preview-btn-download" title="@lang{Download}">
                         &#x1F4E5; <lang>Download</lang>
                     </button>
                 </div>
@@ -132,18 +131,61 @@
 </div>
 
 <!-- 右键菜单 -->
-<div class="mmf-context-menu"></div>
+<div class="mmf-context-menu-root w-menu-root"
+     data-mmf-context-menu-root
+     data-w-component="menu"
+     data-w-placement="bottom-start"
+     data-w-anchor-mode="element">
+    <button type="button"
+            class="mmf-context-menu-anchor"
+            data-w-menu-trigger
+            tabindex="-1"
+            aria-hidden="true"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="mmf-context-menu"></button>
+    <div id="mmf-context-menu"
+         class="mmf-context-menu w-menu"
+         data-w-menu-panel
+         data-w-viewport-padding="8"
+         data-state="closed"
+         role="menu" aria-hidden="true" hidden></div>
+</div>
 
 <!-- 对话框 -->
-<div class="mmf-dialog-overlay">
-    <div class="mmf-dialog">
-        <div class="mmf-dialog-title"></div>
-        <input type="text" class="mmf-dialog-input">
+<div class="mmf-dialog-overlay" aria-hidden="true">
+    <div class="mmf-dialog" role="dialog" aria-modal="true" aria-labelledby="mmf-dialog-title">
+        <div class="mmf-dialog-title" id="mmf-dialog-title"></div>
+        <div class="mmf-dialog-message" hidden></div>
+        <input type="text" class="mmf-dialog-input" autocomplete="off">
         <div class="mmf-dialog-actions">
-            <button class="mmf-btn mmf-dialog-cancel"><lang>Cancel</lang></button>
-            <button class="mmf-btn mmf-btn-primary mmf-dialog-ok"><lang>OK</lang></button>
+            <button type="button" class="mmf-btn mmf-dialog-cancel"><lang>Cancel</lang></button>
+            <button type="button" class="mmf-btn mmf-btn-primary mmf-dialog-ok"><lang>OK</lang></button>
         </div>
     </div>
+</div>
+
+<!-- 文件元数据详情 -->
+<div class="mmf-details-overlay" aria-hidden="true">
+    <section class="mmf-details-dialog" role="dialog" aria-modal="true" aria-labelledby="mmf-details-title">
+        <header class="mmf-details-header">
+            <div>
+                <div class="mmf-details-eyebrow"><lang>文件元数据</lang></div>
+                <h2 class="mmf-details-title" id="mmf-details-title"></h2>
+            </div>
+            <button type="button" class="mmf-details-close" aria-label="@lang{关闭}">&times;</button>
+        </header>
+        <div class="mmf-details-body">
+            <div class="mmf-details-visual" hidden>
+                <img class="mmf-details-image" alt="">
+            </div>
+            <dl class="mmf-details-list" data-mmf-details-list></dl>
+        </div>
+        <footer class="mmf-details-actions">
+            <button type="button" class="mmf-btn mmf-details-edit" style="display:none;"><lang>编辑资源翻译信息</lang></button>
+            <button type="button" class="mmf-btn mmf-btn-primary mmf-details-done"><lang>关闭</lang></button>
+        </footer>
+    </section>
 </div>
 
 <!-- AI 作图弹窗 -->
@@ -213,7 +255,7 @@
                     <div class="mmf-ai-ref-label"><lang>参考图</lang></div>
                     <div class="mmf-ai-ref-preview" id="mmf-ai-ref-preview">
                         <div class="mmf-ai-ref-empty" id="mmf-ai-ref-empty"><lang>请从左侧列表选择一张图片作为参考</lang></div>
-                        <img class="mmf-ai-ref-img" id="mmf-ai-ref-img" src="" alt="" style="display:none;">
+                        <img class="mmf-ai-ref-img" id="mmf-ai-ref-img" alt="" style="display:none;">
                         <div class="mmf-ai-ref-name" id="mmf-ai-ref-name"></div>
                         <button type="button" class="mmf-btn mmf-btn-ghost mmf-ai-ref-preview-btn" id="mmf-ai-ref-preview-btn" style="display:none;"><lang>放大预览</lang></button>
                     </div>
@@ -228,7 +270,7 @@
                         <div class="mmf-ai-spinner" aria-hidden="true"></div>
                         <div class="mmf-ai-loading-text" id="mmf-ai-loading-text"><lang>正在生成…</lang></div>
                     </div>
-                    <img class="mmf-ai-preview-img" id="mmf-ai-preview-img" src="" alt="" style="display:none;">
+                    <img class="mmf-ai-preview-img" id="mmf-ai-preview-img" alt="" style="display:none;">
                     <div class="mmf-ai-preview-grid" id="mmf-ai-preview-grid"></div>
                 </div>
                 <div class="mmf-ai-progress" id="mmf-ai-progress"></div>
@@ -259,6 +301,12 @@
         </div>
         <label class="mmf-ai-field-label"><lang>文件名</lang></label>
         <input type="text" class="mmf-ai-save-filename" id="mmf-ai-save-filename">
+        <label class="mmf-ai-field-label" for="mmf-ai-save-alt"><lang>默认 Alt（必填）</lang></label>
+        <input type="text" class="mmf-ai-save-metadata" id="mmf-ai-save-alt" required>
+        <label class="mmf-ai-field-label" for="mmf-ai-save-description"><lang>资源描述（必填）</lang></label>
+        <textarea class="mmf-ai-save-metadata" id="mmf-ai-save-description" rows="3" required></textarea>
+        <label class="mmf-ai-field-label" for="mmf-ai-save-caption"><lang>默认 Caption（可选）</lang></label>
+        <input type="text" class="mmf-ai-save-metadata" id="mmf-ai-save-caption">
         <div class="mmf-ai-save-error" id="mmf-ai-save-error" role="alert" style="display:none;"></div>
         <div class="mmf-ai-save-actions">
             <button type="button" class="mmf-btn" id="mmf-ai-save-cancel"><lang>取消</lang></button>
@@ -272,12 +320,12 @@
     <div class="mmf-lightbox-header">
         <span class="mmf-lightbox-title"></span>
         <span class="mmf-lightbox-counter"></span>
-        <button class="mmf-lightbox-close" title="Close">&times;</button>
+        <button type="button" class="mmf-lightbox-close" title="@lang{关闭}" aria-label="@lang{关闭}">&times;</button>
     </div>
     <div class="mmf-lightbox-main">
-        <button class="mmf-lightbox-nav mmf-lightbox-prev" title="Previous">&#10094;</button>
-        <img class="mmf-lightbox-img" src="" alt="">
-        <button class="mmf-lightbox-nav mmf-lightbox-next" title="Next">&#10095;</button>
+        <button type="button" class="mmf-lightbox-nav mmf-lightbox-prev" title="@lang{上一张}" aria-label="@lang{上一张}">&#10094;</button>
+        <img class="mmf-lightbox-img" alt="">
+        <button type="button" class="mmf-lightbox-nav mmf-lightbox-next" title="@lang{下一张}" aria-label="@lang{下一张}">&#10095;</button>
     </div>
     <div class="mmf-lightbox-thumbs"></div>
 </div>
@@ -285,116 +333,235 @@
 <!-- 隐藏上传 input -->
 <input type="file" id="mmf-file-input" multiple style="display:none">
 
+<?php
+$mmfJsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+$mmfJson = static function (mixed $value) use ($mmfJsonFlags): string {
+    $encoded = json_encode((string)($value ?? ''), $mmfJsonFlags);
+    return is_string($encoded) ? $encoded : '""';
+};
+$mmfBool = static fn (mixed $value): bool => in_array(
+    strtolower(trim((string)$value)),
+    ['1', 'true'],
+    true,
+);
+$mmfSize = filter_var($this->getData('size'), FILTER_VALIDATE_INT, [
+    'options' => ['min_range' => 1],
+]);
+$mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
+?>
 <script>
-        document.addEventListener('DOMContentLoaded', function () {
-        WelineMediaManager.init('{{$connector_url}}', '{{$start_path|default:""}}', {
-            isIframe: '{{$is_iframe|default:"0"}}' === '1' || '{{$is_iframe|default:"0"}}' === 'true',
-            aiDrawStreamUrl: '{{$ai_draw_stream_url|default:""}}',
-            aiDrawSaveUrl: '{{$ai_draw_save_url|default:""}}',
-            aiDrawConfigUrl: '{{$ai_draw_config_url|default:""}}',
-            aiDrawPreviewUrl: '{{$ai_draw_preview_url|default:""}}',
-            target: '{{$target|default:""}}',
-            multi: '{{$multi|default:"0"}}' === '1' || '{{$multi|default:"0"}}' === 'true',
-            ext: '{{$ext|default:"*"}}',
-            size: parseInt('{{$size|default:"102400"}}') || 102400,
-            lockPath: '{{$lock_path|default:"0"}}' === '1' || '{{$lock_path|default:"0"}}' === 'true',
-            initialValue: '{{$initial_value|default:""}}',
-            themePreference: '{{$theme_preference|default:"system"}}',
-            themeMode: '{{$theme_mode|default:"light"}}',
+    document.addEventListener('DOMContentLoaded', function () {
+        WelineMediaManager.init(
+            <?= $mmfJson($this->getData('connector_url')) ?>,
+            <?= $mmfJson($this->getData('start_path')) ?>,
+            {
+            isIframe: <?= $mmfBool($this->getData('is_iframe')) ? 'true' : 'false' ?>,
+            aiDrawStreamUrl: <?= $mmfJson($this->getData('ai_draw_stream_url')) ?>,
+            aiDrawSaveUrl: <?= $mmfJson($this->getData('ai_draw_save_url')) ?>,
+            aiDrawConfigUrl: <?= $mmfJson($this->getData('ai_draw_config_url')) ?>,
+            aiDrawPreviewUrl: <?= $mmfJson($this->getData('ai_draw_preview_url')) ?>,
+            target: <?= $mmfJson($this->getData('target')) ?>,
+            multi: <?= $mmfBool($this->getData('multi')) ? 'true' : 'false' ?>,
+            ext: <?= $mmfJson($this->getData('ext') ?: '*') ?>,
+            size: <?= (int)$mmfSize ?>,
+            lockPath: <?= $mmfBool($this->getData('lock_path')) ? 'true' : 'false' ?>,
+            initialValue: <?= $mmfJson($this->getData('initial_value')) ?>,
+            themePreference: <?= $mmfJson($this->getData('theme_preference') ?: 'system') ?>,
+            themeMode: <?= $mmfJson($this->getData('theme_mode') ?: 'light') ?>,
+            localeCode: <?= $mmfJson($this->getData('locale_code') ?: 'zh_Hans_CN') ?>,
+            connectorFormKey: <?= $mmfJson($this->getData('connector_form_key')) ?>,
+            requireImageUsage: <?= $mmfBool($this->getData('require_image_usage')) ? 'true' : 'false' ?>,
             i18n: {
-                connectorNotConfigured: '@lang{连接器URL未配置，请刷新页面}',
-                requestTimeout: '@lang{请求超时，服务器可能繁忙}',
-                invalidJson: '@lang{响应JSON格式无效}',
-                networkError: '@lang{网络错误}',
-                invalidResponse: '@lang{响应无效}',
-                itemsCount: '@lang{%{count} 个项目}',
-                selectedCount: '@lang{已选择 %{count} 个}',
-                selectOneToRename: '@lang{请选择一个项目进行重命名}',
-                noItemsSelected: '@lang{未选择任何项目}',
-                pleaseSelectFile: '@lang{请至少选择一个文件}',
-                pleaseSelectValidFiles: '@lang{请选择有效的文件（非文件夹）}',
-                confirmDelete: '@lang{确定删除 %{count} 个项目？}',
-                deleted: '@lang{删除成功}',
-                renamed: '@lang{重命名成功}',
-                uploadComplete: '@lang{上传完成}',
-                folderCreated: '@lang{文件夹已创建}',
-                fileSizeExceeded: '@lang{文件 "%{name}" 超过大小限制（最大：%{size}）}',
-                fileTypeNotAllowed: '@lang{文件类型 "%{ext}" 不允许。允许的类型：%{allowed}}',
-                cannotAccessOutsidePath: '@lang{不能访问指定路径以外的目录}',
-                folder: '@lang{文件夹}',
-                unknown: '@lang{未知}',
-                newFolder: '@lang{新建文件夹}',
-                folderName: '@lang{文件夹名称}',
-                untitled: '@lang{未命名}',
-                rename: '@lang{重命名}',
-                newName: '@lang{新名称}',
-                confirm: '@lang{确认}',
-                noFiles: '@lang{暂无文件}',
-                loading: '@lang{加载中...}',
-                preview: '@lang{预览}',
-                open: '@lang{打开}',
-                download: '@lang{下载}',
-                copyUrl: '@lang{复制URL}',
-                urlCopied: '@lang{链接已复制到剪贴板}',
-                copyUrlFailed: '@lang{复制失败，请手动复制}',
-                delete: '@lang{删除}',
-                exitSelectionMode: '@lang{退出选择模式}',
-                clearSelection: '@lang{清除选择}',
-                confirmSelection: '@lang{确认选择}',
-                selectionMode: '@lang{选择模式}',
-                selectFiles: '@lang{选择文件}',
-                invertSelection: '@lang{反选}',
-                uploadWaitDir: '@lang{请等待当前目录加载完成后再上传}',
-                aiDraw: '@lang{AI 作图}',
-                aiEdit: '@lang{AI 修图}',
-                aiTabText2Image: '@lang{文生图}',
-                aiTabImage2Image: '@lang{图生图}',
-                aiTabBatch: '@lang{批量生成}',
-                aiPrompt: '@lang{提示词}',
-                aiPromptClear: '@lang{清空}',
-                aiPromptPolish: '@lang{AI 润色}',
-                aiPromptPolishing: '@lang{正在润色…}',
-                aiPromptPolishDone: '@lang{润色完成}',
-                aiPromptPolishFailed: '@lang{润色失败}',
-                aiGenerate: '@lang{开始生成}',
-                aiContinue: '@lang{继续修图}',
-                aiSave: '@lang{保存}',
-                aiSaveTitle: '@lang{保存图片}',
-                aiOverwrite: '@lang{覆盖原图}',
-                aiSaveAs: '@lang{另存为新文件}',
-                aiConfirmSave: '@lang{确认保存}',
-                aiGenerating: '@lang{正在生成…}',
-                aiSaved: '@lang{图片保存成功}',
-                aiSaving: '@lang{正在保存…}',
-                aiSaveFailed: '@lang{保存失败}',
-                aiSaveSessionMissing: '@lang{会话已失效，请重新生成后再保存}',
-                aiSaveFilenameRequired: '@lang{请输入文件名}',
-                aiNoPrompt: '@lang{请输入提示词}',
-                aiCloseConfirm: '@lang{有未保存的生成结果，确定关闭吗？}',
-                aiCloseRunningConfirm: '@lang{有任务正在生成，确定要关闭吗？关闭将中断当前任务。}',
-                aiRunningHint: '@lang{生成中}',
-                aiGenerateSuccess: '@lang{生成完成}',
-                aiGenerateFailed: '@lang{生成失败}',
-                aiStreamDisconnected: '@lang{连接已断开，生成未完成。请检查 AI 供应商网络、代理或模型配置后重试}',
-                aiHistoryLabel: '@lang{本轮对话}',
-                aiClose: '@lang{关闭}',
-                aiReference: '@lang{参考图}',
-                aiTargetDir: '@lang{保存目录}',
-                aiPreviewEmpty: '@lang{生成结果将显示在这里}',
-                aiPromptPlaceholder: '@lang{描述你想生成的画面，例如：一只可爱的卡通仓鼠，简约插画风格}',
-                aiPreviewParseFailed: '@lang{预览数据解析失败，请重试}',
-                aiPreviewLoadFailed: '@lang{预览图片加载失败，请重试}',
-                aiMockModeHint: '@lang{当前为 Mock 模式（WELINE_MEDIA_AI_DRAW_MOCK），不会调用真实 AI 模型}',
-                aiModelNotReady: '@lang{文生图模型未就绪，请先在 AI 场景管理中绑定模型}',
-                aiModelLabel: '@lang{当前模型：}',
-                aiNoReference: '@lang{请从当前目录选择一张参考图}',
-                aiRefPickerLabel: '@lang{当前目录图片}',
-                aiRefSearchPlaceholder: '@lang{搜索文件名…}',
-                aiRefNoMatch: '@lang{没有匹配的图片}',
-                aiRefEmpty: '@lang{请从左侧列表选择一张图片作为参考}',
-                aiOutputLabel: '@lang{生成结果}',
-                aiRefDirEmpty: '@lang{当前目录暂无图片，请先上传或切换到包含图片的文件夹}',
-                aiRefPreview: '@lang{放大预览}'
+                connectorNotConfigured: <?= $mmfJson(__('连接器URL未配置，请刷新页面')) ?>,
+                requestTimeout: <?= $mmfJson(__('请求超时，服务器可能繁忙')) ?>,
+                invalidJson: <?= $mmfJson(__('响应JSON格式无效')) ?>,
+                networkError: <?= $mmfJson(__('网络错误')) ?>,
+                crossOriginUploadRejected: <?= $mmfJson(__('仅允许向当前后台域名上传文件。')) ?>,
+                uploadSecurityTokenMissing: <?= $mmfJson(__('上传安全令牌缺失，请刷新页面后重试。')) ?>,
+                uploadCancelled: <?= $mmfJson(__('上传已取消。')) ?>,
+                uploadRequestTooLarge: <?= $mmfJson(__('上传请求超过服务器允许的大小，请减少文件数量或大小后重试。')) ?>,
+                uploadResponseMismatch: <?= $mmfJson(__('上传响应与请求文件数量不一致，请刷新目录确认结果。')) ?>,
+                uploadHashUnavailable: <?= $mmfJson(__('当前浏览器无法计算安全的分块校验值，请升级浏览器后重试。')) ?>,
+                uploadSessionInvalid: <?= $mmfJson(__('分块上传会话响应无效。')) ?>,
+                uploadSessionProgressMismatch: <?= $mmfJson(__('分块上传进度与服务端不一致，请重新上传。')) ?>,
+                backendApiUnavailable: <?= $mmfJson(__('后台 Worker API 尚未就绪，请刷新后重试')) ?>,
+                storageCatalogEmpty: <?= $mmfJson(__('未配置可用的存储源')) ?>,
+                storageCatalogUnavailable: <?= $mmfJson(__('存储源清单不可用，请稍后重试')) ?>,
+                defaultStorageUnavailable: <?= $mmfJson(__('默认存储源当前不可用，未回退到其他磁盘')) ?>,
+                invalidResponse: <?= $mmfJson(__('响应无效')) ?>,
+                itemsCount: <?= $mmfJson(__('%{count} 个项目')) ?>,
+                selectedCount: <?= $mmfJson(__('已选择 %{count} 个')) ?>,
+                selectOneToRename: <?= $mmfJson(__('请选择一个项目进行重命名')) ?>,
+                noItemsSelected: <?= $mmfJson(__('未选择任何项目')) ?>,
+                pleaseSelectFile: <?= $mmfJson(__('请至少选择一个文件')) ?>,
+                pleaseSelectValidFiles: <?= $mmfJson(__('请选择有效的文件（非文件夹）')) ?>,
+                assetMetadataRequired: <?= $mmfJson(__('该资源尚未建立可选的文件实体，或当前语言的名称、alt、描述尚未审核。')) ?>,
+                imageAltConfirmTitle: <?= $mmfJson(__('确认页面图片 Alt')) ?>,
+                imageAltConfirmPrompt: <?= $mmfJson(__('请确认“%{name}”在当前页面语境中的替代文本。该文本会作为页面语言快照保存。')) ?>,
+                imageAltRequired: <?= $mmfJson(__('信息图片必须填写并确认 Alt 文本。')) ?>,
+                imageSemanticTitle: <?= $mmfJson(__('确认页面图片语义')) ?>,
+                imageSemanticPrompt: <?= $mmfJson(__('请选择“%{name}”在当前页面中的用途。装饰图片会明确保存 decorative=true 并输出空 alt。')) ?>,
+                imageSemanticInformation: <?= $mmfJson(__('信息图片（需要 Alt）')) ?>,
+                imageSemanticDecorative: <?= $mmfJson(__('装饰图片（输出空 Alt）')) ?>,
+                imageSemanticRequired: <?= $mmfJson(__('必须明确选择图片是信息内容还是装饰内容。')) ?>,
+                confirmDelete: <?= $mmfJson(__('确定删除 %{count} 个项目？')) ?>,
+                confirmDeleteDirectory: <?= $mmfJson(__('确定删除文件夹“%{name}”及其中的全部内容？此操作不可撤销。')) ?>,
+                deleted: <?= $mmfJson(__('删除成功')) ?>,
+                renamed: <?= $mmfJson(__('重命名成功')) ?>,
+                uploadComplete: <?= $mmfJson(__('上传完成')) ?>,
+                uploadStarted: <?= $mmfJson(__('正在上传 %{count} 个文件')) ?>,
+                uploadInProgress: <?= $mmfJson(__('已有文件正在上传，请等待完成')) ?>,
+                pasteUploadStarted: <?= $mmfJson(__('已从剪贴板读取 %{count} 个文件，正在上传')) ?>,
+                dropUploadHint: <?= $mmfJson(__('松开即可上传到当前文件夹')) ?>,
+                dropUploadFolderHint: <?= $mmfJson(__('松开即可上传到文件夹“%{name}”')) ?>,
+                moveFolderHint: <?= $mmfJson(__('松开即可将所选文件移动到文件夹“%{name}”')) ?>,
+                moveStarted: <?= $mmfJson(__('正在移动 %{count} 个文件')) ?>,
+                moveComplete: <?= $mmfJson(__('已将 %{count} 个文件移入目标文件夹')) ?>,
+                moveNoEligible: <?= $mmfJson(__('请选择可移动的普通文件')) ?>,
+                moveSameFolder: <?= $mmfJson(__('文件已位于目标文件夹')) ?>,
+                moveTargetMissing: <?= $mmfJson(__('目标文件夹不存在')) ?>,
+                folderCreated: <?= $mmfJson(__('文件夹已创建')) ?>,
+                fileSizeExceeded: <?= $mmfJson(__('文件 "%{name}" 超过大小限制（最大：%{size}）')) ?>,
+                fileCountExceeded: <?= $mmfJson(__('一次最多上传 %{count} 个文件')) ?>,
+                fileTypeNotAllowed: <?= $mmfJson(__('文件类型 "%{ext}" 不允许。允许的类型：%{allowed}')) ?>,
+                fileReadFailed: <?= $mmfJson(__('无法读取文件“%{name}”')) ?>,
+                cannotAccessOutsidePath: <?= $mmfJson(__('不能访问指定路径以外的目录')) ?>,
+                folder: <?= $mmfJson(__('文件夹')) ?>,
+                unknown: <?= $mmfJson(__('未知')) ?>,
+                newFolder: <?= $mmfJson(__('新建文件夹')) ?>,
+                folderName: <?= $mmfJson(__('文件夹名称')) ?>,
+                untitled: <?= $mmfJson(__('未命名')) ?>,
+                rename: <?= $mmfJson(__('重命名')) ?>,
+                newName: <?= $mmfJson(__('新名称')) ?>,
+                confirm: <?= $mmfJson(__('确认')) ?>,
+                noFiles: <?= $mmfJson(__('暂无文件')) ?>,
+                loading: <?= $mmfJson(__('加载中...')) ?>,
+                preview: <?= $mmfJson(__('预览')) ?>,
+                open: <?= $mmfJson(__('打开')) ?>,
+                download: <?= $mmfJson(__('下载')) ?>,
+                copyUrl: <?= $mmfJson(__('复制URL')) ?>,
+                viewDetails: <?= $mmfJson(__('查看详情')) ?>,
+                fileDetails: <?= $mmfJson(__('文件详情')) ?>,
+                folders: <?= $mmfJson(__('目录')) ?>,
+                close: <?= $mmfJson(__('关闭')) ?>,
+                editAssetMetadata: <?= $mmfJson(__('编辑资源翻译信息')) ?>,
+                urlCopied: <?= $mmfJson(__('链接已复制到剪贴板')) ?>,
+                copyUrlFailed: <?= $mmfJson(__('复制失败，请手动复制')) ?>,
+                delete: <?= $mmfJson(__('删除')) ?>,
+                directoryActions: <?= $mmfJson(__('%{name} 的文件夹操作')) ?>,
+                fileActions: <?= $mmfJson(__('%{name} 的文件操作')) ?>,
+                providerActionUnsupported: <?= $mmfJson(__('当前存储提供者不支持此操作')) ?>,
+                exitSelectionMode: <?= $mmfJson(__('退出选择模式')) ?>,
+                clearSelection: <?= $mmfJson(__('清除选择')) ?>,
+                confirmSelection: <?= $mmfJson(__('确认选择')) ?>,
+                selectionMode: <?= $mmfJson(__('选择模式')) ?>,
+                selectFiles: <?= $mmfJson(__('选择文件')) ?>,
+                invertSelection: <?= $mmfJson(__('反选')) ?>,
+                uploadWaitDir: <?= $mmfJson(__('请等待当前目录加载完成后再上传')) ?>,
+                uploadAltPrompt: <?= $mmfJson(__('请填写这些资源在当前语言下的默认 alt；具体页面仍需再次确认。')) ?>,
+                uploadAltPromptForFile: <?= $mmfJson(__('请填写“%{name}”在当前语言下的默认 alt；具体页面仍需再次确认。')) ?>,
+                uploadAltLabel: <?= $mmfJson(__('默认 alt（必填）')) ?>,
+                uploadDescriptionPrompt: <?= $mmfJson(__('请填写资源描述，用于检索和编辑提示。')) ?>,
+                uploadDescriptionPromptForFile: <?= $mmfJson(__('请填写“%{name}”的资源描述，用于检索和编辑提示。')) ?>,
+                uploadDescriptionLabel: <?= $mmfJson(__('资源描述（必填）')) ?>,
+                uploadMetadataRequired: <?= $mmfJson(__('上传前必须填写默认 alt 和资源描述')) ?>,
+                assetMetadataMissing: <?= $mmfJson(__('当前文件尚未建立可编辑的资源实体')) ?>,
+                assetMetadataEditorUnavailable: <?= $mmfJson(__('资源信息编辑器尚未就绪')) ?>,
+                assetDisplayNamePrompt: <?= $mmfJson(__('请填写当前语言下的资源名称。')) ?>,
+                assetDisplayNameLabel: <?= $mmfJson(__('资源名称')) ?>,
+                assetDefaultAltPrompt: <?= $mmfJson(__('请填写当前语言下的默认 alt。页面使用时仍需确认语境 alt。')) ?>,
+                assetDefaultAltLabel: <?= $mmfJson(__('默认 alt')) ?>,
+                assetDescriptionPrompt: <?= $mmfJson(__('请填写当前语言下的资源描述，用于检索和编辑提示。')) ?>,
+                assetDescriptionLabel: <?= $mmfJson(__('资源描述')) ?>,
+                assetDefaultCaptionPrompt: <?= $mmfJson(__('请填写当前语言下的默认说明文字（可选）。')) ?>,
+                assetDefaultCaptionLabel: <?= $mmfJson(__('默认说明文字（可选）')) ?>,
+                assetMetadataSaved: <?= $mmfJson(__('资源翻译信息已保存并审核')) ?>,
+                assetMetadataSaveFailed: <?= $mmfJson(__('资源翻译信息保存失败')) ?>,
+                metadataType: <?= $mmfJson(__('类型')) ?>,
+                metadataSize: <?= $mmfJson(__('大小')) ?>,
+                metadataPath: <?= $mmfJson(__('路径')) ?>,
+                metadataDimensions: <?= $mmfJson(__('尺寸')) ?>,
+                metadataModifiedAt: <?= $mmfJson(__('文件修改时间')) ?>,
+                metadataAssetId: <?= $mmfJson(__('资源 ID')) ?>,
+                metadataDisk: <?= $mmfJson(__('存储磁盘')) ?>,
+                metadataObjectKey: <?= $mmfJson(__('对象键')) ?>,
+                metadataOriginalName: <?= $mmfJson(__('原始文件名')) ?>,
+                metadataLifecycle: <?= $mmfJson(__('生命周期')) ?>,
+                metadataVisibility: <?= $mmfJson(__('可见性')) ?>,
+                metadataRevision: <?= $mmfJson(__('修订版本')) ?>,
+                metadataChecksum: <?= $mmfJson(__('SHA-256 校验和')) ?>,
+                metadataDefaultLocale: <?= $mmfJson(__('默认语言')) ?>,
+                metadataLocale: <?= $mmfJson(__('当前语言')) ?>,
+                metadataDisplayName: <?= $mmfJson(__('显示名称')) ?>,
+                metadataAlt: <?= $mmfJson(__('默认 Alt')) ?>,
+                metadataDescription: <?= $mmfJson(__('资源描述')) ?>,
+                metadataCaption: <?= $mmfJson(__('默认说明文字')) ?>,
+                metadataTranslationState: <?= $mmfJson(__('翻译状态')) ?>,
+                metadataTranslationOrigin: <?= $mmfJson(__('翻译来源')) ?>,
+                metadataSelectable: <?= $mmfJson(__('可选择')) ?>,
+                metadataCreatedAt: <?= $mmfJson(__('创建时间')) ?>,
+                metadataUpdatedAt: <?= $mmfJson(__('更新时间')) ?>,
+                metadataAssetStatus: <?= $mmfJson(__('资源状态')) ?>,
+                assetUnregistered: <?= $mmfJson(__('尚未建立 FileAsset；可预览但不可用于发布')) ?>,
+                ready: <?= $mmfJson(__('已就绪')) ?>,
+                draft: <?= $mmfJson(__('草稿')) ?>,
+                yes: <?= $mmfJson(__('是')) ?>,
+                no: <?= $mmfJson(__('否')) ?>,
+                continue: <?= $mmfJson(__('继续')) ?>,
+                save: <?= $mmfJson(__('保存')) ?>,
+                aiDraw: <?= $mmfJson(__('AI 作图')) ?>,
+                aiEdit: <?= $mmfJson(__('AI 修图')) ?>,
+                aiTabText2Image: <?= $mmfJson(__('文生图')) ?>,
+                aiTabImage2Image: <?= $mmfJson(__('图生图')) ?>,
+                aiTabBatch: <?= $mmfJson(__('批量生成')) ?>,
+                aiPrompt: <?= $mmfJson(__('提示词')) ?>,
+                aiPromptClear: <?= $mmfJson(__('清空')) ?>,
+                aiPromptPolish: <?= $mmfJson(__('AI 润色')) ?>,
+                aiPromptPolishing: <?= $mmfJson(__('正在润色…')) ?>,
+                aiPromptPolishDone: <?= $mmfJson(__('润色完成')) ?>,
+                aiPromptPolishFailed: <?= $mmfJson(__('润色失败')) ?>,
+                aiGenerate: <?= $mmfJson(__('开始生成')) ?>,
+                aiContinue: <?= $mmfJson(__('继续修图')) ?>,
+                aiSave: <?= $mmfJson(__('保存')) ?>,
+                aiSaveTitle: <?= $mmfJson(__('保存图片')) ?>,
+                aiOverwrite: <?= $mmfJson(__('覆盖原图')) ?>,
+                aiSaveAs: <?= $mmfJson(__('另存为新文件')) ?>,
+                aiConfirmSave: <?= $mmfJson(__('确认保存')) ?>,
+                aiGenerating: <?= $mmfJson(__('正在生成…')) ?>,
+                aiSaved: <?= $mmfJson(__('图片保存成功')) ?>,
+                aiSaving: <?= $mmfJson(__('正在保存…')) ?>,
+                aiSaveFailed: <?= $mmfJson(__('保存失败')) ?>,
+                aiSaveSessionMissing: <?= $mmfJson(__('会话已失效，请重新生成后再保存')) ?>,
+                aiSaveFilenameRequired: <?= $mmfJson(__('请输入文件名')) ?>,
+                aiSaveAltRequired: <?= $mmfJson(__('保存图片前必须填写并确认默认 Alt。')) ?>,
+                aiSaveDescriptionRequired: <?= $mmfJson(__('保存图片前必须填写资源描述。')) ?>,
+                aiNoPrompt: <?= $mmfJson(__('请输入提示词')) ?>,
+                aiCloseConfirm: <?= $mmfJson(__('有未保存的生成结果，确定关闭吗？')) ?>,
+                aiCloseRunningConfirm: <?= $mmfJson(__('有任务正在生成，确定要关闭吗？关闭将中断当前任务。')) ?>,
+                aiRunningHint: <?= $mmfJson(__('生成中')) ?>,
+                aiGenerateSuccess: <?= $mmfJson(__('生成完成')) ?>,
+                aiGenerateFailed: <?= $mmfJson(__('生成失败')) ?>,
+                aiStreamDisconnected: <?= $mmfJson(__('连接已断开，生成未完成。请检查 AI 供应商网络、代理或模型配置后重试')) ?>,
+                aiHistoryLabel: <?= $mmfJson(__('本轮对话')) ?>,
+                aiClose: <?= $mmfJson(__('关闭')) ?>,
+                aiReference: <?= $mmfJson(__('参考图')) ?>,
+                aiTargetDir: <?= $mmfJson(__('保存目录')) ?>,
+                aiPreviewEmpty: <?= $mmfJson(__('生成结果将显示在这里')) ?>,
+                aiPromptPlaceholder: <?= $mmfJson(__('描述你想生成的画面，例如：一只可爱的卡通仓鼠，简约插画风格')) ?>,
+                aiPreviewParseFailed: <?= $mmfJson(__('预览数据解析失败，请重试')) ?>,
+                aiPreviewLoadFailed: <?= $mmfJson(__('预览图片加载失败，请重试')) ?>,
+                aiMockModeHint: <?= $mmfJson(__('当前为 Mock 模式（WELINE_MEDIA_AI_DRAW_MOCK），不会调用真实 AI 模型')) ?>,
+                aiModelNotReady: <?= $mmfJson(__('文生图模型未就绪，请先在 AI 场景管理中绑定模型')) ?>,
+                aiModelLabel: <?= $mmfJson(__('当前模型：')) ?>,
+                aiNoReference: <?= $mmfJson(__('请从当前目录选择一张参考图')) ?>,
+                aiRefPickerLabel: <?= $mmfJson(__('当前目录图片')) ?>,
+                aiRefSearchPlaceholder: <?= $mmfJson(__('搜索文件名…')) ?>,
+                aiRefNoMatch: <?= $mmfJson(__('没有匹配的图片')) ?>,
+                aiRefEmpty: <?= $mmfJson(__('请从左侧列表选择一张图片作为参考')) ?>,
+                aiOutputLabel: <?= $mmfJson(__('生成结果')) ?>,
+                aiRefDirEmpty: <?= $mmfJson(__('当前目录暂无图片，请先上传或切换到包含图片的文件夹')) ?>,
+                aiRefPreview: <?= $mmfJson(__('放大预览')) ?>
             }
         });
     });

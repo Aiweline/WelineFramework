@@ -16,15 +16,14 @@ $isEdit = $feed->getId() > 0;
     <w:form id="feed-form" class="form-horizontal">
         <input type="hidden" name="id" value="<?= $feed->getId() ?>">
         
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('Feed名称') ?> <span class="required">*</span></label>
-            <input type="text" name="feed_name" class="form-control" 
-                   value="<?= htmlspecialchars($feed->getData('feed_name') ?? '') ?>" required>
+            <input type="text" name="feed_name" class="w-input" value="<?= htmlspecialchars($feed->getData('feed_name') ?? '') ?>" required>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('Feed类型') ?></label>
-            <select name="feed_type" class="form-control">
+            <select name="feed_type" class="w-input">
                 <?php foreach ($feed_types as $value => $label): ?>
                     <option value="<?= $value ?>" 
                             <?= ($feed->getData('feed_type') ?? 'content') === $value ? 'selected' : '' ?>>
@@ -34,9 +33,9 @@ $isEdit = $feed->getId() > 0;
             </select>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('数据源类型') ?></label>
-            <select name="source_type" class="form-control">
+            <select name="source_type" class="w-input">
                 <?php foreach ($source_types as $value => $label): ?>
                     <option value="<?= $value ?>" 
                             <?= ($feed->getData('source_type') ?? 'database') === $value ? 'selected' : '' ?>>
@@ -46,21 +45,19 @@ $isEdit = $feed->getId() > 0;
             </select>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('数据源配置（JSON）') ?></label>
-            <textarea name="source_config" class="form-control" rows="5"><?= htmlspecialchars($feed->getData('source_config') ?? '{}') ?></textarea>
+            <textarea name="source_config" class="w-textarea" rows="5"><?= htmlspecialchars($feed->getData('source_config') ?? '{}') ?></textarea>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('Feed URL') ?></label>
-            <input type="text" name="feed_url" class="form-control" 
-                   value="<?= htmlspecialchars($feed->getData('feed_url') ?? '') ?>"
-                   placeholder="https://example.com/feed.json">
+            <input type="text" name="feed_url" class="w-input" value="<?= htmlspecialchars($feed->getData('feed_url') ?? '') ?>" placeholder="https://example.com/feed.json">
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('更新频率') ?></label>
-            <select name="update_frequency" class="form-control">
+            <select name="update_frequency" class="w-input">
                 <?php foreach ($update_frequencies as $value => $label): ?>
                     <option value="<?= $value ?>" 
                             <?= ($feed->getData('update_frequency') ?? 'daily') === $value ? 'selected' : '' ?>>
@@ -70,19 +67,19 @@ $isEdit = $feed->getId() > 0;
             </select>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('自动推送') ?></label>
             <div class="checkbox">
                 <label>
                     <input type="checkbox" name="is_auto_push" value="1" 
                            <?= ($feed->getData('is_auto_push') !== 0 && $feed->getData('is_auto_push') !== null) || !$feed->getId() ? 'checked' : '' ?>>
                     <?= __('启用自动推送') ?>
-                    <small class="text-muted">（关闭后Cron任务将不再推送此Feed）</small>
+                    <small class="w-text" data-tone="muted">（关闭后Cron任务将不再推送此Feed）</small>
                 </label>
             </div>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('是否启用') ?></label>
             <div class="checkbox">
                 <label>
@@ -93,55 +90,24 @@ $isEdit = $feed->getId() > 0;
             </div>
         </div>
 
-        <div class="form-group">
+        <div class="w-field">
             <label class="control-label"><?= __('配置（JSON）') ?></label>
-            <textarea name="config" class="form-control" rows="5"><?= htmlspecialchars($feed->getData('config') ?? '{}') ?></textarea>
+            <textarea name="config" class="w-textarea" rows="5"><?= htmlspecialchars($feed->getData('config') ?? '{}') ?></textarea>
         </div>
 
-        <div class="form-group">
-            <button type="submit" class="btn btn-primary">
-                <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+        <div class="w-field">
+            <button type="submit" class="w-button" data-tone="primary">
+                <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
             </button>
-            <a href="<?= $this->getUrl('geo/backend/feed') ?>" class="btn btn-secondary">
+            <a href="<?= $this->getUrl('geo/backend/feed') ?>" class="w-button" data-tone="neutral">
                 <?= __('取消') ?>
             </a>
         </div>
     </w:form>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
 
-<script>
-(function(g){
-  if(g.__bqAdmin_geo) return;
-  g.__bqAdmin_geo=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['geo']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('geo').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
 <script>
 document.getElementById('feed-form').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -150,49 +116,36 @@ document.getElementById('feed-form').addEventListener('submit', function(e) {
     
     var feedUrl = '<?= $this->getUrl('geo/backend/feed/save') ?>';
     var feedOpts = { method: 'POST', body: formData };
-    bqAdmin['geo'](feedUrl, feedOpts)
+    Weline.adminRequest('geo', feedUrl, feedOpts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: '<?= __('保存成功') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    window.location.href = '<?= $this->getUrl('geo/backend/feed') ?>';
-                });
-            } else {
-                console.log('<?= __('保存成功') ?>');
+            Weline.UI.dialog.request({
+                tone: 'success',
+                title: '<?= __('成功') ?>',
+                message: '<?= __('保存成功') ?>',
+                duration: 2000,
+                confirmable: false
+            }).then(() => {
                 window.location.href = '<?= $this->getUrl('geo/backend/feed') ?>';
-            }
+            });
         } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('保存失败') ?>',
-                    text: data.message || '<?= __('保存失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('保存失败') ?>');
-            }
+            Weline.UI.dialog.request({
+                tone: 'danger',
+                title: '<?= __('保存失败') ?>',
+                message: data.message || '<?= __('保存失败') ?>',
+                confirmLabel: '<?= __('确定') ?>'
+            });
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('保存失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('保存失败') ?>');
-        }
+        Weline.UI.dialog.request({
+            tone: 'danger',
+            title: '<?= __('保存失败') ?>',
+            message: '<?= __('请重试') ?>',
+            confirmLabel: '<?= __('确定') ?>'
+        });
     });
 });
 </script>

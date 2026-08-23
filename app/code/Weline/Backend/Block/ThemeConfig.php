@@ -101,20 +101,13 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
         if (!is_array($themeConfig)) {
             $themeConfig = [];
         }
+        $rtlMode = array_key_exists('rtl-mode-switch', $themeConfig)
+            ? $this->resolveBool($themeConfig['rtl-mode-switch'])
+            : null;
         $mode = $this->resolveThemeModeFromConfig($themeConfig);
-        if ($mode !== '') {
-            $themeConfig['theme-mode-switch'] = $mode;
-            $themeConfig['dark-mode-switch'] = $mode === 'dark';
-            $themeConfig['light-mode-switch'] = $mode === 'light';
-            $layouts = isset($themeConfig['layouts']) && \is_array($themeConfig['layouts']) ? $themeConfig['layouts'] : [];
-            $layouts['data-theme-preference'] = $mode;
-            if ($mode === 'light' || $mode === 'dark') {
-                $layouts['data-theme-mode'] = $mode;
-                $layouts['data-layout-mode'] = $mode;
-            } else {
-                unset($layouts['data-topbar'], $layouts['data-sidebar'], $layouts['data-theme-mode'], $layouts['data-layout-mode']);
-            }
-            $themeConfig['layouts'] = $layouts;
+        $themeConfig = ['theme-mode-switch' => $mode];
+        if ($rtlMode !== null) {
+            $themeConfig['rtl-mode-switch'] = $rtlMode;
         }
         $this->originThemeConfigCacheKey = $cacheKey;
         $this->originThemeConfigCacheValue = $themeConfig;
@@ -125,18 +118,7 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
     public function getThemeConfig(string $key = '')
     {
         $themeConfig = $this->getOriginThemeConfig();
-        if ($key) {
-            return $themeConfig[$key] ?? '';
-        } else {
-            if ($data = $this->userSession->getData(self::area . 'theme_config')) {
-                return $data;
-            }
-            $data = $this->getOriginThemeConfig();
-            if ($data) {
-                $this->userSession->setData(self::theme_Session_Config, $data);
-            }
-        }
-        return $data;
+        return $key !== '' ? ($themeConfig[$key] ?? '') : $themeConfig;
     }
 
     public function getThemeModel(): string
@@ -175,18 +157,25 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
         $this->resetOriginThemeConfigRuntimeCache();
         if (is_array($key)) {
             $this->assertThemeModePayload($key);
-            $originConfig = $this->getOriginThemeConfig();
-            if (!\is_array($originConfig)) {
-                $originConfig = [];
+            $nextConfig = [
+                'theme-mode-switch' => strtolower(trim((string)$key['theme-mode-switch'])),
+            ];
+            if (array_key_exists('rtl-mode-switch', $key)) {
+                $nextConfig['rtl-mode-switch'] = $this->resolveBool($key['rtl-mode-switch']);
             }
-            $key = \array_merge($originConfig, $key);
-            $this->userSession->setData(self::theme_Session_Config, $key);
+            $this->userSession->setData(self::theme_Session_Config, $nextConfig);
             if ($userId > 0) {
-                $this->userConfig->setConfig(self::theme_Session_Config, json_encode($key), 'Weline_Backend', '主题设置');
+                $this->userConfig->setConfig(self::theme_Session_Config, json_encode($nextConfig), 'Weline_Backend', '主题设置');
             }
         } else {
+            if (!in_array($key, ['theme-mode-switch', 'rtl-mode-switch'], true)) {
+                throw new \InvalidArgumentException((string)__('后端主题配置字段无效。'));
+            }
             if ($key === 'theme-mode-switch') {
                 $this->assertThemeMode($value);
+                $value = strtolower(trim((string)$value));
+            } else {
+                $value = $this->resolveBool($value);
             }
             $theme_Config = $this->getOriginThemeConfig();
             $theme_Config[$key] = $value;
@@ -209,24 +198,15 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
 
     private function assertThemeModePayload(array $themeConfig): void
     {
-        if (array_key_exists('theme-mode-switch', $themeConfig)) {
-            $this->assertThemeMode($themeConfig['theme-mode-switch']);
+        if (!array_key_exists('theme-mode-switch', $themeConfig)) {
+            throw new \InvalidArgumentException((string)__('后端主题模式不能为空。'));
         }
-        if (!array_key_exists('layouts', $themeConfig)) {
-            return;
-        }
-        $layouts = $themeConfig['layouts'];
-        if (!is_array($layouts)) {
-            throw new \InvalidArgumentException((string)__('后端主题模式无效。'));
-        }
-        if (array_key_exists('data-theme-preference', $layouts)) {
-            $this->assertThemeMode($layouts['data-theme-preference']);
-        }
-        foreach (['data-theme-mode', 'data-layout-mode'] as $key) {
-            if (array_key_exists($key, $layouts)) {
-                $this->assertResolvedThemeMode($layouts[$key]);
+        foreach (array_keys($themeConfig) as $key) {
+            if (!in_array($key, ['theme-mode-switch', 'rtl-mode-switch'], true)) {
+                throw new \InvalidArgumentException((string)__('后端主题配置字段无效：%{1}', [$key]));
             }
         }
+        $this->assertThemeMode($themeConfig['theme-mode-switch']);
     }
 
     private function assertThemeMode(mixed $mode): void
@@ -236,69 +216,9 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
         }
     }
 
-    private function assertResolvedThemeMode(mixed $mode): void
-    {
-        if (!is_string($mode) || !in_array(strtolower(trim($mode)), ['light', 'dark'], true)) {
-            throw new \InvalidArgumentException((string)__('后端主题模式无效。'));
-        }
-    }
-
-
     public function getLayouts()
     {
-        $this->userSession = $this->resolveSession();
-        $themeConfig = $this->getOriginThemeConfig();
-        $body_attributes = $themeConfig['layouts'] ?? [];
-        if (!\is_array($body_attributes)) {
-            $configData = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
-            if ($configData) {
-                $decoded = json_decode($configData, true);
-                $body_attributes = $decoded['layouts'] ?? [];
-            }
-        }
-        if (!\is_array($body_attributes)) {
-            $body_attributes = [];
-        }
-        $body_attributes_str = '';
-        $class_value = '';
-        // Always sync rendered theme attributes from current mode to avoid stale layout residue.
-        $themeModeFromSwitch = $themeConfig['theme-mode-switch'] ?? '';
-        $themeMode = $this->resolveThemeModeFromConfig(
-            $themeConfig,
-            \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
-        );
-        $body_attributes['data-theme-preference'] = $themeMode;
-        if ($themeMode === 'light' || $themeMode === 'dark') {
-            $body_attributes['data-theme-mode'] = $themeMode;
-            $body_attributes['data-layout-mode'] = $themeMode;
-        } else {
-            unset($body_attributes['data-theme-mode'], $body_attributes['data-layout-mode']);
-        }
-        
-        foreach ($body_attributes as $attribute => $value) {
-            // 跳过空字符串值
-            if ($value === '' || $value === null) {
-                continue;
-            }
-            
-            // 特殊处理 class 属性
-            if ($attribute === 'class') {
-                $class_value = $value;
-                continue;
-            }
-            
-            // 处理 data- 属性和其他属性
-            if (is_string($value)) {
-                $body_attributes_str .= "$attribute=\"$value\" ";
-            }
-        }
-        
-        // 添加 class 属性（如果有）
-        if ($class_value !== '') {
-            $body_attributes_str .= "class=\"$class_value\" ";
-        }
-        
-        return trim($body_attributes_str);
+        return '';
     }
 
     /**
@@ -314,15 +234,11 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
             $themeConfig,
             \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
         );
-        // `system` needs a deterministic no-JS first paint; the inline Head
-        // prepaint script replaces this light placeholder before CSS evaluates.
         $resolvedMode = $mode === 'dark' ? 'dark' : 'light';
         $attributes = [
+            'data-w-area="backend"',
             'data-theme="' . $resolvedMode . '"',
             'data-theme-preference="' . $mode . '"',
-            'data-bs-theme="' . $resolvedMode . '"',
-            'data-theme-mode="' . $resolvedMode . '"',
-            'data-layout-mode="' . $resolvedMode . '"',
         ];
 
         return implode(' ', $attributes);
@@ -330,38 +246,12 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
 
     private function resolveThemeModeFromConfig(array $themeConfig, string $preferredMode = ''): string
     {
-        $mode = $preferredMode !== '' ? $preferredMode : ($themeConfig['theme-mode-switch'] ?? '');
-        $resolvedMode = $this->normalizeThemeMode($mode);
-        if ($resolvedMode !== null) {
-            return $resolvedMode;
-        }
-        $layouts = $themeConfig['layouts'] ?? [];
-        if (\is_array($layouts)) {
-            $resolvedPreference = $this->normalizeThemeMode($layouts['data-theme-preference'] ?? '');
-            if ($resolvedPreference !== null) {
-                return $resolvedPreference;
-            }
-        }
-        if (array_key_exists('dark-mode-switch', $themeConfig)) {
-            return $this->resolveBool($themeConfig['dark-mode-switch']) ? 'dark' : 'light';
-        }
-        if (array_key_exists('light-mode-switch', $themeConfig)) {
-            return $this->resolveBool($themeConfig['light-mode-switch']) ? 'light' : 'dark';
-        }
-        if (\is_array($layouts)) {
-            foreach (['data-theme-mode', 'data-layout-mode'] as $layoutModeKey) {
-                $resolvedLegacyMode = $this->normalizeThemeMode($layouts[$layoutModeKey] ?? '');
-                if ($resolvedLegacyMode !== null) {
-                    return $resolvedLegacyMode;
-                }
-            }
-        }
-        return 'system';
+        $mode = $preferredMode !== '' ? $preferredMode : ($themeConfig['theme-mode-switch'] ?? 'system');
+        return $this->normalizeThemeMode($mode) ?? 'system';
     }
 
     /**
-     * Returns null only when a mode has not been supplied. Invalid explicit
-     * persisted values deliberately fall back to light for rollback safety.
+     * Missing or invalid persisted values start from the Weline UI 2.0 default.
      */
     private function normalizeThemeMode(mixed $mode): ?string
     {
@@ -369,13 +259,13 @@ class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeCo
             return null;
         }
         if (!\is_string($mode)) {
-            return 'light';
+            return 'system';
         }
         $mode = trim(strtolower($mode));
         if ($mode === '') {
             return null;
         }
-        return \in_array($mode, self::THEME_MODES, true) ? $mode : 'light';
+        return \in_array($mode, self::THEME_MODES, true) ? $mode : 'system';
     }
 
     private function resolveBool(mixed $value): bool

@@ -34,25 +34,25 @@ try {
     return;
 }
 ?>
-<div class="row">
-    <div class="col-xl-3 col-sm-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex">
-                    <div class="flex-shrink-0 me-3 align-self-center">
-                        <div class="avatar-sm">
-                            <div class="avatar-title bg-light rounded-circle text-primary font-size-20">
-                                <i class="ri-bar-chart-2-line"></i>
+<div class="w-grid">
+    <div style="--w-span-lg:3;--w-span:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster">
+                    <div data-shrink="false" data-self="center">
+                        <div data-w-avatar="true" style="--w-avatar-size:2rem;">
+                            <div class="w-text" data-w-avatar-content="true" data-w-background="muted" data-w-radius="round" data-tone="primary" style="--w-font-size:1.25rem;">
+                                <w:icon name="chart" size="sm"></w:icon>
                             </div>
                         </div>
                     </div>
-                    <div class="flex-grow-1 overflow-hidden">
-                        <p class="mb-1">
+                    <div data-grow="true" data-w-overflow="hidden">
+                        <p style="--w-mb:var(--weline-space-1);">
                             <lang>像素总记录数</lang>
                         </p>
-                        <h5 class="mb-3"><?= number_format($totalCount) ?></h5>
-                        <p class="text-truncate mb-0">
-                            <span class="text-muted">
+                        <h5 style="--w-mb:var(--weline-space-4);"><?= number_format($totalCount) ?></h5>
+                        <p class="w-text" data-truncate="true" style="--w-mb:0;">
+                            <span class="w-text" data-tone="muted">
                                 <lang>包含所有站点的有效像素事件</lang>
                             </span>
                         </p>
@@ -62,27 +62,27 @@ try {
         </div>
     </div>
 
-    <div class="col-xl-3 col-sm-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex">
-                    <div class="flex-shrink-0 me-3 align-self-center">
-                        <div class="avatar-sm">
-                            <div class="avatar-title bg-light rounded-circle text-success font-size-20">
-                                <i class="ri-checkbox-circle-line"></i>
+    <div style="--w-span-lg:3;--w-span:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster">
+                    <div data-shrink="false" data-self="center">
+                        <div data-w-avatar="true" style="--w-avatar-size:2rem;">
+                            <div class="w-text" data-w-avatar-content="true" data-w-background="muted" data-w-radius="round" data-tone="success" style="--w-font-size:1.25rem;">
+                                <w:icon name="check" size="sm"></w:icon>
                             </div>
                         </div>
                     </div>
-                    <div class="flex-grow-1 overflow-hidden">
-                        <p class="mb-1">
+                    <div data-grow="true" data-w-overflow="hidden">
+                        <p style="--w-mb:var(--weline-space-1);">
                             <lang>已处理像素</lang>
                         </p>
-                        <h5 class="mb-3"><?= number_format($dealedCount) ?></h5>
-                        <p class="text-truncate mb-0">
-                            <span class="text-success me-2">
+                        <h5 style="--w-mb:var(--weline-space-4);"><?= number_format($dealedCount) ?></h5>
+                        <p class="w-text" data-truncate="true" style="--w-mb:0;">
+                            <span class="w-text" data-tone="success">
                                 <?= htmlspecialchars((string)$dealRate) ?>%
                             </span>
-                            <span class="text-muted">
+                            <span class="w-text" data-tone="muted">
                                 <lang>处理占比</lang>
                             </span>
                         </p>
@@ -92,24 +92,24 @@ try {
         </div>
     </div>
 
-    <div class="col-xl-3 col-sm-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex">
-                    <div class="flex-shrink-0 me-3 align-self-center">
-                        <div class="avatar-sm">
-                            <div class="avatar-title bg-light rounded-circle text-warning font-size-20">
-                                <i class="ri-time-line"></i>
+    <div style="--w-span-lg:3;--w-span:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster">
+                    <div data-shrink="false" data-self="center">
+                        <div data-w-avatar="true" style="--w-avatar-size:2rem;">
+                            <div class="w-text" data-w-avatar-content="true" data-w-background="muted" data-w-radius="round" data-tone="warning" style="--w-font-size:1.25rem;">
+                                <w:icon name="clock" size="sm"></w:icon>
                             </div>
                         </div>
                     </div>
-                    <div class="flex-grow-1 overflow-hidden">
-                        <p class="mb-1">
+                    <div data-grow="true" data-w-overflow="hidden">
+                        <p style="--w-mb:var(--weline-space-1);">
                             <lang>待处理像素</lang>
                         </p>
-                        <h5 class="mb-3"><?= number_format($unDealCount) ?></h5>
-                        <p class="text-truncate mb-0">
-                            <span class="text-muted">
+                        <h5 style="--w-mb:var(--weline-space-4);"><?= number_format($unDealCount) ?></h5>
+                        <p class="w-text" data-truncate="true" style="--w-mb:0;">
+                            <span class="w-text" data-tone="muted">
                                 <lang>建议尽快排查并处理异常事件</lang>
                             </span>
                         </p>
@@ -119,30 +119,30 @@ try {
         </div>
     </div>
 
-    <div class="col-xl-3 col-sm-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex">
-                    <div class="flex-shrink-0 me-3 align-self-center">
-                        <div class="avatar-sm">
-                            <div class="avatar-title bg-light rounded-circle text-info font-size-20">
-                                <i class="ri-global-line"></i>
+    <div style="--w-span-lg:3;--w-span:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster">
+                    <div data-shrink="false" data-self="center">
+                        <div data-w-avatar="true" style="--w-avatar-size:2rem;">
+                            <div class="w-text" data-w-avatar-content="true" data-w-background="muted" data-w-radius="round" data-tone="info" style="--w-font-size:1.25rem;">
+                                <w:icon name="circle" size="sm"></w:icon>
                             </div>
                         </div>
                     </div>
-                    <div class="flex-grow-1 overflow-hidden">
-                        <p class="mb-1">
+                    <div data-grow="true" data-w-overflow="hidden">
+                        <p style="--w-mb:var(--weline-space-1);">
                             <lang>接入站点 / 累计价值</lang>
                         </p>
-                        <h5 class="mb-3">
+                        <h5 style="--w-mb:var(--weline-space-4);">
                             <?= (int)$siteCount ?>
-                            <span class="text-muted ms-1">/</span>
-                            <span class="text-primary ms-1">
+                            <span class="w-text" data-tone="muted">/</span>
+                            <span class="w-text" data-tone="primary">
                                 <?= number_format($totalValue, 2) ?>
                             </span>
                         </h5>
-                        <p class="text-truncate mb-0">
-                            <span class="text-muted">
+                        <p class="w-text" data-truncate="true" style="--w-mb:0;">
+                            <span class="w-text" data-tone="muted">
                                 <lang>站点数量 / 像素累计价值</lang>
                             </span>
                         </p>

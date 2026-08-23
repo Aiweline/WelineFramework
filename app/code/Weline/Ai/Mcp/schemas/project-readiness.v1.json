@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weline.local/schemas/project-readiness.v1.json",
+  "title": "Weline project readiness receipt",
+  "type": "object",
+  "required": ["schema_version", "status", "ready", "project_id", "repository", "project_revision", "gate"],
+  "properties": {
+    "schema_version": {"const": "project-readiness.v1"},
+    "status": {"enum": ["ready", "needs_repair", "blocked"]},
+    "ready": {"type": "boolean"},
+    "readiness_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "repository": {"type": "string", "minLength": 1},
+    "project_revision": {"type": "integer", "minimum": 0},
+    "client_session_id": {"type": "string", "minLength": 1},
+    "module_count": {"type": "integer", "minimum": 0},
+    "knowledge_unit_count": {"type": "integer", "minimum": 0},
+    "module_inventory_hash": {"$ref": "#/$defs/hash"},
+    "documents_hash": {"$ref": "#/$defs/hash"},
+    "missing_documents": {"type": "array", "items": {"type": "string"}},
+    "repair_bundle": {"type": "object"},
+    "blocker": {"type": "object"},
+    "gate": {
+      "type": "object",
+      "required": ["development_allowed"],
+      "properties": {"development_allowed": {"type": "boolean"}},
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ready"}}},
+      "then": {"required": ["readiness_id", "client_session_id", "module_inventory_hash", "documents_hash"]}
+    },
+    {
+      "if": {"properties": {"status": {"const": "needs_repair"}}},
+      "then": {"required": ["client_session_id", "missing_documents", "repair_bundle"]}
+    },
+    {
+      "if": {"properties": {"status": {"const": "blocked"}}},
+      "then": {"required": ["blocker"]}
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": true
+}

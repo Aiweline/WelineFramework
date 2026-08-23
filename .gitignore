@@ -13,6 +13,8 @@
 .vscode
 .cursor/*
 !.cursor/mcp.json
+!.cursor/rules/
+!.cursor/rules/weline-mcp-readiness.mdc
 .trae/
 # ???????
 /.workflow
@@ -90,10 +92,6 @@ tests/e2e/*-debug.png
 tests/e2e/.last-playwright-tee.txt
 tests/e2e/.smoke-publish-last.log
 
-# Codex ????????????
-dev/ai/codex/tasks/**/artifacts/*
-dev/ai/codex/tasks/
-
 # PHPUnit cache directory (10+)
 .phpunit.cache/
 
@@ -120,11 +118,9 @@ dev/ai/codex/tasks/
 .codex/*
 !.codex/agents/
 !.codex/agents/**
-!.codex/skills/
-!.codex/skills/**
-.codex/skills/.system/**
 !.codex/prompts/
 !.codex/prompts/**
+!.codex/config.toml
 
 # Local build, cache, backup and test artifacts
 /build/
@@ -134,9 +130,6 @@ dev/ai/codex/tasks/
 *.bak
 *.swp
 *.swo
-/dev/ai/codex/tmp/
-/dev/ai/code_backup/
-/dev/ai/archive/**/*.log
 /tests/e2e/**/.npm/
 /tests/e2e/**/artifacts/
 /tests/e2e/**/*.log

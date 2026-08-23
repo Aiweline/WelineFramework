@@ -12,7 +12,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Service\OrderTradeAdminCommandException;
 use Weline\Order\Service\OrderTradeAdminCommandService;
 
-#[Acl('Weline_Order::shipment_controller', '订单发货控制器', 'mdi-truck', '订单仓维履约管理', 'Weline_Backend::order_group')]
+#[Acl('Weline_Order::shipment_controller', '订单发货控制器', 'truck', '订单仓维履约管理', 'Weline_Backend::order_group')]
 final class Shipment extends BackendController
 {
     use OrderObjectAuthorizationTrait;
@@ -24,7 +24,7 @@ final class Shipment extends BackendController
         $this->commands = $objectManager->getInstance(OrderTradeAdminCommandService::class);
     }
 
-    #[Acl('Weline_Order::shipment_manage', '查看订单发货', 'mdi-format-list-bulleted', '查看可履约单元和进度', 'Weline_Backend::order_group')]
+    #[Acl('Weline_Order::shipment_manage', '查看订单发货', 'list', '查看可履约单元和进度', 'Weline_Backend::order_group')]
     public function index(): string
     {
         $candidates = [];
@@ -47,7 +47,7 @@ final class Shipment extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Order::shipment_execute', '提交发货', 'mdi-truck-fast', '按仓维 CAS 提交部分或全部发货', 'Weline_Order::shipment_manage')]
+    #[Acl('Weline_Order::shipment_execute', '提交发货', 'truck', '按仓维 CAS 提交部分或全部发货', 'Weline_Order::shipment_manage')]
     public function execute(): mixed
     {
         $unitUuid = trim((string)$this->request->getPost('fulfillment_unit_uuid', ''));

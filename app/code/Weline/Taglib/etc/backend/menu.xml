@@ -5,5 +5,5 @@
     
     <!-- 标签库 - 归入开发者 > 主题模板 -->
     <menu source="Weline_Taglib::taglib" name="taglib" title="标签库" action="taglib/backend/taglib/listing"
-         parent="Weline_Backend::template_management" icon="mdi mdi-tag-multiple-outline" order="30"/>
+         parent="Weline_Backend::template_management" icon="tag" order="30"/>
 </menus>

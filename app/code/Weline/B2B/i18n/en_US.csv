@@ -1,26 +1,34 @@
 ﻿"B2B 接口不支持该操作：%{1}","B2B 接口不支持该操作：%{1}"
-"仅允许 POST 请求。","仅允许 POST 请求。"
+"仅允许 POST 请求。","Only POST requests are allowed."
 操作失败，请稍后重试。参考编号：%{1},"The operation failed. Please try again later. Reference: %{1}"
 数据暂时无法加载。参考编号：%{1},"Data is temporarily unavailable. Reference: %{1}"
 状态暂时无法读取。参考编号：%{1},"Status is temporarily unavailable. Reference: %{1}"
-"B2B 管理","B2B 管理"
-"B2B 客户组、价目表与报价审批管理","B2B 客户组、价目表与报价审批管理"
-客户组,客户组
-"查看 B2B 客户组","查看 B2B 客户组"
-价目表,价目表
-"查看 B2B 价目表","查看 B2B 价目表"
-报价令牌,报价令牌
-"查看 B2B 报价令牌","查看 B2B 报价令牌"
-订单价格快照,订单价格快照
-"查看 B2B 订单价格快照","查看 B2B 订单价格快照"
-迁移状态,迁移状态
-"只读查看 B2B 迁移状态","只读查看 B2B 迁移状态"
-创建客户组,创建客户组
-"创建 B2B 客户组","创建 B2B 客户组"
-创建价目表,创建价目表
-"创建 B2B 价目表","创建 B2B 价目表"
-审批报价,审批报价
-签发报价、重新校验并生成不可变订单价格快照,签发报价、重新校验并生成不可变订单价格快照
+"B2B 管理","B2B management"
+globe,globe
+"B2B 客户组、价目表与报价审批管理","B2B customer group, price list and quotation approval management"
+客户组,"customer group"
+users,users
+"查看 B2B 客户组","View B2B Customer Groups"
+价目表,"price list"
+tag,tag
+"查看 B2B 价目表","View B2B price list"
+报价令牌,"quote token"
+file,file
+"查看 B2B 报价令牌","View B2B Quote Tokens"
+订单价格快照,"Order price snapshot"
+camera,camera
+"查看 B2B 订单价格快照","View B2B Order Price Snapshot"
+迁移状态,"Migration status"
+eye,eye
+"只读查看 B2B 迁移状态","Read-only view of B2B migration status"
+创建客户组,"Create customer group"
+"创建 B2B 客户组","Create a B2B customer group"
+创建价目表,"Create price list"
+plus,plus
+"创建 B2B 价目表","Create a B2B price list"
+审批报价,"Approval of quotations"
+check,check
+签发报价、重新校验并生成不可变订单价格快照,"Issue quotes, revalidate and generate immutable order price snapshots"
 "B2B price list header 数据非法","Invalid B2B price list header"
 "B2B group_id 必填且不能超过 64 字符","B2B group_id is required and must not exceed 64 characters"
 "B2B website_id 不能为负数：%{1}","B2B website_id must not be negative: %{1}"
@@ -60,28 +68,28 @@
 "B2B price list SKU 非法","Invalid B2B price list SKU"
 "B2B price list amount_minor 非法：%{1}","Invalid B2B price list amount_minor: %{1}"
 "B2B membership 数据非法","Invalid B2B membership data"
-是,是
-否,否
-只读诊断,只读诊断
-可管理,可管理
-"此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。","此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。"
-"写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。","写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。"
-签发并审批报价,签发并审批报价
-新增配置,新增配置
-"客户组 ID","客户组 ID"
-"网站 ID","网站 ID"
-代码,代码
-状态,状态
-"价目表 ID","价目表 ID"
-版本,版本
+是,yes
+否,no
+只读诊断,"Read-only diagnostics"
+可管理,Manageable
+"此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。","This page shows a snapshot of immutable quotes and order prices; production migration is still done by the controlled CLI."
+"写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。","Write operations are protected by B2B rollout gates and reuse candidate resolution, quote rechecking and immutable snapshot services."
+签发并审批报价,"Issue and approve quotes"
+新增配置,"New configuration"
+"客户组 ID","Customer group ID"
+网站,website
+代码,code
+状态,state
+"价目表 ID","Price list ID"
+版本,Version
 SKU,SKU
-金额（分）,金额（分）
-"渠道 ID（可选）","渠道 ID（可选）"
-"客户 ID","客户 ID"
-零售价（分）,零售价（分）
-订单引用,订单引用
-保存,保存
-当前没有记录。,当前没有记录。
+金额（分）,"Amount (cents)"
+"渠道 ID（可选）","Channel ID (optional)"
+"客户 ID","Customer ID"
+零售价（分）,"Retail price (cents)"
+订单引用,"order reference"
+保存,save
+当前没有记录。,"There are currently no records."
 "B2B group identity 不可变：%{1}","B2B group identity is immutable: %{1}"
 "B2B customer_id 必填且不能超过 64 字符","B2B customer_id is required and must not exceed 64 characters"
 "B2B group 不存在：%{1}","B2B group does not exist: %{1}"
@@ -104,6 +112,7 @@ SKU,SKU
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
 显示本帮助,"Show this help"
 """B2B 接口不支持该操作：%{1}""","Unsupported B2B operation: %{1}"
+"网站 ID","Website ID"
 "MIG-P4C：B2B 版本映射与 Checkout allowlist（仅登记的 full clone）","MIG-P4C: B2B version mapping and Checkout allowlist (registered full clones only)"
 "MIG-P4C：B2B shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4C: move B2B from shadow to allowlist (apply requires --database=mig_clone_*)"
 "B2B price candidate","B2B price candidate"

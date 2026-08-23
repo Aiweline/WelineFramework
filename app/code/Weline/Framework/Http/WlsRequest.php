@@ -26,6 +26,12 @@ use Weline\Framework\Runtime\Policy\RequestEnvelope;
  */
 class WlsRequest extends Request
 {
+    private const MULTIPART_MAX_PARTS = 128;
+    private const MULTIPART_MAX_FILES = 100;
+    private const MULTIPART_MAX_HEADER_BYTES = 32 * 1024;
+    private const MULTIPART_MAX_TEXT_BYTES = 1024 * 1024;
+    private const MULTIPART_WRITE_CHUNK_BYTES = 64 * 1024;
+
     /**
      * 原始 HTTP 数据
      */
@@ -51,6 +57,8 @@ class WlsRequest extends Request
     private array $parsedPostParams = [];
     /** @var array{post: array, files: array} */
     private array $parsedBodyPayload = ['post' => [], 'files' => []];
+    /** @var list<array{path:string,dev:int,ino:int}> Request-owned WLS upload files. */
+    private array $multipartTemporaryFiles = [];
     /** 解析出的请求方法 */
     private string $parsedMethod = 'GET';
     /** 策略内核已验证的 HTTP 协议版本 */
@@ -68,6 +76,8 @@ class WlsRequest extends Request
      * @var array<string, mixed>
      */
     private array $parsedServerSnapshot = [];
+    /** Transport hand-off marker for a response already queued in bounded chunks. */
+    private ?string $streamedResponseMarker = null;
     
     /**
      * 从原始 HTTP 数据创建请求对象
@@ -79,6 +89,7 @@ class WlsRequest extends Request
     public static function fromRaw(string $rawData, array $serverInfo = []): self
     {
         $request = self::createRequestInstance();
+        $request->streamedResponseMarker = null;
         $request->rawData = $rawData;
         $request->parseRawHttp($rawData, $serverInfo);
         return $request;
@@ -95,11 +106,28 @@ class WlsRequest extends Request
     public static function fromEnvelope(RequestEnvelope $envelope, array $serverInfo = []): self
     {
         $request = self::createRequestInstance();
+        $request->streamedResponseMarker = null;
         // Envelope 路径的原始输入语义是 HTTP body，不再保留已消费的传输头字节。
         $request->rawData = $envelope->body;
         $request->parseRawHttp('', $serverInfo, $envelope);
 
         return $request;
+    }
+
+    public function setStreamedResponseMarker(string $marker): void
+    {
+        if (WlsStreamedResponse::parseMarker($marker) === null) {
+            throw new \InvalidArgumentException((string)__('WLS 流式响应标记无效。'));
+        }
+        $this->streamedResponseMarker = $marker;
+    }
+
+    public function consumeStreamedResponseMarker(): ?string
+    {
+        $marker = $this->streamedResponseMarker;
+        $this->streamedResponseMarker = null;
+
+        return $marker;
     }
 
     private static function createRequestInstance(): self
@@ -448,8 +476,16 @@ class WlsRequest extends Request
         
         // 解析请求体（POST / PUT / PATCH / DELETE 均可携带 body）
         $contentType = $headers['Content-Type'] ?? '';
+        // A request object can be reused by the current Fiber bucket. Never
+        // overwrite ownership metadata for files left by an earlier parse.
+        if ($this->multipartTemporaryFiles !== []) {
+            $this->releaseMultipartTemporaryFiles();
+        }
         $parsed = self::parseRequestBody($this->body, $contentType, $method);
+        $ownedTemporaryFiles = $parsed['_temporary_files'] ?? [];
+        unset($parsed['_temporary_files']);
         $this->parsedBodyPayload = $parsed;
+        $this->multipartTemporaryFiles = self::normalizeMultipartTemporaryFiles($ownedTemporaryFiles);
         $postParams = $parsed['post'] ?? [];
         $this->parsedPostParams = $postParams;
         $_FILES = $parsed['files'] ?? [];
@@ -504,6 +540,7 @@ class WlsRequest extends Request
             
             // 检测 HTTPS：多种检测方式
             $isHttps = false;
+            $explicitScheme = \strtolower(\trim((string)($serverInfo['REQUEST_SCHEME'] ?? '')));
             if ($trustForwardedHeaders
                 && ($forwardedProto === 'https' || isset($headers['X-Forwarded-Ssl']))
             ) {
@@ -513,9 +550,15 @@ class WlsRequest extends Request
             } elseif (isset($serverInfo['HTTPS']) && $serverInfo['HTTPS'] === 'on') {
                 // TCP 透传模式：Worker 直接传递 HTTPS 标志
                 $isHttps = true;
-            } elseif (isset($serverInfo['REQUEST_SCHEME']) && $serverInfo['REQUEST_SCHEME'] === 'https') {
+            } elseif ($explicitScheme === 'https') {
                 // TCP 透传模式：Worker 直接传递 REQUEST_SCHEME
                 $isHttps = true;
+            } elseif ($explicitScheme === 'http') {
+                // Same-port cleartext admission (e.g. loopback 127.0.0.1 with
+                // force_https=false) must keep http. Do not promote to https
+                // just because env.php has wls.https=true — that desyncs the
+                // browser Origin from QueryBin assertSameOrigin().
+                $isHttps = false;
             } else {
                 // 回退检测：从 env.php 配置判断
                 // 如果服务器配置为 HTTPS 模式，即使直接访问 Worker 也应识别为 HTTPS
@@ -1224,83 +1267,147 @@ class WlsRequest extends Request
             return ['post' => [], 'files' => []];
         }
         $boundary = \trim($m[2]);
-        $delimiter = '--' . $boundary;
+        if ($boundary === ''
+            || \strlen($boundary) > 70
+            || \preg_match('/^[0-9A-Za-z\'()+_,.\/:=? -]+$/D', $boundary) !== 1
+        ) {
+            return ['post' => [], 'files' => []];
+        }
 
-        // 按 boundary 分割
-        $parts = \explode($delimiter, $body);
-        \array_shift($parts); // 首段空
-        \array_pop($parts);   // 尾段 --
+        // Boundary 只能出现在行首，且后面必须是换行或关闭标记。直接按
+        // 字符串 explode() 会在二进制文件正文包含 boundary 文本时破坏内容。
+        $boundaryPattern = '~(?:\A|\r?\n)--'
+            . \preg_quote($boundary, '~')
+            . '(--)?[\t ]*(?:\r?\n|\z)~';
+        $matchCount = \preg_match_all($boundaryPattern, $body, $boundaryMatches, \PREG_OFFSET_CAPTURE);
+        if ($matchCount === false || $matchCount < 1) {
+            return ['post' => [], 'files' => []];
+        }
+        if ($matchCount > self::MULTIPART_MAX_PARTS + 1) {
+            throw new \InvalidArgumentException((string)__('WLS multipart 字段数量超过安全上限。'));
+        }
 
-        $textPairs = [];
-        $files = [];
-
-        foreach ($parts as $part) {
-            $part = \ltrim($part, "\r\n");
-
-            // header / body 以双 CRLF 或双 LF 分隔（Linux 下可能只有 \n）
-            $sep = \strpos($part, "\r\n\r\n");
-            $sepLen = 4;
-            if ($sep === false) {
-                $sep = \strpos($part, "\n\n");
-                $sepLen = 2;
+        $textBytes = 0;
+        $fileCount = 0;
+        $parts = [];
+        // First pass validates the entire envelope before creating a single
+        // file. A malformed later part therefore cannot strand earlier files.
+        for ($index = 0; $index < $matchCount; ++$index) {
+            $closing = (string)($boundaryMatches[1][$index][0] ?? '') === '--';
+            if ($closing || !isset($boundaryMatches[0][$index + 1])) {
+                break;
             }
-            if ($sep === false) {
+            $partStart = (int)$boundaryMatches[0][$index][1]
+                + \strlen((string)$boundaryMatches[0][$index][0]);
+            $partEnd = (int)$boundaryMatches[0][$index + 1][1];
+            if ($partEnd <= $partStart) {
                 continue;
             }
-            $head = \substr($part, 0, $sep);
-            $data = \substr($part, $sep + $sepLen);
-            $data = \rtrim($data, "\r\n");
 
-            // 必须有 name
-            if (!\preg_match('/Content-Disposition:\s*form-data;\s*name="([^"]*)"/i', $head, $nm)) {
+            $sep = \strpos($body, "\r\n\r\n", $partStart);
+            $sepLen = 4;
+            if ($sep === false || $sep >= $partEnd) {
+                $sep = \strpos($body, "\n\n", $partStart);
+                $sepLen = 2;
+            }
+            if ($sep === false || $sep >= $partEnd) {
+                continue;
+            }
+            $headerBytes = $sep - $partStart;
+            if ($headerBytes < 1 || $headerBytes > self::MULTIPART_MAX_HEADER_BYTES) {
+                throw new \InvalidArgumentException((string)__('WLS multipart 字段头超过安全上限。'));
+            }
+            $head = \substr($body, $partStart, $headerBytes);
+            $dataStart = $sep + $sepLen;
+            $dataBytes = $partEnd - $dataStart;
+            if ($dataBytes < 0
+                || !\preg_match('/Content-Disposition:\s*form-data;\s*name="([^"]*)"/i', $head, $nm)
+            ) {
                 continue;
             }
             $fieldName = $nm[1];
+            if ($fieldName === ''
+                || \strlen($fieldName) > 255
+                || \preg_match('/[\x00-\x1F\x7F]/', $fieldName) === 1
+            ) {
+                throw new \InvalidArgumentException((string)__('WLS multipart 字段名称无效。'));
+            }
 
-            // ── 文件字段 ──
-            if (\preg_match('/filename="([^"]*)"/i', $head, $fnm)
-                || \preg_match('/filename\*=(?:UTF-8|utf-8)\'\'.+/i', $head)) {
-
-                // 优先 RFC 5987 filename*
-                $filename = '';
-                if (\preg_match('/filename\*=(?:UTF-8|utf-8)\'\'(.+)/i', $head, $fnStar)) {
+            $isFile = \preg_match('/filename="([^"]*)"/i', $head, $fnm) === 1
+                || \preg_match('/filename\*=(?:UTF-8|utf-8)\'\'[^;\r\n]*/i', $head) === 1;
+            $filename = '';
+            $fileContentType = '';
+            if ($isFile) {
+                if (++$fileCount > self::MULTIPART_MAX_FILES) {
+                    throw new \InvalidArgumentException((string)__('WLS multipart 文件数量超过安全上限。'));
+                }
+                if (\preg_match('/filename\*=(?:UTF-8|utf-8)\'\'([^;\r\n]*)/i', $head, $fnStar)) {
                     $filename = \rawurldecode(\trim($fnStar[1]));
                 } elseif (isset($fnm[1])) {
                     $filename = $fnm[1];
                 }
-
-                if ($filename === '') {
-                    // 无文件名且有 filename 属性 → 未选择文件，记为空上传
-                    self::addFileEntry($files, $fieldName, [
-                        'name'     => '',
-                        'type'     => '',
-                        'tmp_name' => '',
-                        'error'    => \UPLOAD_ERR_NO_FILE,
-                        'size'     => 0,
-                    ]);
-                    continue;
+                if ($filename !== '' && (
+                    \strlen($filename) > 1024
+                    || \preg_match('//u', $filename) !== 1
+                    || \preg_match('/[\x00-\x1F\x7F]/', $filename) === 1
+                )) {
+                    throw new \InvalidArgumentException((string)__('WLS multipart 文件名无效。'));
                 }
-
                 $fileContentType = 'application/octet-stream';
-                if (\preg_match('/Content-Type:\s*(.+)/i', $head, $ctm)) {
-                    $fileContentType = \trim($ctm[1]);
-                }
-
-                $tmpFile = \tempnam(\sys_get_temp_dir(), 'wls_');
-                if ($tmpFile !== false) {
-                    \file_put_contents($tmpFile, $data);
-                    self::addFileEntry($files, $fieldName, [
-                        'name'     => $filename,
-                        'type'     => $fileContentType,
-                        'tmp_name' => $tmpFile,
-                        'error'    => \UPLOAD_ERR_OK,
-                        'size'     => \strlen($data),
-                    ]);
+                if (\preg_match('/Content-Type:\s*([^\r\n]+)/i', $head, $ctm)) {
+                    $candidateContentType = \trim($ctm[1]);
+                    if ($candidateContentType !== ''
+                        && \strlen($candidateContentType) <= 255
+                        && \preg_match('/^[\x20-\x7E]+$/D', $candidateContentType) === 1
+                    ) {
+                        $fileContentType = $candidateContentType;
+                    }
                 }
             } else {
-                // ── 文本字段 ──
-                $textPairs[] = \urlencode($fieldName) . '=' . \urlencode($data);
+                $textBytes += $dataBytes;
+                if ($textBytes > self::MULTIPART_MAX_TEXT_BYTES) {
+                    throw new \InvalidArgumentException((string)__('WLS multipart 文本字段超过安全上限。'));
+                }
             }
+            $parts[] = [
+                'field' => $fieldName,
+                'start' => $dataStart,
+                'bytes' => $dataBytes,
+                'file' => $isFile,
+                'filename' => $filename,
+                'content_type' => $fileContentType,
+            ];
+        }
+
+        $textPairs = [];
+        $files = [];
+        $temporaryFiles = [];
+        foreach ($parts as $part) {
+            if (!$part['file']) {
+                $data = \substr($body, $part['start'], $part['bytes']);
+                $textPairs[] = \urlencode($part['field']) . '=' . \urlencode($data);
+                continue;
+            }
+            if ($part['filename'] === '') {
+                self::addFileEntry($files, $part['field'], [
+                    'name' => '', 'type' => '', 'tmp_name' => '',
+                    'error' => \UPLOAD_ERR_NO_FILE, 'size' => 0,
+                ]);
+                continue;
+            }
+
+            $write = self::writeMultipartTemporaryFile($body, $part['start'], $part['bytes']);
+            $owned = $write['file'];
+            if ($owned !== null) {
+                $temporaryFiles[] = $owned;
+            }
+            self::addFileEntry($files, $part['field'], [
+                'name' => $part['filename'],
+                'type' => $part['content_type'],
+                'tmp_name' => $write['complete'] && $owned !== null ? $owned['path'] : '',
+                'error' => $write['complete'] ? \UPLOAD_ERR_OK : \UPLOAD_ERR_CANT_WRITE,
+                'size' => $write['complete'] ? $part['bytes'] : 0,
+            ]);
         }
 
         $postParams = [];
@@ -1308,7 +1415,169 @@ class WlsRequest extends Request
             \parse_str(\implode('&', $textPairs), $postParams);
         }
 
-        return ['post' => $postParams, 'files' => $files];
+        return [
+            'post' => $postParams,
+            'files' => $files,
+            '_temporary_files' => $temporaryFiles,
+        ];
+    }
+
+    /** @return array{file:array{path:string,dev:int,ino:int}|null,complete:bool} */
+    private static function writeMultipartTemporaryFile(string $body, int $offset, int $bytes): array
+    {
+        $tmpDirectory = \realpath(\sys_get_temp_dir());
+        if (!\is_string($tmpDirectory)
+            || $tmpDirectory === ''
+            || !\is_dir($tmpDirectory)
+            || !\is_writable($tmpDirectory)
+        ) {
+            return ['file' => null, 'complete' => false];
+        }
+        $stream = false;
+        $tmpFile = '';
+        for ($attempt = 0; $attempt < 3; ++$attempt) {
+            try {
+                $tmpFile = $tmpDirectory . \DIRECTORY_SEPARATOR . 'wls_' . \bin2hex(\random_bytes(16));
+            } catch (\Throwable) {
+                return ['file' => null, 'complete' => false];
+            }
+            $stream = @\fopen($tmpFile, 'x+b');
+            if ($stream !== false) {
+                break;
+            }
+        }
+        if ($stream === false) {
+            return ['file' => null, 'complete' => false];
+        }
+        $opened = @\fstat($stream);
+        $identity = [
+            'path' => $tmpFile,
+            'dev' => (int)($opened['dev'] ?? -1),
+            'ino' => (int)($opened['ino'] ?? -1),
+        ];
+        $permissionsSet = @\chmod($tmpFile, 0600);
+        $pathStat = @\lstat($tmpFile);
+        $valid = $permissionsSet
+            && \is_array($opened)
+            && \is_array($pathStat)
+            && !\is_link($tmpFile)
+            && (((int)($opened['mode'] ?? 0)) & 0170000) === 0100000
+            && (((int)($pathStat['mode'] ?? 0)) & 0170000) === 0100000
+            && (((int)($pathStat['mode'] ?? 0)) & 0777) === 0600
+            && (int)($opened['nlink'] ?? 0) === 1
+            && (int)($pathStat['nlink'] ?? 0) === 1
+            && (int)($pathStat['dev'] ?? -2) === $identity['dev']
+            && (int)($pathStat['ino'] ?? -2) === $identity['ino']
+            && $identity['dev'] >= 0
+            && $identity['ino'] >= 0;
+        $written = 0;
+        $valid = $valid && @\flock($stream, \LOCK_EX);
+        if ($valid) {
+            while ($written < $bytes) {
+                $chunk = \substr(
+                    $body,
+                    $offset + $written,
+                    \min(self::MULTIPART_WRITE_CHUNK_BYTES, $bytes - $written),
+                );
+                if ($chunk === '') {
+                    $valid = false;
+                    break;
+                }
+                $chunkOffset = 0;
+                $chunkBytes = \strlen($chunk);
+                while ($chunkOffset < $chunkBytes) {
+                    $result = @\fwrite($stream, \substr($chunk, $chunkOffset));
+                    if (!\is_int($result) || $result < 1) {
+                        $valid = false;
+                        break 2;
+                    }
+                    $chunkOffset += $result;
+                    $written += $result;
+                }
+            }
+            $valid = $valid && $written === $bytes && @\fflush($stream);
+        }
+        @\flock($stream, \LOCK_UN);
+        $closed = @\fclose($stream);
+        if (!$valid || !$closed) {
+            return self::cleanupMultipartTemporaryFile($identity)
+                ? ['file' => null, 'complete' => false]
+                : ['file' => $identity, 'complete' => false];
+        }
+
+        return ['file' => $identity, 'complete' => true];
+    }
+
+    /** @return list<array{path:string,dev:int,ino:int}> */
+    private static function normalizeMultipartTemporaryFiles(mixed $files): array
+    {
+        if (!\is_array($files)) {
+            return [];
+        }
+        $normalized = [];
+        foreach ($files as $file) {
+            if (!\is_array($file)
+                || !\is_string($file['path'] ?? null)
+                || !\is_int($file['dev'] ?? null)
+                || !\is_int($file['ino'] ?? null)
+            ) {
+                continue;
+            }
+            $normalized[] = $file;
+        }
+        return $normalized;
+    }
+
+    /** @param array{path:string,dev:int,ino:int} $file */
+    private static function cleanupMultipartTemporaryFile(array $file): bool
+    {
+        $path = $file['path'];
+        if (!\file_exists($path) && !\is_link($path)) {
+            return true;
+        }
+        $current = @\lstat($path);
+        if (!\is_array($current)
+            || \is_link($path)
+            || (((int)($current['mode'] ?? 0)) & 0170000) !== 0100000
+            || (int)($current['nlink'] ?? 0) !== 1
+            || (int)($current['dev'] ?? -1) !== $file['dev']
+            || (int)($current['ino'] ?? -1) !== $file['ino']
+        ) {
+            return false;
+        }
+        return @\unlink($path);
+    }
+
+    /**
+     * Release files owned by the WLS multipart parser at the end of a request.
+     * Native FPM upload files are never recorded here.
+     */
+    public function releaseMultipartTemporaryFiles(): void
+    {
+        $temporaryFiles = $this->multipartTemporaryFiles;
+        $this->multipartTemporaryFiles = [];
+        $failedFiles = [];
+        foreach ($temporaryFiles as $temporaryFile) {
+            if (!self::cleanupMultipartTemporaryFile($temporaryFile)) {
+                $failedFiles[] = $temporaryFile;
+            }
+        }
+        if ($failedFiles !== []) {
+            // Keep failed paths for the destructor/finalizer to retry rather
+            // than forgetting a transient cleanup failure permanently.
+            $this->multipartTemporaryFiles = $failedFiles;
+            throw new \RuntimeException((string)__('WLS 上传临时文件清理失败：%{1} 个文件仍未删除。', [count($failedFiles)]));
+        }
+    }
+
+    public function __destruct()
+    {
+        try {
+            $this->releaseMultipartTemporaryFiles();
+        } catch (\Throwable) {
+            // The WLS runtime reports cleanup failures while the request
+            // context is still active; destruction is only a final fallback.
+        }
     }
 
     /**

@@ -10,40 +10,40 @@
     @media(max-width:560px){.async-probe .probe-steps{grid-template-columns:1fr}}
 </style>
 <div class="async-probe" id="async-event-probe-app" data-provider="async_event_probe">
-    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
         <div>
-            <h4 class="mb-1 font-size-18"><lang>异步资源变更验收台</lang></h4>
-            <p class="text-muted mb-0"><lang>真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。</lang></p>
+            <h4 class="w-text" style="--w-mb:var(--weline-space-1);--w-font-size:1.125rem;"><lang>异步资源变更验收台</lang></h4>
+            <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。</lang></p>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary" type="button" id="probe-trigger"><lang>1. 发起资源变更</lang></button>
-            <button class="btn btn-outline-primary" type="button" id="probe-advance" disabled><lang>2. 推进异步链路</lang></button>
-            <button class="btn btn-outline-secondary" type="button" id="probe-refresh" disabled><lang>刷新状态</lang></button>
+        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <button class="w-button" type="button" id="probe-trigger" data-tone="primary"><lang>1. 发起资源变更</lang></button>
+            <button class="w-button" type="button" id="probe-advance" disabled data-tone="primary" data-variant="outline"><lang>2. 推进异步链路</lang></button>
+            <button class="w-button" type="button" id="probe-refresh" disabled data-tone="neutral" data-variant="outline"><lang>刷新状态</lang></button>
         </div>
     </div>
 
-    <div class="alert alert-info" id="probe-message" role="status" aria-live="polite">
+    <div class="w-alert" id="probe-message" role="status" aria-live="polite" data-tone="info">
         <lang>点击“发起资源变更”创建一个仅用于验收的 async_probe 资源。</lang>
     </div>
 
-    <div class="probe-steps mb-3" aria-label="异步链路阶段">
-        <div class="probe-step" id="probe-step-request"><strong><lang>HTTP / w_changed</lang></strong><div class="text-muted mt-1"><lang>请求内构造 ResourceChange v1</lang></div></div>
-        <div class="probe-step" id="probe-step-outbox"><strong><lang>Outbox</lang></strong><div class="text-muted mt-1"><lang>与事务一起提交</lang></div></div>
-        <div class="probe-step" id="probe-step-delivery"><strong><lang>Delivery / Queue</lang></strong><div class="text-muted mt-1"><lang>Relay 展开并建立队列尝试</lang></div></div>
-        <div class="probe-step" id="probe-step-observer"><strong><lang>Async Observer</lang></strong><div class="text-muted mt-1"><lang>Worker 执行探针并进入 succeeded</lang></div></div>
+    <div class="probe-steps" aria-label="异步链路阶段" style="--w-mb:var(--weline-space-4);">
+        <div class="probe-step" id="probe-step-request"><strong><lang>HTTP / w_changed</lang></strong><div class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-1);"><lang>请求内构造 ResourceChange v1</lang></div></div>
+        <div class="probe-step" id="probe-step-outbox"><strong><lang>Outbox</lang></strong><div class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-1);"><lang>与事务一起提交</lang></div></div>
+        <div class="probe-step" id="probe-step-delivery"><strong><lang>Delivery / Queue</lang></strong><div class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-1);"><lang>Relay 展开并建立队列尝试</lang></div></div>
+        <div class="probe-step" id="probe-step-observer"><strong><lang>Async Observer</lang></strong><div class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-1);"><lang>Worker 执行探针并进入 succeeded</lang></div></div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <div class="row g-2 mb-0">
-                <strong class="col-sm-3"><lang>Event ID</lang></strong><span class="col-sm-9 probe-code" id="probe-event-id">—</span>
-                <strong class="col-sm-3"><lang>Probe ID</lang></strong><span class="col-sm-9 probe-code" id="probe-id">—</span>
-                <strong class="col-sm-3"><lang>Outbox</lang></strong><span class="col-sm-9 probe-code" id="probe-outbox">—</span>
-                <strong class="col-sm-3"><lang>探针 Delivery</lang></strong><span class="col-sm-9 probe-code" id="probe-delivery">—</span>
-                <strong class="col-sm-3"><lang>异步性证明</lang></strong><span class="col-sm-9" id="probe-proof">—</span>
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-grid" style="--w-gap:var(--weline-space-2);--w-mb:0;">
+                <strong style="--w-span:3;"><lang>Event ID</lang></strong><span class="probe-code" id="probe-event-id" style="--w-span:9;">—</span>
+                <strong style="--w-span:3;"><lang>Probe ID</lang></strong><span class="probe-code" id="probe-id" style="--w-span:9;">—</span>
+                <strong style="--w-span:3;"><lang>Outbox</lang></strong><span class="probe-code" id="probe-outbox" style="--w-span:9;">—</span>
+                <strong style="--w-span:3;"><lang>探针 Delivery</lang></strong><span class="probe-code" id="probe-delivery" style="--w-span:9;">—</span>
+                <strong style="--w-span:3;"><lang>异步性证明</lang></strong><span id="probe-proof" style="--w-span:9;">—</span>
             </div>
         </div>
     </div>
-    <details class="card"><summary class="card-header"><lang>原始证据 JSON</lang></summary><div class="card-body"><pre id="probe-json" class="probe-code mb-0">{}</pre></div></details>
+    <details class="w-card"><summary class="w-card__header"><lang>原始证据 JSON</lang></summary><div class="w-card__body"><pre id="probe-json" class="probe-code" style="--w-mb:0;">{}</pre></div></details>
 </div>
 <script src="@static(Weline_DeveloperWorkspace::js/async-event-probe.js)?v=20260723-r1" defer></script>

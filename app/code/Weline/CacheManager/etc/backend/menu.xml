@@ -6,11 +6,11 @@
     <!-- 缓存服务 - 归入系统管理 > 系统服务 -->
     <menu source="Weline_CacheManager::cache_service" name="cache_service" title="缓存服务"
           parent="Weline_Backend::system_service_group"
-          icon="mdi mdi-cached" order="10">
+          icon="circle" order="10">
         
         <menu source="Weline_CacheManager::system_cache" name="system_cache" title="缓存管理" action="*/system/cache"
-              icon="mdi mdi-database-cog-outline" order="10"/>
+              icon="settings" order="10"/>
         <menu source="Weline_CacheManager::cache_policy" name="cache_policy" title="缓存策略" action="*/system/cache-policy"
-              icon="mdi mdi-tune-variant" order="20"/>
+              icon="settings" order="20"/>
     </menu>
 </menus>

@@ -19,77 +19,73 @@
 删除失败：,"Delete failed:"
 历史记录已清空,"History has been cleared"
 清空失败：,"Clear failed:"
-bi-clock-history,bi-clock-history
-下载历史记录,下载历史记录
-查看历史,查看历史
-bi-list,bi-list
-查看下载历史,查看下载历史
-删除记录,删除记录
-bi-trash,bi-trash
-删除下载记录,删除下载记录
-清空历史,清空历史
-清空下载历史,清空下载历史
+clock,clock
+下载历史记录,"Download history"
+查看历史,"View history"
+list,list
+查看下载历史,"View download history"
+删除记录,"delete record"
+trash,trash
+删除下载记录,"Delete download history"
+清空历史,"Clear history"
+清空下载历史,"Clear download history"
 应用商城,"App Store"
-"缺少许可证或模块 ID","缺少许可证或模块 ID"
-模块已下载到临时目录,模块已下载到临时目录
+"缺少许可证或模块 ID","Missing license or module ID"
+模块已下载到临时目录,"Module downloaded to temporary directory"
 模块下载失败：,"Module download failed:"
 请先绑定官网账户,"Please bind the official site account first"
 获取授权令牌失败,"Failed to get authorization token"
 获取模块列表失败：,"Failed to fetch module list:"
-"缺少模块 ID","缺少模块 ID"
-安装授权,安装授权
+"缺少模块 ID","Missing module ID"
+安装授权,"Install license"
 缺少许可证密钥,"Missing license key"
 该应用已安装旧版本，请进入我的模块执行更新。,"An older version of this app is installed. Open My modules to update it."
 该应用已安装，无需重复安装。,"This app is already installed. No repeated installation is needed."
-请勾选并授权应用所需权限后再安装。,请勾选并授权应用所需权限后再安装。
-模块已下载安装，功能页面已生成,模块已下载安装，功能页面已生成
+请勾选并授权应用所需权限后再安装。,"Please check and authorize the required permissions for the application before installing."
+模块已下载安装，功能页面已生成,"The module has been downloaded and installed, and the function page has been generated"
 模块安装失败：,"Module installation failed:"
 安装失败：,"Installation failed:"
-授权令牌无效，请重新授权官网账户,授权令牌无效，请重新授权官网账户
-获取模块列表失败,获取模块列表失败
-当前账户还没有该应用的许可证，请先在官网获取或购买。,当前账户还没有该应用的许可证，请先在官网获取或购买。
-未找到可安装的应用或应用尚未发布。,未找到可安装的应用或应用尚未发布。
-商城首页,商城首页
-bi-bag,bi-bag
-应用商城首页,应用商城首页
-查看商城,查看商城
-bi-house,bi-house
-查看应用商城,查看应用商城
-下载模块,下载模块
-bi-cloud-download,bi-cloud-download
-从官网商城下载模块包,从官网商城下载模块包
-模块列表,模块列表
-获取模块列表,获取模块列表
-bi-shield-check,bi-shield-check
-安装前确认应用权限,安装前确认应用权限
-安装模块,安装模块
-bi-download,bi-download
-下载并安装模块,下载并安装模块
+授权令牌无效，请重新授权官网账户,"The authorization token is invalid, please re-authorize the official website account"
+获取模块列表失败,"Failed to get module list"
+当前账户还没有该应用的许可证，请先在官网获取或购买。,"The current account does not have a license for this application. Please obtain or purchase it on the official website first."
+未找到可安装的应用或应用尚未发布。,"No installable app found or the app hasn't been published yet."
+商城首页,"Mall homepage"
+circle,circle
+应用商城首页,"Application mall homepage"
+查看商城,"View the mall"
+查看应用商城,"View app store"
+下载模块,"Download module"
+download,download
+从官网商城下载模块包,"Download the module package from the official website mall"
+模块列表,"Module list"
+获取模块列表,"Get module list"
+check,check
+安装前确认应用权限,"Confirm app permissions before installation"
+安装模块,"Install module"
+下载并安装模块,"Download and install the module"
 账户绑定,"Account Binding"
-缺少授权码,缺少授权码
-授权绑定失败：,授权绑定失败：
+缺少授权码,"Missing authorization code"
+授权绑定失败：,"Authorization binding failed:"
 无效的请求方法,"Invalid request method"
 请输入邮箱和密码,"Please enter email and password"
 绑定失败：,"Binding failed:"
 解绑失败：,"Unbinding failed:"
-bi-link-45deg,bi-link-45deg
-绑定官网账户,绑定官网账户
-查看账户,查看账户
-bi-person,bi-person
-查看账户绑定状态,查看账户绑定状态
-官网授权,官网授权
-跳转官网授权当前终端,跳转官网授权当前终端
-授权回调,授权回调
-bi-arrow-left-right,bi-arrow-left-right
-接收官网授权回调,接收官网授权回调
-绑定账户,绑定账户
-bi-link,bi-link
-解绑账户,解绑账户
-bi-link-break,bi-link-break
-解绑官网账户,解绑官网账户
-账户状态,账户状态
-bi-info-circle,bi-info-circle
-获取账户绑定状态,获取账户绑定状态
+link,link
+绑定官网账户,"Bind official website account"
+查看账户,"View account"
+user,user
+查看账户绑定状态,"Check account binding status"
+官网授权,"Official website authorization"
+跳转官网授权当前终端,"Jump to the official website to authorize the current terminal"
+授权回调,"Authorization callback"
+arrow-left,arrow-left
+接收官网授权回调,"Receive official website authorization callback"
+绑定账户,"Bind account"
+解绑账户,"Unbind account"
+解绑官网账户,"Unbind official website account"
+账户状态,"Account status"
+info,info
+获取账户绑定状态,"Get account binding status"
 许可证管理,"License Management"
 获取授权令牌失败，请重新绑定账户,"Failed to get authorization token. Please rebind the account."
 许可证激活成功,"License activated successfully"
@@ -97,25 +93,23 @@ bi-info-circle,bi-info-circle
 激活失败：,"Activation failed:"
 验证失败：,"Validation failed:"
 续订失败：,"Renewal failed:"
-bi-key,bi-key
-查看许可证,查看许可证
-查看许可证列表,查看许可证列表
-激活许可证,激活许可证
-bi-check-circle,bi-check-circle
-验证许可证,验证许可证
-续订许可证,续订许可证
-bi-arrow-repeat,bi-arrow-repeat
+key,key
+查看许可证,"View license"
+查看许可证列表,"View license list"
+激活许可证,"Activate license"
+验证许可证,"Verify license"
+续订许可证,"Renew license"
 我的模块,"My modules"
 模块不存在,"Module does not exist"
 缺少模块标识,"Missing module identifier"
-"App 商城不执行卸载。请使用系统模块卸载流程，系统会自动执行卸载数据备份。","App 商城不执行卸载。请使用系统模块卸载流程，系统会自动执行卸载数据备份。"
-获取系统卸载提示失败：,获取系统卸载提示失败：
+"App 商城不执行卸载。请使用系统模块卸载流程，系统会自动执行卸载数据备份。","The App Store does not perform uninstallation. Please use the system module uninstall process, and the system will automatically perform uninstall data backup."
+获取系统卸载提示失败：,"Failed to obtain system uninstall prompt:"
 已重新检查平台更新。,"Platform updates have been checked again."
-"缺少平台应用 ID","缺少平台应用 ID"
+"缺少平台应用 ID","Missing platform app ID"
 获取授权令牌失败，请重新绑定官网账户,"Failed to get the authorization token. Bind the official account again."
-评价提交失败,评价提交失败
-评价已提交，官网评分已更新。,评价已提交，官网评分已更新。
-评价提交失败：,评价提交失败：
+评价提交失败,"Review submission failed"
+评价已提交，官网评分已更新。,"The evaluation has been submitted and the official website rating has been updated."
+评价提交失败：,"Review submission failed:"
 "缺少安装记录 ID","Missing install record ID"
 卸载失败：,"Uninstall failed:"
 当前模块已是最新版本,"The current module is already up to date"
@@ -124,27 +118,25 @@ bi-arrow-repeat,bi-arrow-repeat
 请先绑定官网账户后检查更新,"Bind the official account before checking updates."
 检查更新失败,"Failed to check for updates"
 检查更新失败：,"Failed to check for updates:"
-bi-puzzle,bi-puzzle
-"App 商城安装来源记录","App 商城安装来源记录"
-查看模块,查看模块
-"查看 App 商城安装来源记录","查看 App 商城安装来源记录"
-模块详情,模块详情
-查看模块详情,查看模块详情
-系统卸载提示,系统卸载提示
-bi-terminal,bi-terminal
-提示使用系统模块卸载,提示使用系统模块卸载
+puzzle,puzzle
+"App 商城安装来源记录","App store installation source record"
+查看模块,"View module"
+"查看 App 商城安装来源记录","View App Store installation source records"
+模块详情,"Module details"
+查看模块详情,"View module details"
+系统卸载提示,"System uninstall prompt"
+terminal,terminal
+提示使用系统模块卸载,"Prompt to use system module to uninstall"
 检查更新,"Check updates"
-检查模块更新,检查模块更新
-更新模块,更新模块
-bi-cloud-arrow-down,bi-cloud-arrow-down
-下载并升级已安装模块,下载并升级已安装模块
-鏇存柊妯″潡,鏇存柊妯″潡
-涓嬭浇骞跺崌绾у凡瀹夎妯″潡,涓嬭浇骞跺崌绾у凡瀹夎妯″潡
-提交评价,提交评价
-bi-star,bi-star
-从终端提交应用评分和评价,从终端提交应用评分和评价
-卸载模块,卸载模块
-"通过系统卸载流程卸载 App 商城模块","通过系统卸载流程卸载 App 商城模块"
+检查模块更新,"Check for module updates"
+更新模块,"Update module"
+arrow-down,arrow-down
+下载并升级已安装模块,"Download and upgrade installed modules"
+提交评价,"Submit review"
+star,star
+从终端提交应用评分和评价,"Submit app ratings and reviews from the terminal"
+卸载模块,"Uninstall module"
+"通过系统卸载流程卸载 App 商城模块","Uninstall the App Store module through the system uninstall process"
 有效,Valid
 未激活,"Not activated"
 待激活,"Pending activation"
@@ -152,7 +144,7 @@ bi-star,bi-star
 已撤销,Revoked
 未知,Unknown
 统一查看官网账户下发到当前后台的模块许可证。,"View module licenses issued by the official account to this backend."
-账户授权,账户授权
+账户授权,"Account authorization"
 请先绑定官网账户后再管理许可证。,"Bind the official site account before managing licenses."
 许可证总数,"Total licenses"
 有效许可证,"Valid licenses"
@@ -182,119 +174,119 @@ bi-star,bi-star
 "Back To WLS Panel","Back To WLS Panel"
 正在卸载模块，请不要关闭页面。,"Uninstalling the module. Do not close this page."
 系统正在执行数据备份、文件备份和模块卸载，完成后页面会刷新。,"The system is backing up data and files, then uninstalling the module. The page will refresh when it finishes."
-版本：,版本：
+版本：,Version:
 旧版本备份：,"Old version backup:"
 更新记录：,"Update record:"
-模块：,模块：
+模块：,Module:
 卸载记录：,"Uninstall record:"
 系统卸载输出,"System uninstall output"
 最近一次卸载已完成,"Latest uninstall completed"
 卸载时间：,"Uninstalled at:"
 卸载结果记录：,"Uninstall result record:"
 更新检查不可用,"Update check unavailable"
-标签,标签
-全部标签,全部标签
+标签,Label
+全部标签,"All tags"
 Surface,Surface
-"全部 Surface","全部 Surface"
-筛选,筛选
-清除筛选,清除筛选
-模块,模块
+"全部 Surface","All Surface"
+筛选,filter
+清除筛选,"Clear filters"
+模块,module
 当前版本,"Current version"
 平台最新版本,"Latest platform version"
 更新状态,"Update status"
 来源,Source
-系统状态,系统状态
-说明：,说明：
+系统状态,"System status"
+说明：,illustrate:
 未获取,"Not fetched"
 可更新,"Update available"
 已是最新,"Up to date"
 待检查,"Pending check"
-官方商城,官方商城
-已启用,已启用
-已注册未启用,已注册未启用
-系统中已不存在,系统中已不存在
+官方商城,"Official mall"
+已启用,Enabled
+已注册未启用,"Registered but not activated"
+系统中已不存在,"no longer exists in the system"
 安装：,Installed:
 更新：,Updated:
 更新,Update
 卸载,Uninstall
 卸载前系统会自动执行数据与文件备份。,"The system automatically backs up data and files before uninstalling."
-评分,评分
-评价,评价
-安装使用后的反馈,安装使用后的反馈
-"暂无 App 商城安装记录。","暂无 App 商城安装记录。"
+评分,score
+评价,evaluate
+安装使用后的反馈,"Feedback after installation and use"
+"暂无 App 商城安装记录。","There is currently no App Store installation record."
 "当前列表只展示通过官方 App 商店安装的应用；系统内置模块不会出现在这里。","This list only shows apps installed from the official App Store. Built-in system modules do not appear here."
 "每次从官方 App 商店下载都会记录当时下载的模块版本、文件哈希和许可证，便于追踪安装来源。","Every official App Store download records the module version, file hash, and license used at that moment."
 "最近 50 条","Latest 50"
 时间,Time
 下载版本,"Downloaded version"
 文件,File
-许可证,许可证
+许可证,license
 完成：,Completed:
 哈希：,Hash:
 "官方 App 商店","Official App Store"
 "暂无下载历史。完成一次 App 商店下载后，这里会显示实际下载版本。","No download history yet. After an App Store download, the exact downloaded version appears here."
-安装授权未完成,安装授权未完成
-应用安装授权,应用安装授权
-待安装应用,待安装应用
-版本,版本
-当前终端,当前终端
+安装授权未完成,"Installation authorization is not completed"
+应用安装授权,"Application installation authorization"
+待安装应用,"Apps to be installed"
+版本,Version
+当前终端,"current terminal"
 返回应用商城,"Back to App Store"
 该应用已安装,"This app is already installed"
 当前终端已安装该应用，不需要重复执行安装授权。,"This terminal already has this app installed. Repeating installation authorization is not needed."
 本地版本：,"Local version:"
 检测到商城存在新版本，请进入我的模块走更新流程。,"A newer marketplace version is available. Use the update flow in My modules."
 去更新,Update
-该应用请求访问以下资源,该应用请求访问以下资源
-勾选全部必需权限后，终端才会下载安装到本系统。,勾选全部必需权限后，终端才会下载安装到本系统。
-该应用未声明额外资源权限，将只执行模块包下载、校验和安装。,该应用未声明额外资源权限，将只执行模块包下载、校验和安装。
-确认授权并安装,确认授权并安装
-授权记录与安装记录会保留在当前终端，用于后续更新、卸载和审计。,授权记录与安装记录会保留在当前终端，用于后续更新、卸载和审计。
-授权并安装,授权并安装
+该应用请求访问以下资源,"The application requests access to the following resources"
+勾选全部必需权限后，终端才会下载安装到本系统。,"Only after all necessary permissions are checked, the terminal will be downloaded and installed into the system."
+该应用未声明额外资源权限，将只执行模块包下载、校验和安装。,"The application does not declare additional resource permissions and will only perform module package download, verification and installation."
+确认授权并安装,"Confirm authorization and install"
+授权记录与安装记录会保留在当前终端，用于后续更新、卸载和审计。,"Authorization records and installation records will be retained on the current terminal for subsequent updates, uninstallation, and auditing."
+授权并安装,"Authorize and install"
 生产商城,"Production App Store"
 本地商城,"Local App Store"
 已配置,Configured
 应用商城端点,"App Store endpoint"
 "本地开发应使用 https://app.weline.test:9523，部署后测试应自动使用 https://app.aiweline.com。","Local development should use https://app.weline.test:9523; deployed tests should automatically use https://app.aiweline.com."
 来源：,Source:
-文件：,文件：
-目录：,目录：
-商城说明：,商城说明：
-安装记录：,安装记录：
-功能页面：,功能页面：
-尚未绑定官方账户。请先到账户授权页面完成官网授权。,尚未绑定官方账户。请先到账户授权页面完成官网授权。
-官方账户已绑定：,官方账户已绑定：
-未知账户,未知账户
+文件：,document:
+目录：,"Table of contents:"
+商城说明：,"Mall description:"
+安装记录：,"Installation record:"
+功能页面：,"Function page:"
+尚未绑定官方账户。请先到账户授权页面完成官网授权。,"No official account has been bound yet. Please first go to the account authorization page to complete the official website authorization."
+官方账户已绑定：,"The official account has been bound:"
+未知账户,"unknown account"
 店铺域名：,"Store domain:"
 搜索应用、开发者或能力,"Search apps, developers, or capabilities"
 输入关键词后直接在结果里安装,"Type keywords and install directly from the results"
-价格,价格
+价格,price
 全部价格,"All prices"
-免费,免费
-付费,付费
+免费,free
+付费,Pay
 搜索,Search
-免费应用授权后安装,免费应用授权后安装
-付费应用购买并授权后安装,付费应用购买并授权后安装
+免费应用授权后安装,"Install free apps after authorization"
+付费应用购买并授权后安装,"Paid applications are purchased and installed after authorization"
 同一官网账号可多端登录,"One official account can sign in on multiple terminals"
 已安装,Installed
 本地：,Local:
-下载：,下载：
-大小：,大小：
-下载,下载
+下载：,download:
+大小：,size:
+下载,download
 购买,Buy
 购买后刷新,"Refresh after purchase"
 免费授权尚未下发，请刷新列表后再安装。,"The free license has not been issued yet. Refresh the list and install again."
 没有找到匹配的应用。,"No matching apps found."
-官网暂未发布可下载模块。,官网暂未发布可下载模块。
-去官网授权,去官网授权
-当前终端已绑定官方账户,当前终端已绑定官方账户
-邮箱：,邮箱：
+官网暂未发布可下载模块。,"The official website has not yet released downloadable modules."
+去官网授权,"Go to the official website for authorization"
+当前终端已绑定官方账户,"The current terminal has been bound to an official account"
+邮箱：,Mail:
 未知邮箱,"Unknown email"
-名称：,名称：
-未设置,未设置
-当前终端尚未绑定官方账户。请点击“去官网授权”，在官网注册或登录后自动回到当前终端。,当前终端尚未绑定官方账户。请点击“去官网授权”，在官网注册或登录后自动回到当前终端。
-授权配置,授权配置
-官网地址,官网地址
-回调地址,回调地址
+名称：,name:
+未设置,"not set"
+当前终端尚未绑定官方账户。请点击“去官网授权”，在官网注册或登录后自动回到当前终端。,"The current terminal has not been bound to an official account. Please click ""Go to the official website for authorization"" to automatically return to the current terminal after registering or logging in on the official website."
+授权配置,"Authorization configuration"
+官网地址,"Official website address"
+回调地址,"callback address"
 账户验证失败,"Account verification failed"
 账户绑定已更新,"Account binding updated"
 账户绑定成功,"Account binding succeeded"
@@ -315,13 +307,13 @@ Surface,Surface
 令牌格式无效,"Token format is invalid"
 令牌数据损坏,"Token data is corrupted"
 令牌解密失败,"Token decryption failed"
-"缺少 AppStore 许可证或平台模块 ID","缺少 AppStore 许可证或平台模块 ID"
-"AppStore 未返回指定版本制品","AppStore 未返回指定版本制品"
-"AppStore 制品模块名不匹配","AppStore 制品模块名不匹配"
-"AppStore 制品模块目录无效","AppStore 制品模块目录无效"
-"拒绝删除非受管 AppStore 解压目录: %{1}","拒绝删除非受管 AppStore 解压目录: %{1}"
-"拒绝删除非受管 AppStore 下载文件: %{1}","拒绝删除非受管 AppStore 下载文件: %{1}"
-"无法清理 AppStore 下载文件: %{1}","无法清理 AppStore 下载文件: %{1}"
+"缺少 AppStore 许可证或平台模块 ID","Missing AppStore license or platform module ID"
+"AppStore 未返回指定版本制品","AppStore did not return the specified version of the product"
+"AppStore 制品模块名不匹配","AppStore product module name does not match"
+"AppStore 制品模块目录无效","AppStore product module directory is invalid"
+"拒绝删除非受管 AppStore 解压目录: %{1}","Refuse to delete unmanaged AppStore unzipped directory: %{1}"
+"拒绝删除非受管 AppStore 下载文件: %{1}","Refuse to delete unmanaged AppStore downloads: %{1}"
+"无法清理 AppStore 下载文件: %{1}","Unable to clean AppStore download files: %{1}"
 缺少模块名称,"Missing module name"
 模块名称不合法,"Invalid module name"
 "App 商城模块不能在这里卸载","The App Store module cannot be uninstalled here"
@@ -342,23 +334,44 @@ Surface,Surface
 模块结构无效：缺少模块名,"Invalid module structure: missing module name"
 "模块名格式无效，必须是 Vendor_Module 格式","Invalid module name format. Expected Vendor_Module."
 "Invalid app store package manifest.","Invalid app store package manifest."
-"模块 Marketplace Meta 校验失败：","模块 Marketplace Meta 校验失败："
+"模块 Marketplace Meta 校验失败：","Module Marketplace Meta verification failed:"
 "Invalid app store package path:","Invalid app store package path:"
 "Invalid bundled source path:","Invalid bundled source path:"
 "App code path does not exist.","App code path does not exist."
 "Invalid bundled target path:","Invalid bundled target path:"
-"模块 register.php 不存在","模块 register.php 不存在"
-无法创建模块安装脚本,无法创建模块安装脚本
-无法写入商城应用说明文件：,无法写入商城应用说明文件：
-"无法写入 AppStore 安装记录：","无法写入 AppStore 安装记录："
+"模块 register.php 不存在","Module register.php does not exist"
+无法创建模块安装脚本,"Unable to create module installation script"
+无法写入商城应用说明文件：,"Unable to write to the mall application description file:"
+"无法写入 AppStore 安装记录：","Unable to write AppStore installation record:"
 "下载文件失败，HTTP 状态码：","Failed to download file. HTTP status code:"
 "Module download failed:","Module download failed:"
 "failed to save failure log:","failed to save failure log:"
-"缺少平台模块 ID，无法刷新 Meta","缺少平台模块 ID，无法刷新 Meta"
-"请先绑定官网账户后刷新 Meta","请先绑定官网账户后刷新 Meta"
-"平台未返回有效 Meta","平台未返回有效 Meta"
-"Meta 已从平台刷新","Meta 已从平台刷新"
-请先绑定官网账户后同步标签注册表,请先绑定官网账户后同步标签注册表
-平台未返回有效标签注册表,平台未返回有效标签注册表
-标签注册表已同步,标签注册表已同步
-标签注册表同步失败,标签注册表同步失败
+"缺少平台模块 ID，无法刷新 Meta","Unable to refresh Meta due to missing platform module ID"
+"请先绑定官网账户后刷新 Meta","Please bind the official website account first and then refresh the Meta"
+"平台未返回有效 Meta","The platform did not return a valid Meta"
+"Meta 已从平台刷新","Meta has been refreshed from the platform"
+请先绑定官网账户后同步标签注册表,"Please bind the official website account first and then synchronize the label registration form."
+平台未返回有效标签注册表,"The platform did not return a valid tag registration form"
+标签注册表已同步,"Tag registry synchronized"
+标签注册表同步失败,"Tag registry synchronization failed"
+bi-clock-history,bi-clock-history
+bi-list,bi-list
+bi-trash,bi-trash
+bi-bag,bi-bag
+bi-house,bi-house
+bi-cloud-download,bi-cloud-download
+bi-shield-check,bi-shield-check
+bi-download,bi-download
+bi-link-45deg,bi-link-45deg
+bi-person,bi-person
+bi-arrow-left-right,bi-arrow-left-right
+bi-link,bi-link
+bi-link-break,bi-link-break
+bi-info-circle,bi-info-circle
+bi-key,bi-key
+bi-check-circle,bi-check-circle
+bi-arrow-repeat,bi-arrow-repeat
+bi-puzzle,bi-puzzle
+bi-terminal,bi-terminal
+bi-cloud-arrow-down,bi-cloud-arrow-down
+bi-star,bi-star

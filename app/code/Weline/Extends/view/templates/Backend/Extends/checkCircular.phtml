@@ -1,12 +1,12 @@
 <!-- 页面标题 -->
-<div class="page-title">
+<div class="w-backend-page__title">
     <h1><?= $title ?? '循环依赖检测' ?></h1>
     <div class="page-actions">
-        <a href="*/backend/extends/index" class="btn btn-secondary">
-            <i class="mdi mdi-arrow-left"></i> 返回列表
+        <a href="*/backend/extends/index" class="w-button" data-tone="neutral">
+            <w:icon name="arrow-left" size="sm"></w:icon> 返回列表
         </a>
-        <a href="*/backend/extends/refresh" class="btn btn-warning">
-            <i class="mdi mdi-refresh"></i> 刷新注册表
+        <a href="*/backend/extends/refresh" class="w-button" data-tone="warning">
+            <w:icon name="refresh" size="sm"></w:icon> 刷新注册表
         </a>
     </div>
 </div>
@@ -19,7 +19,7 @@ $cycles = $this->getData('cycles') ?? [];
     <?php if (empty($cycles)): ?>
         <div class="success-message">
             <div class="icon">
-                <i class="mdi mdi-check-circle"></i>
+                <w:icon name="check" size="sm"></w:icon>
             </div>
             <h2>未检测到循环依赖</h2>
             <p>所有模块的扩展关系都是正常的，没有发现循环依赖问题。</p>
@@ -27,7 +27,7 @@ $cycles = $this->getData('cycles') ?? [];
     <?php else: ?>
         <div class="error-message">
             <div class="icon">
-                <i class="mdi mdi-alert-circle"></i>
+                <w:icon name="warning" size="sm"></w:icon>
             </div>
             <h2>检测到 <?= count($cycles) ?> 个循环依赖</h2>
             <p>以下模块之间存在循环依赖关系，请检查并修复：</p>
@@ -50,7 +50,7 @@ $cycles = $this->getData('cycles') ?? [];
                         $cyclePath[] = '<strong>' . htmlspecialchars($cycle[0]) . '</strong>';
                         ?>
                         <div class="path">
-                            <?= implode(' <i class="mdi mdi-arrow-right"></i> ', $cyclePath) ?>
+                            <?= implode(' <w-icon name="arrow-right" size="sm"></w-icon> ', $cyclePath) ?>
                         </div>
                     </div>
                     <div class="cycle-details">
@@ -65,8 +65,7 @@ $cycles = $this->getData('cycles') ?? [];
                                     <strong><?= htmlspecialchars($current) ?></strong> 
                                     扩展了 
                                     <strong><?= htmlspecialchars($next) ?></strong>
-                                    <a href="*/backend/extends/moduleDetail/module/<?= urlencode($next) ?>" 
-                                       class="btn btn-sm btn-outline-primary">查看详情</a>
+                                    <a href="*/backend/extends/moduleDetail/module/<?= urlencode($next) ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">查看详情</a>
                                 </li>
                             <?php endfor; ?>
                         </ul>
@@ -76,7 +75,7 @@ $cycles = $this->getData('cycles') ?? [];
         </div>
         
         <div class="warning-box">
-            <h4><i class="mdi mdi-information"></i> 如何解决循环依赖？</h4>
+            <h4><w:icon name="info" size="sm"></w:icon> 如何解决循环依赖？</h4>
             <ol>
                 <li>检查循环依赖链中的每个模块，找出不必要的扩展关系</li>
                 <li>考虑将共同的功能提取到一个独立的模块中</li>

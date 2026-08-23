@@ -1,14 +1,14 @@
 ﻿"Unnamed Access","Unnamed Access"
-后台活动管理,后台活动管理
-"fas fa-history","fas fa-history"
-查看管理员在后台的操作,查看管理员在后台的操作
-后台活动历史,后台活动历史
-查看后台活动历史,查看后台活动历史
-删除日志,删除日志
-"fas fa-trash","fas fa-trash"
-后台活动详情,后台活动详情
-"fas fa-eye","fas fa-eye"
-查看后台活动详情,查看后台活动详情
+后台活动管理,"Backend activity management"
+history,history
+查看管理员在后台的操作,"View the administrator's operations in the background"
+后台活动历史,"Background activity history"
+查看后台活动历史,"View background activity history"
+删除日志,"Delete log"
+trash,trash
+后台活动详情,"Backstage event details"
+eye,eye
+查看后台活动详情,"View background activity details"
 管理员访问日志,"Admin Access Log"
 管理员访问日志，协助管理员了解用户访问情况，帮助管理员快速定位问题。,"Admin access log to help administrators understand user access patterns and quickly locate issues."
 删除,Delete
@@ -16,9 +16,9 @@
 请求ID,"Request ID"
 操作人,Operator
 操作名,"Operation name"
-业务对象,业务对象
-业务动作,业务动作
-业务数据,业务数据
+业务对象,"business object"
+业务动作,"business action"
+业务数据,"business data"
 主机,Host
 路径,Path
 模块,Module.
@@ -36,3 +36,7 @@ IP地址,"IP address"
 查看数据,"View Data"
 查看日志数据,"View Log Data"
 """Unnamed Access""","Unnamed Access"
+"fas fa-history","fas fa-history"
+"fas fa-trash","fas fa-trash"
+"fas fa-eye","fas fa-eye"
+后台日志,"Backend activity log"

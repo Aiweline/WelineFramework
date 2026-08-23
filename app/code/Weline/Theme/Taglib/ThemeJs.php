@@ -6,6 +6,15 @@ namespace Weline\Theme\Taglib;
 
 use Weline\Framework\Taglib\TaglibInterface;
 
+/**
+ * theme:js — load JS from a module's `view/theme/` (default module: Weline_Theme).
+ *
+ * Module statics stay on `@static(...)` / built-in `<js>`; do not convert those here.
+ *
+ * Examples:
+ * - `<theme:js>frontend/js/catalog-page.js</theme:js>`
+ * - `<theme:js>Vendor_Theme::frontend/js/catalog-page.js</theme:js>`
+ */
 class ThemeJs implements TaglibInterface
 {
     /**
@@ -71,11 +80,11 @@ class ThemeJs implements TaglibInterface
                 $attrs = '';
             }
 
-            if (empty($content)) {
+            if ($content === '') {
                 return '';
             }
 
-            $contentPhp = self::buildRuntimeStringExpression($content);
+            $contentPhp = self::buildRuntimeSourceExpression($content);
             $attrsPhp = var_export($attrs ? ' ' . trim($attrs) : '', true);
 
             return "<?php \$__themeJsSrc = \$this->fetchTagSource(\\Weline\\Framework\\View\\Data\\DataInterface::dir_type_THEME, {$contentPhp});"
@@ -83,6 +92,13 @@ class ThemeJs implements TaglibInterface
                 . " . htmlspecialchars((string)\$__themeJsSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')"
                 . " . '\\'></script>'; } ?>";
         };
+    }
+
+    private static function buildRuntimeSourceExpression(string $content): string
+    {
+        return '\\Weline\\Theme\\Taglib\\ThemeAssetSource::normalize('
+            . self::buildRuntimeStringExpression($content)
+            . ')';
     }
 
     private static function buildRuntimeStringExpression(string $content): string
@@ -145,6 +161,15 @@ class ThemeJs implements TaglibInterface
      */
     public static function document(): string
     {
-        return '主题JavaScript文件标签，用于加载theme目录下的JS文件';
+        return <<<'DOC'
+加载模块 view/theme/ 下的 JS（默认模块 Weline_Theme，可写 Vendor_Module::相对路径）。
+
+示例：
+<theme:js>frontend/js/catalog-page.js</theme:js>
+<theme:js>Vendor_Theme::frontend/js/catalog-page.js</theme:js>
+<theme:js>Weline_Other::frontend/js/custom.js</theme:js>
+
+模块 statics 请继续用 @static(...) 或内置 <js>，不要改写成 theme:js。
+DOC;
     }
 }

@@ -20,30 +20,27 @@ $addUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/getAdd');
 $landingUrls = $landing_urls ?? [];
 ?>
 <div class="weline-traffic-channel-list">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h4 mb-0"><lang>流量渠道</lang></h1>
-        <div class="d-flex gap-2 align-items-center">
-            <div class="btn-group btn-group-sm" role="group">
-                <a class="btn <?= $kindFilter === 'campaign' ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                   href="<?= $h($campaignUrl) ?>"><lang>投放渠道</lang></a>
-                <a class="btn <?= $kindFilter === 'rule' ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                   href="<?= $h($ruleUrl) ?>"><lang>匹配规则</lang></a>
-                <a class="btn <?= $kindFilter === 'all' ? 'btn-primary' : 'btn-outline-secondary' ?>"
-                   href="<?= $h($allUrl) ?>"><lang>全部</lang></a>
+    <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
+        <h1 class="h4" style="--w-mb:0;"><lang>流量渠道</lang></h1>
+        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+            <div class="w-button-group" role="group">
+                <a class="w-button <?= $kindFilter === 'campaign' ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($campaignUrl) ?>"><lang>投放渠道</lang></a>
+                <a class="w-button <?= $kindFilter === 'rule' ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($ruleUrl) ?>"><lang>匹配规则</lang></a>
+                <a class="w-button <?= $kindFilter === 'all' ? 'btn-primary' : 'btn-outline-secondary' ?>" href="<?= $h($allUrl) ?>"><lang>全部</lang></a>
             </div>
-            <a class="btn btn-sm btn-primary" href="<?= $h($addUrl) ?>"><lang>新建渠道</lang></a>
+            <a class="w-button" href="<?= $h($addUrl) ?>" data-tone="primary" data-size="sm"><lang>新建渠道</lang></a>
         </div>
     </div>
 
     <?php if ($loadError !== ''): ?>
-        <div class="alert alert-warning">
+        <div class="w-alert" data-tone="warning">
             <lang>渠道表尚未就绪或查询失败；完成 setup:upgrade 后刷新本页。</lang>
         </div>
     <?php endif; ?>
 
-    <div class="card">
-        <div class="card-body p-0">
-            <table class="table table-hover mb-0">
+    <div class="w-card">
+        <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+            <table class="w-table" style="--w-mb:0;">
                 <thead>
                 <tr>
                     <th><lang>名称</lang></th>
@@ -58,7 +55,7 @@ $landingUrls = $landing_urls ?? [];
                 <tbody>
                 <?php if (!$channels): ?>
                     <tr>
-                        <td colspan="7" class="text-muted text-center py-4">
+                        <td colspan="7" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
                             <lang>暂无渠道。</lang>
                             <a href="<?= $h($addUrl) ?>"><lang>新建渠道</lang></a>
                         </td>
@@ -88,18 +85,17 @@ $landingUrls = $landing_urls ?? [];
                             <td><?= $h($data['traffic_type'] ?? '') ?></td>
                             <td><?= $websiteId === 0 ? $h(__('全局')) : $h((string)$websiteId) ?></td>
                             <td><?= $enabled ? $h(__('是')) : $h(__('否')) ?></td>
-                            <td class="text-nowrap">
+                            <td data-wrap="false">
                                 <?php if ($channelId > 0): ?>
-                                    <a class="btn btn-sm btn-outline-secondary" href="<?= $h($detailUrl) ?>"><lang>详情</lang></a>
-                                    <a class="btn btn-sm btn-outline-primary" href="<?= $h($editUrl) ?>"><lang>编辑</lang></a>
+                                    <a class="w-button" href="<?= $h($detailUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><lang>详情</lang></a>
+                                    <a class="w-button" href="<?= $h($editUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><lang>编辑</lang></a>
                                     <?php if ($landingUrl !== ''): ?>
-                                        <button type="button" class="btn btn-sm btn-outline-success js-copy-landing"
-                                                data-url="<?= $h($landingUrl) ?>"><lang>复制链接</lang></button>
+                                        <button type="button" class="w-button js-copy-landing" data-url="<?= $h($landingUrl) ?>" data-tone="success" data-variant="outline" data-size="sm"><lang>复制链接</lang></button>
                                     <?php endif; ?>
-                                    <w:form method="post" action="@var($toggleUrl)" class="d-inline">
+                                    <w:form method="post" action="@var($toggleUrl)" data-w-display="inline">
                                         <input type="hidden" name="id" value="<?= $h((string)$channelId) ?>"/>
                                         <input type="hidden" name="enabled" value="<?= $enabled ? '0' : '1' ?>"/>
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                        <button type="submit" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
                                             <?= $enabled ? $h(__('停用')) : $h(__('启用')) ?>
                                         </button>
                                     </w:form>

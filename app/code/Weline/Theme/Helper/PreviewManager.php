@@ -109,9 +109,8 @@ class PreviewManager
     {
         $session = ObjectManager::getInstance(Session::class);
         
-        // 清除所有预览相关的session数据
-        $session->unsetData(self::SESSION_KEY_THEME_ID);
-        $session->unsetData(self::SESSION_KEY_THEME_AREA);
+        $session->delete(self::SESSION_KEY_THEME_ID);
+        $session->delete(self::SESSION_KEY_THEME_AREA);
         
         // 清除各类配置
         $areas = ['frontend', 'backend'];
@@ -119,9 +118,9 @@ class PreviewManager
         
         foreach ($areas as $area) {
             foreach ($types as $type) {
-                $session->unsetData(self::SESSION_KEY_PREFIX . $type . '_' . $area);
+                $session->delete(self::SESSION_KEY_PREFIX . $type . '_' . $area);
             }
-            $session->unsetData(self::SESSION_KEY_PREFIX . 'scope_' . $area);
+            $session->delete(self::SESSION_KEY_PREFIX . 'scope_' . $area);
         }
     }
     
@@ -155,9 +154,11 @@ class PreviewManager
         try {
             /** @var PreviewContextService $previewContextService */
             $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
-            return $previewContextService->shouldUseStoredContext();
+            return $previewContextService->hasAuthoritativePreviewContext();
         } catch (\Throwable) {
-            return true;
+            // Preview is privileged draft state. If the request boundary cannot
+            // prove that stored preview context is allowed, fail closed.
+            return false;
         }
     }
     
@@ -175,29 +176,6 @@ class PreviewManager
             $cache = w_cache('theme');
             $cache->clear();
             
-            // 清除CSS编译缓存（通过删除生成的CSS文件）
-            if ($themeId) {
-                /** @var \Weline\Theme\Model\WelineTheme $theme */
-                $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-                $theme->load($themeId);
-                
-                if ($theme->getId()) {
-                    /** @var \Weline\Theme\Helper\LayoutAssetsManager $assetsManager */
-                    $assetsManager = ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
-                    
-                    $areas = $area ? [$area] : ['frontend', 'backend'];
-                    $layoutTypes = ['homepage', 'account', 'default'];
-                    
-                    foreach ($areas as $areaItem) {
-                        foreach ($layoutTypes as $layoutType) {
-                            $cssPath = $assetsManager->getGeneratedCssPath($areaItem, $layoutType, 'default', $theme);
-                            if (is_file($cssPath)) {
-                                @unlink($cssPath);
-                            }
-                        }
-                    }
-                }
-            }
         } catch (\Exception $e) {
             // 清除缓存失败不影响其他操作
             if (defined('DEV') && DEV) {
@@ -234,4 +212,3 @@ class PreviewManager
         return $url;
     }
 }
-

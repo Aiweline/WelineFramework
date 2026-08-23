@@ -17,7 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\FreeShippingRule as FreeShippingRuleModel;
 use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
-#[Acl('Weline_Shipping::free_shipping_rule', '免邮规则管理', 'mdi-gift', '免邮规则管理', 'Weline_Backend::shipping_group')]
+#[Acl('Weline_Shipping::free_shipping_rule', '免邮规则管理', 'circle', '免邮规则管理', 'Weline_Backend::shipping_group')]
 class FreeShippingRule extends BackendController
 {
     private FreeShippingRuleModel $rule;
@@ -32,7 +32,7 @@ class FreeShippingRule extends BackendController
     /**
      * 免邮规则列表页（占位实现，保证页面可用）
      */
-    #[Acl('Weline_Shipping::free_shipping_rule_index', '查看免邮规则', 'mdi-format-list-bulleted', '查看免邮规则列表')]
+    #[Acl('Weline_Shipping::free_shipping_rule_index', '查看免邮规则', 'list', '查看免邮规则列表')]
     public function index()
     {
         $rules = $this->rule->reset()
@@ -47,7 +47,7 @@ class FreeShippingRule extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Shipping::free_shipping_rule_save', '保存免邮规则', 'mdi-content-save', '创建免邮规则')]
+    #[Acl('Weline_Shipping::free_shipping_rule_save', '保存免邮规则', 'save', '创建免邮规则')]
     public function save()
     {
         try {

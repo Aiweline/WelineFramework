@@ -5,37 +5,34 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\View\Template;
+use Weline\Theme\Service\Ui\IconRegistry;
 
-class EditorModeAssetInjector
+final class EditorModeAssetInjector
 {
-    private const EDITOR_MODE_ASSET_VERSION = '20260702-dashboard-slots';
-
     public function __construct(
-        private readonly Template $template
+        private readonly Template $template,
+        private readonly IconRegistry $icons,
     ) {
     }
 
-    public function inject(string $html): string
+    public function inject(string $html, string $previewExitUrl = ''): string
     {
         if ($html === '') {
             return $html;
         }
 
-        $cssUrl = $this->template->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
-        $jsSrc = $this->template->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
-        $jsUrl = $jsSrc . '?v=' . self::EDITOR_MODE_ASSET_VERSION;
+        $cssUrl = $this->assetUrl('pages/weline-theme-preview.css');
+        $jsUrl = $this->assetUrl('pages/weline-theme-preview.js');
 
         $editorCss = <<<HTML
-<!-- Theme Editor Mode CSS -->
-<link rel="stylesheet" href="{$cssUrl}">
+<link rel="stylesheet" href="{$cssUrl}" data-w-editor-preview-asset="style">
 HTML;
 
         $editorJs = <<<HTML
-<!-- Theme Editor Mode JS -->
-<script src="{$jsUrl}"></script>
+<script type="module" src="{$jsUrl}" data-w-editor-preview-asset="script"></script>
 HTML;
 
-        if (!str_contains($html, $cssUrl)) {
+        if (!str_contains($html, 'data-w-editor-preview-asset="style"')) {
             if (stripos($html, '</head>') !== false) {
                 $html = str_ireplace('</head>', $editorCss . "\n</head>", $html);
             } else {
@@ -43,14 +40,60 @@ HTML;
             }
         }
 
-        if (!str_contains($html, $jsSrc)) {
+        $notice = $this->previewNotice($previewExitUrl);
+        if (!str_contains($html, 'data-w-editor-preview-asset="script"')) {
             if (stripos($html, '</body>') !== false) {
-                $html = str_ireplace('</body>', $editorJs . "\n</body>", $html);
+                $html = str_ireplace('</body>', $notice . "\n" . $editorJs . "\n</body>", $html);
             } else {
-                $html .= "\n" . $editorJs;
+                $html .= "\n" . $notice . "\n" . $editorJs;
             }
         }
 
         return $html;
+    }
+
+    private function assetUrl(string $relative): string
+    {
+        if (preg_match('#^[a-z0-9][a-z0-9/.-]+$#', $relative) !== 1 || str_contains($relative, '..')) {
+            throw new \InvalidArgumentException(__('Weline UI 预览资源路径无效'));
+        }
+
+        return htmlspecialchars(
+            $this->template->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative),
+            ENT_QUOTES,
+            'UTF-8',
+        );
+    }
+
+    private function previewNotice(string $previewExitUrl): string
+    {
+        $previewExitUrl = trim($previewExitUrl);
+        if ($previewExitUrl === '') {
+            return '';
+        }
+
+        $url = htmlspecialchars($previewExitUrl, ENT_QUOTES, 'UTF-8');
+        $label = htmlspecialchars((string)__('预览模式'), ENT_QUOTES, 'UTF-8');
+        $hint = htmlspecialchars(
+            (string)__('当前页面处于主题预览中，普通导航和提交已暂停。'),
+            ENT_QUOTES,
+            'UTF-8',
+        );
+        $exit = htmlspecialchars((string)__('退出预览'), ENT_QUOTES, 'UTF-8');
+        $eye = $this->icons->render('eye', 'sm');
+        $arrow = $this->icons->render('arrow-right', 'sm');
+
+        return <<<HTML
+<aside class="w-theme-preview-notice" data-editor-interactive aria-label="{$label}">
+    {$eye}
+    <span class="w-theme-preview-notice__copy">
+        <strong>{$label}</strong>
+        <small>{$hint}</small>
+    </span>
+    <a class="w-button w-theme-preview-notice__exit" data-tone="neutral" data-size="sm" href="{$url}" target="_top">
+        <span>{$exit}</span>{$arrow}
+    </a>
+</aside>
+HTML;
     }
 }

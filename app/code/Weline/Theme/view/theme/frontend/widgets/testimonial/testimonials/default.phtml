@@ -14,7 +14,7 @@
  * 
  * @param title {default="客户评价",type="string",label="标题"}
  * @param subtitle {default="看看客户怎么说",type="string",label="副标题"}
- * @param testimonials {default=[],type="array",label="评价列表",description="每项包含name、avatar、content、rating、company"}
+ * @param testimonials {default=[],type="testimonial_items",label="评价列表",description="每项包含姓名、头像、评价、评分与身份"}
  * @param columns {default="3",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列"}}
  * @param layout {default="grid",type="select",label="布局",options={grid:"网格",carousel:"轮播"}}
  */
@@ -84,15 +84,19 @@ $esc = function ($v) {
     <div class="testimonials-container layout-<?= $esc($layout) ?>">
         <div class="testimonials-grid columns-<?= $esc($columns) ?>">
             <?php foreach ($testimonials as $testimonial): ?>
+                <?php
+                $avatar = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($testimonial['avatar'] ?? '');
+                $avatarHtml = trim((string)($testimonial['avatar_file_html'] ?? ''));
+                ?>
                 <div class="testimonial-card">
                     <div class="testimonial-quote">
-                        <i class="ri-double-quotes-l"></i>
+                        <w:icon name="circle" size="sm"></w:icon>
                     </div>
                     
                     <?php if ($showRating && isset($testimonial['rating'])): ?>
                         <div class="testimonial-rating">
                             <?php for ($i = 1; $i <= 5; $i++): ?>
-                                <i class="ri-star-<?= $i <= $testimonial['rating'] ? 'fill' : 'line' ?>"></i>
+                                <span class="w-rating-star" data-state="<?= $i <= $testimonial['rating'] ? 'filled' : 'empty' ?>"><w:icon name="star" size="sm"></w:icon></span>
                             <?php endfor; ?>
                         </div>
                     <?php endif; ?>
@@ -100,10 +104,14 @@ $esc = function ($v) {
                     <p class="testimonial-content"><?= $esc($testimonial['content'] ?? '') ?></p>
                     
                     <div class="testimonial-author">
-                        <?php if ($showAvatar && !empty($testimonial['avatar'])): ?>
-                            <img src="<?= $esc($testimonial['avatar'] ?? '') ?>" 
-                                 alt="<?= $esc($testimonial['author'] ?? '') ?>"
-                                 class="author-avatar">
+                        <?php if ($showAvatar && ($avatarHtml !== '' || $avatar !== '')): ?>
+                            <?php if ($avatarHtml !== ''): ?>
+                                <div class="author-avatar-media"><?= $avatarHtml ?></div>
+                            <?php else: ?>
+                                <img src="<?= $esc($avatar) ?>"
+                                     alt="<?= $esc($testimonial['author'] ?? '') ?>"
+                                     class="author-avatar">
+                            <?php endif; ?>
                         <?php endif; ?>
                         
                         <div class="author-info">
@@ -182,7 +190,7 @@ $esc = function ($v) {
     font-size: 16px;
 }
 
-.widget-testimonials .testimonial-rating i.ri-star-line {
+.widget-testimonials .testimonial-rating .w-rating-star[data-state="empty"] {
     color: #ddd;
 }
 
@@ -200,7 +208,8 @@ $esc = function ($v) {
     gap: 12px;
 }
 
-.widget-testimonials .author-avatar {
+.widget-testimonials .author-avatar,
+.widget-testimonials .author-avatar-media img {
     width: 50px;
     height: 50px;
     border-radius: 50%;

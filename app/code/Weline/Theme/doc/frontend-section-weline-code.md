@@ -1,8 +1,8 @@
 # 前台 Section `weline-code` 约定（强约束）
 
 > **强约束 / 高压线**：凡前台纳入扫描的源模板中，字面 `<section>` 与 `w:slot wrapper="section"` **必须**配置非空语义 `weline-code`。缺省会在 `setup:upgrade` / Rules 致命门禁失败，并导致 Visitor Pixel 溯源降级为 `missing_code` / `empty_code`。  
-> 权威技能入口：`dev/ai/skills/前端主题工程师-主题模板开发/SKILL.md`、`dev/ai/skills/前端主题工程师-组件与页面构建/SKILL.md`、`dev/ai/skills/visitor-pixel/SKILL.md`。  
-> 全局硬约束：`dev/ai/global-constraints.md` §7。
+> 权威开发约束来自 Theme、Frontend 与 Taglib 的模块文档，由 MCP 按任务动态检索。
+> 全局硬约束：`app/code/Weline/Ai/doc/AI开发治理.md` §7。
 
 ## 目标
 

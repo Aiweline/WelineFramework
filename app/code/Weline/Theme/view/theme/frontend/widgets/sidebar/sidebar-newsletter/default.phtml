@@ -29,7 +29,7 @@ $widgetId = 'sidebar-newsletter-' . uniqid();
 
 <div class="widget-sidebar-newsletter" id="<?= $widgetId ?>">
     <div class="newsletter-icon">
-        <i class="ri-mail-send-line"></i>
+        <w:icon name="mail" size="sm"></w:icon>
     </div>
     
     <?php if ($title): ?>
@@ -52,7 +52,7 @@ $widgetId = 'sidebar-newsletter-' . uniqid();
     </w:form>
     
     <p class="newsletter-privacy">
-        <i class="ri-shield-check-line"></i>
+        <w:icon name="check" size="sm"></w:icon>
         <?= __('我们不会分享您的邮箱地址') ?>
     </p>
 </div>

@@ -22,7 +22,6 @@ class LanguageSwitcher implements TaglibInterface
     private const SWITCHER_HTML_CACHE_TTL = 60.0;
     private const SWITCHER_LANGUAGE_CACHE_TTL = 300.0;
     public const TAG_NAME = 'i18n:switcher';
-    public const LEGACY_TAG_NAME = 'i18n:language:switcher';
 
     /**
      * @var array<string, array{expires: float, html: string}>
@@ -35,12 +34,18 @@ class LanguageSwitcher implements TaglibInterface
     private static array $languageCache = [];
 
     /**
+     * @var array<string, array<string, string>>
+     */
+    private static array $chromeDictionaryCache = [];
+
+    /**
      * Drop process-local language/html memo so lifecycle changes take effect immediately.
      */
     public static function clearProcessCaches(): void
     {
         self::$htmlCache = [];
         self::$languageCache = [];
+        self::$chromeDictionaryCache = [];
     }
 
     public static function name(): string
@@ -77,6 +82,8 @@ class LanguageSwitcher implements TaglibInterface
             'website-id' => false,
             'show-request' => false,
             'label-mode' => false,
+            'show-search' => false,
+            'search-placeholder' => false,
         ];
     }
 
@@ -96,6 +103,8 @@ class LanguageSwitcher implements TaglibInterface
                 . '\'website_id\' => $Taglib__website_id ?? null,'
                 . '\'show_request\' => $Taglib__show_request ?? null,'
                 . '\'label_mode\' => (string)($Taglib__label_mode ?? \'short\'),'
+                . '\'show_search\' => $Taglib__show_search ?? null,'
+                . '\'search_placeholder\' => (string)($Taglib__search_placeholder ?? \'\'),'
                 . ']); ?>';
         };
     }
@@ -137,6 +146,11 @@ class LanguageSwitcher implements TaglibInterface
             if (!\in_array($labelMode, ['short', 'display'], true)) {
                 $labelMode = 'short';
             }
+            $showSearch = self::normalizeOptionalBool($attributes['show_search'] ?? null);
+            if ($showSearch === null) {
+                $showSearch = true;
+            }
+            $searchPlaceholderAttr = \trim((string)($attributes['search_placeholder'] ?? ''));
 
             /** @var LocaleCatalogScopeResolver $scopeResolver */
             $scopeResolver = ObjectManager::getInstance(LocaleCatalogScopeResolver::class);
@@ -152,6 +166,21 @@ class LanguageSwitcher implements TaglibInterface
             $showLanguageRequest = $scope->allowRequest;
             $currentCode = $scope->currentCode;
             $displayLocale = $scope->displayLocale;
+            // WLS only loads the current request module CSV into Phrase layers.
+            // Login/header pages are often Weline_Admin / Theme, so chrome copy
+            // must come from Weline_I18n's own dictionary for displayLocale.
+            $searchPlaceholder = $searchPlaceholderAttr !== ''
+                ? $searchPlaceholderAttr
+                : self::translateChrome('搜索国家、语言或代码...', $displayLocale);
+            $labelSwitchLanguage = self::translateChrome('切换语言', $displayLocale);
+            $labelNoMatch = self::translateChrome('没有匹配的语言', $displayLocale);
+            $labelRequest = self::translateChrome('申请支持其他语言', $displayLocale);
+            $labelLoading = self::translateChrome('正在加载语言目录与人机验证...', $displayLocale);
+            $labelLoadFail = self::translateChrome('申请表加载失败', $displayLocale);
+            $labelRetry = self::translateChrome('重新加载', $displayLocale);
+            $labelError = self::translateChrome('加载失败，请稍后重试', $displayLocale);
+            $labelClose = self::translateChrome('关闭', $displayLocale);
+            $labelUngrouped = self::translateChrome('未分组国家', $displayLocale);
             $welineLanguages = self::buildLanguagesFromScope($scope, $displayLocale);
             $languageGroups = self::groupLanguagesByCountry($welineLanguages, $displayLocale, $currentCode);
 
@@ -232,54 +261,20 @@ class LanguageSwitcher implements TaglibInterface
                 $backendRoute = trim((string)(Env::getAreaRoutePrefix('backend') ?? $backendRoute), '/');
             }
             $currentCurrency = State::getCurrency();
-            if (!State::isAllowedCurrencyCode($currentCurrency)) {
+            // Keep path/State currency for hrefs even if the allow-list is still empty
+            // for this Fiber; demoting to site default drops /USD from language links.
+            if ($currentCurrency === '' || !preg_match('/^[A-Z]{3}$/', strtoupper(trim($currentCurrency)))) {
                 $currentCurrency = self::defaultCurrency();
-            }
-            $backendRouteJson = json_encode($backendRoute, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
-            if (!is_string($backendRouteJson)) {
-                $backendRouteJson = '""';
+            } else {
+                $currentCurrency = strtoupper(trim($currentCurrency));
             }
             $websiteMount = self::resolveWebsiteMountPath($request instanceof Request ? $request : null);
-            $websiteMountJson = json_encode($websiteMount, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
-            if (!is_string($websiteMountJson)) {
-                $websiteMountJson = '""';
-            }
-            // Website mount is a fixed base ([website]/[currency?]/[lang?]/[path]),
-            // never a splittable route segment mixed with locale/page parts.
-            $defaultAwareBuildLangHrefFallbackJs =
-                'buildLangHrefFallback=function(lang){'
-                . 'var pathname=window.location.pathname||"/";var search=window.location.search||"";'
-                . 'var mount=String(' . $websiteMountJson . '||"").replace(/^\\/+|\\/+$/g,"");'
-                . 'if(mount){var mountPrefix="/"+mount;var lower=String(pathname).toLowerCase();var mp=mountPrefix.toLowerCase();'
-                . 'if(lower===mp||lower.indexOf(mp+"/")===0){pathname=pathname.slice(mountPrefix.length)||"/";}}'
-                . 'var pathParts=String(pathname||"/").split("/").filter(Boolean);'
-                . 'var currencyPattern=/^[A-Z]{3}$/;var langPattern=/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;'
-                . 'var cfg=window.__WelineThemeConfig||{};'
-                . 'function addCurrency(codes,value){if(value&&typeof value==="object"){value=value.code||value.currency||value.currency_code||value.value||"";}var code=String(value||"").trim().toUpperCase();if(currencyPattern.test(code)){codes[code]=true;}}'
-                . 'function collectCurrency(codes,source){if(!source){return;}if(Array.isArray(source)){source.forEach(function(item){addCurrency(codes,item);});return;}if(typeof source==="object"){Object.keys(source).forEach(function(key){addCurrency(codes,key);addCurrency(codes,source[key]);});return;}String(source).split(/[,\\s|]+/).forEach(function(code){addCurrency(codes,code);});}'
-                . 'function supportedCurrencies(){var site=window.site||{};var codes={};[cfg.availableCurrencies,cfg.supportedCurrencies,cfg.currencyCodes,cfg.currencies,cfg.site&&cfg.site.availableCurrencies,cfg.site&&cfg.site.supportedCurrencies,cfg.site&&cfg.site.currencyCodes,cfg.site&&cfg.site.currencies,site.availableCurrencies,site.supportedCurrencies,site.currencyCodes,site.currencies].forEach(function(source){collectCurrency(codes,source);});addCurrency(codes,cfg.defaultCurrency||(cfg.site&&(cfg.site.defaultCurrency||cfg.site.default_currency))||site.defaultCurrency||site.default_currency);return codes;}'
-                . 'function isCurrency(value){var code=String(value||"").trim().toUpperCase();return currencyPattern.test(code)&&!!supportedCurrencies()[code];}'
-                . 'var defaultCurrency=String(cfg.defaultCurrency||"CNY").toUpperCase();'
-                . 'var defaultLang=String(cfg.defaultLang||cfg.defaultLanguage||(cfg.i18n&&(cfg.i18n.defaultLang||cfg.i18n.defaultLanguage))||"zh_Hans_CN").replace(/-/g,"_").toLowerCase();'
-                . 'var backendKey=String(' . $backendRouteJson . '||(window.site&&window.site.area)||(window.Weline&&window.Weline.config&&window.Weline.config.url&&window.Weline.config.url.adminArea)||"");'
-                . 'var currency="";for(var i=0;i<pathParts.length;i++){if(isCurrency(pathParts[i])){currency=pathParts[i].toUpperCase();break;}}'
-                . 'if(!currency&&isCurrency(cfg.currentCurrency)){currency=String(cfg.currentCurrency).toUpperCase();}'
-                . 'var prefixIndex=-1;if(backendKey){prefixIndex=pathParts.findIndex(function(part){return !langPattern.test(part)&&!isCurrency(part)&&String(part).toLowerCase()===backendKey.toLowerCase();});}'
-                . 'var prefixSegment=prefixIndex>=0?pathParts[prefixIndex]:backendKey;var remain=[];'
-                . 'pathParts.forEach(function(part,index){if(langPattern.test(part)||isCurrency(part)){return;}if(index===prefixIndex){return;}remain.push(part);});'
-                . 'var out=[];if(prefixSegment){out.push(prefixSegment);}'
-                . 'if(currency&&currency!==defaultCurrency){out.push(currency);}'
-                . 'var normalizedLang=String(lang||"").replace(/-/g,"_");if(normalizedLang&&normalizedLang.toLowerCase()!==defaultLang){out.push(normalizedLang);}'
-                . 'if(remain.length){out.push.apply(out,remain);}'
-                . 'var relativePath=out.length?("/"+out.join("/")):"/";'
-                . 'if(prefixSegment||!mount){return relativePath+(search||"");}'
-                . 'return (relativePath==="/"?("/"+mount+"/"):("/"+mount+relativePath))+(search||"");'
-                . '};';
             $htmlCacheKey = self::buildHtmlCacheKey(
                 $isBackendArea,
                 $websiteId,
                 $renderFor,
                 $currentCode,
+                $displayLocale,
                 $currentCurrency,
                 $currentPath,
                 $currentSearch,
@@ -287,7 +282,9 @@ class LanguageSwitcher implements TaglibInterface
                 \array_keys($welineLanguages)
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
-                . '|markup=v2-lang-native-path-nav-10'
+                . '|show_search=' . ($showSearch ? '1' : '0')
+                . '|label_mode=' . $labelMode
+                . '|markup=weline-ui-2-language-switcher-component-19'
                 . '|mount=' . $websiteMount;
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
@@ -295,51 +292,59 @@ class LanguageSwitcher implements TaglibInterface
             }
             unset(self::$htmlCache[$htmlCacheKey]);
 
-            $i18nRuntimeFile = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'I18n' . DS
-                . 'view' . DS . 'statics' . DS . 'js' . DS . 'i18n.js';
-            $i18nRuntimeVersion = \is_file($i18nRuntimeFile)
-                ? (string)(\filemtime($i18nRuntimeFile) ?: 0)
-                : '0';
+            $safeSwitcherId = htmlspecialchars($switcherId, ENT_QUOTES, 'UTF-8');
+            $safeToggleId = htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8');
+            $safePanelId = htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8');
+            $safeNavigation = htmlspecialchars($navigation, ENT_QUOTES, 'UTF-8');
+            $safeWebsiteMount = htmlspecialchars($websiteMount, ENT_QUOTES, 'UTF-8');
+            $currentLabel = $renderFor === 'js' ? $currentDisplay : $currentName;
             $html = [];
-            $html[] = '<div class="dropdown d-inline-block" data-i18n-switcher data-i18n-switcher-id="'
-                . $switcherId
-                . '" data-i18n-navigation="'
-                . htmlspecialchars($navigation, ENT_QUOTES, 'UTF-8')
-                . '" data-website-mount="'
-                . htmlspecialchars($websiteMount, ENT_QUOTES, 'UTF-8')
-                . '">';
-            $html[] = '    <button type="button" id="' . htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8') . '" class="btn header-item waves-effect weline-i18n-switcher-toggle position-relative" style="z-index:1056" aria-haspopup="true" aria-expanded="false" aria-controls="' . htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8') . '">';
-            if ($renderFor === 'js') {
-                $html[] = '        ' . $currentFlag . '<span class="align-middle current-language"> ' . $currentDisplay . '</span>';
-            } else {
-                $html[] = '        ' . $currentFlag . '<span class="align-middle"> ' . $currentName . '</span>';
-            }
+            $html[] = '<div class="w-language-switcher w-menu-root"'
+                . ' data-w-component="menu language-switcher" data-w-placement="bottom-end" data-w-anchor-mode="element"'
+                . ' data-i18n-switcher data-i18n-switcher-id="' . $safeSwitcherId . '"'
+                . ' data-i18n-navigation="' . $safeNavigation . '"'
+                . ' data-website-id="' . (int)$websiteId . '"'
+                . ($showLanguageRequest ? ' data-language-request="1"' : '')
+                . ' data-website-mount="' . $safeWebsiteMount . '">';
+            $html[] = '    <button type="button" id="' . $safeToggleId . '"'
+                . ' class="w-button w-language-switcher__trigger" data-tone="quiet" data-size="sm"'
+                . ' data-w-menu-trigger aria-expanded="false" aria-haspopup="menu"'
+                . ' aria-controls="' . $safePanelId . '"'
+                . ' aria-label="' . htmlspecialchars($labelSwitchLanguage, ENT_QUOTES, 'UTF-8') . '">';
+            $html[] = '        <span class="w-language-switcher__flag">' . $currentFlag . '</span>'
+                . '<span class="w-language-switcher__current current-language">' . $currentLabel . '</span>'
+                . '<w-icon name="chevron-down" size="xs"></w-icon>';
             $html[] = '    </button>';
-            $html[] = '    <div id="' . htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8') . '" class="dropdown-menu dropdown-menu-end languages weline-i18n-switcher-panel" role="menu" aria-labelledby="' . htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8') . '" hidden style="display:none !important">';
-            $html[] = '        <div class="weline-language-search-wrap px-2 pt-2 pb-1">';
-            $html[] = '            <input type="text" class="form-control weline-language-search" placeholder="' . htmlspecialchars(__('搜索国家、语言或代码...'), ENT_QUOTES, 'UTF-8') . '" autocomplete="off">';
-            $html[] = '        </div>';
+            $html[] = '    <div id="' . $safePanelId . '" class="w-menu w-language-switcher__menu"'
+                . ' data-w-menu-panel role="menu" aria-labelledby="' . $safeToggleId . '" hidden>';
+            if ($showSearch) {
+                $html[] = '        <div class="w-language-switcher__search-wrap">'
+                    . '<input class="w-input w-language-switcher__search" type="search"'
+                    . ' placeholder="' . htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' autocomplete="off" data-w-language-search'
+                    . ' aria-label="' . htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') . '"></div>';
+                $html[] = '        <p class="w-language-switcher__empty" data-w-language-empty hidden>'
+                    . htmlspecialchars($labelNoMatch, ENT_QUOTES, 'UTF-8')
+                    . '</p>';
+            }
 
-            $html[] = '        <div class="weline-language-groups" data-language-scroll>';
             foreach ($languageGroups as $groupIndex => $languageGroup) {
-                $countryNameRaw = (string)($languageGroup['country_name'] ?? __('未分组国家'));
+                $countryNameRaw = (string)($languageGroup['country_name'] ?? $labelUngrouped);
                 $countryCodeRaw = (string)($languageGroup['country_code'] ?? '');
-                $countryName = htmlspecialchars($countryNameRaw, ENT_QUOTES, 'UTF-8');
-                $countryCode = htmlspecialchars($countryCodeRaw, ENT_QUOTES, 'UTF-8');
                 $groupId = $switcherId . '-group-' . (int)$groupIndex;
-                $html[] = '            <div class="weline-language-group" data-language-group role="group" aria-labelledby="' . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8') . '">';
-                $html[] = '                <div id="' . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8') . '" class="weline-language-group-label"><span>' . $countryName . '</span><small>' . $countryCode . '</small></div>';
+                $html[] = '        <div class="w-language-switcher__group" role="group" aria-labelledby="'
+                    . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8') . '">';
+                $html[] = '            <div id="' . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8')
+                    . '" class="w-menu__header w-language-switcher__group-label"><span>'
+                    . htmlspecialchars($countryNameRaw, ENT_QUOTES, 'UTF-8') . '</span><small>'
+                    . htmlspecialchars($countryCodeRaw, ENT_QUOTES, 'UTF-8') . '</small></div>';
+
                 foreach ((array)($languageGroup['languages'] ?? []) as $code => $language) {
                     $code = (string)$code;
-                    $safeCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
-                    $flag = self::sanitizeInlineFlagMarkup((string)($language['flag'] ?? ''));
                     $nameRaw = (string)($language['display_name'] ?? ($language['name'] ?? $code));
-                    $name = htmlspecialchars($nameRaw, ENT_QUOTES, 'UTF-8');
-                    $active = $currentCode === $code ? ' active' : '';
                     $selfName = \trim((string)($language['self_name'] ?? ''));
                     $referenceName = \trim((string)($language['reference_name'] ?? ($language['english_name'] ?? '')));
                     $metaParts = [$code];
-                    // Prefer native endonym in the subtitle (中文…), fall back to English only if missing.
                     $metaSecondary = $selfName !== '' ? $selfName : $referenceName;
                     if ($metaSecondary !== '' && $metaSecondary !== $nameRaw && !\in_array($metaSecondary, $metaParts, true)) {
                         $metaParts[] = $metaSecondary;
@@ -347,180 +352,86 @@ class LanguageSwitcher implements TaglibInterface
                     if ($countryNameRaw !== '' && $countryNameRaw !== $nameRaw && !\in_array($countryNameRaw, $metaParts, true)) {
                         $metaParts[] = $countryNameRaw;
                     }
-                    $meta = htmlspecialchars(\implode(' | ', $metaParts), ENT_QUOTES, 'UTF-8');
-                    $searchParts = [
+                    $active = $currentCode === $code;
+                    $href = self::buildLanguageHref(
+                        $currentPath,
+                        $currentSearch,
                         $code,
+                        $currentCurrency,
+                        $backendRoute,
+                    );
+                    $searchBlob = \trim(\implode(' ', \array_filter([
+                        (string)($language['search_terms'] ?? ''),
                         $nameRaw,
-                        (string)($language['name'] ?? ''),
-                        (string)($language['self_name'] ?? ''),
+                        $selfName,
                         $referenceName,
+                        $code,
                         $countryNameRaw,
                         $countryCodeRaw,
-                        (string)($language['search'] ?? ''),
-                    ];
-                    $searchText = htmlspecialchars(\mb_strtolower(\implode(' ', $searchParts), 'UTF-8'), ENT_QUOTES, 'UTF-8');
-                    $href = htmlspecialchars(self::buildLanguageHref($currentPath, $currentSearch, $code, $currentCurrency, $backendRoute), ENT_QUOTES, 'UTF-8');
-                    $optionRole = ' role="menuitemradio" aria-checked="' . ($active !== '' ? 'true' : 'false') . '"';
-                    if ($renderFor === 'js') {
-                        $html[] = '                <a href="' . $href . '" data-i18n-authoritative-href="1" data-language-option="1" data-lang="' . $safeCode . '" data-search="' . $searchText . '" class="dropdown-item notify-item language-option weline-language-option' . $active . '"' . $optionRole . '>';
-                    } else {
-                        $html[] = '                <a href="' . $href . '" data-i18n-authoritative-href="1" data-language-option="1" data-lang="' . $safeCode . '" data-search="' . $searchText . '" class="dropdown-item notify-item weline-language-option' . $active . '"' . $optionRole . '>';
-                    }
-                    $html[] = '                    <span class="weline-language-option-flag">' . $flag . '</span><span class="weline-language-option-copy"><strong>' . $name . '</strong><small>' . $meta . '</small></span>';
-                    $html[] = '                </a>';
+                    ], static fn(string $part): bool => $part !== '')));
+                    $html[] = '            <a class="w-menu__item w-language-switcher__option"'
+                        . ' role="menuitemradio" aria-checked="' . ($active ? 'true' : 'false') . '"'
+                        . ' data-state="' . ($active ? 'active' : 'idle') . '"'
+                        . ' data-i18n-authoritative-href="1" data-language-option="1"'
+                        . ' data-w-search="' . htmlspecialchars(\mb_strtolower($searchBlob), ENT_QUOTES, 'UTF-8') . '"'
+                        . ' data-lang="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '"'
+                        . ' href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '">'
+                        . '<span class="w-language-switcher__flag">'
+                        . self::sanitizeInlineFlagMarkup((string)($language['flag'] ?? ''))
+                        . '</span><span class="w-language-switcher__copy"><strong>'
+                        . htmlspecialchars($nameRaw, ENT_QUOTES, 'UTF-8') . '</strong><small>'
+                        . htmlspecialchars(\implode(' | ', $metaParts), ENT_QUOTES, 'UTF-8')
+                        . '</small></span></a>';
                 }
-                $html[] = '            </div>';
-            }
-            $html[] = '        </div>';
-            if ($showLanguageRequest) {
-                $html[] = '        <div class="weline-language-request-entry">';
-                $html[] = '            <button type="button" class="weline-language-request-open" data-language-request-open aria-haspopup="dialog" aria-controls="' . htmlspecialchars($switcherId . '-request-dialog', ENT_QUOTES, 'UTF-8') . '">';
-                $html[] = '                <i class="mdi mdi-translate"></i><span>' . htmlspecialchars(__('申请支持其他语言'), ENT_QUOTES, 'UTF-8') . '</span>';
-                $html[] = '            </button>';
                 $html[] = '        </div>';
+            }
+
+            if ($showLanguageRequest) {
+                $requestDialogId = $switcherId . '-request-dialog';
+                $requestTitleId = $switcherId . '-request-title';
+                $html[] = '        <div class="w-menu__divider"></div>';
+                $html[] = '        <button type="button" class="w-menu__item w-language-switcher__request"'
+                    . ' role="menuitem" data-language-request-open'
+                    . ' aria-haspopup="dialog"'
+                    . ' aria-controls="' . htmlspecialchars($requestDialogId, ENT_QUOTES, 'UTF-8') . '">'
+                    . '<w-icon name="language" size="sm"></w-icon><span>'
+                    . htmlspecialchars($labelRequest, ENT_QUOTES, 'UTF-8')
+                    . '</span></button>';
             }
 
             $html[] = '    </div>';
             if ($showLanguageRequest) {
-                $html[] = '    <div class="weline-language-request-modal" data-language-request-modal hidden>';
-                $html[] = '        <div class="weline-language-request-backdrop" data-language-request-close></div>';
-                $html[] = '        <div id="' . htmlspecialchars($switcherId . '-request-dialog', ENT_QUOTES, 'UTF-8') . '" class="weline-language-request-dialog" role="dialog" aria-modal="true" aria-labelledby="' . htmlspecialchars($switcherId . '-request-title', ENT_QUOTES, 'UTF-8') . '" tabindex="-1">';
-                $html[] = '            <div class="weline-language-request-header"><h2 id="' . htmlspecialchars($switcherId . '-request-title', ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars(__('申请支持其他语言'), ENT_QUOTES, 'UTF-8') . '</h2><button type="button" class="weline-language-request-close" data-language-request-close aria-label="' . htmlspecialchars(__('关闭'), ENT_QUOTES, 'UTF-8') . '"><i class="mdi mdi-close"></i></button></div>';
-                $html[] = '            <div class="weline-language-request-body" data-language-request-body><div class="weline-language-request-loading" role="status">' . htmlspecialchars(__('正在加载语言目录与人机验证...'), ENT_QUOTES, 'UTF-8') . '</div></div>';
-                $html[] = '        </div>';
-                $html[] = '    </div>';
+                $requestDialogId = $switcherId . '-request-dialog';
+                $requestTitleId = $switcherId . '-request-title';
+                // Native <dialog> uses the browser top layer so the Theme overlay
+                // cannot bury the panel under .wf-nav's low stacking context.
+                $html[] = '    <dialog id="' . htmlspecialchars($requestDialogId, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' class="w-dialog" data-w-component="dialog" data-size="lg"'
+                    . ' data-language-request-modal'
+                    . ' data-loading-text="' . htmlspecialchars($labelLoading, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' data-load-fail-text="' . htmlspecialchars($labelLoadFail, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' data-retry-text="' . htmlspecialchars($labelRetry, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' data-error-text="' . htmlspecialchars($labelError, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' aria-labelledby="' . htmlspecialchars($requestTitleId, ENT_QUOTES, 'UTF-8') . '">';
+                $html[] = '        <header class="w-dialog__header">'
+                    . '<h2 id="' . htmlspecialchars($requestTitleId, ENT_QUOTES, 'UTF-8') . '" class="w-dialog__title">'
+                    . htmlspecialchars($labelRequest, ENT_QUOTES, 'UTF-8')
+                    . '</h2>'
+                    . '<button type="button" class="w-button" data-tone="quiet" data-size="sm"'
+                    . ' data-w-action="dialog.close" data-w-close'
+                    . ' data-language-request-close'
+                    . ' aria-label="' . htmlspecialchars($labelClose, ENT_QUOTES, 'UTF-8') . '">'
+                    . '<w-icon name="close" size="sm"></w-icon></button>'
+                    . '</header>';
+                // Shell only — form HTML arrives on first open via QueryProvider.
+                $html[] = '        <div class="w-dialog__body" data-language-request-body>'
+                    . '<p class="w-text" data-tone="muted" role="status">'
+                    . htmlspecialchars($labelLoading, ENT_QUOTES, 'UTF-8')
+                    . '</p></div>';
+                $html[] = '    </dialog>';
             }
             $html[] = '</div>';
-            $html[] = '<style>';
-            // Closed by default even when Bootstrap `.dropdown-menu{display:none}` is absent.
-            // z-index must beat .main-content paint order; panel is portaled to <body> while open
-            // so #page-topbar overflow/backdrop-filter cannot clip or trap it.
-            // Panel: flex column; only .weline-language-groups scrolls. Search + request entry stay pinned.
-            $html[] = '.weline-i18n-switcher-panel{display:none;position:absolute;z-index:10055;min-width:min(320px,calc(100vw - 16px));max-width:min(420px,calc(100vw - 16px));max-height:min(70vh,420px);padding:0.5rem;background:var(--backend-color-card-bg,var(--backend-color-bg-primary,#fff));border:1px solid var(--backend-color-card-border,var(--backend-color-border-light,#e9ecef));border-radius:var(--backend-border-radius-xl,1rem);box-shadow:var(--backend-dropdown-shadow,0 10px 30px rgba(0,0,0,.12));overflow:hidden;flex-direction:column;}';
-            $html[] = '.weline-i18n-switcher-panel.show,body>.weline-i18n-switcher-panel.show{display:flex !important;position:fixed;top:auto !important;right:auto !important;left:auto !important;bottom:auto !important;z-index:10055;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-search-wrap{flex:0 0 auto;position:sticky;top:0;z-index:3;background:var(--backend-color-card-bg,var(--backend-color-bg-primary,#fff));}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-search{min-height:var(--backend-form-control-height,44px);height:var(--backend-form-control-height,44px);padding:0.5rem 0.85rem;line-height:var(--backend-line-height-base,1.5);border:1px solid var(--backend-color-input-border,var(--backend-color-border,#ced4da));border-radius:var(--backend-border-radius-md,0.5rem);background:var(--backend-color-input-bg,var(--backend-color-bg-primary,#fff));color:var(--backend-color-text-primary,#212529);font-size:var(--backend-font-size-base,.875rem);box-shadow:none;transition:border-color .18s ease,box-shadow .18s ease,background-color .18s ease;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-search::placeholder{color:var(--backend-color-text-placeholder,var(--backend-color-text-tertiary,#adb5bd));opacity:1;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-search:focus-visible{border-color:var(--backend-color-input-focus-border,var(--backend-color-primary,#556ee6));background:var(--backend-color-bg-primary,#fff);color:var(--backend-color-text-primary,#212529);box-shadow:var(--backend-focus-ring,0 0 0 0.2rem rgba(85,110,230,.25));outline:none;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-groups{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 0.25rem 0.25rem;scrollbar-width:thin;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-group{margin-top:0.25rem;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-group-label{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.45rem 0.75rem;background:var(--backend-color-bg-secondary,#f8fafc);color:var(--backend-color-text-secondary,#64748b);font-size:0.75rem;font-weight:600;text-transform:uppercase;border-bottom:1px solid var(--backend-color-border-light,#edf2f7);}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-group-label small{font-size:0.7rem;font-weight:500;letter-spacing:.04em;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-option{display:flex;align-items:flex-start;gap:0.65rem;padding:0.6rem 0.75rem;border-radius:var(--backend-border-radius-md,0.5rem);color:var(--backend-color-text-secondary,#495057);line-height:var(--backend-line-height-base,1.5);transition:background-color .18s ease,color .18s ease;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-option:hover,.weline-i18n-switcher-panel .weline-language-option.active,.weline-i18n-switcher-panel .weline-language-option:focus-visible{background:var(--backend-color-bg-secondary,#f8f9fa);color:var(--backend-color-text-primary,#212529);outline:none;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-option-flag{display:inline-flex;align-items:center;flex:0 0 auto;min-width:1.5rem;padding-top:.1rem;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-option-flag svg{display:block;width:1.5rem;height:auto;max-height:1.1rem;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-option-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:.05rem;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-option-copy strong{font-size:.875rem;font-weight:600;color:inherit;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-option-copy small{font-size:.72rem;color:var(--backend-color-text-secondary,#64748b);white-space:normal;}';
-            $html[] = '.weline-i18n-switcher-panel .weline-language-request-entry{flex:0 0 auto;position:sticky;bottom:0;z-index:4;margin:0 -.15rem -.15rem;padding:.55rem .4rem .35rem;border-top:1px solid #e2e8f0;background:var(--backend-color-card-bg,var(--backend-color-bg-primary,#fff));box-shadow:0 -6px 12px rgba(15,23,42,.06)}.weline-language-request-open{display:flex;width:100%;align-items:center;justify-content:center;gap:.45rem;min-height:42px;border:1px solid #2563eb;border-radius:.5rem;background:#fff;color:#1d4ed8;font-weight:600;cursor:pointer;transition:background-color .18s ease,color .18s ease}.weline-language-request-open:hover,.weline-language-request-open:focus-visible{background:#eff6ff;outline:3px solid rgba(37,99,235,.2)}';
-            $html[] = '.weline-language-request-modal[hidden]{display:none}.weline-language-request-modal{position:fixed;inset:0;z-index:10050;display:grid;place-items:center;padding:1rem}.weline-language-request-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.62)}.weline-language-request-dialog{position:relative;width:min(760px,100%);max-height:min(820px,calc(100vh - 2rem));overflow:auto;border-radius:.75rem;background:#f8fafc;border:1px solid #cbd5e1;color:#1e293b}.weline-language-request-header{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.25rem;border-bottom:1px solid #e2e8f0;background:#f8fafc}.weline-language-request-header h2{margin:0;font-size:1.15rem}.weline-language-request-close{display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:.5rem;background:transparent;color:#334155;cursor:pointer}.weline-language-request-close:hover,.weline-language-request-close:focus-visible{background:#e2e8f0;outline:3px solid rgba(37,99,235,.2)}.weline-language-request-body{padding:1.25rem}.weline-language-request-loading{padding:2rem;text-align:center;color:#475569}.weline-language-request-retry{display:flex;flex-direction:column;align-items:center;gap:.75rem;padding:1.5rem;text-align:center}.weline-language-request-retry button{min-height:42px;border:1px solid #2563eb;border-radius:.5rem;background:#2563eb;color:#fff;padding:.55rem 1rem;cursor:pointer}@media(max-width:575px){.weline-language-request-modal{padding:0}.weline-language-request-dialog{width:100%;height:100%;max-height:none;border-radius:0}.weline-language-request-body{padding:1rem}}@media(prefers-reduced-motion:reduce){.weline-language-request-open{transition:none}}';
-            $html[] = '</style>';
-            $html[] = '<script src="/Weline/I18n/view/statics/js/i18n.js?v='
-                . htmlspecialchars($i18nRuntimeVersion, ENT_QUOTES, 'UTF-8')
-                . '" data-weline-i18n-runtime="1"></script>';
-            $html[] = '<script>(function(){';
-            $html[] = 'var currentScript=document.currentScript;var root=null;';
-            $html[] = 'if(currentScript){var node=currentScript.previousElementSibling;while(node&&!node.hasAttribute("data-i18n-switcher-id")){node=node.previousElementSibling;}root=node;}';
-            $html[] = 'if(!root||root.dataset.welineI18nNative==="1"){return;}root.dataset.welineI18nNative="1";';
-            $html[] = 'var toggle=root.querySelector(".weline-i18n-switcher-toggle");';
-            $html[] = 'var panel=root.querySelector(".weline-i18n-switcher-panel");';
-            $html[] = 'var input=root.querySelector(".weline-language-search");';
-            $html[] = 'var requestOpen=root.querySelector("[data-language-request-open]");var requestModal=root.querySelector("[data-language-request-modal]");var requestBody=root.querySelector("[data-language-request-body]");var requestLoaded=false;var requestLoading=false;var requestReturnFocus=null;var requestDraft=null;';
-            $html[] = 'if(!toggle||!panel){return;}';
-            // Panel may be portaled to document.body while open — always query from panel,
-            // never from root (empty root lookups falsely show「无匹配语言」and duplicate nodes).
-            $html[] = 'var options=function(){return panel.querySelectorAll(".weline-language-option");};';
-            $html[] = 'var groups=function(){return panel.querySelectorAll("[data-language-group]");};';
-            $html[] = 'var emptyId="weline-language-empty-' . $switcherId . '";';
-            $html[] = 'function ensureEmpty(){var empty=panel.querySelector("#"+emptyId);if(!empty){empty=document.createElement("div");empty.id=emptyId;empty.className="dropdown-item text-muted small weline-i18n-switcher-empty";empty.setAttribute("role","status");empty.style.display="none";empty.hidden=true;empty.textContent="' . addslashes(__('无匹配语言')) . '";var scroll=panel.querySelector("[data-language-scroll]");(scroll||panel).appendChild(empty);}panel.querySelectorAll(".weline-i18n-switcher-empty").forEach(function(node){if(node!==empty){node.remove();}});return empty;}';
-            $html[] = 'function filter(){if(!input){return;}var kw=String(input.value||"").trim().toLowerCase();var visible=0;groups().forEach(function(group){var groupVisible=0;group.querySelectorAll(".weline-language-option").forEach(function(opt){var search=(opt.getAttribute("data-search")||"").toLowerCase();var ok=(kw==="")||search.indexOf(kw)!==-1;opt.style.display=ok?"":"none";opt.setAttribute("aria-hidden",ok?"false":"true");if(ok){groupVisible++;}});group.style.display=groupVisible>0?"":"none";visible+=groupVisible;});var empty=ensureEmpty();var showEmpty=visible===0;empty.style.display=showEmpty?"":"none";empty.hidden=!showEmpty;}';
-            $html[] = 'var panelHome=panel.parentNode;var panelNext=panel.nextSibling;';
-            $html[] = 'function mountPanelToBody(){if(!document.body){return;}if(panel.parentNode!==document.body){document.body.appendChild(panel);}panel.style.zIndex="10055";}';
-            $html[] = 'function restorePanelHome(){if(!panelHome){return;}if(panel.parentNode===panelHome){return;}if(panelNext&&panelNext.parentNode===panelHome){panelHome.insertBefore(panel,panelNext);}else{panelHome.appendChild(panel);}}';
-            $html[] = 'function clearPanelPlacement(){panel.style.position="";panel.style.removeProperty("top");panel.style.removeProperty("left");panel.style.removeProperty("right");panel.style.removeProperty("bottom");panel.style.maxHeight="";panel.style.width="";panel.style.visibility="";panel.style.zIndex="";panel.style.setProperty("display","none","important");restorePanelHome();}';
-            $html[] = 'function placePanelAgainstToggle(){var margin=8,gap=8;var tr=toggle.getBoundingClientRect();mountPanelToBody();panel.style.position="fixed";panel.style.setProperty("right","auto","important");panel.style.setProperty("bottom","auto","important");panel.style.setProperty("left","0px","important");panel.style.setProperty("top","0px","important");panel.style.visibility="hidden";panel.style.maxHeight="";panel.style.setProperty("display","flex","important");panel.style.zIndex="10055";var pw=Math.max(panel.offsetWidth||0,Math.min(320,Math.max(0,(window.innerWidth||0)-16)));var ph=panel.offsetHeight||0;var vw=window.innerWidth||document.documentElement.clientWidth||pw;var vh=window.innerHeight||document.documentElement.clientHeight||ph;if(pw>vw-margin*2){pw=Math.max(160,vw-margin*2);panel.style.width=pw+"px";pw=panel.offsetWidth||pw;ph=panel.offsetHeight||ph;}var left=tr.right-pw;if(left<margin){left=margin;}if(left+pw>vw-margin){left=Math.max(margin,vw-margin-pw);}var top=tr.bottom+gap;if(top+ph>vh-margin){var above=tr.top-gap-ph;if(above>=margin){top=above;}else{top=Math.max(margin,Math.min(top,vh-margin-Math.min(ph,vh-margin*2)));panel.style.maxHeight=Math.max(120,vh-top-margin)+"px";ph=panel.offsetHeight||ph;if(top+ph>vh-margin){top=Math.max(margin,vh-margin-ph);}}}panel.style.setProperty("left",Math.round(left)+"px","important");panel.style.setProperty("top",Math.round(top)+"px","important");panel.style.visibility="";}';
-            $html[] = 'function openMenu(){panel.hidden=false;panel.classList.add("show");toggle.setAttribute("aria-expanded","true");panel.style.setProperty("display","flex","important");placePanelAgainstToggle();if(input){input.value="";filter();setTimeout(function(){try{input.focus();}catch(e){}},0);requestAnimationFrame(function(){placePanelAgainstToggle();});}}';
-            $html[] = 'function closeMenu(reason){panel.classList.remove("show");panel.hidden=true;toggle.setAttribute("aria-expanded","false");clearPanelPlacement();if(input){input.value="";filter();}}';
-            $html[] = 'function isOpen(){return panel.classList.contains("show");}';
-            $html[] = 'clearPanelPlacement();';
-            $html[] = 'window.addEventListener("resize",function(){if(isOpen()){placePanelAgainstToggle();}});';
-            $html[] = 'window.addEventListener("scroll",function(){if(isOpen()){placePanelAgainstToggle();}},true);';
-            $html[] = 'toggle.addEventListener("click",function(e){e.stopPropagation();if(isOpen()){closeMenu("toggle-click");}else{openMenu();}});';
-            $html[] = 'function stopInside(e){e.stopPropagation();}';
-            $html[] = 'panel.addEventListener("pointerdown",function(e){stopInside(e);});';
-            $html[] = 'panel.addEventListener("mousedown",stopInside);';
-            $html[] = 'panel.addEventListener("click",stopInside);';
-            $html[] = 'if(input){input.addEventListener("input",function(){filter();});input.addEventListener("pointerdown",stopInside);input.addEventListener("mousedown",stopInside);input.addEventListener("click",stopInside);}';
-            $html[] = 'function isFromRoot(ev){if(!ev){return false;}if(typeof ev.composedPath==="function"){var path=ev.composedPath();return Array.isArray(path)&&(path.indexOf(root)!==-1||path.indexOf(panel)!==-1);}return root.contains(ev.target)||panel.contains(ev.target);}';
-            $html[] = 'document.addEventListener("pointerdown",function(ev){if(!isOpen()){return;}if(isFromRoot(ev)){return;}closeMenu("doc-pointerdown-outside");},true);';
-            $html[] = 'document.addEventListener("mousedown",function(ev){if(!isOpen()){return;}var fromRoot=isFromRoot(ev);if(fromRoot){return;}closeMenu("doc-mousedown-outside");},true);';
-            $html[] = 'document.addEventListener("click",function(ev){if(!isOpen()){return;}var fromRoot=isFromRoot(ev);if(fromRoot){return;}closeMenu("doc-click-outside");},true);';
-            $html[] = 'document.addEventListener("keydown",function(e){if(e.key!=="Escape"||!isOpen()){return;}closeMenu();try{toggle.focus();}catch(err){}});';
-            if ($showLanguageRequest) {
-                $html[] = 'function executeMountedScripts(container){Array.prototype.slice.call(container.querySelectorAll("script")).forEach(function(oldScript){var script=document.createElement("script");Array.prototype.slice.call(oldScript.attributes||[]).forEach(function(attr){script.setAttribute(attr.name,attr.value);});script.text=oldScript.textContent||"";oldScript.parentNode.replaceChild(script,oldScript);});}';
-                $html[] = 'function restoreRequestDraft(){if(!requestBody||!requestDraft){return;}var name=requestBody.querySelector("[name=\"name\"]");var email=requestBody.querySelector("[name=\"email\"]");if(name){name.value=String(requestDraft.name||"");}if(email){email.value=String(requestDraft.email||"");}var select=requestBody.querySelector(".weline-language-select[data-component-id]");var componentId=select?select.getAttribute("data-component-id"):"";var component=componentId&&window.WelineLanguageSelect?window.WelineLanguageSelect[componentId]:null;if(component&&typeof component.setValues==="function"){component.setValues(Array.isArray(requestDraft.locales)?requestDraft.locales:[]);}requestDraft=null;}';
-                $html[] = 'function renderRequestError(error){if(!requestBody){return;}requestBody.innerHTML="";var box=document.createElement("div");box.className="weline-language-request-retry";var msg=document.createElement("p");msg.textContent=(error&&error.message)?error.message:"' . addslashes(__('加载失败，请稍后重试')) . '";var retry=document.createElement("button");retry.type="button";retry.textContent="' . addslashes(__('重新加载')) . '";retry.addEventListener("click",function(){loadRequestForm();});box.appendChild(msg);box.appendChild(retry);requestBody.appendChild(box);}';
-                $html[] = 'function loadRequestForm(){if(requestLoaded||requestLoading||!requestBody){return;}requestLoading=true;requestBody.innerHTML="<div class=\"weline-language-request-loading\" role=\"status\">' . addslashes(__('正在加载语言目录与人机验证...')) . '</div>";Promise.resolve(window.Weline&&window.Weline.Api?window.Weline.Api.resource("i18n_language_requests"):Promise.reject(new Error("Weline.Api unavailable"))).then(function(api){return api.getLanguageSupportRequestForm({});}).then(function(result){var markup=result&&result.html?result.html:(result&&result.data&&result.data.html?result.data.html:"");if(!markup){throw new Error("' . addslashes(__('申请表加载失败')) . '");}requestBody.innerHTML=markup;executeMountedScripts(requestBody);requestLoaded=true;restoreRequestDraft();}).catch(renderRequestError).finally(function(){requestLoading=false;});}';
-                $html[] = 'function requestFocusable(){return requestModal?requestModal.querySelectorAll("button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex]:not([tabindex=\"-1\"])"):[];}';
-                $html[] = 'function openRequest(){if(!requestModal){return;}requestReturnFocus=document.activeElement;closeMenu("request-open");requestModal.hidden=false;document.documentElement.style.overflow="hidden";var dialog=requestModal.querySelector(".weline-language-request-dialog");if(dialog){dialog.focus();}loadRequestForm();}';
-                $html[] = 'function closeRequest(){if(!requestModal||requestModal.hidden){return;}requestModal.hidden=true;document.documentElement.style.overflow="";if(requestReturnFocus&&typeof requestReturnFocus.focus==="function"){requestReturnFocus.focus();}}';
-                $html[] = 'if(requestOpen){requestOpen.addEventListener("click",function(event){event.preventDefault();event.stopPropagation();openRequest();});}';
-                $html[] = 'if(requestModal){requestModal.querySelectorAll("[data-language-request-close]").forEach(function(close){close.addEventListener("click",closeRequest);});requestModal.addEventListener("weline:captcha:refresh-requested",function(event){requestDraft=event&&event.detail?event.detail:null;requestLoaded=false;loadRequestForm();});requestModal.addEventListener("keydown",function(event){if(event.key==="Escape"){event.preventDefault();closeRequest();return;}if(event.key!=="Tab"){return;}var focusable=Array.prototype.slice.call(requestFocusable());if(!focusable.length){event.preventDefault();return;}var first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}});}';
-            }
-            // Overwritten below by default-aware builder (omits default currency/locale).
-            $html[] = 'function buildLangHrefFallback(lang){return "/"+(String(lang||"").replace(/-/g,"_")||"");}';
-            $html[] = $defaultAwareBuildLangHrefFallbackJs;
-            $html[] = 'function buildLangHref(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";if(window.WelineI18n&&typeof window.WelineI18n.buildLanguageUrl==="function"){return window.WelineI18n.buildLanguageUrl(lang,pathname,search);}return buildLangHrefFallback(lang);}';
-            $html[] = 'var navigation=String(root.getAttribute("data-i18n-navigation")||"path").toLowerCase();';
-            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(opt){';
-            $html[] = 'var code=opt.getAttribute("data-lang")||"";if(!code){return;}';
-            $html[] = 'if(opt.dataset.welineLangBound==="1"){return;}opt.dataset.welineLangBound="1";';
-            $html[] = 'opt.addEventListener("click",function(event){';
-            $html[] = 'var href=opt.getAttribute("href")||"";var i18n=window.WelineI18n;';
-            $html[] = 'closeMenu("language-selected");';
-            $html[] = 'if(navigation==="emit"){';
-            // Preview/canvas emit mode has no real navigation target — cancel the
-            // anchor and broadcast the locale to the parent workbench.
-            $html[] = 'event.preventDefault();';
-            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
-            $html[] = 'panel.querySelectorAll("[data-language-option]").forEach(function(node){var active=(node.getAttribute("data-lang")||"")===code;if(active){node.classList.add("active");}else{node.classList.remove("active");}node.setAttribute("aria-checked",active?"true":"false");});';
-            $html[] = 'var currentEl=root.querySelector(".current-language");if(currentEl){var parts=String(code).split("_");var short=parts.length>=2?(parts[0].toUpperCase()==="ZH"?(String(parts[1]).toUpperCase()==="HANT"?"TW":"ZH"):parts[0].substring(0,2).toUpperCase()):String(code).substring(0,2).toUpperCase();currentEl.textContent=short;}';
-            $html[] = 'try{root.dispatchEvent(new CustomEvent("weline:i18n:locale-change",{bubbles:true,detail:{locale:code}}));}catch(err){}';
-            $html[] = 'return;}';
-            // Path/LIVE mode: write the language cookie then let the browser follow
-            // the authoritative <a href>. preventDefault + location.assign races
-            // into an empty document in Chromium/Electron (200 + decodedBodySize 0).
-            $html[] = 'if(typeof event.stopImmediatePropagation==="function"){event.stopImmediatePropagation();}else{event.stopPropagation();}';
-            $html[] = 'if(i18n&&typeof i18n.writeLanguagePreference==="function"){i18n.writeLanguagePreference(code);}';
-            $html[] = 'try{var target=new URL(href||"#",window.location.origin);var samePath=target.pathname===(window.location.pathname||"/")&&target.search===(window.location.search||"")&&target.hash===(window.location.hash||"");if(samePath){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}else{window.location.reload();}return;}}catch(err){}';
-            $html[] = 'if(!href||href==="#"){event.preventDefault();if(i18n&&typeof i18n.switchLang==="function"){i18n.switchLang(code,href);}return;}';
-            // Native navigation — do not preventDefault.
-            $html[] = '});';
-            $html[] = '});';
-            $html[] = 'filter();';
-            $html[] = '})();</script>';
-            if ($renderFor === 'js') {
-                $html[] = '<script>(function(){';
-                $html[] = 'var root=document.querySelector(\'[data-i18n-switcher-id="' . $switcherId . '"]\');if(!root){return;}';
-                $html[] = 'var panel=root.querySelector(".weline-i18n-switcher-panel")||document.getElementById("' . addslashes($panelId) . '");';
-                $html[] = 'function detectLang(){try{if(typeof window.getCookie==="function"){var c=window.getCookie("WELINE_USER_LANG");if(c){return c;}}}catch(e){}';
-                $html[] = 'try{var u=new URLSearchParams(window.location.search);var q=u.get("lang");if(q){return q;}}catch(e){}';
-                $html[] = 'var p=(window.location.pathname||"").split("/").filter(Boolean);for(var i=0;i<p.length;i++){if(/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(p[i])){return p[i];}}';
-                $html[] = 'return (window.site&&window.site.lang)||"zh_Hans_CN";}';
-                $html[] = 'function toShort(code){if(!code){return"ZH";}var parts=String(code).split("_");if(parts.length>=2){var lang=parts[0].toUpperCase();var region=parts[1].toUpperCase();if(lang==="ZH"){return region==="HANT"?"TW":"ZH";}return lang.substring(0,2);}return String(code).substring(0,2).toUpperCase();}';
-                $html[] = 'function buildLangHrefFallback(lang){return "/"+(String(lang||"").replace(/-/g,"_")||"");}';
-                $html[] = $defaultAwareBuildLangHrefFallbackJs;
-                $html[] = 'function buildLangHref(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";if(window.WelineI18n&&typeof window.WelineI18n.buildLanguageUrl==="function"){return window.WelineI18n.buildLanguageUrl(lang,pathname,search);}return buildLangHrefFallback(lang);}';
-                $html[] = 'function optionNodes(){return (panel||root).querySelectorAll("[data-language-option],.language-option,a[data-lang]");}';
-                $html[] = 'function hasDiff(lang){var currentEl=root.querySelector(".current-language");var should=toShort(lang);var active=(panel||root).querySelector("[data-language-option].active,.language-option.active,a[data-lang].active");var activeLang=active?(active.getAttribute("data-lang")||active.dataset.lang||""):"";if(currentEl&&String(currentEl.textContent||"").trim()!==should){return true;}if(activeLang!==lang){return true;}return false;}';
-                $html[] = 'function rerender(lang){var currentEl=root.querySelector(".current-language");if(currentEl){currentEl.textContent=toShort(lang);}optionNodes().forEach(function(opt){var code=opt.getAttribute("data-lang")||opt.dataset.lang||"";if(!code){return;}var active=code===lang;if(active){opt.classList.add("active");}else{opt.classList.remove("active");}opt.setAttribute("aria-checked",active?"true":"false");});}';
-                $html[] = 'function reconcileOnce(){var lang=detectLang();if(hasDiff(lang)){rerender(lang);}}';
-                $html[] = 'if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",function(){setTimeout(reconcileOnce,120);},{once:true});}else{setTimeout(reconcileOnce,120);}';
-                $html[] = '})();</script>';
-            }
-
-            $output = implode("\n", $html);
+            $output = \implode("\n", $html);
             self::$htmlCache[$htmlCacheKey] = [
                 'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
                 'html' => $output,
@@ -562,6 +473,10 @@ class LanguageSwitcher implements TaglibInterface
                 ) {
                     return true;
                 }
+                // Live HTTP request is authoritative. ThemeData area can remain
+                // "backend" after worker chrome warmup and must not force backend
+                // language hrefs on frontend pages.
+                return false;
             }
         } catch (\Throwable) {
         }
@@ -672,7 +587,7 @@ class LanguageSwitcher implements TaglibInterface
                 'flag' => (string)($item['flag'] ?? ''),
                 'country_code' => (string)($item['country_code'] ?? ''),
                 'country_name' => (string)($item['country_name'] ?? ''),
-                'search_terms' => (string)($item['search_terms'] ?? ''),
+                'search_terms' => (string)($item['search_terms'] ?? ($item['search'] ?? '')),
             ];
         }
 
@@ -789,7 +704,7 @@ class LanguageSwitcher implements TaglibInterface
             $countryCode = \strtoupper(\trim((string)($language['country_code'] ?? '')));
             $countryName = \trim((string)($language['country_name'] ?? ''));
             if ($countryName === '') {
-                $countryName = $countryCode !== '' ? $countryCode : (string)__('未分组国家');
+                $countryName = $countryCode !== '' ? $countryCode : self::translateChrome('未分组国家', $displayLocale);
             }
             $groupKey = \strtolower($countryCode . '|' . $countryName);
             if (!isset($groupIndexes[$groupKey])) {
@@ -1004,6 +919,7 @@ class LanguageSwitcher implements TaglibInterface
         int $websiteId,
         string $renderFor,
         string $currentCode,
+        string $displayLocale,
         string $currentCurrency,
         string $currentPath,
         string $currentSearch,
@@ -1014,12 +930,80 @@ class LanguageSwitcher implements TaglibInterface
             'scope' => $isBackendArea ? 'backend' : 'frontend:' . $websiteId,
             'for' => $renderFor,
             'lang' => $currentCode,
+            'display' => $displayLocale,
             'currency' => $currentCurrency,
             'path' => $currentPath,
             'search' => self::sanitizeLanguageSearch($currentSearch),
             'backend_route' => $backendRoute,
             'languages' => $languageCodes,
         ], \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE) ?: '');
+    }
+
+    /**
+     * Translate switcher chrome copy from Weline_I18n module CSV for a locale.
+     *
+     * WLS Phrase layers only load the current request module CSV; Admin/Theme
+     * pages therefore miss I18n-owned strings when using __() alone.
+     */
+    private static function translateChrome(string $source, string $locale): string
+    {
+        $source = \trim($source);
+        if ($source === '') {
+            return '';
+        }
+        $locale = \trim($locale) !== '' ? \trim($locale) : 'zh_Hans_CN';
+        $dictionary = self::loadChromeDictionary($locale);
+        if (isset($dictionary[$source]) && $dictionary[$source] !== '') {
+            return $dictionary[$source];
+        }
+        try {
+            $fallback = (string)__($source);
+            if ($fallback !== '') {
+                return $fallback;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $source;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function loadChromeDictionary(string $locale): array
+    {
+        if (isset(self::$chromeDictionaryCache[$locale])) {
+            return self::$chromeDictionaryCache[$locale];
+        }
+
+        $path = \dirname(__DIR__) . '/i18n/' . $locale . '.csv';
+        if (!\is_file($path)) {
+            return self::$chromeDictionaryCache[$locale] = [];
+        }
+
+        $handle = @\fopen($path, 'rb');
+        if ($handle === false) {
+            return self::$chromeDictionaryCache[$locale] = [];
+        }
+
+        $words = [];
+        try {
+            while (($row = \fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
+                if (!isset($row[0], $row[1])) {
+                    continue;
+                }
+                $key = \trim((string)$row[0]);
+                $value = \trim((string)$row[1]);
+                if ($key === '' || $value === '') {
+                    continue;
+                }
+                $words[$key] = $value;
+            }
+        } finally {
+            \fclose($handle);
+        }
+
+        return self::$chromeDictionaryCache[$locale] = $words;
     }
 
     private static function sanitizeInlineFlagMarkup(string $markup): string
@@ -1584,6 +1568,6 @@ class LanguageSwitcher implements TaglibInterface
 
     public static function document(): string
     {
-        return '<p><code>&lt;w:i18n:switcher /&gt;</code> 按国家分组、支持搜索的标准语言切换标签。旧名 <code>&lt;w:i18n:language:switcher /&gt;</code> 为兼容别名。</p>';
+        return '<p><code>&lt;w:i18n:switcher /&gt;</code> 按国家分组、支持搜索的标准语言切换标签。</p>';
     }
 }

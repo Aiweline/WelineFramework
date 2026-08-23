@@ -23,7 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 客服聊天工作台控制器
  */
-#[Acl('Weline_CustomerService::console', '客服工作台', 'mdi-message-text', '客服聊天工作台', 'Weline_CustomerService::customer_service')]
+#[Acl('Weline_CustomerService::console', '客服工作台', 'message', '客服聊天工作台', 'Weline_CustomerService::customer_service')]
 class Console extends BackendController
 {
     private ChatService $chatService;
@@ -40,7 +40,7 @@ class Console extends BackendController
     /**
      * 客服聊天工作台主页面
      */
-    #[Acl('Weline_CustomerService::console_index', '查看工作台', 'mdi-message-text', '查看客服工作台')]
+    #[Acl('Weline_CustomerService::console_index', '查看工作台', 'message', '查看客服工作台')]
     public function index(): string
     {
         try {

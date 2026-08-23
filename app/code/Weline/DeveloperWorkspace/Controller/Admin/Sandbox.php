@@ -10,7 +10,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Ui\FormKey;
 
-#[Acl('Weline_DeveloperWorkspace::dev-sandbox-manager', '沙盒管理', 'fa fa-database')]
+#[Acl('Weline_DeveloperWorkspace::dev-sandbox-manager', '沙盒管理', 'database')]
 class Sandbox extends BackendController
 {
     protected function csrf(): string

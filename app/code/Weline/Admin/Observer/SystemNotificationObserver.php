@@ -117,19 +117,26 @@ class SystemNotificationObserver implements ObserverInterface
             if (isset($data['is_icon']) && $data['is_icon']) {
                 $notification->setIsIcon(1)
                             ->setIsImg(0)
-                            ->setAvatar($data['avatar'] ?? 'ri-notification-line');
+                            ->setAvatar($data['avatar'] ?? 'bell');
             }
             // 如果指定了 is_img，使用图片
             elseif (isset($data['is_img']) && $data['is_img']) {
-                $notification->setIsIcon(0)
-                            ->setIsImg(1)
-                            ->setAvatar($data['avatar'] ?? 'assets/images/users/avatar-1.jpg');
+                $avatar = trim((string)($data['avatar'] ?? ''));
+                if ($avatar !== '') {
+                    $notification->setIsIcon(0)
+                                ->setIsImg(1)
+                                ->setAvatar($avatar);
+                } else {
+                    $notification->setIsIcon(1)
+                                ->setIsImg(0)
+                                ->setAvatar('bell');
+                }
             }
             // 默认使用图标
             else {
                 $notification->setIsIcon(1)
                             ->setIsImg(0)
-                            ->setAvatar($data['avatar'] ?? 'ri-notification-line');
+                            ->setAvatar($data['avatar'] ?? 'bell');
             }
             
             // 保存通知
@@ -192,7 +199,7 @@ class SystemNotificationObserver implements ObserverInterface
                         ->setIsRead(false)
                         ->setIsIcon(1)
                         ->setIsImg(0)
-                        ->setAvatar('ri-error-warning-line')
+                        ->setAvatar('warning')
                         ->save();
         } catch (\Exception $e) {
             // 如果连错误消息都保存失败，记录到错误日志
@@ -255,4 +262,3 @@ class SystemNotificationObserver implements ObserverInterface
         return __('未知来源');
     }
 }
-

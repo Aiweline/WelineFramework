@@ -9,93 +9,73 @@ $closeUrl = $this->getBackendUrl('*/admin/sandbox/close');
 $saveUrl = $this->getBackendUrl('*/admin/sandbox/setSandboxKey');
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('沙盒环境配置') ?></h4>
-            <div class="page-title-right">
-                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order'
-                            name_field='title'></breadcrumb>
-            </div>
-        </div>
-    </div>
-</div>
-
 <template>Weline_DeveloperWorkspace::Backend/AsyncEventProbe/index.phtml</template>
 
-<div class="row">
-    <div class="col-xl-12 col-sm-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span-lg:12;--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <?= __('沙盒环境是一套数据隔离的测试环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。') ?>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-xl-12 col-sm-12">
-        <div class="card">
-            <div class="card-title">
-                <div class='row'>
+<div class="w-grid">
+    <div style="--w-span-lg:12;--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__title">
+                <div class="w-grid">
                     <template>Weline_Component::message.phtml</template>
                 </div>
             </div>
-            <div class="card-body">
-                <h4 class='card-title'><?= __('可配置参数：') ?></h4>
-                <p class='card-title-desc'><?= __('控制沙盒环境参数来达到测试系统环境。') ?></p>
-                <div class="row">
+            <div class="w-card__body">
+                <h4 class="w-card__title"><?= __('可配置参数：') ?></h4>
+                <p class="w-text" data-tone="muted"><?= __('控制沙盒环境参数来达到测试系统环境。') ?></p>
+                <div class="w-grid">
                     <h3><?= __('沙盒启动Key') ?></h3>
-                    <div class="mt-2">
+                    <div style="--w-mt:var(--weline-space-2);">
                         <?= __('当前沙盒状态：') ?>
-                        <span class="badge bg-<?= $enabled ? 'success' : 'info' ?>">
+                        <span class="w-badge bg-<?= $enabled ? 'success' : 'info' ?>">
                             <?= $enabled ? __('开启') : __('关闭') ?>
                         </span>
                     </div>
-                    <div class="mt-2">
+                    <div style="--w-mt:var(--weline-space-2);">
                         <?= __('当前Key状态：') ?>
-                        <span class="badge bg-<?= $sandboxKeyConfigured ? 'success' : 'warning' ?>">
+                        <span class="w-badge bg-<?= $sandboxKeyConfigured ? 'success' : 'warning' ?>">
                             <?= $sandboxKeyConfigured ? __('已配置') : __('未配置') ?>
                         </span>
                     </div>
-                    <div class="mt-3">
-                        <w:form class="row g-2 align-items-end" method="post"
-                              action="@var($saveUrl)" novalidate csrf="off">
+                    <div style="--w-mt:var(--weline-space-4);">
+                        <w:form class="w-grid" method="post" action="@var($saveUrl)" novalidate csrf="off" data-align="end" style="--w-gap:var(--weline-space-2);">
                             <?= $this->getFormKey($saveUrl) ?>
-                            <div class="col-md-6 col-lg-5">
-                                <label class="form-label mb-1" for="sandbox_key_input"><?= __('新沙盒Key') ?></label>
-                                <input type="password" class="form-control" name="key" id="sandbox_key_input"
-                                       placeholder="<?= __('请输入新的沙盒Key') ?>" autocomplete="new-password" required>
+                            <div style="--w-span-md:6;--w-span-lg:5;">
+                                <label class="w-field__label" for="sandbox_key_input" style="--w-mb:var(--weline-space-1);"><?= __('新沙盒Key') ?></label>
+                                <input type="password" class="w-input" name="key" id="sandbox_key_input" placeholder="<?= __('请输入新的沙盒Key') ?>" autocomplete="new-password" required>
                             </div>
-                            <div class="col-auto pb-1">
-                                <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
+                            <div style="--w-pb:var(--weline-space-1);">
+                                <button type="submit" class="w-button" data-tone="primary"><?= __('保存') ?></button>
                             </div>
                         </w:form>
                     </div>
 
-                    <div class="mt-3">
-                        <div class="mb-2">
+                    <div style="--w-mt:var(--weline-space-4);">
+                        <div style="--w-mb:var(--weline-space-2);">
                             <?= __('沙盒请求请优先通过已授权表单开关；不要把启动Key放进可点击GET链接。') ?>
                         </div>
-                        <w:form class="d-inline-block me-2" method="post"
-                              action="@var($enableUrl)" csrf="off">
+                        <w:form class="me-2" method="post" action="@var($enableUrl)" csrf="off" data-w-display="inline-block">
                             <?= $this->getFormKey($enableUrl) ?>
-                            <label class="visually-hidden" for="sandbox_enable_key"><?= __('沙盒启动Key') ?></label>
-                            <input type="password" class="form-control form-control-sm d-inline-block w-auto me-1"
-                                   name="key" id="sandbox_enable_key" placeholder="<?= __('沙盒启动Key') ?>"
-                                   autocomplete="off" required>
+                            <label class="w-visually-hidden" for="sandbox_enable_key"><?= __('沙盒启动Key') ?></label>
+                            <input type="password" class="w-input me-1" name="key" id="sandbox_enable_key" placeholder="<?= __('沙盒启动Key') ?>" autocomplete="off" required data-w-display="inline-block" data-w-width="auto" data-size="sm">
                             <input type="hidden" name="enable" value="on">
-                            <button type="submit" class="btn btn-sm btn-success"><?= __('开启沙盒') ?></button>
+                            <button type="submit" class="w-button" data-tone="success" data-size="sm"><?= __('开启沙盒') ?></button>
                         </w:form>
-                        <w:form class="d-inline-block" method="post"
-                              action="@var($closeUrl)" csrf="off">
+                        <w:form method="post" action="@var($closeUrl)" csrf="off" data-w-display="inline-block">
                             <?= $this->getFormKey($closeUrl) ?>
-                            <label class="visually-hidden" for="sandbox_close_key"><?= __('沙盒启动Key') ?></label>
-                            <input type="password" class="form-control form-control-sm d-inline-block w-auto me-1"
-                                   name="key" id="sandbox_close_key" placeholder="<?= __('沙盒启动Key') ?>"
-                                   autocomplete="off" required>
+                            <label class="w-visually-hidden" for="sandbox_close_key"><?= __('沙盒启动Key') ?></label>
+                            <input type="password" class="w-input me-1" name="key" id="sandbox_close_key" placeholder="<?= __('沙盒启动Key') ?>" autocomplete="off" required data-w-display="inline-block" data-w-width="auto" data-size="sm">
                             <input type="hidden" name="close" value="on">
-                            <button type="submit" class="btn btn-sm btn-warning"><?= __('关闭沙盒') ?></button>
+                            <button type="submit" class="w-button" data-tone="warning" data-size="sm"><?= __('关闭沙盒') ?></button>
                         </w:form>
                     </div>
                 </div>

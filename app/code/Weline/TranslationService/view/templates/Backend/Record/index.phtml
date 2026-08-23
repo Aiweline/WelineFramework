@@ -26,63 +26,63 @@ $confirmMessages = [
 ];
 ?>
 <div class="translation-record-page">
-    <div class="page-header mb-4">
+    <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h1><?= __('翻译记录管理') ?></h1>
-        <p class="text-muted"><?= __('查看和管理翻译服务的使用记录和统计信息') ?></p>
+        <p class="w-text" data-tone="muted"><?= __('查看和管理翻译服务的使用记录和统计信息') ?></p>
     </div>
 
     <!-- 统计卡片 -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('总记录数') ?></h5>
-                    <h2 class="mb-0"><?= number_format($stats['total_records'] ?? 0) ?></h2>
-                    <small class="text-muted"><?= __('今日：%{1}', [number_format($stats['today_records'] ?? 0)]) ?></small>
+    <div class="w-grid" style="--w-mb:var(--weline-space-6);">
+        <div style="--w-span-md:3;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('总记录数') ?></h5>
+                    <h2 style="--w-mb:0;"><?= number_format($stats['total_records'] ?? 0) ?></h2>
+                    <small class="w-text" data-tone="muted"><?= __('今日：%{1}', [number_format($stats['today_records'] ?? 0)]) ?></small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('成功记录') ?></h5>
-                    <h2 class="mb-0 text-success"><?= number_format($stats['success_records'] ?? 0) ?></h2>
-                    <small class="text-muted"><?= __('失败：%{1}', [number_format($stats['failed_records'] ?? 0)]) ?></small>
+        <div style="--w-span-md:3;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('成功记录') ?></h5>
+                    <h2 class="w-text" data-tone="success" style="--w-mb:0;"><?= number_format($stats['success_records'] ?? 0) ?></h2>
+                    <small class="w-text" data-tone="muted"><?= __('失败：%{1}', [number_format($stats['failed_records'] ?? 0)]) ?></small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('总字符数') ?></h5>
-                    <h2 class="mb-0"><?= number_format($stats['total_characters'] ?? 0) ?></h2>
-                    <small class="text-muted"><?= __('今日：%{1}', [number_format($stats['today_characters'] ?? 0)]) ?></small>
+        <div style="--w-span-md:3;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('总字符数') ?></h5>
+                    <h2 style="--w-mb:0;"><?= number_format($stats['total_characters'] ?? 0) ?></h2>
+                    <small class="w-text" data-tone="muted"><?= __('今日：%{1}', [number_format($stats['today_characters'] ?? 0)]) ?></small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= __('总成本') ?></h5>
-                    <h2 class="mb-0 text-primary">¥<?= number_format($stats['total_cost'] ?? 0, 4) ?></h2>
-                    <small class="text-muted"><?= __('今日：¥%{1}', [number_format($stats['today_cost'] ?? 0, 4)]) ?></small>
+        <div style="--w-span-md:3;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <h5 class="w-card__title"><?= __('总成本') ?></h5>
+                    <h2 class="w-text" data-tone="primary" style="--w-mb:0;">¥<?= number_format($stats['total_cost'] ?? 0, 4) ?></h2>
+                    <small class="w-text" data-tone="muted"><?= __('今日：¥%{1}', [number_format($stats['today_cost'] ?? 0, 4)]) ?></small>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- 筛选表单 -->
-    <div class="card mb-4">
-        <div class="card-header">
+    <div class="w-card" style="--w-mb:var(--weline-space-6);">
+        <div class="w-card__header">
             <h3><?= __('筛选条件') ?></h3>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <w:form method="get" action="@var($this->getBackendUrl('*/backend/record'))">
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('渠道') ?></label>
-                            <select class="form-select" name="provider_id">
+                <div class="w-grid">
+                    <div style="--w-span-md:3;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('渠道') ?></label>
+                            <select class="w-select" name="provider_id">
                                 <option value=""><?= __('全部') ?></option>
                                 <?php foreach ($providers as $provider): ?>
                                     <option value="<?= $provider->getId() ?>" <?= ($filters['provider_id'] ?? '') == $provider->getId() ? 'selected' : '' ?>>
@@ -92,10 +92,10 @@ $confirmMessages = [
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-2">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('状态') ?></label>
-                            <select class="form-select" name="status">
+                    <div style="--w-span-md:2;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('状态') ?></label>
+                            <select class="w-select" name="status">
                                 <option value=""><?= __('全部') ?></option>
                                 <option value="success" <?= ($filters['status'] ?? '') == 'success' ? 'selected' : '' ?>><?= __('成功') ?></option>
                                 <option value="failed" <?= ($filters['status'] ?? '') == 'failed' ? 'selected' : '' ?>><?= __('失败') ?></option>
@@ -103,47 +103,47 @@ $confirmMessages = [
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-2">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('源语言') ?></label>
-                            <input type="text" class="form-control" name="source_language" value="<?= htmlspecialchars($filters['source_language'] ?? '') ?>" placeholder="如：zh">
+                    <div style="--w-span-md:2;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('源语言') ?></label>
+                            <input type="text" class="w-input" name="source_language" value="<?= htmlspecialchars($filters['source_language'] ?? '') ?>" placeholder="如：zh">
                         </div>
                     </div>
-                    <div class="col-md-2">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('目标语言') ?></label>
-                            <input type="text" class="form-control" name="target_language" value="<?= htmlspecialchars($filters['target_language'] ?? '') ?>" placeholder="如：en">
+                    <div style="--w-span-md:2;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('目标语言') ?></label>
+                            <input type="text" class="w-input" name="target_language" value="<?= htmlspecialchars($filters['target_language'] ?? '') ?>" placeholder="如：en">
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('调用模块') ?></label>
-                            <input type="text" class="form-control" name="module_name" value="<?= htmlspecialchars($filters['module_name'] ?? '') ?>" placeholder="如：Weline_Cms">
+                    <div style="--w-span-md:3;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('调用模块') ?></label>
+                            <input type="text" class="w-input" name="module_name" value="<?= htmlspecialchars($filters['module_name'] ?? '') ?>" placeholder="如：Weline_Cms">
                         </div>
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('开始日期') ?></label>
-                            <input type="date" class="form-control" name="start_date" value="<?= htmlspecialchars($filters['start_date'] ?? '') ?>">
+                <div class="w-grid">
+                    <div style="--w-span-md:3;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('开始日期') ?></label>
+                            <input type="date" class="w-input" name="start_date" value="<?= htmlspecialchars($filters['start_date'] ?? '') ?>">
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="mb-3">
-                            <label class="form-label"><?= __('结束日期') ?></label>
-                            <input type="date" class="form-control" name="end_date" value="<?= htmlspecialchars($filters['end_date'] ?? '') ?>">
+                    <div style="--w-span-md:3;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label"><?= __('结束日期') ?></label>
+                            <input type="date" class="w-input" name="end_date" value="<?= htmlspecialchars($filters['end_date'] ?? '') ?>">
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label class="form-label">&nbsp;</label>
+                    <div style="--w-span-md:6;">
+                        <div style="--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label">&nbsp;</label>
                             <div>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="mdi mdi-filter"></i> <?= __('筛选') ?>
+                                <button type="submit" class="w-button" data-tone="primary">
+                                    <w:icon name="filter" size="sm"></w:icon> <?= __('筛选') ?>
                                 </button>
-                                <a href="<?= $this->getBackendUrl('*/backend/record') ?>" class="btn btn-secondary">
-                                    <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                                <a href="<?= $this->getBackendUrl('*/backend/record') ?>" class="w-button" data-tone="neutral">
+                                    <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
                                 </a>
                             </div>
                         </div>
@@ -154,26 +154,26 @@ $confirmMessages = [
     </div>
 
     <!-- 记录列表 -->
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="w-card">
+        <div class="w-card__header w-cluster" data-justify="between" data-align="center">
             <h3><?= __('翻译记录') ?></h3>
             <div>
-                <button type="button" class="btn btn-sm btn-danger" data-translation-record-action="batch-delete">
-                    <i class="mdi mdi-delete"></i> <?= __('批量删除') ?>
+                <button type="button" class="w-button" data-translation-record-action="batch-delete" data-tone="danger" data-size="sm">
+                    <w:icon name="trash" size="sm"></w:icon> <?= __('批量删除') ?>
                 </button>
-                <button type="button" class="btn btn-sm btn-info" data-translation-record-action="export-stats">
-                    <i class="mdi mdi-download"></i> <?= __('导出统计') ?>
+                <button type="button" class="w-button" data-translation-record-action="export-stats" data-tone="info" data-size="sm">
+                    <w:icon name="download" size="sm"></w:icon> <?= __('导出统计') ?>
                 </button>
             </div>
         </div>
-        <div class="card-body">
+        <div class="w-card__body">
             <?php if (empty($records)): ?>
-                <div class="alert alert-info">
+                <div class="w-alert" data-tone="info">
                     <?= __('暂无翻译记录') ?>
                 </div>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                <div class="w-table-wrap">
+                    <table class="w-table">
                         <thead>
                             <tr>
                                 <th>
@@ -216,42 +216,39 @@ $confirmMessages = [
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="badge bg-secondary"><?= htmlspecialchars($record->getData('source_language')) ?></span>
-                                        <i class="mdi mdi-arrow-right"></i>
-                                        <span class="badge bg-primary"><?= htmlspecialchars($record->getData('target_language')) ?></span>
+                                        <span class="w-badge" data-w-background="muted"><?= htmlspecialchars($record->getData('source_language')) ?></span>
+                                        <w:icon name="arrow-right" size="sm"></w:icon>
+                                        <span class="w-badge" data-w-background="primary"><?= htmlspecialchars($record->getData('target_language')) ?></span>
                                     </td>
                                     <td><?= number_format($record->getData('character_count') ?? 0) ?></td>
                                     <td>¥<?= number_format($record->getData('cost') ?? 0, 4) ?></td>
                                     <td><?= number_format($record->getData('response_time') ?? 0) ?>ms</td>
                                     <td>
                                         <?php if ($record->isSuccess()): ?>
-                                            <span class="badge bg-success"><?= __('成功') ?></span>
+                                            <span class="w-badge" data-w-background="success"><?= __('成功') ?></span>
                                         <?php elseif ($record->isFailed()): ?>
-                                            <span class="badge bg-danger" title="<?= htmlspecialchars($record->getData('error_message') ?? '') ?>">
+                                            <span class="w-badge" title="<?= htmlspecialchars($record->getData('error_message') ?? '') ?>" data-w-background="danger">
                                                 <?= __('失败') ?>
                                             </span>
                                         <?php else: ?>
-                                            <span class="badge bg-warning"><?= __('待处理') ?></span>
+                                            <span class="w-badge" data-w-background="warning"><?= __('待处理') ?></span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php if ($record->getData('module_name')): ?>
                                             <code><?= htmlspecialchars($record->getData('module_name')) ?></code>
                                         <?php else: ?>
-                                            <span class="text-muted">-</span>
+                                            <span class="w-text" data-tone="muted">-</span>
                                         <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($record->getData('created_at')) ?></td>
                                     <td>
-                                        <div class="btn-group btn-group-sm">
-                                            <a href="<?= $this->getBackendUrl('*/backend/record/view', ['id' => $record->getId()]) ?>" 
-                                               class="btn btn-outline-info">
-                                                <i class="mdi mdi-eye"></i>
+                                        <div class="w-button-group">
+                                            <a href="<?= $this->getBackendUrl('*/backend/record/view', ['id' => $record->getId()]) ?>" class="w-button" data-tone="info" data-variant="outline">
+                                                <w:icon name="eye" size="sm"></w:icon>
                                             </a>
-                                            <a href="<?= $this->getBackendUrl('*/backend/record/delete', ['id' => $record->getId()]) ?>" 
-                                               class="btn btn-outline-danger"
-                                               data-translation-record-confirm="deleteRecord">
-                                                <i class="mdi mdi-delete"></i>
+                                            <a href="<?= $this->getBackendUrl('*/backend/record/delete', ['id' => $record->getId()]) ?>" class="w-button" data-translation-record-confirm="deleteRecord" data-tone="danger" data-variant="outline">
+                                                <w:icon name="trash" size="sm"></w:icon>
                                             </a>
                                         </div>
                                     </td>
@@ -264,26 +261,26 @@ $confirmMessages = [
                 <!-- 分页 -->
                 <?php if ($totalPages > 1): ?>
                     <nav aria-label="Page navigation">
-                        <ul class="pagination justify-content-center">
+                        <ul class="w-pagination" data-justify="center">
                             <?php if ($page > 1): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $page - 1])) ?>">
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $page - 1])) ?>">
                                         <?= __('上一页') ?>
                                     </a>
                                 </li>
                             <?php endif; ?>
                             
                             <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                                <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                                    <a class="page-link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $i])) ?>">
+                                <li class="w-pagination__item <?= $i == $page ? 'active' : '' ?>">
+                                    <a class="w-pagination__link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $i])) ?>">
                                         <?= $i ?>
                                     </a>
                                 </li>
                             <?php endfor; ?>
                             
                             <?php if ($page < $totalPages): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $page + 1])) ?>">
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $page + 1])) ?>">
                                         <?= __('下一页') ?>
                                     </a>
                                 </li>
@@ -296,10 +293,6 @@ $confirmMessages = [
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 const translationRecordMessages = <?= json_encode($confirmMessages, $dialogJsonFlags) ?>;
 
@@ -364,20 +357,16 @@ function showLocalChoice(message) {
 }
 
 function showTranslationRecordChoice(message) {
-    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
-        return Swal.fire({
-            icon: 'warning',
-            title: translationRecordMessages.confirmTitle,
-            text: message,
-            showCancelButton: true,
-            confirmButtonText: translationRecordMessages.confirmButton,
-            cancelButtonText: translationRecordMessages.cancelButton
-        }).then(function(result) {
-            return !!(result && result.isConfirmed);
-        });
-    }
-
-    return showLocalChoice(message);
+    return Weline.UI.dialog.request({
+        tone: 'warning',
+        title: translationRecordMessages.confirmTitle,
+        message: message,
+        cancelable: true,
+        confirmLabel: translationRecordMessages.confirmButton,
+        cancelLabel: translationRecordMessages.cancelButton
+    }).then(function(result) {
+        return !!(result && result.confirmed);
+    });
 }
 
 document.querySelectorAll('[data-translation-record-confirm]').forEach(function(link) {
@@ -408,16 +397,12 @@ function toggleSelectAll() {
 function batchDelete() {
     const checked = document.querySelectorAll('.record-checkbox:checked');
     if (checked.length === 0) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请选择要删除的记录') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请选择要删除的记录') ?>');
-        }
+        Weline.UI.dialog.request({
+            tone: 'warning',
+            title: '<?= __('提示') ?>',
+            message: '<?= __('请选择要删除的记录') ?>',
+            confirmLabel: '<?= __('确定') ?>'
+        });
         return;
     }
     

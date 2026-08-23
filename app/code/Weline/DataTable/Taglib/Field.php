@@ -1,52 +1,33 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Weline\DataTable\Taglib;
 
 use Weline\DataTable\Helper\FrontendAccess;
-use Weline\Framework\Http\Request;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\App\Exception;
-use Weline\Framework\Database\Model;
-use Weline\Framework\Taglib\TaglibInterface;
 use Weline\DataTable\Helper\TableContext;
+use Weline\Framework\App\Exception;
+use Weline\Framework\Taglib\TaglibInterface;
 
-class Field implements TaglibInterface
+final class Field implements TaglibInterface
 {
-    const default_sortable = false;
-    
-    /**
-     * 请求级模板字段缓存（WLS 下由 StateManager 每请求重置）
-     */
-    private static array $templateFields = [];
-
-    public static function resetRequestState(): void
-    {
-        self::$templateFields = [];
-    }
-
-    static public function name(): string
+    public static function name(): string
     {
         return 'field';
     }
 
-    static function tag(): bool
+    public static function tag(): bool
     {
         return true;
     }
 
-    static function attr(): array
+    public static function attr(): array
     {
         return [
             'name' => true,
-            'belong' => true,
+            'belong' => false,
             'sortable' => false,
-            'url' => false,
-            'multi' => false,
-            'icon' => false,
             'width' => false,
-            'min-width' => false,
-            'max-width' => false,
-            'resizable' => false,
             'visible' => false,
             'editable' => false,
             'searchable' => false,
@@ -55,9 +36,6 @@ class Field implements TaglibInterface
             'placeholder' => false,
             'options' => false,
             'class' => false,
-            'style' => false,
-            'formatter' => false,
-            'validator' => false,
             'default' => false,
             'required' => false,
             'readonly' => false,
@@ -67,1358 +45,404 @@ class Field implements TaglibInterface
             'maxlength' => false,
             'step' => false,
             'multiple' => false,
-            'max-size' => false
+            'max-size' => false,
         ];
     }
 
-    static function tag_start(): bool
+    public static function tag_start(): bool
     {
         return false;
     }
 
-    static function tag_end(): bool
+    public static function tag_end(): bool
     {
         return false;
     }
 
-    static function callback(): callable
+    public static function callback(): callable
     {
-        return function ($tag_key, $config, $tag_data, $attrs) {
-            $currentAccessContext = TableContext::getCurrentTableContext() ?? [];
-            $belong = $attrs['belong'] ?? '';
-            if ($belong) {
-                $renderContext = TableContext::getRenderStack($belong);
-                if (is_array($renderContext) && isset($renderContext['attributes']) && is_array($renderContext['attributes'])) {
-                    $currentAccessContext = $renderContext['attributes'];
-                    if (isset($currentAccessContext['attributes']) && is_array($currentAccessContext['attributes'])) {
-                        $currentAccessContext = array_merge($currentAccessContext, $currentAccessContext['attributes']);
-                    }
-                }
+        return static function ($tagKey, $config, $tagData, $attributes): string {
+            $name = trim((string)($attributes['name'] ?? ''));
+            if ($name === '') {
+                throw new Exception(__('field标签必须指定name属性！'));
             }
-            if (!FrontendAccess::isAllowed($attrs, $currentAccessContext)) {
-                $name = $attrs['name'] ?? 'unknown';
+
+            $belong = trim((string)($attributes['belong'] ?? ''));
+            if ($belong === '') {
+                $stack = TableContext::getRenderStack();
+                $current = is_array($stack) ? end($stack) : null;
+                $belong = is_array($current) ? (string)($current['type'] ?? '') : '';
+            }
+            if (!in_array($belong, ['t-header', 't-filter', 'd-form'], true)) {
+                throw new Exception(__('field标签的belong必须是t-header、t-filter或d-form。'));
+            }
+
+            $context = TableContext::getRenderStack($belong);
+            $accessContext = is_array($context['attributes'] ?? null) ? $context['attributes'] : [];
+            if (!FrontendAccess::isAllowed($attributes, $accessContext)) {
                 return FrontendAccess::deniedComment('field:' . $name);
             }
-            // 检查是否为后端请求
-            /** @var Request $req */
-            $req = ObjectManager::getInstance(Request::class);
-            $isUnitTest = (\defined('ENV_TEST') && ENV_TEST === true) || \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__');
-            if (false) {
-                // 前端请求直接返回空（开发环境返回注释说明）
-                if (defined('DEV') && DEV) {
-                    $name = $attrs['name'] ?? 'unknown';
-                    return "<!-- DataTable 字段标签只能在后端使用，当前为前端请求（字段：{$name}） -->";
-                }
-                return '';
-            }
 
-            $name = $attrs['name'] ?? '';
-            $belong = $attrs['belong'] ?? '';
+            $content = trim((string)($tagData[2] ?? ''));
+            $field = self::normalizeField($name, $belong, $content, $attributes, $context);
+            $scope = (string)($context['scope'] ?? $accessContext['scope'] ?? 'datatable');
+            TableContext::recordTemplateField($scope, $belong, $name, $field);
 
-            // 验证belong属性
-            if (empty($belong)) {
-                throw new Exception(__('field标签（字段：%{1}）缺少必填属性belong！请指定belong="t-header"、belong="t-filter"或belong="d-form"。', [$name]));
-            }
-
-            if (!in_array($belong, ['t-header', 't-filter', 'd-form'])) {
-                throw new Exception(__('field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。', [$name, $belong]));
-            }
-
-            // 临时解决方案：如果没有上下文，直接返回占位符
-            // 这样可以避免标签解析顺序导致的问题
-            try {
-            
-            $multi = boolval($attrs['multi'] ?? false);
-            $sortable = boolval($attrs['sortable'] ?? self::default_sortable);
-            $width = $attrs['width'] ?? '';
-            $minWidth = $attrs['min-width'] ?? '';
-            $maxWidth = $attrs['max-width'] ?? '';
-            $resizable = boolval($attrs['resizable'] ?? true);
-            $visible = boolval($attrs['visible'] ?? true);
-            $editable = boolval($attrs['editable'] ?? false);
-            $searchable = boolval($attrs['searchable'] ?? true);
-            $type = $attrs['type'] ?? 'text';
-            $label = $attrs['label'] ?? '';
-            $placeholder = $attrs['placeholder'] ?? '';
-            $options = $attrs['options'] ?? '';
-            $class = $attrs['class'] ?? '';
-            $style = $attrs['style'] ?? '';
-            $formatter = $attrs['formatter'] ?? '';
-            $validator = $attrs['validator'] ?? '';
-            $default = $attrs['default'] ?? '';
-            $required = filter_var($attrs['required'] ?? false, FILTER_VALIDATE_BOOLEAN);
-            $readonly = filter_var($attrs['readonly'] ?? false, FILTER_VALIDATE_BOOLEAN);
-            $disabled = filter_var($attrs['disabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
-            $min = $attrs['min'] ?? '';
-            $max = $attrs['max'] ?? '';
-            $maxlength = $attrs['maxlength'] ?? '';
-            $step = $attrs['step'] ?? '';
-            $multiple = filter_var($attrs['multiple'] ?? false, FILTER_VALIDATE_BOOLEAN);
-            $maxSize = $attrs['max-size'] ?? '';
-
-            // 获取当前上下文信息
-            $context = TableContext::getRenderStack($belong);
-            if (empty($context)) {
-                // 尝试从全局上下文中获取最近的表格上下文
-                $tableContext = TableContext::getCurrentTableContext();
-                if (empty($tableContext)) {
-                    // 最后尝试从所有表格上下文中查找匹配的scope
-                    $allContexts = TableContext::getAllTableContexts();
-                    if (!empty($allContexts)) {
-                        // 使用第一个可用的表格上下文
-                        $tableContext = reset($allContexts);
-                    }
-                }
-
-                if (empty($tableContext)) {
-                    // 在没有上下文的情况下，返回一个占位符，而不是抛出异常
-                    // 这样可以避免标签解析顺序导致的问题
-                    return "<!-- Field '{$name}' waiting for context -->";
-                }
-
-                // 创建一个临时上下文
-                $context = [
-                    'type' => $belong,
-                    'scope' => $tableContext['scope'] . '-' . str_replace('d-', '', $belong),
-                    'attributes' => $tableContext
-                ];
-            }
-            $parentTagType = $context['type'];
-            $parentAttributes = $context['attributes'];
-            $tableContext = TableContext::getTableContext($parentAttributes['scope']);
-            
-            // 验证belong属性与父标签类型是否匹配
-            if ($belong !== $parentTagType) {
-                throw new Exception(__('field标签（字段：%{1}）的belong属性值"%{2}"与父标签类型"%{3}"不匹配！请确保belong属性值与父标签类型一致。', [$name, $belong, $parentTagType]));
-            }
-
-            // 根据上下文验证字段和参数
-            self::validateFieldByContext($name, $belong, $parentAttributes, $tableContext, $attrs);
-
-            // 记录模板中定义的字段
-            $scope = $parentAttributes['scope'] ?? '';
-            if ($scope) {
-                $fieldConfig = [
-                    'name' => $name,
-                    'belong' => $belong,
-                    'sortable' => $sortable,
-                    'width' => $width,
-                    'min_width' => $minWidth,
-                    'max_width' => $maxWidth,
-                    'resizable' => $resizable,
-                    'visible' => $visible,
-                    'editable' => $editable,
-                    'searchable' => $searchable,
-                    'type' => $type,
-                    'label' => $label,
-                    'placeholder' => $placeholder,
-                    'options' => $options,
-                    'class' => $class,
-                    'style' => $style,
-                    'formatter' => $formatter,
-                    'validator' => $validator,
-                    'default' => $default,
-                    'required' => $required,
-                    'readonly' => $readonly,
-                    'disabled' => $disabled,
-                    'min' => $min,
-                    'max' => $max,
-                    'maxlength' => $maxlength,
-                    'step' => $step,
-                    'multiple' => $multiple,
-                    'max_size' => $maxSize,
-                    'template_defined' => true,
-                    'content' => $label ?: ($tag_data[2] ?? $name)
-                ];
-                
-                // 记录到TableContext中
-                self::recordTemplateField($scope, $belong, $name, $fieldConfig);
-            }
-
-            // 构建样式
-            $styleStr = $style;
-            if ($width) $styleStr .= "width: {$width};";
-            if ($minWidth) $styleStr .= "min-width: {$minWidth};";
-            if ($maxWidth) $styleStr .= "max-width: {$maxWidth};";
-
-            // 构建属性字符串
-            $attrStr = '';
-            $attrStr .= " data-belong=\"{$belong}\"";
-            if ($class) $attrStr .= " class=\"{$class}\"";
-            if ($styleStr) $attrStr .= " style=\"{$styleStr}\"";
-            if (!$visible) $attrStr .= " data-visible=\"false\"";
-            if ($editable) $attrStr .= " data-editable=\"true\"";
-            if ($searchable) $attrStr .= " data-searchable=\"true\"";
-            if ($resizable) $attrStr .= " data-resizable=\"true\"";
-            if ($sortable) $attrStr .= " data-sortable=\"true\"";
-            if ($formatter) $attrStr .= " data-formatter=\"{$formatter}\"";
-            // 新增：序列化所有属性到data-w-field
-            $fieldData = [
-                'name' => $name,
-                'belong' => $belong,
-                'sortable' => $sortable,
-                'width' => $width,
-                'min_width' => $minWidth,
-                'max_width' => $maxWidth,
-                'resizable' => $resizable,
-                'visible' => $visible,
-                'editable' => $editable,
-                'searchable' => $searchable,
-                'type' => $type,
-                'label' => $label,
-                'placeholder' => $placeholder,
-                'options' => $options,
-                'class' => $class,
-                'style' => $style,
-                'formatter' => $formatter,
-                'validator' => $validator,
-                'default' => $default,
-                'required' => $required,
-                'readonly' => $readonly,
-                'disabled' => $disabled,
-                'min' => $min,
-                'max' => $max,
-                'maxlength' => $maxlength,
-                'step' => $step,
-                'multiple' => $multiple,
-                'max_size' => $maxSize,
-                'template_defined' => true,
-                'content' => $label ?: ($tag_data[2] ?? $name)
-            ];
-            $attrStr .= " data-w-field='" . htmlspecialchars(json_encode($fieldData), ENT_QUOTES) . "'";
-
-            // 新增：每个属性都输出为data-xxx="..."
-            foreach ($fieldData as $k => $v) {
-                if (is_bool($v)) $v = $v ? 'true' : 'false';
-                if ($v !== '' && $v !== null) {
-                    $attrStr .= ' data-' . str_replace('_', '-', strtolower($k)) . '="' . htmlspecialchars((string)$v, ENT_QUOTES) . '"';
-                }
-            }
-
-            $content = $label ?: ($tag_data[2] ?? $name);
-
-            // 根据belong属性渲染不同的字段
-            if ($belong === 't-header') {
-                // 表格头部字段
-                return self::renderTableHeaderField($name, $content, $sortable, $req, $attrStr, $placeholder);
-            } elseif ($belong === 't-filter') {
-                // 过滤器字段
-                return self::renderFilterField($name, $type, $placeholder, $options, $class, $attrStr);
-            } elseif ($belong === 'd-form') {
-                // 表单字段
-                return self::renderFormField($name, $type, $placeholder, $options, $class, $attrStr, $content, $fieldData);
-            } else {
-                // 默认表格头部字段
-                return self::renderTableHeaderField($name, $content, $sortable, $req, $attrStr, $placeholder);
-            }
-
-            } catch (Exception $e) {
-                // 如果出现上下文相关的错误，返回占位符
-                if (strpos($e->getMessage(), '必须位于d-table标签内') !== false) {
-                    return "<!-- Field '{$name}' waiting for context: {$e->getMessage()} -->";
-                }
-                // 其他错误继续抛出
-                throw $e;
-            }
+            return match ($belong) {
+                't-header' => self::renderHeader($field),
+                't-filter' => self::renderFilter($field),
+                'd-form' => self::renderForm($field, $context),
+            };
         };
     }
 
-    /**
-     * 记录模板中定义的字段到TableContext
-     * @param string $scope 表格作用域
-     * @param string $belong 字段所属类型
-     * @param string $fieldName 字段名称
-     * @param array $fieldConfig 字段配置
-     */
-    private static function recordTemplateField(string $scope, string $belong, string $fieldName, array $fieldConfig): void
+    /** @return array<string,mixed> */
+    private static function normalizeField(string $name, string $belong, string $content, array $attributes, array $context): array
     {
-        if (!isset(self::$templateFields[$scope])) {
-            self::$templateFields[$scope] = [
-                't-header' => [],
-                't-filter' => []
-            ];
+        $type = strtolower(trim((string)($attributes['type'] ?? '')));
+        if ($type === '') {
+            $type = self::inferType($name);
         }
-        
-        self::$templateFields[$scope][$belong][$fieldName] = $fieldConfig;
-        
-        // 将配置存储到TableContext中（如果TableContext支持的话）
-        if (method_exists(TableContext::class, 'recordTemplateField')) {
-            TableContext::recordTemplateField($scope, $belong, $fieldName, $fieldConfig);
-        }
-    }
-
-    /**
-     * 根据上下文验证字段和参数
-     * @param string $fieldName 字段名称
-     * @param string $parentTagType 父标签类型
-     * @param array $parentAttributes 父标签属性
-     * @param array|null $tableContext 表格上下文
-     * @param array $fieldAttributes 字段属性
-     * @throws Exception 当验证失败时抛出异常
-     */
-    private static function validateFieldByContext(string $fieldName, string $parentTagType, array $parentAttributes, ?array $tableContext, array $fieldAttributes): void
-    {
-        // 使用TableContext助手类继承表格属性
-        $inheritedAttributes = TableContext::inheritTableAttributes(
-            $parentAttributes, 
-            $parentAttributes['scope'] ?? '', 
-            ['model', 'scope']
-        );
-
-        // 获取model类名
-        $modelClass = $inheritedAttributes['model'] ?? '';
-        
-        // 检查是否有转义问题并修复
-        if (strpos($modelClass, '\\\\') !== false) {
-            // 修复转义问题：将双反斜杠替换为单反斜杠
-            $modelClass = str_replace('\\\\', '\\', $modelClass);
-        }
-
-        // 如果从父标签没有获取到model，尝试从表格上下文获取
-        if (empty($modelClass) && $tableContext) {
-            $modelClass = $tableContext['model'] ?? '';
-        }
-
-        // 验证必需的属性
-        try {
-            TableContext::validateRequiredAttributes(
-                ['model' => $modelClass, 'scope' => $inheritedAttributes['scope'] ?? ''], 
-                ['model'], 
-                'field'
-            );
-        } catch (Exception $e) {
-            // 提供更具体的错误信息
-            throw new Exception(__('field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。', [$fieldName, $e->getMessage()]));
-        }
-        
-
-        $fieldTarget = self::resolveFieldTarget($fieldName, $modelClass, $tableContext);
-        if (!empty($fieldTarget['alias']) && empty($fieldTarget['resolved'])) {
-            throw new Exception(__('field标签（字段：%{1}）配置错误：未找到别名"%{2}"对应的模型。请检查 d-table 的 model 配置。', [$fieldName, $fieldTarget['alias']]));
-        }
-
-        // 验证字段是否在model中存在
-        self::validateFieldExists($fieldTarget['field'], $fieldTarget['model']);
-
-        // 根据上下文验证特定参数
-        if ($parentTagType === 't-header') {
-            // 确保在表格头部上下文中进行验证
-            self::validateHeaderFieldAttributes($fieldAttributes);
-        } elseif ($parentTagType === 't-filter') {
-            // 确保在过滤器上下文中进行验证
-            self::validateFilterFieldAttributes($fieldAttributes);
-        } else {
-            // 如果无法确定上下文，使用默认的表格头部验证
-            // 这种情况通常发生在field标签没有明确的父标签时
-            self::validateHeaderFieldAttributes($fieldAttributes);
-        }
-    }
-
-    /**
-     * 验证字段是否在model中存在
-     * @param string $fieldName 字段名称
-     * @param string $modelClass model类名
-     * @throws Exception 当字段不存在时抛出异常
-     */
-    private static function validateFieldExists(string $fieldName, string $modelClass): void
-    {
-        // 首先检查类是否存在
-        if (!class_exists($modelClass)) {
-            throw new Exception(__('field标签验证失败：Model类"%{1}"不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。', [$modelClass]));
-        }
-
-        try {
-            // 实例化model
-            /** @var Model $model */
-            $model = ObjectManager::getInstance($modelClass);
-
-            
-            // 获取model的字段列表
-            $modelFields = $model->getModelFields();
-
-            
-            // 检查字段是否存在
-            if (!in_array($fieldName, $modelFields)) {
-                throw new Exception(__('field标签（字段：%{1}）在Model类"%{2}"中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。', [
-                    $fieldName, 
-                    $modelClass, 
-                    implode(', ', $modelFields)
-                ]));
-            }
-        } catch (\Exception $e) {
-            // 如果model实例化失败，抛出更友好的错误信息
-            if ($e instanceof Exception) {
-                throw $e;
-            }
-            throw new Exception(__('field标签验证失败：实例化Model类"%{1}"时发生错误：%{2}。请检查Model类是否正确配置。', [$modelClass, $e->getMessage()]));
-        }
-    }
-
-    private static function resolveFieldTarget(string $fieldName, string $defaultModelClass, ?array $tableContext): array
-    {
-        $target = [
-            'model' => $defaultModelClass,
-            'field' => $fieldName,
-            'alias' => null,
-            'resolved' => true,
+        $allowedTypes = [
+            'text', 'search', 'email', 'tel', 'url', 'password', 'number', 'date', 'datetime',
+            'time', 'textarea', 'select', 'checkbox', 'radio', 'switch', 'range', 'color',
+            'file', 'image', 'hidden',
         ];
-
-        $modelAliasMap = self::extractModelAliasMap($defaultModelClass, $tableContext);
-        if (!empty($modelAliasMap['main'])) {
-            $target['model'] = $modelAliasMap['main'];
-        }
-
-        if (strpos($fieldName, '.') === false) {
-            return $target;
-        }
-
-        [$alias, $actualField] = explode('.', $fieldName, 2);
-        $target['alias'] = $alias;
-        $target['field'] = $actualField;
-        $target['resolved'] = false;
-
-        if (!empty($modelAliasMap['models'][$alias])) {
-            $target['model'] = $modelAliasMap['models'][$alias];
-            $target['resolved'] = true;
-        }
-
-        return $target;
-    }
-
-    private static function extractModelAliasMap(string $modelClass, ?array $tableContext): array
-    {
-        $result = [
-            'main' => '',
-            'models' => [],
-        ];
-
-        if (!empty($tableContext['model_config']['models']) && is_array($tableContext['model_config']['models'])) {
-            $result['models'] = $tableContext['model_config']['models'];
-            $result['main'] = $tableContext['model_config']['main_model'] ?? (reset($result['models']) ?: '');
-            return $result;
-        }
-
-        if (strpos($modelClass, ',') === false) {
-            $result['main'] = $modelClass;
-            return $result;
-        }
-
-        $parts = array_map('trim', explode(',', $modelClass));
-        foreach ($parts as $part) {
-            if (preg_match('/^(.+?)\s+as\s+([A-Za-z_][A-Za-z0-9_]*)$/i', $part, $matches)) {
-                $resolvedModel = trim($matches[1]);
-                $alias = trim($matches[2]);
-            } else {
-                $resolvedModel = trim($part);
-                $alias = basename(str_replace('\\', '/', $resolvedModel));
-            }
-
-            if (empty($result['main'])) {
-                $result['main'] = $resolvedModel;
-            }
-
-            $result['models'][$alias] = $resolvedModel;
-        }
-
-        return $result;
-    }
-
-    /**
-     * 验证表格头部字段的属性
-     * @param array $attributes 字段属性
-     * @throws Exception 当验证失败时抛出异常
-     */
-    private static function validateHeaderFieldAttributes(array $attributes): void
-    {
-        $fieldName = $attributes['name'] ?? 'unknown';
-        
-        // 表格头部字段的验证规则
-        $type = $attributes['type'] ?? '';
-        if ($type && !in_array($type, ['text', 'number', 'date', 'select', 'checkbox'])) {
-            throw new Exception(__('field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。', [$fieldName, $type]));
-        }
-
-        // 检查过滤器特有的属性（只有options是过滤器特有的）
-        $filterOnlyAttrs = ['options'];
-        foreach ($filterOnlyAttrs as $attr) {
-            if (isset($attributes[$attr])) {
-                $attrValue = $attributes[$attr];
-                $suggestion = '';
-                
-                // 如果是options属性，提供更具体的建议
-                if ($attr === 'options') {
-                    $suggestion = '。如果您需要为字段"'.$fieldName.'"创建下拉选择器，请将该field标签移动到t-filter标签内，例如：<w:t-filter><w:field name="'.$fieldName.'" type="select" options="'.$attrValue.'">'.$fieldName.'</w:field></w:t-filter>';
-                }
-                
-                throw new Exception(__('field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3}', [$fieldName, $attr, $suggestion]));
-            }
-        }
-    }
-
-    /**
-     * 验证过滤器字段的属性
-     * @param array $attributes 字段属性
-     * @throws Exception 当验证失败时抛出异常
-     */
-    private static function validateFilterFieldAttributes(array $attributes): void
-    {
-        $fieldName = $attributes['name'] ?? 'unknown';
-        $type = $attributes['type'] ?? 'text';
-        
-        // 验证type值
-        $validTypes = [
-            'text', 'select', 'date', 'datetime', 'number', 'checkbox', 'radio',
-            'email', 'tel', 'url', 'password', 'search', 'range', 'color',
-            'time', 'month', 'week', 'file', 'hidden'
-        ];
-        if (!in_array($type, $validTypes)) {
-            throw new Exception(__('field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。', [
-                $fieldName,
-                $type,
-                implode(', ', $validTypes)
-            ]));
-        }
-
-        // 根据type验证特定属性
-        if ($type === 'select') {
-            $options = $attributes['options'] ?? '';
-            if (empty($options)) {
-                throw new Exception(__('field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。', [$fieldName]));
-            }
-            
-            // 验证options格式
-            $optionPairs = explode(',', $options);
-            foreach ($optionPairs as $pair) {
-                $parts = explode(':', $pair);
-                if (count($parts) !== 2) {
-                    throw new Exception(__('field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。', [$fieldName, $pair]));
-                }
-            }
-        }
-
-        // 检查表格头部特有的属性
-        $headerOnlyAttrs = ['sortable', 'width', 'min-width', 'max-width', 'resizable', 'formatter'];
-        foreach ($headerOnlyAttrs as $attr) {
-            if (isset($attributes[$attr])) {
-                $attrValue = $attributes[$attr];
-                $suggestion = '';
-                
-                // 如果是sortable属性，提供更具体的建议
-                if ($attr === 'sortable') {
-                    $suggestion = '。如果您需要为字段"'.$fieldName.'"启用排序功能，请将该field标签移动到t-header标签内，例如：<w:t-header><w:field name="'.$fieldName.'" sortable="true">'.$fieldName.'</w:field></w:t-header>';
-                } elseif (in_array($attr, ['width', 'min-width', 'max-width', 'resizable'])) {
-                    $suggestion = '。如果您需要为字段"'.$fieldName.'"设置列宽相关属性，请将该field标签移动到t-header标签内。';
-                } elseif ($attr === 'formatter') {
-                    $suggestion = '。如果您需要为字段"'.$fieldName.'"设置格式化函数，请将该field标签移动到t-header标签内。';
-                }
-                
-                throw new Exception(__('field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3}', [$fieldName, $attr, $suggestion]));
-            }
-        }
-    }
-
-    /**
-     * 渲染表格头部字段
-     */
-    private static function renderTableHeaderField($name, $content, $sortable, $req, $attrStr, $placeholder = '')
-    {
-        $sort_name = 'sort.' . $name;
-        $current = $req->getGet('current', '');
-        $current_sort_name = $current ? 'sort.' . $current : '';
-        $order = $current_sort_name ? strtolower($req->getGet($current_sort_name, 'desc')) : 'desc';
-
-        # 获取所有排序
-        $sorts = $req->getGetByPre('sort.');
-        // 默认非多字段排序
-        $multi = false;
-        if (!$multi) {
-            foreach ($sorts as $key => $sort) {
-                if ($key != $current) {
-                    $sorts['sort.'.$key] = '';
-                }else{
-                    $sorts['sort.'.$key] = $sort;
-                }
-                unset($sorts[$key]);
-            }
-        }
-
-        # 当前字段可排序时显示排序图标
-        $icon_str = '';
-        $field_active = $sort_name == $current_sort_name;
-        if ($sortable) {
-            $icon_str = "<i class=\"fa fa-sort{{icon}}\"></i>";
-            $icon_status = '';
-            if ($order and $field_active) {
-                $order = $order == 'asc' ? 'desc' : 'asc';
-                $icon_status = $order == 'asc' ? '-down' : '-asc';
-            }
-            $icon_str = str_replace('{{icon}}', $icon_status, $icon_str);
-        }
-
-        $url_params = $_GET;
-        $url_params['current'] = $name;
-        $url_params = array_merge($url_params, $sorts);
-        $url_params['sort.' . $url_params['current']] = $order;
-
-        $url = $req->getUrlBuilder()->getCurrentUrl($url_params, false);
-        $url = $req->getUrlBuilder()->extractedUrl($url_params, false, $url);
-
-        // 添加placeholder作为title属性
-        $titleAttr = $placeholder ? " title=\"{$placeholder}\"" : '';
-        
-        $start = <<<DOC
-<th data-field="{$name}" data-sort-field="{$sort_name}"{$attrStr}{$titleAttr}>
-DOC;
-        if ($sortable) {
-            $field_active = $field_active ? 'active text-info' : '';
-            $start .= "<a href=\"{$url}\" class='{$field_active}'>" . $content . $icon_str . '</a>';
-        } else {
-            $start .= $content;
-        }
-        return $start . '</th>';
-    }
-
-    /**
-     * 渲染过滤器字段
-     */
-    private static function renderFilterField($name, $type, $placeholder, $options, $class, $attrStr)
-    {
-        $inputClass = "form-control form-control-sm {$class}";
-        $placeholder = $placeholder ?: "请输入{$name}";
-
-        switch ($type) {
-            case 'select':
-                $optionsHtml = '<option value="">请选择</option>';
-                if ($options) {
-                    $optionPairs = explode(',', $options);
-                    foreach ($optionPairs as $pair) {
-                        $parts = explode(':', $pair);
-                        if (count($parts) == 2) {
-                            $value = trim($parts[0]);
-                            $label = trim($parts[1]);
-                            $optionsHtml .= "<option value=\"{$value}\">{$label}</option>";
-                        }
-                    }
-                }
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <select class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]" data-field="{$name}" title="{$name}">
-        {$optionsHtml}
-    </select>
-</div>
-HTML;
-
-            case 'date':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="date" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'datetime':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="datetime-local" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'time':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="time" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'number':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="number" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'range':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="range" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" title="{$name}" min="0" max="100">
-    <small class="form-text text-muted">{$placeholder}</small>
-</div>
-HTML;
-
-            case 'email':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="email" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'tel':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="tel" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'url':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="url" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'search':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="search" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]"
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-
-            case 'checkbox':
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="filter-{$name}" name="filter[{$name}]"
-               data-field="{$name}" value="1" title="{$name}">
-        <label class="form-check-label" for="filter-{$name}">{$name}</label>
-    </div>
-</div>
-HTML;
-
-            case 'radio':
-                $radioOptions = $options ? explode(',', $options) : ['是:1', '否:0'];
-                $radioHtml = '';
-                foreach ($radioOptions as $option) {
-                    $parts = explode(':', $option);
-                    $label = trim($parts[0]);
-                    $value = isset($parts[1]) ? trim($parts[1]) : $label;
-                    $radioHtml .= <<<HTML
-                    <div class="form-check form-check-inline">
-                        <input type="radio" class="form-check-input" id="filter-{$name}-{$value}"
-                               name="filter[{$name}]" value="{$value}" data-field="{$name}">
-                        <label class="form-check-label" for="filter-{$name}-{$value}">{$label}</label>
-                    </div>
-HTML;
-                }
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    {$radioHtml}
-</div>
-HTML;
-
-            default: // text
-                return <<<HTML
-<div class="filter-field" data-field="{$name}"{$attrStr}>
-    <input type="text" class="{$inputClass}" id="filter-{$name}" name="filter[{$name}]" 
-           data-field="{$name}" placeholder="{$placeholder}" title="{$name}">
-</div>
-HTML;
-        }
-    }
-
-    /**
-     * 渲染表单字段
-     */
-    private static function renderFormField($name, $type, $placeholder, $options, $class, $attrStr, $content, array $fieldData = [])
-    {
-        $inputClass = trim("w-form-control form-control {$class}");
-        $label = $content ?: $name;
-        $placeholder = $placeholder ?: "请输入{$label}";
-        $controlAttrs = self::buildFormControlAttributes($fieldData);
-
-        // 情况1：如果内容包含HTML标签，直接返回内容（用户自定义HTML）
-        if (strip_tags($content) !== $content) {
-            return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    {$content}
-</div>
-HTML;
-        }
-
-        // 情况2：如果没有指定type且内容为空，自动推测字段类型
-        if (empty($type) && empty($content)) {
-            $type = self::inferFieldType($name);
-        }
-
-        // 情况3：如果仍然没有type，使用默认的text类型
-        if (empty($type)) {
+        if (!in_array($type, $allowedTypes, true)) {
             $type = 'text';
         }
 
-        switch ($type) {
-            case 'textarea':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <textarea class="{$inputClass}" id="form-{$name}" name="{$name}" 
-              placeholder="{$placeholder}" rows="3" {$controlAttrs}></textarea>
-</div>
-HTML;
-
-            case 'select':
-                $optionsHtml = '<option value="">请选择</option>';
-                if ($options) {
-                    $optionPairs = explode(',', $options);
-                    foreach ($optionPairs as $pair) {
-                        $parts = explode(':', $pair);
-                        if (count($parts) == 2) {
-                            $value = trim($parts[0]);
-                            $label = trim($parts[1]);
-                            $optionsHtml .= "<option value=\"{$value}\">{$label}</option>";
-                        }
-                    }
-                }
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <select class="{$inputClass}" id="form-{$name}" name="{$name}" {$controlAttrs}>
-        {$optionsHtml}
-    </select>
-</div>
-HTML;
-
-            case 'checkbox':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="form-{$name}" name="{$name}" value="1" {$controlAttrs}>
-        <label class="form-check-label" for="form-{$name}">{$label}</label>
-    </div>
-</div>
-HTML;
-
-            case 'radio':
-                $optionsHtml = '';
-                if ($options) {
-                    $optionPairs = explode(',', $options);
-                    foreach ($optionPairs as $pair) {
-                        $parts = explode(':', $pair);
-                        if (count($parts) == 2) {
-                            $value = trim($parts[0]);
-                            $label = trim($parts[1]);
-                            $optionsHtml .= <<<HTML
-<div class="form-check">
-    <input type="radio" class="form-check-input" id="form-{$name}-{$value}" name="{$name}" value="{$value}" {$controlAttrs}>
-    <label class="form-check-label" for="form-{$name}-{$value}">{$label}</label>
-</div>
-HTML;
-                        }
-                    }
-                }
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label class="form-label">{$label}</label>
-    <div class="form-radio-group">
-        {$optionsHtml}
-    </div>
-</div>
-HTML;
-
-            case 'date':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="date" class="{$inputClass}" id="form-{$name}" name="{$name}" 
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'datetime':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="datetime-local" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'time':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="time" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'number':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="number" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'range':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="range" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           min="0" max="100" step="1" {$controlAttrs}>
-    <small class="form-text text-muted">{$placeholder}</small>
-</div>
-HTML;
-
-            case 'color':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="color" class="{$inputClass}" id="form-{$name}" name="{$name}" {$controlAttrs}>
-    <small class="form-text text-muted">{$placeholder}</small>
-</div>
-HTML;
-
-            case 'file':
-                $accept = $options ? "accept=\"{$options}\"" : '';
-                $multiple = !empty($fieldData['multiple']) ? 'multiple' : '';
-                $maxSize = $fieldData['max_size'] ?? '10MB';
-
-                return <<<HTML
-<div class="w-form-field w-file-field" data-field="{$name}"{$attrStr}>
-    <label for="field-{$name}" class="w-field-label">{$label}</label>
-    <div class="w-field-control">
-        <input type="file" id="field-{$name}" name="{$name}" class="w-file-input" {$accept} {$multiple} {$controlAttrs} style="display: none;">
-
-        <div class="w-file-selector">
-            <button type="button" class="w-btn w-btn-outline-primary w-file-btn" data-datatable-form-action="trigger-file-select" data-field-id="field-{$name}">
-                <i class="fas fa-upload"></i> 选择文件
-            </button>
-            <span class="w-file-info">支持格式：{$options}，最大：{$maxSize}</span>
-        </div>
-
-        <div class="w-file-list" id="w-file-list-field-{$name}">
-            <div class="w-file-placeholder">未选择文件</div>
-        </div>
-
-        <div class="w-upload-progress" id="w-upload-progress-field-{$name}" style="display: none;">
-            <div class="w-progress-bar">
-                <div class="w-progress-fill" style="width: 0%"></div>
-            </div>
-            <div class="w-progress-text">0%</div>
-        </div>
-    </div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof DataTableFormManager !== 'undefined') {
-        DataTableFormManager.bindFileEvents('field-{$name}', {
-            accept: '{$options}',
-            multiple: {$multiple} !== '',
-            maxSize: '{$maxSize}'
-        });
-    }
-});
-</script>
-HTML;
-
-            case 'image':
-                $accept = $options ?: 'image/*';
-                $multiple = !empty($fieldData['multiple']) ? 'multiple' : '';
-                $maxSize = $fieldData['max_size'] ?? '5MB';
-
-                return <<<HTML
-<div class="w-form-field w-image-field" data-field="{$name}"{$attrStr}>
-    <label for="field-{$name}" class="w-field-label">{$label}</label>
-    <div class="w-field-control">
-        <input type="file" id="field-{$name}" name="{$name}" class="w-image-input" accept="{$accept}" {$multiple} {$controlAttrs} style="display: none;">
-
-        <div class="w-image-preview" id="w-image-preview-field-{$name}">
-            <div class="w-image-placeholder" data-datatable-form-action="trigger-file-select" data-field-id="field-{$name}">
-                <i class="fas fa-image"></i>
-                <div class="w-placeholder-text">点击选择图片</div>
-                <div class="w-placeholder-info">支持格式：JPG、PNG、GIF，最大：{$maxSize}</div>
-            </div>
-        </div>
-
-        <div class="w-image-actions" style="display: none;">
-            <button type="button" class="w-btn w-btn-sm w-btn-outline-primary" data-datatable-form-action="trigger-file-select" data-field-id="field-{$name}">
-                <i class="fas fa-edit"></i> 更换
-            </button>
-            <button type="button" class="w-btn w-btn-sm w-btn-outline-danger" data-datatable-form-action="clear-image-field" data-field-id="field-{$name}">
-                <i class="fas fa-trash"></i> 删除
-            </button>
-        </div>
-
-        <div class="w-upload-progress" id="w-upload-progress-field-{$name}" style="display: none;">
-            <div class="w-progress-bar">
-                <div class="w-progress-fill" style="width: 0%"></div>
-            </div>
-            <div class="w-progress-text">0%</div>
-        </div>
-    </div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof DataTableFormManager !== 'undefined') {
-        DataTableFormManager.bindImageEvents('field-{$name}', {
-            accept: '{$accept}',
-            multiple: {$multiple} !== '',
-            maxSize: '{$maxSize}'
-        });
-    }
-});
-</script>
-HTML;
-
-            case 'email':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="email" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'tel':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="tel" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'url':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="url" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'password':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="password" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'search':
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="search" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
-
-            case 'hidden':
-                return <<<HTML
-<input type="hidden" id="form-{$name}" name="{$name}" data-field="{$name}" {$controlAttrs}{$attrStr}>
-HTML;
-
-            default: // text
-                return <<<HTML
-<div class="form-group" data-field="{$name}"{$attrStr}>
-    <label for="form-{$name}" class="form-label">{$label}</label>
-    <input type="text" class="{$inputClass}" id="form-{$name}" name="{$name}"
-           placeholder="{$placeholder}" {$controlAttrs}>
-</div>
-HTML;
+        $label = trim((string)($attributes['label'] ?? $content));
+        if ($label === '') {
+            $label = self::humanize($name);
         }
+        $placeholder = trim((string)($attributes['placeholder'] ?? ''));
+        if ($placeholder === '' && !in_array($type, ['select', 'checkbox', 'radio', 'switch', 'file', 'image', 'hidden'], true)) {
+            $placeholder = (string)__('请输入%{1}', [$label]);
+        }
+        $width = self::cssLength((string)($attributes['width'] ?? ''));
+        $defaultVisible = $belong !== 't-filter';
+
+        return [
+            'name' => $name,
+            'belong' => $belong,
+            'label' => $label,
+            'content' => $content,
+            'type' => $type,
+            'placeholder' => $placeholder,
+            'options' => self::options($attributes['options'] ?? ''),
+            'class' => self::welineClasses((string)($attributes['class'] ?? '')),
+            'sortable' => self::toBool($attributes['sortable'] ?? false),
+            'visible' => array_key_exists('visible', $attributes) ? self::toBool($attributes['visible']) : $defaultVisible,
+            'editable' => self::toBool($attributes['editable'] ?? false),
+            'searchable' => array_key_exists('searchable', $attributes) ? self::toBool($attributes['searchable']) : true,
+            'required' => self::toBool($attributes['required'] ?? false),
+            'readonly' => self::toBool($attributes['readonly'] ?? false),
+            'disabled' => self::toBool($attributes['disabled'] ?? false),
+            'multiple' => self::toBool($attributes['multiple'] ?? false),
+            'default' => (string)($attributes['default'] ?? ''),
+            'min' => self::scalar((string)($attributes['min'] ?? '')),
+            'max' => self::scalar((string)($attributes['max'] ?? '')),
+            'maxlength' => self::positiveInteger((string)($attributes['maxlength'] ?? '')),
+            'step' => self::scalar((string)($attributes['step'] ?? '')),
+            'width' => $width,
+            'maxSize' => self::fileSize((string)($attributes['max-size'] ?? '')),
+            'formId' => self::normalizeId((string)($context['attributes']['id'] ?? $context['scope'] ?? 'form')),
+        ];
     }
 
-    private static function buildFormControlAttributes(array $fieldData): string
+    private static function renderHeader(array $field): string
     {
-        $attributes = [];
-
-        foreach (['required', 'readonly', 'disabled', 'multiple'] as $booleanAttr) {
-            if (!empty($fieldData[$booleanAttr])) {
-                $attributes[$booleanAttr] = $booleanAttr;
-            }
+        $name = self::escape((string)$field['name']);
+        $label = self::escape((string)$field['label']);
+        $config = self::jsonAttribute($field);
+        $style = $field['width'] !== ''
+            ? ' style="--w-column-width:' . self::escape((string)$field['width']) . '"'
+            : '';
+        $hidden = $field['visible'] ? '' : ' hidden';
+        if ($field['sortable']) {
+            $label = '<button type="button" class="w-datatable__sort" data-w-datatable-action="sort" data-field="'
+                . $name . '" aria-label="' . self::escape((string)__('按%{1}排序', [$field['label']])) . '">'
+                . '<span>' . $label . '</span><w-icon name="sort" size="xs"></w-icon></button>';
         }
-
-        foreach (['min', 'max', 'maxlength', 'step'] as $valueAttr) {
-            if (isset($fieldData[$valueAttr]) && $fieldData[$valueAttr] !== '' && $fieldData[$valueAttr] !== null) {
-                $attributes[$valueAttr] = (string)$fieldData[$valueAttr];
-            }
-        }
-
-        return self::renderHtmlAttributes($attributes);
+        return '<th data-field="' . $name . '" data-sortable="' . ($field['sortable'] ? 'true' : 'false')
+            . '" data-w-field="' . $config . '"' . $style . $hidden . '>' . $label . '</th>';
     }
 
-    private static function renderHtmlAttributes(array $attributes): string
+    private static function renderFilter(array $field): string
+    {
+        $name = (string)$field['name'];
+        $id = 'w-filter-' . self::normalizeId($name);
+        $idHtml = self::escape($id);
+        $nameHtml = self::escape($name);
+        $label = self::escape((string)$field['label']);
+        $config = self::jsonAttribute($field);
+        $class = trim('w-datatable__filter-field ' . (string)$field['class']);
+        $common = ' id="' . $idHtml . '" name="filter[' . $nameHtml . ']" data-field="' . $nameHtml . '"';
+
+        if ($field['type'] === 'select') {
+            $control = '<select class="w-select"' . $common . '><option value="">' . self::escape((string)__('全部')) . '</option>';
+            foreach ($field['options'] as $option) {
+                $control .= '<option value="' . self::escape((string)$option['value']) . '">' . self::escape((string)$option['label']) . '</option>';
+            }
+            $control .= '</select>';
+        } elseif (in_array($field['type'], ['checkbox', 'switch'], true)) {
+            $control = '<label class="w-check"><input type="checkbox"' . $common . ' value="1"><span>' . $label . '</span></label>';
+            $label = '';
+        } else {
+            $type = in_array($field['type'], ['text', 'search', 'email', 'tel', 'url', 'number', 'date', 'time'], true)
+                ? $field['type']
+                : 'text';
+            $control = '<input type="' . self::escape((string)$type) . '" class="w-input"' . $common
+                . ' placeholder="' . self::escape((string)$field['placeholder']) . '">';
+        }
+
+        $labelHtml = $label === '' ? '' : '<label class="w-visually-hidden" for="' . $idHtml . '">' . $label . '</label>';
+        return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-w-field="' . $config . '">'
+            . $labelHtml . $control . '</div>';
+    }
+
+    private static function renderForm(array $field, array $context): string
+    {
+        $name = (string)$field['name'];
+        $id = 'w-field-' . self::normalizeId((string)$field['formId'] . '-' . $name);
+        $idHtml = self::escape($id);
+        $nameHtml = self::escape($name);
+        $label = self::escape((string)$field['label']);
+        $config = self::jsonAttribute($field);
+        $class = trim('w-field w-datatable-form__field ' . (string)$field['class']);
+        $attributes = self::controlAttributes($field);
+        $required = $field['required'] ? '<span class="w-datatable-form__required" aria-hidden="true">*</span>' : '';
+
+        if ($field['type'] === 'hidden') {
+            return '<input type="hidden" id="' . $idHtml . '" name="' . $nameHtml . '" value="'
+                . self::escape((string)$field['default']) . '" data-w-field="' . $config . '">';
+        }
+
+        if (self::containsTrustedMarkup((string)$field['content'])) {
+            return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-w-field="'
+                . $config . '">' . (string)$field['content'] . '</div>';
+        }
+
+        $control = self::formControl($field, $idHtml, $nameHtml, $attributes);
+        return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-type="'
+            . self::escape((string)$field['type']) . '" data-w-field="' . $config . '">'
+            . '<label class="w-field__label" for="' . $idHtml . '">' . $label . $required . '</label>'
+            . $control . '<div class="w-field__error" data-w-field-error hidden></div></div>';
+    }
+
+    private static function formControl(array $field, string $id, string $name, string $attributes): string
+    {
+        $type = (string)$field['type'];
+        $placeholder = self::escape((string)$field['placeholder']);
+        $value = self::escape((string)$field['default']);
+        if ($type === 'textarea') {
+            return '<textarea class="w-input" id="' . $id . '" name="' . $name . '" rows="4" placeholder="'
+                . $placeholder . '"' . $attributes . '>' . $value . '</textarea>';
+        }
+        if ($type === 'select') {
+            $html = '<select class="w-select" id="' . $id . '" name="' . $name . '"' . $attributes . '><option value="">'
+                . self::escape((string)__('请选择')) . '</option>';
+            foreach ($field['options'] as $option) {
+                $selected = (string)$field['default'] === (string)$option['value'] ? ' selected' : '';
+                $html .= '<option value="' . self::escape((string)$option['value']) . '"' . $selected . '>'
+                    . self::escape((string)$option['label']) . '</option>';
+            }
+            return $html . '</select>';
+        }
+        if (in_array($type, ['checkbox', 'switch'], true)) {
+            $checked = self::toBool($field['default']) ? ' checked' : '';
+            return '<label class="w-check"><input type="checkbox" id="' . $id . '" name="' . $name
+                . '" value="1"' . $checked . $attributes . '><span>' . self::escape((string)$field['label']) . '</span></label>';
+        }
+        if ($type === 'radio') {
+            $html = '<div class="w-cluster" role="radiogroup">';
+            foreach ($field['options'] as $index => $option) {
+                $optionId = $id . '-' . $index;
+                $checked = (string)$field['default'] === (string)$option['value'] ? ' checked' : '';
+                $html .= '<label class="w-check"><input type="radio" id="' . self::escape($optionId) . '" name="'
+                    . $name . '" value="' . self::escape((string)$option['value']) . '"' . $checked . $attributes . '><span>'
+                    . self::escape((string)$option['label']) . '</span></label>';
+            }
+            return $html . '</div>';
+        }
+        if (in_array($type, ['file', 'image'], true)) {
+            $accept = self::escape(self::accept((string)($field['options'][0]['value'] ?? '')));
+            $acceptAttr = $accept === '' ? '' : ' accept="' . $accept . '"';
+            $icon = $type === 'image' ? 'image' : 'upload';
+            $label = $type === 'image' ? (string)__('选择图片') : (string)__('选择文件');
+            return '<input type="file" id="' . $id . '" name="' . $name . '" hidden' . $acceptAttr . $attributes
+                . ' data-max-size="' . self::escape((string)$field['maxSize']) . '">'
+                . '<div class="w-datatable-form__file"><button type="button" class="w-button" data-tone="neutral"'
+                . ' data-w-datatable-form-action="file.choose" data-w-target="#' . $id . '"><w-icon name="' . $icon
+                . '" size="sm"></w-icon><span>' . self::escape($label) . '</span></button>'
+                . '<div class="w-datatable-form__file-preview" data-w-file-preview aria-live="polite"></div></div>';
+        }
+
+        $inputType = in_array($type, ['text', 'search', 'email', 'tel', 'url', 'password', 'number', 'date', 'time', 'range', 'color'], true)
+            ? $type
+            : ($type === 'datetime' ? 'datetime-local' : 'text');
+        return '<input type="' . self::escape($inputType) . '" class="w-input" id="' . $id . '" name="' . $name
+            . '" value="' . $value . '" placeholder="' . $placeholder . '"' . $attributes . '>';
+    }
+
+    private static function controlAttributes(array $field): string
     {
         $parts = [];
-        foreach ($attributes as $key => $value) {
-            if ($value === '' || $value === null || $value === false) {
-                continue;
+        foreach (['required', 'readonly', 'disabled', 'multiple'] as $name) {
+            if (!empty($field[$name])) {
+                $parts[] = $name;
             }
-
-            if ($value === true || $value === $key) {
-                $parts[] = $key;
-                continue;
-            }
-
-            $parts[] = sprintf(
-                '%s="%s"',
-                $key,
-                htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8')
-            );
         }
-
-        return implode(' ', $parts);
+        foreach (['min', 'max', 'maxlength', 'step'] as $name) {
+            if (($field[$name] ?? '') !== '') {
+                $parts[] = $name . '="' . self::escape((string)$field[$name]) . '"';
+            }
+        }
+        return $parts === [] ? '' : ' ' . implode(' ', $parts);
     }
 
-    /**
-     * 根据字段名称自动推测字段类型
-     * @param string $fieldName 字段名称
-     * @return string 推测的字段类型
-     */
-    private static function inferFieldType($fieldName)
+    /** @return list<array{value:string,label:string}> */
+    private static function options(mixed $value): array
     {
-        $fieldName = strtolower($fieldName);
-        
-        // 日期时间相关字段
-        if (strpos($fieldName, 'date') !== false || strpos($fieldName, 'time') !== false) {
-            if (strpos($fieldName, 'datetime') !== false) {
-                return 'datetime';
+        if (is_array($value)) {
+            $result = [];
+            foreach ($value as $key => $label) {
+                if (is_array($label)) {
+                    $result[] = [
+                        'value' => (string)($label['value'] ?? $key),
+                        'label' => (string)($label['label'] ?? $label['value'] ?? $key),
+                    ];
+                } else {
+                    $result[] = ['value' => (string)$key, 'label' => (string)$label];
+                }
             }
-            return 'date';
+            return $result;
         }
-        
-        // 邮箱字段
-        if (strpos($fieldName, 'email') !== false || strpos($fieldName, 'mail') !== false) {
-            return 'email';
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return [];
         }
-        
-        // 密码字段
-        if (strpos($fieldName, 'password') !== false || strpos($fieldName, 'pwd') !== false) {
-            return 'password';
+        $result = [];
+        foreach (explode(',', $raw) as $pair) {
+            $parts = array_map('trim', explode(':', $pair, 2));
+            $result[] = ['value' => $parts[0], 'label' => $parts[1] ?? $parts[0]];
         }
-        
-        // 数字字段
-        if (strpos($fieldName, 'price') !== false || strpos($fieldName, 'amount') !== false || 
-            strpos($fieldName, 'count') !== false || strpos($fieldName, 'number') !== false ||
-            strpos($fieldName, 'quantity') !== false || strpos($fieldName, 'qty') !== false ||
-            strpos($fieldName, 'age') !== false || strpos($fieldName, 'score') !== false ||
-            strpos($fieldName, 'rate') !== false || strpos($fieldName, 'percent') !== false) {
-            return 'number';
-        }
-        
-        // 长文本字段
-        if (strpos($fieldName, 'description') !== false || strpos($fieldName, 'content') !== false ||
-            strpos($fieldName, 'detail') !== false || strpos($fieldName, 'remark') !== false ||
-            strpos($fieldName, 'note') !== false || strpos($fieldName, 'comment') !== false) {
-            return 'textarea';
-        }
-        
-        // 状态字段
-        if (strpos($fieldName, 'status') !== false || strpos($fieldName, 'state') !== false ||
-            strpos($fieldName, 'type') !== false || strpos($fieldName, 'category') !== false) {
-            return 'select';
-        }
-        
-        // 布尔字段
-        if (strpos($fieldName, 'is_') !== false || strpos($fieldName, 'has_') !== false ||
-            strpos($fieldName, 'enable') !== false || strpos($fieldName, 'active') !== false) {
-            return 'checkbox';
-        }
-        
-        // 默认返回文本类型
-        return 'text';
+        return $result;
     }
 
-    /**
-     * @inheritDoc
-     */
+    private static function inferType(string $name): string
+    {
+        $name = strtolower($name);
+        return match (true) {
+            str_contains($name, 'email') => 'email',
+            str_contains($name, 'phone'), str_contains($name, 'mobile') => 'tel',
+            str_contains($name, 'password') => 'password',
+            str_contains($name, 'date'), str_contains($name, 'time') => 'datetime',
+            str_contains($name, 'price'), str_contains($name, 'amount'), str_ends_with($name, '_id'), $name === 'id' => 'number',
+            str_contains($name, 'status'), str_contains($name, 'type') => 'select',
+            default => 'text',
+        };
+    }
+
+    private static function humanize(string $name): string
+    {
+        $name = str_replace(['.', '_', '-'], ' ', $name);
+        return ucwords(trim($name));
+    }
+
+    private static function containsTrustedMarkup(string $content): bool
+    {
+        return $content !== '' && strip_tags($content) !== $content;
+    }
+
+    private static function accept(string $value): string
+    {
+        return preg_match('/^[A-Za-z0-9*+.,_\/-]+$/', $value) ? $value : '';
+    }
+
+    private static function fileSize(string $value): string
+    {
+        $value = strtoupper(trim($value));
+        return preg_match('/^\d+(?:\.\d+)?(?:KB|MB|GB)$/', $value) ? $value : '';
+    }
+
+    private static function positiveInteger(string $value): string
+    {
+        return ctype_digit($value) && (int)$value > 0 ? $value : '';
+    }
+
+    private static function scalar(string $value): string
+    {
+        return preg_match('/^-?\d+(?:\.\d+)?$/', trim($value)) ? trim($value) : '';
+    }
+
+    private static function cssLength(string $value): string
+    {
+        $value = trim($value);
+        if (ctype_digit($value)) {
+            return $value . 'px';
+        }
+        return preg_match('/^(?:0|\d+(?:\.\d+)?(?:px|rem|em|%|ch))$/', $value) ? $value : '';
+    }
+
+    private static function normalizeId(string $id): string
+    {
+        $id = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim($id)) ?: 'field';
+        return trim($id, '-') ?: 'field';
+    }
+
+    private static function welineClasses(string $classes): string
+    {
+        return implode(' ', array_values(array_filter(
+            preg_split('/\s+/', trim($classes)) ?: [],
+            static fn (string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1
+        )));
+    }
+
+    private static function toBool(mixed $value): bool
+    {
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private static function jsonAttribute(array $value): string
+    {
+        unset($value['content']);
+        $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        return self::escape($json === false ? '{}' : $json);
+    }
+
+    private static function escape(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+    }
+
+    public static function resetRequestState(): void
+    {
+        TableContext::clearAll();
+    }
+
     public static function tag_self_close(): bool
     {
         return false;
     }
 
-    /**
-     * @inheritDoc
-     */
     public static function tag_self_close_with_attrs(): bool
     {
-        return true;
+        return false;
     }
 
-    /**
-     * 指定父标签，用于依赖管理
-     * @return string|null 父标签名称
-     */
     public static function parent(): ?string
     {
-        return 't-header,t-filter,d-form'; // Field标签依赖于t-header、t-filter或d-form标签
+        return null;
     }
 
     public static function document(): string
     {
-        return <<<DOC
-字段组件使用方式：
-
-表格头部字段（在t-header标签内）：
-<w:d-table model="Weline\Demo\Model\Demo" scope="demo-table">
-    <w:t-header>
-        <w:field belong="t-header" name="store_id" sortable="true" width="80" editable="false">ID</w:field>
-        <w:field belong="t-header" name="name" sortable="true" width="200" editable="true">店铺名称</w:field>
-        <w:field belong="t-header" name="status" sortable="true" width="100">状态</w:field>
-    </w:t-header>
-</w:d-table>
-
-过滤器字段（在t-filter标签内）：
-<w:d-table model="Weline\Demo\Model\Demo" scope="demo-table">
-    <w:t-filter>
-        <w:field belong="t-filter" name="name" type="text" placeholder="搜索店铺名称" class="col-md-3"></w:field>
-        <w:field belong="t-filter" name="status" type="select" options="1:启用,0:禁用" class="col-md-3"></w:field>
-        <w:field belong="t-filter" name="created_at" type="date" class="col-md-3"></w:field>
-        <w:field belong="t-filter" name="is_active" type="checkbox" class="col-md-3"></w:field>
-    </w:t-filter>
-</w:d-table>
-
-表单字段（在d-form标签内）：
-
-方式1：指定type属性（推荐）
-<w:d-form model="WeShop\Store\Model\Store" scope="store-form">
-    <w:field belong="d-form" name="name" type="text" label="店铺名称" required="true">店铺名称</w:field>
-    <w:field belong="d-form" name="description" type="textarea" label="店铺描述">店铺描述</w:field>
-    <w:field belong="d-form" name="status" type="select" label="状态" options="1:启用,0:禁用">状态</w:field>
-    <w:field belong="d-form" name="email" type="email" label="联系邮箱">联系邮箱</w:field>
-    <w:field belong="d-form" name="phone" type="text" label="联系电话">联系电话</w:field>
-</w:d-form>
-
-方式2：自定义HTML内容（不指定type）
-<w:d-form model="WeShop\Store\Model\Store" scope="store-form">
-    <w:field belong="d-form" name="custom_field">
-        <div class="custom-input-group">
-            <input type="text" name="custom_field" class="form-control" placeholder="自定义输入框">
-            <button type="button" class="btn btn-secondary">选择</button>
-        </div>
-    </w:field>
-</w:d-form>
-
-方式3：自动推测字段类型（不指定type且无HTML内容）
-<w:d-form model="WeShop\Store\Model\Store" scope="store-form">
-    <w:field belong="d-form" name="email">邮箱地址</w:field>
-    <w:field belong="d-form" name="created_date">创建日期</w:field>
-    <w:field belong="d-form" name="price">价格</w:field>
-    <w:field belong="d-form" name="description">商品描述</w:field>
-    <w:field belong="d-form" name="status">状态</w:field>
-    <w:field belong="d-form" name="is_active">是否启用</w:field>
-</w:d-form>
-
-继承模式表单字段：
-<w:d-table model="WeShop\Store\Model\Store" scope="store-table" form="true">
-    <w:d-form>
-        <w:field belong="d-form" name="name" type="text" label="店铺名称" required="true">店铺名称</w:field>
-        <w:field belong="d-form" name="description" type="textarea" label="店铺描述">店铺描述</w:field>
-        <w:field belong="d-form" name="status" type="select" label="状态" options="1:启用,0:禁用">状态</w:field>
-    </w:d-form>
-</w:d-table>
-
-高级用法（手动指定model和scope）：
-<w:t-header model="Weline\Demo\Model\Demo" scope="custom-header-scope">
-    <w:field belong="t-header" name="store_id" sortable="true" width="80">ID</w:field>
-    <w:field belong="t-header" name="name" sortable="true" width="200">店铺名称</w:field>
-</w:t-header>
-
-<w:t-filter model="Weline\Demo\Model\Demo" scope="custom-filter-scope">
-    <w:field belong="t-filter" name="name" type="text" placeholder="搜索店铺名称"></w:field>
-    <w:field belong="t-filter" name="status" type="select" options="1:启用,0:禁用"></w:field>
-</w:t-filter>
-
-<w:d-form model="WeShop\Store\Model\Store" scope="custom-form-scope">
-    <w:field belong="d-form" name="name" type="text" label="店铺名称">店铺名称</w:field>
-    <w:field belong="d-form" name="status" type="select" label="状态" options="1:启用,0:禁用">状态</w:field>
-</w:d-form>
-
-常见模型类示例：
-- 店铺管理：WeShop\Store\Model\Store
-- 产品管理：WeShop\Product\Model\Product
-- 用户管理：Weline\Backend\Model\BackendUser
-- 菜单管理：Weline\Backend\Model\Menu
-- 系统配置：Weline\SystemConfig\Model\Config
-
-属性说明：
-name: 必须，字段名称（必须在model中存在）
-belong: 必须，指定属于哪个父元素（t-header、t-filter 或 d-form）
-
-表格头部字段特有属性：
-sortable: 可选，是否可排序，默认false
-width: 可选，列宽度
-min-width: 可选，最小列宽度
-max-width: 可选，最大列宽度
-resizable: 可选，是否可调整列宽，默认true
-editable: 可选，是否可编辑，默认false
-formatter: 可选，格式化函数
-
-过滤器字段特有属性：
-type: 可选，字段类型（text/select/date/number/checkbox），默认text
-placeholder: 可选，占位符文本
-options: 可选，select类型选项（格式：value:label,value2:label2）
-
-表单字段特有属性：
-type: 可选，字段类型（text/textarea/select/checkbox/radio/date/datetime/number/email/password）
-  - 如果不指定type且field内容包含HTML标签，则直接渲染自定义HTML内容
-  - 如果不指定type且field内容为空，则根据字段名称自动推测类型：
-    * 包含date/time → date类型
-    * 包含email/mail → email类型  
-    * 包含password/pwd → password类型
-    * 包含price/amount/count/number/qty/age/score/rate/percent → number类型
-    * 包含description/content/detail/remark/note/comment → textarea类型
-    * 包含status/state/type/category → select类型
-    * 包含is_/has_/enable/active → checkbox类型
-    * 其他 → text类型（默认）
-placeholder: 可选，占位符文本
-options: 可选，select/radio/checkbox类型选项（格式：value:label,value2:label2）
-required: 可选，是否必填，默认false
-readonly: 可选，是否只读，默认false
-disabled: 可选，是否禁用，默认false
-
-通用属性：
-class: 可选，CSS类名
-style: 可选，内联样式
-visible: 可选，是否可见，默认true
-searchable: 可选，是否可搜索，默认true
-validator: 可选，验证规则
-default: 可选，默认值
-
-验证规则：
-1. belong属性为必填，必须指定为"t-header"、"t-filter"或"d-form"
-2. belong属性值必须与父标签类型匹配
-3. 字段名称必须在对应的model中存在，否则会抛出异常
-4. 表格头部字段不支持过滤器/表单特有属性（placeholder、options等）
-5. 过滤器字段不支持表格头部特有属性（sortable、width等）
-6. 表单字段支持所有字段类型和属性
-7. select类型的字段必须指定options属性
-8. model属性会自动从父标签继承，无需重复指定
-9. Model类必须存在且可实例化
-
-上下文识别：
-- field标签通过belong属性明确指定父标签类型（t-header、t-filter或d-form）
-- 系统会验证belong属性值与实际父标签类型是否匹配
-- 根据belong属性进行相应的参数校验和渲染
-- 支持从d-table继承model和scope属性
-- 支持手动覆盖继承的属性
-
-错误处理：
-- 当belong属性缺失时，会提示添加必填属性
-- 当belong属性值无效时，会提示正确的值
-- 当belong属性与父标签类型不匹配时，会提示修正
-- 当Model类不存在时，会提示检查类名是否正确
-- 当字段不存在时，会显示可用字段列表
-- 当属性使用错误时，会提供明确的错误信息
-
-注意：
-1. belong属性是必填的，用于明确指定field标签属于哪个父元素
-2. belong属性值必须与实际的父标签类型一致
-3. 当在w:d-table内部使用时，model和scope属性会自动从父标签继承
-4. 使用错误的属性会抛出明确的异常信息
-5. 支持动态属性传递和覆盖
-6. 确保Model类的命名空间正确，例如：WeShop\Store\Model\Store
+        return <<<'DOC'
+<w:field belong="t-header" name="name" sortable="true">名称</w:field>
+<w:field belong="t-filter" name="name" type="search"></w:field>
+<w:field belong="d-form" name="name" type="text" required="true">名称</w:field>
 DOC;
     }
 }

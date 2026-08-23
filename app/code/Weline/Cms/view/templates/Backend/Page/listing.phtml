@@ -46,45 +46,48 @@ $matchesHighlightedSite = static function (int $websiteId, string $websiteCode) 
     }
     return false;
 };
+$websiteSelectOptions = [];
+foreach ($websites as $website) {
+    if (!is_array($website)) {
+        continue;
+    }
+    $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+    $websiteCode = trim((string)($website['code'] ?? $website['website_code'] ?? 'default'));
+    if ($websiteCode === '') {
+        $websiteCode = 'default';
+    }
+    $websiteSelectOptions[] = [
+        'value' => (string)$websiteId,
+        'label' => (string)($website['label'] ?? $website['name'] ?? $websiteCode),
+        'meta' => $websiteCode,
+    ];
+}
+$websiteSelectValue = $websiteIdFilter;
+$websiteSelectDisplay = '';
+foreach ($websiteSelectOptions as $option) {
+    if ((string)($option['value'] ?? '') === $websiteSelectValue) {
+        $websiteSelectDisplay = trim((string)($option['label'] ?? ''));
+        if ($websiteSelectDisplay === '') {
+            $websiteSelectDisplay = '#' . $websiteSelectValue;
+        }
+        break;
+    }
+}
+if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
+    $websiteSelectDisplay = '#' . $websiteSelectValue;
+}
+$websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Cms::page" order_field="order" name_field="title"></breadcrumb></h4>
-        </div>
-    </div>
-</div>
-
 <style>
 .cms-page-listing {
-    --cms-surface: var(--w-box-bg, var(--bs-body-bg));
-    --cms-surface-muted: var(--bs-tertiary-bg);
-    --cms-surface-soft: var(--bs-light-bg-subtle);
-    --cms-border: var(--bs-border-color);
-    --cms-text: var(--bs-body-color);
-    --cms-muted: var(--bs-secondary-color);
-    --cms-code: var(--bs-code-color, #d63384);
-    --cms-table-head: var(--bs-tertiary-bg);
-}
-
-html.dark-mode .cms-page-listing,
-body.dark-mode .cms-page-listing,
-html[data-theme-mode="dark"] .cms-page-listing,
-body[data-theme-mode="dark"] .cms-page-listing,
-html[data-layout-mode="dark"] .cms-page-listing,
-body[data-layout-mode="dark"] .cms-page-listing,
-html[data-bs-theme="dark"] .cms-page-listing,
-body[data-bs-theme="dark"] .cms-page-listing,
-[data-theme-mode="dark"] .cms-page-listing,
-[data-bs-theme="dark"] .cms-page-listing {
-    --cms-surface: #0f1726;
-    --cms-surface-muted: #172236;
-    --cms-surface-soft: #111c2e;
-    --cms-border: #2b3952;
-    --cms-text: #e8eef8;
-    --cms-muted: #a7b3c8;
-    --cms-code: #ff6ba8;
-    --cms-table-head: #1d2a40;
+    --cms-surface: var(--weline-theme-surface, var(--w-box-bg, #ffffff));
+    --cms-surface-muted: var(--weline-theme-surface-muted, #f1f5f9);
+    --cms-surface-soft: var(--weline-theme-surface-raised, #f8fafc);
+    --cms-border: var(--weline-theme-border, #dbe3ef);
+    --cms-text: var(--weline-theme-text, #162033);
+    --cms-muted: var(--weline-theme-text-muted, #64748b);
+    --cms-code: var(--weline-theme-text-muted, #64748b);
+    --cms-table-head: var(--weline-theme-surface-muted, #f1f5f9);
 }
 
 .cms-site-group {
@@ -368,7 +371,7 @@ body[data-bs-theme="dark"] .cms-page-listing,
     background: var(--cms-surface);
 }
 
-.cms-copy-panel .form-select {
+.cms-copy-panel .w-select {
     min-width: 0;
 }
 
@@ -472,34 +475,34 @@ body[data-bs-theme="dark"] .cms-page-listing,
     border-color: #f5c2c7;
 }
 
-html[data-theme-mode="dark"] .cms-status-published,
-body[data-theme-mode="dark"] .cms-status-published,
-html[data-bs-theme="dark"] .cms-status-published,
-body[data-bs-theme="dark"] .cms-status-published,
-[data-theme-mode="dark"] .cms-status-published,
-[data-bs-theme="dark"] .cms-status-published {
+html[data-theme="dark"] .cms-status-published,
+body[data-theme="dark"] .cms-status-published,
+html[data-theme="dark"] .cms-status-published,
+body[data-theme="dark"] .cms-status-published,
+[data-theme="dark"] .cms-status-published,
+[data-theme="dark"] .cms-status-published {
     color: #8ee0b4;
     background: #123226;
     border-color: #1f6f4b;
 }
 
-html[data-theme-mode="dark"] .cms-status-draft,
-body[data-theme-mode="dark"] .cms-status-draft,
-html[data-bs-theme="dark"] .cms-status-draft,
-body[data-bs-theme="dark"] .cms-status-draft,
-[data-theme-mode="dark"] .cms-status-draft,
-[data-bs-theme="dark"] .cms-status-draft {
+html[data-theme="dark"] .cms-status-draft,
+body[data-theme="dark"] .cms-status-draft,
+html[data-theme="dark"] .cms-status-draft,
+body[data-theme="dark"] .cms-status-draft,
+[data-theme="dark"] .cms-status-draft,
+[data-theme="dark"] .cms-status-draft {
     color: #ffd977;
     background: #3a2d0d;
     border-color: #8a6715;
 }
 
-html[data-theme-mode="dark"] .cms-status-disabled,
-body[data-theme-mode="dark"] .cms-status-disabled,
-html[data-bs-theme="dark"] .cms-status-disabled,
-body[data-bs-theme="dark"] .cms-status-disabled,
-[data-theme-mode="dark"] .cms-status-disabled,
-[data-bs-theme="dark"] .cms-status-disabled {
+html[data-theme="dark"] .cms-status-disabled,
+body[data-theme="dark"] .cms-status-disabled,
+html[data-theme="dark"] .cms-status-disabled,
+body[data-theme="dark"] .cms-status-disabled,
+[data-theme="dark"] .cms-status-disabled,
+[data-theme="dark"] .cms-status-disabled {
     color: #ffb4bd;
     background: #3b151a;
     border-color: #7f2d38;
@@ -517,22 +520,21 @@ body[data-bs-theme="dark"] .cms-status-disabled,
     color: var(--cms-muted) !important;
 }
 
-.cms-page-listing .table {
-    --bs-table-bg: var(--cms-surface);
-    --bs-table-color: var(--cms-text);
-    --bs-table-border-color: var(--cms-border);
-    --bs-table-striped-bg: var(--cms-surface-soft);
-    --bs-table-striped-color: var(--cms-text);
+.cms-page-listing .w-table,
+.cms-page-listing table {
     color: var(--cms-text);
+    background: var(--cms-surface);
 }
 
-.cms-page-listing .table thead th {
+.cms-page-listing .w-table thead th,
+.cms-page-listing table thead th {
     color: var(--cms-text);
     background: var(--cms-table-head);
     border-color: var(--cms-border);
 }
 
-.cms-page-listing .table tbody td {
+.cms-page-listing .w-table tbody td,
+.cms-page-listing table tbody td {
     color: var(--cms-text);
     border-color: var(--cms-border);
 }
@@ -553,14 +555,10 @@ body[data-bs-theme="dark"] .cms-status-disabled,
 }
 </style>
 
-<div class="row">
-    <template>Weline_Component::message.phtml</template>
-</div>
-
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
                 <div class="cms-page-listing">
                 <?php if (!empty($copyNotice)): ?>
                     <?php
@@ -594,7 +592,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                     ?>
                     <div class="cms-copy-notice<?= !empty($copyNotice['theme_partial']) ? ' is-warning' : '' ?>" data-cms-copy-notice>
                         <div class="cms-copy-notice__main">
-                            <i class="mdi <?= $copyNoticeType === 'path' ? 'mdi-folder-check-outline' : 'mdi-check-circle-outline' ?> cms-copy-notice__icon"></i>
+                            <i class="mdi <?= $copyNoticeType === 'path' ? 'check' : 'check' ?> cms-copy-notice__icon"></i>
                             <div>
                                 <div class="cms-copy-notice__title"><?= htmlspecialchars($copyNoticeTitle) ?></div>
                                 <?php if (!empty($copyNoticeMetaParts)): ?>
@@ -603,63 +601,63 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                             </div>
                         </div>
                         <div class="cms-copy-notice__actions">
-                            <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars($copyGoUrl) ?>">
-                                <i class="mdi mdi-arrow-right"></i>
+                            <a class="w-button" href="<?= htmlspecialchars($copyGoUrl) ?>" data-tone="primary" data-size="sm">
+                                <w:icon name="arrow-right" size="sm"></w:icon>
                                 <?= __('前往查看') ?>
                             </a>
-                            <button class="btn btn-sm btn-outline-secondary" type="button" data-cms-copy-notice-close>
+                            <button class="w-button" type="button" data-cms-copy-notice-close data-tone="neutral" data-variant="outline" data-size="sm">
                                 <?= __('我知道了') ?>
                             </button>
                         </div>
                     </div>
                 <?php endif; ?>
-                <w:form class="row g-2 mb-3" method="get" action="@var($this->getBackendUrl('cms/backend/page/listing'))">
-                    <div class="col-md-3">
-                        <input class="form-control" type="search" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= htmlspecialchars((string)__('搜索标题或路径')) ?>">
+                <w:form class="w-grid" method="get" action="@var($this->getBackendUrl('cms/backend/page/listing'))" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                    <div style="--w-span-md:3;">
+                        <input class="w-input" type="search" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= htmlspecialchars((string)__('搜索标题或路径')) ?>">
                     </div>
-                    <div class="col-md-2">
-                        <select class="form-select" name="website_id">
-                            <option value=""><?= __('全部站点') ?></option>
-                            <?php foreach ($websites as $website): ?>
-                                <?php $websiteId = (string)(int)($website['website_id'] ?? 0); ?>
-                                <option value="<?= htmlspecialchars($websiteId) ?>" <?= $websiteIdFilter === $websiteId ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars((string)($website['label'] ?? $website['code'] ?? $websiteId)) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                    <div style="--w-span-md:2;">
+                        <label class="w-visually-hidden" for="cms-listing-website_trigger"><?= __('站点') ?></label>
+                        <w:websites:website:select
+                            id="cms-listing-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            empty-label="@lang(全部站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                        />
                     </div>
-                    <div class="col-md-2">
-                        <input class="form-control" type="text" name="path_group" value="<?= htmlspecialchars($pathGroupFilter) ?>" placeholder="<?= htmlspecialchars((string)__('一级 path')) ?>">
+                    <div style="--w-span-md:2;">
+                        <input class="w-input" type="text" name="path_group" value="<?= htmlspecialchars($pathGroupFilter) ?>" placeholder="<?= htmlspecialchars((string)__('一级 path')) ?>">
                     </div>
-                    <div class="col-md-2">
-                        <select class="form-select" name="status">
+                    <div style="--w-span-md:2;">
+                        <select class="w-select" name="status">
                             <option value=""><?= __('全部状态') ?></option>
                             <?php foreach ($statusLabels as $value => $label): ?>
                                 <option value="<?= htmlspecialchars($value) ?>" <?= $status === $value ? 'selected' : '' ?>><?= $label ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-1">
-                        <input class="form-control" type="text" name="scope" value="<?= htmlspecialchars($scope) ?>" placeholder="<?= htmlspecialchars((string)__('范围')) ?>">
+                    <div style="--w-span-md:1;">
+                        <input class="w-input" type="text" name="scope" value="<?= htmlspecialchars($scope) ?>" placeholder="<?= htmlspecialchars((string)__('范围')) ?>">
                     </div>
-                    <div class="col-md-2">
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-outline-primary flex-grow-1" type="submit">
-                                <i class="mdi mdi-magnify"></i>
+                    <div style="--w-span-md:2;">
+                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                            <button class="w-button" type="submit" data-grow="true" data-tone="primary" data-variant="outline">
+                                <w:icon name="search" size="sm"></w:icon>
                                 <?= __('筛选') ?>
                             </button>
-                            <a class="btn btn-outline-secondary flex-shrink-0"
-                               href="<?= $this->getBackendUrl('cms/backend/page/listing') ?>"
-                               title="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>"
-                               aria-label="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>">
-                                <i class="mdi mdi-close-circle-outline"></i>
+                            <a class="w-button" href="<?= $this->getBackendUrl('cms/backend/page/listing') ?>" title="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>" aria-label="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>" data-shrink="false" data-tone="neutral" data-variant="outline">
+                                <w:icon name="close" size="sm"></w:icon>
                             </a>
                         </div>
                     </div>
                 </w:form>
 
                 <?php if (empty($siteGroups)): ?>
-                    <div class="text-center text-muted py-5"><?= __('暂无站点') ?></div>
+                    <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><?= __('暂无站点') ?></div>
                 <?php endif; ?>
 
                 <?php $siteLoopIndex = 0; ?>
@@ -695,12 +693,12 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                 <div>
                                     <div class="cms-site-group__title">
                                         <?= htmlspecialchars((string)($site['name'] ?? $siteCode)) ?>
-                                        <span class="badge cms-count-badge ms-2"><?= (int)($site['page_count'] ?? 0) ?></span>
+                                        <span class="w-badge cms-count-badge"><?= (int)($site['page_count'] ?? 0) ?></span>
                                     </div>
                                     <div class="cms-site-group__meta">
                                         <code><?= htmlspecialchars($siteCode) ?></code>
                                         <?php if (!empty($site['url'])): ?>
-                                            <span class="ms-2"><?= htmlspecialchars((string)$site['url']) ?></span>
+                                            <span class=""><?= htmlspecialchars((string)$site['url']) ?></span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -716,12 +714,12 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                     <input type="hidden" name="website_id" value="<?= $siteId ?>">
                                     <input type="hidden" name="website_code" value="<?= htmlspecialchars($siteCode) ?>">
                                     <div class="cms-create-title">
-                                        <i class="mdi mdi-folder-plus-outline"></i>
+                                        <w:icon name="plus" size="sm"></w:icon>
                                         <?= __('新建一级 path') ?>
                                     </div>
-                                    <input class="form-control" type="text" name="path_group" required placeholder="<?= htmlspecialchars((string)__('新建一级 path，例如 blog')) ?>">
-                                    <input class="form-control" type="text" name="path_group_alias" placeholder="<?= htmlspecialchars((string)__('显示别名，例如 博客')) ?>">
-                                    <button class="btn btn-outline-primary w-100" type="submit"><?= __('创建') ?></button>
+                                    <input class="w-input" type="text" name="path_group" required placeholder="<?= htmlspecialchars((string)__('新建一级 path，例如 blog')) ?>">
+                                    <input class="w-input" type="text" name="path_group_alias" placeholder="<?= htmlspecialchars((string)__('显示别名，例如 博客')) ?>">
+                                    <button class="w-button" type="submit" data-w-width="full" data-tone="primary" data-variant="outline"><?= __('创建') ?></button>
                                 </w:form>
 
                                 <?php if (empty($pathGroups)): ?>
@@ -762,7 +760,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                             <div>
                                                 <div class="cms-path-group__title">
                                                     <?= htmlspecialchars($groupAlias !== '' ? $groupAlias : $groupPath) ?>
-                                                    <span class="badge cms-count-badge ms-2"><?= count($groupPages) ?></span>
+                                                    <span class="w-badge cms-count-badge"><?= count($groupPages) ?></span>
                                                 </div>
                                                 <div class="cms-path-group__meta">
                                                     /<code><?= htmlspecialchars($groupPath) ?></code>
@@ -771,15 +769,15 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                         </div>
                                         <div class="cms-path-group__actions">
                                             <details class="cms-copy-menu">
-                                                <summary class="btn btn-sm btn-outline-secondary cms-copy-summary">
-                                                    <i class="mdi mdi-content-copy"></i>
+                                                <summary class="w-button cms-copy-summary" data-tone="neutral" data-variant="outline" data-size="sm">
+                                                    <w:icon name="copy" size="sm"></w:icon>
                                                     <?= __('拷贝') ?>
                                                 </summary>
                                                 <w:form class="cms-copy-panel" method="post" action="@var($this->getBackendUrl('cms/backend/page/copy-path-group'))">
                                                     <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
                                                     <input type="hidden" name="source_website_id" value="<?= $siteId ?>">
                                                     <input type="hidden" name="source_path_group" value="<?= htmlspecialchars($groupPath) ?>">
-                                                    <select class="form-select form-select-sm" name="target_website" required>
+                                                    <select class="w-select" name="target_website" required data-size="sm">
                                                         <option value=""><?= __('选择目标站点') ?></option>
                                                         <?php foreach ($websites as $targetWebsite): ?>
                                                             <?php if (!is_array($targetWebsite)) { continue; } ?>
@@ -789,8 +787,8 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                             </option>
                                                         <?php endforeach; ?>
                                                     </select>
-                                                    <button class="btn btn-sm btn-primary" type="submit">
-                                                        <i class="mdi mdi-check"></i>
+                                                    <button class="w-button" type="submit" data-tone="primary" data-size="sm">
+                                                        <w:icon name="check" size="sm"></w:icon>
                                                         <?= __('确认拷贝') ?>
                                                     </button>
                                                 </w:form>
@@ -799,8 +797,8 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                 <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
                                                 <input type="hidden" name="website_id" value="<?= $siteId ?>">
                                                 <input type="hidden" name="path_group" value="<?= htmlspecialchars($groupPath) ?>">
-                                                <button class="btn btn-sm btn-outline-danger" type="submit">
-                                                    <i class="mdi mdi-folder-remove-outline"></i>
+                                                <button class="w-button" type="submit" data-tone="danger" data-variant="outline" data-size="sm">
+                                                    <w:icon name="minus" size="sm"></w:icon>
                                                     <?= __('移入回收站') ?>
                                                 </button>
                                             </w:form>
@@ -809,15 +807,15 @@ body[data-bs-theme="dark"] .cms-status-disabled,
 
                                     <div class="cms-path-group__body" id="<?= htmlspecialchars($pathBodyId) ?>" data-cms-collapse-panel<?= $pathExpanded ? '' : ' hidden' ?>>
                                         <div class="cms-page-tile-grid">
-                                            <a class="cms-path-action text-decoration-none" href="<?= $this->getBackendUrl('cms/backend/page/new', [
+                                            <a class="cms-path-action" href="<?= $this->getBackendUrl('cms/backend/page/new', [
                                                 'website_id' => $siteId,
                                                 'website_code' => $siteCode,
                                                 'path_group_id' => (int)($group['group_id'] ?? 0),
                                                 'path_group' => $groupPath,
                                                 'path_group_alias' => $groupAlias,
-                                            ]) ?>">
+                                            ]) ?>" data-w-decoration="none">
                                                 <div class="cms-create-title">
-                                                    <i class="mdi mdi-plus"></i>
+                                                    <w:icon name="plus" size="sm"></w:icon>
                                                     <?= __('新建页面') ?>
                                                 </div>
                                                 <div class="cms-path-group__meta"><?= __('在这个 path 下创建页面') ?></div>
@@ -840,7 +838,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                              data-cms-page-path="<?= htmlspecialchars((string)($page['identifier'] ?? '')) ?>">
                                                         <div class="cms-page-tile__head">
                                                             <div class="cms-page-tile__title"><?= htmlspecialchars((string)($page['title'] ?? '')) ?></div>
-                                                            <span class="badge cms-status-badge <?= htmlspecialchars($statusClass) ?>">
+                                                            <span class="w-badge cms-status-badge <?= htmlspecialchars($statusClass) ?>">
                                                                 <?= $statusLabels[$pageStatus] ?? htmlspecialchars($pageStatus) ?>
                                                             </span>
                                                         </div>
@@ -856,26 +854,26 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                             <span><?= __('更新时间') ?>: <?= htmlspecialchars((string)($page['updated_at'] ?? '')) ?></span>
                                                         </div>
                                                         <div class="cms-page-tile__actions">
-                                                            <a class="btn btn-sm btn-outline-primary" href="<?= $this->getBackendUrl('cms/backend/page/edit', ['page_id' => $pageId]) ?>">
-                                                                <i class="mdi mdi-file-edit-outline"></i>
+                                                            <a class="w-button" href="<?= $this->getBackendUrl('cms/backend/page/edit', ['page_id' => $pageId]) ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                                                <w:icon name="edit" size="sm"></w:icon>
                                                                 <?= __('编辑') ?>
                                                             </a>
                                                             <?php if ($previewUrl !== ''): ?>
-                                                                <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars($previewUrl) ?>" target="_blank" rel="noopener">
-                                                                    <i class="mdi mdi-eye-outline"></i>
+                                                                <a class="w-button" href="<?= htmlspecialchars($previewUrl) ?>" target="_blank" rel="noopener" data-tone="neutral" data-variant="outline" data-size="sm">
+                                                                    <w:icon name="eye" size="sm"></w:icon>
                                                                     <?= __('预览') ?>
                                                                 </a>
                                                             <?php endif; ?>
                                                             <details class="cms-copy-menu">
-                                                                <summary class="btn btn-sm btn-outline-secondary cms-copy-summary">
-                                                                    <i class="mdi mdi-content-copy"></i>
+                                                                <summary class="w-button cms-copy-summary" data-tone="neutral" data-variant="outline" data-size="sm">
+                                                                    <w:icon name="copy" size="sm"></w:icon>
                                                                     <?= __('拷贝') ?>
                                                                 </summary>
                                                                 <w:form class="cms-copy-panel" method="post" action="@var($this->getBackendUrl('cms/backend/page/copy'))">
                                                                     <input type="hidden" name="page_id" value="<?= $pageId ?>">
                                                                     <input type="hidden" name="source_website_id" value="<?= (int)($page['website_id'] ?? $siteId) ?>">
                                                                     <input type="hidden" name="source_path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? $groupPath)) ?>">
-                                                                    <select class="form-select form-select-sm" name="target_website" required>
+                                                                    <select class="w-select" name="target_website" required data-size="sm">
                                                                         <option value=""><?= __('选择目标站点') ?></option>
                                                                         <?php foreach ($websites as $targetWebsite): ?>
                                                                             <?php if (!is_array($targetWebsite)) { continue; } ?>
@@ -885,16 +883,16 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                                             </option>
                                                                         <?php endforeach; ?>
                                                                     </select>
-                                                                    <button class="btn btn-sm btn-primary" type="submit">
-                                                                        <i class="mdi mdi-check"></i>
+                                                                    <button class="w-button" type="submit" data-tone="primary" data-size="sm">
+                                                                        <w:icon name="check" size="sm"></w:icon>
                                                                         <?= __('确认拷贝') ?>
                                                                     </button>
                                                                 </w:form>
                                                             </details>
                                                             <w:form method="post" action="@var($this->getBackendUrl('cms/backend/page/delete'))">
                                                                 <input type="hidden" name="page_id" value="<?= $pageId ?>">
-                                                                <button class="btn btn-sm btn-outline-danger" type="submit">
-                                                                    <i class="mdi mdi-delete-outline"></i>
+                                                                <button class="w-button" type="submit" data-tone="danger" data-variant="outline" data-size="sm">
+                                                                    <w:icon name="trash" size="sm"></w:icon>
                                                                     <?= __('移入回收站') ?>
                                                                 </button>
                                                             </w:form>

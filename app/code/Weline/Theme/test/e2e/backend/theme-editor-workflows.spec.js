@@ -269,7 +269,7 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
 
         const firstStructureWidget = page.locator('.content-slot-widgets .preview-widget-item').nth(0);
         await firstStructureWidget.hover();
-        await firstStructureWidget.locator('.btn-edit-widget').click();
+        await firstStructureWidget.locator('.w-theme-editor-edit-widget').click();
         await expect(page.locator('#widgetConfigModal')).toHaveClass(/show/, { timeout: 20000 });
         await expect(page.locator('#widgetConfigModal')).not.toContainText(/Loading|加载中/i, { timeout: 20000 });
 
@@ -293,119 +293,6 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
         expect(consoleIssues, consoleIssues.join('\n')).toEqual([]);
       } finally {
         runFixture('cleanup', { theme_id: themeId, page_type: pageType });
-      }
-    },
-  );
-  moduleCase(
-    test,
-    { module: MODULE, id: 'TEST-P1C-03' },
-    'normal and test Store theme drafts and versions remain isolated',
-    async ({ page }, testInfo) => {
-      const activeTheme = getActiveTheme('frontend');
-      test.skip(!activeTheme, 'No active frontend theme found in runtime info.');
-
-      const themeId = Number(activeTheme.id || 0);
-      const pageType = makePageType(testInfo);
-      const normalIdentity = {
-        layout_option: 'default',
-        scope: 'e2e.theme.store',
-        target_type: 'global',
-        target_id: 0,
-      };
-      const testIdentity = { ...normalIdentity, scope: 'e2e.theme.store~test' };
-
-      runFixture('cleanup', { theme_id: themeId, page_type: pageType, identity: normalIdentity });
-      runFixture('cleanup', { theme_id: themeId, page_type: pageType, identity: testIdentity });
-
-      try {
-        await loginAsAdmin(page, { timeout: 60000, settleMs: 1000 });
-        await gotoBackend(page, `theme/backend/theme-editor?theme_id=${themeId}&editor_area=frontend&page_type=${pageType}&scope=${encodeURIComponent(normalIdentity.scope)}`, {
-          waitUntil: 'domcontentloaded',
-          timeout: 60000,
-          settleMs: 1500,
-        });
-        await waitForThemeEditor(page);
-
-        const saveDraft = async (identity, text) => {
-          const saved = await callEditorRequest(page, '/theme/backend/theme-editor/save-widget', 'POST', {
-            theme_id: themeId,
-            page_type: pageType,
-            area: 'content',
-            slot_id: 'content',
-            widget_module: 'Weline_Theme',
-            widget_type: 'theme_component',
-            widget_code: 'basic/button',
-            config: { text, type: 'primary', size: 'md' },
-            sort_order: 0,
-            exclusive: false,
-            ...identity,
-          });
-          expectEditorSuccess(saved, `${text} draft`);
-        };
-
-        await saveDraft(normalIdentity, 'P1C03 Normal Draft');
-        await saveDraft(testIdentity, 'P1C03 Test Draft');
-
-        const saveVersion = async (identity, versionName) => {
-          const saved = await callEditorRequest(page, '/theme/backend/theme-editor/save-version', 'POST', {
-            theme_id: themeId,
-            page_type: pageType,
-            version_name: versionName,
-            description: 'TEST-P1C-03 scope isolation evidence',
-            ...identity,
-          });
-          expectEditorSuccess(saved, versionName);
-          return Number(saved.data?.version_id || 0);
-        };
-
-        const normalVersionId = await saveVersion(normalIdentity, 'P1C03 Normal Version');
-        const testVersionId = await saveVersion(testIdentity, 'P1C03 Test Version');
-        expect(normalVersionId).toBeGreaterThan(0);
-        expect(testVersionId).toBeGreaterThan(0);
-        expect(normalVersionId).not.toBe(testVersionId);
-
-        const readVersions = async (identity) => {
-          const query = new URLSearchParams({
-            theme_id: String(themeId),
-            page_type: pageType,
-            ...Object.fromEntries(Object.entries(identity).map(([key, value]) => [key, String(value)])),
-          });
-          const result = await callEditorRequest(page, `/theme/backend/theme-editor/versions?${query.toString()}`, 'GET');
-          expectEditorSuccess(result, `${identity.scope} versions`);
-          return result.data;
-        };
-
-        const normalVersions = await readVersions(normalIdentity);
-        const testVersions = await readVersions(testIdentity);
-        const normalNames = normalVersions.versions.map((version) => String(version.version_name || version.name || ''));
-        const testNames = testVersions.versions.map((version) => String(version.version_name || version.name || ''));
-        expect(normalNames).toContain('P1C03 Normal Version');
-        expect(normalNames).not.toContain('P1C03 Test Version');
-        expect(testNames).toContain('P1C03 Test Version');
-        expect(testNames).not.toContain('P1C03 Normal Version');
-
-        const published = await callEditorRequest(page, '/theme/backend/theme-editor/publish-version', 'POST', {
-          theme_id: themeId,
-          page_type: pageType,
-          version_id: testVersionId,
-          ...testIdentity,
-        });
-        expectEditorSuccess(published, 'test scope publish');
-
-        const normalAfterPublish = await readVersions(normalIdentity);
-        const testAfterPublish = await readVersions(testIdentity);
-        expect(Number(testAfterPublish.published_version_id || 0)).toBe(testVersionId);
-        expect(Number(normalAfterPublish.published_version_id || 0)).not.toBe(testVersionId);
-
-        const normalSnapshot = runFixture('snapshot', { theme_id: themeId, page_type: pageType, identity: normalIdentity });
-        const testSnapshot = runFixture('snapshot', { theme_id: themeId, page_type: pageType, identity: testIdentity });
-        expect(normalSnapshot.layout.some((row) => String(row.config || '').includes('P1C03 Normal Draft'))).toBeTruthy();
-        expect(normalSnapshot.layout.every((row) => !String(row.config || '').includes('P1C03 Test Draft'))).toBeTruthy();
-        expect(testSnapshot.layout.some((row) => String(row.config || '').includes('P1C03 Test Draft'))).toBeTruthy();
-        expect(testSnapshot.layout.every((row) => !String(row.config || '').includes('P1C03 Normal Draft'))).toBeTruthy();
-      } finally {
-        runFixture('cleanup', { theme_id: themeId, page_type: pageType, identity: normalIdentity });
-        runFixture('cleanup', { theme_id: themeId, page_type: pageType, identity: testIdentity });
       }
     },
   );

@@ -2,14 +2,17 @@
 未知税务配置类型。,未知税务配置类型。
 税务配置创建成功。,税务配置创建成功。
 税务管理,税务管理
+check,查看
 税务配置管理与迁移诊断,税务配置管理与迁移诊断
 税类,税类
+circle,圆圈
 管理税类,管理税类
 税率,税率
 管理税率,管理税率
 税务规则,税务规则
 管理税务规则,管理税务规则
 创建税类,创建税类
+save,节省
 创建税率,创建税率
 创建税务规则,创建税务规则
 税引擎状态,税引擎状态
@@ -19,6 +22,7 @@
 "已验证 LKG","已验证 LKG"
 "查看已验证税务 LKG","查看已验证税务 LKG"
 迁移状态,迁移状态
+eye,眼睛
 只读查看税务迁移状态,只读查看税务迁移状态
 是,是
 否,否
@@ -27,7 +31,7 @@
 "此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。","此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。"
 "配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。","配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。"
 新增%{1},新增%{1}
-"网站 ID","网站 ID"
+网站,网站
 税类代码,税类代码
 税类名称,税类名称
 管辖区,管辖区
@@ -90,16 +94,17 @@
 "新进程重载 checkpoint，重算同一观察窗并复核 report/LKG","新进程重载 checkpoint，重算同一观察窗并复核 report/LKG"
 "fresh verify 成功后仅放量指定 Website/Store/Channel","fresh verify 成功后仅放量指定 Website/Store/Channel"
 "按 checkpoint 持久化 mode off；保留 LKG、TaxSnapshot 与审计事实","按 checkpoint 持久化 mode off；保留 LKG、TaxSnapshot 与审计事实"
-"migration registry 已登记的 full mig_clone_*","migration registry 已登记的 full mig_clone_*"
-"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）"
+"migration registry 已登记的 full mig_clone_*","迁移注册表已注册完整的 mig_clone_*"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）",apply输出的检查点ID（verify/allowlist/rollback必需）
 "目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
 "目标 Store ID，必须 >=1","目标 Store ID，必须 >=1"
 "目标 Channel ID，必须 >=1","目标 Channel ID，必须 >=1"
 显示本帮助,显示本帮助
-"""仅允许 POST 请求。""","仅允许 POST 请求。"
-"""税务不可用且无同版本同 Scope 的 LKG，新结账已阻断""","税务不可用且无同版本同 Scope 的 LKG，新结账已阻断"
-"MIG-P3B：Tax shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P3B：Tax shadow 到 allowlist（apply 必须 --database=mig_clone_*）"
-"""税务不可用且无同版本 LKG，新结账已阻断""","税务不可用且无同版本 LKG，新结账已阻断"
+"""仅允许 POST 请求。""","""仅允许 POST 请求。"""
+"网站 ID","网站 ID"
+"""税务不可用且无同版本同 Scope 的 LKG，新结账已阻断""","""税务不可用且无同版本同 Scope 的 LKG，新结账已阻断"""
+"MIG-P3B：Tax shadow 到 allowlist（apply 必须 --database=mig_clone_*）",MIG-P3B：税收影子到白名单（必须--database=mig_clone_*）
+"""税务不可用且无同版本 LKG，新结账已阻断""","""税务不可用且无同版本 LKG，新结账已阻断"""
 税务配置,税务配置
 "配置 Scope 税务引擎开关、默认管辖区与 schema 版本。","配置 Scope 税务引擎开关、默认管辖区与 schema 版本。"
 税务运行规则,税务运行规则

@@ -16,28 +16,28 @@ $search = $this->getData('search') ?: '';
 $status = $this->getData('status');
 ?>
 <!-- 消息提示 -->
-                <div class='row' data-testid="seo-subject-management">
-                    <div class='col-12'>
+                <div class="w-grid" data-testid="seo-subject-management">
+                    <div style="--w-span:12;">
                         <template>Weline_Component::message.phtml</template>
                     </div>
                 </div>
                 
                 <!-- Page Title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-file-document-multiple me-2"></i>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;">
+                                <w:icon name="file" size="sm"></w:icon>
                                 <?= htmlspecialchars($title) ?>
                             </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item">
                                         <a href='<?= $this->getUrl('*/backend/dashboard') ?>'>
                                             <lang>SEO管理</lang>
                                         </a>
                                     </li>
-                                    <li class='breadcrumb-item active'>
+                                    <li class="w-breadcrumb__item" data-state="active">
                                         <lang>主体列表</lang>
                                     </li>
                                 </ol>
@@ -47,32 +47,30 @@ $status = $this->getData('status');
                 </div>
 
                 <!-- 搜索框 -->
-                <div class="row">
-                    <div class="col-12">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
                         <div class="search-box">
                             <w:form method="get" action="@var($this->getUrl('*/backend/dashboard/subject'))">
-                                <div class="row align-items-end">
-                                    <div class="col-md-4">
-                                        <label class="form-label"><lang>搜索主体</lang></label>
-                                        <input type="text" class="form-control" name="search" 
-                                               value="<?= htmlspecialchars($search) ?>" 
-                                               placeholder="<?= __('输入主体标题...') ?>">
+                                <div class="w-grid" data-align="end">
+                                    <div style="--w-span-md:4;">
+                                        <label class="w-field__label"><lang>搜索主体</lang></label>
+                                        <input type="text" class="w-input" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= __('输入主体标题...') ?>">
                                     </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label"><lang>状态</lang></label>
-                                        <select class="form-select" name="status">
+                                    <div style="--w-span-md:3;">
+                                        <label class="w-field__label"><lang>状态</lang></label>
+                                        <select class="w-select" name="status">
                                             <option value=""><?= __('全部状态') ?></option>
                                             <option value="1" <?= $status === '1' ? 'selected' : '' ?>><?= __('启用') ?></option>
                                             <option value="0" <?= $status === '0' ? 'selected' : '' ?>><?= __('禁用') ?></option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="mdi mdi-magnify me-1"></i>
+                                    <div style="--w-span-md:3;">
+                                        <button type="submit" class="w-button" data-tone="primary">
+                                            <w:icon name="search" size="sm"></w:icon>
                                             <lang>搜索</lang>
                                         </button>
-                                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="btn btn-outline-secondary ms-2">
-                                            <i class="mdi mdi-refresh me-1"></i>
+                                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="w-button ms-2" data-tone="neutral" data-variant="outline">
+                                            <w:icon name="refresh" size="sm"></w:icon>
                                             <lang>重置</lang>
                                         </a>
                                     </div>
@@ -83,33 +81,33 @@ $status = $this->getData('status');
                 </div>
 
                 <!-- 主体列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="card-title mb-0">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                                <h5 class="w-card__title" style="--w-mb:0;">
                                     <lang>主体列表</lang>
-                                    <span class="badge bg-secondary ms-2"><?= count($subjects) ?></span>
+                                    <span class="w-badge ms-2" data-w-background="muted"><?= count($subjects) ?></span>
                                 </h5>
                             </div>
-                            <div class="card-body p-0">
+                            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                                 <?php if (empty($subjects)): ?>
                                     <div class="empty-state">
-                                        <i class="mdi mdi-file-document-outline"></i>
+                                        <w:icon name="file" size="sm"></w:icon>
                                         <h5><lang>暂无SEO主体</lang></h5>
-                                        <p class="text-muted"><lang>当前没有SEO主体记录。</lang></p>
+                                        <p class="w-text" data-tone="muted"><lang>当前没有SEO主体记录。</lang></p>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table subject-table">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table subject-table">
                                             <thead>
                                                 <tr>
                                                     <th style="width: 60px;">ID</th>
                                                     <th><lang>主体信息</lang></th>
-                                                    <th style="width: 100px;" class="text-center"><lang>关键词数</lang></th>
-                                                    <th style="width: 100px;" class="text-center"><lang>状态</lang></th>
+                                                    <th style="width: 100px;" class="w-text" data-align="center"><lang>关键词数</lang></th>
+                                                    <th style="width: 100px;" class="w-text" data-align="center"><lang>状态</lang></th>
                                                     <th style="width: 160px;"><lang>更新时间</lang></th>
-                                                    <th style="width: 120px;" class="text-center"><lang>操作</lang></th>
+                                                    <th style="width: 120px;" class="w-text" data-align="center"><lang>操作</lang></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -123,34 +121,33 @@ $status = $this->getData('status');
                                                             </a>
                                                             <?php if (!empty($subject['url'])): ?>
                                                                 <div class="subject-url">
-                                                                    <i class="mdi mdi-link-variant me-1"></i>
+                                                                    <w:icon name="link" size="sm"></w:icon>
                                                                     <?= htmlspecialchars(mb_substr($subject['url'], 0, 50)) ?>
                                                                     <?= mb_strlen($subject['url']) > 50 ? '...' : '' ?>
                                                                 </div>
                                                             <?php endif; ?>
                                                         </td>
-                                                        <td class="text-center">
+                                                        <td class="w-text" data-align="center">
                                                             <span class="keyword-count">
-                                                                <i class="mdi mdi-tag me-1"></i>
+                                                                <w:icon name="tag" size="sm"></w:icon>
                                                                 <?= (int)($subject['keyword_count'] ?? 0) ?>
                                                             </span>
                                                         </td>
-                                                        <td class="text-center">
+                                                        <td class="w-text" data-align="center">
                                                             <?php if ((int)($subject['status'] ?? 0) === 1): ?>
-                                                                <span class="badge badge-status bg-success"><lang>启用</lang></span>
+                                                                <span class="w-badge badge-status" data-w-background="success"><lang>启用</lang></span>
                                                             <?php else: ?>
-                                                                <span class="badge badge-status bg-secondary"><lang>禁用</lang></span>
+                                                                <span class="w-badge badge-status" data-w-background="muted"><lang>禁用</lang></span>
                                                             <?php endif; ?>
                                                         </td>
                                                         <td>
-                                                            <small class="text-muted">
+                                                            <small class="w-text" data-tone="muted">
                                                                 <?= htmlspecialchars($subject['updated_at'] ?? '-') ?>
                                                             </small>
                                                         </td>
-                                                        <td class="text-center action-buttons">
-                                                            <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" 
-                                                               class="btn btn-sm btn-outline-primary" title="<?= __('查看详情') ?>">
-                                                                <i class="mdi mdi-eye"></i>
+                                                        <td class="w-text action-buttons" data-align="center">
+                                                            <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" class="w-button" title="<?= __('查看详情') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                                                <w:icon name="eye" size="sm"></w:icon>
                                                                 <lang>详情</lang>
                                                             </a>
                                                         </td>

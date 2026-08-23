@@ -2,13 +2,14 @@
 
 ## AI / 开发入口
 
-开发或修改 Widget、可视化编辑器部件、`w:widget`、slot 注入、部件查询事件前，先读：
+- [需求基线](./需求.md)
+- [开发日志](./开发日志.md)
 
-1. [AI-INDEX.md](./AI-INDEX.md)
-2. [../Theme/doc/AI-INDEX.md](../../Theme/doc/AI-INDEX.md)
-3. [../Theme/doc/theme-inheritance-and-file-conventions.md](../../Theme/doc/theme-inheritance-and-file-conventions.md)
-4. [../Theme/doc/部件开发指南.md](../../Theme/doc/部件开发指南.md)
-5. [../Theme/doc/widget-slot-attributes.md](../../Theme/doc/widget-slot-attributes.md)
+开发或修改 Widget、可视化编辑器部件、`w:widget`、slot 注入、部件查询事件前，先完成 `prepare_project`，调用 `resolve_task_context` 获取 Widget 与 Theme 的任务上下文，再读：
+
+1. [../Theme/doc/theme-inheritance-and-file-conventions.md](../../Theme/doc/theme-inheritance-and-file-conventions.md)
+2. [../Theme/doc/部件开发指南.md](../../Theme/doc/部件开发指南.md)
+3. [../Theme/doc/widget-slot-attributes.md](../../Theme/doc/widget-slot-attributes.md)
 
 当前推荐注册路径是 `app/code/{Vendor}/{Module}/extends/module/Weline_Widget/{ModuleName}/widget.php`。旧式 `extends/Weline_Widget/...` 只作为兼容扫描存在，不要作为新开发首选。
 

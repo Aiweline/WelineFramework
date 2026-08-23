@@ -27,6 +27,7 @@
  */
 $meta = $this->getData('meta') ?? [];
 $colors = $this->getData('colors') ?? [];
+$contentTemplate = trim((string)($this->getData('contentTemplate') ?? ''));
 
 // 新增参数
 $showSidebar = $meta['showSidebar'] ?? $this->getData('showSidebar') ?? true;
@@ -100,6 +101,8 @@ $this->assign('meta', $meta);
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content<else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
+                                <elseif condition="contentTemplate"/>
+                                    <?php echo $this->fetch($this->getData("contentTemplate")); ?>
                                 <else/>
                                     <div class="product-detail-layout__placeholder" data-placeholder="product-main">
                                         <div class="product-detail-layout__placeholder-icon">

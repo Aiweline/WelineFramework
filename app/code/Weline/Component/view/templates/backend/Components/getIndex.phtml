@@ -4,9 +4,9 @@ $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framewor
 $backendUrlPrefix = $request->getUrlBuilder()->getBackendUrl('/');
 $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 ?>
-<div class="container-fluid">
+<div class="w-container">
     <!-- 页面标题 -->
-    <div class="page-title">
+    <div class="w-backend-page__title">
         <h1><?= $this->getData('title') ?? __('组件库') ?></h1>
     </div>
 
@@ -15,28 +15,28 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
     $stats = $this->getData('stats') ?? [];
     ?>
     <div class="stats-cards">
-        <div class="card">
-            <div class="card-content">
-                <div class="card-title"><?= __('总组件数') ?></div>
-                <div class="card-value"><?= $stats['total'] ?? 0 ?></div>
+        <div class="w-card">
+            <div class="weline-card-content">
+                <div class="w-card__title"><?= __('总组件数') ?></div>
+                <div class="weline-card-value"><?= $stats['total'] ?? 0 ?></div>
             </div>
         </div>
-        <div class="card">
-            <div class="card-content">
-                <div class="card-title"><?= __('当前显示') ?></div>
-                <div class="card-value" style="color: var(--primary-color, #0bb197);"><?= $stats['filtered'] ?? 0 ?></div>
+        <div class="w-card">
+            <div class="weline-card-content">
+                <div class="w-card__title"><?= __('当前显示') ?></div>
+                <div class="weline-card-value" style="color: var(--primary-color, #0bb197);"><?= $stats['filtered'] ?? 0 ?></div>
             </div>
         </div>
-        <div class="card">
-            <div class="card-content">
-                <div class="card-title"><?= __('模块数') ?></div>
-                <div class="card-value" style="color: var(--info-color, #4aa3ff);"><?= $stats['modules'] ?? 0 ?></div>
+        <div class="w-card">
+            <div class="weline-card-content">
+                <div class="w-card__title"><?= __('模块数') ?></div>
+                <div class="weline-card-value" style="color: var(--info-color, #4aa3ff);"><?= $stats['modules'] ?? 0 ?></div>
             </div>
         </div>
-        <div class="card">
-            <div class="card-content">
-                <div class="card-title"><?= __('分类数') ?></div>
-                <div class="card-value" style="color: var(--success-color, #0ac074);"><?= $stats['categories'] ?? 0 ?></div>
+        <div class="w-card">
+            <div class="weline-card-content">
+                <div class="w-card__title"><?= __('分类数') ?></div>
+                <div class="weline-card-value" style="color: var(--success-color, #0ac074);"><?= $stats['categories'] ?? 0 ?></div>
             </div>
         </div>
     </div>
@@ -47,16 +47,11 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
             <div class="filter-row">
                 <div class="filter-group">
                     <label for="q"><?= __('快速搜索') ?>：</label>
-                    <input type="text" 
-                           id="q" 
-                           name="q" 
-                           value="<?= htmlspecialchars($this->getData('search_keyword') ?? '') ?>" 
-                           placeholder="<?= __('输入组件名、模块名、分类...') ?>"
-                           class="form-control form-control-sm">
+                    <input type="text" id="q" name="q" value="<?= htmlspecialchars($this->getData('search_keyword') ?? '') ?>" placeholder="<?= __('输入组件名、模块名、分类...') ?>" class="w-input" data-size="sm">
                 </div>
                 <div class="filter-group">
                     <label for="module"><?= __('模块筛选') ?>：</label>
-                    <select id="module" name="module" class="form-control form-control-sm">
+                    <select id="module" name="module" class="w-input" data-size="sm">
                         <option value=""><?= __('全部模块') ?></option>
                         <?php foreach ($this->getData('all_modules') ?? [] as $module): ?>
                             <option value="<?= htmlspecialchars($module) ?>" 
@@ -68,7 +63,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
                 </div>
                 <div class="filter-group">
                     <label for="category"><?= __('分类筛选') ?>：</label>
-                    <select id="category" name="category" class="form-control form-control-sm">
+                    <select id="category" name="category" class="w-input" data-size="sm">
                         <option value=""><?= __('全部分类') ?></option>
                         <?php foreach ($this->getData('all_categories') ?? [] as $category): ?>
                             <option value="<?= htmlspecialchars($category) ?>" 
@@ -79,11 +74,11 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
                     </select>
                 </div>
                 <div class="filter-actions">
-                    <button type="submit" class="btn btn-sm" style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);">
-                        <i class="mdi mdi-filter"></i> <?= __('应用筛选') ?>
+                    <button type="submit" class="w-button" style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);" data-size="sm">
+                        <w:icon name="filter" size="sm"></w:icon> <?= __('应用筛选') ?>
                     </button>
-                    <a href="*/backend/components/index" class="btn btn-sm" style="background-color: var(--secondary-color, #74788d); color: white; border-color: var(--secondary-color, #74788d);">
-                        <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                    <a href="*/backend/components/index" class="w-button" style="background-color: var(--secondary-color, #74788d); color: white; border-color: var(--secondary-color, #74788d);" data-size="sm">
+                        <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
                     </a>
                 </div>
             </div>
@@ -103,13 +98,13 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
         </div>
         <?php if (empty($components)): ?>
             <div class="empty-state">
-                <i class="mdi mdi-puzzle-outline" style="font-size: 64px; color: var(--text-secondary, #74788d);"></i>
+                <w:icon name="puzzle" size="sm"></w:icon>
                 <h3><?= __('暂无组件信息') ?></h3>
                 <p><?= __('系统中还没有找到任何实现了 ComponentInterface 的组件。') ?></p>
             </div>
         <?php else: ?>
-            <div class="table-container">
-                <table class="table">
+            <div class="weline-table-container">
+                <table class="w-table">
                     <thead>
                         <tr>
                             <th><?= __('组件名称') ?></th>
@@ -129,12 +124,12 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
                                 </td>
                                 <td>
                                     <div class="component-module">
-                                        <span class="badge" style="background-color: var(--info-color, #4aa3ff); color: white;"><?= htmlspecialchars($component['module'] ?? '') ?></span>
+                                        <span class="w-badge" style="background-color: var(--info-color, #4aa3ff); color: white;"><?= htmlspecialchars($component['module'] ?? '') ?></span>
                                     </div>
                                 </td>
                                 <td>
                                     <div class="component-category">
-                                        <span class="badge" style="background-color: var(--success-color, #0ac074); color: white;"><?= htmlspecialchars($component['category'] ?? __('其他')) ?></span>
+                                        <span class="w-badge" style="background-color: var(--success-color, #0ac074); color: white;"><?= htmlspecialchars($component['category'] ?? __('其他')) ?></span>
                                     </div>
                                 </td>
                                 <td>
@@ -144,12 +139,8 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
                                 </td>
                                 <td>
                                     <div class="actions">
-                                        <button type="button" 
-                                                class="btn btn-sm btn-view-detail" 
-                                                data-component-class="<?= htmlspecialchars($fullClass) ?>"
-                                                style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);"
-                                                title="<?= __('查看详情') ?>">
-                                            <i class="mdi mdi-eye"></i> <?= __('详情') ?>
+                                        <button type="button" class="w-button weline-btn-view-detail" data-component-class="<?= htmlspecialchars($fullClass) ?>" style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);" title="<?= __('查看详情') ?>" data-size="sm">
+                                            <w:icon name="eye" size="sm"></w:icon> <?= __('详情') ?>
                                         </button>
                                     </div>
                                 </td>
@@ -185,7 +176,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
     transform: translateY(-2px);
 }
 
-.stats-cards .card-content {
+.stats-cards .weline-card-content {
     display: flex;
     flex-direction: column;
 }
@@ -196,7 +187,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
     margin-bottom: 0.5rem;
 }
 
-.stats-cards .card-value {
+.stats-cards .weline-card-value {
     font-size: 1.75rem;
     font-weight: 600;
     color: var(--text-color, #212529);
@@ -296,7 +287,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 }
 
 /* 表格样式 */
-.table-container {
+.weline-table-container {
     overflow-x: auto;
 }
 
@@ -364,23 +355,23 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 }
 
 /* 滚动条样式 */
-.table-container::-webkit-scrollbar {
+.weline-table-container::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
-.table-container::-webkit-scrollbar-track {
+.weline-table-container::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
     border-radius: 3px;
 }
 
-.table-container::-webkit-scrollbar-thumb {
+.weline-table-container::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
     border-radius: 3px;
     transition: background 0.2s ease;
 }
 
-.table-container::-webkit-scrollbar-thumb:hover {
+.weline-table-container::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover);
 }
 
@@ -401,34 +392,7 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 </style>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_component_admin) return;
-  g.__bqAdmin_component_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['component_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('component_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 组件详情查看功能
@@ -443,8 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 使用 OffCanvas 或 Modal 显示详情
             // 这里可以使用框架的 OffCanvas 组件
-            bqAdmin['component_admin']('*/backend/components/detail?class=' + encodeURIComponent(componentClass), {
-                method: 'GET',
+            Weline.adminRequest('component_admin', '*/backend/components/detail?class='+ encodeURIComponent(componentClass), { method:'GET',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
                 }
@@ -455,12 +418,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     // 显示组件详情
                     showComponentDetail(data.component);
                 } else {
-                    (window.parent&&window.parent.BackendToast?window.parent.BackendToast.error(data.message||'<?= addslashes(__('加载详情失败')) ?>'):console.error(data.message||'<?= addslashes(__('加载详情失败')) ?>'));
+                    (window.parent&&window.parent.Weline.UI.toast?window.parent.Weline.UI.toast.error(data.message||'<?= addslashes(__('加载详情失败')) ?>'):console.error(data.message||'<?= addslashes(__('加载详情失败')) ?>'));
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                (window.parent&&window.parent.BackendToast?window.parent.BackendToast.error('<?= addslashes(__('加载详情失败')) ?>'):console.error('<?= addslashes(__('加载详情失败')) ?>'));
+                (window.parent&&window.parent.Weline.UI.toast?window.parent.Weline.UI.toast.error('<?= addslashes(__('加载详情失败')) ?>'):console.error('<?= addslashes(__('加载详情失败')) ?>'));
             });
         });
     });
@@ -503,11 +466,11 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div style="margin-bottom: 1rem;">
                 <strong><?= __('模块') ?>：</strong>
-                <span class="badge" style="background-color: var(--info-color, #4aa3ff); color: white; padding: 0.25rem 0.5rem; border-radius: 4px;">${component.module || ''}</span>
+                <span class="w-badge" style="background-color: var(--info-color, #4aa3ff); color: white; padding: 0.25rem 0.5rem; border-radius: 4px;">${component.module || ''}</span>
             </div>
             <div style="margin-bottom: 1rem;">
                 <strong><?= __('分类') ?>：</strong>
-                <span class="badge" style="background-color: var(--success-color, #0ac074); color: white; padding: 0.25rem 0.5rem; border-radius: 4px;">${component.category || '<?= __('其他') ?>'}</span>
+                <span class="w-badge" style="background-color: var(--success-color, #0ac074); color: white; padding: 0.25rem 0.5rem; border-radius: 4px;">${component.category || '<?= __('其他') ?>'}</span>
             </div>
             <div style="margin-bottom: 1rem;">
                 <strong><?= __('完整类名') ?>：</strong>

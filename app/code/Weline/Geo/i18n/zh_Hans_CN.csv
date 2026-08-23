@@ -1,11 +1,11 @@
 ﻿"GEO feed item add","GEO feed item add"
-"Triggered when a GEO feed item is added.","Triggered when a GEO feed item is added."
-"GEO feed item update","GEO feed item update"
-"Triggered when a GEO feed item is updated.","Triggered when a GEO feed item is updated."
-"GEO feed item delete","GEO feed item delete"
-"Triggered when a GEO feed item is deleted.","Triggered when a GEO feed item is deleted."
-"GEO feed submit request","GEO feed submit request"
-"Unified entrypoint for syncing new or updated URLs into GEO feeds.","Unified entrypoint for syncing new or updated URLs into GEO feeds."
+"Triggered when a GEO feed item is added.","添加 GEO feed 项目时触发。"
+"GEO feed item update","GEO Feed 项目更新"
+"Triggered when a GEO feed item is updated.","当 GEO feed 项目更新时触发。"
+"GEO feed item delete","GEO Feed 项目删除"
+"Triggered when a GEO feed item is deleted.","当删除 GEO Feed 项目时触发。"
+"GEO feed submit request","GEO Feed 提交请求"
+"Unified entrypoint for syncing new or updated URLs into GEO feeds.","用于将新的或更新的 URL 同步到 GEO 源的统一入口点。"
 "website_id 必须是非负整数","website_id 必须是非负整数"
 "website_id 不能为负数","website_id 不能为负数"
 加载Feed列表失败：%{1},加载Feed列表失败：%{1}
@@ -15,7 +15,7 @@ Feed不存在,Feed不存在
 文章,文章
 自定义,自定义
 数据库,数据库
-API,API
+API,应用程序编程接口
 实时,实时
 每小时,每小时
 每天,每天
@@ -28,11 +28,15 @@ API,API
 请选择Feed,请选择Feed
 生成成功,生成成功
 生成失败：%{1},生成失败：%{1}
-Feed管理,Feed管理
+Feed管理,饲料管理
+circle,圆圈
 查看Feed列表,查看Feed列表
-编辑Feed,编辑Feed
-保存Feed,保存Feed
-生成Feed,生成Feed
+编辑Feed,编辑提要
+edit,编辑
+保存Feed,保存饲料
+save,节省
+生成Feed,生成饲料
+refresh,刷新
 加载平台列表失败：%{1},加载平台列表失败：%{1}
 平台不存在,平台不存在
 加载平台失败：%{1},加载平台失败：%{1}
@@ -47,24 +51,30 @@ Feed管理,Feed管理
 连接失败,连接失败
 测试失败：%{1},测试失败：%{1}
 平台管理,平台管理
+cloud,云
 查看平台列表,查看平台列表
 编辑平台,编辑平台
 保存平台,保存平台
 平台账户管理,平台账户管理
+user,用户
 保存账户,保存账户
 测试连接,测试连接
+link,关联
 加载推送历史失败：%{1},加载推送历史失败：%{1}
 加载推送页面失败：%{1},加载推送页面失败：%{1}
 请选择推送平台,请选择推送平台
 推送失败：%{1},推送失败：%{1}
 推送管理,推送管理
+arrow-right,向右箭头
 查看推送历史,查看推送历史
+history,历史
 一键推送,一键推送
 执行推送,执行推送
+play,玩
 "GEO 协议与 AI 搜索发现","GEO 协议与 AI 搜索发现"
 "llms.txt / ai.txt","llms.txt / ai.txt"
 "启用 AI 搜索发现文件","启用 AI 搜索发现文件"
-"GEO Feed","GEO Feed"
+"GEO Feed",地球饲料
 "启用 JSON Feed / RSS Feed","启用 JSON Feed / RSS Feed"
 自动推送,自动推送
 "内容更新后由 Weline_Geo 自动处理推送","内容更新后由 Weline_Geo 自动处理推送"
@@ -93,7 +103,7 @@ ID,ID
 平台代码,平台代码
 平台名称,平台名称
 API端点,API端点
-Feed格式,Feed格式
+Feed格式,饲料格式
 状态,状态
 操作,操作
 暂无数据,暂无数据
@@ -122,14 +132,14 @@ API密钥（可选）,API密钥（可选）
 设为默认账户,设为默认账户
 测试成功,测试成功
 测试失败,测试失败
-选择Feed,选择Feed
+选择Feed,选择饲料
 选择平台,选择平台
 开始推送,开始推送
 提示,提示
 请选择Feed和至少一个平台,请选择Feed和至少一个平台
 推送失败,推送失败
 推送历史,推送历史
-"Feed ID","Feed ID"
+"Feed ID","饲料 ID"
 "平台 ID","平台 ID"
 推送类型,推送类型
 条目数,条目数
@@ -137,15 +147,16 @@ API密钥（可选）,API密钥（可选）
 待处理,待处理
 查看错误,查看错误
 错误信息,错误信息
-添加Feed,添加Feed
-Feed名称,Feed名称
-Feed类型,Feed类型
+添加Feed,添加饲料
+Feed名称,饲料名称
+Feed类型,饲料类型
 数据源,数据源
 更新频率,更新频率
 最后生成,最后生成
 数据源类型,数据源类型
 数据源配置（JSON）,数据源配置（JSON）
-"Feed URL","Feed URL"
+"Feed URL",提要网址
 启用自动推送,启用自动推送
 创建队列失败。,创建队列失败。
-"""GEO feed item add""","GEO feed item add"
+"""GEO feed item add""","“GEO Feed 项目添加”"
+生成式搜索引擎优化,生成式搜索引擎优化

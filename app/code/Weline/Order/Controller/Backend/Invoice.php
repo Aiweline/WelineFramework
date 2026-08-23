@@ -12,7 +12,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Service\OrderTradeAdminCommandException;
 use Weline\Order\Service\OrderTradeAdminCommandService;
 
-#[Acl('Weline_Order::invoice_controller', '订单发票控制器', 'mdi-file-document', '支付 effect 驱动的订单发票管理', 'Weline_Backend::order_group')]
+#[Acl('Weline_Order::invoice_controller', '订单发票控制器', 'file', '支付 effect 驱动的订单发票管理', 'Weline_Backend::order_group')]
 final class Invoice extends BackendController
 {
     use OrderObjectAuthorizationTrait;
@@ -24,7 +24,7 @@ final class Invoice extends BackendController
         $this->commands = $objectManager->getInstance(OrderTradeAdminCommandService::class);
     }
 
-    #[Acl('Weline_Order::invoice_manage', '查看订单发票', 'mdi-format-list-bulleted', '查看支付 effect 和最小发票', 'Weline_Backend::order_group')]
+    #[Acl('Weline_Order::invoice_manage', '查看订单发票', 'list', '查看支付 effect 和最小发票', 'Weline_Backend::order_group')]
     public function index(): string
     {
         $candidates = [];
@@ -47,7 +47,7 @@ final class Invoice extends BackendController
         return $this->fetch();
     }
 
-    #[Acl('Weline_Order::invoice_execute', '处理开票 effect', 'mdi-file-plus', '在 Payment outbox 事务内幂等生成最小发票', 'Weline_Order::invoice_manage')]
+    #[Acl('Weline_Order::invoice_execute', '处理开票 effect', 'plus', '在 Payment outbox 事务内幂等生成最小发票', 'Weline_Order::invoice_manage')]
     public function execute(): mixed
     {
         $outboxCode = trim((string)$this->request->getPost('outbox_code', ''));

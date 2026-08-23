@@ -4,13 +4,13 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_Vendor::commerce:partner:control-center" name="vendor_control_center"
           title="商家管理" action="" parent="Weline_Backend::commerce:partner:group"
-          icon="mdi mdi-storefront-outline" order="10">
-        <menu source="Weline_Vendor::commerce:partner:vendors" name="vendor_vendors" title="商家档案" action="vendor/backend/controlcenter/vendors" icon="mdi mdi-store-outline" order="10"/>
-        <menu source="Weline_Vendor::commerce:partner:authorizations" name="vendor_authorizations" title="站点授权" action="vendor/backend/controlcenter/authorizations" icon="mdi mdi-shield-account-outline" order="20"/>
-        <menu source="Weline_Vendor::commerce:partner:product-bindings" name="vendor_product_bindings" title="商品绑定" action="vendor/backend/controlcenter/productbindings" icon="mdi mdi-link-variant" order="30"/>
-        <menu source="Weline_Vendor::commerce:partner:split-rules" name="vendor_split_rules" title="拆分规则" action="vendor/backend/controlcenter/splitrules" icon="mdi mdi-call-split" order="40"/>
-        <menu source="Weline_Vendor::commerce:partner:payouts" name="vendor_payouts" title="结算账本" action="vendor/backend/controlcenter/payouts" icon="mdi mdi-cash-check" order="50"/>
-        <menu source="Weline_Vendor::commerce:partner:reversals" name="vendor_reversals" title="退款冲正" action="vendor/backend/controlcenter/reversals" icon="mdi mdi-cash-refund" order="60"/>
-        <menu source="Weline_Vendor::commerce:partner:migration" name="vendor_migration" title="迁移状态" action="vendor/backend/controlcenter/migration" icon="mdi mdi-database-eye-outline" order="70"/>
+          icon="store" order="10">
+        <menu source="Weline_Vendor::commerce:partner:vendors" name="vendor_vendors" title="商家档案" action="vendor/backend/controlcenter/vendors" icon="store" order="10"/>
+        <menu source="Weline_Vendor::commerce:partner:authorizations" name="vendor_authorizations" title="站点授权" action="vendor/backend/controlcenter/authorizations" icon="user" order="20"/>
+        <menu source="Weline_Vendor::commerce:partner:product-bindings" name="vendor_product_bindings" title="商品绑定" action="vendor/backend/controlcenter/productbindings" icon="link" order="30"/>
+        <menu source="Weline_Vendor::commerce:partner:split-rules" name="vendor_split_rules" title="拆分规则" action="vendor/backend/controlcenter/splitrules" icon="circle" order="40"/>
+        <menu source="Weline_Vendor::commerce:partner:payouts" name="vendor_payouts" title="结算账本" action="vendor/backend/controlcenter/payouts" icon="check" order="50"/>
+        <menu source="Weline_Vendor::commerce:partner:reversals" name="vendor_reversals" title="退款冲正" action="vendor/backend/controlcenter/reversals" icon="circle" order="60"/>
+        <menu source="Weline_Vendor::commerce:partner:migration" name="vendor_migration" title="迁移状态" action="vendor/backend/controlcenter/migration" icon="eye" order="70"/>
     </menu>
 </menus>

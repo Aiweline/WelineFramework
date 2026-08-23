@@ -487,6 +487,13 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             $dependencies[] = __DIR__ . '/../view/templates/maintenance_api.json';
         } else {
             $dependencies[] = __DIR__ . '/../view/templates/maintenance.phtml';
+            $dependencies[] = __DIR__ . '/../view/statics/css/maintenance.css';
+            $dependencies[] = __DIR__ . '/../view/statics/js/maintenance.js';
+            $dependencies[] = BP . 'app/code/Weline/Theme/view/statics/ui/weline-foundation.css';
+            $dependencies[] = BP . 'app/code/Weline/Theme/view/statics/ui/weline-frontend.css';
+            $dependencies[] = BP . 'app/code/Weline/Theme/view/statics/ui/weline-ui.js';
+            $dependencies[] = BP . 'app/code/Weline/Theme/view/statics/ui/pages/weline-maintenance.css';
+            $dependencies[] = BP . 'app/code/Weline/Theme/view/statics/ui/pages/weline-maintenance.js';
             $dependencies[] = BP . 'app/code/Weline/I18n/view/hooks/header-language-switcher.phtml';
             $dependencies[] = BP . 'app/code/Weline/I18n/view/templates/Frontend/header-choice-selector-assets.phtml';
             $dependencies[] = BP . 'app/code/Weline/I18n/Taglib/LanguageSwitcher.php';
@@ -776,9 +783,18 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         string $recoveryNotice,
         string $backHome
     ): string {
+        $escape = static fn(string $value): string => \htmlspecialchars($value, \ENT_QUOTES, 'UTF-8');
+        $htmlLang = $escape($htmlLang);
+        $title = $escape($title);
+        $heading = $escape($heading);
+        $message1 = $escape($message1);
+        $message2 = $escape($message2);
+        $recoveryNotice = $escape($recoveryNotice);
+        $backHome = $escape($backHome);
+
         return <<<HTML
 <!DOCTYPE html>
-<html lang="{$htmlLang}">
+<html lang="{$htmlLang}" data-w-area="frontend" data-theme-preference="system" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -787,122 +803,25 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>{$title}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
-            padding: 20px;
-        }
-        .container { text-align: center; max-width: 500px; }
-        .icon { font-size: 64px; margin-bottom: 24px; }
-        h1 { font-size: 2rem; margin-bottom: 16px; }
-        p { font-size: 1.1rem; opacity: 0.9; line-height: 1.6; margin-bottom: 32px; }
-        .back-btn {
-            display: inline-block;
-            padding: 12px 24px;
-            border: 2px solid rgba(255,255,255,0.5);
-            border-radius: 8px;
-            color: #fff;
-            text-decoration: none;
-            transition: all 0.3s;
-        }
-        .back-btn:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
-    </style>
+    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/weline-foundation.css">
+    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/weline-frontend.css">
+    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/pages/weline-maintenance.css">
+    <script type="module" src="/Weline/Theme/view/statics/ui/weline-ui.js"></script>
+    <script type="module" src="/Weline/Theme/view/statics/ui/pages/weline-maintenance.js"></script>
 </head>
-<body>
-    <div class="container">
-        <div class="icon">🔧</div>
-        <h1>{$heading}</h1>
-        <p>{$message1}<br>{$message2}</p>
-        <p>{$recoveryNotice}</p>
-        <a href="/" class="back-btn">← {$backHome}</a>
-    </div>
-    <script>
-        (function () {
-            var initialDelay = 5000;
-            var maxDelay = 30000;
-            var jitter = 1500;
-            var timer = 0;
-
-            if (!window.fetch || !window.URL) {
-                return;
-            }
-
-            function getProbeUrl() {
-                var url = new URL(window.location.href);
-                if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
-                    url = new URL('/', window.location.origin);
-                }
-                url.hash = '';
-                url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
-                return url.toString();
-            }
-
-            function schedule(delay) {
-                if (timer) {
-                    window.clearTimeout(timer);
-                }
-                timer = window.setTimeout(function () {
-                    timer = 0;
-                    check();
-                }, delay + Math.floor(Math.random() * jitter));
-            }
-
-            function probe(method) {
-                return window.fetch(getProbeUrl(), {
-                    method: method,
-                    cache: 'no-store',
-                    credentials: 'same-origin',
-                    redirect: 'follow',
-                    headers: {
-                        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
-                        'X-Maintenance-Recovery-Check': '1'
-                    }
-                });
-            }
-
-            function handleResponse(response) {
-                if (response.status === 200) {
-                    window.location.reload();
-                    return;
-                }
-                schedule(response.status === 503 ? initialDelay : maxDelay);
-            }
-
-            function check() {
-                if (document.hidden) {
-                    return;
-                }
-
-                probe('HEAD').then(function (response) {
-                    if (response.status === 405 || response.status === 501) {
-                        return probe('GET').then(handleResponse);
-                    }
-                    handleResponse(response);
-                }).catch(function () {
-                    schedule(maxDelay);
-                });
-            }
-
-            document.addEventListener('visibilitychange', function () {
-                if (document.hidden) {
-                    if (timer) {
-                        window.clearTimeout(timer);
-                        timer = 0;
-                    }
-                    return;
-                }
-                schedule(0);
-            });
-            schedule(initialDelay);
-        })();
-    </script>
+<body class="w-maintenance-page">
+    <main class="w-container w-maintenance-page__main">
+        <section class="w-card w-maintenance-page__hero">
+            <div class="w-card__body">
+                <div class="w-maintenance-page__mark" aria-hidden="true"><w-icon name="settings" size="xl"></w-icon></div>
+                <h1>{$heading}</h1>
+                <p class="w-maintenance-page__subtitle">{$message1}<br>{$message2}</p>
+                <div class="w-progress w-maintenance-page__progress"><div class="w-progress__bar"></div></div>
+                <p class="w-maintenance-page__recovery" aria-live="polite">{$recoveryNotice}</p>
+                <a href="/" class="w-button" data-tone="primary"><w-icon name="home" size="sm"></w-icon><span>{$backHome}</span></a>
+            </div>
+        </section>
+    </main>
 </body>
 </html>
 HTML;

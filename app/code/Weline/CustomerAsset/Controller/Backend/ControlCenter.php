@@ -16,44 +16,44 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_CustomerAsset::commerce:partner:control-center', '客户资产', 'mdi-wallet-outline', '客户资产账户、预留、结算、退回与一致性诊断', 'Weline_Backend::commerce:partner:group')]
+#[Acl('Weline_CustomerAsset::commerce:partner:control-center', '客户资产', 'circle', '客户资产账户、预留、结算、退回与一致性诊断', 'Weline_Backend::commerce:partner:group')]
 final class ControlCenter extends BackendController
 {
     public function __construct(private readonly CustomerAssetAdminService $adminService)
     {
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:accounts', '资产账户', 'mdi-account-cash-outline', '查看客户资产账户')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:accounts', '资产账户', 'user', '查看客户资产账户')]
     public function accounts(): string
     {
         return $this->renderWorkspace('accounts', '资产账户', ['资产账户' => [AssetAccount::class, ['account_id', 'customer_id', 'website_id', 'asset_code', 'namespace', 'available_minor', 'reserved_minor', 'version', 'created_at', 'updated_at']]], [], ['kind' => 'credit', 'action' => 'customer_asset/backend/controlcenter/credit']);
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:ledger', '资产账本', 'mdi-book-open-variant', '查看客户资产账本')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:ledger', '资产账本', 'book', '查看客户资产账本')]
     public function ledger(): string
     {
         return $this->renderWorkspace('ledger', '资产账本', ['账本记录' => [AssetLedger::class, ['entry_id', 'event_id', 'account_id', 'customer_id', 'website_id', 'asset_code', 'namespace', 'event_type', 'amount_minor', 'reservation_id', 'balance_after_available', 'balance_after_reserved', 'account_version', 'created_at']]]);
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:reservations', '资产预留', 'mdi-lock-clock', '查看客户资产预留')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:reservations', '资产预留', 'clock', '查看客户资产预留')]
     public function reservations(): string
     {
         return $this->renderWorkspace('reservations', '资产预留', ['预留记录' => [AssetReservation::class, ['reservation_id', 'account_id', 'customer_id', 'website_id', 'asset_code', 'namespace', 'amount_minor', 'returned_amount_minor', 'status', 'version', 'terminal_event_id', 'created_at', 'updated_at', 'terminal_at']]], [], ['kind' => 'reserve', 'action' => 'customer_asset/backend/controlcenter/reserve']);
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:settlements', '资产结算', 'mdi-cash-check', '查看已结算客户资产')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:settlements', '资产结算', 'cash', '查看已结算客户资产')]
     public function settlements(): string
     {
         return $this->renderWorkspace('settlements', '资产结算', ['已结算预留' => [AssetReservation::class, ['reservation_id', 'account_id', 'customer_id', 'website_id', 'asset_code', 'namespace', 'amount_minor', 'returned_amount_minor', 'status', 'version', 'terminal_event_id', 'terminal_at'], ['status' => AssetReservation::STATUS_COMMITTED]]], [], ['kind' => 'commit', 'action' => 'customer_asset/backend/controlcenter/commit']);
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:returns', '资产退回', 'mdi-cash-refund', '查看已退回客户资产')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:returns', '资产退回', 'cash', '查看已退回客户资产')]
     public function returns(): string
     {
         return $this->renderWorkspace('returns', '资产退回', ['退回账本' => [AssetLedger::class, ['entry_id', 'event_id', 'account_id', 'customer_id', 'website_id', 'asset_code', 'namespace', 'event_type', 'amount_minor', 'reservation_id', 'balance_after_available', 'balance_after_reserved', 'account_version', 'created_at'], ['event_type' => AssetLedger::TYPE_RETURN]]], [], ['kind' => 'return', 'action' => 'customer_asset/backend/control-center/return-committed']);
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:exceptions', '一致性异常', 'mdi-alert-decagram-outline', '只读诊断客户资产一致性异常')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:exceptions', '一致性异常', 'warning', '只读诊断客户资产一致性异常')]
     public function exceptions(): string
     {
         $websiteId = max(0, (int)$this->request->getParam('website_id', 0));
@@ -70,7 +70,7 @@ final class ControlCenter extends BackendController
         return $this->renderWorkspace('exceptions', '一致性异常', [], $status);
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:migration', '迁移状态', 'mdi-database-eye-outline', '只读查看客户资产迁移状态')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:migration', '迁移状态', 'eye', '只读查看客户资产迁移状态')]
     public function migration(): string
     {
         return $this->renderWorkspace('migration', '迁移状态', [], $this->rolloutStatus() + [
@@ -79,25 +79,25 @@ final class ControlCenter extends BackendController
         ]);
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:accounts', '资产入账', 'mdi-cash-plus', '向隔离命名空间资产账户入账')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:accounts', '资产入账', 'plus', '向隔离命名空间资产账户入账')]
     public function credit()
     {
         return $this->executeWrite('credit', 'accounts', '资产入账成功。');
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:reservations', '预留资产', 'mdi-lock-plus-outline', '创建客户资产预留')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:reservations', '预留资产', 'plus', '创建客户资产预留')]
     public function reserve()
     {
         return $this->executeWrite('reserve', 'reservations', '资产预留成功。');
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:settlements', '结算资产', 'mdi-cash-check', '提交资产预留结算')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:settlements', '结算资产', 'cash', '提交资产预留结算')]
     public function commit()
     {
         return $this->executeWrite('commit', 'settlements', '资产结算成功。');
     }
 
-    #[Acl('Weline_CustomerAsset::commerce:partner:returns', '退回资产', 'mdi-cash-refund', '退回已结算资产')]
+    #[Acl('Weline_CustomerAsset::commerce:partner:returns', '退回资产', 'cash', '退回已结算资产')]
     public function returnCommitted()
     {
         return $this->executeWrite('returnCommitted', 'returns', '资产退回成功。');

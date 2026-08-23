@@ -17,6 +17,7 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\AdapterScanner;
+use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
@@ -31,7 +32,7 @@ use Weline\Framework\Acl\Acl;
  * - 适配器状态管理
  * - 适配器扫描和更新
  */
-#[Acl('Weline_Ai::ai_adapter_manager', '场景适配器管理', 'mdi-puzzle', '场景适配器管理', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_adapter_manager', '场景适配器管理', 'puzzle', '场景适配器管理', 'Weline_Backend::ai_group')]
 class Adapter extends BackendController
 {
     /**
@@ -108,17 +109,49 @@ class Adapter extends BackendController
     {
         /** @var AiModel $aiModel */
         $aiModel = ObjectManager::getInstance(AiModel::class);
-        return $aiModel->reset()
+        $fields = AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ','
+            . AiModel::schema_fields_PRIMARY_MODALITY . ',' . AiModel::schema_fields_SUPPLIER;
+        $active = $aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-            ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ','
-                . AiModel::schema_fields_PRIMARY_MODALITY . ',' . AiModel::schema_fields_SUPPLIER)
+            ->fields($fields)
             ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
             ->select()
             ->fetchArray();
+
+        // 兼容：此前本地模型因「未测通不激活」被挡在绑定列表外，补进可选集
+        $local = $aiModel->reset()
+            ->where(AiModel::schema_fields_MODEL_SOURCE, AiModel::SOURCE_LOCAL)
+            ->where(AiModel::schema_fields_IS_ACTIVE, 0)
+            ->fields($fields)
+            ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        if ($local === []) {
+            return $active;
+        }
+
+        $seen = [];
+        foreach ($active as $row) {
+            $code = (string)($row[AiModel::schema_fields_MODEL_CODE] ?? '');
+            if ($code !== '') {
+                $seen[$code] = true;
+            }
+        }
+        foreach ($local as $row) {
+            $code = (string)($row[AiModel::schema_fields_MODEL_CODE] ?? '');
+            if ($code === '' || isset($seen[$code])) {
+                continue;
+            }
+            $active[] = $row;
+            $seen[$code] = true;
+        }
+
+        return $active;
     }
 
     /**
-     * @return array<string,true> provider_code => true when an active, connected account has an API key
+     * @return array<string,true> provider_code => true when an active account is usable for binding
      */
     private function getReadyProviderCodes(): array
     {
@@ -126,14 +159,26 @@ class Adapter extends BackendController
         $account = ObjectManager::getInstance(Account::class);
         $rows = $account->reset()
             ->where(Account::schema_fields_IS_ACTIVE, 1)
-            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
             ->select()
             ->fetchArray();
         $ready = [];
         foreach ($rows as $row) {
             $code = \strtolower(\trim((string)($row[Account::schema_fields_PROVIDER_CODE] ?? '')));
+            if ($code === '') {
+                continue;
+            }
+            $isCustom = VendorConfigManager::isCustomProvider($code);
+            $status = (string)($row[Account::schema_fields_CONNECTION_STATUS] ?? '');
             $apiKey = \trim((string)($row[Account::schema_fields_API_KEY] ?? ''));
-            if ($code === '' || $apiKey === '') {
+            if ($isCustom) {
+                // 本地/自定义：允许空 Key；failed 以外均可调度
+                if ($status === Account::STATUS_FAILED) {
+                    continue;
+                }
+                $ready[$code] = true;
+                continue;
+            }
+            if ($status !== Account::STATUS_SUCCESS || $apiKey === '') {
                 continue;
             }
             $ready[$code] = true;
@@ -251,7 +296,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_list', '查看场景适配器列表', 'mdi-view-list', '查看场景适配器列表')]
+    #[Acl('Weline_Ai::ai_adapter_list', '查看场景适配器列表', 'list', '查看场景适配器列表')]
     public function index(): string
     {
         if ($this->request->getGet('embed') === '1') {
@@ -285,7 +330,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_detail', '查看场景适配器详情', 'mdi-information', '查看场景适配器详情')]
+    #[Acl('Weline_Ai::ai_adapter_detail', '查看场景适配器详情', 'info', '查看场景适配器详情')]
     public function detailOffcanvas(): string
     {
         $this->layoutType = 'default.blank';
@@ -321,7 +366,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_detail_page', '查看场景适配器详情页面', 'mdi-file-document', '查看场景适配器完整详情页面')]
+    #[Acl('Weline_Ai::ai_adapter_detail_page', '查看场景适配器详情页面', 'file', '查看场景适配器完整详情页面')]
     public function detail(): string
     {
         $this->layoutType = 'default.blank';
@@ -357,7 +402,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_scan', '扫描场景适配器', 'mdi-radar', '扫描场景适配器')]
+    #[Acl('Weline_Ai::ai_adapter_scan', '扫描场景适配器', 'search', '扫描场景适配器')]
     public function scan(): string
     {
         try {
@@ -395,7 +440,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_toggle', '切换场景适配器状态', 'mdi-toggle-switch', '启用或禁用场景适配器')]
+    #[Acl('Weline_Ai::ai_adapter_toggle', '切换场景适配器状态', 'switch', '启用或禁用场景适配器')]
     public function toggleStatus(): string
     {
         $id = (int)$this->request->getBodyParam('id', $this->request->getPost('id'));
@@ -439,7 +484,7 @@ class Adapter extends BackendController
      *
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_list', '查看场景适配器列表', 'mdi-view-list', '查看场景适配器列表')]
+    #[Acl('Weline_Ai::ai_adapter_list', '查看场景适配器列表', 'list', '查看场景适配器列表')]
     public function getModelOptions(): string
     {
         try {
@@ -465,7 +510,7 @@ class Adapter extends BackendController
      *
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_toggle', '切换场景适配器状态', 'mdi-toggle-switch', '启用或禁用场景适配器')]
+    #[Acl('Weline_Ai::ai_adapter_toggle', '切换场景适配器状态', 'switch', '启用或禁用场景适配器')]
     public function postBatchSaveDefaultModel(): string
     {
         $ids = $this->parseAdapterIds($this->request->getBodyParam('ids', $this->request->getPost('ids', [])));
@@ -523,7 +568,7 @@ class Adapter extends BackendController
      *
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_toggle', 'Save adapter model bindings', 'mdi-toggle-switch', 'Save adapter model bindings')]
+    #[Acl('Weline_Ai::ai_adapter_toggle', 'Save adapter model bindings', 'switch', 'Save adapter model bindings')]
     public function postBatchSaveModelBindings(): string
     {
         $ids = $this->parseAdapterIds($this->request->getBodyParam('ids', $this->request->getPost('ids', [])));
@@ -570,7 +615,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_info', '获取场景适配器信息', 'mdi-information-outline', '获取场景适配器信息')]
+    #[Acl('Weline_Ai::ai_adapter_info', '获取场景适配器信息', 'info', '获取场景适配器信息')]
     public function getAdapterInfo(): string
     {
         $code = $this->request->getGet('code');
@@ -610,7 +655,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_cleanup', '清理无效场景适配器', 'mdi-delete-sweep', '清理无效场景适配器')]
+    #[Acl('Weline_Ai::ai_adapter_cleanup', '清理无效场景适配器', 'trash', '清理无效场景适配器')]
     public function cleanup(): string
     {
         try {
@@ -631,7 +676,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_stats', '查看场景适配器统计', 'mdi-chart-bar', '查看场景适配器统计信息')]
+    #[Acl('Weline_Ai::ai_adapter_stats', '查看场景适配器统计', 'chart', '查看场景适配器统计信息')]
     public function getStats(): string
     {
         try {
@@ -654,7 +699,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_delete', '删除场景适配器', 'mdi-delete', '删除场景适配器')]
+    #[Acl('Weline_Ai::ai_adapter_delete', '删除场景适配器', 'trash', '删除场景适配器')]
     public function postDelete(): string
     {
         $id = (int)$this->request->getBodyParam('id', $this->request->getPost('id'));
@@ -695,7 +740,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_batch_delete', '批量删除场景适配器', 'mdi-delete-sweep', '批量删除场景适配器')]
+    #[Acl('Weline_Ai::ai_adapter_batch_delete', '批量删除场景适配器', 'trash', '批量删除场景适配器')]
     public function postBatchDelete(): string
     {
         $ids = $this->request->getBodyParam('ids', $this->request->getPost('ids', []));
@@ -738,7 +783,7 @@ class Adapter extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_adapter_batch_toggle', '批量切换场景适配器状态', 'mdi-toggle-switch-outline', '批量启用或禁用场景适配器')]
+    #[Acl('Weline_Ai::ai_adapter_batch_toggle', '批量切换场景适配器状态', 'switch', '批量启用或禁用场景适配器')]
     public function postBatchToggle(): string
     {
         $ids = $this->request->getBodyParam('ids', $this->request->getPost('ids', []));

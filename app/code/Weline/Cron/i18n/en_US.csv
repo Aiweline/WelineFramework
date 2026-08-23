@@ -1,8 +1,8 @@
 ﻿"Cron 查询器不支持的操作：%{1}","Cron 查询器不支持的操作：%{1}"
-计划任务查询,计划任务查询
-提供计划任务安装状态等公开查询能力,提供计划任务安装状态等公开查询能力
-获取当前平台计划任务的安装状态,获取当前平台计划任务的安装状态
-"计划任务配置作用域，默认 Weline_Cron","计划任务配置作用域，默认 Weline_Cron"
+计划任务查询,"Scheduled task query"
+提供计划任务安装状态等公开查询能力,"Provides public query capabilities such as scheduled task installation status"
+获取当前平台计划任务的安装状态,"Get the installation status of the current platform scheduled task"
+"计划任务配置作用域，默认 Weline_Cron","Scheduled task configuration scope, default Weline_Cron"
 获取计划任务手动运行帮助,"Get scheduled task manual-run help"
 获取计划任务运行日志列表,"Get scheduled task run-log list"
 读取计划任务历史日志内容,"Read scheduled task history log content"
@@ -15,7 +15,7 @@
 系统定时任务移除失败：%{1},"Failed to remove the system scheduled task: %{1}"
 系统定时任务已移除：%{1},"System scheduled task has been removed: %{1}"
 "系统计划任务：%{1} ,成功移除!","Scheduled task: %{1} , successfully removed!"
-系统定时任务维护失败：%{1}，已跳过，不影响本次系统更新。错误：%{2},系统定时任务维护失败：%{1}，已跳过，不影响本次系统更新。错误：%{2}
+系统定时任务维护失败：%{1}，已跳过，不影响本次系统更新。错误：%{2},"System scheduled task maintenance failed: %{1}, skipped, does not affect this system update. Error: %{2}"
 秒,second
 分,Minute
 小时,Hour
@@ -30,37 +30,36 @@
 任务状态已变化，请刷新后重试,"The task state changed. Refresh and try again."
 "CSRF 验证失败","CSRF validation failed"
 执行名不能为空,"Execution name cannot be empty"
-计划任务接口,计划任务接口
-"mdi mdi-clock-outline","mdi mdi-clock-outline"
-计划任务后台（列表、锁定、手动运行等）,计划任务后台（列表、锁定、手动运行等）
-计划任务列表,计划任务列表
-"mdi mdi-format-list-bulleted","mdi mdi-format-list-bulleted"
-查看计划任务列表,查看计划任务列表
-锁定计划任务,锁定计划任务
-"mdi mdi-lock","mdi mdi-lock"
-锁定定时任务,锁定定时任务
-解锁计划任务,解锁计划任务
-"mdi mdi-lock-open","mdi mdi-lock-open"
-解锁定时任务,解锁定时任务
-手动运行帮助,手动运行帮助
-"mdi mdi-help-circle-outline","mdi mdi-help-circle-outline"
-"计划任务 SSE 手动运行说明 JSON","计划任务 SSE 手动运行说明 JSON"
-手动运行SSE（GET）,手动运行SSE（GET）
-"mdi mdi-play-network","mdi mdi-play-network"
-"计划任务真实执行 SSE 流（GET 兼容入口）","计划任务真实执行 SSE 流（GET 兼容入口）"
-手动运行SSE,手动运行SSE
-"计划任务真实执行 SSE 流","计划任务真实执行 SSE 流"
-运行日志列表,运行日志列表
-"mdi mdi-history","mdi mdi-history"
-计划任务调度日志历史与当前文件信息,计划任务调度日志历史与当前文件信息
-运行日志内容,运行日志内容
-"mdi mdi-file-document-outline","mdi mdi-file-document-outline"
-读取单次调度归档日志全文,读取单次调度归档日志全文
-运行日志SSE（GET）,运行日志SSE（GET）
-"mdi mdi-access-point","mdi mdi-access-point"
-"当前调度日志实时尾随（GET 兼容入口）","当前调度日志实时尾随（GET 兼容入口）"
-运行日志SSE,运行日志SSE
-当前调度日志实时尾随（SSE）,当前调度日志实时尾随（SSE）
+计划任务接口,"Scheduled task interface"
+clock,clock
+计划任务后台（列表、锁定、手动运行等）,"Scheduled task background (list, lock, manual run, etc.)"
+计划任务列表,"Scheduled task list"
+list,list
+查看计划任务列表,"View the list of scheduled tasks"
+锁定计划任务,"Lock scheduled tasks"
+lock,lock
+锁定定时任务,"Lock scheduled tasks"
+解锁计划任务,"Unlock scheduled tasks"
+解锁定时任务,"unlock task"
+手动运行帮助,"Run help manually"
+help,help
+"计划任务 SSE 手动运行说明 JSON","Scheduled task SSE manual running instructions JSON"
+手动运行SSE（GET）,"Run SSE manually (GET)"
+play,play
+"计划任务真实执行 SSE 流（GET 兼容入口）","Scheduled tasks actually execute SSE flow (GET compatible entry)"
+手动运行SSE,"Run SSE manually"
+"计划任务真实执行 SSE 流","Planned tasks actually execute the SSE flow"
+运行日志列表,"Run log list"
+history,history
+计划任务调度日志历史与当前文件信息,"Planned task scheduling log history and current file information"
+运行日志内容,"Run log content"
+file,file
+读取单次调度归档日志全文,"Read the full text of a single dispatch archive log"
+运行日志SSE（GET）,"Run log SSE (GET)"
+wifi,wifi
+"当前调度日志实时尾随（GET 兼容入口）","Current scheduling log real-time tracking (GET compatible entry)"
+运行日志SSE,"Run log SSE"
+当前调度日志实时尾随（SSE）,"Current Scheduling Log Live Trailing (SSE)"
 全部,All
 待执行,"To execute"
 运行中,Running
@@ -140,7 +139,7 @@ ID,ID
 "参数 execute_name 不能为空","Parameter execute_name cannot be empty"
 "检测到 crontab 命令不可用，正在尝试自动安装依赖...","Crontab command not found"
 "crontab 依赖已安装 ✔","Crontab dependency installed ✔"
-"系统定时任务：%{1} ,已安装！","系统定时任务：%{1} ,已安装！"
+"系统定时任务：%{1} ,已安装！","System scheduled task: %{1}, installed!"
 "系统定时任务：%{1} ,未安装！","System scheduled task: %{1} , not installed!"
 系统-其他定时任务：,"System - Other scheduled tasks:"
 系统-定时计划任务：,"System - Scheduled plan tasks:"
@@ -199,6 +198,15 @@ ID,ID
 受管计划任务失败，任务未提供错误摘要。,"The managed scheduled task failed without an error summary."
 等待受管计划任务时丢失状态围栏：%{1},"Lost the managed scheduled-task state fence while waiting: %{1}"
 """Cron 查询器不支持的操作：%{1}""","Unsupported Cron query operation: %{1}"
+"mdi mdi-clock-outline","mdi mdi-clock-outline"
+"mdi mdi-format-list-bulleted","mdi mdi-format-list-bulleted"
+"mdi mdi-lock","mdi mdi-lock"
+"mdi mdi-lock-open","mdi mdi-lock-open"
+"mdi mdi-help-circle-outline","mdi mdi-help-circle-outline"
+"mdi mdi-play-network","mdi mdi-play-network"
+"mdi mdi-history","mdi mdi-history"
+"mdi mdi-file-document-outline","mdi mdi-file-document-outline"
+"mdi mdi-access-point","mdi mdi-access-point"
 系统定时任务名称无效：%{1},"System scheduled task name is invalid: %{1}"
 后台手动运行对应的任务记录已不存在。,"The task record for this manual background run no longer exists."
 后台手动运行代次已被替换，停止转发旧代次日志：%{1},"The manual background generation was replaced; stopped forwarding the old generation log: %{1}"
@@ -211,3 +219,4 @@ ID,ID
 无法设置手动运行环境变量,"Unable to set manual runtime environment variables"
 "%{1} 程序ID:%{2} 已运行完毕!","%{1} Program ID:%{2} Completed!"
 进程创建失败！请检查进程状态！,"Process creation failed! Please check the process status!"
+计划任务,"Scheduled tasks"

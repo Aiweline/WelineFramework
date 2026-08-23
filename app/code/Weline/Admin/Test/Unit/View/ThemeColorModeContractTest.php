@@ -10,85 +10,48 @@ use PHPUnit\Framework\TestCase;
 
 final class ThemeColorModeContractTest extends TestCase
 {
-    public function testAdminControlsExposeKeyboardAccessibleThreeStateMode(): void
+    public function testAdminControlsUseTheNativeThreeStateThemeContract(): void
     {
-        $appJs = $this->read('app/code/Weline/Admin/view/statics/assets/js/app.js');
-        self::assertStringContainsString("mode !== 'system' && mode !== 'light' && mode !== 'dark'", $appJs);
-        self::assertStringContainsString("data-theme-preference", $appJs);
-        self::assertStringContainsString('bindSystemThemeMode()', $appJs);
-        self::assertStringNotContainsString("media.addEventListener('change'", $appJs);
-        self::assertStringNotContainsString('media.addListener(', $appJs);
-        self::assertStringContainsString('[data-weline-backend-theme-mode]', $appJs);
-        self::assertStringNotContainsString('$("#theme-mode-switch, #rtl-mode-switch', $appJs);
-        self::assertStringContainsString("$(document).on('change', '[data-weline-backend-theme-mode]'", $appJs);
+        $runtime = $this->read('app/code/Weline/Theme/view/ui/js/weline-ui.js');
+        self::assertStringContainsString("['system', 'light', 'dark'].includes(value)", $runtime);
+        self::assertStringContainsString('root.dataset.themePreference = preference;', $runtime);
+        self::assertStringContainsString('root.dataset.theme = theme;', $runtime);
+        self::assertStringContainsString("media?.addEventListener('change', onSystemChange);", $runtime);
+        self::assertStringContainsString("closest('[data-w-theme-preference]')", $runtime);
+        self::assertStringNotContainsString('window.bootstrap', $runtime);
+        self::assertStringNotContainsString('window.jQuery', $runtime);
 
-        $rightSidebar = $this->read('app/code/Weline/Admin/view/templates/common/right-sidebar.phtml');
-        self::assertStringContainsString('<option value="system"', $rightSidebar);
-        self::assertStringContainsString("__('跟随系统')", $rightSidebar);
-        self::assertStringContainsString('id="theme-mode-switch" data-weline-backend-theme-mode data-weline-theme-mode', $rightSidebar);
-
-        foreach (['topbar.phtml', 'top-bar.phtml'] as $fileName) {
-            $topbar = $this->read('app/code/Weline/Admin/view/blocks/backend/public/' . $fileName);
-            self::assertStringContainsString('data-weline-backend-theme-trigger', $topbar);
-            self::assertStringContainsString('data-weline-backend-theme-mode', $topbar);
-            self::assertStringContainsString('data-weline-theme-mode="system"', $topbar);
-            self::assertStringContainsString('data-bs-toggle="dropdown"', $topbar);
-            self::assertStringContainsString("__('主题模式')", $topbar);
-            self::assertStringNotContainsString("__('Theme mode')", $topbar);
+        $settings = $this->read('app/code/Weline/Admin/view/templates/common/right-sidebar.phtml');
+        self::assertSame(3, substr_count($settings, 'data-w-theme-preference='));
+        foreach (['system', 'light', 'dark'] as $preference) {
+            self::assertStringContainsString('data-w-theme-preference="' . $preference . '"', $settings);
         }
+        self::assertStringContainsString('data-w-component="drawer"', $settings);
+        self::assertStringNotContainsString('data-bs-', $settings);
+
+        $topbar = $this->read('app/code/Weline/Admin/view/blocks/backend/public/top-bar.phtml');
+        self::assertStringContainsString('data-w-component="menu"', $topbar);
+        self::assertStringContainsString('data-w-menu-trigger', $topbar);
+        self::assertStringContainsString('data-w-menu-panel', $topbar);
+        self::assertSame(3, substr_count($topbar, 'data-w-theme-preference='));
+        self::assertStringNotContainsString('data-bs-', $topbar);
+        self::assertStringNotContainsString('dropdown-toggle', $topbar);
     }
 
-    public function testVisualEditorUsesNoAdditionalThemeModeRequest(): void
-    {
-        $template = $this->read('app/code/Weline/Theme/view/templates/backend/config/visual-editor.phtml');
-        self::assertStringContainsString('id="theme-mode-preference"', $template);
-        self::assertStringContainsString('visual-editor-theme-mode.js', $template);
-
-        $bridge = $this->read('app/code/Weline/Theme/view/statics/js/visual-editor-theme-mode.js');
-        self::assertStringNotContainsString('fetch(', $bridge);
-        self::assertStringContainsString("window.w_query('theme', 'setBackendThemeMode'", $bridge);
-        self::assertStringContainsString("type: 'switchThemeColor'", $bridge);
-        self::assertStringContainsString('themeColor: preference', $bridge);
-        self::assertStringContainsString("preference === 'system'", $bridge);
-        self::assertStringNotContainsString("media.addEventListener('change'", $bridge);
-        self::assertStringNotContainsString('media.addListener(', $bridge);
-
-        // Login/Docs own standalone first-paint fallbacks; normal Admin and
-        // visual-editor documents delegate durable system changes to Theme.
-        $canonicalRuntime = $this->read('app/code/Weline/Theme/view/theme/backend/assets/js/theme.js');
-        self::assertSame(1, substr_count($canonicalRuntime, "media.addEventListener('change', updateSystemTheme)"));
-        self::assertSame(1, substr_count($canonicalRuntime, 'media.addListener(updateSystemTheme)'));
-        self::assertStringContainsString('runtime.systemListenerBound', $canonicalRuntime);
-    }
-
-    public function testBackendShellHasOneOwnerForBlockingRuntimeAssets(): void
+    public function testBackendShellHasOneWelineUiAssetOwner(): void
     {
         $adminHead = $this->read('app/code/Weline/Admin/view/templates/common/head.phtml');
         $backendHeader = $this->read('app/code/Weline/Backend/view/blocks/header/base.phtml');
         $themeHead = $this->read('app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml');
-        $shellSources = $adminHead . "\n" . $backendHeader . "\n" . $themeHead;
+        $sources = $adminHead . "\n" . $backendHeader . "\n" . $themeHead;
 
-        self::assertSame(
-            1,
-            substr_count($shellSources, 'backend/lib/jquery/3.6.0/jquery.js'),
-            'The backend header owns jQuery; the Admin head must not load it again.'
-        );
-        self::assertSame(
-            1,
-            substr_count($shellSources, 'backend/assets/js/theme.js'),
-            'The Theme head partial is the sole owner of the backend theme runtime.'
-        );
-        self::assertSame(
-            1,
-            substr_count($shellSources, 'backend/assets/js/backend-components.js'),
-            'The Theme head partial is the sole owner of backend components.'
-        );
-        foreach (['_colors.css', '_typography.css', '_spacing.css', '_borders.css', '_shadows.css'] as $asset) {
-            self::assertSame(
-                1,
-                substr_count($shellSources, 'backend/variables/' . $asset),
-                $asset . ' must not be emitted by both Admin and Theme heads.'
-            );
+        self::assertSame(1, substr_count($sources, 'Weline_Theme::ui/weline-foundation.css'));
+        self::assertSame(1, substr_count($sources, 'Weline_Theme::ui/weline-backend.css'));
+        self::assertSame(1, substr_count($sources, 'Weline_Theme::ui/weline-ui.js'));
+        self::assertStringContainsString('type="module"', $themeHead);
+
+        foreach (['jquery', 'bootstrap', 'backend-components.js', 'assets/js/theme.js', 'data-bs-'] as $forbidden) {
+            self::assertStringNotContainsString($forbidden, strtolower($sources));
         }
     }
 

@@ -523,6 +523,7 @@ final class ThemeVirtualThemeRuntimeService implements ThemeVirtualThemeRuntimeI
             'layout_type' => $layoutType,
             'layout_option' => $layoutOption,
             'scope' => (string)($input['scope'] ?? self::DEFAULT_SCOPE),
+            'locale_code' => (string)($input['locale_code'] ?? $input['locale'] ?? ''),
             'target_type' => (string)($input['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
             'target_id' => (int)($input['target_id'] ?? 0),
             'name' => $name !== '' ? $name : 'AI ' . ucfirst($layoutType),

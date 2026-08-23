@@ -17,7 +17,7 @@ use Weline\Acl\Api\Authorization\AccessMode;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Response;
 
-#[Acl('Weline_Queue::type_manager', '队列类型管理', 'mdi mdi-shape-outline', '管理队列类型', 'Weline_Queue::message_service')]
+#[Acl('Weline_Queue::type_manager', '队列类型管理', 'circle', '管理队列类型', 'Weline_Queue::message_service')]
 class Type extends \Weline\Framework\App\Controller\BackendController
 {
     private \Weline\Queue\Model\Queue\Type $type;
@@ -28,26 +28,28 @@ class Type extends \Weline\Framework\App\Controller\BackendController
         $this->type = $type;
     }
 
-    #[Acl('Weline_Queue::type_index', '队列类型列表', 'mdi mdi-format-list-bulleted', '查看队列类型列表')]
+    #[Acl('Weline_Queue::type_index', '队列类型列表', 'list', '查看队列类型列表')]
     public function index()
     {
         $this->assign('title', __('队列类型'));
-        if ($search = $this->request->getGet('q')) {
+        $search = \trim((string)$this->request->getGet('q', ''));
+        if ($search !== '') {
             $this->type->where('concat(name,type_id)', "%$search%", 'LIKE');
         }
         $this->type->pagination()->select()->fetch();
         $this->assign('types', $this->type->getItems());
-        $this->assign('pagination', $this->type->getPagination());
+        $this->assign('pagination', $this->type->getPaginationState());
+        $this->assign('q', $search);
         return $this->fetch();
     }
 
-    #[Acl('Weline_Queue::type_manage', '启停队列类型', 'mdi mdi-toggle-switch', '启用或禁用队列类型', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::type_manage', '启停队列类型', 'switch', '启用或禁用队列类型', accessMode: AccessMode::EDIT)]
     public function enable()
     {
         return $this->legacyMutationGone();
     }
 
-    #[Acl('Weline_Queue::type_manage', '启停队列类型', 'mdi mdi-toggle-switch', '启用或禁用队列类型', accessMode: AccessMode::EDIT)]
+    #[Acl('Weline_Queue::type_manage', '启停队列类型', 'switch', '启用或禁用队列类型', accessMode: AccessMode::EDIT)]
     public function disable()
     {
         return $this->legacyMutationGone();
@@ -62,7 +64,7 @@ class Type extends \Weline\Framework\App\Controller\BackendController
         ], 410);
     }
 
-    #[Acl('Weline_Queue::type_show', '查看队列类型', 'mdi mdi-eye', '查看队列类型详情')]
+    #[Acl('Weline_Queue::type_show', '查看队列类型', 'eye', '查看队列类型详情')]
     function show()
     {
         $this->layoutType = 'default.blank';

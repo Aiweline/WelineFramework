@@ -13,61 +13,60 @@ $isMaintenance = (bool)($is_maintenance ?? false);
 $maintenanceMessage = $maintenance_message ?? __('系统维护中，请稍后再试');
 ?>
 <!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>系统维护模式</lang></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>系统维护模式</lang></h4>
         </div>
     </div>
 </div>
 
 <!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
 <!-- 提示信息 -->
-<div class="row">
-    <div class="col-12">
-        <div class="alert alert-warning">
-            <i class="mdi mdi-alert me-2"></i>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-alert" data-tone="warning">
+            <w:icon name="warning" size="sm"></w:icon>
             <strong><lang>重要提示</lang>:</strong> <lang>开启维护模式后，前台将显示维护页面，但后台仍可正常访问。</lang>
         </div>
     </div>
 </div>
 
 <!-- 维护模式设置 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>维护模式设置</lang></h4>
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title" style="--w-mb:var(--weline-space-6);"><lang>维护模式设置</lang></h4>
                 
                 <w:form id="maintenanceForm">
-                    <div class="row">
-                        <div class="col-md-12">
-                            <div class="mb-3">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="is_maintenance" name="enabled" 
-                                           <?= $isMaintenance ? 'checked' : '' ?>>
-                                    <label class="form-check-label" for="is_maintenance">
+                    <div class="w-grid">
+                        <div style="--w-span-md:12;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <div class="w-switch">
+                                    <input type="checkbox" id="is_maintenance" name="enabled" <?= $isMaintenance ? 'checked' : '' ?>>
+                                    <label for="is_maintenance">
                                         <strong><lang>启用维护模式</lang></strong>
                                     </label>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-12">
-                            <div class="mb-3">
-                                <label class="form-label"><lang>维护消息</lang></label>
-                                <textarea class="form-control" id="maintenance_message" name="message" rows="5"><?= htmlspecialchars($maintenanceMessage) ?></textarea>
-                                <div class="form-text"><lang>此消息将显示给访问前台的用户</lang></div>
+                        <div style="--w-span-md:12;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>维护消息</lang></label>
+                                <textarea class="w-textarea" id="maintenance_message" name="message" rows="5"><?= htmlspecialchars($maintenanceMessage) ?></textarea>
+                                <div class="w-field__hint"><lang>此消息将显示给访问前台的用户</lang></div>
                             </div>
                         </div>
-                        <div class="col-md-12">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-content-save me-2"></i><lang>保存设置</lang>
+                        <div style="--w-span-md:12;">
+                            <button type="submit" class="w-button" data-tone="primary">
+                                <w:icon name="save" size="sm"></w:icon><lang>保存设置</lang>
                             </button>
                         </div>
                     </div>
@@ -78,12 +77,12 @@ $maintenanceMessage = $maintenance_message ?? __('系统维护中，请稍后再
 </div>
 
 <!-- 当前状态 -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>当前状态</lang></h4>
-                <div class="alert alert-<?= $isMaintenance ? 'warning' : 'success' ?>">
+<div class="w-grid">
+    <div style="--w-span-lg:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title" style="--w-mb:var(--weline-space-6);"><lang>当前状态</lang></h4>
+                <div class="w-alert alert-<?= $isMaintenance ? 'warning' : 'success' ?>">
                     <i class="mdi mdi-<?= $isMaintenance ? 'alert' : 'check-circle' ?> me-2"></i>
                     <strong>
                         <?= $isMaintenance ? __('系统当前处于维护模式') : __('系统当前正常运行') ?>
@@ -95,34 +94,7 @@ $maintenanceMessage = $maintenance_message ?? __('系统维护中，请稍后再
 </div>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_backend_admin) return;
-  g.__bqAdmin_backend_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['backend_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('backend_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function() {
     'use strict';
@@ -135,20 +107,20 @@ $maintenanceMessage = $maintenance_message ?? __('系统维护中，请稍后再
             
             var url = '<?= $this->getBackendUrl('*/backend/maintenance/toggle') ?>';
             var opts = { method: 'POST', body: formData };
-            bqAdmin['backend_admin'](url, opts)
+            Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    BackendToast.success(data.message);
+                    Weline.UI.toast.success(data.message);
                     setTimeout(function() {
                         location.reload();
                     }, 1000);
                 } else {
-                    BackendToast.error(data.message);
+                    Weline.UI.toast.error(data.message);
                 }
             })
             .catch(function(error) {
-                BackendToast.error('<?= __('保存失败') ?>');
+                Weline.UI.toast.error('<?= __('保存失败') ?>');
             });
         }
     };

@@ -127,12 +127,43 @@
         1. 在模块安装或升级后触发
         2. 推送 CDN 规则以绕过包含预览 Token 的请求缓存
     -->
+    <event name="Weline_Framework_Http::error_page_assets">
+        <observer name="Weline_Theme::error_page_assets"
+                  instance="Weline\Theme\Observer\ErrorPageAssets"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
+    <event name="Weline_Framework_Deploy::static_asset_transform">
+        <observer name="Weline_Theme::static_asset_transform_minify"
+                  instance="Weline\Theme\Observer\StaticAssetTransformMinify"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Theme::setup_upgrade_after"
                   instance="Weline\Theme\Observer\SetupUpgradeAfter"
                   disabled="false"
                   shared="true"
                   sort="200"/>
+        <observer name="Weline_Theme::setup_upgrade_font_warmup"
+                  instance="Weline\Theme\Font\Observer\SetupUpgradeAfterFontWarmup"
+                  disabled="false"
+                  shared="true"
+                  sort="120"/>
+        <observer name="Weline_Theme::setup_upgrade_theme_disk_compile"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfterThemeDiskCompile"
+                  disabled="false"
+                  shared="true"
+                  sort="125"/>
+        <observer name="Weline_Theme::setup_upgrade_deploy_static"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfterDeployStatic"
+                  disabled="false"
+                  shared="true"
+                  sort="130"/>
     </event>
 
     <event name="Weline_Widget::widget_install_after">

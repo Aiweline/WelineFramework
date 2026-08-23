@@ -1,491 +1,109 @@
 <?php
-/**
- * 队列类型管理页面
- * @var \Weline\Framework\View\Template $this
- */
-?>
-<style>
-.weline-queue-type-container {
-    background: var(--backend-color-card-bg, #fff);
-}
-
-.weline-queue-type-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.weline-queue-type-table th {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #333);
-    font-weight: 600;
-    padding: var(--backend-padding-table-cell, 12px);
-    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
-    white-space: nowrap;
-}
-
-.weline-queue-type-table td {
-    padding: var(--backend-padding-table-cell, 12px);
-    color: var(--backend-color-text-primary, #333);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-    vertical-align: middle;
-}
-
-.weline-queue-type-table tr:hover td {
-    background: var(--backend-color-table-bg-hover, #f8f9fa);
-}
-
-.weline-queue-type-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.weline-queue-type-status-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 12px;
-    border-radius: var(--backend-border-radius-pill, 50rem);
-    font-size: 0.8125rem;
-    font-weight: 500;
-}
-
-.weline-queue-type-status-badge--enabled {
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
-}
-
-.weline-queue-type-status-badge--disabled {
-    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
-    color: var(--backend-color-danger, #f46a6a);
-}
-
-.weline-queue-type-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.weline-queue-type-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 12px;
-    border: none;
-    border-radius: var(--backend-border-radius, 6px);
-    font-size: 0.8125rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.weline-queue-type-btn--enable {
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
-}
-
-.weline-queue-type-btn--enable:hover {
-    background: var(--backend-color-success, #34c38f);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-queue-type-btn--disable {
-    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
-    color: var(--backend-color-danger, #f46a6a);
-}
-
-.weline-queue-type-btn--disable:hover {
-    background: var(--backend-color-danger, #f46a6a);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-queue-type-btn--view {
-    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
-    color: var(--backend-color-info, #50a5f1);
-}
-
-.weline-queue-type-btn--view:hover {
-    background: var(--backend-color-info, #50a5f1);
-    color: var(--backend-color-text-inverse, #fff);
-}
-
-.weline-queue-type-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
-}
-
-.weline-queue-type-btn[aria-busy="true"] i {
-    animation: queue-type-spin 0.8s linear infinite;
-}
-
-@keyframes queue-type-spin {
-    to { transform: rotate(360deg); }
-}
-
-.weline-queue-type-class {
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.75rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-    word-break: break-all;
-    max-width: 300px;
-}
-
-.weline-queue-type-module {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    color: var(--backend-color-primary, #556ee6);
-    border-radius: var(--backend-border-radius-sm, 4px);
-    font-size: 0.8125rem;
-}
-
-.weline-queue-type-time {
-    font-size: 0.8125rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-.weline-queue-type-empty {
-    text-align: center;
-    padding: var(--backend-spacing-xl, 40px);
-    color: var(--backend-color-text-tertiary, #999);
-}
-
-.weline-queue-type-empty i {
-    font-size: 3rem;
-    opacity: 0.3;
-    margin-bottom: var(--backend-spacing-md, 15px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .weline-queue-type-btn,
-    .weline-queue-type-btn[aria-busy="true"] i {
-        animation: none !important;
-        transition: none !important;
-        transform: none !important;
-    }
-}
-</style>
-
-<!-- start page title -->
-<div class='row' data-testid="queue-type-management">
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <breadcrumb model="Weline\Backend\Model\Menu" order_field="order" name_field="title"></breadcrumb>
-            </h4>
-            <div class='page-title-right'>
-                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order' name_field='title'></breadcrumb>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- end page title -->
-
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
-<!-- end message -->
-
-<div class='row'>
-    <div class='col-12'>
-        <div class='card weline-queue-type-container'>
-            <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>{{title}}</lang>
-                </h4>
-                <p class="card-title-desc">
-                    <lang>管理系统中注册的队列类型，可以启用或禁用特定类型的队列处理器</lang>
-                </p>
-                
-                <div class='table-rep-plugin'>
-                    <!-- search form -->
-                    <div class='row mb-3'>
-                        <div class='col-12'>
-                            <block class='Weline\Component\Block\Form\Search' 
-                                   id='type-search'
-                                   action='*/backend/type' 
-                                   method='get' 
-                                   keyword='q'
-                                   value=''
-                                   placeholder='搜索队列类型名称或ID...'></block>
-                        </div>
-                    </div>
-                    <!-- end search form -->
-                    
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table class='weline-queue-type-table table table-striped table-bordered'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1' style="width: 80px;"><?= __('ID') ?></th>
-                                <th data-priority='1'><?= __('类型名称') ?></th>
-                                <th data-priority='1'><?= __('所属模块') ?></th>
-                                <th data-priority='2'><?= __('执行类') ?></th>
-                                <th data-priority='1' style="width: 120px;"><?= __('状态') ?></th>
-                                <th data-priority='3' style="width: 160px;"><?= __('更新时间') ?></th>
-                                <th data-priority='1' style="width: 180px;"><?= __('操作') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <empty name="types">
-                                <tr>
-                                    <td colspan="7">
-                                        <div class="weline-queue-type-empty">
-                                            <i class="mdi mdi-inbox-outline"></i>
-                                            <p><lang>暂无队列类型数据</lang></p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </empty>
-                            <foreach name="types" item="type" key="key">
-                                <tr data-type-id="{{type.type_id}}">
-                                    <td>
-                                        <strong>{{type.type_id}}</strong>
-                                    </td>
-                                    <td>
-                                        <strong>{{type.name}}</strong>
-                                    </td>
-                                    <td>
-                                        <span class="weline-queue-type-module">
-                                            <i class="mdi mdi-package-variant-closed"></i>
-                                            {{type.module_name}}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="weline-queue-type-class" title="{{type.class}}">
-                                            {{type.class}}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="weline-queue-type-status">
-                                            <if condition="type.enable == 1">
-                                                <span class="weline-queue-type-status-badge weline-queue-type-status-badge--enabled">
-                                                    <i class="mdi mdi-check-circle"></i>
-                                                    <lang>启用</lang>
-                                                </span>
-                                            <else/>
-                                                <span class="weline-queue-type-status-badge weline-queue-type-status-badge--disabled">
-                                                    <i class="mdi mdi-close-circle"></i>
-                                                    <lang>禁用</lang>
-                                                </span>
-                                            </if>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="weline-queue-type-time">{{type.update_time}}</span>
-                                    </td>
-                                    <td>
-                                        <div class="weline-queue-type-actions">
-                                            <if condition="type.enable == 1">
-                                                <button type="button" 
-                                                        class="weline-queue-type-btn weline-queue-type-btn--disable"
-                                                        data-action="disable"
-                                                        data-id="{{type.type_id}}"
-                                                        data-name="{{type.name}}"
-                                                        title="@lang(禁用此队列类型)">
-                                                    <i class="mdi mdi-power-off"></i>
-                                                    <lang>禁用</lang>
-                                                </button>
-                                            <else/>
-                                                <button type="button" 
-                                                        class="weline-queue-type-btn weline-queue-type-btn--enable"
-                                                        data-action="enable"
-                                                        data-id="{{type.type_id}}"
-                                                        data-name="{{type.name}}"
-                                                        title="@lang(启用此队列类型)">
-                                                    <i class="mdi mdi-power"></i>
-                                                    <lang>启用</lang>
-                                                </button>
-                                            </if>
-                                            <button type="button"
-                                                    class="weline-queue-type-btn weline-queue-type-btn--view weline-queue-type-view-btn"
-                                                    data-id="{{type.type_id}}"
-                                                    title="@lang(查看详情)">
-                                                <i class="mdi mdi-eye" aria-hidden="true"></i>
-                                                <lang>详情</lang>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </foreach>
-                            </tbody>
-                        </table>
-                        {{pagination}}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<block class='Weline\Component\Block\OffCanvas'
-       template='Weline_Component::off-canvas.phtml'
-       title='查看详情'
-       cache='0'
-       id='queue_type_shared_view'
-       action='*/backend/type/show'
-       target-tag='button'
-       target-button-text=''
-       icon='mdi mdi-eye'
-       target-button-class='d-none weline-queue-type-shared-view-trigger'
-       flush='1'
-       save='0'
-       close-button-show='1'
-       close-button-text='关闭'
-       direction='right'
-       class-names='w-50'
-       off-canvas-body-style=''
-/>
-
-<script>
-(function() {
-    'use strict';
-
-    var queueText = <?= json_encode([
+/** @var \Weline\Framework\View\Template $this */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$typeItems = is_array($types ?? null) ? $types : [];
+$typePagination = is_array($pagination ?? null) ? $pagination : [];
+$typePage = max(1, (int)($typePagination['page'] ?? 1));
+$typePageSize = max(1, (int)($typePagination['pageSize'] ?? 10));
+$typeLastPage = max(0, (int)($typePagination['lastPage'] ?? 0));
+$typeTotalSize = max(0, (int)($typePagination['totalSize'] ?? count($typeItems)));
+$typePageUrl = static fn(int $page): string => '?' . http_build_query([
+    'q' => trim((string)($q ?? '')),
+    'page' => max(1, $page),
+    'pageSize' => $typePageSize,
+]);
+$config = [
+    'messages' => [
         'enable' => (string)__('启用'),
         'disable' => (string)__('禁用'),
-        'networkError' => (string)__('网络错误，请检查网络后重试')
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    var queueAdminPromise = null;
+        'saved' => (string)__('队列类型状态已更新'),
+        'networkError' => (string)__('网络错误，请检查网络后重试'),
+    ],
+];
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-admin.css)">
 
-    async function getQueueAdmin() {
-        if (!queueAdminPromise) {
-            queueAdminPromise = (async function() {
-                if (!window.Weline || typeof Weline.load !== 'function') {
-                    throw new Error(queueText.networkError);
-                }
-                var api = await Weline.load('api');
-                return api.resource('queue_admin');
-            })().catch(function(error) {
-                queueAdminPromise = null;
-                throw error;
-            });
-        }
-        return queueAdminPromise;
-    }
+<main class="w-queue-type-admin w-stack" data-w-component="queue-type-admin" data-testid="queue-type-management">
+    <header class="w-queue-type-admin__heading">
+        <h1><w:icon name="settings" size="sm" /> <?= $escape($title ?? __('队列类型')) ?></h1>
+    </header>
 
-    async function setTypeEnabled(typeId, enabled) {
-        var api = await getQueueAdmin();
-        if (!api || typeof api.setTypeEnabled !== 'function') {
-            throw new Error(queueText.networkError);
-        }
-        return api.setTypeEnabled({ type_id: typeId, enabled: enabled }, {
-            keepBusinessResult: true,
-            silent: true
-        });
-    }
+    <template>Weline_Component::message.phtml</template>
 
-    function setButtonBusy(button, busy) {
-        var icon = button ? button.querySelector('i') : null;
-        if (!button) return;
-        if (busy) {
-            button.disabled = true;
-            button.setAttribute('aria-busy', 'true');
-            if (icon) {
-                button.dataset.queueOriginalIcon = icon.getAttribute('class') || '';
-                icon.setAttribute('class', 'mdi mdi-loading');
-            }
-            return;
-        }
-        button.disabled = false;
-        button.removeAttribute('aria-busy');
-        if (icon && button.dataset.queueOriginalIcon) {
-            icon.setAttribute('class', button.dataset.queueOriginalIcon);
-            delete button.dataset.queueOriginalIcon;
-        }
-    }
+    <section class="w-card">
+        <div class="w-card__body w-stack">
+            <header class="w-stack" data-gap="sm">
+                <h2 class="w-card__title"><lang>已注册的队列消费者</lang></h2>
+                <p class="w-text" data-tone="muted"><lang>启用或禁用消费者类型；运行中的队列不受列表操作影响。</lang></p>
+            </header>
 
-    function openTypeOffcanvas(typeId) {
-        var id = parseInt(String(typeId || ''), 10);
-        var trigger = document.querySelector('.weline-queue-type-shared-view-trigger');
-        if (!Number.isFinite(id) || id <= 0 || !trigger) {
-            BackendToast.error(queueText.networkError);
-            return;
-        }
-        var targetSelector = trigger.getAttribute('data-bs-target') || '';
-        var panel = targetSelector ? document.querySelector(targetSelector) : null;
-        var iframe = panel ? panel.querySelector('iframe[data-src]') : null;
-        if (!panel || !iframe) {
-            BackendToast.error(queueText.networkError);
-            return;
-        }
-        var baseSrc = iframe.getAttribute('data-queue-type-base-src') || iframe.getAttribute('data-src') || '';
-        if (!baseSrc) {
-            BackendToast.error(queueText.networkError);
-            return;
-        }
-        iframe.setAttribute('data-queue-type-base-src', baseSrc);
-        var url = new URL(baseSrc, window.location.origin);
-        url.searchParams.set('id', String(id));
-        iframe.setAttribute('data-src', url.toString());
-        iframe.removeAttribute('src');
-        trigger.click();
-    }
+            <form class="w-cluster" method="get" action="@backend-url('queue/backend/type')" data-wrap="true">
+                <label class="w-field">
+                    <span class="w-field__label"><lang>搜索类型</lang></span>
+                    <input class="w-input" type="search" name="q" value="<?= $escape($q ?? '') ?>" maxlength="120" placeholder="<?= $escape(__('按名称或 ID 搜索')) ?>">
+                </label>
+                <button class="w-button" type="submit" data-tone="primary"><w:icon name="search" size="sm" /><lang>搜索</lang></button>
+                <a class="w-button" href="@backend-url('queue/backend/type')" data-tone="neutral" data-variant="outline"><w:icon name="refresh" size="sm" /><lang>重置</lang></a>
+            </form>
 
-    async function handleTypeAction(button) {
-        var action = button.getAttribute('data-action');
-        var typeId = parseInt(button.getAttribute('data-id') || '0', 10);
-        var typeName = button.getAttribute('data-name');
-        var enabled = action === 'enable';
-        var actionText = enabled ? queueText.enable : queueText.disable;
+            <div class="w-table-wrap">
+                <table class="w-table" data-w-vertical="middle">
+                    <thead><tr><th><lang>ID</lang></th><th><lang>类型名称</lang></th><th><lang>所属模块</lang></th><th><lang>执行类</lang></th><th><lang>状态</lang></th><th><lang>更新时间</lang></th><th><lang>操作</lang></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($typeItems as $type): ?>
+                        <?php $enabled = (int)($type['enable'] ?? 0) === 1; ?>
+                        <tr data-type-id="<?= (int)($type['type_id'] ?? 0) ?>">
+                            <td><strong>#<?= (int)($type['type_id'] ?? 0) ?></strong></td>
+                            <td><strong><?= $escape($type['name'] ?? '') ?></strong></td>
+                            <td><span class="w-badge" data-tone="info"><w:icon name="puzzle" size="xs" /><?= $escape($type['module_name'] ?? '') ?></span></td>
+                            <td><code class="w-queue-type-admin__class" title="<?= $escape($type['class'] ?? '') ?>"><?= $escape($type['class'] ?? '') ?></code></td>
+                            <td><span class="w-badge" data-tone="<?= $enabled ? 'success' : 'danger' ?>"><?php if ($enabled): ?><w:icon name="check" size="xs" /><?php else: ?><w:icon name="close" size="xs" /><?php endif; ?><?= $escape($enabled ? __('启用') : __('禁用')) ?></span></td>
+                            <td><span class="w-text" data-tone="muted" data-size="sm"><?= $escape($type['update_time'] ?? '') ?></span></td>
+                            <td>
+                                <div class="w-queue-type-admin__actions">
+                                    <button type="button" class="w-button" data-w-queue-type-action="<?= $enabled ? 'disable' : 'enable' ?>" data-type-id="<?= (int)($type['type_id'] ?? 0) ?>" data-type-name="<?= $escape($type['name'] ?? '') ?>" data-tone="<?= $enabled ? 'warning' : 'success' ?>" data-variant="outline" data-size="sm"><w:icon name="switch" size="sm" /><?= $escape($enabled ? __('禁用') : __('启用')) ?></button>
+                                    <button type="button" class="w-button" data-w-queue-type-action="view" data-type-id="<?= (int)($type['type_id'] ?? 0) ?>" data-tone="info" data-variant="outline" data-size="sm"><w:icon name="eye" size="sm" /><lang>详情</lang></button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if ($typeItems === []): ?><tr><td colspan="7"><div class="w-empty w-queue-type-admin__empty"><w:icon name="box" size="lg" /><p><lang>暂无队列类型数据</lang></p></div></td></tr><?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
 
-        if (!Number.isFinite(typeId) || typeId <= 0) {
-            BackendToast.error(queueText.networkError);
-            return;
-        }
+            <?php if ($typeLastPage > 1): ?>
+                <nav class="w-queue-pagination" aria-label="<?= $escape(__('队列类型分页')) ?>">
+                    <ul class="w-pagination">
+                        <li class="w-pagination__item"><?php if ($typePage <= 1): ?><span class="w-pagination__link" aria-disabled="true"><lang>上一页</lang></span><?php else: ?><a class="w-pagination__link" href="<?= $escape($typePageUrl($typePage - 1)) ?>"><lang>上一页</lang></a><?php endif; ?></li>
+                        <?php for ($pageNumber = max(1, $typePage - 2); $pageNumber <= min($typeLastPage, $typePage + 2); $pageNumber++): ?><li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($typePageUrl($pageNumber)) ?>" <?= $pageNumber === $typePage ? 'aria-current="page"' : '' ?>><?= $pageNumber ?></a></li><?php endfor; ?>
+                        <li class="w-pagination__item"><?php if ($typePage >= $typeLastPage): ?><span class="w-pagination__link" aria-disabled="true"><lang>下一页</lang></span><?php else: ?><a class="w-pagination__link" href="<?= $escape($typePageUrl($typePage + 1)) ?>"><lang>下一页</lang></a><?php endif; ?></li>
+                    </ul>
+                    <span class="w-queue-pagination__summary"><?= $escape(__('第 %{1} / %{2} 页，共 %{3} 条', [$typePage, $typeLastPage, $typeTotalSize])) ?></span>
+                </nav>
+            <?php endif; ?>
+        </div>
+    </section>
 
-        var confirmed = false;
-        try {
-            confirmed = await BackendConfirm.show(actionText + ' · ' + String(typeName || typeId), {
-                title: actionText,
-                confirmText: actionText,
-                type: enabled ? 'success' : 'warning'
-            });
-        } catch (error) {
-            BackendToast.error(error && error.message ? error.message : queueText.networkError);
-            return;
-        }
-        if (!confirmed) return;
+    <block class="Weline\Component\Block\OffCanvas"
+           template="Weline_Component::off-canvas.phtml"
+           title="查看详情"
+           cache="0"
+           id="queue_type_shared_view"
+           action="*/backend/type/show"
+           target-tag="button"
+           target-button-text=""
+           icon="eye"
+           target-hidden="1"
+           target-class="w-queue-type-shared-view-trigger"
+           flush="1"
+           save="0"
+           close-button-show="1"
+           close-button-text="关闭"
+           direction="right"
+           drawer-size="md" />
+</main>
 
-        setButtonBusy(button, true);
-        if (window.showLoading) showLoading();
-        try {
-            var result = await setTypeEnabled(typeId, enabled);
-            if (result && result.success) {
-                BackendToast.success(result.msg);
-                setTimeout(function() {
-                    window.location.reload();
-                }, 600);
-            } else {
-                BackendToast.error((result && result.msg) || queueText.networkError);
-            }
-        } catch (error) {
-            BackendToast.error(error && error.message ? error.message : queueText.networkError);
-        } finally {
-            setButtonBusy(button, false);
-            if (window.hideLoading) hideLoading();
-        }
-    }
-    
-    function init() {
-        document.querySelectorAll('[data-action="enable"], [data-action="disable"]').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                handleTypeAction(this);
-            });
-        });
-        document.querySelectorAll('.weline-queue-type-view-btn').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                openTypeOffcanvas(this.getAttribute('data-id'));
-            });
-        });
-    }
-    
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-})();
-</script>
+<script type="application/json" data-w-queue-type-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-queue-type.js)"></script>

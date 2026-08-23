@@ -12,46 +12,57 @@ declare(strict_types=1);
 
 namespace Weline\Component\Block;
 
-use PHPUnit\Framework\Exception;
+use Weline\Framework\App\Exception;
 
 class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Component\ComponentInterface
 {
     protected string $_template = 'Weline_Component::off-canvas.phtml';
 
-    const default_data = [
+    /** Block 入参标题；避免 Template::init() 用模块名覆盖后丢失 */
+    private string $panelTitle = '';
+
+    private const DEFAULT_DATA = [
         'cache' => 300,
-        'target-tag' => 'a',
+        'target-tag' => 'button',
         'icon' => '',
         'target-button-text' => '添加',
-        'target-button-class' => '',
+        'target-tone' => 'primary',
+        'target-variant' => '',
+        'target-size' => '',
+        'target-class' => '',
+        'target-hidden' => '0',
         'submit-button-text' => '保存',
-        'submit-button-class' => 'btn btn-primary',
+        'submit-tone' => 'primary',
         'title' => '',
         'close-button-show' => '1',
         'close-button-text' => '关闭',
         'direction' => 'right',
+        'drawer-size' => 'lg',
         'flush' => '1',
         'flush-button-text' => "刷新",
-        'flush-button-class' => "btn btn-default",
+        'flush-tone' => 'neutral',
         'save' => '0',
         'save-form' => '',
-        'class-names' => 'h-100 overflow-hidden w-75',
-        'off-canvas-body-style' => '',
     ];
-    const direction = [
-        'left' => 'offcanvas-start',
-        'right' => 'offcanvas-end',
-        'bottom' => 'offcanvas-bottom',
-        'top' => 'offcanvas-top',
+    private const DIRECTION = [
+        'left' => 'start',
+        'right' => 'end',
+        'bottom' => 'bottom',
+        'top' => 'top',
     ];
 
     function __init(): void
     {
+        // 直接读构造入参，避免 parent::init() 把 title 写成模块名
+        $this->panelTitle = trim((string)($this->_data['title'] ?? ''));
         parent::__init();
         // 解析参数传参
         $action_params = $this->getParseVarsParams('action-params');
         $check_fields = ['action', 'id'];
         $data = $this->getData();
+        if ($this->panelTitle !== '') {
+            $data['title'] = $this->panelTitle;
+        }
         foreach ($check_fields as $check_field) {
             $field = $this->getData($check_field) ?: '';
             if (empty($field)) {
@@ -69,14 +80,24 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
             $this->_template = $data['template'];
         }
         // 默认数据
-        foreach (self::default_data as $key => $value) {
+        foreach (self::DEFAULT_DATA as $key => $value) {
             if (str_contains($key, '-text')) {
                 $value = __($value);
             }
             $data[$key] = $data[$key] ?? $value;
         }
-        $data['class-names'] = $data['class-names'] . ' ' . self::direction[$data['direction']];
-        $data = array_merge(self::default_data, $data);
+        $data = array_merge(self::DEFAULT_DATA, $data);
+        $data['drawer-side'] = self::DIRECTION[$data['direction']] ?? self::DIRECTION['right'];
+        $data['target-tag'] = in_array($data['target-tag'], ['a', 'button'], true) ? $data['target-tag'] : 'button';
+        $data['target-class'] = $this->sanitizeWelineClasses((string)$data['target-class']);
+        $data['drawer-size'] = in_array($data['drawer-size'], ['sm', 'md', 'lg', 'full'], true) ? $data['drawer-size'] : 'lg';
+        foreach (['target-tone', 'submit-tone', 'flush-tone'] as $toneKey) {
+            $data[$toneKey] = in_array($data[$toneKey], ['primary', 'neutral', 'quiet', 'success', 'warning', 'danger', 'info'], true)
+                ? $data[$toneKey]
+                : 'neutral';
+        }
+        $data['target-size'] = in_array($data['target-size'], ['', 'sm', 'lg'], true) ? $data['target-size'] : '';
+        $data['target-variant'] = in_array($data['target-variant'], ['', 'outline', 'soft'], true) ? $data['target-variant'] : '';
         foreach ($data as $key => $value) {
             unset($data[$key]);
             $key = str_replace('-', '_', $key);
@@ -85,8 +106,20 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
         // $data['id']只留下字母和下划线
         $data['id'] = preg_replace('/[^\w]+/', '', $data['id']);
         $data['id'] = $data['id'] . md5(json_encode($data ?? []));
+        $data['drawer_title'] = $this->panelTitle !== '' ? $this->panelTitle : (string)($data['title'] ?? '');
         $this->setData($data);
         $this->assign($data);
+    }
+
+    private function sanitizeWelineClasses(string $classes): string
+    {
+        $result = [];
+        foreach (preg_split('/\s+/', trim($classes)) ?: [] as $class) {
+            if (preg_match('/^w-[a-z0-9_-]+$/', $class) === 1) {
+                $result[] = $class;
+            }
+        }
+        return implode(' ', array_unique($result));
     }
 
     /**
@@ -114,22 +147,21 @@ id="demo_off_canvas"
 action="*/demo" 
 vars="demo,lang"
 target-tag="a"
-icon="mdi mdi-eye"
+icon="eye"
 action-params="{code:demo.code,lang:lang.code}"
 submit-button-text="保存"
-submit-button-class="btn btn-primary"
+submit-tone="primary"
 target-button-text="添加"
-target-button-class=""
+target-tone="primary"
 flush-button-text="刷新"
-flush-button-class="btn btn -default"
+flush-tone="neutral"
 flush="1"
 save="1"
 save-form="#demo-form"
 close-button-show="1"
 close-button-text="取消"
 direction="right"
-class-names="w-75"
-off-canvas-body-style=""
+drawer-size="lg"
 />
 '));
     }

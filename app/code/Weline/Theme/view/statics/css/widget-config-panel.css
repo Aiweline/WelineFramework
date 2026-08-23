@@ -2,26 +2,27 @@
  * 部件配置面板样式 - 现代化美化版
  * 精致的配置UI，支持多语言切换
  */
+@layer page {
 
 /* ========================================
    配置面板主容器
    ======================================== */
 
 .widget-config-panel {
-    background: var(--te-bg-card);
+    background: var(--w-theme-editor-bg-card);
     border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
-                0 2px 4px -1px rgba(0, 0, 0, 0.06),
-                0 0 0 1px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 6px -1px color-mix(in srgb, var(--weline-theme-overlay) 10%, transparent), 
+                0 2px 4px -1px color-mix(in srgb, var(--weline-theme-overlay) 6%, transparent),
+                0 0 0 1px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
     padding: 0;
     overflow: hidden;
     transition: box-shadow 0.3s ease;
 }
 
 .widget-config-panel:hover {
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 
-                0 4px 6px -2px rgba(0, 0, 0, 0.05),
-                0 0 0 1px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--weline-theme-overlay) 10%, transparent), 
+                0 4px 6px -2px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent),
+                0 0 0 1px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
 }
 
 /* ========================================
@@ -31,10 +32,10 @@
 .config-header {
     padding: 1.75rem 1.5rem;
     background: linear-gradient(135deg, 
-        #667eea 0%, 
-        #764ba2 50%, 
-        #f093fb 100%);
-    color: #ffffff;
+        var(--w-theme-editor-accent) 0%, 
+        var(--w-theme-editor-accent-hover) 50%, 
+        var(--weline-theme-info) 100%);
+    color: var(--w-theme-editor-on-accent);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -51,8 +52,8 @@
     right: 0;
     bottom: 0;
     background: linear-gradient(135deg, 
-        rgba(255, 255, 255, 0.1) 0%, 
-        rgba(255, 255, 255, 0) 100%);
+        color-mix(in srgb, var(--w-theme-editor-on-accent) 10%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-on-accent) 0%, transparent) 100%);
     pointer-events: none;
 }
 
@@ -65,7 +66,7 @@
     height: 1px;
     background: linear-gradient(90deg, 
         transparent 0%, 
-        rgba(255, 255, 255, 0.3) 50%, 
+        color-mix(in srgb, var(--w-theme-editor-on-accent) 30%, transparent) 50%, 
         transparent 100%);
 }
 
@@ -79,8 +80,8 @@
 .widget-icon {
     width: 48px;
     height: 48px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: var(--te-radius-md);
+    background: color-mix(in srgb, var(--w-theme-editor-on-accent) 20%, transparent);
+    border-radius: var(--w-theme-editor-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -107,38 +108,38 @@
 }
 
 .config-lang-switcher select {
-    background: rgba(255, 255, 255, 0.25);
+    background: color-mix(in srgb, var(--w-theme-editor-on-accent) 25%, transparent);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #ffffff;
+    border: 1px solid color-mix(in srgb, var(--w-theme-editor-on-accent) 30%, transparent);
+    color: var(--w-theme-editor-on-accent);
     font-size: 0.875rem;
     font-weight: 500;
     padding: 0.625rem 2.5rem 0.625rem 1rem;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 10%, transparent),
+                inset 0 1px 0 color-mix(in srgb, var(--w-theme-editor-on-accent) 20%, transparent);
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
 .config-lang-switcher select:hover {
-    background: rgba(255, 255, 255, 0.35);
-    border-color: rgba(255, 255, 255, 0.5);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15),
-                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    background: color-mix(in srgb, var(--w-theme-editor-on-accent) 35%, transparent);
+    border-color: color-mix(in srgb, var(--w-theme-editor-on-accent) 50%, transparent);
+    box-shadow: 0 4px 6px color-mix(in srgb, var(--weline-theme-overlay) 15%, transparent),
+                inset 0 1px 0 color-mix(in srgb, var(--w-theme-editor-on-accent) 30%, transparent);
 }
 
 .config-lang-switcher select:focus {
     outline: none;
-    background: rgba(255, 255, 255, 0.4);
-    border-color: rgba(255, 255, 255, 0.6);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2),
-                0 4px 6px rgba(0, 0, 0, 0.15);
+    background: color-mix(in srgb, var(--w-theme-editor-on-accent) 40%, transparent);
+    border-color: color-mix(in srgb, var(--w-theme-editor-on-accent) 60%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-theme-editor-on-accent) 20%, transparent),
+                0 4px 6px color-mix(in srgb, var(--weline-theme-overlay) 15%, transparent);
 }
 
 .config-lang-switcher select option {
-    background: var(--te-bg-card);
-    color: var(--te-text-primary);
+    background: var(--w-theme-editor-bg-card);
+    color: var(--w-theme-editor-text-primary);
 }
 
 /* ========================================
@@ -155,17 +156,17 @@
 
 .config-group {
     margin-bottom: 1.5rem;
-    border: 1px solid var(--te-border);
+    border: 1px solid var(--w-theme-editor-border);
     border-radius: 10px;
     overflow: hidden;
-    background: var(--te-bg-card);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    background: var(--w-theme-editor-bg-card);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
     transition: all 0.3s ease;
 }
 
 .config-group:hover {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-    border-color: rgba(99, 102, 241, 0.2);
+    box-shadow: 0 4px 6px color-mix(in srgb, var(--weline-theme-overlay) 7%, transparent);
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 20%, transparent);
 }
 
 .config-group:last-child {
@@ -179,12 +180,12 @@
     margin: 0;
     padding: 1rem 1.25rem;
     background: linear-gradient(135deg, 
-        var(--te-bg-hover) 0%, 
-        var(--te-bg-card) 100%);
+        var(--w-theme-editor-bg-hover) 0%, 
+        var(--w-theme-editor-bg-card) 100%);
     font-size: 0.9375rem;
     font-weight: 600;
-    color: var(--te-text-primary);
-    border-bottom: 1px solid var(--te-border);
+    color: var(--w-theme-editor-text-primary);
+    border-bottom: 1px solid var(--w-theme-editor-border);
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
@@ -198,9 +199,9 @@
     bottom: 0;
     width: 4px;
     background: linear-gradient(180deg, 
-        #667eea 0%, 
-        #764ba2 50%, 
-        #f093fb 100%);
+        var(--w-theme-editor-accent) 0%, 
+        var(--w-theme-editor-accent-hover) 50%, 
+        var(--weline-theme-info) 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -211,33 +212,33 @@
 
 .config-group-title:hover {
     background: linear-gradient(135deg, 
-        rgba(99, 102, 241, 0.05) 0%, 
-        var(--te-bg-card) 100%);
+        color-mix(in srgb, var(--w-theme-editor-accent) 5%, transparent) 0%, 
+        var(--w-theme-editor-bg-card) 100%);
     padding-left: 1.5rem;
 }
 
-.config-group-title i {
+.config-group-title .w-icon {
     font-size: 1.25rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--w-theme-editor-accent) 0%, var(--w-theme-editor-accent-hover) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
-.config-group-title .toggle-icon {
+.config-group-title .w-theme-editor-toggle-icon {
     margin-left: auto;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-size: 1.125rem;
-    color: var(--te-text-secondary);
+    color: var(--w-theme-editor-text-secondary);
 }
 
-.config-group.collapsed .toggle-icon {
+.config-group.collapsed .w-theme-editor-toggle-icon {
     transform: rotate(-90deg);
 }
 
 .config-fields {
     padding: 1.25rem;
-    background: var(--te-bg-card);
+    background: var(--w-theme-editor-bg-card);
 }
 
 .config-group.collapsed .config-fields {
@@ -263,12 +264,12 @@
     margin-bottom: 0.625rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--te-text-primary);
+    color: var(--w-theme-editor-text-primary);
     letter-spacing: -0.01em;
 }
 
 .config-label .required-mark {
-    color: #ef4444;
+    color: var(--w-theme-editor-danger);
     font-weight: 700;
     font-size: 1rem;
     line-height: 1;
@@ -276,7 +277,7 @@
 
 .config-label .translatable-icon {
     font-size: 1.125rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--w-theme-editor-accent) 0%, var(--w-theme-editor-accent-hover) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -303,56 +304,56 @@
     width: 4px;
     height: calc(100% - 0.5rem);
     background: linear-gradient(180deg, 
-        #667eea 0%, 
-        #764ba2 50%, 
-        #f093fb 100%);
+        var(--w-theme-editor-accent) 0%, 
+        var(--w-theme-editor-accent-hover) 50%, 
+        var(--weline-theme-info) 100%);
     border-radius: 3px;
     opacity: 0.6;
-    box-shadow: 0 0 8px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
     transition: all 0.3s ease;
 }
 
 .translatable-field:hover::before {
     opacity: 1;
-    box-shadow: 0 0 12px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--w-theme-editor-accent) 50%, transparent);
     width: 5px;
 }
 
 /* 表单控件样式 - 精致现代设计 */
-.config-field .form-control,
-.config-field .form-select {
-    border: 2px solid var(--te-border);
-    background: var(--te-bg-card);
-    color: var(--te-text-primary);
+.config-field :is(.w-input, .w-textarea),
+.config-field .w-select {
+    border: 2px solid var(--w-theme-editor-border);
+    background: var(--w-theme-editor-bg-card);
+    color: var(--w-theme-editor-text-primary);
     font-size: 0.875rem;
     padding: 0.625rem 0.875rem;
     border-radius: 8px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
 }
 
-.config-field .form-control:hover,
-.config-field .form-select:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+.config-field :is(.w-input, .w-textarea):hover,
+.config-field .w-select:hover {
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
 }
 
-.config-field .form-control:focus,
-.config-field .form-select:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1),
-                0 2px 4px rgba(0, 0, 0, 0.05);
-    background: var(--te-bg-card);
+.config-field :is(.w-input, .w-textarea):focus,
+.config-field .w-select:focus {
+    border-color: var(--w-theme-editor-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-theme-editor-accent) 10%, transparent),
+                0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
+    background: var(--w-theme-editor-bg-card);
     outline: none;
 }
 
-.config-field .form-control::placeholder {
-    color: var(--te-text-tertiary);
+.config-field :is(.w-input, .w-textarea)::placeholder {
+    color: var(--w-theme-editor-text-muted);
     opacity: 0.6;
 }
 
-.config-field .form-control:disabled,
-.config-field .form-select:disabled {
+.config-field :is(.w-input, .w-textarea):disabled,
+.config-field .w-select:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
@@ -362,10 +363,10 @@
     margin-top: 0.5rem;
     padding: 0.5rem 0.75rem;
     font-size: 0.8125rem;
-    color: var(--te-text-secondary);
+    color: var(--w-theme-editor-text-secondary);
     line-height: 1.5;
-    background: rgba(99, 102, 241, 0.03);
-    border-left: 3px solid rgba(99, 102, 241, 0.2);
+    background: color-mix(in srgb, var(--w-theme-editor-accent) 3%, transparent);
+    border-left: 3px solid color-mix(in srgb, var(--w-theme-editor-accent) 20%, transparent);
     border-radius: 4px;
 }
 
@@ -376,13 +377,13 @@
     padding: 0.375rem;
     border-radius: 8px;
     cursor: pointer;
-    border: 2px solid var(--te-border);
+    border: 2px solid var(--w-theme-editor-border);
     transition: all 0.3s ease;
 }
 
 .config-field input[type="color"]:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
 }
 
 .config-field input[type="color"]::-webkit-color-swatch-wrapper {
@@ -392,38 +393,38 @@
 .config-field input[type="color"]::-webkit-color-swatch {
     border: none;
     border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 10%, transparent);
 }
 
 /* Checkbox/Switch - 渐变开关 */
-.config-field .form-check {
+.config-field .w-check {
     padding-top: 0.375rem;
 }
 
-.config-field .form-check-input {
+.config-field :is(.w-check > input, .w-theme-editor-choice-input) {
     width: 1.25rem;
     height: 1.25rem;
-    border: 2px solid var(--te-border);
+    border: 2px solid var(--w-theme-editor-border);
     transition: all 0.3s ease;
 }
 
-.config-field .form-check-input:checked {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-color: #667eea;
-    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+.config-field :is(.w-check > input, .w-theme-editor-choice-input):checked {
+    background: linear-gradient(135deg, var(--w-theme-editor-accent) 0%, var(--w-theme-editor-accent-hover) 100%);
+    border-color: var(--w-theme-editor-accent);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
 }
 
-.config-field .form-check-input:hover {
-    border-color: rgba(99, 102, 241, 0.5);
+.config-field :is(.w-check > input, .w-theme-editor-choice-input):hover {
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 50%, transparent);
 }
 
-.config-field .form-switch .form-check-input {
+.config-field .w-switch > input {
     width: 2.5rem;
     height: 1.25rem;
     border-radius: 1rem;
 }
 
-.config-field .form-switch .form-check-input:checked {
+.config-field .w-switch > input:checked {
     background-position: right center;
 }
 
@@ -435,11 +436,11 @@
     display: flex;
     gap: 0.875rem;
     padding-top: 1.75rem;
-    border-top: 1px solid var(--te-border);
+    border-top: 1px solid var(--w-theme-editor-border);
     margin-top: 1.75rem;
 }
 
-.config-actions .btn {
+.config-actions .w-button {
     flex: 1;
     display: flex;
     align-items: center;
@@ -455,72 +456,72 @@
     overflow: hidden;
 }
 
-.config-actions .btn i {
+.config-actions .w-button .w-icon {
     font-size: 1.125rem;
     transition: transform 0.3s ease;
 }
 
-.config-actions .btn:hover i {
+.config-actions .w-button:hover .w-icon {
     transform: scale(1.1);
 }
 
-.config-actions .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #ffffff;
-    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+.config-actions .w-button[data-tone="primary"] {
+    background: linear-gradient(135deg, var(--w-theme-editor-accent) 0%, var(--w-theme-editor-accent-hover) 100%);
+    color: var(--w-theme-editor-on-accent);
+    box-shadow: 0 4px 6px color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
 }
 
-.config-actions .btn-primary::before {
+.config-actions .w-button[data-tone="primary"]::before {
     content: "";
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--w-theme-editor-on-accent) 20%, transparent) 0%, transparent 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
 }
 
-.config-actions .btn-primary:hover {
+.config-actions .w-button[data-tone="primary"]:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 6px 12px color-mix(in srgb, var(--w-theme-editor-accent) 40%, transparent);
 }
 
-.config-actions .btn-primary:hover::before {
+.config-actions .w-button[data-tone="primary"]:hover::before {
     opacity: 1;
 }
 
-.config-actions .btn-primary:active {
+.config-actions .w-button[data-tone="primary"]:active {
     transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
 }
 
-.config-actions .btn-outline-secondary {
-    background: var(--te-bg-card);
-    border: 2px solid var(--te-border);
-    color: var(--te-text-secondary);
+.config-actions .w-button[data-tone="neutral"][data-variant="outline"] {
+    background: var(--w-theme-editor-bg-card);
+    border: 2px solid var(--w-theme-editor-border);
+    color: var(--w-theme-editor-text-secondary);
 }
 
-.config-actions .btn-outline-secondary:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    background: rgba(99, 102, 241, 0.05);
-    color: var(--te-text-primary);
+.config-actions .w-button[data-tone="neutral"][data-variant="outline"]:hover {
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--w-theme-editor-accent) 5%, transparent);
+    color: var(--w-theme-editor-text-primary);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
 }
 
-.config-actions .btn-outline-danger {
-    background: var(--te-bg-card);
-    border: 2px solid rgba(239, 68, 68, 0.3);
-    color: #ef4444;
+.config-actions .w-button[data-tone="danger"][data-variant="outline"] {
+    background: var(--w-theme-editor-bg-card);
+    border: 2px solid color-mix(in srgb, var(--w-theme-editor-danger) 30%, transparent);
+    color: var(--w-theme-editor-danger);
 }
 
-.config-actions .btn-outline-danger:hover {
-    background: rgba(239, 68, 68, 0.05);
-    border-color: #ef4444;
+.config-actions .w-button[data-tone="danger"][data-variant="outline"]:hover {
+    background: color-mix(in srgb, var(--w-theme-editor-danger) 5%, transparent);
+    border-color: var(--w-theme-editor-danger);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--w-theme-editor-danger) 20%, transparent);
 }
 
 /* ========================================
@@ -530,14 +531,14 @@
 .config-empty-state {
     padding: 4rem 2rem;
     text-align: center;
-    color: var(--te-text-secondary);
+    color: var(--w-theme-editor-text-secondary);
 }
 
-.config-empty-state i {
+.config-empty-state .w-icon {
     font-size: 4rem;
     background: linear-gradient(135deg, 
-        rgba(99, 102, 241, 0.2) 0%, 
-        rgba(118, 75, 162, 0.2) 100%);
+        color-mix(in srgb, var(--w-theme-editor-accent) 20%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-accent-hover) 20%, transparent) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -568,19 +569,19 @@
 .config-loading {
     padding: 3rem 2rem;
     text-align: center;
-    color: var(--te-text-secondary);
+    color: var(--w-theme-editor-text-secondary);
 }
 
 .config-loading-spinner {
     width: 2.5rem;
     height: 2.5rem;
-    border: 3px solid rgba(99, 102, 241, 0.1);
-    border-top-color: #667eea;
-    border-right-color: #764ba2;
+    border: 3px solid color-mix(in srgb, var(--w-theme-editor-accent) 10%, transparent);
+    border-top-color: var(--w-theme-editor-accent);
+    border-right-color: var(--w-theme-editor-accent-hover);
     border-radius: 50%;
     animation: config-spin 0.8s linear infinite;
     margin: 0 auto 1.5rem;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--w-theme-editor-accent) 20%, transparent);
 }
 
 @keyframes config-spin {
@@ -614,7 +615,7 @@
         flex-direction: column;
     }
     
-    .config-actions .btn {
+    .config-actions .w-button {
         width: 100%;
     }
 }
@@ -624,11 +625,11 @@
    ======================================== */
 
 .widget-accordion-config {
-    border-top: 1px solid var(--te-border);
+    border-top: 1px solid var(--w-theme-editor-border);
     padding: 1.25rem;
     background: linear-gradient(135deg, 
-        var(--te-bg-hover) 0%, 
-        var(--te-bg-card) 100%);
+        var(--w-theme-editor-bg-hover) 0%, 
+        var(--w-theme-editor-bg-card) 100%);
     animation: slideDown 0.3s ease;
 }
 
@@ -656,8 +657,8 @@
     margin-bottom: 0.375rem;
 }
 
-.widget-accordion-config .form-control,
-.widget-accordion-config .form-select {
+.widget-accordion-config :is(.w-input, .w-textarea),
+.widget-accordion-config .w-select {
     font-size: 0.8125rem;
     padding: 0.375rem 0.75rem;
 }
@@ -668,7 +669,7 @@
     gap: 0.5rem;
 }
 
-.widget-accordion-config .btn-sm {
+.widget-accordion-config .w-button[data-size="sm"] {
     font-size: 0.8125rem;
     padding: 0.375rem 0.75rem;
 }
@@ -689,12 +690,12 @@
     left: 50%;
     transform: translateX(-50%) translateY(-8px);
     padding: 0.5rem 0.75rem;
-    background: var(--te-bg-dark);
-    color: var(--te-text-primary);
+    background: var(--w-theme-editor-bg-dark);
+    color: var(--w-theme-editor-text-primary);
     font-size: 0.75rem;
     white-space: nowrap;
-    border-radius: var(--te-radius-sm);
-    box-shadow: var(--te-shadow-lg);
+    border-radius: var(--w-theme-editor-radius-sm);
+    box-shadow: var(--w-theme-editor-shadow-lg);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -751,27 +752,27 @@
 .config-field:nth-child(n+6) { animation-delay: 0.3s; }
 
 /* 聚焦时的脉冲效果 */
-.config-field .form-control:focus,
-.config-field .form-select:focus {
+.config-field :is(.w-input, .w-textarea):focus,
+.config-field .w-select:focus {
     animation: focusPulse 0.6s ease;
 }
 
 @keyframes focusPulse {
     0%, 100% {
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-theme-editor-accent) 10%, transparent), 0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
     }
     50% {
-        box-shadow: 0 0 0 5px rgba(102, 126, 234, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 0 0 5px color-mix(in srgb, var(--w-theme-editor-accent) 15%, transparent), 0 2px 4px color-mix(in srgb, var(--weline-theme-overlay) 5%, transparent);
     }
 }
 
 /* 按钮点击涟漪效果 */
-.config-actions .btn {
+.config-actions .w-button {
     overflow: hidden;
     position: relative;
 }
 
-.config-actions .btn::after {
+.config-actions .w-button::after {
     content: "";
     position: absolute;
     top: 50%;
@@ -779,12 +780,12 @@
     width: 0;
     height: 0;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.5);
+    background: color-mix(in srgb, var(--w-theme-editor-on-accent) 50%, transparent);
     transform: translate(-50%, -50%);
     transition: width 0.6s ease, height 0.6s ease;
 }
 
-.config-actions .btn:active::after {
+.config-actions .w-button:active::after {
     width: 300px;
     height: 300px;
 }
@@ -809,10 +810,10 @@
 /* 成功状态指示 */
 @keyframes successFlash {
     0%, 100% {
-        background: var(--te-bg-card);
+        background: var(--w-theme-editor-bg-card);
     }
     50% {
-        background: rgba(16, 185, 129, 0.1);
+        background: color-mix(in srgb, var(--w-theme-editor-success) 10%, transparent);
     }
 }
 
@@ -837,21 +838,21 @@
     animation: errorShake 0.4s ease;
 }
 
-.config-field.error .form-control,
-.config-field.error .form-select {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+.config-field.error :is(.w-input, .w-textarea),
+.config-field.error .w-select {
+    border-color: var(--w-theme-editor-danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-theme-editor-danger) 10%, transparent);
 }
 
 /* 禁用状态优化 */
-.config-field .form-control:disabled,
-.config-field .form-select:disabled {
+.config-field :is(.w-input, .w-textarea):disabled,
+.config-field .w-select:disabled {
     background: repeating-linear-gradient(
         45deg,
-        var(--te-bg-hover),
-        var(--te-bg-hover) 10px,
-        var(--te-bg-card) 10px,
-        var(--te-bg-card) 20px
+        var(--w-theme-editor-bg-hover),
+        var(--w-theme-editor-bg-hover) 10px,
+        var(--w-theme-editor-bg-card) 10px,
+        var(--w-theme-editor-bg-card) 20px
     );
     cursor: not-allowed;
 }
@@ -862,43 +863,43 @@
 }
 
 .config-form::-webkit-scrollbar-track {
-    background: var(--te-bg-hover);
+    background: var(--w-theme-editor-bg-hover);
     border-radius: 4px;
 }
 
 .config-form::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--w-theme-editor-accent) 0%, var(--w-theme-editor-accent-hover) 100%);
     border-radius: 4px;
     transition: background 0.3s ease;
 }
 
 .config-form::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #764ba2 0%, #f093fb 100%);
+    background: linear-gradient(135deg, var(--w-theme-editor-accent-hover) 0%, var(--weline-theme-info) 100%);
 }
 
 /* 多选框组优化 */
-.config-field .form-check-group {
+.config-field :is(.checkbox-group, .radio-group) {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
 }
 
-.config-field .form-check-group .form-check {
+.config-field :is(.checkbox-group, .radio-group) .w-check {
     margin: 0;
     padding: 0.5rem 0.875rem;
-    background: var(--te-bg-hover);
-    border: 2px solid var(--te-border);
+    background: var(--w-theme-editor-bg-hover);
+    border: 2px solid var(--w-theme-editor-border);
     border-radius: 8px;
     transition: all 0.3s ease;
 }
 
-.config-field .form-check-group .form-check:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    background: rgba(99, 102, 241, 0.05);
+.config-field :is(.checkbox-group, .radio-group) .w-check:hover {
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--w-theme-editor-accent) 5%, transparent);
 }
 
-.config-field .form-check-group .form-check-input:checked ~ .form-check-label {
-    color: #667eea;
+.config-field :is(.checkbox-group, .radio-group) .w-check > input:checked ~ span {
+    color: var(--w-theme-editor-accent);
     font-weight: 600;
 }
 
@@ -923,29 +924,29 @@
     padding: 0.5rem 0.625rem;
     border-radius: 8px;
     background: linear-gradient(135deg,
-        rgba(102, 126, 234, 0.03) 0%,
-        rgba(118, 75, 162, 0.02) 100%);
-    border: 1px solid rgba(102, 126, 234, 0.08);
+        color-mix(in srgb, var(--w-theme-editor-accent) 3%, transparent) 0%,
+        color-mix(in srgb, var(--w-theme-editor-accent-hover) 2%, transparent) 100%);
+    border: 1px solid color-mix(in srgb, var(--w-theme-editor-accent) 8%, transparent);
     transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .config-field-input:hover {
     background: linear-gradient(135deg,
-        rgba(102, 126, 234, 0.05) 0%,
-        rgba(118, 75, 162, 0.04) 100%);
-    border-color: rgba(102, 126, 234, 0.15);
+        color-mix(in srgb, var(--w-theme-editor-accent) 5%, transparent) 0%,
+        color-mix(in srgb, var(--w-theme-editor-accent-hover) 4%, transparent) 100%);
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 15%, transparent);
 }
 
 .config-field-input:focus-within {
     background: linear-gradient(135deg,
-        rgba(102, 126, 234, 0.06) 0%,
-        rgba(118, 75, 162, 0.05) 100%);
-    border-color: rgba(102, 126, 234, 0.25);
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.08);
+        color-mix(in srgb, var(--w-theme-editor-accent) 6%, transparent) 0%,
+        color-mix(in srgb, var(--w-theme-editor-accent-hover) 5%, transparent) 100%);
+    border-color: color-mix(in srgb, var(--w-theme-editor-accent) 25%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--w-theme-editor-accent) 8%, transparent);
 }
 
-.config-field-input .form-control,
-.config-field-input .form-select,
+.config-field-input :is(.w-input, .w-textarea),
+.config-field-input .w-select,
 .config-field-input input[type="text"],
 .config-field-input input[type="number"],
 .config-field-input input[type="url"],
@@ -954,52 +955,26 @@
     width: 100%;
 }
 
-.config-field-input .form-control:focus,
-.config-field-input .form-select:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.12);
+.config-field-input :is(.w-input, .w-textarea):focus,
+.config-field-input .w-select:focus {
+    border-color: var(--w-theme-editor-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--w-theme-editor-accent) 12%, transparent);
 }
 
-/* 多语言编辑按钮 */
-.btn-i18n-edit {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.25rem 0.625rem;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    border-radius: 6px;
-    color: #667eea;
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.btn-i18n-edit:hover {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
-    border-color: rgba(102, 126, 234, 0.4);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-}
-
-.btn-i18n-edit.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-color: #667eea;
-    color: #fff;
-}
-
-.btn-i18n-edit i {
-    font-size: 0.875rem;
+/* 当前多语言字段的状态强调；按钮基础外观由 Weline UI 持有。 */
+.w-theme-editor-i18n-edit[aria-expanded="true"] {
+    background: var(--w-theme-editor-accent-light);
+    border-color: var(--w-theme-editor-accent);
+    color: var(--w-theme-editor-accent);
 }
 
 /* 多语言编辑面板 */
 .i18n-edit-panel {
     margin-top: 0.75rem;
     background: linear-gradient(135deg, 
-        rgba(102, 126, 234, 0.03) 0%, 
-        rgba(118, 75, 162, 0.03) 100%);
-    border: 1px solid rgba(102, 126, 234, 0.15);
+        color-mix(in srgb, var(--w-theme-editor-accent) 3%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-accent-hover) 3%, transparent) 100%);
+    border: 1px solid color-mix(in srgb, var(--w-theme-editor-accent) 15%, transparent);
     border-radius: 10px;
     overflow: hidden;
     animation: slideDown 0.3s ease;
@@ -1011,9 +986,9 @@
     justify-content: space-between;
     padding: 0.75rem 1rem;
     background: linear-gradient(135deg, 
-        rgba(102, 126, 234, 0.08) 0%, 
-        rgba(118, 75, 162, 0.08) 100%);
-    border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+        color-mix(in srgb, var(--w-theme-editor-accent) 8%, transparent) 0%, 
+        color-mix(in srgb, var(--w-theme-editor-accent-hover) 8%, transparent) 100%);
+    border-bottom: 1px solid color-mix(in srgb, var(--w-theme-editor-accent) 10%, transparent);
 }
 
 .i18n-panel-header span {
@@ -1022,30 +997,11 @@
     gap: 0.5rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: #667eea;
+    color: var(--w-theme-editor-accent);
 }
 
-.i18n-panel-header span i {
+.i18n-panel-header span .w-icon {
     font-size: 1rem;
-}
-
-.btn-i18n-close {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    color: var(--te-text-secondary);
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-i18n-close:hover {
-    background: rgba(0, 0, 0, 0.1);
-    color: var(--te-text-primary);
 }
 
 .i18n-panel-body {
@@ -1070,7 +1026,7 @@
     min-width: 100px;
     font-size: 0.8125rem;
     font-weight: 500;
-    color: var(--te-text-primary);
+    color: var(--w-theme-editor-text-primary);
 }
 
 .lang-flag {
@@ -1088,22 +1044,22 @@
     justify-content: flex-end;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    background: rgba(0, 0, 0, 0.02);
-    border-top: 1px solid rgba(102, 126, 234, 0.1);
+    background: color-mix(in srgb, var(--weline-theme-overlay) 2%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--w-theme-editor-accent) 10%, transparent);
     text-align: right;
 }
 
-.btn-save-i18n {
+.w-theme-editor-save-i18n {
     font-size: 0.75rem;
     padding: 0.375rem 0.875rem;
 }
 
-.btn-ai-i18n {
+.w-theme-editor-ai-i18n {
     font-size: 0.75rem;
     padding: 0.375rem 0.75rem;
 }
 
-.btn-ai-i18n[aria-busy="true"] {
+.w-theme-editor-ai-i18n[aria-busy="true"] {
     cursor: wait;
 }
 
@@ -1112,17 +1068,17 @@
     position: relative;
 }
 
-.input-with-icon i {
+.input-with-icon .w-icon {
     position: absolute;
     left: 0.75rem;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--te-text-tertiary);
+    color: var(--w-theme-editor-text-muted);
     font-size: 1rem;
     pointer-events: none;
 }
 
-.input-with-icon .form-control {
+.input-with-icon :is(.w-input, .w-textarea) {
     padding-left: 2.25rem;
 }
 
@@ -1133,27 +1089,27 @@
     gap: 0.5rem;
 }
 
-.color-picker-wrapper .form-control-color {
+.color-picker-wrapper .w-theme-editor-color-input {
     width: 42px;
     height: 38px;
     padding: 0.25rem;
-    border: 2px solid var(--te-border);
+    border: 2px solid var(--w-theme-editor-border);
     border-radius: 8px;
     cursor: pointer;
     flex-shrink: 0;
 }
 
-.color-picker-wrapper .form-control {
+.color-picker-wrapper :is(.w-input, .w-textarea) {
     flex: 1;
     font-family: monospace;
 }
 
 /* ========================================
    主题编辑器内表单控件（不依赖 Bootstrap）
-   form-control / array-item-input / input-group-text
+   w-input / array-item-input / w-field__addon
    ======================================== */
 
-.theme-editor-container .form-control,
+.theme-editor-container :is(.w-input, .w-textarea),
 .theme-editor-container .array-item-input {
     display: block;
     width: 100%;
@@ -1161,23 +1117,23 @@
     font-size: 11px;
     line-height: 1.4;
     min-height: 24px;
-    color: var(--te-text-primary, #1f2937);
-    background-color: var(--te-bg-card, #fff);
-    border: 1px solid var(--te-border, #d1d5db);
+    color: var(--w-theme-editor-text-primary);
+    background-color: var(--w-theme-editor-bg-card);
+    border: 1px solid var(--w-theme-editor-border);
     border-radius: 4px;
     box-sizing: border-box;
 }
 
-.theme-editor-container .form-control:focus,
+.theme-editor-container :is(.w-input, .w-textarea):focus,
 .theme-editor-container .array-item-input:focus {
-    border-color: var(--te-primary, #6366f1);
+    border-color: var(--w-theme-editor-accent);
     outline: 0;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--w-theme-editor-accent) 20%, transparent);
 }
 
-.theme-editor-container .form-control::placeholder,
+.theme-editor-container :is(.w-input, .w-textarea)::placeholder,
 .theme-editor-container .array-item-input::placeholder {
-    color: var(--te-text-tertiary, #9ca3af);
+    color: var(--w-theme-editor-text-muted);
 }
 
 .theme-editor-container .array-item-input {
@@ -1185,26 +1141,26 @@
     min-width: 0;
 }
 
-.theme-editor-container .input-group-text {
+.theme-editor-container .w-field__addon {
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
-    color: var(--te-text-secondary, #6b7280);
-    background: var(--te-bg-muted, #f3f4f6);
-    border: 1px solid var(--te-border, #d1d5db);
+    color: var(--w-theme-editor-text-secondary);
+    background: var(--w-theme-editor-bg-hover);
+    border: 1px solid var(--w-theme-editor-border);
     border-radius: 6px;
 }
 
-.theme-editor-container .input-group-text .te-icon {
+.theme-editor-container .w-field__addon .w-theme-editor-icon {
     display: inline-flex;
     width: 1.25em;
     height: 1.25em;
 }
 
 /* 内联 SVG 图标（不依赖图标字体） */
-.theme-editor-container .te-icon {
+.theme-editor-container .w-theme-editor-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1213,7 +1169,7 @@
     vertical-align: -0.2em;
 }
 
-.theme-editor-container .te-icon svg {
+.theme-editor-container .w-theme-editor-icon svg {
     width: 100%;
     height: 100%;
     fill: currentColor;
@@ -1230,8 +1186,12 @@
 .theme-editor-container .array-item-handle {
     display: flex;
     align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
     cursor: grab;
-    color: var(--te-text-tertiary, #9ca3af);
+    color: var(--w-theme-editor-text-muted);
 }
 
 .theme-editor-container .array-item-content {
@@ -1249,7 +1209,7 @@
 
 .theme-editor-container .array-item-title {
     margin-bottom: 0.5rem;
-    color: var(--te-text-secondary, #4b5563);
+    color: var(--w-theme-editor-text-secondary);
     font-size: 0.8125rem;
     font-weight: 600;
 }
@@ -1266,7 +1226,7 @@
 
 .theme-editor-container .array-item-label {
     margin: 0;
-    color: var(--te-text-secondary, #4b5563);
+    color: var(--w-theme-editor-text-secondary);
     font-size: 0.75rem;
     font-weight: 500;
 }
@@ -1283,10 +1243,10 @@
     width: 100%;
     min-height: 64px;
     overflow: hidden;
-    border: 1px dashed var(--te-border-color, #d1d5db);
+    border: 1px dashed var(--w-theme-editor-border);
     border-radius: 8px;
-    background: #f9fafb;
-    color: var(--te-text-tertiary, #9ca3af);
+    background: var(--w-theme-editor-bg-hover);
+    color: var(--w-theme-editor-text-muted);
 }
 
 .theme-editor-container .array-image-preview img {
@@ -1320,7 +1280,7 @@
 }
 
 .theme-editor-container .config-group-title {
-    border-bottom: 1px solid var(--te-border, #e5e7eb);
+    border-bottom: 1px solid var(--w-theme-editor-border);
     background: transparent;
 }
 
@@ -1370,7 +1330,7 @@
 .theme-editor-container .array-editor-wrapper .array-item {
     border: none;
     border-radius: 6px;
-    background: var(--te-bg-hover, #f8fafc);
+    background: var(--w-theme-editor-bg-hover);
     margin-bottom: 0.5rem;
 }
 
@@ -1379,7 +1339,7 @@
 }
 
 .theme-editor-container .array-editor-wrapper .array-item:hover {
-    background: var(--te-bg-hover, #f1f5f9);
+    background: var(--w-theme-editor-bg-hover);
 }
 
 .theme-editor-container .array-actions {
@@ -1390,12 +1350,12 @@
 
 .theme-editor-container .array-image-preview {
     border-style: solid;
-    border-color: var(--te-border, #e5e7eb);
-    background: #fff;
+    border-color: var(--w-theme-editor-border);
+    background: var(--w-theme-editor-bg-card);
 }
 
 .theme-editor-container .config-actions {
-    border-top: 1px solid var(--te-border, #e5e7eb);
+    border-top: 1px solid var(--w-theme-editor-border);
 }
 
 /* w-param 表单：同样去掉多层外框 */
@@ -1405,12 +1365,12 @@
 }
 
 .theme-editor-container .w-param-form .w-param-group-title {
-    border-bottom: 1px solid var(--te-border, #e5e7eb);
+    border-bottom: 1px solid var(--w-theme-editor-border);
     background: transparent;
 }
 
 .theme-editor-container .w-param-form .w-param-group-title:hover {
-    background: var(--te-bg-hover, #f8fafc);
+    background: var(--w-theme-editor-bg-hover);
 }
 
 .theme-editor-container .w-param-form .w-param-fields {
@@ -1426,7 +1386,7 @@
 .theme-editor-container .w-param-form .w-param-array-item {
     border: none;
     border-radius: 6px;
-    background: var(--te-bg-hover, #f8fafc);
+    background: var(--w-theme-editor-bg-hover);
     margin-bottom: 0.5rem;
 }
 
@@ -1435,7 +1395,7 @@
 }
 
 .theme-editor-container .w-param-form .w-param-array-item:hover {
-    background: var(--te-bg-hover, #f1f5f9);
+    background: var(--w-theme-editor-bg-hover);
 }
 
 .theme-editor-container .w-param-form .w-param-array-actions {
@@ -1446,12 +1406,12 @@
 
 .theme-editor-container .w-param-form .w-param-image-preview {
     border-style: solid;
-    border-color: var(--te-border, #e5e7eb);
-    background: #fff;
+    border-color: var(--w-theme-editor-border);
+    background: var(--w-theme-editor-bg-card);
 }
 
 .theme-editor-container .w-param-form .w-param-actions {
-    border-top: 1px solid var(--te-border, #e5e7eb);
+    border-top: 1px solid var(--w-theme-editor-border);
     background: transparent;
 }
 
@@ -1516,11 +1476,11 @@
     padding-left: 0.5rem;
 }
 
-.theme-editor-container .config-group-title i {
+.theme-editor-container .config-group-title .w-icon {
     font-size: 12px;
 }
 
-.theme-editor-container .config-group-title .toggle-icon {
+.theme-editor-container .config-group-title .w-theme-editor-toggle-icon {
     font-size: 12px;
 }
 
@@ -1554,15 +1514,15 @@
     gap: 0.375rem;
 }
 
-.theme-editor-container .config-actions .btn {
+.theme-editor-container .config-actions .w-button {
     padding: 2px 8px;
     min-height: 24px;
     font-size: 11px;
 }
 
 /* 紧凑密度：回退表单控件（config-field / array） */
-.theme-editor-container .config-field .form-control,
-.theme-editor-container .config-field .form-select,
+.theme-editor-container .config-field :is(.w-input, .w-textarea),
+.theme-editor-container .config-field .w-select,
 .theme-editor-container .config-field textarea {
     font-size: 11px;
     min-height: 24px;
@@ -1598,7 +1558,7 @@
 }
 
 .theme-editor-container .w-param-search-wrap .w-param-search,
-.theme-editor-container .w-param-search-wrap .form-control-sm {
+.theme-editor-container .w-param-search-wrap .w-theme-editor-control-sm {
     font-size: 11px;
     min-height: 24px;
     padding: 2px 8px;
@@ -1636,14 +1596,14 @@
     font-size: 12px;
 }
 
-.theme-editor-container .array-item-handle .te-icon {
+.theme-editor-container .array-item-handle .w-theme-editor-icon {
     width: 1em;
     height: 1em;
 }
 
-.theme-editor-container .array-item-actions .btn,
-.theme-editor-container .array-actions .btn,
-.theme-editor-container .btn-sm {
+.theme-editor-container .array-item-actions .w-button,
+.theme-editor-container .array-actions .w-button,
+.theme-editor-container .w-button[data-size="sm"] {
     min-height: 22px;
     padding: 1px 6px;
     font-size: 10px;
@@ -1651,8 +1611,8 @@
     border-radius: 4px;
 }
 
-.theme-editor-container .array-item-actions .btn .te-icon,
-.theme-editor-container .array-item-actions .btn svg {
+.theme-editor-container .array-item-actions .w-button .w-theme-editor-icon,
+.theme-editor-container .array-item-actions .w-button svg {
     width: 12px;
     height: 12px;
 }
@@ -1671,13 +1631,13 @@
     max-height: 72px;
 }
 
-.theme-editor-container .input-group-text {
+.theme-editor-container .w-field__addon {
     padding: 2px 6px;
     font-size: 11px;
     min-height: 24px;
 }
 
-.theme-editor-container .color-picker-wrapper .form-control-color {
+.theme-editor-container .color-picker-wrapper .w-theme-editor-color-input {
     width: 28px;
     height: 24px;
     padding: 1px;
@@ -1716,14 +1676,7 @@
     padding: 0.5rem;
 }
 
-.theme-editor-container .w-param-form .w-param-input,
-.theme-editor-container .w-param-form input[type="text"],
-.theme-editor-container .w-param-form input[type="number"],
-.theme-editor-container .w-param-form input[type="url"],
-.theme-editor-container .w-param-form input[type="email"],
-.theme-editor-container .w-param-form textarea,
-.theme-editor-container .w-param-form select.w-param-select,
-.theme-editor-container .w-param-form .w-param-select {
+.theme-editor-container .w-param-form :is(.w-input, .w-select, .w-textarea) {
     font-size: 11px;
     min-height: 24px;
     padding: 2px 8px;
@@ -1731,23 +1684,9 @@
     line-height: 1.4;
 }
 
-.theme-editor-container .w-param-form textarea {
+.theme-editor-container .w-param-form .w-textarea {
     min-height: 40px;
     padding: 4px 8px;
-}
-
-.theme-editor-container .w-param-form .w-param-btn {
-    min-height: 24px;
-    padding: 2px 8px;
-    font-size: 11px;
-    border-radius: 4px;
-    line-height: 1.4;
-}
-
-.theme-editor-container .w-param-form .w-param-btn-sm {
-    min-height: 22px;
-    padding: 1px 6px;
-    font-size: 10px;
 }
 
 .theme-editor-container .w-param-form .w-param-array-item {
@@ -1835,4 +1774,6 @@
 .theme-editor-container .w-param-form .w-param-form-check input[type="checkbox"] {
     width: 0.875rem;
     height: 0.875rem;
+}
+
 }

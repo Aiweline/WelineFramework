@@ -72,52 +72,52 @@ $formKey = (string) $this->getFormKeyValue();
 }
 </style>
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <h5 class="mb-0">
-        <i class="mdi mdi-database me-1"></i><?= __('域名池') ?>
+<div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+    <h5 style="--w-mb:0;">
+        <w:icon name="database" size="sm"></w:icon><?= __('域名池') ?>
     </h5>
-    <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="badge bg-primary-subtle text-primary" id="weline-pool-total-badge">
+    <div class="w-cluster" data-wrap="true" data-align="center" style="--w-gap:var(--weline-space-2);">
+        <span class="w-badge w-text" id="weline-pool-total-badge" data-w-background="primary" data-tone="primary">
             <?= __('共 %{1} 条', [(string) $poolTotal]) ?>
         </span>
-        <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-secondary" id="weline-pool-btn-clean-invalid" title="<?= __('清理含非法字符的误同步池记录') ?>">
-                <i class="mdi mdi-broom me-1"></i><?= __('清理误同步池记录') ?>
+        <div class="w-button-group" role="group">
+            <button type="button" class="w-button" id="weline-pool-btn-clean-invalid" title="<?= __('清理含非法字符的误同步池记录') ?>" data-tone="neutral" data-variant="outline">
+                <w:icon name="trash" size="sm"></w:icon><?= __('清理误同步池记录') ?>
             </button>
-            <button type="button" class="btn btn-outline-warning" id="weline-pool-btn-clean-dns" title="<?= __('删除根域@未指向本机IP的A/AAAA，并清空该根下域名池') ?>">
-                <i class="mdi mdi-dns me-1"></i><?= __('清理错误解析并移出池') ?>
+            <button type="button" class="w-button" id="weline-pool-btn-clean-dns" title="<?= __('删除根域@未指向本机IP的A/AAAA，并清空该根下域名池') ?>" data-tone="warning" data-variant="outline">
+                <w:icon name="dns" size="sm"></w:icon><?= __('清理错误解析并移出池') ?>
             </button>
         </div>
     </div>
 </div>
 
 <?php if (!$cronInstalled): ?>
-<div class="alert alert-warning mb-3" role="alert">
-    <div class="d-flex align-items-start">
-        <i class="mdi mdi-alert-circle-outline me-2 mt-1" style="font-size:1.25rem;"></i>
-        <div class="flex-grow-1">
-            <button type="button" class="btn btn-link p-0 text-start text-decoration-none fw-semibold" data-bs-toggle="collapse" data-bs-target="#weline-domain-pool-cron-collapse" aria-expanded="false" aria-controls="weline-domain-pool-cron-collapse">
+<div class="w-alert" role="alert" data-tone="warning" style="--w-mb:var(--weline-space-4);">
+    <div class="w-cluster" data-align="start">
+        <w:icon name="warning" size="sm"></w:icon>
+        <div data-grow="true">
+            <button type="button" class="w-button w-text" aria-expanded="false" aria-controls="weline-domain-pool-cron-collapse" data-w-target="#weline-domain-pool-cron-collapse" data-w-action="disclosure.toggle" data-align="start" data-w-decoration="none" data-weight="strong" data-tone="quiet" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
                 <?= __('cron未安装，无法自动检查域名状态，请点击查看安装指南') ?>
-                <i class="mdi mdi-chevron-down ms-1"></i>
+                <w:icon name="chevron-down" size="sm"></w:icon>
             </button>
-            <div class="collapse mt-2" id="weline-domain-pool-cron-collapse">
-                <p class="text-muted small mb-2"><?= __('域名池中的域名需通过定时任务定期检测解析状态、HTTPS 与建站就绪。请按以下步骤安装系统定时任务：') ?></p>
-                <ol class="small mb-0 ps-3">
-                    <li><?= __('在项目根目录执行命令：') ?><code class="bg-light px-1 rounded">php bin/w cron:install</code></li>
+            <div class="w-disclosure__panel" id="weline-domain-pool-cron-collapse" data-w-disclosure-panel hidden style="--w-mt:var(--weline-space-2);">
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);"><?= __('域名池中的域名需通过定时任务定期检测解析状态、HTTPS 与建站就绪。请按以下步骤安装系统定时任务：') ?></p>
+                <ol class="w-text ps-3" data-size="sm" style="--w-mb:0;">
+                    <li><?= __('在项目根目录执行命令：') ?><code data-w-background="muted" data-w-radius="md" style="--w-ps:var(--weline-space-1);--w-pe:var(--weline-space-1);">php bin/w cron:install</code></li>
                     <li><strong><?= __('Linux / macOS') ?></strong>：<?= __('命令会在 crontab 中添加每分钟执行的任务，自动运行所有定时任务（含域名池解析检测）。') ?></li>
                     <li><strong><?= __('Windows') ?></strong>：<?= __('命令会创建系统计划任务。若遇到权限问题，请以管理员身份运行，或在本地安全策略中赋予当前用户「作为批处理作业登录」权限。') ?></li>
                 </ol>
-                <p class="small text-muted mt-2 mb-0"><?= __('安装完成后刷新本页面，将不再显示此提示。') ?></p>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('安装完成后刷新本页面，将不再显示此提示。') ?></p>
             </div>
         </div>
     </div>
 </div>
 <?php endif; ?>
 
-<div id="weline-pool-alert" class="alert d-none mb-3" role="alert"></div>
+<div id="weline-pool-alert" class="w-alert" role="alert" hidden style="--w-mb:var(--weline-space-4);"></div>
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-    <div class="text-muted small" id="weline-pool-page-info">
+<div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+    <div class="w-text" id="weline-pool-page-info" data-tone="muted" data-size="sm">
         <?php if ($poolTotal > 0): ?>
             <?= __('第 %{p} / %{t} 页，每页 %{n} 条，合计 %{total} 条', [
                 'p' => (string) $poolPage,
@@ -129,9 +129,9 @@ $formKey = (string) $this->getFormKeyValue();
             <?= __('暂无数据') ?>
         <?php endif; ?>
     </div>
-    <div class="d-flex align-items-center gap-2">
-        <label class="small text-muted mb-0"><?= __('每页') ?></label>
-        <select class="form-select form-select-sm" id="weline-pool-page-size" style="width:5rem;">
+    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+        <label class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><?= __('每页') ?></label>
+        <select class="w-select" id="weline-pool-page-size" style="width:5rem;" data-size="sm">
             <?php foreach ([10, 20, 50, 100] as $ps): ?>
                 <option value="<?= $ps ?>" <?= $poolLimit === $ps ? 'selected' : '' ?>><?= $ps ?></option>
             <?php endforeach; ?>
@@ -139,9 +139,9 @@ $formKey = (string) $this->getFormKeyValue();
     </div>
 </div>
 
-<div class="table-responsive overflow-x-auto" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-    <table class="table table-hover align-middle mb-0 weline-pool-table">
-        <thead class="table-light">
+<div class="w-table-wrap" style="overflow-x: auto; -webkit-overflow-scrolling: touch;" data-w-overflow="x-auto">
+    <table class="w-table weline-pool-table" data-w-vertical="middle" style="--w-mb:0;">
+        <thead>
         <tr>
             <th><?= __('域名') ?></th>
             <th><?= __('服务商') ?></th>
@@ -152,9 +152,9 @@ $formKey = (string) $this->getFormKeyValue();
         <tbody id="weline-pool-tbody">
         <?php if ($poolTotal === 0): ?>
             <tr>
-                <td colspan="4" class="text-center py-5 text-muted">
-                    <i class="mdi mdi-database-remove" style="font-size:2rem;"></i>
-                    <p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p>
+                <td colspan="4" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="minus" size="sm"></w:icon>
+                    <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><?= __('域名池暂无数据') ?></p>
                     <small><?= __('请先在「域名列表」中转存到域名池，或执行 DNS 查询/解析自动入池') ?></small>
                 </td>
             </tr>
@@ -189,54 +189,54 @@ $formKey = (string) $this->getFormKeyValue();
                     </td>
                     <td>
                         <div class="weline-pool-provider-cell">
-                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label"><?= __('注册') ?></span><span class="badge bg-primary-subtle text-primary"><?= \htmlspecialchars($registrarName, ENT_QUOTES, 'UTF-8') ?></span></div>
-                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label">DNS</span><span class="badge bg-warning-subtle text-warning"><?= \htmlspecialchars($dnsProviderName, ENT_QUOTES, 'UTF-8') ?></span></div>
-                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label">CDN</span><span class="badge bg-info-subtle text-info"><?= \htmlspecialchars($cdnProviderName, ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label"><?= __('注册') ?></span><span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= \htmlspecialchars($registrarName, ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label">DNS</span><span class="w-badge w-text" data-w-background="warning" data-tone="warning"><?= \htmlspecialchars($dnsProviderName, ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label">CDN</span><span class="w-badge w-text" data-w-background="info" data-tone="info"><?= \htmlspecialchars($cdnProviderName, ENT_QUOTES, 'UTF-8') ?></span></div>
                         </div>
                     </td>
                     <td>
                         <div class="weline-pool-summary-cell">
                             <div class="weline-pool-summary-row">
                                 <?php if ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVED): ?>
-                                    <span class="badge bg-success-subtle text-success"><?= __('已解析') ?></span>
+                                    <span class="w-badge w-text" data-w-background="success" data-tone="success"><?= __('已解析') ?></span>
                                 <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVING): ?>
-                                    <span class="badge bg-info-subtle text-info"><?= __('解析中') ?></span>
+                                    <span class="w-badge w-text" data-w-background="info" data-tone="info"><?= __('解析中') ?></span>
                                 <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_ERROR): ?>
-                                    <span class="badge bg-danger-subtle text-danger"><?= __('异常') ?></span>
+                                    <span class="w-badge w-text" data-w-background="danger" data-tone="danger"><?= __('异常') ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-warning-subtle text-warning"><?= __('待检测') ?></span>
+                                    <span class="w-badge w-text" data-w-background="warning" data-tone="warning"><?= __('待检测') ?></span>
                                 <?php endif; ?>
                                 <?php if ($httpsStatus === DomainPool::HTTPS_STATUS_VALID): ?>
-                                    <span class="badge bg-success-subtle text-success"><?= __('有效') ?></span>
+                                    <span class="w-badge w-text" data-w-background="success" data-tone="success"><?= __('有效') ?></span>
                                 <?php elseif ($httpsStatus === DomainPool::HTTPS_STATUS_PENDING): ?>
-                                    <span class="badge bg-warning-subtle text-warning"><?= __('申请中') ?></span>
+                                    <span class="w-badge w-text" data-w-background="warning" data-tone="warning"><?= __('申请中') ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary-subtle text-secondary"><?= __('无') ?></span>
+                                    <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('无') ?></span>
                                 <?php endif; ?>
                                 <?php if ($isLocal): ?>
-                                    <span class="badge bg-primary-subtle text-primary"><?= __('本机') ?></span>
+                                    <span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= __('本机') ?></span>
                                 <?php endif; ?>
                             </div>
                             <div class="weline-pool-summary-row">
                                 <?php if ($siteReady): ?>
-                                    <span class="badge bg-success"><?= __('可用') ?></span>
+                                    <span class="w-badge" data-w-background="success"><?= __('可用') ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary"><?= __('未就绪') ?></span>
+                                    <span class="w-badge" data-w-background="muted"><?= __('未就绪') ?></span>
                                 <?php endif; ?>
                                 <?php if ($siteCreated): ?>
-                                    <span class="badge bg-info"><?= __('已建站') ?></span>
+                                    <span class="w-badge" data-w-background="info"><?= __('已建站') ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary"><?= __('未建站') ?></span>
+                                    <span class="w-badge" data-w-background="muted"><?= __('未建站') ?></span>
                                 <?php endif; ?>
-                                <span class="badge bg-light text-muted" title="<?= \htmlspecialchars($connTitle, ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-radar me-1" aria-hidden="true"></i><?= __('连通性') ?></span>
+                                <span class="w-badge w-text" title="<?= \htmlspecialchars($connTitle, ENT_QUOTES, 'UTF-8') ?>" data-w-background="muted" data-tone="muted"><w:icon name="search" size="sm"></w:icon><?= __('连通性') ?></span>
                             </div>
                         </div>
                     </td>
                     <td class="weline-pool-flow-cell">
-                        <?= $flowHtml !== '' ? $flowHtml : '<span class="text-muted small">—</span>' ?>
+                        <?= $flowHtml !== '' ? $flowHtml : '<span class="w-text" data-tone="muted" data-size="sm">—</span>' ?>
                         <?php if ($poolId > 0): ?>
-                            <div class="mt-1">
-                                <button type="button" class="btn btn-link btn-sm p-0 weline-pool-flow-log-btn" data-pool-id="<?= (int) $poolId ?>"><?= __('时间线') ?></button>
+                            <div style="--w-mt:var(--weline-space-1);">
+                                <button type="button" class="w-button weline-pool-flow-log-btn" data-pool-id="<?= (int) $poolId ?>" data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;"><?= __('时间线') ?></button>
                             </div>
                         <?php endif; ?>
                     </td>
@@ -247,39 +247,12 @@ $formKey = (string) $this->getFormKeyValue();
     </table>
 </div>
 
-<nav class="mt-3" aria-label="Pool pagination">
-    <ul class="pagination pagination-sm justify-content-center mb-0" id="weline-pool-pagination"></ul>
+<nav aria-label="Pool pagination" style="--w-mt:var(--weline-space-4);">
+    <ul class="w-pagination pagination-sm" id="weline-pool-pagination" data-justify="center" style="--w-mb:0;"></ul>
 </nav>
 
 
-<script>
-(function(g){
-  if(g.__bqAdmin_websites) return;
-  g.__bqAdmin_websites=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['websites']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('websites').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
+
 <script>
 (function(){
 'use strict';
@@ -306,29 +279,29 @@ function rowHtml(row) {
     var cdn = row._cdn_provider_name || '-';
     var connDetail = (row.connectivity_detail || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     var connTitle = connDetail || (row.connectivity_checked_at ? ('<?= __('检测于') ?> ' + (row.connectivity_checked_at || '')) : '<?= __('待检测') ?>');
-    var connCell = '<span class="badge bg-light text-muted" title="' + connTitle + '"><i class="mdi mdi-radar me-1" aria-hidden="true"></i><?= __('连通性') ?></span>';
+    var connCell = '<span class="w-badge w-text" title="' + connTitle + '" data-w-background="muted" data-tone="muted"><w:icon name="search" size="sm"></w:icon><?= __('连通性') ?></span>';
     function rb(s, a, b, c, e) {
-        if (s === 'resolved') return '<span class="badge bg-success-subtle text-success">' + a + '</span>';
-        if (s === 'resolving') return '<span class="badge bg-info-subtle text-info">' + b + '</span>';
-        if (s === 'error') return '<span class="badge bg-danger-subtle text-danger">' + c + '</span>';
-        return '<span class="badge bg-warning-subtle text-warning">' + e + '</span>';
+        if (s === 'resolved') return '<span class="w-badge w-text" data-w-background="success" data-tone="success">' + a + '</span>';
+        if (s === 'resolving') return '<span class="w-badge w-text" data-w-background="info" data-tone="info">' + b + '</span>';
+        if (s === 'error') return '<span class="w-badge w-text" data-w-background="danger" data-tone="danger">' + c + '</span>';
+        return '<span class="w-badge w-text" data-w-background="warning" data-tone="warning">' + e + '</span>';
     }
     var resolveBadge = rb(rs, '<?= __('已解析') ?>', '<?= __('解析中') ?>', '<?= __('异常') ?>', '<?= __('待检测') ?>');
-    var localBadge = il ? '<span class="badge bg-primary-subtle text-primary"><?= __('本机') ?></span>' : '';
-    var httpsBadge = hs === 'valid' ? '<span class="badge bg-success-subtle text-success"><?= __('有效') ?></span>' : (hs === 'pending' ? '<span class="badge bg-warning-subtle text-warning"><?= __('申请中') ?></span>' : '<span class="badge bg-secondary-subtle text-secondary"><?= __('无') ?></span>');
-    var readyBadge = sr ? '<span class="badge bg-success"><?= __('可用') ?></span>' : '<span class="badge bg-secondary"><?= __('未就绪') ?></span>';
-    var createdBadge = sc ? '<span class="badge bg-info"><?= __('已建站') ?></span>' : '<span class="badge bg-secondary"><?= __('未建站') ?></span>';
-    var flowCell = flowH || '<span class="text-muted small">—</span>';
+    var localBadge = il ? '<span class="w-badge w-text" data-w-background="primary" data-tone="primary"><?= __('本机') ?></span>' : '';
+    var httpsBadge = hs === 'valid' ? '<span class="w-badge w-text" data-w-background="success" data-tone="success"><?= __('有效') ?></span>' : (hs === 'pending' ? '<span class="w-badge w-text" data-w-background="warning" data-tone="warning"><?= __('申请中') ?></span>' : '<span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('无') ?></span>');
+    var readyBadge = sr ? '<span class="w-badge" data-w-background="success"><?= __('可用') ?></span>' : '<span class="w-badge" data-w-background="muted"><?= __('未就绪') ?></span>';
+    var createdBadge = sc ? '<span class="w-badge" data-w-background="info"><?= __('已建站') ?></span>' : '<span class="w-badge" data-w-background="muted"><?= __('未建站') ?></span>';
+    var flowCell = flowH || '<span class="w-text" data-tone="muted" data-size="sm">—</span>';
     if (pid > 0) {
-        flowCell += '<div class="mt-1"><button type="button" class="btn btn-link btn-sm p-0 weline-pool-flow-log-btn" data-pool-id="' + pid + '"><?= __('时间线') ?></button></div>';
+        flowCell += '<div style="--w-mt:var(--weline-space-1);"><button type="button" class="w-button weline-pool-flow-log-btn" data-pool-id="' + pid + '" data-tone="quiet" data-size="sm" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;"><?= __('时间线') ?></button></div>';
     }
     var domainCell = '<div class="weline-pool-domain-cell"><strong>' + escapeHtml(d) + '</strong>' +
         ((r && r !== d) ? '<span class="weline-pool-domain-sub">' + escapeHtml(r) + '</span>' : '') +
         '</div>';
     var providerCell = '<div class="weline-pool-provider-cell">' +
-        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label"><?= __('注册') ?></span><span class="badge bg-primary-subtle text-primary">' + escapeHtml(reg) + '</span></div>' +
-        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label">DNS</span><span class="badge bg-warning-subtle text-warning">' + escapeHtml(dns) + '</span></div>' +
-        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label">CDN</span><span class="badge bg-info-subtle text-info">' + escapeHtml(cdn) + '</span></div>' +
+        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label"><?= __('注册') ?></span><span class="w-badge w-text" data-w-background="primary" data-tone="primary">' + escapeHtml(reg) + '</span></div>' +
+        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label">DNS</span><span class="w-badge w-text" data-w-background="warning" data-tone="warning">' + escapeHtml(dns) + '</span></div>' +
+        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label">CDN</span><span class="w-badge w-text" data-w-background="info" data-tone="info">' + escapeHtml(cdn) + '</span></div>' +
         '</div>';
     var summaryCell = '<div class="weline-pool-summary-cell">' +
         '<div class="weline-pool-summary-row">' + resolveBadge + httpsBadge + localBadge + '</div>' +
@@ -341,9 +314,9 @@ function openWelinePoolFlowLogModal(title, htmlInner) {
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:1rem;';
     var dlg = document.createElement('div');
     dlg.style.cssText = 'background:var(--backend-color-card-bg,#fff);border-radius:.75rem;padding:1.25rem;max-width:90vw;width:720px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);';
-    dlg.innerHTML = '<h5 class="mb-3" style="margin:0 0 12px;font-size:1.1rem;">' + escapeHtml(title) + '</h5>' +
+    dlg.innerHTML = '<h5 style="margin:0 0 12px;font-size:1.1rem;">' + escapeHtml(title) + '</h5>' +
         '<div class="weline-pool-flow-body">' + htmlInner + '</div>' +
-        '<button type="button" class="btn btn-primary mt-3 weline-pool-flow-close"><?= __('关闭') ?></button>';
+        '<button type="button" class="w-button weline-pool-flow-close" data-tone="primary" style="--w-mt:var(--weline-space-4);"><?= __('关闭') ?></button>';
     overlay.appendChild(dlg);
     document.body.appendChild(overlay);
     document.body.style.overflow = 'hidden';
@@ -367,11 +340,11 @@ function loadPage(page) {
     currentPage = page || 1;
     var tbody = document.getElementById('weline-pool-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><w:icon name="circle" size="sm"></w:icon> <?= __('加载中...') ?></td></tr>';
     var u = poolListUrl + (poolListUrl.indexOf('?') >= 0 ? '&' : '?') + 'page=' + encodeURIComponent(currentPage) + '&page_size=' + encodeURIComponent(pageSize);
-    bqAdmin['websites'](u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
+    Weline.adminRequest('websites', u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
             return;
         }
         var d = data.data;
@@ -384,13 +357,13 @@ function loadPage(page) {
             : '<?= __('暂无数据') ?>';
         var items = d.items || [];
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-muted"><i class="mdi mdi-database-remove" style="font-size:2rem;"></i><p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="minus" size="sm"></w:icon><p style="--w-mb:0;--w-mt:var(--weline-space-2);"><?= __('域名池暂无数据') ?></p></td></tr>';
         } else {
             tbody.innerHTML = items.map(rowHtml).join('');
         }
         renderPager(parseInt(d.page, 10) || 1, pages);
     }).catch(function(){
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4"><?= __('请求失败') ?></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请求失败') ?></td></tr>';
     });
 }
 function renderPager(page, lastPage) {
@@ -398,14 +371,14 @@ function renderPager(page, lastPage) {
     if (!nav) return;
     var h = '';
     if (lastPage > 1) {
-        h += '<li class="page-item ' + (page <= 1 ? 'disabled' : '') + '"><a class="page-link" href="#" data-p="' + (page - 1) + '">&laquo;</a></li>';
+        h += '<li class="w-pagination__item ' + (page <= 1 ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-p="' + (page - 1) + '">&laquo;</a></li>';
         var s = Math.max(1, page - 2), e = Math.min(lastPage, page + 2);
         for (var i = s; i <= e; i++) {
-            h += '<li class="page-item ' + (i === page ? 'active' : '') + '"><a class="page-link" href="#" data-p="' + i + '">' + i + '</a></li>';
+            h += '<li class="w-pagination__item ' + (i === page ? 'active' : '')"><a class="w-pagination__link" href="#" data-p="' + i + '">' + i + '</a></li>';
         }
-        h += '<li class="page-item ' + (page >= lastPage ? 'disabled' : '') + '"><a class="page-link" href="#" data-p="' + (page + 1) + '">&raquo;</a></li>';
+        h += '<li class="w-pagination__item ' + (page >= lastPage ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-p="' + (page + 1) + '">&raquo;</a></li>';
     } else if (totalRows > 0) {
-        h = '<li class="page-item disabled"><span class="page-link"><?= __('共 1 页') ?></span></li>';
+        h = '<li class="w-pagination__item" aria-disabled="true"><span class="w-pagination__link"><?= __('共 1 页') ?></span></li>';
     }
     nav.innerHTML = h;
     nav.querySelectorAll('a.page-link[data-p]').forEach(function(a){
@@ -427,7 +400,7 @@ function postJson(url, dry) {
     var fd = new FormData();
     fd.append('dry_run', dry ? '1' : '0');
     if (formKey) fd.append('form_key', formKey);
-    return bqAdmin['websites'](url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); });
+    return Weline.adminRequest('websites', url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); });
 }
 function showInlineAlert(message, type) {
     var el = document.getElementById('weline-pool-alert');
@@ -446,63 +419,21 @@ function showInlineAlert(message, type) {
     el.classList.add(map[type] || 'alert-primary');
 }
 function toastError(message) {
-    if (typeof BackendToast !== 'undefined' && BackendToast.error) return BackendToast.error(message);
+    if (typeof Weline.UI.toast !== 'undefined' && Weline.UI.toast.error) return Weline.UI.toast.error(message);
     showInlineAlert(message, 'danger');
 }
 function toastSuccess(message) {
-    if (typeof BackendToast !== 'undefined' && BackendToast.success) return BackendToast.success(message);
+    if (typeof Weline.UI.toast !== 'undefined' && Weline.UI.toast.success) return Weline.UI.toast.success(message);
     showInlineAlert(message, 'success');
 }
 function backendConfirmPromise(title, options) {
     options = options || {};
-    if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
-        return BackendConfirm.show(title, options);
-    }
-    return new Promise(function(resolve){
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10003;display:flex;align-items:center;justify-content:center;padding:1rem;';
-
-        var dlg = document.createElement('div');
-        dlg.style.cssText = 'background:var(--backend-color-card-bg,#fff);border-radius:.75rem;padding:1.25rem;max-width:90vw;width:680px;box-shadow:0 8px 32px rgba(0,0,0,.2);';
-
-        var type = options.type || 'primary';
-        var btnClass = 'btn-primary';
-        if (type === 'danger') btnClass = 'btn-danger';
-        else if (type === 'warning') btnClass = 'btn-warning';
-        else if (type === 'info') btnClass = 'btn-info';
-        else if (type === 'success') btnClass = 'btn-success';
-
-        var headerTitle = options.title || '';
-        var confirmText = options.confirmText || '<?= __('确认') ?>';
-        var cancelText = options.cancelText || '<?= __('取消') ?>';
-
-        dlg.innerHTML =
-            (headerTitle ? '<div class="text-secondary small mb-2">' + escapeHtml(headerTitle) + '</div>' : '') +
-            '<div style="white-space:pre-wrap;">' + escapeHtml(title) + '</div>' +
-            '<div class="d-flex justify-content-end gap-2 mt-3">' +
-            '<button type="button" class="btn btn-outline-secondary" data-weline-cancel="1">' + escapeHtml(cancelText) + '</button>' +
-            '<button type="button" class="btn ' + btnClass + '" data-weline-confirm="1">' + escapeHtml(confirmText) + '</button>' +
-            '</div>';
-
-        overlay.appendChild(dlg);
-        document.body.appendChild(overlay);
-
-        document.body.style.overflow = 'hidden';
-        function close(ok) {
-            overlay.remove();
-            document.body.style.overflow = '';
-            resolve(ok === true);
-        }
-
-        dlg.querySelector('[data-weline-cancel="1"]').addEventListener('click', function(){ close(false); });
-        dlg.querySelector('[data-weline-confirm="1"]').addEventListener('click', function(){ close(true); });
-        overlay.addEventListener('click', function(e){ if (e.target === overlay) close(false); });
-        document.addEventListener('keydown', function onKey(e){
-            if (e.key === 'Escape') {
-                document.removeEventListener('keydown', onKey);
-                close(false);
-            }
-        });
+    return Weline.UI.dialog.confirm(title, {
+        title: options.title || '',
+        tone: options.type || 'warning',
+        dangerous: options.type === 'danger',
+        confirmLabel: options.confirmText || '<?= __('确认') ?>',
+        cancelLabel: options.cancelText || '<?= __('取消') ?>'
     });
 }
 function toastResult(data) {
@@ -556,13 +487,13 @@ document.getElementById('weline-pool-tbody').addEventListener('click', function(
     var id = t.getAttribute('data-pool-id');
     if (!id) return;
     var u = poolFlowLogUrl + (poolFlowLogUrl.indexOf('?') >= 0 ? '&' : '?') + 'pool_id=' + encodeURIComponent(id);
-    bqAdmin['websites'](u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
+    Weline.adminRequest('websites', u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data || !data.data.items) {
             toastError(data.msg || 'Error');
             return;
         }
         var lines = data.data.items.map(function(x){ return (x.at || '') + ' [' + (x.kind || '') + '] ' + (x.message || ''); });
-        var body = lines.length ? '<pre class="small mb-0 text-start" style="white-space:pre-wrap;max-height:70vh;overflow:auto;">' +
+        var body = lines.length ? '<pre class="w-text" style="white-space:pre-wrap;max-height:70vh;overflow:auto;" data-align="start" data-size="sm">' +
             lines.map(function(s){ return escapeHtml(s); }).join('\n') + '</pre>' : '<?= __('暂无记录') ?>';
         openWelinePoolFlowLogModal('<?= __('流转记录') ?> #' + id, body);
     }).catch(function(){ toastError('<?= __('请求失败') ?>'); });

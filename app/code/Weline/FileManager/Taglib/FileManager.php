@@ -40,6 +40,7 @@ class FileManager implements TaglibInterface
             'target' => true,
             'path' => true,
             'lockPath' => false,
+            'preview' => false,
             'setAttr' => false,
             'value' => true,
             'vars' => false,
@@ -73,6 +74,13 @@ class FileManager implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            $booleanAttribute = static function (mixed $value, bool $default): bool {
+                if ($value === null || $value === '') {
+                    return $default;
+                }
+                $parsed = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+                return $parsed ?? $default;
+            };
             // 如果匹配到</file-manager>，则返回空
             if (str_contains($tag_data[0]??'', '</file-manager>')) {
                 throw new \Exception(__('文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。'));
@@ -82,6 +90,9 @@ class FileManager implements TaglibInterface
             } else {
                 # 检查是否有配置默认的文件管理器，默认使用 weline_media
                 $userConfigFileManager = ObjectManager::getInstance(BackendUserConfigStore::class)->getConfig('file_manager') ?: 'weline_media';
+            }
+            if ($userConfigFileManager === 'local') {
+                $userConfigFileManager = 'weline_media';
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigFileManager;
             /**@var CachePoolInterface $cache */
@@ -130,6 +141,9 @@ class FileManager implements TaglibInterface
                 /**@var \Weline\FileManager\FileManager $fileManager */
                 $fileManager = $fileManagers[$userConfigFileManager];
             }
+            if (!isset($fileManager) || !($fileManager instanceof FileManagerInterface)) {
+                throw new \RuntimeException(__('未找到可用的文件管理器实现。'));
+            }
             if (!isset($attributes['target'])) {
                 throw new \Exception(__('缺少目标ID。文档：%{1}', self::document()));
             }
@@ -139,11 +153,11 @@ class FileManager implements TaglibInterface
             $fileManager
                 ->setTarget(trim($attributes['target'], '#'))
                 ->setPath($attributes['path'] ?? '')
-                ->setLockPath((bool)($attributes['lockPath'] ?? false))
-                ->setPreview((bool)($attributes['preview'] ?? true))
+                ->setLockPath($booleanAttribute($attributes['lockPath'] ?? null, false))
+                ->setPreview($booleanAttribute($attributes['preview'] ?? null, true))
                 ->setValue($attributes['value'] ?? '')
                 ->setTitle($attributes['title'] ?? '')
-                ->setMulti($attributes['multi'] ?? '')
+                ->setMulti($booleanAttribute($attributes['multi'] ?? null, false))
                 ->setWidth($attributes['w'] ?? 50)
                 ->setHeight($attributes['h'] ?? 50)
                 ->setExt($attributes['ext'] ?? '*')
@@ -210,7 +224,7 @@ class FileManager implements TaglibInterface
 使用方法：
 {$doc}
 参数解释：
-code：可选,指定安装的编辑器代码。例如：local、elfinder、weline_media
+code：可选，指定文件管理器实现，例如：local、weline_media
 target：目标容器id【选择文件后会根据id回填到属性value上】
 preview: 是否预览。默认：1
 ext：可选。允许的文件后缀，默认 * 表示所有类型，例如：jpg,png,gif,webp

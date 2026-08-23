@@ -4,7 +4,7 @@
 > 作者：Codex（依据 2026-04-23 代码快照）
 > 上游文档：`WLS-HA-IPC-REDESIGN-2026-04-15.md`
 > 并行任务：`WLS-MASTER-SELF-HEAL-HA-DESIGN-2026-04-23.md`（子进程自愈 v2）
-> 本任务：`dev/ai/codex/tasks/2026-04-23/2026-04-23-2330-wls-supervisor-blueprint-phase-1`
+> 本任务：`迁移前历史任务记录（已清理）`
 
 本文件只定义 **Phase 1 必须交付的最小集合**，以及"Supervisor 与子进程自愈"的共存策略。
 Phase 1 **不写主循环代码**、**不引入外部依赖**（etcd/Consul）、**不重构控制协议**。
@@ -61,7 +61,7 @@ Supervisor 相关代码**已在仓库里成型**，不是白纸。这是决定 P
 
 - 本文件：交付边界（你现在读的这份）
 - `WLS-HA-IPC-REDESIGN-2026-04-15.md` 对应章节追加"2026-04-23 现状对齐"小节
-- `dev/ai/codex/tasks/.../result.md` 登记 §5 的"悬而未决问题"给 Phase 2 接手
+- `迁移前历史任务记录（已清理）` 登记 §5 的"悬而未决问题"给 Phase 2 接手
 
 ---
 

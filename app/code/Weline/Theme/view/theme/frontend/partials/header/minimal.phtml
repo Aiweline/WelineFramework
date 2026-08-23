@@ -1,122 +1,20 @@
 <?php
-/**
- * 片段：Header - 极简风格
- * 
- * 极简风格的页面头部，只包含Logo和基本导航
- * 字段
- * @meta.name {default="Header极简风格片段",name="Header极简风格片段",description="Header极简风格片段，用于描述片段的名称"}
- * @meta.description {default="极简风格的页面头部，只包含Logo和基本导航",name="极简风格的页面头部，只包含Logo和基本导航",description="极简风格的页面头部，只包含Logo和基本导航，用于描述片段的用途"}
- * @param.logo {default="",name="Logo URL",description="Logo图片URL，用于设置头部Logo图片地址"}
- * @param.logoText {default="Weline",name="Logo文字",description="Logo文字，用于设置当Logo图片不存在时显示的文字"}
- * @param.navItems {default=[],name="导航项数组",description="导航项数组，用于设置头部导航菜单，格式：[{\"text\":\"菜单文字\",\"url\":\"菜单链接\"}]"}
- * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
- */
-
-// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
-$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.header.minimal');
-foreach ($metaParams as $key => $value) {
-    $this->setData("meta.{$key}", $value);
-}
-$logo = $this->getData("meta.logo") ?? '';
-$logoText = $this->getData("meta.logoText") ?? __('Weline');
-$navItems = $this->getData("meta.navItems") ?? [];
-$class = $this->getData("meta.class") ?? '';
-
-$baseUrl = $this->request->getBaseUrl();
-?>
-<?php
+/** @meta.name {default="Weline UI 2.0 前台极简顶部",name="Weline UI 2.0 前台极简顶部"} */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteBrand;
-$__siteBrand = ObjectManager::getInstance(SiteBrand::class);
-$__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$logo = trim((string)($meta['logo'] ?? '')) ?: ObjectManager::getInstance(SiteBrand::class)->resolveFrontendLogoUrl($this);
+$logoText = (string)($meta['logoText'] ?? 'Weline');
 ?>
-
-<header class="weline-header minimal-header <?= htmlspecialchars($class) ?>">
-    <div class="header-container">
-        <!-- Logo -->
-        <div class="header-logo">
-            <a href="/" title="<?= __('首页') ?>">
-                <?php if ($logo): ?>
-                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" class="minimal-header__logo-image" data-fallback-target=".logo-text" data-fallback-display="inline-block">
-                <?php else: ?>
-                    <img src="<?= htmlspecialchars($__defaultFrontendLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= __('网站Logo') ?>" class="minimal-header__logo-image" data-fallback-target=".logo-text" data-fallback-display="inline-block">
-                <?php endif; ?>
-                <span class="logo-text" style="display: none;"><?= htmlspecialchars($logoText) ?></span>
-            </a>
-        </div>
-
-        <!-- 导航菜单 -->
-        <?php if (!empty($navItems)): ?>
-            <nav class="header-nav">
-                <ul class="nav-list">
-                    <?php foreach ($navItems as $item): ?>
-                        <li class="nav-item">
-                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="nav-link">
-                                <?= htmlspecialchars($item['text'] ?? '') ?>
-                            </a>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </nav>
-        <?php endif; ?>
-
-        <div class="minimal-header-actions">
+<header class="w-frontend-header">
+    <div class="w-container w-frontend-nav">
+        <a class="w-frontend-brand" href="/"><?php if ($logo !== ''): ?><img src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>"><?php else: ?><span><?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></a>
+        <div class="w-frontend-nav__actions">
             <w:hook>header-language-switcher</w:hook>
             <w:hook>header-currency-switcher</w:hook>
+            <w:hook>header-orders</w:hook>
+            <w:hook>header-cart</w:hook>
             <w:hook>header-account</w:hook>
         </div>
     </div>
 </header>
-
-<style>
-    .minimal-header .header-container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 24px;
-        min-height: 64px;
-    }
-    .minimal-header .minimal-header-actions {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-inline-start: auto;
-    }
-    .minimal-header .header-logo a {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .minimal-header .header-logo img {
-        max-height: 40px;
-        width: auto;
-    }
-    @media (max-width: 720px) {
-        .minimal-header .header-container {
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-        .minimal-header .minimal-header-actions {
-            width: 100%;
-            justify-content: flex-start;
-            flex-wrap: wrap;
-        }
-    }
-</style>
-
-<script>
-(function() {
-    'use strict';
-
-    document.querySelectorAll('.minimal-header__logo-image[data-fallback-target]').forEach(function(image) {
-        image.addEventListener('error', function() {
-            var targetSelector = image.getAttribute('data-fallback-target') || '';
-            var fallback = targetSelector && image.parentNode ? image.parentNode.querySelector(targetSelector) : null;
-            image.style.display = 'none';
-            if (fallback) {
-                fallback.style.display = image.getAttribute('data-fallback-display') || 'inline-block';
-            }
-        });
-    });
-})();
-</script>

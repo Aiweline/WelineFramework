@@ -6,6 +6,6 @@
           title="设备管理"
           action="session-manager/backend/device"
           parent="Weline_Backend::user_permission_group"
-          icon="mdi mdi-devices"
+          icon="circle"
           order="40"/>
 </menus>

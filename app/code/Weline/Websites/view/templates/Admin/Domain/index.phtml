@@ -18,65 +18,20 @@
 
 $activeTab = $active_tab ?? 'domain_list';
 ?>
-<style>
-.domain-tabs-nav {
-    display: flex;
-    gap: 4px;
-    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
-    padding-bottom: 0;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-}
-.domain-tab {
-    padding: 10px 20px;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    background: transparent;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-weight: 500;
-    transition: all 0.2s;
-    border-radius: 4px 4px 0 0;
-}
-.domain-tab:hover {
-    color: var(--backend-color-primary, #556ee6);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-}
-.domain-tab.active {
-    color: var(--backend-color-primary, #556ee6);
-    border-bottom-color: var(--backend-color-primary, #556ee6);
-    background: transparent;
-}
-.account-card {
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
-    transition: box-shadow 0.2s;
-}
-.account-card:hover {
-    box-shadow: var(--backend-shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
-}
-.status-badge {
-    font-size: 0.75rem;
-    padding: 0.2em 0.6em;
-    border-radius: 4px;
-}
-</style>
 
 <!-- 页面标题 -->
-<div class='row' data-testid="domain-management">
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <i class="mdi mdi-domain me-1"></i>
+<div class="w-grid" data-testid="domain-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
+                <w:icon name="globe" size="sm"></w:icon>
                 <?= __('域名服务') ?>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><?= __('后台') ?></span></li>
-                    <li class='breadcrumb-item'><span><?= __('网站服务') ?></span></li>
-                    <li class='breadcrumb-item active'><?= __('域名服务') ?></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><?= __('后台') ?></span></li>
+                    <li class="w-breadcrumb__item"><span><?= __('网站服务') ?></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= __('域名服务') ?></li>
                 </ol>
             </div>
         </div>
@@ -84,93 +39,53 @@ $activeTab = $active_tab ?? 'domain_list';
 </div>
 
 <!-- 消息 -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- Tab 导航 -->
-<div class="card">
-    <div class="card-body">
-        <nav class='domain-tabs-nav' role='tablist'>
-            <button class='btn domain-tab <?= $activeTab === 'domain_list' ? 'active' : '' ?>'
-                    type='button'
-                    id='domain-list-tab'
-                    data-bs-toggle='tab'
-                    data-bs-target='#domain-list'
-                    role='tab'
-                    aria-controls='domain-list'
-                    aria-selected='<?= $activeTab === 'domain_list' ? 'true' : 'false' ?>'>
-                <i class="mdi mdi-earth me-1"></i>
-                <span class='d-none d-sm-inline-block'><?= __('域名列表') ?></span>
+<div class="w-card">
+    <div class="w-card__body">
+        <nav class="w-tabs__list" role='tablist' data-w-component="tabs">
+            <button class="w-tabs__tab" type='button' id='domain-list-tab' role="tab" aria-controls="domain-list" aria-selected='<?= $activeTab === 'domain_list' ? 'true' : 'false' ?>' data-w-target='#domain-list'>
+                <w:icon name="globe" size="sm"></w:icon>
+                <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名列表') ?></span>
             </button>
-            <button class='btn domain-tab <?= $activeTab === 'domain_pool' ? 'active' : '' ?>'
-                    type='button'
-                    id='domain-pool-tab'
-                    data-bs-toggle='tab'
-                    data-bs-target='#domain-pool'
-                    role='tab'
-                    aria-controls='domain-pool'
-                    aria-selected='<?= $activeTab === 'domain_pool' ? 'true' : 'false' ?>'>
-                <i class="mdi mdi-database me-1"></i>
-                <span class='d-none d-sm-inline-block'><?= __('域名池') ?></span>
+            <button class="w-tabs__tab" type='button' id='domain-pool-tab' role="tab" aria-controls="domain-pool" aria-selected='<?= $activeTab === 'domain_pool' ? 'true' : 'false' ?>' data-w-target='#domain-pool'>
+                <w:icon name="database" size="sm"></w:icon>
+                <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名池') ?></span>
             </button>
-            <button class='btn domain-tab <?= $activeTab === 'registrar' ? 'active' : '' ?>'
-                    type='button'
-                    id='domain-registrar-tab'
-                    data-bs-toggle='tab'
-                    data-bs-target='#domain-registrar'
-                    role='tab'
-                    aria-controls='domain-registrar'
-                    aria-selected='<?= $activeTab === 'registrar' ? 'true' : 'false' ?>'>
-                <i class="mdi mdi-store me-1"></i>
-                <span class='d-none d-sm-inline-block'><?= __('域名商管理') ?></span>
+            <button class="w-tabs__tab" type='button' id='domain-registrar-tab' role="tab" aria-controls="domain-registrar" aria-selected='<?= $activeTab === 'registrar' ? 'true' : 'false' ?>' data-w-target='#domain-registrar'>
+                <w:icon name="store" size="sm"></w:icon>
+                <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名商管理') ?></span>
             </button>
-            <button class='btn domain-tab <?= $activeTab === 'purchase' ? 'active' : '' ?>'
-                    type='button'
-                    id='domain-purchase-tab'
-                    data-bs-toggle='tab'
-                    data-bs-target='#domain-purchase'
-                    role='tab'
-                    aria-controls='domain-purchase'
-                    aria-selected='<?= $activeTab === 'purchase' ? 'true' : 'false' ?>'>
-                <i class="mdi mdi-cart me-1"></i>
-                <span class='d-none d-sm-inline-block'><?= __('域名购买') ?></span>
+            <button class="w-tabs__tab" type='button' id='domain-purchase-tab' role="tab" aria-controls="domain-purchase" aria-selected='<?= $activeTab === 'purchase' ? 'true' : 'false' ?>' data-w-target='#domain-purchase'>
+                <w:icon name="cart" size="sm"></w:icon>
+                <span data-w-display="inline-block" data-w-visible-from="sm"><?= __('域名购买') ?></span>
             </button>
             <!-- Hook: 其他模块注入的 Tab 按钮 -->
             <w:hook>Weline_Websites::backend::partials::domain::tabs</w:hook>
         </nav>
 
         <!-- Tab 内容 -->
-        <div class='tab-content'>
+        <div class="w-tabs__content">
             <!-- Tab1: 域名列表 -->
-            <div class='tab-pane fade <?= $activeTab === 'domain_list' ? 'show active' : '' ?>'
-                 id='domain-list'
-                 role='tabpanel'
-                 aria-labelledby='domain-list-tab'>
+            <div class="w-tabs__panel" id='domain-list' role='tabpanel' aria-labelledby='domain-list-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/domain_list_tab.phtml') ?>
             </div>
 
             <!-- Tab2: 域名池 -->
-            <div class='tab-pane fade <?= $activeTab === 'domain_pool' ? 'show active' : '' ?>'
-                 id='domain-pool'
-                 role='tabpanel'
-                 aria-labelledby='domain-pool-tab'>
+            <div class="w-tabs__panel" id='domain-pool' role='tabpanel' aria-labelledby='domain-pool-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/domain_pool_tab.phtml') ?>
             </div>
 
             <!-- Tab3: 域名商管理 -->
-            <div class='tab-pane fade <?= $activeTab === 'registrar' ? 'show active' : '' ?>'
-                 id='domain-registrar'
-                 role='tabpanel'
-                 aria-labelledby='domain-registrar-tab'>
+            <div class="w-tabs__panel" id='domain-registrar' role='tabpanel' aria-labelledby='domain-registrar-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/registrar_tab.phtml') ?>
             </div>
 
             <!-- Tab4: 域名购买 -->
-            <div class='tab-pane fade <?= $activeTab === 'purchase' ? 'show active' : '' ?>'
-                 id='domain-purchase'
-                 role='tabpanel'
-                 aria-labelledby='domain-purchase-tab'>
+            <div class="w-tabs__panel" id='domain-purchase' role='tabpanel' aria-labelledby='domain-purchase-tab' hidden>
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/purchase_tab.phtml') ?>
             </div>
 
@@ -179,63 +94,3 @@ $activeTab = $active_tab ?? 'domain_list';
         </div>
     </div>
 </div>
-
-<script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
-
-<script>
-(function() {
-    'use strict';
-    
-    function showToast(message, type) {
-        type = type || 'info';
-        if (typeof BackendToast !== 'undefined') {
-            BackendToast[type] ? BackendToast[type](message) : BackendToast.info(message);
-            return;
-        }
-        var bgColor = {
-            success: 'var(--backend-color-success, #34c38f)', 
-            error: 'var(--backend-color-danger, #f46a6a)', 
-            warning: 'var(--backend-color-warning, #f1b44c)', 
-            info: 'var(--backend-color-primary, #556ee6)'
-        }[type] || 'var(--backend-color-primary, #556ee6)';
-        var toast = document.createElement('div');
-        toast.textContent = message;
-        toast.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;z-index:10000;color:#fff;background:' + bgColor + ';box-shadow:var(--backend-shadow-lg);animation:slideInRight 0.3s ease;';
-        document.body.appendChild(toast);
-        setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 2500);
-        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-    }
-    
-    window.showToast = showToast;
-
-    function initTabs() {
-        var tabButtons = document.querySelectorAll('.domain-tab[data-bs-toggle="tab"]');
-        tabButtons.forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                var targetSelector = btn.getAttribute('data-bs-target');
-                var target = document.querySelector(targetSelector);
-                if (!target) return;
-
-                tabButtons.forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-                btn.classList.add('active');
-                btn.setAttribute('aria-selected', 'true');
-
-                document.querySelectorAll('.tab-pane').forEach(function(pane) {
-                    pane.classList.remove('show', 'active');
-                });
-                target.classList.add('show', 'active');
-
-                var event = new CustomEvent('shown.bs.tab', { bubbles: true });
-                btn.dispatchEvent(event);
-            });
-        });
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTabs);
-    } else {
-        initTabs();
-    }
-})();
-</script>

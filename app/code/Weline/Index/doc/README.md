@@ -4,15 +4,11 @@
 
 ## 当前入口
 
-开发前先读：
+开发前先完成 `prepare_project` 并调用 `resolve_task_context`，再读：
 
-1. `app/code/Weline/Index/doc/AI-INDEX.md`
-2. `app/code/Weline/Index/doc/需求.md`
-3. `app/code/Weline/Index/doc/开发日志.md`
-4. `dev/ai/diagrams/08-module-docs-index.txt`
-5. `dev/ai/global-constraints.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+1. `app/code/Weline/Index/doc/需求.md`
+2. `app/code/Weline/Index/doc/开发日志.md`
+3. `app/code/Weline/Ai/doc/AI开发治理.md`
 
 ## 模块定位
 
@@ -47,6 +43,7 @@
 - 存在浏览器静态资源；业务请求必须走 `Weline.Api.*`，不要直接写 raw fetch/ajax。
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 官网首页正文词条以 `Weline_Index/i18n` 为准；`en_US` 为中文 source → 英文译文。WLS 常驻运行时只读模块 CSV（不依赖 generated/language 总表）。`i18n:collect` 会保留 CSV 中已有但静态收集未扫到的词条，避免数组字面量再经 `__($var)` 输出的首页文案被冲掉。
+- 首页所有面向开发者展示的默认访问地址必须复用当前请求已解析的 canonical Origin，保留 scheme、Host 与非默认端口；不得把 WLS 内部 loopback 或某个环境域名硬编码进模板。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
 
 ## 本模块文档资产

@@ -6,10 +6,10 @@
     <!-- 货币列表 - 归入业务运营 > 货币管理 -->
     <menu source="Weline_Currency::currency_list" name="currency_list" title="货币列表" 
           action="currency/backend/currency/index" parent="Weline_Backend::currency_group" 
-          icon="mdi mdi-format-list-bulleted" order="10"/>
+          icon="list" order="10"/>
     
     <!-- 货币配置 -->
     <menu source="Weline_Currency::currency_config" name="currency_config" title="货币配置" 
           action="currency/backend/config/index" parent="Weline_Backend::currency_group" 
-          icon="mdi mdi-cog-outline" order="20"/>
+          icon="settings" order="20"/>
 </menus>

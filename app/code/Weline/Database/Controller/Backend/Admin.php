@@ -17,7 +17,7 @@ use Weline\Framework\Http\Response;
 #[Acl(
     'Weline_Database::database_admin',
     '数据库管理',
-    'mdi mdi-database-cog-outline',
+    'settings',
     '类 phpMyAdmin 数据库管理入口',
     'Weline_Backend::data_tools_group'
 )]
@@ -36,7 +36,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_overview',
         '数据库管理总览',
-        'mdi mdi-view-dashboard-outline',
+        'grid',
         '数据库管理总览与操作入口',
         'Weline_Database::database_admin'
     )]
@@ -73,7 +73,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_read',
         '数据库只读浏览',
-        'mdi mdi-database-search',
+        'search',
         '数据库元数据与行数据查看',
         'Weline_Database::database_admin'
     )]
@@ -85,7 +85,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_read_tables',
         '查看数据表',
-        'mdi mdi-table',
+        'table',
         '查看指定数据库数据表列表',
         'Weline_Database::database_admin_read'
     )]
@@ -98,7 +98,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_table_meta',
         '查看表结构',
-        'mdi mdi-table-search',
+        'search',
         '查看字段索引与建表语句',
         'Weline_Database::database_admin_read'
     )]
@@ -112,7 +112,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_rows',
         '查看表数据',
-        'mdi mdi-table-eye',
+        'eye',
         '按分页查看表数据',
         'Weline_Database::database_admin_read'
     )]
@@ -141,7 +141,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_write',
         '写入数据',
-        'mdi mdi-content-save-edit',
+        'edit',
         '新增与更新数据行',
         'Weline_Database::database_admin'
     )]
@@ -177,7 +177,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_delete',
         '删除数据',
-        'mdi mdi-delete-alert-outline',
+        'trash',
         '删除表数据（高风险）',
         'Weline_Database::database_admin'
     )]
@@ -212,7 +212,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_export',
         '导出 CSV',
-        'mdi mdi-file-delimited-outline',
+        'file',
         '导出当前表 CSV 数据',
         'Weline_Database::database_admin'
     )]
@@ -229,7 +229,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_import',
         '导入 CSV',
-        'mdi mdi-database-import-outline',
+        'database',
         '导入 CSV 到数据表',
         'Weline_Database::database_admin'
     )]
@@ -263,7 +263,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_sql_execute',
         '执行 SQL 语句',
-        'mdi mdi-play-network-outline',
+        'play',
         '受控执行 SQL（需写确认）',
         'Weline_Database::database_admin_sql_console'
     )]
@@ -318,7 +318,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_sql_import_prepare',
         '准备 SQL 文件导入',
-        'mdi mdi-database-arrow-up-outline',
+        'arrow-up',
         '上传 SQL、生成备份并暂存导入任务',
         'Weline_Database::database_admin_sql_console'
     )]
@@ -400,27 +400,17 @@ class Admin extends BackendPageController
             }
         }
 
-        $rawBody = $this->request->getParameterBag()->getRawBody();
-        $contentType = $this->request->getContentType();
-        if ($rawBody === '' || !str_contains(strtolower($contentType), 'multipart/form-data')) {
-            return null;
-        }
-
-        $parsed = \Weline\Framework\Http\WlsRequest::parseMultipartFormData($rawBody, $contentType);
-        $files = is_array($parsed['files'] ?? null) ? $parsed['files'] : [];
-        foreach (['sql_file', 'file'] as $key) {
-            if (isset($files[$key]) && is_array($files[$key])) {
-                return $files[$key];
-            }
-        }
-
+        // Multipart ownership belongs to the transport boundary. Native PHP
+        // populates $_FILES and WLS exposes the same entries through Request;
+        // reparsing the raw body here would create an untracked temporary file
+        // in a persistent Worker.
         return null;
     }
 
     #[Acl(
         'Weline_Database::database_admin_sql_import_backup_download',
         '下载 SQL 导入前备份',
-        'mdi mdi-download-lock-outline',
+        'download',
         '下载 SQL 导入前生成的备份文件',
         'Weline_Database::database_admin_sql_console'
     )]
@@ -465,7 +455,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_sql_import_execute',
         '执行 SQL 文件导入',
-        'mdi mdi-database-import-outline',
+        'database',
         '在已下载备份后执行 SQL 文件导入',
         'Weline_Database::database_admin_sql_console'
     )]
@@ -517,7 +507,7 @@ class Admin extends BackendPageController
     #[Acl(
         'Weline_Database::database_admin_schema',
         '结构管理',
-        'mdi mdi-database-edit-outline',
+        'edit',
         '字段索引视图结构管理',
         'Weline_Database::database_admin'
     )]

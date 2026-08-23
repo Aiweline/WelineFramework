@@ -23,21 +23,37 @@
  */
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
-$backgroundImage = $this->getData('background_image') ?? '';
+$backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
+    $this->getData('background_image') ?? '',
+    true,
+);
+$backgroundImageFileHtml = (string)($this->getData('background_image_file_html') ?? '');
 $backgroundColor = $this->getData('background_color') ?? '#f8d7da';
 $text = $this->getData('text') ?? __('限时特惠！全场满300减50');
 $textColor = $this->getData('text_color') ?? '#721c24';
-$link = $this->getData('link') ?? '';
+$link = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('link') ?? '');
 $closeable = (bool)($this->getData('closeable') ?? true);
 $countdownEnd = $this->getData('countdown_end') ?? '';
 
 $bannerId = 'promo-banner-' . uniqid();
 $hasCountdown = !empty($countdownEnd);
+$backgroundColor = preg_match('/^(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\([0-9.,%\s]+\)|transparent)$/D', (string)$backgroundColor) === 1
+    ? (string)$backgroundColor
+    : '#f8d7da';
+$textColor = preg_match('/^(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\([0-9.,%\s]+\)|currentColor)$/D', (string)$textColor) === 1
+    ? (string)$textColor
+    : '#721c24';
+$bannerStyles = ['background-color:' . $backgroundColor];
+if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
+    $bannerStyles[] = 'background-image:url("' . $backgroundImage . '")';
+}
 ?>
 
 <div class="widget-promo-banner<?= $isPreviewMode ? ' widget-promo-banner--preview' : '' ?>" id="<?= $bannerId ?>"
-     style="background-color: <?= htmlspecialchars($backgroundColor) ?>;
-            <?= $backgroundImage ? 'background-image: url(' . htmlspecialchars($backgroundImage) . ');' : '' ?>">
+     style="<?= htmlspecialchars(implode(';', $bannerStyles), ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($backgroundImageFileHtml !== ''): ?>
+        <div class="promo-background"><?= $backgroundImageFileHtml ?></div>
+    <?php endif; ?>
     
     <div class="promo-content">
         <?php if ($link): ?>
@@ -62,7 +78,7 @@ $hasCountdown = !empty($countdownEnd);
         
         <?php if ($link): ?>
             <span class="promo-arrow">
-                <i class="ri-arrow-right-line"></i>
+                <w:icon name="arrow-right" size="sm"></w:icon>
             </span>
             </a>
         <?php endif; ?>
@@ -70,7 +86,7 @@ $hasCountdown = !empty($countdownEnd);
     
     <?php if ($closeable): ?>
         <button class="promo-close" type="button" aria-label="<?= __('关闭') ?>">
-            <i class="ri-close-line"></i>
+            <w:icon name="close" size="sm"></w:icon>
         </button>
     <?php endif; ?>
 </div>
@@ -87,11 +103,27 @@ $hasCountdown = !empty($countdownEnd);
 }
 
 .widget-promo-banner .promo-content {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 15px;
     flex-wrap: wrap;
+}
+
+.widget-promo-banner .promo-background,
+.widget-promo-banner .promo-background figure,
+.widget-promo-banner .promo-background img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+.widget-promo-banner .promo-background img {
+    object-fit: cover;
 }
 
 .widget-promo-banner .promo-link {
@@ -163,6 +195,7 @@ $hasCountdown = !empty($countdownEnd);
     padding: 5px;
     opacity: 0.6;
     transition: opacity 0.3s;
+    z-index: 3;
 }
 
 .widget-promo-banner .promo-close:hover {

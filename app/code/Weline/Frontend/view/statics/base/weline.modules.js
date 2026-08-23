@@ -6,35 +6,11 @@
 
     // 一次性合并所有模块配置
     Object.assign(window.WelineModulesConfig.modules, {
-        i18n: {
-            origin_paths: ["app/code/Weline/I18n/view/statics/js/i18n.js"],
-            paths: ["/Weline/I18n/view/statics/js/i18n.js"],
-            globalVar: "WelineI18n",
-            description: "国际化（i18n）语言切换器模块"
-        },
         currency: {
             origin_paths: ["app/code/Weline/Currency/view/statics/js/currency.js"],
             paths: ["/Weline/Currency/view/statics/js/currency.js"],
             globalVar: "WelineCurrency",
             description: "货币切换器模块"
-        },
-        jquery: {
-            origin_paths: ["app/code/Weline/Frontend/view/statics/libs/jquery/3.6.0/jquery.min.js"],
-            paths: ["https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js", "https://code.bdstatic.com/npm/jquery@3.6.0/dist/jquery.min.js", "/Weline/Frontend/view/statics/libs/jquery/3.6.0/jquery.min.js"],
-            globalVar: "jQuery",
-            description: "jQuery库"
-        },
-        vue: {
-            origin_paths: ["app/code/Weline/Frontend/view/statics/libs/vue/vue2.6.11.js"],
-            paths: ["/Weline/Frontend/view/statics/libs/vue/vue2.6.11.js"],
-            globalVar: "Vue",
-            description: "Vue.js框架"
-        },
-        bootstrap: {
-            origin_paths: ["app/code/Weline/Frontend/view/statics/libs/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js"],
-            paths: ["/Weline/Frontend/view/statics/libs/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js"],
-            globalVar: "bootstrap",
-            description: "Bootstrap JS"
         },
         weline: {
             origin_paths: ["app/code/Weline/Frontend/view/statics/js/weline.js"],
@@ -58,11 +34,7 @@
 
     // 一次性合并所有模块别名
     Object.assign(window.WelineModulesConfig.moduleAliases, {
-        language: "i18n",
-        lang: "i18n",
         money: "currency",
-        jq: "jquery",
-        $: "jquery",
         api: "weline-api",
         account: "weline-api-account",
         tokenStorage: "weline-api-token-storage",

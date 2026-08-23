@@ -1,10 +1,13 @@
 /**
  * Backend Theme - dark palette
- */
+  * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
+ * @meta.palette_role {default="mode",name="palette_role",description="palette_role"}
+*/
 
 [data-theme="dark"],
 [data-theme-mode="dark"],
-[data-bs-theme="dark"],
+[data-theme="dark"],
 [data-layout-mode="dark"] {
     /* Typography */
     --backend-color-text-primary: #e6eef8;

@@ -14,7 +14,7 @@ use Weline\Social\Service\SocialPlatformRegistry;
 use Weline\Social\Service\SocialPublishService;
 use Weline\Social\Service\SocialWebsiteAccountService;
 
-#[Acl('Weline_Social::social', '融媒体管理', 'mdi mdi-share-variant-outline', '管理社媒平台账户、AI 创意和多平台发布', 'Weline_Backend::marketing_group')]
+#[Acl('Weline_Social::social', '融媒体管理', 'share', '管理社媒平台账户、AI 创意和多平台发布', 'Weline_Backend::marketing_group')]
 class Social extends BaseController
 {
     public function __construct(
@@ -28,7 +28,7 @@ class Social extends BaseController
     ) {
     }
 
-    #[Acl('Weline_Social::social_index', '查看融媒体管理', 'mdi mdi-view-dashboard-outline', '查看融媒体管理页面')]
+    #[Acl('Weline_Social::social_index', '查看融媒体管理', 'grid', '查看融媒体管理页面')]
     public function index(): string
     {
         $platforms = $this->iconService->enrichDefinitions($this->registry->listDefinitions());

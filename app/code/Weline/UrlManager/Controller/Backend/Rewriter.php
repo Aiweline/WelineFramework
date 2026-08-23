@@ -101,8 +101,40 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         
         $url = $query->find()->fetch();
         $this->assign('url', $url);
-        $this->assign('current_website_id', UrlRewrite::getCurrentWebsiteId());
+        $currentWebsiteId = UrlRewrite::getCurrentWebsiteId();
+        $this->assign('current_website_id', $currentWebsiteId);
+        $selectedWebsiteId = (string)($url['website_id'] ?? $currentWebsiteId ?? 0);
+        $this->assignWebsiteSelect($selectedWebsiteId);
         return $this->fetch();
+    }
+
+    private function assignWebsiteSelect(string $selectedValue): void
+    {
+        $options = [];
+        try {
+            $queried = \w_query('websites', 'getWebsiteSelectOptions', [], 'backend');
+            if (\is_array($queried)) {
+                $options = $queried;
+            }
+        } catch (\Throwable) {
+            $options = [];
+        }
+        $display = '';
+        foreach ($options as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            if ((string)($option['value'] ?? '') === $selectedValue) {
+                $display = \trim((string)($option['label'] ?? ''));
+                break;
+            }
+        }
+        if ($display === '' && $selectedValue !== '') {
+            $display = '#' . $selectedValue;
+        }
+        $this->assign('websiteSelectValue', $selectedValue);
+        $this->assign('websiteSelectDisplay', $display);
+        $this->assign('websiteSelectOptionsJson', \json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
     }
 
     /**

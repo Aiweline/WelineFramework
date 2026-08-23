@@ -38,82 +38,82 @@ $amountList = static function (array $amounts) use ($escape): string {
 };
 ?>
 
-<div class="row" data-testid="payment-diagnostics-management">
-    <div class="col-12">
-        <div class="page-title-box">
-            <h4 class="page-title">
-                <i class="mdi mdi-view-dashboard-outline me-2"></i><?= __('支付诊断') ?>
+<div class="w-grid" data-testid="payment-diagnostics-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading">
+            <h4 class="w-backend-page__title">
+                <w:icon name="grid" size="sm"></w:icon><?= __('支付诊断') ?>
             </h4>
         </div>
     </div>
 </div>
 
-<div class="row">
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="row">
-    <div class="col-xl-3 col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between">
+<div class="w-grid">
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between">
                     <div>
-                        <p class="text-muted mb-1"><?= __('失败率') ?></p>
-                        <h3 class="mb-0"><?= $rateValue($summary['failure_rate'] ?? 0) ?></h3>
+                        <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('失败率') ?></p>
+                        <h3 style="--w-mb:0;"><?= $rateValue($summary['failure_rate'] ?? 0) ?></h3>
                     </div>
-                    <span class="badge bg-danger"><?= $countValue($summary['failure_count'] ?? 0) ?></span>
+                    <span class="w-badge" data-w-background="danger"><?= $countValue($summary['failure_count'] ?? 0) ?></span>
                 </div>
-                <p class="text-muted mt-2 mb-0"><?= __('优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径') ?></p>
+                <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径') ?></p>
             </div>
         </div>
     </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between">
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between">
                     <div>
-                        <p class="text-muted mb-1"><?= __('未完成支付') ?></p>
-                        <h3 class="mb-0"><?= $countValue($summary['incomplete_count'] ?? 0) ?></h3>
+                        <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('未完成支付') ?></p>
+                        <h3 style="--w-mb:0;"><?= $countValue($summary['incomplete_count'] ?? 0) ?></h3>
                     </div>
-                    <span class="badge bg-warning text-dark"><?= __('待处理') ?></span>
+                    <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('待处理') ?></span>
                 </div>
-                <p class="text-muted mt-2 mb-0"><?= __('pending、processing、requires action 等非终态支付') ?></p>
+                <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('pending、processing、requires action 等非终态支付') ?></p>
             </div>
         </div>
     </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between">
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between">
                     <div>
-                        <p class="text-muted mb-1"><?= __('退款入口') ?></p>
-                        <h3 class="mb-0"><?= $countValue($summary['refund_count'] ?? 0) ?></h3>
+                        <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('退款入口') ?></p>
+                        <h3 style="--w-mb:0;"><?= $countValue($summary['refund_count'] ?? 0) ?></h3>
                     </div>
-                    <span class="badge bg-secondary"><?= __('退款') ?></span>
+                    <span class="w-badge" data-w-background="muted"><?= __('退款') ?></span>
                 </div>
-                <p class="text-muted mt-2 mb-0"><?= __('当前只识别交易和 intent 的退款状态') ?></p>
+                <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('当前只识别交易和 intent 的退款状态') ?></p>
             </div>
         </div>
     </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between">
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-cluster" data-align="center" data-justify="between">
                     <div>
-                        <p class="text-muted mb-1"><?= __('对账异常') ?></p>
-                        <h3 class="mb-0"><?= $countValue($reconciliation['diff_count'] ?? 0) ?></h3>
+                        <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('对账异常') ?></p>
+                        <h3 style="--w-mb:0;"><?= $countValue($reconciliation['diff_count'] ?? 0) ?></h3>
                     </div>
                     <?php if (!empty($reconciliation['error'])): ?>
-                        <span class="badge bg-danger"><?= __('扫描不可用') ?></span>
+                        <span class="w-badge" data-w-background="danger"><?= __('扫描不可用') ?></span>
                     <?php elseif (!empty($reconciliation['scan_truncated'])): ?>
-                        <span class="badge bg-warning text-dark"><?= __('扫描已截断') ?></span>
+                        <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('扫描已截断') ?></span>
                     <?php elseif (!empty($reconciliation['diff_count'])): ?>
-                        <span class="badge bg-danger"><?= __('需要处理') ?></span>
+                        <span class="w-badge" data-w-background="danger"><?= __('需要处理') ?></span>
                     <?php else: ?>
-                        <span class="badge bg-success"><?= __('不变量正常') ?></span>
+                        <span class="w-badge" data-w-background="success"><?= __('不变量正常') ?></span>
                     <?php endif; ?>
                 </div>
-                <p class="text-muted mt-2 mb-0">
+                <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;">
                     <?= __('Scope %{1} 的只读 ORM 扫描；修复只能通过双人授权 CLI 执行。', [
                         $reconciliation['scope'] ?? '',
                     ]) ?>
@@ -123,42 +123,42 @@ $amountList = static function (array $amounts) use ($escape): string {
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-shield-search-outline me-2"></i><?= __('支付对账不变量') ?>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__header w-cluster" data-align="center" data-justify="between">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="search" size="sm"></w:icon><?= __('支付对账不变量') ?>
                 </h4>
-                <span class="text-muted">
+                <span class="w-text" data-tone="muted">
                     <?= __('最近扫描时间') ?>: <?= $escape($reconciliation['generated_at'] ?? '-') ?>
                 </span>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <?php if (!empty($reconciliation['error'])): ?>
-                    <div class="alert alert-danger" role="alert">
-                        <div class="fw-semibold"><?= __('对账扫描不可用') ?></div>
+                    <div class="w-alert" role="alert" data-tone="danger">
+                        <div class="w-text" data-weight="strong"><?= __('对账扫描不可用') ?></div>
                         <div><?= $escape($reconciliation['error']) ?></div>
                     </div>
                 <?php elseif (!empty($reconciliation['scan_truncated'])): ?>
-                    <div class="alert alert-warning" role="alert">
+                    <div class="w-alert" role="alert" data-tone="warning">
                         <?= __('扫描达到 %{1} 行安全上限，repair 将保持关闭；请缩小 Scope 或归档历史数据。', [
                             $reconciliation['scan_limit'] ?? 0,
                         ]) ?>
                     </div>
                 <?php elseif (empty($reconciliation['diff_count'])): ?>
-                    <div class="alert alert-success" role="status">
+                    <div class="w-alert" role="status" data-tone="success">
                         <?= __('当前 Scope 的支付对账不变量全部通过。') ?>
                     </div>
                 <?php endif; ?>
 
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
+                <div class="w-table-wrap">
+                    <table class="w-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th><?= __('不变量') ?></th>
                                 <th><?= __('说明') ?></th>
-                                <th class="text-end"><?= __('异常数') ?></th>
+                                <th class="w-text" data-align="end"><?= __('异常数') ?></th>
                                 <th><?= __('修复策略') ?></th>
                                 <th><?= __('状态') ?></th>
                             </tr>
@@ -172,19 +172,19 @@ $amountList = static function (array $amounts) use ($escape): string {
                                 <tr>
                                     <td><code><?= $escape($invariantCode) ?></code></td>
                                     <td><?= $escape(__((string)($invariant['description'] ?? ''))) ?></td>
-                                    <td class="text-end"><?= $countValue($invariantCount) ?></td>
+                                    <td class="w-text" data-align="end"><?= $countValue($invariantCount) ?></td>
                                     <td>
                                         <?php if (!empty($invariant['repairable'])): ?>
-                                            <span class="badge bg-light text-dark"><?= __('双人授权 CLI') ?></span>
+                                            <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('双人授权 CLI') ?></span>
                                         <?php else: ?>
-                                            <span class="badge bg-light text-dark"><?= __('仅告警，人工处置') ?></span>
+                                            <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('仅告警，人工处置') ?></span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php if ($invariantCount > 0): ?>
-                                            <span class="badge bg-danger"><?= __('异常 %{1}', [$invariantCount]) ?></span>
+                                            <span class="w-badge" data-w-background="danger"><?= __('异常 %{1}', [$invariantCount]) ?></span>
                                         <?php else: ?>
-                                            <span class="badge bg-success"><?= __('通过') ?></span>
+                                            <span class="w-badge" data-w-background="success"><?= __('通过') ?></span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -192,7 +192,7 @@ $amountList = static function (array $amounts) use ($escape): string {
                         </tbody>
                     </table>
                 </div>
-                <p class="text-muted mt-3 mb-0">
+                <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);--w-mb:0;">
                     <?= __('Correlation 链') ?>:
                     <?= $escape(implode(' → ', $reconciliation['correlation_chain'] ?? [])) ?>.
                     <?= __('审计保留') ?>: <?= $countValue($reconciliation['retention_days'] ?? 0) ?> <?= __('天') ?>.
@@ -202,35 +202,35 @@ $amountList = static function (array $amounts) use ($escape): string {
     </div>
 </div>
 
-<div class="row">
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-credit-card-outline me-2"></i><?= __('按支付方式统计') ?>
+<div class="w-grid">
+    <div style="--w-span-lg:4;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="edit" size="sm"></w:icon><?= __('按支付方式统计') ?>
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th><?= __('支付方式代码') ?></th>
-                                <th class="text-end"><?= __('数量') ?></th>
+                                <th class="w-text" data-align="end"><?= __('数量') ?></th>
                                 <th><?= __('入口') ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php $methodRows = $attempts['by_method'] ?? $transactions['by_method'] ?? []; ?>
                             <?php if (empty($methodRows)): ?>
-                                <tr><td colspan="3" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                                <tr><td colspan="3" class="w-text" data-align="center" data-tone="muted"><?= __('暂无统计数据') ?></td></tr>
                             <?php else: ?>
                                 <?php foreach (array_slice($methodRows, 0, 10) as $row): ?>
                                     <tr>
                                         <td><?= $escape($row['key'] ?? '') ?></td>
-                                        <td class="text-end"><?= $countValue($row['count'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $countValue($row['count'] ?? 0) ?></td>
                                         <td>
-                                            <a class="btn btn-sm btn-outline-primary" href="<?= $this->getUrl('*/backend/transaction/index', ['method_code' => $row['key'] ?? '']) ?>">
+                                            <a class="w-button" href="<?= $this->getUrl('*/backend/transaction/index', ['method_code' => $row['key'] ?? '']) ?>" data-tone="primary" data-variant="outline" data-size="sm">
                                                 <?= __('交易') ?>
                                             </a>
                                         </td>
@@ -243,33 +243,33 @@ $amountList = static function (array $amounts) use ($escape): string {
             </div>
         </div>
     </div>
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-currency-usd me-2"></i><?= __('按币种统计') ?>
+    <div style="--w-span-lg:4;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="cash" size="sm"></w:icon><?= __('按币种统计') ?>
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th><?= __('币种') ?></th>
-                                <th class="text-end"><?= __('数量') ?></th>
-                                <th class="text-end"><?= __('金额') ?></th>
+                                <th class="w-text" data-align="end"><?= __('数量') ?></th>
+                                <th class="w-text" data-align="end"><?= __('金额') ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php $currencyRows = $transactions['by_currency'] ?? []; ?>
                             <?php if (empty($currencyRows)): ?>
-                                <tr><td colspan="3" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                                <tr><td colspan="3" class="w-text" data-align="center" data-tone="muted"><?= __('暂无统计数据') ?></td></tr>
                             <?php else: ?>
                                 <?php foreach (array_slice($currencyRows, 0, 10) as $row): ?>
                                     <tr>
                                         <td><?= $escape($row['key'] ?? '') ?></td>
-                                        <td class="text-end"><?= $countValue($row['count'] ?? 0) ?></td>
-                                        <td class="text-end"><?= number_format((float)(($transactions['amount_by_currency'][$row['key']] ?? 0)), 2) ?></td>
+                                        <td class="w-text" data-align="end"><?= $countValue($row['count'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= number_format((float)(($transactions['amount_by_currency'][$row['key']] ?? 0)), 2) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -279,33 +279,33 @@ $amountList = static function (array $amounts) use ($escape): string {
             </div>
         </div>
     </div>
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-source-branch me-2"></i><?= __('按 scope 统计') ?>
+    <div style="--w-span-lg:4;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="branch" size="sm"></w:icon><?= __('按 scope 统计') ?>
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th><?= __('Scope 代码') ?></th>
-                                <th class="text-end"><?= __('数量') ?></th>
+                                <th class="w-text" data-align="end"><?= __('数量') ?></th>
                                 <th><?= __('来源') ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php $scopeRows = $intents['by_scope'] ?? $attempts['by_scope'] ?? []; ?>
                             <?php if (empty($scopeRows)): ?>
-                                <tr><td colspan="3" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                                <tr><td colspan="3" class="w-text" data-align="center" data-tone="muted"><?= __('暂无统计数据') ?></td></tr>
                             <?php else: ?>
                                 <?php foreach (array_slice($scopeRows, 0, 10) as $row): ?>
                                     <tr>
                                         <td><?= $escape($row['key'] ?? '') ?></td>
-                                        <td class="text-end"><?= $countValue($row['count'] ?? 0) ?></td>
-                                        <td><span class="badge bg-light text-dark"><?= __('只读统计') ?></span></td>
+                                        <td class="w-text" data-align="end"><?= $countValue($row['count'] ?? 0) ?></td>
+                                        <td><span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('只读统计') ?></span></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -317,23 +317,23 @@ $amountList = static function (array $amounts) use ($escape): string {
     </div>
 </div>
 
-<div class="row">
-    <div class="col-xl-6">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-format-list-bulleted me-2"></i><?= __('按状态统计') ?>
+<div class="w-grid">
+    <div style="--w-span-lg:6;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="list" size="sm"></w:icon><?= __('按状态统计') ?>
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th><?= __('状态') ?></th>
-                                <th class="text-end"><?= __('交易') ?></th>
-                                <th class="text-end"><?= __('Intent 数量') ?></th>
-                                <th class="text-end"><?= __('Attempt 数量') ?></th>
+                                <th class="w-text" data-align="end"><?= __('交易') ?></th>
+                                <th class="w-text" data-align="end"><?= __('Intent 数量') ?></th>
+                                <th class="w-text" data-align="end"><?= __('Attempt 数量') ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -346,7 +346,7 @@ $amountList = static function (array $amounts) use ($escape): string {
                             }
                             ?>
                             <?php if (empty($statusKeys)): ?>
-                                <tr><td colspan="4" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                                <tr><td colspan="4" class="w-text" data-align="center" data-tone="muted"><?= __('暂无统计数据') ?></td></tr>
                             <?php else: ?>
                                 <?php foreach (array_keys($statusKeys) as $statusKey): ?>
                                     <tr>
@@ -355,9 +355,9 @@ $amountList = static function (array $amounts) use ($escape): string {
                                                 <?= $escape($statusKey) ?>
                                             </a>
                                         </td>
-                                        <td class="text-end"><?= $countValue(array_column($transactions['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
-                                        <td class="text-end"><?= $countValue(array_column($intents['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
-                                        <td class="text-end"><?= $countValue(array_column($attempts['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $countValue(array_column($transactions['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $countValue(array_column($intents['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $countValue(array_column($attempts['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -367,22 +367,22 @@ $amountList = static function (array $amounts) use ($escape): string {
             </div>
         </div>
     </div>
-    <div class="col-xl-6">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-alert-circle-outline me-2"></i><?= __('需求缺口') ?>
+    <div style="--w-span-lg:6;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="warning" size="sm"></w:icon><?= __('需求缺口') ?>
                 </h4>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <?php if (empty($gaps)): ?>
-                    <div class="alert alert-success mb-0"><?= __('暂无阻塞缺口') ?></div>
+                    <div class="w-alert" data-tone="success" style="--w-mb:0;"><?= __('暂无阻塞缺口') ?></div>
                 <?php else: ?>
-                    <div class="list-group list-group-flush">
+                    <div class="w-list-group list-group-flush">
                         <?php foreach ($gaps as $gap): ?>
-                            <div class="list-group-item px-0">
-                                <div class="fw-semibold"><?= $escape($gap['title'] ?? '') ?></div>
-                                <div class="text-muted"><?= $escape(__((string)($gap['detail'] ?? ''))) ?></div>
+                            <div class="w-list-group__item" style="--w-ps:0;--w-pe:0;">
+                                <div class="w-text" data-weight="strong"><?= $escape($gap['title'] ?? '') ?></div>
+                                <div class="w-text" data-tone="muted"><?= $escape(__((string)($gap['detail'] ?? ''))) ?></div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -392,21 +392,21 @@ $amountList = static function (array $amounts) use ($escape): string {
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-database-search-outline me-2"></i><?= __('数据源状态') ?>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="search" size="sm"></w:icon><?= __('数据源状态') ?>
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" style="--w-mb:0;">
                         <thead>
                             <tr>
                                 <th><?= __('数据源') ?></th>
-                                <th class="text-end"><?= __('读取行数') ?></th>
+                                <th class="w-text" data-align="end"><?= __('读取行数') ?></th>
                                 <th><?= __('状态') ?></th>
                                 <th><?= __('说明') ?></th>
                             </tr>
@@ -415,14 +415,14 @@ $amountList = static function (array $amounts) use ($escape): string {
                             <?php foreach ($sources as $source): ?>
                                 <tr>
                                     <td><?= $escape($source['label'] ?? '') ?></td>
-                                    <td class="text-end"><?= $countValue($source['count'] ?? 0) ?></td>
+                                    <td class="w-text" data-align="end"><?= $countValue($source['count'] ?? 0) ?></td>
                                     <td>
                                         <?php if (!empty($source['error'])): ?>
-                                            <span class="badge bg-danger"><?= __('不可用') ?></span>
+                                            <span class="w-badge" data-w-background="danger"><?= __('不可用') ?></span>
                                         <?php elseif (!empty($source['limited'])): ?>
-                                            <span class="badge bg-warning text-dark"><?= __('已截断') ?></span>
+                                            <span class="w-badge w-text" data-w-background="warning" data-tone="muted"><?= __('已截断') ?></span>
                                         <?php else: ?>
-                                            <span class="badge bg-success"><?= __('可用') ?></span>
+                                            <span class="w-badge" data-w-background="success"><?= __('可用') ?></span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -439,7 +439,7 @@ $amountList = static function (array $amounts) use ($escape): string {
                         </tbody>
                     </table>
                 </div>
-                <p class="text-muted mt-3 mb-0">
+                <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);--w-mb:0;">
                     <?= __('生成时间') ?>: <?= $escape($dashboard['generated_at'] ?? '') ?>.
                     <?= __('交易成功金额') ?>: <?= $amountList($transactions['success_amount_by_currency'] ?? []) ?>.
                     <?= __('退款金额') ?>: <?= $amountList($transactions['refund_amount_by_currency'] ?? []) ?>.

@@ -8,7 +8,7 @@
          title="布局管理"
          action="*/backend/layout"
          parent="Weline_Backend::system_management"
-         icon="mdi mdi-view-dashboard-variant"
+         icon="grid"
          order="80">
         
         <!-- 布局列表 -->
@@ -16,7 +16,7 @@
              name="layout_list" 
              title="布局列表"
              action="*/backend/layout"
-             icon="mdi mdi-format-list-bulleted"
+             icon="list"
              order="10"/>
         
         <!-- 布局计划 -->
@@ -24,7 +24,7 @@
              name="layout_schedule" 
              title="布局计划"
              action="*/backend/layout/schedule"
-             icon="mdi mdi-calendar-clock"
+             icon="calendar"
              order="20"/>
     </menu>
 </menus>

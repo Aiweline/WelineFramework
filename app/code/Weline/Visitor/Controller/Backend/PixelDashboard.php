@@ -25,7 +25,7 @@ use Weline\Visitor\Service\Report\PixelDetailReportTabService;
  * - 实时数据监控
  * - 站点统计
  */
-#[Acl('Weline_Visitor::pixel_dashboard', '像素统计', 'mdi-chart-line', '像素统计', 'Weline_Backend::data_tools_group')]
+#[Acl('Weline_Visitor::pixel_dashboard', '像素统计', 'chart', '像素统计', 'Weline_Backend::data_tools_group')]
 class PixelDashboard extends BackendController
 {
     /**
@@ -33,7 +33,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_index', '查看像素统计', 'mdi-chart-line', '查看像素统计')]
+    #[Acl('Weline_Visitor::pixel_dashboard_index', '查看像素统计', 'chart', '查看像素统计')]
     public function index(): string
     {
         try {
@@ -54,7 +54,7 @@ class PixelDashboard extends BackendController
     /**
      * 站点详情页面（GA4 风格洞察报表）
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_detail', '查看站点详情', 'mdi-chart-line', '查看站点详情')]
+    #[Acl('Weline_Visitor::pixel_dashboard_detail', '查看站点详情', 'chart', '查看站点详情')]
     public function detail(): string
     {
         try {
@@ -391,7 +391,7 @@ class PixelDashboard extends BackendController
     /**
      * C01–C03：像素事件明细 list（短横线路由；热表分页 + 归因筛选表单）。
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_list', '查看像素事件列表', 'mdi-table', '查看像素事件明细列表')]
+    #[Acl('Weline_Visitor::pixel_dashboard_list', '查看像素事件列表', 'table', '查看像素事件明细列表')]
     public function list(): string
     {
         $filters = $this->getDashboardRequestFilters();
@@ -430,7 +430,7 @@ class PixelDashboard extends BackendController
     /**
      * G09：冷归档明细 list（显式入口；必选站点 + ≤31 天 + 分页）。
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_archive_list', '查看冷归档像素事件', 'mdi-archive', '查看冷归档像素事件明细')]
+    #[Acl('Weline_Visitor::pixel_dashboard_archive_list', '查看冷归档像素事件', 'circle', '查看冷归档像素事件明细')]
     public function archiveList(): string
     {
         $filters = $this->getDashboardRequestFilters();
@@ -492,7 +492,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_realtime', '查看像素实时数据', 'mdi-chart-line', '查看像素实时数据')]
+    #[Acl('Weline_Visitor::pixel_dashboard_realtime', '查看像素实时数据', 'chart', '查看像素实时数据')]
     public function getRealtimeData(): string
     {
         try {
@@ -518,7 +518,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_business_value', '查看像素商业价值', 'mdi-chart-line', '查看像素商业价值')]
+    #[Acl('Weline_Visitor::pixel_dashboard_business_value', '查看像素商业价值', 'chart', '查看像素商业价值')]
     public function getBusinessValue(): string
     {
         try {
@@ -546,7 +546,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_daily_comparison', '查看像素每日对比', 'mdi-chart-line', '查看像素每日对比')]
+    #[Acl('Weline_Visitor::pixel_dashboard_daily_comparison', '查看像素每日对比', 'chart', '查看像素每日对比')]
     public function getDailyComparison(): string
     {
         try {
@@ -567,7 +567,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_event_stats', '查看像素事件统计', 'mdi-chart-line', '查看像素事件统计')]
+    #[Acl('Weline_Visitor::pixel_dashboard_event_stats', '查看像素事件统计', 'chart', '查看像素事件统计')]
     public function getEventStats(): string
     {
         try {
@@ -639,7 +639,7 @@ class PixelDashboard extends BackendController
     /**
      * C04：数据导出（与 list 同筛选条件，含渠道/UTM 归因列）。
      */
-    #[Acl('Weline_Visitor::pixel_dashboard_export', '导出像素数据', 'mdi-download', '导出像素数据')]
+    #[Acl('Weline_Visitor::pixel_dashboard_export', '导出像素数据', 'download', '导出像素数据')]
     public function export(): string
     {
         try {

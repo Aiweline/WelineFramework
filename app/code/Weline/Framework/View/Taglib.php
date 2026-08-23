@@ -560,6 +560,13 @@ class Taglib
                 
                 // 获取子内容代码
                 $isHookTag = ($tagName === 'hook' || $tagName === 'w:hook');
+                $ownsChildCompilation = isset($tagConfig['class'])
+                    && \is_string($tagConfig['class'])
+                    && \is_a(
+                        $tagConfig['class'],
+                        \Weline\Framework\Taglib\OwnsChildCompilationInterface::class,
+                        true
+                    );
                 $innerContent = '';
                 $rawContent = $params['rawContent'] ?? '';
                 
@@ -608,6 +615,8 @@ class Taglib
                             $innerContent = $rawContent;
                         }
                     }
+                } elseif ($ownsChildCompilation) {
+                    $innerContent = \is_string($rawContent) ? $rawContent : '';
                 } elseif (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
                     $innerContent = $params['childrenCode']();
                 }
@@ -616,10 +625,16 @@ class Taglib
                 $selfClosing = $params['selfClosing'] ?? false;
                 $rawContent = $params['rawContent'] ?? '';
                 $children = $params['children'] ?? [];
+
+                // InlineOptimizationPass 会把 rawContent 写成 __INLINE_OPTIMIZED__ / __STATIC_CHILDREN__，
+                // 这不是 @tag() 内联语法，必须走带属性的自闭合分支。
+                $isOptimizerMarker = is_string($rawContent)
+                    && (str_starts_with($rawContent, '__INLINE_OPTIMIZED__')
+                        || str_starts_with($rawContent, '__STATIC_CHILDREN__'));
                 
                 // 内联标签格式：@tag() 或 @tag{}
                 // 特征：selfClosing=true, rawContent不为空, children为空
-                if ($selfClosing && $rawContent !== '' && empty($children)) {
+                if ($selfClosing && $rawContent !== '' && empty($children) && !$isOptimizerMarker) {
                     // 内联标签格式 @tag()
                     $tag_key = '@tag()';
                 } elseif ($selfClosing && !empty($attrs)) {
@@ -1272,8 +1287,12 @@ class Taglib
                 },
                 'callback' => static function ($tag_key, $config, $tag_data, $attributes): string {
                     if ($tag_key === 'tag-end') {
+                        // Flush the body buffer started after open(), so captcha can
+                        // replace data-weline-form-captcha-slot ahead of submit controls.
                         return self::PHP_OPEN_TAG
-                            . '=\\Weline\\Framework\\View\\Form\\FormRenderer::close()'
+                            . 'php $Taglib__form_body = \\ob_get_clean();'
+                            . ' if (!\\is_string($Taglib__form_body)) { $Taglib__form_body = \'\'; }'
+                            . ' echo \\Weline\\Framework\\View\\Form\\FormRenderer::close($Taglib__form_body);'
                             . self::PHP_CLOSE_TAG;
                     }
                     if ($tag_key !== 'tag-start') {
@@ -1286,7 +1305,9 @@ class Taglib
                         . ' $Taglib__form_attributes = json_decode($Taglib__json, true);'
                         . ' echo \\Weline\\Framework\\View\\Form\\FormRenderer::open('
                         . 'is_array($Taglib__form_attributes) ? $Taglib__form_attributes : []'
-                        . '); ' . self::PHP_CLOSE_TAG;
+                        . ');'
+                        . ' \\ob_start();'
+                        . self::PHP_CLOSE_TAG;
                 },
             ],
             'var' => [
@@ -1957,7 +1978,48 @@ class Taglib
                 'doc' => '@block{Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml}或者@block(Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml)或者' . htmlentities('<block class="Vendor\Module\Block\Demo" template="Vendor_Module::block/demo.phtml"/>') . '或者' . htmlentities('<block>Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml</block>'),
                 'tag' => 1,
                 'attr' => ['class' => 0, 'template' => 0, 'cache' => 0],
+                'tag-self-close' => 1,
                 'tag-self-close-with-attrs' => 1,
+                // AST CodeGenerator 对动态属性 block 会走 renderRuntimeTag；必须直接执行而非再吐 PHP 源码。
+                'runtime_callback' => static function (
+                    Template $template,
+                    string $tagKey,
+                    array $attributes,
+                    string $content,
+                ): string {
+                    if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                        return '';
+                    }
+                    if ((!isset($attributes['class']) || !$attributes['class']) && isset($attributes['value']) && $attributes['value']) {
+                        $attributes['class'] = $attributes['value'];
+                        unset($attributes['value']);
+                    }
+                    if (!isset($attributes['class']) || !$attributes['class']) {
+                        return '';
+                    }
+                    $vars = [];
+                    if (!empty($attributes['vars'])) {
+                        foreach (explode(',', (string)$attributes['vars']) as $varName) {
+                            $varName = trim($varName);
+                            if ($varName === '') {
+                                continue;
+                            }
+                            $value = $template->getData($varName);
+                            if ($value === null) {
+                                $value = w_env('template.' . $varName);
+                            }
+                            if ($value === null && isset($GLOBALS[$varName])) {
+                                $value = $GLOBALS[$varName];
+                            }
+                            $vars[$varName] = $value;
+                        }
+                    }
+                    try {
+                        return framework_view_process_block($attributes, $vars);
+                    } catch (\Throwable $e) {
+                        return '';
+                    }
+                },
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
                         // 防止非预期 tag_key 分支未赋值就 return：避免 Undefined variable warning。
@@ -1985,7 +2047,8 @@ class Taglib
                                 $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // <block class='Vendor\Module\Block\Demo' template='Vendor_Module::templates/demo.phtml'/>
-                            // 或者内联格式 @block(Vendor\Module\Block\Demo) 会解析为 value 属性
+                            // AST 自闭合使用 tag-self-close；旧解析器用 tag-self-close-with-attrs。
+                            case 'tag-self-close':
                             case 'tag-self-close-with-attrs':
                                 // 支持内联格式：@block(ClassName) 会设置 value 属性
                                 // 将 value 属性作为 class 的备选
@@ -2120,34 +2183,47 @@ class Taglib
             ],
             'js' => [
                 'tag' => 1,
+                'attr' => ['type' => 0, 'async' => 0, 'defer' => 0, 'crossorigin' => 0, 'integrity' => 0, 'nomodule' => 0, 'id' => 0, 'class' => 0, 'data-*' => 0],
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
-                        // 过滤掉包含 :: 的非标准属性（开发模式调试信息）
+                        $raw1 = trim((string)($tag_data[1] ?? ''));
+                        $raw2 = trim((string)($tag_data[2] ?? ''));
+                        // 若 [1] 是路径（含 :: 或 /），不能当 HTML 属性；属性优先用 $attributes
+                        $looksLikePath = $raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'));
                         $filteredAttrs = '';
-                        if (!empty($tag_data[1])) {
-                            $rawAttrs = $tag_data[1];
-                            // 移除包含 :: 的属性（非标准属性名）- 改进正则以匹配完整路径
-                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $rawAttrs);
-                            // 清理多余的空格
-                            $filteredAttrs = trim($filteredAttrs);
-                            
-                            if ($filteredAttrs !== '') {
-                                $filteredAttrs = ' ' . $filteredAttrs;
-                            }
+                        if (!$looksLikePath && $raw1 !== '') {
+                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $raw1);
+                            $filteredAttrs = trim((string)$filteredAttrs);
                         }
-                        // 成对标签 <js>path</js>：编译期 tag_data[1]=rawContent（路径）、tag_data[2]=编译后子内容；运行时 tag_data[1]=rawAttributes、tag_data[2]=content（路径）
-                        $path = trim($tag_data[1] ?? '') ?: trim($tag_data[2] ?? '');
+                        if ($filteredAttrs === '' && is_array($attributes) && $attributes !== []) {
+                            $parts = [];
+                            foreach ($attributes as $attrName => $attrValue) {
+                                $name = trim((string)$attrName);
+                                if ($name === '' || !preg_match('/^[a-zA-Z_:][\w:.-]*$/', $name)) {
+                                    continue;
+                                }
+                                if ($attrValue === true || $attrValue === '' || $attrValue === null) {
+                                    $parts[] = $name;
+                                    continue;
+                                }
+                                $parts[] = $name . '="' . htmlspecialchars((string)$attrValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+                            }
+                            $filteredAttrs = implode(' ', $parts);
+                        }
+                        if ($filteredAttrs !== '') {
+                            $filteredAttrs = ' ' . $filteredAttrs;
+                        }
+                        // 成对标签：编译期 [1]=路径或属性，[2]=内容路径；取有路径语义的一方
+                        $path = ($looksLikePath ? $raw1 : '') ?: ($raw2 !== '' ? $raw2 : $raw1);
+                        $path = trim($path);
                         if ($path === '' && defined('DEV') && DEV) {
-                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签路径不能为空，示例：%{1}', ['<js>Vendor_Module::assets/js/app.js</js>']));
+                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签路径不能为空，示例：%{1}', ['<js type="module">Vendor_Module::assets/js/app.js</js>']));
                         }
                         $url = $template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, $path);
                         if (defined('DEV') && DEV && preg_match('#/view/statics/\s*[\'"]?\s*$#', $url)) {
                             throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确', [$path]));
                         }
-                        return match ($tag_key) {
-                            'tag' => "<script{$filteredAttrs} src='{$url}'></script>",
-                            default => "<script{$filteredAttrs} src='{$url}'></script>"
-                        };
+                        return "<script{$filteredAttrs} src='{$url}'></script>";
                     }
             ],
             // 注意：本项为内置 css 标签（仅处理 STATICS：<css>Module::statics/.../file.css</css>）。

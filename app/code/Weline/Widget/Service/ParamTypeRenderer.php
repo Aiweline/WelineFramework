@@ -114,26 +114,7 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         $showDeleteButton = array_key_exists('delete_button', $options) ? (bool)$options['delete_button'] : true;
         $actionsHtml = (string)($options['actions_html'] ?? '');
 
-        $groups = $this->groupFields($params);
-        $groupsHtml = '';
-        foreach ($groups as $groupKey => $groupData) {
-            $fieldsHtml = '';
-            foreach ($groupData['fields'] as $key => $param) {
-                $value = $config[$key] ?? null;
-                $fieldsHtml .= $this->renderField($key, $param, $value, $layoutId);
-            }
-            $collapsed = $groupData['collapsed'] ?? false;
-            $groupClass = 'w-param-group' . ($collapsed ? ' w-param-collapsed' : '');
-            $groupsHtml .= '
-                <div class="' . $groupClass . '">
-                    <h5 class="w-param-group-title">
-                        ' . htmlspecialchars($groupData['label']) . '
-                        <span class="w-param-toggle">▾</span>
-                    </h5>
-                    <div class="w-param-fields">' . $fieldsHtml . '</div>
-                </div>
-            ';
-        }
+        $groupsHtml = $this->renderGroups($layoutId, $params, $config);
         return FormRenderer::open([
                 'class' => 'w-param-form',
                 'data-layout-id' => (string)$layoutId,
@@ -142,7 +123,7 @@ class ParamTypeRenderer implements ParamFormRendererInterface
             ]) . '
                 ' . $groupsHtml . '
                 <div class="w-param-actions">
-                    <button type="button" class="w-param-btn w-param-btn-outline-danger w-param-btn-delete-widget" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>
+                    <button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>
                 </div>
             ' . FormRenderer::close();
     }
@@ -154,29 +135,10 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         $showDeleteButton = array_key_exists('delete_button', $options) ? (bool)$options['delete_button'] : true;
         $actionsHtml = (string)($options['actions_html'] ?? '');
 
-        $groups = $this->groupFields($params);
-        $groupsHtml = '';
-        foreach ($groups as $groupData) {
-            $fieldsHtml = '';
-            foreach ($groupData['fields'] as $key => $param) {
-                $fieldsHtml .= $this->renderField($key, $param, $config[$key] ?? null, $layoutId);
-            }
-
-            $collapsed = $groupData['collapsed'] ?? false;
-            $groupClass = 'w-param-group' . ($collapsed ? ' w-param-collapsed' : '');
-            $groupsHtml .= '
-                <div class="' . $groupClass . '">
-                    <h5 class="w-param-group-title">
-                        ' . htmlspecialchars($groupData['label']) . '
-                        <span class="w-param-toggle">&#9662;</span>
-                    </h5>
-                    <div class="w-param-fields">' . $fieldsHtml . '</div>
-                </div>
-            ';
-        }
+        $groupsHtml = $this->renderGroups($layoutId, $params, $config);
 
         if ($showDeleteButton) {
-            $actionsHtml = '<button type="button" class="w-param-btn w-param-btn-outline-danger w-param-btn-delete-widget" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('鍒犻櫎') . '</button>' . $actionsHtml;
+            $actionsHtml = '<button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>' . $actionsHtml;
         }
 
         $actionsBlock = $actionsHtml !== '' ? '<div class="w-param-actions">' . $actionsHtml . '</div>' : '';
@@ -192,13 +154,41 @@ class ParamTypeRenderer implements ParamFormRendererInterface
             ' . FormRenderer::close();
     }
 
+    private function renderGroups(int|string $layoutId, array $params, array $config): string
+    {
+        $groupsHtml = '';
+        foreach ($this->groupFields($params) as $groupKey => $groupData) {
+            $fieldsHtml = '';
+            foreach ($groupData['fields'] as $key => $param) {
+                $fieldsHtml .= $this->renderField($key, $param, $config[$key] ?? null, $layoutId);
+            }
+
+            $collapsed = (bool)($groupData['collapsed'] ?? false);
+            $groupClass = 'w-param-group' . ($collapsed ? ' w-param-collapsed' : '');
+            $groupState = $collapsed ? 'closed' : 'open';
+            $expanded = $collapsed ? 'false' : 'true';
+            $fieldsId = 'w_param_group_' . substr(sha1((string)$layoutId . ':' . (string)$groupKey), 0, 12);
+            $hidden = $collapsed ? ' hidden' : '';
+            $groupsHtml .= '
+                <div class="' . $groupClass . '" data-state="' . $groupState . '">
+                    <button type="button" class="w-param-group-title" data-w-param-group-toggle aria-expanded="' . $expanded . '" aria-controls="' . $fieldsId . '">
+                        <span>' . htmlspecialchars((string)$groupData['label'], ENT_QUOTES, 'UTF-8') . '</span>
+                        <span class="w-param-toggle" aria-hidden="true">&#9662;</span>
+                    </button>
+                    <div class="w-param-fields" id="' . $fieldsId . '"' . $hidden . '>' . $fieldsHtml . '</div>
+                </div>
+            ';
+        }
+        return $groupsHtml;
+    }
+
     private function groupFields(array $params): array
     {
         $groups = [
-            'basic'   => ['label' => __('基本信息'), 'icon' => 'ri-information-line', 'collapsed' => false, 'fields' => []],
-            'style'   => ['label' => __('样式设置'), 'icon' => 'ri-palette-line', 'collapsed' => false, 'fields' => []],
-            'link'    => ['label' => __('链接配置'), 'icon' => 'ri-links-line', 'collapsed' => true, 'fields' => []],
-            'advanced'=> ['label' => __('高级设置'), 'icon' => 'ri-settings-4-line', 'collapsed' => true, 'fields' => []],
+            'basic'   => ['label' => __('基本信息'), 'icon' => 'info', 'collapsed' => false, 'fields' => []],
+            'style'   => ['label' => __('样式设置'), 'icon' => 'palette', 'collapsed' => false, 'fields' => []],
+            'link'    => ['label' => __('链接配置'), 'icon' => 'link', 'collapsed' => true, 'fields' => []],
+            'advanced'=> ['label' => __('高级设置'), 'icon' => 'settings', 'collapsed' => true, 'fields' => []],
         ];
         $socialKeys = ['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'];
         foreach ($params as $key => $param) {

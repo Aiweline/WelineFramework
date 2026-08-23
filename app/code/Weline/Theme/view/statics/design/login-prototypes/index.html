@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Weline 登录页原型总览</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#121820;background:#f4efe6;padding:2rem 1.25rem 3rem}
+main{max-width:920px;margin:0 auto}
+h1{font-family:"Fraunces",Georgia,serif;font-size:clamp(1.8rem,4vw,2.4rem);margin:0 0 .4rem}
+.lead{color:#5a6472;margin:0 0 1.75rem;max-width:52ch;line-height:1.55}
+.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))}
+a.card{display:block;text-decoration:none;color:inherit;background:#fffcf7;border:1px solid #1218201a;border-radius:14px;padding:1.15rem 1.2rem}
+a.card:hover{border-color:#c46b2f8c}
+.tag{display:inline-block;margin-bottom:.55rem;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:#c46b2f;font-weight:600}
+a.card h2{font-family:"Fraunces",Georgia,serif;font-size:1.35rem;margin:0 0 .35rem}
+a.card p{margin:0;color:#5a6472;font-size:.88rem;line-height:1.45}
+section{margin-top:2rem;padding-top:1.25rem;border-top:1px solid #1218201a}
+section h3{margin:0 0 .65rem;font-size:1rem}
+ul{margin:0;padding-left:1.15rem;color:#5a6472;font-size:.9rem;line-height:1.55}
+li+li{margin-top:.25rem}
+code{font-size:.84em;background:#1218200f;padding:.1em .35em;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+  <h1>登录页视觉原型</h1>
+  <p class="lead">基于现有功能重做视觉与排版：后台偏「安全控制台」，前台偏「品牌会员入口」。不改接口字段，只改布局语言与信息层级。</p>
+  <div class="grid">
+    <a class="card" href="./backend-login.html"><span class="tag">Backend</span><h2>后台登录</h2><p>左右分栏：左侧墨色品牌叙事 + 右侧纸色表单。铜强调、语言切换在卡片右上。</p></a>
+    <a class="card" href="./frontend-login.html"><span class="tag">Frontend</span><h2>前台登录</h2><p>沉浸品牌面 + 奶油卡片。记住时长改为分段控件，主色珊瑚，注册与第三方入口保留。</p></a>
+  </div>
+  <section>
+    <h3>功能对照（均保留）</h3>
+    <ul>
+      <li><strong>后台</strong>：Logo / 站名描述、语言切换、告警、SSO Hook、账号、密码、验证码刷新、记住我、提交加载、页脚。</li>
+      <li><strong>前台</strong>：欢迎文案、用户名或邮箱、密码显隐、记住时长、忘记密码、验证码、提交加载、Providers Hook、注册入口。</li>
+    </ul>
+  </section>
+  <section>
+    <h3>设计原则</h3>
+    <ul>
+      <li>品牌字级在第一屏够大（Fraunces / Cormorant），避免「居中小卡片 + 灰底」通用后台脸。</li>
+      <li>禁止紫渐变、玻璃拟态堆叠、默认 Inter 唯一字体。</li>
+      <li>验证码、SSO、记住我占次级权重，主路径是账号 → 密码 → 登录。</li>
+      <li>源码：<code>app/code/Weline/Theme/view/statics/design/login-prototypes/</code>（仅原型，未接入运行时模板）。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

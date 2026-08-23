@@ -6963,7 +6963,6 @@
                 "weline/module-system-config": "@dev",
                 "weline/module-taglib": "@dev",
                 "weline/module-theme": "@dev",
-                "weline/module-theme-fancy": "@dev",
                 "weline/module-two-factor-auth": "@dev",
                 "weline/module-url-manager": "@dev",
                 "weline/module-visitor": "@dev",
@@ -8337,39 +8336,6 @@
                 }
             ],
             "description": "WelineFramework theme module",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-theme-fancy",
-            "version": "dev-codex/welineframework-2-architecture",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/ThemeFancy",
-                "reference": "ac3fe3852300f0a2cef27084f848118676660c17"
-            },
-            "require": {
-                "php": "^8.4",
-                "weline/module-frontend": "@dev"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\ThemeFancy\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "前端Fancy主题",
             "transport-options": {
                 "symlink": false,
                 "relative": true

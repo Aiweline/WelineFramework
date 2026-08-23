@@ -164,26 +164,26 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
 </style>
 
 <div class="weline-pixel-insight">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
         <div>
-            <h4 class="mb-1"><?= __('像素详情报表') ?></h4>
-            <div class="weline-pixel-muted small">
+            <h4 style="--w-mb:var(--weline-space-1);"><?= __('像素详情报表') ?></h4>
+            <div class="weline-pixel-muted w-text" data-size="sm">
                 <?= $h($rangeLabels[$selectedRange] ?? $selectedRange) ?>
                 · <?= __('对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源') ?>
             </div>
         </div>
-        <div class="d-flex gap-2">
-            <a class="btn btn-outline-secondary btn-sm" href="<?= $h($indexUrl) ?>"><?= __('返回事件看板') ?></a>
-            <a class="btn btn-outline-primary btn-sm" href="<?= $h($listUrl) ?>"><?= __('事件列表') ?></a>
-            <a class="btn btn-primary btn-sm" href="<?= $h($refreshUrl) ?>"><?= __('刷新') ?></a>
+        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <a class="w-button" href="<?= $h($indexUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('返回事件看板') ?></a>
+            <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('事件列表') ?></a>
+            <a class="w-button" href="<?= $h($refreshUrl) ?>" data-tone="primary" data-size="sm"><?= __('刷新') ?></a>
         </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-body">
-            <w:form method="get" action="@var($detailFormAction)" class="row g-2 align-items-end" id="pixel-detail-site-form">
-                <div class="col-md-6 col-xl-4 weline-pixel-website-filter">
-                    <label class="form-label" for="detail-filter-website_trigger"><lang>站点</lang></label>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__body">
+            <w:form method="get" action="@var($detailFormAction)" class="w-grid" id="pixel-detail-site-form" data-align="end" style="--w-gap:var(--weline-space-2);">
+                <div class="weline-pixel-website-filter" style="--w-span-md:6;--w-span-lg:4;">
+                    <label class="w-field__label" for="detail-filter-website_trigger"><lang>站点</lang></label>
                     <w:websites:website:select
                         id="detail-filter-website"
                         name="websiteId"
@@ -198,9 +198,9 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                         class="weline-pixel-website-select"
                     />
                 </div>
-                <div class="col-md-3 col-xl-2">
-                    <label class="form-label" for="detail-filter-range"><lang>时间范围</lang></label>
-                    <select name="range" id="detail-filter-range" class="form-select">
+                <div style="--w-span-md:3;--w-span-lg:2;">
+                    <label class="w-field__label" for="detail-filter-range"><lang>时间范围</lang></label>
+                    <select name="range" id="detail-filter-range" class="w-select">
                         <?php foreach ($rangeLabels as $rangeValue => $rangeLabel): ?>
                             <option value="<?= $h($rangeValue) ?>" <?= $selectedRange === $rangeValue ? 'selected' : '' ?>>
                                 <?= $h($rangeLabel) ?>
@@ -217,14 +217,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                 <?php if ((string)($filters['end_day'] ?? '') !== ''): ?>
                     <input type="hidden" name="endDate" value="<?= $h((string)$filters['end_day']) ?>">
                 <?php endif; ?>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-outline-primary"><?= __('切换站点') ?></button>
+                <div>
+                    <button type="submit" class="w-button" data-tone="primary" data-variant="outline"><?= __('切换站点') ?></button>
                 </div>
             </w:form>
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
         <?php
         $kpis = [
             [__('会话'), $engagement['sessions'] ?? 0, __('Sessions')],
@@ -235,8 +235,8 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
             [__('事件'), $engagement['events'] ?? ($summary['total_events'] ?? 0), __('Events')],
         ];
         foreach ($kpis as $kpi): ?>
-            <div class="col-6 col-md-4 col-xl-2">
-                <div class="card h-100"><div class="card-body weline-pixel-kpi">
+            <div style="--w-span:6;--w-span-md:4;--w-span-lg:2;">
+                <div class="w-card" data-w-height="full"><div class="w-card__body weline-pixel-kpi">
                     <div class="label"><?= $h($kpi[0]) ?></div>
                     <div class="value"><?= $h(is_numeric($kpi[1]) ? $num($kpi[1], is_float($kpi[1]) ? 2 : 0) : $kpi[1]) ?></div>
                     <div class="sub"><?= $h($kpi[2]) ?></div>
@@ -245,30 +245,30 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         <?php endforeach; ?>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-xl-7">
-            <div class="card h-100"><div class="card-body">
-                <h2 class="h5 mb-3"><?= __('页面表现') ?></h2>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span-lg:7;">
+            <div class="w-card" data-w-height="full"><div class="w-card__body">
+                <h2 class="h5" style="--w-mb:var(--weline-space-4);"><?= __('页面表现') ?></h2>
                 <?php if ($pages === []): ?>
-                    <div class="text-muted"><?= __('暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。') ?></div>
+                    <div class="w-text" data-tone="muted"><?= __('暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。') ?></div>
                 <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                             <thead><tr>
                                 <th><?= __('路径') ?></th>
-                                <th class="text-end"><?= __('浏览') ?></th>
-                                <th class="text-end"><?= __('事件') ?></th>
-                                <th class="text-end"><?= __('访客') ?></th>
-                                <th class="text-end"><?= __('平均停留') ?></th>
+                                <th class="w-text" data-align="end"><?= __('浏览') ?></th>
+                                <th class="w-text" data-align="end"><?= __('事件') ?></th>
+                                <th class="w-text" data-align="end"><?= __('访客') ?></th>
+                                <th class="w-text" data-align="end"><?= __('平均停留') ?></th>
                             </tr></thead>
                             <tbody>
                             <?php foreach ($pages as $page): ?>
                                 <tr>
-                                    <td class="text-truncate" style="max-width:280px" title="<?= $h($page['path'] ?? '') ?>"><?= $h($page['path'] ?? '/') ?></td>
-                                    <td class="text-end"><?= $num($page['views'] ?? 0) ?></td>
-                                    <td class="text-end"><?= $num($page['events'] ?? 0) ?></td>
-                                    <td class="text-end"><?= $num($page['users'] ?? 0) ?></td>
-                                    <td class="text-end"><?= $num($page['avg_dwell_sec'] ?? 0, 1) ?>s</td>
+                                    <td class="w-text" style="max-width:280px" title="<?= $h($page['path'] ?? '') ?>" data-truncate="true"><?= $h($page['path'] ?? '/') ?></td>
+                                    <td class="w-text" data-align="end"><?= $num($page['views'] ?? 0) ?></td>
+                                    <td class="w-text" data-align="end"><?= $num($page['events'] ?? 0) ?></td>
+                                    <td class="w-text" data-align="end"><?= $num($page['users'] ?? 0) ?></td>
+                                    <td class="w-text" data-align="end"><?= $num($page['avg_dwell_sec'] ?? 0, 1) ?>s</td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -277,18 +277,18 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                 <?php endif; ?>
             </div></div>
         </div>
-        <div class="col-xl-5">
-            <div class="card h-100"><div class="card-body">
-                <h2 class="h5 mb-3"><?= __('事件排行') ?></h2>
+        <div style="--w-span-lg:5;">
+            <div class="w-card" data-w-height="full"><div class="w-card__body">
+                <h2 class="h5" style="--w-mb:var(--weline-space-4);"><?= __('事件排行') ?></h2>
                 <?php if ($eventRows === []): ?>
-                    <div class="text-muted"><?= __('暂无事件排行。') ?></div>
+                    <div class="w-text" data-tone="muted"><?= __('暂无事件排行。') ?></div>
                 <?php else: ?>
                     <?php $max = max(1, ...(array_map(static fn($r) => (int)($r['count'] ?? 0), $eventRows))); ?>
-                    <div class="d-grid gap-2">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-2);">
                         <?php foreach (array_slice($eventRows, 0, 8) as $row): ?>
                             <?php $width = max(4, (int)round(((int)($row['count'] ?? 0) / $max) * 100)); ?>
                             <div>
-                                <div class="d-flex justify-content-between small mb-1">
+                                <div class="w-text w-cluster" data-justify="between" data-size="sm" style="--w-mb:var(--weline-space-1);">
                                     <strong><?= $h($row['event'] ?? '-') ?></strong>
                                     <span><?= $num($row['count'] ?? 0) ?></span>
                                 </div>
@@ -301,14 +301,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         </div>
     </div>
 
-    <div class="row g-3 mb-3" id="ecommerce-funnel">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="w-grid" id="ecommerce-funnel" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
                         <div>
-                            <h2 class="h5 mb-0"><?= __('电商漏斗') ?></h2>
-                            <div class="small text-muted">
+                            <h2 class="h5" style="--w-mb:0;"><?= __('电商漏斗') ?></h2>
+                            <div class="w-text" data-tone="muted" data-size="sm">
                                 <?= __('字典四步：view_item → add_to_cart → begin_checkout → checkout_success') ?>
                                 <?php if (!empty($ecommerceFunnel['window_clamped'])): ?>
                                     · <?= __('已按热明细短窗（≤7 天）截取') ?>
@@ -316,23 +316,23 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                        <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('查看全部事件') ?></a>
                     </div>
                     <?php if (trim((string)($ecommerceFunnel['error'] ?? '')) !== ''): ?>
-                        <div class="alert alert-warning py-2 mb-0">
+                        <div class="w-alert" data-tone="warning" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-mb:0;">
                             <?= __('电商漏斗暂不可用（扁平列未就绪或查询失败）。') ?>
                         </div>
                     <?php elseif ((int)($ecommerceFunnel['step1_sessions'] ?? 0) <= 0): ?>
-                        <div class="text-muted"><?= __('该窗口暂无浏览商品会话，无法计算步进占比。') ?></div>
+                        <div class="w-text" data-tone="muted"><?= __('该窗口暂无浏览商品会话，无法计算步进占比。') ?></div>
                     <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><?= __('步骤') ?></th>
-                                    <th class="text-end"><?= __('会话数') ?></th>
-                                    <th class="text-end"><?= __('相对浏览') ?></th>
-                                    <th class="text-end"><?= __('相对上步流失') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('会话数') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('相对浏览') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('相对上步流失') ?></th>
                                     <th style="min-width:160px"><?= __('占比条') ?></th>
                                 </tr>
                                 </thead>
@@ -348,21 +348,18 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     <tr>
                                         <td>
                                             <?= $h(__($labelKey)) ?>
-                                            <code class="small text-muted ms-1"><?= $h($stepKey) ?></code>
+                                            <code class="w-text" data-tone="muted" data-size="sm"><?= $h($stepKey) ?></code>
                                         </td>
-                                        <td class="text-end"><?= $num($step['sessions'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $h(number_format($rate * 100, 1)) ?>%</td>
-                                        <td class="text-end">
+                                        <td class="w-text" data-align="end"><?= $num($step['sessions'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $h(number_format($rate * 100, 1)) ?>%</td>
+                                        <td class="w-text" data-align="end">
                                             <?= $stepKey === 'view_item'
                                                 ? '—'
                                                 : $h(number_format($dropoff * 100, 1) . '%') ?>
                                         </td>
                                         <td>
-                                            <div class="progress" style="height:8px">
-                                                <div class="progress-bar" role="progressbar"
-                                                     style="width: <?= $h((string)max(0, min(100, $pct))) ?>%"
-                                                     aria-valuenow="<?= $h((string)$pct) ?>"
-                                                     aria-valuemin="0" aria-valuemax="100"></div>
+                                            <div class="w-progress" style="height:8px">
+                                                <div class="w-progress__bar" role="progressbar" style="width: <?= $h((string)max(0, min(100, $pct))) ?>%" aria-valuenow="<?= $h((string)$pct) ?>" aria-valuemin="0" aria-valuemax="100"></div>
                                             </div>
                                         </td>
                                     </tr>
@@ -370,7 +367,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 </tbody>
                             </table>
                         </div>
-                        <p class="text-muted small mb-0 mt-2">
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;--w-mt:var(--weline-space-2);">
                             <?= __('须按会话顺序命中；checkout_success 兼容 purchase。单渠道口径见流量渠道详情，可切换营销简漏斗 / 电商四步。') ?>
                         </p>
                     <?php endif; ?>
@@ -379,14 +376,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         </div>
     </div>
 
-    <div class="row g-3 mb-3" id="ecommerce-revenue">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="w-grid" id="ecommerce-revenue" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
                         <div>
-                            <h2 class="h5 mb-0"><?= __('购成与收入') ?></h2>
-                            <div class="small text-muted">
+                            <h2 class="h5" style="--w-mb:0;"><?= __('购成与收入') ?></h2>
+                            <div class="w-text" data-tone="muted" data-size="sm">
                                 <?= __('purchase_revenue 仅合计购买类事件（checkout_success / purchase）') ?>
                                 <?php if (!empty($ecommerceRevenue['window_clamped'])): ?>
                                     · <?= __('已按热明细短窗（≤7 天）截取') ?>
@@ -394,14 +391,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                        <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('查看全部事件') ?></a>
                     </div>
                     <?php if (trim((string)($ecommerceRevenue['error'] ?? '')) !== ''): ?>
-                        <div class="alert alert-warning py-2 mb-0">
+                        <div class="w-alert" data-tone="warning" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-mb:0;">
                             <?= __('购成收入暂不可用（扁平列未就绪或查询失败）。') ?>
                         </div>
                     <?php else: ?>
-                        <div class="row g-3 mb-3">
+                        <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
                             <?php
                             $revKpis = [
                                 [__('购买次数'), $ecommerceRevenue['purchases'] ?? 0, 'purchases'],
@@ -410,36 +407,36 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 [__('购成率'), $num(((float)($ecommerceRevenue['purchase_rate_from_view_item'] ?? 0)) * 100, 1) . '%', __('相对浏览商品会话')],
                             ];
                             foreach ($revKpis as $kpi): ?>
-                                <div class="col-6 col-md-3">
-                                    <div class="border rounded p-3 h-100">
-                                        <div class="small text-muted"><?= $h($kpi[0]) ?></div>
-                                        <div class="fs-5 fw-semibold"><?= $h(is_numeric($kpi[1]) ? $num($kpi[1]) : $kpi[1]) ?></div>
-                                        <div class="small text-muted"><?= $h($kpi[2]) ?></div>
+                                <div style="--w-span:6;--w-span-md:3;">
+                                    <div data-w-border="border" data-w-radius="md" data-w-height="full" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
+                                        <div class="w-text" data-tone="muted" data-size="sm"><?= $h($kpi[0]) ?></div>
+                                        <div class="fs-5 w-text" data-weight="strong"><?= $h(is_numeric($kpi[1]) ? $num($kpi[1]) : $kpi[1]) ?></div>
+                                        <div class="w-text" data-tone="muted" data-size="sm"><?= $h($kpi[2]) ?></div>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
-                        <div class="row g-3">
-                            <div class="col-xl-6">
+                        <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                            <div style="--w-span-lg:6;">
                                 <h3 class="h6"><?= __('按渠道收入') ?></h3>
                                 <?php if ($revenueByChannel === []): ?>
-                                    <div class="text-muted small"><?= __('暂无购买类事件。') ?></div>
+                                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无购买类事件。') ?></div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm align-middle mb-0">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                             <thead><tr>
                                                 <th><?= __('渠道码') ?></th>
-                                                <th class="text-end"><?= __('购买次数') ?></th>
-                                                <th class="text-end"><?= __('收入') ?></th>
-                                                <th class="text-end"><?= __('客单价') ?></th>
+                                                <th class="w-text" data-align="end"><?= __('购买次数') ?></th>
+                                                <th class="w-text" data-align="end"><?= __('收入') ?></th>
+                                                <th class="w-text" data-align="end"><?= __('客单价') ?></th>
                                             </tr></thead>
                                             <tbody>
                                             <?php foreach ($revenueByChannel as $row): ?>
                                                 <tr>
                                                     <td><code><?= $h($row['channel_code'] ?? '') ?></code></td>
-                                                    <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
-                                                    <td class="text-end"><?= $num($row['purchase_revenue'] ?? 0, 2) ?></td>
-                                                    <td class="text-end"><?= $num($row['avg_order_value'] ?? 0, 2) ?></td>
+                                                    <td class="w-text" data-align="end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                                    <td class="w-text" data-align="end"><?= $num($row['purchase_revenue'] ?? 0, 2) ?></td>
+                                                    <td class="w-text" data-align="end"><?= $num($row['avg_order_value'] ?? 0, 2) ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                             </tbody>
@@ -447,26 +444,26 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     </div>
                                 <?php endif; ?>
                             </div>
-                            <div class="col-xl-6">
+                            <div style="--w-span-lg:6;">
                                 <h3 class="h6"><?= __('按日收入') ?></h3>
                                 <?php if ($revenueByDay === []): ?>
-                                    <div class="text-muted small"><?= __('暂无购买类事件。') ?></div>
+                                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无购买类事件。') ?></div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm align-middle mb-0">
+                                    <div class="w-table-wrap">
+                                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                             <thead><tr>
                                                 <th><?= __('日期') ?></th>
-                                                <th class="text-end"><?= __('购买次数') ?></th>
-                                                <th class="text-end"><?= __('收入') ?></th>
-                                                <th class="text-end"><?= __('客单价') ?></th>
+                                                <th class="w-text" data-align="end"><?= __('购买次数') ?></th>
+                                                <th class="w-text" data-align="end"><?= __('收入') ?></th>
+                                                <th class="w-text" data-align="end"><?= __('客单价') ?></th>
                                             </tr></thead>
                                             <tbody>
                                             <?php foreach ($revenueByDay as $row): ?>
                                                 <tr>
                                                     <td><?= $h($row['day'] ?? '') ?></td>
-                                                    <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
-                                                    <td class="text-end"><?= $num($row['purchase_revenue'] ?? 0, 2) ?></td>
-                                                    <td class="text-end"><?= $num($row['avg_order_value'] ?? 0, 2) ?></td>
+                                                    <td class="w-text" data-align="end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                                    <td class="w-text" data-align="end"><?= $num($row['purchase_revenue'] ?? 0, 2) ?></td>
+                                                    <td class="w-text" data-align="end"><?= $num($row['avg_order_value'] ?? 0, 2) ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                             </tbody>
@@ -481,14 +478,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         </div>
     </div>
 
-    <div class="row g-3 mb-3" id="ecommerce-items">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="w-grid" id="ecommerce-items" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
                         <div>
-                            <h2 class="h5 mb-0"><?= __('商品表现') ?></h2>
-                            <div class="small text-muted">
+                            <h2 class="h5" style="--w-mb:0;"><?= __('商品表现') ?></h2>
+                            <div class="w-text" data-tone="muted" data-size="sm">
                                 <?= __('按 item_id 展开 items：曝光 / 加购 / 购买与收入') ?>
                                 <?php if (!empty($ecommerceItemsReport['window_clamped'])): ?>
                                     · <?= __('已按热明细短窗（≤7 天）截取') ?>
@@ -496,26 +493,26 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                        <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('查看全部事件') ?></a>
                     </div>
                     <?php if (trim((string)($ecommerceItemsReport['error'] ?? '')) !== ''): ?>
-                        <div class="alert alert-warning py-2 mb-0">
+                        <div class="w-alert" data-tone="warning" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-mb:0;">
                             <?= __('商品表现暂不可用（扁平列或 items 未就绪）。') ?>
                         </div>
                     <?php elseif ($ecommerceItemRows === []): ?>
-                        <div class="text-muted"><?= __('该窗口暂无带 items 的电商事件。') ?></div>
+                        <div class="w-text" data-tone="muted"><?= __('该窗口暂无带 items 的电商事件。') ?></div>
                     <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><?= __('商品') ?></th>
-                                    <th class="text-end"><?= __('曝光') ?></th>
-                                    <th class="text-end"><?= __('加购') ?></th>
-                                    <th class="text-end"><?= __('结账') ?></th>
-                                    <th class="text-end"><?= __('购买') ?></th>
-                                    <th class="text-end"><?= __('销量') ?></th>
-                                    <th class="text-end"><?= __('商品收入') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('曝光') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('加购') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('结账') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('购买') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('销量') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('商品收入') ?></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -523,14 +520,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     <tr>
                                         <td>
                                             <div><?= $h($row['item_name'] ?? '') ?></div>
-                                            <code class="small text-muted"><?= $h($row['item_id'] ?? '') ?></code>
+                                            <code class="w-text" data-tone="muted" data-size="sm"><?= $h($row['item_id'] ?? '') ?></code>
                                         </td>
-                                        <td class="text-end"><?= $num($row['views'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['add_to_carts'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['begin_checkouts'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['quantity_sold'] ?? 0, 1) ?></td>
-                                        <td class="text-end"><?= $num($row['item_revenue'] ?? 0, 2) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['views'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['add_to_carts'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['begin_checkouts'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['quantity_sold'] ?? 0, 1) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['item_revenue'] ?? 0, 2) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
@@ -542,14 +539,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         </div>
     </div>
 
-    <div class="row g-3 mb-3" id="path-exploration">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="w-grid" id="path-exploration" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
                         <div>
-                            <h2 class="h5 mb-0"><?= __('路径探索') ?></h2>
-                            <div class="small text-muted">
+                            <h2 class="h5" style="--w-mb:0;"><?= __('路径探索') ?></h2>
+                            <div class="w-text" data-tone="muted" data-size="sm">
                                 <?= __('落地页 → 次页（限深 %{1} 步，页面事件会话）', [(int)($pathExploration['max_depth'] ?? 3)]) ?>
                                 <?php if (!empty($pathExploration['window_clamped'])): ?>
                                     · <?= __('已按热明细短窗（≤7 天）截取') ?>
@@ -557,29 +554,29 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                        <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('查看全部事件') ?></a>
                     </div>
                     <?php if (trim((string)($pathExploration['error'] ?? '')) !== ''): ?>
-                        <div class="alert alert-warning py-2 mb-0">
+                        <div class="w-alert" data-tone="warning" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-mb:0;">
                             <?= __('路径探索暂不可用（扁平列未就绪或查询失败）。') ?>
                         </div>
                     <?php elseif ((int)($pathExploration['total_sessions'] ?? 0) <= 0): ?>
-                        <div class="text-muted"><?= __('该窗口暂无页面事件会话，无法分析路径。') ?></div>
+                        <div class="w-text" data-tone="muted"><?= __('该窗口暂无页面事件会话，无法分析路径。') ?></div>
                     <?php else: ?>
-                        <div class="small text-muted mb-3">
+                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);">
                             <?= __('会话数') ?>：<strong><?= $num($pathExploration['total_sessions'] ?? 0) ?></strong>
                             · <?= __('单页离站') ?>：<strong><?= $num($pathExploration['bounced_sessions'] ?? 0) ?></strong>
                         </div>
-                        <div class="row g-3">
-                            <div class="col-xl-7">
-                                <h3 class="h6 mb-2"><?= __('Top 落地页 → 次页') ?></h3>
-                                <div class="table-responsive">
-                                    <table class="table table-sm align-middle mb-0">
+                        <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                            <div style="--w-span-lg:7;">
+                                <h3 class="h6" style="--w-mb:var(--weline-space-2);"><?= __('Top 落地页 → 次页') ?></h3>
+                                <div class="w-table-wrap">
+                                    <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                         <thead>
                                         <tr>
                                             <th><?= __('落地页') ?></th>
-                                            <th class="text-end"><?= __('会话数') ?></th>
-                                            <th class="text-end"><?= __('单页离站') ?></th>
+                                            <th class="w-text" data-align="end"><?= __('会话数') ?></th>
+                                            <th class="w-text" data-align="end"><?= __('单页离站') ?></th>
                                             <th style="min-width:220px"><?= __('主要次页') ?></th>
                                         </tr>
                                         </thead>
@@ -588,14 +585,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                             <?php $nextList = is_array($landing['next'] ?? null) ? $landing['next'] : []; ?>
                                             <tr>
                                                 <td><code><?= $h($landing['path'] ?? '') ?></code></td>
-                                                <td class="text-end"><?= $num($landing['sessions'] ?? 0) ?></td>
-                                                <td class="text-end"><?= $num($landing['exits'] ?? 0) ?></td>
+                                                <td class="w-text" data-align="end"><?= $num($landing['sessions'] ?? 0) ?></td>
+                                                <td class="w-text" data-align="end"><?= $num($landing['exits'] ?? 0) ?></td>
                                                 <td>
                                                     <?php if ($nextList === []): ?>
-                                                        <span class="text-muted"><?= __('无次页') ?></span>
+                                                        <span class="w-text" data-tone="muted"><?= __('无次页') ?></span>
                                                     <?php else: ?>
                                                         <?php foreach ($nextList as $next): ?>
-                                                            <div class="d-flex justify-content-between small">
+                                                            <div class="w-text w-cluster" data-justify="between" data-size="sm">
                                                                 <code><?= $h($next['path'] ?? '') ?></code>
                                                                 <span><?= $num($next['sessions'] ?? 0) ?>（<?= $num(((float)($next['rate'] ?? 0)) * 100, 1) ?>%）</span>
                                                             </div>
@@ -608,18 +605,18 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     </table>
                                 </div>
                             </div>
-                            <div class="col-xl-5">
-                                <h3 class="h6 mb-2"><?= __('Top 路径序列') ?></h3>
+                            <div style="--w-span-lg:5;">
+                                <h3 class="h6" style="--w-mb:var(--weline-space-2);"><?= __('Top 路径序列') ?></h3>
                                 <?php if ($pathTopPaths === []): ?>
-                                    <div class="text-muted"><?= __('暂无路径序列。') ?></div>
+                                    <div class="w-text" data-tone="muted"><?= __('暂无路径序列。') ?></div>
                                 <?php else: ?>
-                                    <div class="d-grid gap-2">
+                                    <div class="w-stack" style="--w-gap:var(--weline-space-2);">
                                         <?php $maxPathSessions = max(1, ...array_map(static fn($r) => (int)($r['sessions'] ?? 0), $pathTopPaths)); ?>
                                         <?php foreach ($pathTopPaths as $pathRow): ?>
                                             <?php $width = max(4, (int)round(((int)($pathRow['sessions'] ?? 0) / $maxPathSessions) * 100)); ?>
                                             <div>
-                                                <div class="d-flex justify-content-between small mb-1">
-                                                    <code class="text-truncate me-2" style="max-width:75%"><?= $h($pathRow['path'] ?? '') ?></code>
+                                                <div class="w-text w-cluster" data-justify="between" data-size="sm" style="--w-mb:var(--weline-space-1);">
+                                                    <code class="w-text" style="max-width:75%" data-truncate="true"><?= $h($pathRow['path'] ?? '') ?></code>
                                                     <span><?= $num($pathRow['sessions'] ?? 0) ?></span>
                                                 </div>
                                                 <div class="weline-pixel-bar"><i style="width:<?= $width ?>%"></i></div>
@@ -635,14 +632,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         </div>
     </div>
 
-    <div class="row g-3 mb-3" id="retention">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="w-grid" id="retention" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
                         <div>
-                            <h2 class="h5 mb-0"><?= __('留存分析') ?></h2>
-                            <div class="small text-muted">
+                            <h2 class="h5" style="--w-mb:0;"><?= __('留存分析') ?></h2>
+                            <div class="w-text" data-tone="muted" data-size="sm">
                                 <?= __('日队列留存（Day0–Day%{1}）：登录用户优先，匿名用 IP+UA 软指纹', [max(0, \count($retentionOffsets) - 1)]) ?>
                                 <?php if (!empty($retention['window_clamped'])): ?>
                                     · <?= __('已按热明细短窗（≤7 天）截取') ?>
@@ -650,36 +647,36 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                        <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('查看全部事件') ?></a>
                     </div>
                     <?php if (trim((string)($retention['error'] ?? '')) !== ''): ?>
-                        <div class="alert alert-warning py-2 mb-0">
+                        <div class="w-alert" data-tone="warning" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-mb:0;">
                             <?= __('留存分析暂不可用（扁平列未就绪或查询失败）。') ?>
                         </div>
                     <?php elseif ((int)($retention['total_visitors'] ?? 0) <= 0): ?>
-                        <div class="text-muted"><?= __('该窗口暂无可识别访客，无法计算留存。') ?></div>
+                        <div class="w-text" data-tone="muted"><?= __('该窗口暂无可识别访客，无法计算留存。') ?></div>
                     <?php else: ?>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-3">
-                                <div class="small text-muted"><?= __('访客数') ?></div>
-                                <div class="fs-5 fw-semibold"><?= $num($retention['total_visitors'] ?? 0) ?></div>
+                        <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+                            <div style="--w-span-md:3;">
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('访客数') ?></div>
+                                <div class="fs-5 w-text" data-weight="strong"><?= $num($retention['total_visitors'] ?? 0) ?></div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="small text-muted"><?= __('回访访客') ?></div>
-                                <div class="fs-5 fw-semibold"><?= $num($retention['returning_visitors'] ?? 0) ?></div>
-                                <div class="small text-muted"><?= $num(((float)($retention['returning_rate'] ?? 0)) * 100, 1) ?>%</div>
+                            <div style="--w-span-md:3;">
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('回访访客') ?></div>
+                                <div class="fs-5 w-text" data-weight="strong"><?= $num($retention['returning_visitors'] ?? 0) ?></div>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $num(((float)($retention['returning_rate'] ?? 0)) * 100, 1) ?>%</div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="small text-muted"><?= __('次日留存') ?></div>
-                                <div class="fs-5 fw-semibold"><?= $num(((float)($retention['d1_rate'] ?? 0)) * 100, 1) ?>%</div>
-                                <div class="small text-muted"><?= $num($retention['d1_retained'] ?? 0) ?> / <?= $num($retention['d1_eligible'] ?? 0) ?></div>
+                            <div style="--w-span-md:3;">
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= __('次日留存') ?></div>
+                                <div class="fs-5 w-text" data-weight="strong"><?= $num(((float)($retention['d1_rate'] ?? 0)) * 100, 1) ?>%</div>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $num($retention['d1_retained'] ?? 0) ?> / <?= $num($retention['d1_eligible'] ?? 0) ?></div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="small text-muted mb-1"><?= __('整体偏移留存') ?></div>
-                                <div class="d-flex flex-wrap gap-2">
+                            <div style="--w-span-md:3;">
+                                <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-1);"><?= __('整体偏移留存') ?></div>
+                                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                                     <?php foreach ($retentionOffsetSummary as $summary): ?>
                                         <?php if ((int)($summary['offset'] ?? 0) === 0) { continue; } ?>
-                                        <span class="badge text-bg-light border">
+                                        <span class="w-badge" data-w-background="muted" data-w-border="border" data-tone="muted">
                                             D<?= (int)($summary['offset'] ?? 0) ?>
                                             <?= $num(((float)($summary['rate'] ?? 0)) * 100, 1) ?>%
                                         </span>
@@ -688,16 +685,16 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                             </div>
                         </div>
                         <?php if ($retentionCohorts === []): ?>
-                            <div class="text-muted"><?= __('暂无队列。') ?></div>
+                            <div class="w-text" data-tone="muted"><?= __('暂无队列。') ?></div>
                         <?php else: ?>
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle mb-0">
+                            <div class="w-table-wrap">
+                                <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                     <thead>
                                     <tr>
                                         <th><?= __('队列日') ?></th>
-                                        <th class="text-end"><?= __('队列规模') ?></th>
+                                        <th class="w-text" data-align="end"><?= __('队列规模') ?></th>
                                         <?php foreach ($retentionOffsets as $offset): ?>
-                                            <th class="text-end">D<?= (int)$offset ?></th>
+                                            <th class="w-text" data-align="end">D<?= (int)$offset ?></th>
                                         <?php endforeach; ?>
                                     </tr>
                                     </thead>
@@ -705,15 +702,15 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     <?php foreach ($retentionCohorts as $cohort): ?>
                                         <tr>
                                             <td><code><?= $h($cohort['cohort_date'] ?? '') ?></code></td>
-                                            <td class="text-end"><?= $num($cohort['size'] ?? 0) ?></td>
+                                            <td class="w-text" data-align="end"><?= $num($cohort['size'] ?? 0) ?></td>
                                             <?php
                                             $rates = is_array($cohort['rates'] ?? null) ? $cohort['rates'] : [];
                                             foreach ($retentionOffsets as $idx => $offset):
                                                 $rate = $rates[$idx] ?? null;
                                             ?>
-                                                <td class="text-end">
+                                                <td class="w-text" data-align="end">
                                                     <?php if ($rate === null): ?>
-                                                        <span class="text-muted">—</span>
+                                                        <span class="w-text" data-tone="muted">—</span>
                                                     <?php else: ?>
                                                         <?= $num(((float)$rate) * 100, 1) ?>%
                                                     <?php endif; ?>
@@ -731,18 +728,18 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                        <h2 class="h5 mb-0"><?= __('引擎报表') ?></h2>
-                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+        <div style="--w-span:12;">
+            <div class="w-card">
+                <div class="w-card__body">
+                    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                        <h2 class="h5" style="--w-mb:0;"><?= __('引擎报表') ?></h2>
+                        <a class="w-button" href="<?= $h($listUrl) ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('查看全部事件') ?></a>
                     </div>
                     <?php if ($reportTabs === []): ?>
-                        <div class="text-muted"><?= __('暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。') ?></div>
+                        <div class="w-text" data-tone="muted"><?= __('暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。') ?></div>
                     <?php else: ?>
-                        <ul class="nav nav-tabs mb-3" role="tablist" data-pixel-report-tabs>
+                        <ul class="w-nav w-tabs__list" role="tablist" data-pixel-report-tabs data-w-component="tabs" style="--w-mb:var(--weline-space-4);">
                             <?php foreach ($reportTabs as $tab): ?>
                                 <?php
                                 $code = (string)($tab['code'] ?? '');
@@ -751,18 +748,14 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 $tabQuery['report_tab'] = $code;
                                 $tabUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/detail', $tabQuery);
                                 ?>
-                                <li class="nav-item" role="presentation">
-                                    <a class="nav-link <?= $isActive ? 'active' : '' ?>"
-                                       href="<?= $h($tabUrl) ?>"
-                                       data-report-tab="<?= $h($code) ?>"
-                                       role="tab"
-                                       aria-selected="<?= $isActive ? 'true' : 'false' ?>">
+                                <li role="presentation">
+                                    <a class="<?= $isActive ? 'active' : '' ?>" href="<?= $h($tabUrl) ?>" data-report-tab="<?= $h($code) ?>" role="tab" aria-selected="<?= $isActive ? 'true' : 'false' ?>">
                                         <?= $h($tab['label'] ?? $code) ?>
                                     </a>
                                 </li>
                             <?php endforeach; ?>
                         </ul>
-                        <div class="tab-content" data-pixel-report-tab-panels>
+                        <div class="w-tabs__content" data-pixel-report-tab-panels>
                             <?php foreach ($reportTabs as $tab): ?>
                                 <?php
                                 $code = (string)($tab['code'] ?? '');
@@ -771,11 +764,8 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 $tabError = trim((string)($tab['error'] ?? ''));
                                 $clamped = !empty($tab['window_clamped']);
                                 ?>
-                                <div class="tab-pane fade <?= $isActive ? 'show active' : '' ?>"
-                                     id="report-tab-<?= $h($code) ?>"
-                                     data-report-tab-panel="<?= $h($code) ?>"
-                                     role="tabpanel">
-                                    <div class="small text-muted mb-2">
+                                <div class="w-tabs__panel <?= $isActive ? 'show active' : '' ?>" id="report-tab-<?= $h($code) ?>" data-report-tab-panel="<?= $h($code) ?>" role="tabpanel" hidden>
+                                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
                                         <?= $h($tab['description'] ?? '') ?>
                                         <?php if ($clamped): ?>
                                             · <?= __('已按热明细短窗（≤7 天）截取') ?>
@@ -783,26 +773,26 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                         <?php endif; ?>
                                     </div>
                                     <?php if ($tabError !== ''): ?>
-                                        <div class="alert alert-warning py-2 mb-2"><?= $h($tabError) ?></div>
+                                        <div class="w-alert" data-tone="warning" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-mb:var(--weline-space-2);"><?= $h($tabError) ?></div>
                                     <?php endif; ?>
                                     <?php if ($rows === []): ?>
-                                        <div class="text-muted"><?= __('该 Tab 暂无聚合数据（需扁平列就绪且时间窗内有事件）。') ?></div>
+                                        <div class="w-text" data-tone="muted"><?= __('该 Tab 暂无聚合数据（需扁平列就绪且时间窗内有事件）。') ?></div>
                                     <?php else: ?>
                                         <?php $showAvgValue = array_key_exists('avg_value', $rows[0]); ?>
-                                        <div class="table-responsive">
-                                            <table class="table table-sm align-middle mb-0">
+                                        <div class="w-table-wrap">
+                                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                                 <thead>
                                                 <tr>
                                                     <th><?= __('维度值') ?></th>
-                                                    <th class="text-end"><?= __('事件') ?></th>
-                                                    <th class="text-end"><?= __('价值') ?></th>
+                                                    <th class="w-text" data-align="end"><?= __('事件') ?></th>
+                                                    <th class="w-text" data-align="end"><?= __('价值') ?></th>
                                                     <?php if ($showAvgValue): ?>
-                                                        <th class="text-end"><?= __('均值') ?></th>
+                                                        <th class="w-text" data-align="end"><?= __('均值') ?></th>
                                                     <?php endif; ?>
-                                                    <th class="text-end"><?= __('有价事件') ?></th>
-                                                    <th class="text-end"><?= __('购买') ?></th>
-                                                    <th class="text-end"><?= __('加购') ?></th>
-                                                    <th class="text-end"><?= __('下钻') ?></th>
+                                                    <th class="w-text" data-align="end"><?= __('有价事件') ?></th>
+                                                    <th class="w-text" data-align="end"><?= __('购买') ?></th>
+                                                    <th class="w-text" data-align="end"><?= __('加购') ?></th>
+                                                    <th class="w-text" data-align="end"><?= __('下钻') ?></th>
                                                 </tr>
                                                 </thead>
                                                 <tbody>
@@ -825,17 +815,17 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                                     ?>
                                                     <tr>
                                                         <td><code><?= $h($dimValue !== '' ? $dimValue : '—') ?></code></td>
-                                                        <td class="text-end"><?= $num($row['events'] ?? 0) ?></td>
-                                                        <td class="text-end"><?= $num($row['value_sum'] ?? 0, 2) ?></td>
+                                                        <td class="w-text" data-align="end"><?= $num($row['events'] ?? 0) ?></td>
+                                                        <td class="w-text" data-align="end"><?= $num($row['value_sum'] ?? 0, 2) ?></td>
                                                         <?php if ($showAvgValue): ?>
-                                                            <td class="text-end"><?= $num($row['avg_value'] ?? 0, 2) ?></td>
+                                                            <td class="w-text" data-align="end"><?= $num($row['avg_value'] ?? 0, 2) ?></td>
                                                         <?php endif; ?>
-                                                        <td class="text-end"><?= $num($row['valued_events'] ?? 0) ?></td>
-                                                        <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
-                                                        <td class="text-end"><?= $num($row['add_to_carts'] ?? 0) ?></td>
-                                                        <td class="text-end">
+                                                        <td class="w-text" data-align="end"><?= $num($row['valued_events'] ?? 0) ?></td>
+                                                        <td class="w-text" data-align="end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                                        <td class="w-text" data-align="end"><?= $num($row['add_to_carts'] ?? 0) ?></td>
+                                                        <td class="w-text" data-align="end">
                                                             <?php if ($drillUrl !== ''): ?>
-                                                                <a class="btn btn-sm btn-outline-secondary" href="<?= $h($drillUrl) ?>"><?= __('事件列表') ?></a>
+                                                                <a class="w-button" href="<?= $h($drillUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('事件列表') ?></a>
                                                             <?php else: ?>
                                                                 —
                                                             <?php endif; ?>
@@ -852,18 +842,18 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                     <?php endif; ?>
 
                     <?php if ($reportTabs === [] && $channelRows !== []): ?>
-                        <hr class="my-3">
-                        <div class="small text-muted mb-2"><?= __('回退：统计服务渠道聚合') ?></div>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
+                        <hr style="--w-mt:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);"><?= __('回退：统计服务渠道聚合') ?></div>
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                                 <thead>
                                 <tr>
                                     <th><?= __('渠道名称') ?></th>
                                     <th><?= __('渠道码') ?></th>
                                     <th><?= __('流量类型') ?></th>
-                                    <th class="text-end"><?= __('事件') ?></th>
-                                    <th class="text-end"><?= __('用户') ?></th>
-                                    <th class="text-end"><?= __('价值') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('事件') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('用户') ?></th>
+                                    <th class="w-text" data-align="end"><?= __('价值') ?></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -876,12 +866,12 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     }
                                     ?>
                                     <tr>
-                                        <td class="fw-semibold"><?= $h($name) ?></td>
+                                        <td class="w-text" data-weight="strong"><?= $h($name) ?></td>
                                         <td><code><?= $h($code !== '' ? $code : '—') ?></code></td>
                                         <td><?= $h($row['traffic_type'] ?? '') ?></td>
-                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
-                                        <td class="text-end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="w-text" data-align="end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
@@ -893,7 +883,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
         <?php
         $dimensionBlocks = [
             [__('设备'), $devices],
@@ -902,16 +892,16 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
             [__('浏览器'), $browsers],
         ];
         foreach ($dimensionBlocks as [$title, $rows]): ?>
-            <div class="col-md-6 col-xl-3">
-                <div class="card h-100"><div class="card-body">
-                    <h2 class="h6 mb-3"><?= $h($title) ?></h2>
+            <div style="--w-span-md:6;--w-span-lg:3;">
+                <div class="w-card" data-w-height="full"><div class="w-card__body">
+                    <h2 class="h6" style="--w-mb:var(--weline-space-4);"><?= $h($title) ?></h2>
                     <?php if ($rows === []): ?>
-                        <div class="text-muted small"><?= __('暂无数据') ?></div>
+                        <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无数据') ?></div>
                     <?php else: ?>
                         <?php foreach ($rows as $row): ?>
-                            <div class="d-flex justify-content-between small mb-2">
-                                <span class="text-truncate pe-2" title="<?= $h($row['label'] ?? '') ?>"><?= $h($row['label'] ?? '-') ?></span>
-                                <span class="text-nowrap"><?= $num($row['count'] ?? 0) ?> · <?= $num($row['share'] ?? 0, 1) ?>%</span>
+                            <div class="w-text w-cluster" data-justify="between" data-size="sm" style="--w-mb:var(--weline-space-2);">
+                                <span class="w-text pe-2" title="<?= $h($row['label'] ?? '') ?>" data-truncate="true"><?= $h($row['label'] ?? '-') ?></span>
+                                <span data-wrap="false"><?= $num($row['count'] ?? 0) ?> · <?= $num($row['share'] ?? 0, 1) ?>%</span>
                             </div>
                         <?php endforeach; ?>
                     <?php endif; ?>
@@ -920,15 +910,15 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
         <?php endforeach; ?>
     </div>
 
-    <div class="row g-3">
-        <div class="col-xl-7">
-            <div class="card h-100"><div class="card-body">
-                <h2 class="h5 mb-3"><?= __('最近事件明细') ?></h2>
+    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+        <div style="--w-span-lg:7;">
+            <div class="w-card" data-w-height="full"><div class="w-card__body">
+                <h2 class="h5" style="--w-mb:var(--weline-space-4);"><?= __('最近事件明细') ?></h2>
                 <?php if ($recent === []): ?>
-                    <div class="text-muted"><?= __('暂无最近事件。') ?></div>
+                    <div class="w-text" data-tone="muted"><?= __('暂无最近事件。') ?></div>
                 <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover align-middle mb-0">
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                             <thead><tr>
                                 <th><?= __('时间') ?></th>
                                 <th><?= __('事件') ?></th>
@@ -940,18 +930,18 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                             <tbody>
                             <?php foreach ($recent as $idx => $row): ?>
                                 <tr>
-                                    <td class="small text-muted text-nowrap"><?= $h($row['created_at'] ?? '') ?></td>
-                                    <td class="fw-semibold"><?= $h($row['event'] ?? '') ?></td>
-                                    <td class="small text-truncate" style="max-width:180px" title="<?= $h($row['path'] ?? '') ?>"><?= $h($row['path'] ?? '') ?></td>
-                                    <td class="small"><?= $h($row['device'] ?? '-') ?></td>
-                                    <td class="small"><?= $num(($row['dwell_ms'] ?? 0) / 1000, 1) ?>s</td>
-                                    <td class="text-end">
-                                        <button type="button" class="btn btn-sm btn-outline-primary" data-pixel-detail-toggle="<?= (int)$idx ?>"><?= __('细节') ?></button>
+                                    <td class="w-text" data-wrap="false" data-tone="muted" data-size="sm"><?= $h($row['created_at'] ?? '') ?></td>
+                                    <td class="w-text" data-weight="strong"><?= $h($row['event'] ?? '') ?></td>
+                                    <td class="w-text" style="max-width:180px" title="<?= $h($row['path'] ?? '') ?>" data-truncate="true" data-size="sm"><?= $h($row['path'] ?? '') ?></td>
+                                    <td class="w-text" data-size="sm"><?= $h($row['device'] ?? '-') ?></td>
+                                    <td class="w-text" data-size="sm"><?= $num(($row['dwell_ms'] ?? 0) / 1000, 1) ?>s</td>
+                                    <td class="w-text" data-align="end">
+                                        <button type="button" class="w-button" data-pixel-detail-toggle="<?= (int)$idx ?>" data-tone="primary" data-variant="outline" data-size="sm"><?= __('细节') ?></button>
                                     </td>
                                 </tr>
-                                <tr class="d-none" data-pixel-detail-row="<?= (int)$idx ?>">
+                                <tr data-pixel-detail-row="<?= (int)$idx ?>" hidden>
                                     <td colspan="6">
-                                        <pre class="weline-pixel-json mb-0"><?= $h(json_encode($row['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
+                                        <pre class="weline-pixel-json" style="--w-mb:0;"><?= $h(json_encode($row['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -961,18 +951,18 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                 <?php endif; ?>
             </div></div>
         </div>
-        <div class="col-xl-5">
-            <div class="card h-100"><div class="card-body">
-                <h2 class="h5 mb-3"><?= __('趋势') ?></h2>
+        <div style="--w-span-lg:5;">
+            <div class="w-card" data-w-height="full"><div class="w-card__body">
+                <h2 class="h5" style="--w-mb:var(--weline-space-4);"><?= __('趋势') ?></h2>
                 <?php if ($trend === []): ?>
-                    <div class="text-muted"><?= __('暂无趋势。') ?></div>
+                    <div class="w-text" data-tone="muted"><?= __('暂无趋势。') ?></div>
                 <?php else: ?>
                     <?php $tmax = max(1, ...(array_map(static fn($r) => (int)($r['count'] ?? 0), $trend))); ?>
-                    <div class="d-grid gap-2">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-2);">
                         <?php foreach ($trend as $row): ?>
                             <?php $width = max(4, (int)round(((int)($row['count'] ?? 0) / $tmax) * 100)); ?>
                             <div>
-                                <div class="d-flex justify-content-between small mb-1">
+                                <div class="w-text w-cluster" data-justify="between" data-size="sm" style="--w-mb:var(--weline-space-1);">
                                     <span><?= $h($row['date'] ?? '') ?></span>
                                     <span><?= $num($row['count'] ?? 0) ?></span>
                                 </div>

@@ -8,9 +8,14 @@ use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Layout\LayoutStatus;
 use Weline\Theme\Api\Layout\LayoutWorkspaceInterface;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 
 class DashboardViewService
@@ -22,7 +27,10 @@ class DashboardViewService
         private readonly DashboardView $dashboardView,
         private readonly BackendUserConfigStore $backendUserConfig,
         private readonly WebsiteCatalogInterface $websiteCatalog,
+        private readonly ScopeHierarchyInterface $scopeHierarchy,
         private readonly LayoutWorkspaceInterface $layoutWorkspace,
+        private readonly ThemeScopedWorkspaceInterface $scopedWorkspace,
+        private readonly ThemeScopedResourceAdapterInterface $scopedResources,
         private readonly ?EventsManager $eventsManager = null,
     ) {
     }
@@ -228,6 +236,9 @@ class DashboardViewService
             if ($source && $source->getViewId() !== $view->getViewId()) {
                 $this->copyLayout($source, $view);
             }
+            if (!$this->ensureLayoutInitialized($view)) {
+                throw new \RuntimeException((string)__('Dashboard 布局未能写入 Scope Release。'));
+            }
         }
 
         return $view;
@@ -325,18 +336,29 @@ class DashboardViewService
                 'created' => $created,
                 'layout' => $layoutResult,
                 'view' => $this->viewToPayload($view, 0),
-                'identity' => $view->layoutIdentity(),
+                'identity' => $this->layoutIdentity($view)->toArray(),
             ];
         }
 
-        $this->ensureLayoutInitialized($view);
+        if (!$this->ensureLayoutInitialized($view)) {
+            return [
+                'success' => false,
+                'created' => $created,
+                'layout' => [
+                    'success' => false,
+                    'status' => 'scoped_release_sync_failed',
+                ],
+                'view' => $this->viewToPayload($view, 0),
+                'identity' => $this->layoutIdentity($view)->toArray(),
+            ];
+        }
 
         return [
             'success' => true,
             'created' => $created,
             'layout' => $layoutResult,
             'view' => $this->viewToPayload($view, 0),
-            'identity' => $view->layoutIdentity(),
+            'identity' => $this->layoutIdentity($view)->toArray(),
         ];
     }
 
@@ -381,15 +403,18 @@ class DashboardViewService
             false
         );
         $this->copyLayout($source, $view);
+        if (!$this->ensureLayoutInitialized($view)) {
+            throw new \RuntimeException((string)__('Dashboard 副本布局未能写入 Scope Release。'));
+        }
 
         return $view;
     }
 
-    public function ensureLayoutInitialized(DashboardView $view): void
+    public function ensureLayoutInitialized(DashboardView $view): bool
     {
-        $themeId = $this->getBackendThemeId();
+        $themeId = $this->getBackendThemeId($view->getWebsiteId());
         if ($themeId <= 0 || $view->getViewId() <= 0) {
-            return;
+            return false;
         }
 
         $identity = $this->layoutIdentity($view);
@@ -401,10 +426,12 @@ class DashboardViewService
                 $identity,
             );
         } catch (\Throwable) {
-            return;
+            return false;
         }
 
         $this->dispatchLayoutIdentityReady($themeId, $view, $identity);
+
+        return $this->synchronizeLegacyPublishedLayout($view, $themeId);
     }
 
     private function dispatchLayoutIdentityReady(int $themeId, DashboardView $view, LayoutIdentity $identity): void
@@ -481,9 +508,30 @@ class DashboardViewService
             throw new \RuntimeException((string)__('当前视图不能直接编辑，请先复制到我的视图。'));
         }
 
-        $themeId = $this->getBackendThemeId();
+        $themeId = $this->getBackendThemeId($view->getWebsiteId());
         if ($themeId <= 0) {
             throw new \RuntimeException((string)__('未找到后台主题，无法保存 Dashboard 布局。'));
+        }
+
+        $context = $this->scopedLayoutContext($view, $themeId);
+        $state = $this->scopedWorkspace->load($context, true);
+        if ((int)($state['draft_revision_id'] ?? 0) > 0) {
+            $published = $this->scopedWorkspace->publish(
+                $context,
+                (int)($state['revision'] ?? 0),
+                $this->nullablePositiveInt($state['expected_parent_release_id'] ?? null),
+                $this->dashboardActorId($view),
+                'Dashboard',
+                'dashboard_layout_publish',
+            );
+            if (!empty($published['blocked']) || (int)($published['release_id'] ?? 0) <= 0) {
+                throw new \RuntimeException((string)__('Dashboard 布局存在 Scope 合并冲突，无法发布。'));
+            }
+
+            return true;
+        }
+        if ((int)($state['published_release_id'] ?? 0) > 0) {
+            return true;
         }
 
         $saved = $this->layoutWorkspace->publishLayout(
@@ -495,14 +543,19 @@ class DashboardViewService
         if (!$saved) {
             throw new \RuntimeException((string)__('Dashboard 布局保存失败。'));
         }
+        if (!$this->synchronizeLegacyPublishedLayout($view, $themeId)) {
+            throw new \RuntimeException((string)__('Dashboard 布局未能写入 Scope Release。'));
+        }
 
         return true;
     }
 
-    public function getBackendThemeId(): int
+    public function getBackendThemeId(?int $websiteId = null): int
     {
         try {
-            return $this->layoutWorkspace->resolveActiveThemeId('backend', false);
+            $scopeIdentity = $websiteId === null ? null : $this->websiteIdentity($websiteId);
+
+            return $this->layoutWorkspace->resolveActiveThemeId('backend', false, $scopeIdentity);
         } catch (\Throwable) {
             return 0;
         }
@@ -512,24 +565,25 @@ class DashboardViewService
     {
         /** @var \Weline\Framework\Http\Url $url */
         $url = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+        $identity = $this->layoutIdentity($view);
 
         return $url->getBackendUrl('theme/backend/theme-editor/index', [
             'editor_area' => 'backend',
-            'theme_id' => $this->getBackendThemeId(),
+            'theme_id' => $this->getBackendThemeId($view->getWebsiteId()),
             'page_type' => DashboardView::PAGE_TYPE,
             'layout_type' => DashboardView::PAGE_TYPE,
             'layout_option' => DashboardView::LAYOUT_OPTION,
             'lock_layout_context' => 1,
             'lock_source' => 'dashboard',
-            'scope' => $view->scopeKey(),
-            'target_type' => DashboardView::TARGET_TYPE_WEBSITE,
-            'target_id' => $view->getWebsiteId(),
-            'layout_lock_target_type' => DashboardView::TARGET_TYPE_WEBSITE,
-            'layout_lock_target_id' => $view->getWebsiteId(),
-            'theme_layout_target_type' => DashboardView::TARGET_TYPE_WEBSITE,
-            'theme_layout_target_id' => $view->getWebsiteId(),
-            'theme_layout_source_target_type' => DashboardView::TARGET_TYPE_WEBSITE,
-            'theme_layout_source_target_id' => $view->getWebsiteId(),
+            'scope' => $identity->scope,
+            'target_type' => $identity->targetType,
+            'target_id' => $identity->targetId,
+            'layout_lock_target_type' => $identity->targetType,
+            'layout_lock_target_id' => $identity->targetId,
+            'theme_layout_target_type' => $identity->targetType,
+            'theme_layout_target_id' => $identity->targetId,
+            'theme_layout_source_target_type' => $identity->targetType,
+            'theme_layout_source_target_id' => $identity->targetId,
             'widget_allow_supports' => 'dashboard-widget',
         ]);
     }
@@ -537,12 +591,14 @@ class DashboardViewService
     public function rowToPayload(array $row, int $userId = 0): array
     {
         $viewId = (int)($row[DashboardView::schema_fields_ID] ?? 0);
+        $websiteId = (int)($row[DashboardView::schema_fields_WEBSITE_ID] ?? 0);
         $ownerId = (int)($row[DashboardView::schema_fields_OWNER_ADMIN_ID] ?? 0);
         $visibility = (string)($row[DashboardView::schema_fields_VISIBILITY] ?? DashboardView::VISIBILITY_PRIVATE);
+        $identity = $this->layoutIdentityForIds($websiteId, $viewId)->toArray();
 
         return [
             'view_id' => $viewId,
-            'website_id' => (int)($row[DashboardView::schema_fields_WEBSITE_ID] ?? 0),
+            'website_id' => $websiteId,
             'owner_admin_id' => $ownerId > 0 ? $ownerId : null,
             'name' => (string)($row[DashboardView::schema_fields_NAME] ?? ''),
             'code' => (string)($row[DashboardView::schema_fields_CODE] ?? ''),
@@ -552,13 +608,8 @@ class DashboardViewService
             'sort_order' => (int)($row[DashboardView::schema_fields_SORT_ORDER] ?? 0),
             'created_at' => (string)($row[DashboardView::schema_fields_CREATED_AT] ?? ''),
             'updated_at' => (string)($row[DashboardView::schema_fields_UPDATED_AT] ?? ''),
-            'scope' => 'dashboard_view:' . $viewId,
-            'layout_identity' => [
-                'layout_option' => DashboardView::LAYOUT_OPTION,
-                'scope' => 'dashboard_view:' . $viewId,
-                'target_type' => DashboardView::TARGET_TYPE_WEBSITE,
-                'target_id' => (int)($row[DashboardView::schema_fields_WEBSITE_ID] ?? 0),
-            ],
+            'scope' => $identity['scope'],
+            'layout_identity' => $identity,
             'can_edit' => $visibility !== DashboardView::VISIBILITY_SYSTEM && $ownerId > 0 && $ownerId === $userId,
         ];
     }
@@ -843,7 +894,14 @@ class DashboardViewService
      */
     private function copyLayoutIdentity(DashboardView $source, DashboardView $target): array
     {
-        $themeId = $this->getBackendThemeId();
+        if ($source->getWebsiteId() !== $target->getWebsiteId()) {
+            return [
+                'success' => false,
+                'status' => 'cross_website_layout_copy_forbidden',
+                'copied' => [],
+            ];
+        }
+        $themeId = $this->getBackendThemeId($target->getWebsiteId());
         if ($themeId <= 0) {
             return [
                 'success' => false,
@@ -866,7 +924,7 @@ class DashboardViewService
      */
     private function seedLayout(DashboardView $view, array $layoutData): array
     {
-        $themeId = $this->getBackendThemeId();
+        $themeId = $this->getBackendThemeId($view->getWebsiteId());
         if ($themeId <= 0) {
             return [
                 'success' => false,
@@ -895,7 +953,6 @@ class DashboardViewService
             );
             $seeded[$status->value] = array_sum(array_map('count', $payload));
         }
-
         return [
             'success' => true,
             'status' => 'seeded',
@@ -982,7 +1039,7 @@ class DashboardViewService
 
     private function hasLayoutRows(DashboardView $view): bool
     {
-        $themeId = $this->getBackendThemeId();
+        $themeId = $this->getBackendThemeId($view->getWebsiteId());
         if ($themeId <= 0) {
             return false;
         }
@@ -996,7 +1053,7 @@ class DashboardViewService
 
     private function deleteLayoutRows(DashboardView $view): void
     {
-        $themeId = $this->getBackendThemeId();
+        $themeId = $this->getBackendThemeId($view->getWebsiteId());
         if ($themeId <= 0) {
             return;
         }
@@ -1007,8 +1064,129 @@ class DashboardViewService
         );
     }
 
-    private function layoutIdentity(DashboardView $view): LayoutIdentity
+    /**
+     * Scope and business target are orthogonal: Website is the canonical
+     * hierarchy level, while the Dashboard view remains the target resource.
+     */
+    public function layoutIdentity(DashboardView $view): LayoutIdentity
     {
-        return LayoutIdentity::fromArray($view->layoutIdentity());
+        return $this->layoutIdentityForIds($view->getWebsiteId(), $view->getViewId());
+    }
+
+    private function layoutIdentityForIds(int $websiteId, int $viewId): LayoutIdentity
+    {
+        if ($viewId <= 0) {
+            throw new \InvalidArgumentException('dashboard_layout_identity_view_required');
+        }
+
+        return new LayoutIdentity(
+            layoutOption: DashboardView::LAYOUT_OPTION,
+            scope: $this->scopeHierarchy->toStorageScope($this->websiteIdentity($websiteId)),
+            targetType: DashboardView::TARGET_TYPE_DASHBOARD_VIEW,
+            targetId: $viewId,
+        );
+    }
+
+    private function websiteIdentity(int $websiteId): ScopeIdentity
+    {
+        foreach ($this->websiteCatalog->all() as $website) {
+            if ($website->id === $websiteId) {
+                return ScopeIdentity::website($websiteId, $website->code);
+            }
+        }
+
+        throw new \RuntimeException('dashboard_layout_identity_website_missing:' . $websiteId);
+    }
+
+    private function scopedLayoutContext(DashboardView $view, int $themeId): ThemeEditorContext
+    {
+        return new ThemeEditorContext(
+            scope: $this->scopeHierarchy->contextFromIdentity($this->websiteIdentity($view->getWebsiteId())),
+            area: 'backend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: $themeId,
+            layoutType: DashboardView::PAGE_TYPE,
+            layoutOption: DashboardView::LAYOUT_OPTION,
+            locale: 'default',
+            targetType: DashboardView::TARGET_TYPE_DASHBOARD_VIEW,
+            targetId: $view->getViewId(),
+        );
+    }
+
+    /**
+     * Import an exact legacy Dashboard snapshot once, then keep the scoped
+     * workspace authoritative. Legacy rows remain a compatibility projection.
+     */
+    private function synchronizeLegacyPublishedLayout(DashboardView $view, int $themeId): bool
+    {
+        if ($themeId <= 0 || $view->getViewId() <= 0) {
+            return false;
+        }
+        $identity = $this->layoutIdentity($view);
+        if (!$this->layoutWorkspace->hasLayout($themeId, DashboardView::PAGE_TYPE, $identity)) {
+            return true;
+        }
+
+        try {
+            $context = $this->scopedLayoutContext($view, $themeId);
+            $state = $this->scopedWorkspace->load($context, true);
+            if ((int)($state['revision'] ?? 0) > 0
+                || (int)($state['published_release_id'] ?? 0) > 0
+                || (int)($state['draft_revision_id'] ?? 0) > 0
+            ) {
+                $this->scopedResources->projectPublished(
+                    $context,
+                    is_array($state['published_payload'] ?? null) ? $state['published_payload'] : [],
+                    max(0, (int)($state['effective_release_id'] ?? 0)),
+                );
+                if ((int)($state['draft_revision_id'] ?? 0) > 0
+                    && is_array($state['draft_payload'] ?? null)
+                ) {
+                    $this->scopedResources->projectDraft($context, $state['draft_payload']);
+                }
+
+                return true;
+            }
+
+            $updated = $this->scopedWorkspace->replaceEffectivePayload(
+                $context,
+                0,
+                $this->nullablePositiveInt($state['expected_parent_release_id'] ?? null),
+                $this->scopedResources->loadLegacyPublished($context),
+                $this->dashboardActorId($view),
+                'Dashboard',
+                'dashboard_legacy_layout_import',
+            );
+            $published = $this->scopedWorkspace->publish(
+                $context,
+                (int)($updated['revision'] ?? 0),
+                $this->nullablePositiveInt($updated['expected_parent_release_id'] ?? null),
+                $this->dashboardActorId($view),
+                'Dashboard',
+                'dashboard_legacy_layout_import',
+            );
+
+            return empty($published['blocked']) && (int)($published['release_id'] ?? 0) > 0;
+        } catch (\Throwable $e) {
+            w_log_error(
+                'Dashboard Scope 布局同步失败: ' . $e->getMessage(),
+                ['view_id' => $view->getViewId(), 'website_id' => $view->getWebsiteId()],
+                'DashboardThemeScope',
+            );
+
+            return false;
+        }
+    }
+
+    private function dashboardActorId(DashboardView $view): string
+    {
+        return 'system:dashboard-view:' . $view->getViewId();
+    }
+
+    private function nullablePositiveInt(mixed $value): ?int
+    {
+        $value = (int)$value;
+
+        return $value > 0 ? $value : null;
     }
 }

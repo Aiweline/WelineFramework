@@ -132,6 +132,9 @@ class AiModel extends Model
         }
 
         try {
+            if (VendorConfigManager::isCustomProvider($supplier)) {
+                return true;
+            }
             $supportedProviders = VendorConfigManager::getSupportedProviders();
             return !isset($supportedProviders[$supplier]);
         } catch (\Throwable) {

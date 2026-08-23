@@ -8,7 +8,7 @@ use Weline\CacheManager\Service\CacheAdminService;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\Acl\Acl;
 
-#[Acl('Weline_CacheManager::cache_policy', '缓存策略', 'mdi mdi-tune-variant', '运行时缓存 TTL 与共享 Memory 策略', 'Weline_CacheManager::cache_service')]
+#[Acl('Weline_CacheManager::cache_policy', '缓存策略', 'settings', '运行时缓存 TTL 与共享 Memory 策略', 'Weline_CacheManager::cache_service')]
 class CachePolicy extends \Weline\Framework\App\Controller\BackendPageController
 {
     public function __construct(
@@ -17,7 +17,7 @@ class CachePolicy extends \Weline\Framework\App\Controller\BackendPageController
     ) {
     }
 
-    #[Acl('Weline_CacheManager::cache_policy_index', '缓存策略设置', 'mdi mdi-tune-variant', '查看运行时缓存策略')]
+    #[Acl('Weline_CacheManager::cache_policy_index', '缓存策略设置', 'settings', '查看运行时缓存策略')]
     public function index()
     {
         $this->assign('config', $this->runtimeCachePolicy->getConfig());
@@ -26,7 +26,7 @@ class CachePolicy extends \Weline\Framework\App\Controller\BackendPageController
         return $this->fetch();
     }
 
-    #[Acl('Weline_CacheManager::cache_policy_save', '保存缓存策略', 'mdi mdi-content-save', '保存运行时缓存策略')]
+    #[Acl('Weline_CacheManager::cache_policy_save', '保存缓存策略', 'save', '保存运行时缓存策略')]
     public function postSave()
     {
         try {

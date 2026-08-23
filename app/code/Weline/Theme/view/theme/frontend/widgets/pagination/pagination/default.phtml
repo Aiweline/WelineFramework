@@ -50,7 +50,7 @@ if ($totalPages <= 1) return; // 只有一页时不显示
         <?php if ($showFirstLast && $currentPage > 1): ?>
             <li class="w-page-item">
                 <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="w-page-link page-first" title="<?= __('第一页') ?>">
-                    <i class="ri-skip-back-line"></i>
+                    <w:icon name="circle" size="sm"></w:icon>
                 </a>
             </li>
         <?php endif; ?>
@@ -59,12 +59,12 @@ if ($totalPages <= 1) return; // 只有一页时不显示
             <li class="w-page-item <?= $currentPage <= 1 ? 'w-disabled' : '' ?>">
                 <?php if ($currentPage > 1): ?>
                     <a href="<?= htmlspecialchars($baseUrl . ($currentPage - 1)) ?>" class="w-page-link page-prev">
-                        <i class="ri-arrow-left-s-line"></i>
+                        <w:icon name="arrow-left" size="sm"></w:icon>
                         <span><?= htmlspecialchars($prevText) ?></span>
                     </a>
                 <?php else: ?>
                     <span class="w-page-link page-prev">
-                        <i class="ri-arrow-left-s-line"></i>
+                        <w:icon name="arrow-left" size="sm"></w:icon>
                         <span><?= htmlspecialchars($prevText) ?></span>
                     </span>
                 <?php endif; ?>
@@ -104,12 +104,12 @@ if ($totalPages <= 1) return; // 只有一页时不显示
                 <?php if ($currentPage < $totalPages): ?>
                     <a href="<?= htmlspecialchars($baseUrl . ($currentPage + 1)) ?>" class="w-page-link page-next">
                         <span><?= htmlspecialchars($nextText) ?></span>
-                        <i class="ri-arrow-right-s-line"></i>
+                        <w:icon name="arrow-right" size="sm"></w:icon>
                     </a>
                 <?php else: ?>
                     <span class="w-page-link page-next">
                         <span><?= htmlspecialchars($nextText) ?></span>
-                        <i class="ri-arrow-right-s-line"></i>
+                        <w:icon name="arrow-right" size="sm"></w:icon>
                     </span>
                 <?php endif; ?>
             </li>
@@ -118,7 +118,7 @@ if ($totalPages <= 1) return; // 只有一页时不显示
         <?php if ($showFirstLast && $currentPage < $totalPages): ?>
             <li class="w-page-item">
                 <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="w-page-link page-last" title="<?= __('最后一页') ?>">
-                    <i class="ri-skip-forward-line"></i>
+                    <w:icon name="circle" size="sm"></w:icon>
                 </a>
             </li>
         <?php endif; ?>
@@ -149,9 +149,9 @@ if ($totalPages <= 1) return; // 只有一页时不显示
     min-width: 40px;
     height: 40px;
     padding: 0 12px;
-    color: var(--weline-theme-text-secondary);
+    color: var(--weline-theme-text-muted);
     text-decoration: none;
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     background: var(--weline-theme-surface);
     transition: all var(--weline-theme-transition-base);
 }
@@ -173,7 +173,7 @@ if ($totalPages <= 1) return; // 只有一页时不显示
 }
 
 .widget-pagination .w-page-item.w-disabled .w-page-link:hover {
-    border-color: var(--weline-theme-border-color);
+    border-color: var(--weline-theme-border);
     color: var(--weline-theme-text-muted);
 }
 

@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Controller\Frontend\ThemePreview;
 
+use Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface;
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\State;
-use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\TargetPreviewPayloadProviderInterface;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\EditorModeAssetInjector;
 use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\PreviewTokenService;
+use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
+use Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Service\ThemeTargetIdentityResolver;
@@ -23,18 +30,30 @@ class Content extends FrontendController
 {
     public function index(): string
     {
-        $this->applyPreviewLocale((string)$this->request->getParam('locale', ''));
-
         /** @var PreviewContextService $previewContextService */
         $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
         /** @var ThemePageTypeResolver $pageTypeResolver */
         $pageTypeResolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
+        /** @var PreviewTokenService $previewTokenService */
+        $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
+        $tokenData = $previewTokenService->getCurrentPreviewData();
+        if (!\is_array($tokenData)) {
+            if (!$this->isBackendUserLoggedIn()) {
+                throw new \RuntimeException((string)__('Theme 预览需要有效 Token 或后台登录状态。'));
+            }
+            $this->assertBackendScopePreviewAllowed();
+        }
+        $this->applyPrivatePreviewResponsePolicy();
 
         $context = $previewContextService->persistCurrentRequestContext();
-        $this->applyPreviewLocale((string)$this->request->getParam('locale', (string)($context['locale'] ?? '')));
+        $this->applyPreviewLocale((string)($context['locale'] ?? ''));
         $targetValue = \trim((string)($context['target_value'] ?? ''));
-        $layoutType = \trim((string)$this->request->getParam('layout_type', ''));
-        $layoutOption = \trim((string)$this->request->getParam('layout_option', ''));
+        $layoutType = \is_array($tokenData)
+            ? ''
+            : \trim((string)$this->request->getParam('layout_type', ''));
+        $layoutOption = \is_array($tokenData)
+            ? \trim((string)($context['layout_option'] ?? 'default'))
+            : \trim((string)$this->request->getParam('layout_option', ''));
 
         if ($layoutType === '') {
             $layoutType = \trim((string)$this->request->getParam('page_type', ''));
@@ -80,16 +99,44 @@ class Content extends FrontendController
 
         /** @var ThemePreviewContentRenderer $previewContentRenderer */
         $previewContentRenderer = ObjectManager::getInstance(ThemePreviewContentRenderer::class);
-        $versionId = (int)$this->request->getParam('version_id', 0) ?: null;
+        $versionId = \is_array($tokenData)
+            ? ((int)($context['version_id'] ?? 0) ?: null)
+            : ((int)$this->request->getParam('version_id', 0) ?: null);
+        $typedEditorContext = $this->resolveControlledEditorContext(
+            $themeId,
+            $layoutType,
+            $layoutOption,
+        );
+        $status = \is_array($tokenData)
+            ? (string)($context['status'] ?? PreviewContextService::DEFAULT_STATUS)
+            : (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS);
+        $controlledPreview = $typedEditorContext instanceof ThemeEditorContext
+            || $this->isControlledPreviewRequest();
+        if (!$controlledPreview) {
+            throw new \RuntimeException('theme_preview_authorization_required');
+        }
+        $this->installLayoutRenderIdentity(
+            $typedEditorContext,
+            $context,
+            $layoutOption,
+            $controlledPreview,
+        );
         $previewPayload = $previewContentRenderer->build(
             $themeId,
             $layoutType,
-            (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
-            $versionId
+            $status,
+            $versionId,
+            [],
+            $typedEditorContext,
         );
         $editorArea = (string)($context['editor_area'] ?? PreviewContextService::AREA_FRONTEND);
         $scope = (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE);
         $layoutMeta = $this->resolveLayoutMetaForPreview($themeId, $layoutType, $layoutOption, $editorArea, $scope);
+        if ($typedEditorContext instanceof ThemeEditorContext) {
+            /** @var ThemeScopedPreviewResolver $scopedPreview */
+            $scopedPreview = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
+            $layoutMeta = $scopedPreview->resolveLayoutMeta($typedEditorContext, $status);
+        }
         $targetPreviewPayload = $this->resolveTargetPreviewPayload($context, $layoutType, $layoutOption, $editorArea, $scope);
         $targetPreviewMeta = $this->buildTargetPreviewMeta($targetPreviewPayload);
         $this->assign('content', $previewPayload['content']);
@@ -106,6 +153,9 @@ class Content extends FrontendController
         ], $previewPayload['meta'], $layoutMeta, $targetPreviewMeta));
 
         $html = (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+        if ($typedEditorContext instanceof ThemeEditorContext) {
+            $html = $this->injectScopedAppearance($html, $typedEditorContext, $status);
+        }
         $editorMode = (string)$this->request->getParam('editor_mode', '');
         if ($html !== '' && ($editorMode === '1' || $editorMode === 'true')) {
             /** @var EditorModeAssetInjector $injector */
@@ -116,6 +166,123 @@ class Content extends FrontendController
         return $html;
     }
 
+    private function injectScopedAppearance(
+        string $html,
+        ThemeEditorContext $context,
+        string $status,
+    ): string {
+        /** @var WelineTheme $theme */
+        $theme = clone ObjectManager::getInstance(WelineTheme::class);
+        $theme->clearData()->clearQuery()->load($context->themeId);
+        if ((int)$theme->getId() !== $context->themeId) {
+            return $html;
+        }
+        /** @var ThemeScopedPreviewResolver $resolver */
+        $resolver = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
+        $style = $resolver->renderAppearanceStyle($context, $theme, $status);
+        if ($style === '') {
+            return $html;
+        }
+        $headEnd = \stripos($html, '</head>');
+        if ($headEnd === false) {
+            return $style . $html;
+        }
+
+        return \substr($html, 0, $headEnd) . $style . \substr($html, $headEnd);
+    }
+
+    /**
+     * A raw typed context is accepted only for a logged-in backend user. A
+     * standalone preview must carry a valid server-side preview token whose
+     * stored typed context is used as the authority.
+     */
+    private function resolveControlledEditorContext(
+        int $themeId,
+        string $layoutType,
+        string $layoutOption,
+    ): ?ThemeEditorContext {
+        $raw = $this->request->getParam('editor_context', null);
+        /** @var PreviewTokenService $tokens */
+        $tokens = ObjectManager::getInstance(PreviewTokenService::class);
+        $tokenData = $tokens->getCurrentPreviewData();
+        $tokenContext = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
+        $tokenRaw = $tokenContext['editor_context'] ?? null;
+
+        if (\is_array($tokenRaw)) {
+            $raw = $tokenRaw;
+        } elseif ($raw !== null && $raw !== '') {
+            $this->assertBackendScopePreviewAllowed();
+        }
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        /** @var ThemeEditorContextFactory $factory */
+        $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+        $typed = $factory->fromInput(
+            ['editor_context' => $raw],
+            ThemeEditorContext::RESOURCE_LAYOUT,
+        );
+        if ($typed->themeId !== $themeId
+            || $typed->layoutType !== $layoutType
+            || $typed->layoutOption !== $layoutOption
+            || $typed->area !== PreviewContextService::AREA_FRONTEND
+        ) {
+            throw new \InvalidArgumentException('theme_scoped_preview_context_mismatch');
+        }
+
+        return $typed;
+    }
+
+    private function assertBackendScopePreviewAllowed(): void
+    {
+        /** @var BackendUserContextProviderInterface $users */
+        $users = ObjectManager::getInstance(BackendUserContextProviderInterface::class);
+        $user = $users->current();
+        if ($user === null
+            || !$user->getIsEnabled()
+            || $user->getRoleId() <= 0
+            || !ObjectManager::getInstance(ResourceAuthorizationServiceInterface::class)->isSourceAllowed(
+                $user->getRoleId(),
+                'Weline_Theme::theme_visual_editor_scope_read',
+            )
+        ) {
+            throw new \RuntimeException('theme_scoped_preview_authorization_required');
+        }
+    }
+
+    private function isBackendUserLoggedIn(): bool
+    {
+        try {
+            return SessionFactory::getInstance()->createBackendSession()->isLoggedIn();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function applyPrivatePreviewResponsePolicy(): void
+    {
+        $response = $this->request->getResponse();
+        $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+        $response->setHeader('Pragma', 'no-cache');
+        $response->setHeader('Referrer-Policy', 'no-referrer');
+        $response->setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+
+    private function isControlledPreviewRequest(): bool
+    {
+        if ($this->isBackendUserLoggedIn()) {
+            return true;
+        }
+        try {
+            /** @var PreviewTokenService $tokens */
+            $tokens = ObjectManager::getInstance(PreviewTokenService::class);
+            return \is_array($tokens->getCurrentPreviewData());
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function applyPreviewLocale(string $locale): void
     {
         $locale = \trim($locale);
@@ -123,15 +290,63 @@ class Content extends FrontendController
             return;
         }
 
-        $_SERVER['WELINE_USER_LANG'] = $locale;
-        $this->request->setServer('WELINE_USER_LANG', $locale);
         $this->request->setGet('locale', $locale);
         $this->assign('locale', $locale);
         RequestContext::locale($locale);
-        WelineEnv::setLang($locale);
-        WelineEnv::setServer('WELINE_USER_LANG', $locale, 'Theme preview locale override');
         State::resetRequestPathLocalizationCache();
         State::resetLangLocalCache();
+    }
+
+    /** @param array<string,mixed> $context */
+    private function installLayoutRenderIdentity(
+        ?ThemeEditorContext $typedContext,
+        array $context,
+        string $layoutOption,
+        bool $controlledPreview,
+    ): void {
+        /** @var \Weline\Theme\Service\ThemeLayoutScopeNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutScopeNormalizer::class);
+        if ($typedContext instanceof ThemeEditorContext) {
+            $scope = $normalizer->encodeStorageScope(
+                $typedContext->scope->storageScope,
+                $typedContext->scope->storeMode,
+            );
+            $locale = $typedContext->locale === 'default' ? '' : $typedContext->locale;
+            $targetType = $typedContext->targetType;
+            $targetId = $typedContext->targetId;
+        } elseif ($controlledPreview) {
+            $normalized = $normalizer->normalize([
+                'scope' => (string)($context['scope'] ?? 'default'),
+                'store_mode' => (string)($context['store_mode'] ?? 'normal'),
+                'locale_code' => (string)($context['locale'] ?? ''),
+            ]);
+            $scope = $normalized['scope'];
+            $locale = $normalized['locale_code'];
+            [$targetType, $targetId] = $this->resolvePreviewTarget($context);
+            $targetType = $targetType !== '' ? $targetType : 'global';
+            $targetId = $targetType !== 'global' ? $targetId : 0;
+        } else {
+            $identity = RequestContext::scopeIdentity();
+            if ($identity === null) {
+                throw new \RuntimeException((string)__('Theme 预览缺少冻结的 ScopeIdentity。'));
+            }
+            $normalized = $normalizer->normalize([
+                'scope_identity' => $identity,
+                'locale_code' => (string)(RequestContext::locale() ?? ''),
+            ]);
+            $scope = $normalized['scope'];
+            $locale = $normalized['locale_code'];
+            $targetType = 'global';
+            $targetId = 0;
+        }
+
+        RequestContext::set(LayoutIdentity::REQUEST_CONTEXT_KEY, new LayoutIdentity(
+            $layoutOption !== '' ? $layoutOption : 'default',
+            $scope,
+            $targetType,
+            $targetId,
+            $locale,
+        ));
     }
 
     /**
@@ -145,7 +360,7 @@ class Content extends FrontendController
         string $editorArea,
         string $scope
     ): ?array {
-        [$targetType, $targetId] = $this->resolvePreviewTarget();
+        [$targetType, $targetId] = $this->resolvePreviewTarget($context);
         if ($targetType === '') {
             return null;
         }
@@ -169,6 +384,11 @@ class Content extends FrontendController
                 'preview_mode' => (string)($context['preview_mode'] ?? PreviewContextService::DEFAULT_PREVIEW_MODE),
                 'status' => (string)($context['status'] ?? PreviewContextService::DEFAULT_STATUS),
                 'scope' => $scope,
+                'store_id' => (int)$this->request->getParam('store_id', 0),
+                'store_code' => (string)$this->request->getParam('store_code', ''),
+                'store_mode' => (string)$this->request->getParam('store_mode', 'normal'),
+                'locale_code' => (string)$this->request->getParam('locale_code', $this->request->getParam('locale', '')),
+                'locale' => (string)$this->request->getParam('locale', $this->request->getParam('locale_code', '')),
                 'preview' => true,
                 'request_context' => $context,
             ]);
@@ -182,11 +402,26 @@ class Content extends FrontendController
     /**
      * @return array{0:string,1:int}
      */
-    private function resolvePreviewTarget(): array
+    private function resolvePreviewTarget(array $context = []): array
     {
         /** @var ThemeTargetIdentityResolver $identityResolver */
         $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
-        return $identityResolver->resolveFirst([
+        $candidates = [
+            [
+                'target_type' => $context['theme_layout_source_target_type'] ?? null,
+                'target_id' => $context['theme_layout_source_target_id'] ?? null,
+            ],
+            [
+                'target_type' => $context['theme_layout_target_type'] ?? null,
+                'target_id' => $context['theme_layout_target_id'] ?? null,
+            ],
+        ];
+        /** @var PreviewTokenService $tokens */
+        $tokens = ObjectManager::getInstance(PreviewTokenService::class);
+        if (\is_array($tokens->getCurrentPreviewData())) {
+            return $identityResolver->resolveFirst($candidates);
+        }
+        return $identityResolver->resolveFirst([...$candidates,
             [
                 'target_type' => $this->readPreviewRequestValue('theme_layout_target_type'),
                 'target_id' => $this->readPreviewRequestValue('theme_layout_target_id'),

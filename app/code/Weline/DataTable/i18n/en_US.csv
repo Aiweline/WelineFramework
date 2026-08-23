@@ -1,211 +1,35 @@
 ﻿"DataTable Frontend Demo Query","DataTable Frontend Demo Query"
 "Whitelist-only frontend DataTable demo operations through the worker channel.","Whitelist-only frontend DataTable demo operations through the worker channel."
-"field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","The field tag (field: %{1}) is missing the required attribute belong! Please specify along=""t-header"", along=""t-filter"", or along=""d-form""."
-"field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","The value of the belong attribute of the field tag (field: %{1}) is invalid: %{2}. Valid values: t-header, t-filter, or d-form."
-"field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","The along attribute value ""%{2}"" of the field tag (field: %{1}) does not match the parent tag type ""%{3}""! Please ensure that the along attribute value is consistent with the parent tag type."
-field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,"field tag (field: %{1}) configuration error: %{2}. Please make sure the model attribute is set correctly in the parent tag (t-header or t-filter), or make sure the field tag is inside the d-table tag."
-"field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。","Field tag (field: %{1}) configuration error: The model corresponding to the alias ""%{2}"" was not found. Please check the model configuration of d-table."
-"field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。","Field tag validation failed: Model class ""%{1}"" does not exist! Please check whether the class name is correct and ensure that the Model class is loaded correctly. Common Model classes: Weline\Demo\Model\Demo, WeShop\Product\Model\Product, etc."
-"field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。","The field tag (field: %{1}) does not exist in the Model class ""%{2}""! Available fields: %{3}. Please check whether the field name is correct or confirm that the field is defined in the Model."
-"field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。","Field tag validation failed: An error occurred while instantiating Model class ""%{1}"": %{2}. Please check if the Model class is configured correctly."
-field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。,"The field tag (field: %{1}) does not support the type attribute in the t-header context, or the type value is invalid: %{2}. In the t-header, the field tag is mainly used to define table columns, and there is no need to specify the type attribute."
-field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3},"field tag (field: %{1}) does not support %{2} attribute in t-header context! This attribute is only used for filter fields in t-filter. Please remove the %{2} attribute or move the field tag to the t-filter tag. %{3}"
-field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。,"field tag (field: %{1}) In t-filter context, the type attribute value is invalid: %{2}. Valid values: %{3}. Please check whether the type attribute value is correct."
-"field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。","field tag (field: %{1}) In the t-filter context, the select type field must specify the options attribute! Please add the options attribute in the format: value:label,value2:label2."
-"field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。","field tag (field: %{1}) In the t-filter context, the options attribute of the select type is malformed: %{2}. Correct format: value:label,value2:label2. Please check the options attribute format."
-field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3},"field tag (field: %{1}) does not support %{2} attribute in t-filter context! This attribute is only used for table header fields in t-header. Please remove the %{2} attribute or move the field tag to the t-header tag. %{3}"
-娣诲姞,Add
-鏂板璁板綍,"Add Record"
-缂栬緫璁板綍,"Edit record"
-鍙栨秷,Cancel
-淇濆瓨,Save
-姝ｅ湪鍔犺浇瀛楁...,"Loading fields..."
-閲嶇疆,Reset
+分页,Pagination
+筛选,filter
+重置,Reset
+field标签必须指定name属性！,"The field tag must specify the name attribute!"
+field标签的belong必须是t-header、t-filter或d-form。,"The field label must be t-header, t-filter or d-form."
+请输入%{1},"Please enter %{1}"
+按%{1}排序,"Sort by %{1}"
+全部,all
+请选择,"Please select"
+选择图片,"Select picture"
+选择文件,"Select file"
+d-form标签必须指定model属性，或放在d-table内部。,"The d-form tag must specify the model attribute or be placed inside the d-table."
+编辑记录,"Edit record"
+新增记录,"Add Record"
+新增,Add
+正在加载字段…,"Loading fields…"
+取消,Cancel
+保存,Save
+关闭,closure
 d-table标签必须指定model属性！,"d-table tag must specify model attribute!"
 d-table标签必须指定scope属性！,"d-table tag must specify scope attribute!"
-新增,Add
-新增记录,"Add Record"
 自动生成,"Auto Generated"
-数据表格,"Data Table"
-字段设置,"Field Settings"
 刷新,Refresh
-总记录,"Total Records"
-显示,Display
-字段配置,"Field Configuration"
-加载失败,"Load Failed"
-加载中,Loading
-刷新数据,"Refresh Data"
-只显示重要数据,"Show Important Only"
-重置配置,"Reset Configuration"
-重置,Reset
-重置表头字段配置,"Reset Header Field Configuration"
-重置表头,"Reset Header"
-重置筛选字段配置,"Reset Filter Field Configuration"
-重置筛选,"Reset Filter"
-重置全部配置,"Reset All Configurations"
-全部重置,"Reset All"
-主题配置,"Theme Settings"
-主题,Theme
-导出数据,"Export Data"
 导出,Export
-导出为Excel,"Export as Excel"
-导出Excel,"Export Excel"
-导出为CSV,"Export as CSV"
-导出CSV,"Export CSV"
-导出为JSON,"Export as JSON"
-导出JSON,"Export JSON"
-列设置,"Column Settings"
-筛选设置,"Filter Settings"
-可用字段,"Available Fields"
-加载中...,Loading...
+总记录,"Total Records"
+当前显示,"Currently showing"
+字段配置,"Field Configuration"
 显示字段,"Display Fields"
 筛选字段,"Filter Fields"
-取消,Cancel
-保存配置,"Save Configuration"
-编辑记录,"Edit Record"
-保存,Save
-添加,Add
-正在加载字段...,"Loading fields..."
-鍔犺浇瀛楁澶辫触,鍔犺浇瀛楁澶辫触
-缃戠粶閿欒,缃戠粶閿欒
-璇疯緭鍏?{1},璇疯緭鍏?{1}
-璇烽€夋嫨,璇烽€夋嫨
-鍔犺浇璁板綍澶辫触,鍔犺浇璁板綍澶辫触
-璇锋鏌ヨ〃鍗曚腑鐨勯敊璇?,璇锋鏌ヨ〃鍗曚腑鐨勯敊璇?
-淇濆瓨鎴愬姛,淇濆瓨鎴愬姛
-淇濆瓨澶辫触,淇濆瓨澶辫触
-淇濆瓨涓?..,淇濆瓨涓?..
-鎿嶄綔,鎿嶄綔
-缂栬緫,缂栬緫
-姝ゅ瓧娈典负蹇呭～椤?,姝ゅ瓧娈典负蹇呭～椤?
-璇疯緭鍏ユ湁鏁堢殑閭鍦板潃,璇疯緭鍏ユ湁鏁堢殑閭鍦板潃
-璇疯緭鍏ユ湁鏁堢殑鏁板瓧,璇疯緭鍏ユ湁鏁堢殑鏁板瓧
-璇疯緭鍏ユ湁鏁堢殑鐢佃瘽鍙风爜,璇疯緭鍏ユ湁鏁堢殑鐢佃瘽鍙风爜
-璇烽€夋嫨鍥剧墖鏂囦欢,璇烽€夋嫨鍥剧墖鏂囦欢
-棰勮鍥剧墖,棰勮鍥剧墖
-鏁板€间笉鑳藉皬浜?%{1},鏁板€间笉鑳藉皬浜?%{1}
-鏁板€间笉鑳藉ぇ浜?%{1},鏁板€间笉鑳藉ぇ浜?%{1}
-"杈撳叆闀垮害涓嶈兘瓒呰繃 %{1}","杈撳叆闀垮害涓嶈兘瓒呰繃 %{1}"
-瀛楁鏍煎紡涓嶆纭?,瀛楁鏍煎紡涓嶆纭?
-瀛楁楠岃瘉澶辫触,瀛楁楠岃瘉澶辫触
-鐞涖劍鐗告稉濠氼暯闁板秶鐤?,鐞涖劍鐗告稉濠氼暯闁板秶鐤?
-閺勫墽銇氶柅澶愩€?,閺勫墽銇氶柅澶愩€?
-閺勫墽銇氶弬鎴︹攬缁?,閺勫墽銇氶弬鎴︹攬缁?
-閺勫墽銇氶幃顒€浠犻弫鍫熺亯,閺勫墽銇氶幃顒€浠犻弫鍫熺亯
-閺勫墽銇氶幒鎺戠碍閸ョ偓鐖?,閺勫墽銇氶幒鎺戠碍閸ョ偓鐖?
-妫版粏澹婃稉濠氼暯,妫版粏澹婃稉濠氼暯
-娑撴槒澹婄拫?,娑撴槒澹婄拫?
-鐞涖劌銇旈懗灞炬珯,鐞涖劌銇旈懗灞炬珯
-鐞涘本鍋撻崑婊嗗,鐞涘本鍋撻崑婊嗗
-鐎涙ぞ缍嬬拋鍓х枂,鐎涙ぞ缍嬬拋鍓х枂
-鐎涙ぞ缍嬫径褍鐨?,鐎涙ぞ缍嬫径褍鐨?
-鐏?,鐏?
-娑?,娑?
-婢?,婢?
-閸欘亝妯夌粈娲櫢鐟曚焦鏆熼幑?,閸欘亝妯夌粈娲櫢鐟曚焦鏆熼幑?
-閺勫墽銇氶幍鈧張澶嬫殶閹?,閺勫墽銇氶幍鈧張澶嬫殶閹?
-濮濓絽婀€电厧鍤弫鐗堝祦,濮濓絽婀€电厧鍤弫鐗堝祦
-鐎电厧鍤弽鐓庣础,鐎电厧鍤弽鐓庣础
-妫板嫯顓哥€电厧鍤?,妫板嫯顓哥€电厧鍤?
-閺壜ゎ唶瑜?,閺壜ゎ唶瑜?
-閸?,閸?
-妞?,妞?
-瑜版挸澧犳い?,瑜版挸澧犳い?
-瀹告彃顕遍崙?,瀹告彃顕遍崙?
-鏉╂稑瀹?,鏉╂稑瀹?
-濮濓絽婀崚婵嗩潗閸栨牕顕遍崙?..,濮濓絽婀崚婵嗩潗閸栨牕顕遍崙?..
-瀹歌尙鏁ら弮鍫曟？,瀹歌尙鏁ら弮鍫曟？
-妫板嫯顓搁崜鈺€缍?,妫板嫯顓搁崜鈺€缍?
-鐠侊紕鐣绘稉?..,鐠侊紕鐣绘稉?..
-鐎电厧鍤潻鍥┾柤娑擃叀顕崟鍨彠闂傤厽顒濈粣妤€褰涢敍灞间簰閸忓秴顕遍懛瀛樻殶閹诡喕娑径?,鐎电厧鍤潻鍥┾柤娑擃叀顕崟鍨彠闂傤厽顒濈粣妤€褰涢敍灞间簰閸忓秴顕遍懛瀛樻殶閹诡喕娑径?
-閸欐牗绉风€电厧鍤?,閸欐牗绉风€电厧鍤?
-濮濓絽婀悽鐔稿灇閺傚洣娆?..,濮濓絽婀悽鐔稿灇閺傚洣娆?..
-鐎电厧鍤€瑰本鍨氶敍?,鐎电厧鍤€瑰本鍨氶敍?
-鐎电厧鍤径杈Е,鐎电厧鍤径杈Е
-閸忔娊妫?,閸忔娊妫?
-濞屸剝婀侀崣顖氼嚤閸戣櫣娈戦弫鐗堝祦,濞屸剝婀侀崣顖氼嚤閸戣櫣娈戦弫鐗堝祦
-濮濓絽婀崙鍡楊槵鐎电厧鍤弫鐗堝祦...,濮濓絽婀崙鍡楊槵鐎电厧鍤弫鐗堝祦...
-"閹存劕濮涚€电厧鍤?%{1} 閺壜ゎ唶瑜?","閹存劕濮涚€电厧鍤?%{1} 閺壜ゎ唶瑜?"
-鐎电厧鍤径杈Е閿?{1},鐎电厧鍤径杈Е閿?{1}
-娑撳秵鏁幐浣烘畱鐎电厧鍤弽鐓庣础,娑撳秵鏁幐浣烘畱鐎电厧鍤弽鐓庣础
-閼惧嘲褰囩€涙顔屾径杈Е,閼惧嘲褰囩€涙顔屾径杈Е
-閹锋牕濮╃拫鍐╂殻閸掓銆庢惔?,閹锋牕濮╃拫鍐╂殻閸掓銆庢惔?
-鐠囥儱鍨稉宥呭帒鐠佸摜些閸?,鐠囥儱鍨稉宥呭帒鐠佸摜些閸?
-閺冪姵纭堕弨鍓х枂閸掓媽顕氭担宥囩枂,閺冪姵纭堕弨鍓х枂閸掓媽顕氭担宥囩枂
-閸掓銆庢惔蹇撳嚒閺囧瓨鏌?,閸掓銆庢惔蹇撳嚒閺囧瓨鏌?
-閸旂姾娴囬弫鐗堝祦婢惰精瑙?,閸旂姾娴囬弫鐗堝祦婢惰精瑙?
-"閸旂姾娴囬弫鐗堝祦婢惰精瑙? %{1}","閸旂姾娴囬弫鐗堝祦婢惰精瑙? %{1}"
-鏉堟挸鍙?,鏉堟挸鍙?
-鐠囩柉绶崗銉ㄧ箖濠娿倕娅掗崥宥囆?,鐠囩柉绶崗銉ㄧ箖濠娿倕娅掗崥宥囆?
-鏉╁洦鎶ら崳銊ょ箽鐎涙ɑ鍨氶崝?,鏉╁洦鎶ら崳銊ょ箽鐎涙ɑ鍨氶崝?
-闁板秶鐤嗘穱婵嗙摠閹存劕濮?,闁板秶鐤嗘穱婵嗙摠閹存劕濮?
-娣囨繂鐡ㄦ径杈Е,娣囨繂鐡ㄦ径杈Е
-娣囨繂鐡ㄩ柊宥囩枂婢惰精瑙?,娣囨繂鐡ㄩ柊宥囩枂婢惰精瑙?
-鐠囧嘲鍘涙穱婵嗙摠瑜版挸澧犵紓鏍帆閻ㄥ嫯顢?,鐠囧嘲鍘涙穱婵嗙摠瑜版挸澧犵紓鏍帆閻ㄥ嫯顢?
-缂傛牞绶弫鐗堝祦,缂傛牞绶弫鐗堝祦
-娣囨繂鐡?,娣囨繂鐡?
-閸欐牗绉?,閸欐牗绉?
-鐠囩兘鈧瀚?,鐠囩兘鈧瀚?
-娣囨繂鐡ㄩ幋鎰,娣囨繂鐡ㄩ幋鎰
-绾喖鐣剧憰浣稿灩闂勩倛绻栭弶陇顔囪ぐ鏇炴偋閿?,绾喖鐣剧憰浣稿灩闂勩倛绻栭弶陇顔囪ぐ鏇炴偋閿?
-鐠囩兘鈧瀚ㄧ憰浣稿灩闂勩倗娈戠拋鏉跨秿,鐠囩兘鈧瀚ㄧ憰浣稿灩闂勩倗娈戠拋鏉跨秿
-"Confirm deleting selected records: %{1}","Confirm deleting selected records: %{1}"
-閸掔娀娅庣涵顔款吇,閸掔娀娅庣涵顔款吇
-鏉烆垰鍨归梽銈忕礄閸欘垱浠径宥忕礆,鏉烆垰鍨归梽銈忕礄閸欘垱浠径宥忕礆
-绾喛顓婚崚鐘绘珟,绾喛顓婚崚鐘绘珟
-閸楀啿鐨㈤崚鐘绘珟閻ㄥ嫯顔囪ぐ鏇窗,閸楀啿鐨㈤崚鐘绘珟閻ㄥ嫯顔囪ぐ鏇窗
-閸忛亶鈧鑵?,閸忛亶鈧鑵?
-濮濓絽婀崚鐘绘珟...,濮濓絽婀崚鐘绘珟...
-鐠佹澘缍嶅鑼╅懛鍐叉礀閺€鍓佺彲,鐠佹澘缍嶅鑼╅懛鍐叉礀閺€鍓佺彲
-閸掔娀娅庨幋鎰,閸掔娀娅庨幋鎰
-閸掔娀娅庢径杈Е,閸掔娀娅庢径杈Е
-閹劍婀侀張顏冪箽鐎涙娈戠紓鏍帆閸愬懎顔愰敍宀€鈥樼€规俺顩︾粋璇茬磻閸氭绱?,閹劍婀侀張顏冪箽鐎涙娈戠紓鏍帆閸愬懎顔愰敍宀€鈥樼€规俺顩︾粋璇茬磻閸氭绱?
-閸旂姾娴囨稉?..,閸旂姾娴囨稉?..
-闁插秷鐦?,闁插秷鐦?
-閸旂姾娴囨径杈Е,閸旂姾娴囨径杈Е
-閸欐ぞ绻氶幎?,閸欐ぞ绻氶幎?
-閺勫墽銇?,閺勫墽銇?
-閹碘偓閺堝鐡у▓鐢稿厴瀹告煡鍘ょ純?,閹碘偓閺堝鐡у▓鐢稿厴瀹告煡鍘ょ純?
-缁涙盯鈧?,缁涙盯鈧?
-瀹歌弓绻氱€?,瀹歌弓绻氱€?
-閻劍鍩涢柅澶嬪,閻劍鍩涢柅澶嬪
-閺堚偓鐏忓繘鏆辨惔?,閺堚偓鐏忓繘鏆辨惔?
-閺堚偓婢堆囨毐鎼?,閺堚偓婢堆囨毐鎼?
-濮濓絽鍨悰銊ㄦ彧瀵?,濮濓絽鍨悰銊ㄦ彧瀵?
-闂呮劘妫?,闂呮劘妫?
-娑撳﹦些,娑撳﹦些
-娑撳些,娑撳些
-鐎涙顔岄弽鍥暯,鐎涙顔岄弽鍥暯
-閸楃姳缍呯粭锔肩礄閸欘垶鈧绱?,閸楃姳缍呯粭锔肩礄閸欘垶鈧绱?
-闁銆??:閸氼垳鏁?0:缁備胶鏁?,闁銆??:閸氼垳鏁?0:缁備胶鏁?
-鐠佸墽鐤?,鐠佸墽鐤?
-閺嗗倹妫ら弰鍓с仛鐎涙顔?,閺嗗倹妫ら弰鍓с仛鐎涙顔?
-閹劌褰叉禒銉ユ躬閸欏厖鏅剁拫鍐╂殻鐎涙顔岄柊宥囩枂,閹劌褰叉禒銉ユ躬閸欏厖鏅剁拫鍐╂殻鐎涙顔岄柊宥囩枂
-缁夊娅?,缁夊娅?
-闁銆?閸?閺嶅洨顒?閸?閺嶅洨顒?,闁銆?閸?閺嶅洨顒?閸?閺嶅洨顒?
-閺嗗倹妫ょ粵娑⑩偓澶婄摟濞?,閺嗗倹妫ょ粵娑⑩偓澶婄摟濞?
-绾喖鐣剧憰渚€鍣哥純顔昏礋姒涙顓荤€涙顔岄柊宥囩枂閸氭绱垫潻娆忕殺閺勫墽銇氶幍鈧張澶婂讲閻劌鐡у▓纰夌吹,绾喖鐣剧憰渚€鍣哥純顔昏礋姒涙顓荤€涙顔岄柊宥囩枂閸氭绱垫潻娆忕殺閺勫墽銇氶幍鈧張澶婂讲閻劌鐡у▓纰夌吹
-"娣囨繂鐡ㄦ径杈Е: %{1}","娣囨繂鐡ㄦ径杈Е: %{1}"
-绾喖鐣剧憰渚€鍣哥純顔裤€冩径鏉戠摟濞堢敻鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕▔缁€鍝勭摟濞堜絻顔曠純?,绾喖鐣剧憰渚€鍣哥純顔裤€冩径鏉戠摟濞堢敻鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕▔缁€鍝勭摟濞堜絻顔曠純?
-绾喖鐣剧憰渚€鍣哥純顔剧摣闁鐡у▓鐢稿帳缂冾喖鎮ч敍鐔荤箹鐏忓棙绔婚梽銈嗗閺堝鍤滅€规矮绠熼惃鍕摣闁鐡у▓浣冾啎缂?,绾喖鐣剧憰渚€鍣哥純顔剧摣闁鐡у▓鐢稿帳缂冾喖鎮ч敍鐔荤箹鐏忓棙绔婚梽銈嗗閺堝鍤滅€规矮绠熼惃鍕摣闁鐡у▓浣冾啎缂?
-绾喖鐣剧憰渚€鍣哥純顔煎弿闁劑鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕€冩径鏉戠摟濞堥潧鎷扮粵娑⑩偓澶婄摟濞堜絻顔曠純?,绾喖鐣剧憰渚€鍣哥純顔煎弿闁劑鍘ょ純顔兼偋閿涚喕绻栫亸鍡樼闂勩倖澧嶉張澶庡殰鐎规矮绠熼惃鍕€冩径鏉戠摟濞堥潧鎷扮粵娑⑩偓澶婄摟濞堜絻顔曠純?
-闁板秶鐤嗗鏌ュ櫢缂?,闁板秶鐤嗗鏌ュ櫢缂?
-闁插秶鐤嗘径杈Е,闁插秶鐤嗘径杈Е
-闁插秶鐤嗛柊宥囩枂婢惰精瑙﹂敍宀冾嚞缁嬪秴鎮楅柌宥堢槸,闁插秶鐤嗛柊宥囩枂婢惰精瑙﹂敍宀冾嚞缁嬪秴鎮楅柌宥堢槸
-閺€鎯版崳,閺€鎯版崳
-缂冩垹绮堕柨娆掝嚖閿?{1},缂冩垹绮堕柨娆掝嚖閿?{1}
-閸旂姾娴囩€涙顔屾径杈Е,閸旂姾娴囩€涙顔屾径杈Е
-闁板秶鐤嗗韫箽鐎?,闁板秶鐤嗗韫箽鐎?
-婵繐绲藉﹢顏堝礄閸℃妲甸悗鐢靛帶閸ゎ參寮悧鍫濈ウ...,婵繐绲藉﹢顏堝礄閸℃妲甸悗鐢靛帶閸ゎ參寮悧鍫濈ウ...
-閻庣數鍘ч崵顓熷緞鏉堫偉袝,閻庣數鍘ч崵顓熷緞鏉堫偉袝
-閻庣數鍘ч崵顓㈠箣閹邦剙顫?,閻庣數鍘ч崵顓㈠箣閹邦剙顫?
-婵繐绲藉﹢顏堝礆閻樼粯鐝?..,婵繐绲藉﹢顏堝礆閻樼粯鐝?..
-"Record moved to recycle bin","Record moved to recycle bin"
-"Delete succeeded","Delete succeeded"
-闁告帞濞€濞呭孩寰勬潏顐バ?,闁告帞濞€濞呭孩寰勬潏顐バ?
-濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝,濞ｅ洦绻傞悺銊﹀緞鏉堫偉袝
-濞ｅ洦绻傞悺銊╁箣閹邦剙顫?,濞ｅ洦绻傞悺銊╁箣閹邦剙顫?
-"模型类不存在: %{1}","模型类不存在: %{1}"
+"模型类不存在: %{1}","Model class does not exist: %{1}"
 "数据删除失败: %{1}","Data deletion failed: %{1}"
 记录不存在,"Record does not exist"
 记录已永久删除,"Record permanently deleted"
@@ -237,7 +61,6 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 "缺少必需参数: model 和 scope","Missing required parameters: model and scope"
 "永久删除失败: %{1}","Permanent deletion failed: %{1}"
 永久删除失败,"Permanent deletion failed"
-请输入%{1},"Please enter %{1}"
 未找到任何字段,"No fields found"
 "模型 %{1} 没有可用的字段，或者所有字段都被排除了","Model %{1} has no available fields, or all fields are excluded"
 获取字段成功,"Successfully got fields"
@@ -256,4 +79,88 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 "Invalid demo join condition: %{1}","Invalid demo join condition: %{1}"
 "Frontend demo access is not allowed for model %{1}","Frontend demo access is not allowed for model %{1}"
 %{1}标签必须指定%{2}属性或位于d-table标签内！,"The %{1} tag must specify the %{2} attribute or be located within the d-table tag!"
+"Weline UI 编译 bundle 不可用：%{1}","Weline UI compilation bundle unavailable: %{1}"
+"Weline UI 编译清单不存在，请先运行 resource:compile welineUi","Weline UI compilation manifest does not exist, please run resource:compile welineUi first"
+"Weline UI 编译清单无效：%{1}","Invalid Weline UI build manifest: %{1}"
 """DataTable Frontend Demo Query""","DataTable Frontend Demo Query"
+"field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","The field tag (field: %{1}) is missing the required attribute belong! Please specify along=""t-header"", along=""t-filter"", or along=""d-form""."
+"field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","The value of the belong attribute of the field tag (field: %{1}) is invalid: %{2}. Valid values: t-header, t-filter, or d-form."
+"field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","The along attribute value ""%{2}"" of the field tag (field: %{1}) does not match the parent tag type ""%{3}""! Please ensure that the along attribute value is consistent with the parent tag type."
+field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,"field tag (field: %{1}) configuration error: %{2}. Please make sure the model attribute is set correctly in the parent tag (t-header or t-filter), or make sure the field tag is inside the d-table tag."
+"field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。","Field tag (field: %{1}) configuration error: The model corresponding to the alias ""%{2}"" was not found. Please check the model configuration of d-table."
+"field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。","Field tag validation failed: Model class ""%{1}"" does not exist! Please check whether the class name is correct and ensure that the Model class is loaded correctly. Common Model classes: Weline\Demo\Model\Demo, WeShop\Product\Model\Product, etc."
+"field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。","The field tag (field: %{1}) does not exist in the Model class ""%{2}""! Available fields: %{3}. Please check whether the field name is correct or confirm that the field is defined in the Model."
+"field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。","Field tag validation failed: An error occurred while instantiating Model class ""%{1}"": %{2}. Please check if the Model class is configured correctly."
+field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。,"The field tag (field: %{1}) does not support the type attribute in the t-header context, or the type value is invalid: %{2}. In the t-header, the field tag is mainly used to define table columns, and there is no need to specify the type attribute."
+field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3},"field tag (field: %{1}) does not support %{2} attribute in t-header context! This attribute is only used for filter fields in t-filter. Please remove the %{2} attribute or move the field tag to the t-filter tag. %{3}"
+field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。,"field tag (field: %{1}) In t-filter context, the type attribute value is invalid: %{2}. Valid values: %{3}. Please check whether the type attribute value is correct."
+"field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。","field tag (field: %{1}) In the t-filter context, the select type field must specify the options attribute! Please add the options attribute in the format: value:label,value2:label2."
+"field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。","field tag (field: %{1}) In the t-filter context, the options attribute of the select type is malformed: %{2}. Correct format: value:label,value2:label2. Please check the options attribute format."
+field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3},"field tag (field: %{1}) does not support %{2} attribute in t-filter context! This attribute is only used for table header fields in t-header. Please remove the %{2} attribute or move the field tag to the t-header tag. %{3}"
+添加,Add
+正在加载字段...,"Loading fields..."
+数据表格,"Data Table"
+字段设置,"Field Settings"
+显示,Display
+加载失败,"Load Failed"
+加载中,Loading
+刷新数据,"Refresh Data"
+只显示重要数据,"Show Important Only"
+重置配置,"Reset Configuration"
+重置表头字段配置,"Reset Header Field Configuration"
+重置表头,"Reset Header"
+重置筛选字段配置,"Reset Filter Field Configuration"
+重置筛选,"Reset Filter"
+重置全部配置,"Reset All Configurations"
+全部重置,"Reset All"
+主题配置,"Theme Settings"
+主题,Theme
+导出数据,"Export Data"
+导出为Excel,"Export as Excel"
+导出Excel,"Export Excel"
+导出为CSV,"Export as CSV"
+导出CSV,"Export CSV"
+导出为JSON,"Export as JSON"
+导出JSON,"Export JSON"
+列设置,"Column Settings"
+筛选设置,"Filter Settings"
+可用字段,"Available Fields"
+加载中...,Loading...
+保存配置,"Save Configuration"
+加载字段失败,"Failed to load fields"
+网络错误,"Network error"
+璇疯緭鍏?{1},"Xuan crazy?{1}"
+加载记录失败,"Failed to load records"
+保存成功,"Saved successfully"
+保存失败,"Save failed"
+淇濆瓨涓?..,"Qi Cun Quan Juan?.."
+操作,operate
+编辑,edit
+请输入有效的邮箱地址,"Please enter a valid email address"
+请输入有效的数字,"Please enter a valid number"
+请输入有效的电话号码,"Please enter a valid phone number"
+预览图片,"Preview picture"
+"输入长度不能超过 %{1}","Input length cannot exceed %{1}"
+字段验证失败,"Field validation failed"
+娑?,Soo?
+婢?,"slave girl?"
+妞?,"little girl?"
+閸忔娊妫?,"What about Fan Gui?"
+閸欐牗绉?,"What’s wrong?"
+"Confirm deleting selected records: %{1}","Confirm deleting selected records: %{1}"
+闁插秷鐦?,"Chia Chaoqi?"
+閺勫墽銇?,"What's going on?"
+缁涙盯鈧?,"Looking at the scandium?"
+闂呮劘妫?,"What's wrong?"
+"Record moved to recycle bin","Record moved to recycle bin"
+"Delete succeeded","Delete succeeded"
+删除,delete
+提示,Tip
+重置失败,"Reset failed"
+正在删除...,Deleting...
+使用指南,"User Guide"
+后台仪表盘,"Backend dashboard"
+快速入门,"Quick start"
+文档说明,"Documentation description"
+标签验证,"Tag verification"
+综合测试,"Comprehensive testing"

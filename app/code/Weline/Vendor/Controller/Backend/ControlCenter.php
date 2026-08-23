@@ -17,80 +17,80 @@ use Weline\Vendor\Model\VendorWebsiteAuthorizationRecord;
 use Weline\Vendor\Service\VendorAdminService;
 use Weline\Vendor\Service\VendorRolloutGate;
 
-#[Acl('Weline_Vendor::commerce:partner:control-center', '商家管理', 'mdi-storefront-outline', '商家、授权、商品绑定与结算管理', 'Weline_Backend::commerce:partner:group')]
+#[Acl('Weline_Vendor::commerce:partner:control-center', '商家管理', 'store', '商家、授权、商品绑定与结算管理', 'Weline_Backend::commerce:partner:group')]
 final class ControlCenter extends BackendController
 {
     public function __construct(private readonly VendorAdminService $adminService)
     {
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:vendors', '商家档案', 'mdi-store-outline', '查看商家档案')]
+    #[Acl('Weline_Vendor::commerce:partner:vendors', '商家档案', 'store', '查看商家档案')]
     public function vendors(): string
     {
         return $this->renderWorkspace('vendors', '商家档案', ['商家档案' => [VendorRecord::class, ['identity_id', 'vendor_id', 'code', 'legal_name', 'environment', 'status', 'created_at', 'updated_at']]], [], ['kind' => 'vendor', 'action' => 'vendor/backend/control-center/save-vendor']);
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:authorizations', '站点授权', 'mdi-shield-account-outline', '查看商家站点授权')]
+    #[Acl('Weline_Vendor::commerce:partner:authorizations', '站点授权', 'user', '查看商家站点授权')]
     public function authorizations(): string
     {
         return $this->renderWorkspace('authorizations', '站点授权', ['授权记录' => [VendorWebsiteAuthorizationRecord::class, ['authorization_id', 'vendor_id', 'website_id', 'status', 'grant_version', 'authorized_at', 'revoked_at']]], [], ['kind' => 'authorization', 'action' => 'vendor/backend/control-center/save-authorization']);
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:product-bindings', '商品绑定', 'mdi-link-variant', '查看商家商品绑定')]
+    #[Acl('Weline_Vendor::commerce:partner:product-bindings', '商品绑定', 'link', '查看商家商品绑定')]
     public function productBindings(): string
     {
         return $this->renderWorkspace('product-bindings', '商品绑定', ['商品绑定' => [VendorProductBindingRecord::class, ['binding_id', 'vendor_id', 'website_id', 'store_id', 'product_registry_id', 'product_sku', 'global_product_uuid', 'environment', 'status', 'binding_version', 'bound_at', 'unbound_at']]], [], ['kind' => 'product-binding', 'action' => 'vendor/backend/control-center/save-product-binding']);
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:split-rules', '拆分规则', 'mdi-call-split', '查看商家拆分规则')]
+    #[Acl('Weline_Vendor::commerce:partner:split-rules', '拆分规则', 'circle', '查看商家拆分规则')]
     public function splitRules(): string
     {
         return $this->renderWorkspace('split-rules', '拆分规则', ['拆分规则' => [VendorSplitRuleRecord::class, ['rule_id', 'vendor_id', 'website_id', 'commission_bps', 'currency', 'rule_version', 'updated_at']]], [], ['kind' => 'split-rule', 'action' => 'vendor/backend/control-center/save-split-rule']);
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:payouts', '结算账本', 'mdi-cash-check', '查看商家结算账本')]
+    #[Acl('Weline_Vendor::commerce:partner:payouts', '结算账本', 'cash', '查看商家结算账本')]
     public function payouts(): string
     {
         return $this->renderWorkspace('payouts', '结算账本', ['结算记录' => [VendorPayoutRecord::class, ['payout_row_id', 'payout_id', 'snapshot_id', 'vendor_id', 'website_id', 'store_id', 'environment', 'currency', 'amount_minor', 'reversed_minor', 'net_minor', 'status', 'ledger_version', 'created_at', 'updated_at']]], [], ['kind' => 'payout', 'action' => 'vendor/backend/control-center/schedule-payout']);
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:reversals', '退款冲正', 'mdi-cash-refund', '查看商家退款冲正')]
+    #[Acl('Weline_Vendor::commerce:partner:reversals', '退款冲正', 'cash', '查看商家退款冲正')]
     public function reversals(): string
     {
         return $this->renderWorkspace('reversals', '退款冲正', ['冲正记录' => [VendorRefundReversalRecord::class, ['reversal_row_id', 'reversal_id', 'payout_id', 'snapshot_id', 'vendor_id', 'website_id', 'store_id', 'environment', 'refund_ref', 'amount_minor', 'currency', 'reason', 'payout_net_after_minor', 'created_at']]]);
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:migration', '迁移状态', 'mdi-database-eye-outline', '只读查看商家迁移状态')]
+    #[Acl('Weline_Vendor::commerce:partner:migration', '迁移状态', 'eye', '只读查看商家迁移状态')]
     public function migration(): string
     {
         return $this->renderWorkspace('migration', '迁移状态', [], $this->rolloutStatus() + ['execution_policy' => 'registered_postgresql_full_clone_cli_only', 'production_actions_exposed' => false]);
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:vendors', '创建商家档案', 'mdi-content-save', '创建商家档案')]
+    #[Acl('Weline_Vendor::commerce:partner:vendors', '创建商家档案', 'save', '创建商家档案')]
     public function saveVendor()
     {
         return $this->executeWrite('registerVendor', 'vendors', '商家档案已创建。');
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:authorizations', '授权商家站点', 'mdi-shield-check', '授权商家访问站点')]
+    #[Acl('Weline_Vendor::commerce:partner:authorizations', '授权商家站点', 'check', '授权商家访问站点')]
     public function saveAuthorization()
     {
         return $this->executeWrite('authorizeWebsite', 'authorizations', '站点授权已保存。');
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:product-bindings', '绑定商家商品', 'mdi-link-variant-plus', '绑定商家与商品')]
+    #[Acl('Weline_Vendor::commerce:partner:product-bindings', '绑定商家商品', 'plus', '绑定商家与商品')]
     public function saveProductBinding()
     {
         return $this->executeWrite('bindProduct', 'product-bindings', '商品绑定已保存。');
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:split-rules', '保存拆分规则', 'mdi-content-save', '保存商家拆分规则')]
+    #[Acl('Weline_Vendor::commerce:partner:split-rules', '保存拆分规则', 'save', '保存商家拆分规则')]
     public function saveSplitRule()
     {
         return $this->executeWrite('upsertSplitRule', 'split-rules', '拆分规则已保存。');
     }
 
-    #[Acl('Weline_Vendor::commerce:partner:payouts', '调度结算', 'mdi-cash-clock', '从不可变快照调度结算')]
+    #[Acl('Weline_Vendor::commerce:partner:payouts', '调度结算', 'clock', '从不可变快照调度结算')]
     public function schedulePayout()
     {
         return $this->executeWrite('schedulePayout', 'payouts', '结算已调度。');

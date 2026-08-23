@@ -45,12 +45,15 @@ function fixture_token(array $payload): string
 
 function fixture_identity(int $viewId, int $websiteId): array
 {
-    return [
-        'layout_option' => DashboardView::LAYOUT_OPTION,
-        'scope' => 'dashboard_view:' . $viewId,
-        'target_type' => DashboardView::TARGET_TYPE_WEBSITE,
-        'target_id' => $websiteId,
-    ];
+    /** @var DashboardView $view */
+    $view = clone ObjectManager::getInstance(DashboardView::class);
+    $view->clearData()->clearQuery()->load($viewId);
+    if ($view->getViewId() !== $viewId || $view->getWebsiteId() !== $websiteId) {
+        fixture_fail('Dashboard layout identity cannot resolve its Website Scope.');
+    }
+    /** @var DashboardViewService $dashboardViews */
+    $dashboardViews = ObjectManager::getInstance(DashboardViewService::class);
+    return $dashboardViews->layoutIdentity($view)->toArray();
 }
 
 function fixture_apply_identity($query, array $identity, string $modelClass)
@@ -233,7 +236,7 @@ function fixture_snapshot(int $themeId, DashboardView $view): array
 {
     /** @var ThemeLayout $layout */
     $layout = clone ObjectManager::getInstance(ThemeLayout::class);
-    $identity = $view->layoutIdentity();
+    $identity = fixture_identity($view->getViewId(), $view->getWebsiteId());
     $rows = $layout->clearQuery()->clearData()
         ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
         ->where(ThemeLayout::schema_fields_PAGE_TYPE, DashboardView::PAGE_TYPE);
@@ -290,8 +293,9 @@ function fixture_clear_layout(int $themeId, DashboardView $view): void
 {
     /** @var ThemeLayoutService $layoutService */
     $layoutService = ObjectManager::getInstance(ThemeLayoutService::class);
-    $layoutService->saveLayout($themeId, DashboardView::PAGE_TYPE, [], ThemeLayout::STATUS_DRAFT, $view->layoutIdentity());
-    $layoutService->publishLayout($themeId, DashboardView::PAGE_TYPE, $view->layoutIdentity(), true);
+    $identity = fixture_identity($view->getViewId(), $view->getWebsiteId());
+    $layoutService->saveLayout($themeId, DashboardView::PAGE_TYPE, [], ThemeLayout::STATUS_DRAFT, $identity);
+    $layoutService->publishLayout($themeId, DashboardView::PAGE_TYPE, $identity, true);
 }
 
 $payload = fixture_payload();
@@ -342,7 +346,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $view->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
@@ -359,7 +363,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $website->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
@@ -385,7 +389,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $website->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
@@ -402,7 +406,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $view->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
@@ -422,7 +426,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $website->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
@@ -447,7 +451,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $view->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'report' => $report,
             'layout' => fixture_snapshot($themeId, $view),
         ]);
@@ -467,7 +471,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $view->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
@@ -484,7 +488,7 @@ try {
         $items = $defaultInjectionService->getMissingForLayout(
             $themeId,
             DashboardView::PAGE_TYPE,
-            $view->layoutIdentity(),
+            fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'backend'
         );
 
@@ -493,7 +497,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $view->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'items' => $items,
             'total' => count($items),
         ]);
@@ -518,7 +522,7 @@ try {
                 $themeId,
                 DashboardView::PAGE_TYPE,
                 $injectionKey,
-                $view->layoutIdentity(),
+                fixture_identity($view->getViewId(), $view->getWebsiteId()),
                 ThemeLayout::STATUS_DRAFT,
                 'backend'
             );
@@ -527,7 +531,7 @@ try {
                 $themeId,
                 DashboardView::PAGE_TYPE,
                 $injectionKey,
-                $view->layoutIdentity(),
+                fixture_identity($view->getViewId(), $view->getWebsiteId()),
                 ThemeLayout::STATUS_DRAFT,
                 'backend'
             );
@@ -545,7 +549,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $view->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'apply_scope' => $applyScope === 'all' ? 'all' : 'current',
             'result' => $result,
             'layout' => fixture_snapshot($themeId, $view),
@@ -572,7 +576,7 @@ try {
             'theme_id' => $themeId,
             'website_id' => $website->getWebsiteId(),
             'view_id' => $view->getViewId(),
-            'identity' => $view->layoutIdentity(),
+            'identity' => fixture_identity($view->getViewId(), $view->getWebsiteId()),
             'result' => $result,
             'layout' => fixture_snapshot($themeId, $view),
         ]);

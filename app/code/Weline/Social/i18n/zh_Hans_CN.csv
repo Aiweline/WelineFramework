@@ -27,7 +27,7 @@
 "YouTube 授权回调缺少 code 或应用凭据。","YouTube 授权回调缺少 code 或应用凭据。"
 "交换 YouTube access token 失败。","交换 YouTube access token 失败。"
 "YouTube 授权完成。","YouTube 授权完成。"
-"缺少 YouTube Access Token。","缺少 YouTube Access Token。"
+"缺少 YouTube Access Token。","缺少 YouTube 访问令牌。"
 "YouTube 连通性检测失败。","YouTube 连通性检测失败。"
 "YouTube 连通性检测通过：%{1}","YouTube 连通性检测通过：%{1}"
 "YouTube 第一期仅支持授权与连通性检测；视频文件上传将在二期实现。当前草稿标题：%{1}","YouTube 第一期仅支持授权与连通性检测；视频文件上传将在二期实现。当前草稿标题：%{1}"
@@ -39,17 +39,17 @@
 "TikTok 授权回调缺少 code 或应用凭据。","TikTok 授权回调缺少 code 或应用凭据。"
 "交换 TikTok access token 失败。","交换 TikTok access token 失败。"
 "TikTok 授权完成。","TikTok 授权完成。"
-"缺少 TikTok Access Token。","缺少 TikTok Access Token。"
+"缺少 TikTok Access Token。","缺少 TikTok 访问令牌。"
 "TikTok 连通性检测失败。","TikTok 连通性检测失败。"
 "TikTok 连通性检测通过：%{1}","TikTok 连通性检测通过：%{1}"
 "TikTok 第一期仅支持授权与连通性检测；视频上传将在二期实现。当前草稿：%{1}","TikTok 第一期仅支持授权与连通性检测；视频上传将在二期实现。当前草稿：%{1}"
 "LinkedIn 授权回调缺少 code 或应用凭据。","LinkedIn 授权回调缺少 code 或应用凭据。"
 "交换 LinkedIn access token 失败。","交换 LinkedIn access token 失败。"
 "LinkedIn 授权完成。","LinkedIn 授权完成。"
-"缺少 LinkedIn Access Token。","缺少 LinkedIn Access Token。"
+"缺少 LinkedIn Access Token。","缺少 LinkedIn 访问令牌。"
 "LinkedIn 连通性检测失败。","LinkedIn 连通性检测失败。"
 "LinkedIn 连通性检测通过：%{1}","LinkedIn 连通性检测通过：%{1}"
-"缺少 LinkedIn Access Token 或 Author URN。","缺少 LinkedIn Access Token 或 Author URN。"
+"缺少 LinkedIn Access Token 或 Author URN。","缺少 LinkedIn 访问令牌或作者 URN。"
 发布内容为空。,发布内容为空。
 "LinkedIn 发布失败。","LinkedIn 发布失败。"
 "LinkedIn 发布成功。","LinkedIn 发布成功。"
@@ -57,7 +57,7 @@
 "交换 Facebook access token 失败。","交换 Facebook access token 失败。"
 "未找到可管理的 Facebook 主页，请确认授权权限。","未找到可管理的 Facebook 主页，请确认授权权限。"
 "Facebook 授权完成。","Facebook 授权完成。"
-"缺少 Page Access Token 或 Page ID。","缺少 Page Access Token 或 Page ID。"
+"缺少 Page Access Token 或 Page ID。",缺少页面访问令牌或页面ID。
 "Facebook 连通性检测失败。","Facebook 连通性检测失败。"
 "Facebook 主页连通性检测通过：%{1}","Facebook 主页连通性检测通过：%{1}"
 "缺少 Facebook 发布凭据。","缺少 Facebook 发布凭据。"
@@ -66,14 +66,14 @@
 "Snapchat 授权回调缺少 code 或应用凭据。","Snapchat 授权回调缺少 code 或应用凭据。"
 "交换 Snapchat access token 失败。","交换 Snapchat access token 失败。"
 "Snapchat 授权完成。","Snapchat 授权完成。"
-"缺少 Snapchat Access Token。","缺少 Snapchat Access Token。"
+"缺少 Snapchat Access Token。","缺少 Snapchat 访问令牌。"
 "Snapchat 连通性检测失败。","Snapchat 连通性检测失败。"
 "Snapchat Marketing API 连通性检测通过。","Snapchat Marketing API 连通性检测通过。"
 "Snapchat 第一期仅支持授权与连通性检测；创意/媒体发布将在二期实现。当前草稿：%{1}","Snapchat 第一期仅支持授权与连通性检测；创意/媒体发布将在二期实现。当前草稿：%{1}"
 "Pinterest 授权回调缺少 code 或应用凭据。","Pinterest 授权回调缺少 code 或应用凭据。"
 "交换 Pinterest access token 失败。","交换 Pinterest access token 失败。"
 "Pinterest 授权完成。","Pinterest 授权完成。"
-"缺少 Pinterest Access Token。","缺少 Pinterest Access Token。"
+"缺少 Pinterest Access Token。","缺少 Pinterest 访问令牌。"
 "Pinterest 连通性检测失败。","Pinterest 连通性检测失败。"
 "Pinterest 连通性检测通过：%{1}","Pinterest 连通性检测通过：%{1}"
 "缺少 Pinterest Access Token 或 Board ID。","缺少 Pinterest Access Token 或 Board ID。"
@@ -84,7 +84,7 @@
 "交换 Instagram access token 失败。","交换 Instagram access token 失败。"
 "未找到 Instagram 商业账户，请确认主页已绑定 IG 账号。","未找到 Instagram 商业账户，请确认主页已绑定 IG 账号。"
 "Instagram 授权完成。","Instagram 授权完成。"
-"缺少 Instagram Access Token 或 User ID。","缺少 Instagram Access Token 或 User ID。"
+"缺少 Instagram Access Token 或 User ID。","缺少 Instagram 访问令牌或用户 ID。"
 "Instagram 连通性检测失败。","Instagram 连通性检测失败。"
 "Instagram 连通性检测通过：%{1}","Instagram 连通性检测通过：%{1}"
 "缺少 Instagram 发布凭据。","缺少 Instagram 发布凭据。"
@@ -95,7 +95,7 @@
 "X 授权回调缺少 code / PKCE verifier 或应用凭据。","X 授权回调缺少 code / PKCE verifier 或应用凭据。"
 "交换 X access token 失败。","交换 X access token 失败。"
 "X 授权完成。","X 授权完成。"
-"缺少 X Access Token。","缺少 X Access Token。"
+"缺少 X Access Token。",缺少X访问令牌。
 "X 连通性检测失败。","X 连通性检测失败。"
 "X 连通性检测通过：@%{1}","X 连通性检测通过：@%{1}"
 "X 发帖失败。","X 发帖失败。"
@@ -110,7 +110,7 @@
 微信客服消息已发送。,微信客服消息已发送。
 "缺少微信 AppID/AppSecret。","缺少微信 AppID/AppSecret。"
 "获取微信 access_token 失败。","获取微信 access_token 失败。"
-"缺少 WhatsApp Phone Number ID 或 Access Token。","缺少 WhatsApp Phone Number ID 或 Access Token。"
+"缺少 WhatsApp Phone Number ID 或 Access Token。","缺少 WhatsApp 电话号码 ID 或访问令牌。"
 "WhatsApp 连通性检测失败。","WhatsApp 连通性检测失败。"
 "WhatsApp Cloud API 连通性检测通过。","WhatsApp Cloud API 连通性检测通过。"
 "缺少 WhatsApp 发布凭据或收件人。","缺少 WhatsApp 发布凭据或收件人。"
@@ -120,26 +120,26 @@
 暂无站点，无法验证站点社媒账户关系。,暂无站点，无法验证站点社媒账户关系。
 "Fake 浏览器发布草稿","Fake 浏览器发布草稿"
 "Fake 浏览器发布批次","Fake 浏览器发布批次"
-"Weline Social Fake Smoke","Weline Social Fake Smoke"
+"Weline Social Fake Smoke",Weline社交假烟
 授权被拒绝。,授权被拒绝。
 授权完成。,授权完成。
 授权失败。,授权失败。
 "融媒体 OAuth 回调","融媒体 OAuth 回调"
-"mdi mdi-shield-key-outline","mdi mdi-shield-key-outline"
+shield,盾
 处理社媒平台一键授权回调,处理社媒平台一键授权回调
 处理融媒体授权回调,处理融媒体授权回调
-"mdi mdi-login-variant","mdi mdi-login-variant"
+login,登录
 "接收平台 OAuth 回调并保存账户凭据","接收平台 OAuth 回调并保存账户凭据"
 融媒体管理,融媒体管理
-"mdi mdi-share-variant-outline","mdi mdi-share-variant-outline"
+share,分享
 "管理社媒平台账户、AI 创意和多平台发布","管理社媒平台账户、AI 创意和多平台发布"
 查看融媒体管理,查看融媒体管理
-"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+grid,网格
 查看融媒体管理页面,查看融媒体管理页面
 社媒账户,社媒账户
 "Fake 验证通过","Fake 验证通过"
 "Fake 验证失败","Fake 验证失败"
-"Weline_Social Fake 模式","Weline_Social Fake 模式"
+"Weline_Social Fake 模式",Weline_社交假模式
 "该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。","该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。"
 "该页面只调用 fake_browser Provider，不访问任何外部社媒平台。","该页面只调用 fake_browser Provider，不访问任何外部社媒平台。"
 账户,账户
@@ -156,13 +156,12 @@
 搜索站点名称或编码,搜索站点名称或编码
 配置融媒体平台应用,配置融媒体平台应用
 "填写该平台 App/Client 后返回融媒体管理，即可一键授权或保存账户凭据。","填写该平台 App/Client 后返回融媒体管理，即可一键授权或保存账户凭据。"
-营销管理,营销管理
-"平台 Provider","平台 Provider"
+"平台 Provider",平台提供商
 已连接账户,已连接账户
 可发布账户,可发布账户
 当前配置范围,当前配置范围
 先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。,先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。
-"Scope 优先","Scope 优先"
+"Scope 优先",范围优先
 范围类型,范围类型
 请选择范围类型,请选择范围类型
 搜索范围类型,搜索范围类型
@@ -289,10 +288,10 @@
 "按 SocialPublishTarget 执行单个平台发布。","按 SocialPublishTarget 执行单个平台发布。"
 "缺少 target_id。","缺少 target_id。"
 社媒发布完成,社媒发布完成
-"Social platform provider with empty code was skipped: %{1}","Social platform provider with empty code was skipped: %{1}"
-"Duplicate social platform provider code: %{1}","Duplicate social platform provider code: %{1}"
-"Social platform provider load failed: %{1} - %{2}","Social platform provider load failed: %{1} - %{2}"
-"Social platform definition missing %{1}: %{2}","Social platform definition missing %{1}: %{2}"
+"Social platform provider with empty code was skipped: %{1}",跳过带有空代码的社交平台提供商：%{1}
+"Duplicate social platform provider code: %{1}",重复的社交平台提供商代码：%{1}
+"Social platform provider load failed: %{1} - %{2}","社交平台提供商加载失败：%{1} - %{2}"
+"Social platform definition missing %{1}: %{2}","缺少社交平台定义 %{1}：%{2}"
 创意草稿不存在。,创意草稿不存在。
 请选择发布账户，或先为当前范围配置默认社媒账户。,请选择发布账户，或先为当前范围配置默认社媒账户。
 没有可用的发布账户。,没有可用的发布账户。
@@ -303,12 +302,12 @@
 发布失败,发布失败
 "社媒发布目标 #%{1}","社媒发布目标 #%{1}"
 站点默认,站点默认
-一级范围,站点范围
+一级范围,一级范围
 站点默认社媒账户已保存。,站点默认社媒账户已保存。
 范围默认社媒账户已保存。,范围默认社媒账户已保存。
 账户不存在。,账户不存在。
 暂不支持的社媒配置范围：%{1},暂不支持的社媒配置范围：%{1}
-请选择一级范围。,请选择站点范围。
+请选择一级范围。,请选择一级范围。
 站点不存在。,站点不存在。
 "站点 #%{1}","站点 #%{1}"
 "%{1} #%{2}","%{1} #%{2}"
@@ -329,7 +328,7 @@
 "在对应平台开发者后台创建应用，并把 OAuth 回调设为：%{1}","在对应平台开发者后台创建应用，并把 OAuth 回调设为：%{1}"
 "回调 URL 需包含你的后台域名与端口，例如 https://your-admin.example.com/jRax.../weline_social/backend/oauth/callback","回调 URL 需包含你的后台域名与端口，例如 https://your-admin.example.com/jRax.../weline_social/backend/oauth/callback"
 一键授权（OAuth）,一键授权（OAuth）
-Meta（Facebook）,Meta（Facebook）
+Meta（Facebook）,元（脸书）
 "Meta 开发者后台启用 Facebook Login，申请 pages_manage_posts、pages_read_engagement 等 Page 权限","Meta 开发者后台启用 Facebook Login，申请 pages_manage_posts、pages_read_engagement 等 Page 权限"
 "点「打开系统配置」填写 App ID/Secret","点「打开系统配置」填写 App ID/Secret"
 "回到本页点「一键授权」，用 Page 管理员账号登录并授权","回到本页点「一键授权」，用 Page 管理员账号登录并授权"
@@ -337,27 +336,27 @@ Meta（Facebook）,Meta（Facebook）
 "保存 → 检测 → 启用发布","保存 → 检测 → 启用发布"
 "支持文本、链接、图片 URL 发布","支持文本、链接、图片 URL 发布"
 "一键授权（Meta OAuth）","一键授权（Meta OAuth）"
-Meta（Instagram）,Meta（Instagram）
+Meta（Instagram）,元（Instagram）
 "Instagram 业务账号需关联 Facebook Page，并开通 Content Publishing","Instagram 业务账号需关联 Facebook Page，并开通 Content Publishing"
 "配置 Facebook/Instagram 应用凭据","配置 Facebook/Instagram 应用凭据"
 "一键授权后自动写入 Access Token 与 Instagram Business User ID","一键授权后自动写入 Access Token 与 Instagram Business User ID"
 "发布需图片 URL；保存后检测并启用发布","发布需图片 URL；保存后检测并启用发布"
 "支持图片 URL 发布","支持图片 URL 发布"
 "一键授权（Google OAuth）","一键授权（Google OAuth）"
-Google（YouTube）,Google（YouTube）
+Google（YouTube）,谷歌（YouTube）
 "Google Cloud Console 启用 YouTube Data API v3","Google Cloud Console 启用 YouTube Data API v3"
 "填写 Client ID/Secret 后一键授权","填写 Client ID/Secret 后一键授权"
 "授权后写入 Access Token；可选填 Channel ID","授权后写入 Access Token；可选填 Channel ID"
 第一期仅连通检测；视频上传发布二期支持,第一期仅连通检测；视频上传发布二期支持
 第一期：连通检测；视频上传二期,第一期：连通检测；视频上传二期
 "一键授权（TikTok Login Kit）","一键授权（TikTok Login Kit）"
-TikTok,TikTok
+TikTok,抖音
 "TikTok 开发者平台启用 Login Kit 与 Content Posting API","TikTok 开发者平台启用 Login Kit 与 Content Posting API"
 "配置 Client Key/Secret → 一键授权","配置 Client Key/Secret → 一键授权"
 "保存 Open ID / Refresh Token（自动或人工）","保存 Open ID / Refresh Token（自动或人工）"
 第一期连通检测；视频上传二期,第一期连通检测；视频上传二期
 "人工凭据（Cloud API）","人工凭据（Cloud API）"
-"WhatsApp Cloud API","WhatsApp Cloud API"
+"WhatsApp Cloud API","WhatsApp 云 API"
 "Meta Business 创建 WhatsApp Business 应用与 Cloud API 号码","Meta Business 创建 WhatsApp Business 应用与 Cloud API 号码"
 "在 Meta 开发者后台获取 Phone Number ID 与永久 Access Token","在 Meta 开发者后台获取 Phone Number ID 与永久 Access Token"
 "系统配置可填默认 WABA ID","系统配置可填默认 WABA ID"
@@ -371,21 +370,21 @@ TikTok,TikTok
 "账户填 AppID、AppSecret、OpenID；Access Token 可留空自动获取","账户填 AppID、AppSecret、OpenID；Access Token 可留空自动获取"
 "客服文本消息；需有效 OpenID","客服文本消息；需有效 OpenID"
 "一键授权（OAuth 2.0 PKCE）","一键授权（OAuth 2.0 PKCE）"
-"X / Twitter","X / Twitter"
-"X Developer Portal 创建 App，启用 OAuth 2.0 与 tweet.write","X Developer Portal 创建 App，启用 OAuth 2.0 与 tweet.write"
+"X / Twitter",X/推特
+"X Developer Portal 创建 App，启用 OAuth 2.0 与 tweet.write","X Developer Portal 创建 App，启用 OAuth 2.0 和 tweet.write"
 "填写 Client ID/Secret → 一键授权","填写 Client ID/Secret → 一键授权"
 "授权后写入 Access Token / Refresh Token","授权后写入 Access Token / Refresh Token"
 支持推文文本发布,支持推文文本发布
-LinkedIn,LinkedIn
+LinkedIn,领英
 "LinkedIn Developer 创建 App，申请 w_member_social 等权限","LinkedIn Developer 创建 App，申请 w_member_social 等权限"
 "一键授权后还需填写 Author URN（urn:li:person:xxx）","一键授权后还需填写 Author URN（urn:li:person:xxx）"
 "支持 UGC 文本帖","支持 UGC 文本帖"
-Pinterest,Pinterest
-"Pinterest Developer 创建 App 并申请 pins:write","Pinterest Developer 创建 App 并申请 pins:write"
+Pinterest,兴趣
+"Pinterest Developer 创建 App 并申请 pins:write","Pinterest 开发者创建应用程序并申请 pin:write"
 "一键授权后填写 Board ID","一键授权后填写 Board ID"
 "Pin 发布需图片 URL","Pin 发布需图片 URL"
-Snapchat,Snapchat
-"Snap Kit / Marketing API 创建 OAuth 应用","Snap Kit / Marketing API 创建 OAuth 应用"
+Snapchat,快照
+"Snap Kit / Marketing API 创建 OAuth 应用","Snap Kit / 营销 API 创建 OAuth 应用"
 "一键授权；可选填 Ad Account ID","一键授权；可选填 Ad Account ID"
 "Bot Token（人工）","Bot Token（人工）"
 "通过 @BotFather 创建 Bot 并获取 Token","通过 @BotFather 创建 Bot 并获取 Token"
@@ -393,41 +392,46 @@ Snapchat,Snapchat
 "无需系统配置；直接在账户表单填 Bot Token 与 Chat ID","无需系统配置；直接在账户表单填 Bot Token 与 Chat ID"
 "保存 → 检测","保存 → 检测"
 "Adapter 待实发；凭据可先保存用于展示或联调","Adapter 待实发；凭据可先保存用于展示或联调"
-"Webhook URL","Webhook URL"
+"Webhook URL","网络钩子 URL"
 "Discord 频道设置 → 集成 → Webhook → 复制 Webhook URL","Discord 频道设置 → 集成 → Webhook → 复制 Webhook URL"
 "账户表单粘贴 Webhook URL → 保存 → 检测","账户表单粘贴 Webhook URL → 保存 → 检测"
-"Adapter 待实发","Adapter 待实发"
-"Application Password","Application Password"
+"Adapter 待实发",适配器待实发
+"Application Password",申请密码
 "WordPress 用户 → 个人资料 → Application Passwords 生成密码","WordPress 用户 → 个人资料 → Application Passwords 生成密码"
-"填 Site URL、Username、Application Password","填 Site URL、Username、Application Password"
-"Channel Access Token","Channel Access Token"
-"LINE Developers 创建 Messaging API Channel，签发 Channel Access Token","LINE Developers 创建 Messaging API Channel，签发 Channel Access Token"
+"填 Site URL、Username、Application Password","填写 网站网址、用户名、申请密码"
+"Channel Access Token",通道访问令牌
+"LINE Developers 创建 Messaging API Channel，签发 Channel Access Token","LINE开发者创建Messaging API Channel，签署Channel Access Token"
 "账户表单填 Channel Access Token","账户表单填 Channel Access Token"
-"App Password（AT Protocol）","App Password（AT Protocol）"
+"App Password（AT Protocol）",应用密码（AT协议）
 "Bluesky 设置 → App Passwords 生成专用密码","Bluesky 设置 → App Passwords 生成专用密码"
-"填 Handle（如 user.bsky.social）与 App Password","填 Handle（如 user.bsky.social）与 App Password"
+"填 Handle（如 user.bsky.social）与 App Password","填写 账号（如user.bsky.social）与应用密码"
 "OAuth Client（人工）","OAuth Client（人工）"
 "Tumblr 开发者注册 App，获取 Client ID/Secret","Tumblr 开发者注册 App，获取 Client ID/Secret"
-"填 Client ID、Client Secret、Blog Identifier","填 Client ID、Client Secret、Blog Identifier"
-"Admin API Key","Admin API Key"
-"Ghost Admin → Integrations → 创建 Custom Integration，复制 Admin API URL 与 Key","Ghost Admin → Integrations → 创建 Custom Integration，复制 Admin API URL 与 Key"
-"填 Admin API URL 与 Admin API Key","填 Admin API URL 与 Admin API Key"
+"填 Client ID、Client Secret、Blog Identifier","填写 客户端 ID、客户端密码、博客标识符"
+"Admin API Key","管理员 API 密钥"
+"Ghost Admin → Integrations → 创建 Custom Integration，复制 Admin API URL 与 Key","Ghost 管理 → 集成 → 创建自定义集成，复制管理 API URL 和密钥"
+"填 Admin API URL 与 Admin API Key","填 管理 API URL 和管理 API 密钥"
 "实例 OAuth Client（人工）","实例 OAuth Client（人工）"
 "在目标 Mastodon 实例注册 OAuth 应用（Development → 新建应用）","在目标 Mastodon 实例注册 OAuth 应用（Development → 新建应用）"
 "填 Instance URL、Client ID、Client Secret；Token 流程待一键授权接入","填 Instance URL、Client ID、Client Secret；Token 流程待一键授权接入"
-"JWT Token","JWT Token"
+"JWT Token",智威汤逊令牌
 "Lemmy 实例登录后从 API 获取 JWT（或使用 bot 账号）","Lemmy 实例登录后从 API 获取 JWT（或使用 bot 账号）"
-"填 Instance URL 与 Access Token","填 Instance URL 与 Access Token"
-"API Token","API Token"
+"填 Instance URL 与 Access Token","填 实例 URL 和访问令牌"
+"API Token",API令牌
 "Misskey 设置 → API → 生成 Access Token","Misskey 设置 → API → 生成 Access Token"
-"API Key","API Key"
-"Discourse Admin → API → 创建 API Key 并指定 API Username","Discourse Admin → API → 创建 API Key 并指定 API Username"
-"填 Base URL、API Key、API Username","填 Base URL、API Key、API Username"
-"Bot Token","Bot Token"
-"Viber Admin Panel 创建 Public Account / Bot，获取 Token","Viber Admin Panel 创建 Public Account / Bot，获取 Token"
-"填 Bot Token 与 Receiver ID","填 Bot Token 与 Receiver ID"
+"API Key",API密钥
+"Discourse Admin → API → 创建 API Key 并指定 API Username","Discourse Admin → API → 创建 API 密钥并指定 API 用户名"
+"填 Base URL、API Key、API Username","填写 基本URL、API密钥、API用户名"
+"Bot Token",机器人代币
+"Viber Admin Panel 创建 Public Account / Bot，获取 Token",Viber管理面板创建公众号/Bot，获取Token
+"填 Bot Token 与 Receiver ID","填写 Bot Token 和接收者 ID"
 "本地 Fake Token","本地 Fake Token"
 "仅用于本地 smoke；不访问外部平台","仅用于本地 smoke；不访问外部平台"
 "填任意 Fake Token，或运行 fake 浏览器验证自动创建","填任意 Fake Token，或运行 fake 浏览器验证自动创建"
 "本地 fake 发布验证","本地 fake 发布验证"
-"""Weline Social 查询器不支持的操作：%{1}""","Weline Social 查询器不支持的操作：%{1}"
+"""Weline Social 查询器不支持的操作：%{1}""","""Weline Social 查询器不支持的操作：%{1}"""
+营销管理,营销管理
+"mdi mdi-shield-key-outline","mdi mdi-shield-key-outline"
+"mdi mdi-login-variant","mdi mdi 登录变体"
+"mdi mdi-share-variant-outline","mdi mdi-share-variant-outline"
+"mdi mdi-view-dashboard-outline","MDI MDI-视图-仪表板-大纲"

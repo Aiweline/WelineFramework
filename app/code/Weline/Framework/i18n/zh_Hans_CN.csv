@@ -16,7 +16,7 @@
 事务控制语句执行失败,事务控制语句执行失败
 保存点作用域的事务深度不平衡,保存点作用域的事务深度不平衡
 事务已标记为仅回滚，无法提交,事务已标记为仅回滚，无法提交
-"SQLite database directory is not writable: %{1}","SQLite database directory is not writable: %{1}"
+"SQLite database directory is not writable: %{1}","SQLite 数据库目录不可写：%{1}"
 "SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}","SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}"
 "SQLite 表 %{1} 已存在列 %{2}","SQLite 表 %{1} 已存在列 %{2}"
 "SQLite 表 %{1} 添加自增主键 %{2} 前必须先降级旧主键","SQLite 表 %{1} 添加自增主键 %{2} 前必须先降级旧主键"
@@ -30,7 +30,7 @@
 "：此索引的column需要array类型,当前类型","：此索引的column需要array类型,当前类型"
 未知的索引类型：,未知的索引类型：
 数据库SQL:%{1},数据库SQL:%{1}
-"SQLite alter table failed: %{1}","SQLite alter table failed: %{1}"
+"SQLite alter table failed: %{1}","SQLite 更改表失败：%{1}"
 即将执行信息：,即将执行信息：
 "PDO prepare 失败：%{1}。SQL预览：%{2}","PDO prepare 失败：%{1}。SQL预览：%{2}"
 "SQLite 变量数量超过限制（最多999个变量）。请将批量操作拆分为更小的批次。SQL预览：%{1}","SQLite 变量数量超过限制（最多999个变量）。请将批量操作拆分为更小的批次。SQL预览：%{1}"
@@ -51,7 +51,6 @@
 没有要更新的字段,没有要更新的字段
 "Where查询异常：%{1},%{2},%{3}","Where查询异常：%{1},%{2},%{3}"
 "当前错误的条件操作符：%{1} ,当前的条件数组：%{2}, 允许的条件符：%{3}","当前错误的条件操作符：%{1} ,当前的条件数组：%{2}, 允许的条件符：%{3}"
-"MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}","MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}"
 更新表注释错误：%{1},更新表注释错误：%{1}
 创建时间,创建时间
 更新时间,更新时间
@@ -126,7 +125,7 @@
 "Shard family code 不能为空","Shard family code 不能为空"
 "Shard family code %{1} 重复注册：%{2} 与 %{3}","Shard family code %{1} 重复注册：%{2} 与 %{3}"
 "Schema 扩展 %{1} 必须实现 SchemaProviderInterface","Schema 扩展 %{1} 必须实现 SchemaProviderInterface"
-"Shard family provider %{1} 的 family code 不能为空","Shard family provider %{1} 的 family code 不能为空"
+"Shard family provider %{1} 的 family code 不能为空","分片家族提供者 %{1} 的家族代码不能为空"
 "Shard family code %{1} 重复：%{2} 与 %{3}","Shard family code %{1} 重复：%{2} 与 %{3}"
 "PostgreSQL 表 %{1} 的物理索引 %{2} 同时匹配多个逻辑索引声明","PostgreSQL 表 %{1} 的物理索引 %{2} 同时匹配多个逻辑索引声明"
 "PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致","PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致"
@@ -237,8 +236,8 @@
 "最终 HTTP 响应就绪","最终 HTTP 响应就绪"
 "FPC 命中响应就绪","FPC 命中响应就绪"
 "FPC 早期命中已经构造 Response、但尚未返回客户端时触发；观察者可按请求上下文安全装饰 response。","FPC 早期命中已经构造 Response、但尚未返回客户端时触发；观察者可按请求上下文安全装饰 response。"
-"WLS worker bootstrap after","WLS worker bootstrap after"
-"Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches.","Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches."
+"WLS worker bootstrap after","WLS 工作线程引导后"
+"Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches.","每个 WLS 工作线程加载框架注册表后触发一次。观察者必须仅热独立于请求的运行时缓存。"
 请求遥测数据已采集,请求遥测数据已采集
 "在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。","在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。"
 URL解析后,URL解析后
@@ -407,10 +406,16 @@ ACL分发,ACL分发
 在处理HTTP请求区域时触发，允许其他模块自定义区域处理逻辑。,在处理HTTP请求区域时触发，允许其他模块自定义区域处理逻辑。
 响应无路由前,响应无路由前
 在响应无路由请求前触发，允许其他模块处理无路由请求。,在响应无路由请求前触发，允许其他模块处理无路由请求。
+"HTTP 状态回执页渲染","HTTP 状态回执页渲染"
+"渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data[""html""] 整页覆盖，或改写 page_title/page_lead/page_hint。","渲染 403/404/429/500/503 等状态页前触发；观察者可写入 data[""html""] 整页覆盖，或改写 page_title/page_lead/page_hint。"
+错误页资源贡献,错误页资源贡献
+"内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。","内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。"
+静态资源发布变换,静态资源发布变换
+"deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。","deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。"
 响应重定向前,响应重定向前
 在HTTP响应重定向前触发，允许其他模块修改重定向URL。,在HTTP响应重定向前触发，允许其他模块修改重定向URL。
 结果桥接页地址,结果桥接页地址
-"获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 BackendToast。","获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 BackendToast。"
+"获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 Weline.UI.toast。","获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 Weline.UI.toast。"
 资源编译器,资源编译器
 在编译资源文件时触发，允许其他模块监听并处理资源编译过程。事件数据包含区域、类型、资源列表等信息。,在编译资源文件时触发，允许其他模块监听并处理资源编译过程。事件数据包含区域、类型、资源列表等信息。
 资源编译后,资源编译后
@@ -445,7 +450,7 @@ ACL分发,ACL分发
 "缺省时读系统配置 test.ui_enabled；true 时 headed UI","缺省时读系统配置 test.ui_enabled；true 时 headed UI"
 可选用例文件列表,可选用例文件列表
 异步运行模块单元/集成测试,异步运行模块单元/集成测试
-"unit 或 integration，默认 unit","unit 或 integration，默认 unit"
+"unit 或 integration，默认 unit",单位或积分，默认单位
 读取一次测试运行状态与日志,读取一次测试运行状态与日志
 "运行 ID","运行 ID"
 分页列出测试运行历史,分页列出测试运行历史
@@ -478,15 +483,15 @@ ACL分发,ACL分发
 "网站 ID；0 是合法默认站点","网站 ID；0 是合法默认站点"
 "current 或 all；all 需要全站权限","current 或 all；all 需要全站权限"
 "读取单个 Delivery 的白名单字段和脱敏载荷。","读取单个 Delivery 的白名单字段和脱敏载荷。"
-"Delivery 主键","Delivery 主键"
+"Delivery 主键",交货主键
 "网站 ID；缺失时使用当前后台网站","网站 ID；缺失时使用当前后台网站"
 "为 dead Delivery 创建新 event_id、Outbox 与单 Observer 目标。","为 dead Delivery 创建新 event_id、Outbox 与单 Observer 目标。"
 "待重放的 dead Delivery 主键","待重放的 dead Delivery 主键"
 "重放原因，去空白后 1–500 字节","重放原因，去空白后 1–500 字节"
 "page_size 只允许 1–100","page_size 只允许 1–100"
-"Delivery status 无效","Delivery status 无效"
+"Delivery status 无效",交货状态无效
 "Delivery 不存在或不属于当前网站范围","Delivery 不存在或不属于当前网站范围"
-"Delivery payload JSON 无效","Delivery payload JSON 无效"
+"Delivery payload JSON 无效","传递负载 JSON 无效"
 "重放原因必须是 1–500 字节","重放原因必须是 1–500 字节"
 "%{1} 必须是正整数","%{1} 必须是正整数"
 "开始增量重建模块 %{1} 的扩展注册表...","开始增量重建模块 %{1} 的扩展注册表..."
@@ -506,7 +511,7 @@ ACL分发,ACL分发
 "当前系统用户与 env.php 配置 user 不一致：当前=%{1}，配置=%{2}。","当前系统用户与 env.php 配置 user 不一致：当前=%{1}，配置=%{2}。"
 无法创建环境配置文件：%{1},无法创建环境配置文件：%{1}
 start,start
-end,end
+end,结尾
 模块列表文件不可读：%{1}，系统错误：%{2},模块列表文件不可读：%{1}，系统错误：%{2}
 "读取模块列表失败：%{1}。请检查文件权限，并确认 Web 与 CLI 运行用户一致。","读取模块列表失败：%{1}。请检查文件权限，并确认 Web 与 CLI 运行用户一致。"
 调试信息,调试信息
@@ -514,7 +519,7 @@ end,end
 调用位置,调用位置
 调试内容,调试内容
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec"
-"WelineFramework Admin","WelineFramework Admin"
+"WelineFramework Admin",Weline框架管理员
 WelineFramework,WelineFramework
 请先登录,请先登录
 未登录或登录已过期,未登录或登录已过期
@@ -693,7 +698,7 @@ WelineFramework,WelineFramework
 此命令会删除并重建数据表，可能导致数据丢失！,此命令会删除并重建数据表，可能导致数据丢失！
 为保护生产环境数据安全，此命令已被禁用。,为保护生产环境数据安全，此命令已被禁用。
 "如需在开发环境中使用，请在 .env 文件中设置：","如需在开发环境中使用，请在 .env 文件中设置："
-dev=true,dev=true
+dev=true,开发=真
 错误：必须指定模块名！,错误：必须指定模块名！
 "模块 %{1} 没有 Model 目录","模块 %{1} 没有 Model 目录"
 "搜索模块 %{1} 中的模型...","搜索模块 %{1} 中的模型..."
@@ -720,6 +725,7 @@ dev=true,dev=true
 错误信息：%{1},错误信息：%{1}
 堆栈跟踪：,堆栈跟踪：
 可用的模块列表：,可用的模块列表：
+"WLS 下载临时文件清理失败。","WLS 下载临时文件清理失败。"
 "SSE 会话已失效，请重新登录后重试。","SSE 会话已失效，请重新登录后重试。"
 "当前账号无权限执行该 SSE 操作。","当前账号无权限执行该 SSE 操作。"
 "SSE 请求处理失败，请稍后重试。","SSE 请求处理失败，请稍后重试。"
@@ -907,7 +913,7 @@ dev=true,dev=true
 注册表已在本次升级中收集过，跳过重复收集,注册表已在本次升级中收集过，跳过重复收集
 检测到模块安装或升级，正在重新收集所有注册表信息...,检测到模块安装或升级，正在重新收集所有注册表信息...
 检测到工作区路径变化，先修正模块路径：%{1},检测到工作区路径变化，先修正模块路径：%{1}
-"Module manifest metadata changed; refreshing module registration first: %{1}","Module manifest metadata changed; refreshing module registration first: %{1}"
+"Module manifest metadata changed; refreshing module registration first: %{1}",模块清单元数据已更改；首先刷新模块注册：%{1}
 检测到新部署模块，先写入模块注册表：%{1},检测到新部署模块，先写入模块注册表：%{1}
 "--force-schema-rebind 仅允许在 DEV 环境使用；生产请提升 etc/module.php version","--force-schema-rebind 仅允许在 DEV 环境使用；生产请提升 etc/module.php version"
 "DEV --force-schema-rebind：同版本 Schema checkpoint 冲突时将 supersede 旧记录后重绑（与 -f/--force 无关）","DEV --force-schema-rebind：同版本 Schema checkpoint 冲突时将 supersede 旧记录后重绑（与 -f/--force 无关）"
@@ -1053,7 +1059,7 @@ dev=true,dev=true
 "访问后台 REST API：%{1}","访问后台 REST API：%{1}"
 "默认使用 PostgreSQL 作为开发与生产数据库；SQLite 仅用于显式沙盒或隔离开发。配置位置：%{1}env.php 的 db 键。","默认使用 PostgreSQL 作为开发与生产数据库；SQLite 仅用于显式沙盒或隔离开发。配置位置：%{1}env.php 的 db 键。"
 "系统已按 env.php 中数据库配置完成安装。","系统已按 env.php 中数据库配置完成安装。"
-"setup:schema:check 失败：%{1}","setup:schema:check 失败：%{1}"
+"setup:schema:check 失败：%{1}",设置：架构：检查失败：%{1}
 "Schema checkpoint 检查：已比对 %{1} 个模块","Schema checkpoint 检查：已比对 %{1} 个模块"
 "无 Schema checkpoint 漂移","无 Schema checkpoint 漂移"
 "漂移：%{1}@%{2} 表=%{3} 建议 version=%{4}","漂移：%{1}@%{2} 表=%{3} 建议 version=%{4}"
@@ -1071,7 +1077,7 @@ dev=true,dev=true
 "后台优化任务失败: %{1}","后台优化任务失败: %{1}"
 后台执行优化缓存生成（类映射、PSR-4、framework:compile、反射编译）,后台执行优化缓存生成（类映射、PSR-4、framework:compile、反射编译）
 跳过类映射缓存生成,跳过类映射缓存生成
-"跳过 framework:compile","跳过 framework:compile"
+"跳过 framework:compile",跳过框架：编译
 跳过反射元数据编译,跳过反射元数据编译
 手动执行,手动执行
 跳过类映射,跳过类映射
@@ -1102,7 +1108,7 @@ dev=true,dev=true
 消息,消息
 数据,数据
 异步事件死信运维,异步事件死信运维
-"mdi mdi-email-alert-outline","mdi mdi-email-alert-outline"
+mail,邮件
 "查看当前网站范围内的异步事件 Delivery","查看当前网站范围内的异步事件 Delivery"
 未知,未知
 环境管理,环境管理
@@ -1122,36 +1128,34 @@ dev=true,dev=true
 模块测试：%{1},模块测试：%{1}
 未指定,未指定
 "测试运行 #%{1}","测试运行 #%{1}"
-"mdi mdi-flask-outline","mdi mdi-flask-outline"
+circle,圆圈
 "收集并运行各模块 E2E / 单元测试","收集并运行各模块 E2E / 单元测试"
 查看测试目录,查看测试目录
-"mdi mdi-file-tree","mdi mdi-file-tree"
+file,文件
 查看各模块测试用例目录,查看各模块测试用例目录
 "查看 E2E 用例","查看 E2E 用例"
-"mdi mdi-monitor-screenshot","mdi mdi-monitor-screenshot"
+monitor,监视器
 "查看模块 E2E 用例并准备运行","查看模块 E2E 用例并准备运行"
 查看测试运行历史,查看测试运行历史
-"mdi mdi-history","mdi mdi-history"
+history,历史
 查看测试运行进度、日志与历史,查看测试运行进度、日志与历史
 "运行 E2E 测试","运行 E2E 测试"
-"mdi mdi-play","mdi mdi-play"
+play,玩
 "异步运行模块 E2E 测试","异步运行模块 E2E 测试"
 查看单元测试用例,查看单元测试用例
-"mdi mdi-code-tags","mdi mdi-code-tags"
+code,代码
 查看模块单元/集成测试用例,查看模块单元/集成测试用例
 运行单元测试,运行单元测试
-"mdi mdi-play-circle-outline","mdi mdi-play-circle-outline"
 查询成功,查询成功
 查询失败：%{1},查询失败：%{1}
-"BinQuery Gateway","BinQuery Gateway"
-"bi bi-diagram-3","bi bi-diagram-3"
-"External BinQuery binary gateway","External BinQuery binary gateway"
-edit,edit
-framework,framework
+"BinQuery Gateway",Bin查询网关
+"External BinQuery binary gateway","外部 BinQuery 二进制网关"
+edit,编辑
+framework,框架
 "BinQuery Connect Query Call Graph","BinQuery Connect Query Call Graph"
-"Connect, inspect, call and graph through /bin/query","Connect, inspect, call and graph through /bin/query"
+"Connect, inspect, call and graph through /bin/query","通过 /bin/query 连接、检查、调用和绘制图表"
 后台页面凭证已失效，请刷新页面后重试。,后台页面凭证已失效，请刷新页面后重试。
-"Frontend JSON query is deprecated. Use the Weline frontend worker API.","Frontend JSON query is deprecated. Use the Weline frontend worker API."
+"Frontend JSON query is deprecated. Use the Weline frontend worker API.","前端 JSON 查询已弃用。使用 Weline 前端工作 API。"
 环境初始化检测中...,环境初始化检测中...
 未设置环境需求,未设置环境需求
 "PHP 版本: %{version} ✔","PHP 版本: %{version} ✔"
@@ -1339,7 +1343,7 @@ framework,framework
 "可能原因: 包名与当前 PHP 版本不匹配(RHEL/Amazon 需 php81-exif 等)、当前使用宝塔/自编译 PHP(apt/dnf 对其无效，需在宝塔面板启用)","可能原因: 包名与当前 PHP 版本不匹配(RHEL/Amazon 需 php81-exif 等)、当前使用宝塔/自编译 PHP(apt/dnf 对其无效，需在宝塔面板启用)"
 "输出: %{output}","输出: %{output}"
 当前平台优先方式未成功，继续检查当前平台安全回退策略...,当前平台优先方式未成功，继续检查当前平台安全回退策略...
-"已 reload PHP-FPM","已 reload PHP-FPM"
+"已 reload PHP-FPM","已重新加载 PHP-FPM"
 "已通过 sudo 写入扩展配置: %{path}","已通过 sudo 写入扩展配置: %{path}"
 "添加有序扩展配置: %{path}","添加有序扩展配置: %{path}"
 "添加配置: extension=%{ext}","添加配置: extension=%{ext}"
@@ -1358,7 +1362,7 @@ framework,framework
 "Ubuntu/Debian: sudo apt install php-%{pkg}","Ubuntu/Debian: sudo apt install php-%{pkg}"
 "CentOS/RHEL: sudo yum install php-%{pkg}","CentOS/RHEL: sudo yum install php-%{pkg}"
 "macOS: brew install php && pecl install %{ext}","macOS: brew install php && pecl install %{ext}"
-"通用: pecl install %{ext}","通用: pecl install %{ext}"
+"通用: pecl install %{ext}","通用：pecl 安装 %{ext}"
 检测并尝试自动修复环境依赖问题,检测并尝试自动修复环境依赖问题
 仅在必需依赖未满足时进入安装；安装时同时尝试必需项与可选推荐项。可指定名称仅安装某推荐项。,仅在必需依赖未满足时进入安装；安装时同时尝试必需项与可选推荐项。可指定名称仅安装某推荐项。
 "可选。指定推荐项名称时仅安装该项，如 event","可选。指定推荐项名称时仅安装该项，如 event"
@@ -1375,7 +1379,6 @@ framework,framework
 操作成功！,操作成功！
 警告！,警告！
 提示！,提示！
-Close,Close
 压缩文件时发生异常,压缩文件时发生异常
 创建压缩文件时发生异常,创建压缩文件时发生异常
 解压文件打开异常：,解压文件打开异常：
@@ -1516,8 +1519,28 @@ SQL调试输出,SQL调试输出
 "PHP 8.4+ 提供新数组函数 (array_find/array_any/array_all)，可简化代码并提升性能","PHP 8.4+ 提供新数组函数 (array_find/array_any/array_all)，可简化代码并提升性能"
 "PHP 8.4+ 支持 Property Hooks，可在 Model 属性上直接定义 get/set 行为","PHP 8.4+ 支持 Property Hooks，可在 Model 属性上直接定义 get/set 行为"
 "SSE 载荷编码失败，请检查模型输出是否含非法二进制数据","SSE 载荷编码失败，请检查模型输出是否含非法二进制数据"
+下载文件读取失败。,下载文件读取失败。
+下载文件清理失败。,下载文件清理失败。
+大文件下载必须使用流式响应。,大文件下载必须使用流式响应。
+下载临时文件身份无效。,下载临时文件身份无效。
+下载文件不可用。,下载文件不可用。
+下载文件状态无效。,下载文件状态无效。
 鏂囦欢涓嶅瓨鍦紒,鏂囦欢涓嶅瓨鍦紒
+"当前 WLS 传输不支持文件流式响应。","当前 WLS 传输不支持文件流式响应。"
+"文件流式响应 Cookie 数量超过上限。","文件流式响应 Cookie 数量超过上限。"
+文件流式响应头数量超过上限。,文件流式响应头数量超过上限。
+文件流式响应头大小超过上限。,文件流式响应头大小超过上限。
+文件流式响应头名称无效。,文件流式响应头名称无效。
+文件流式响应头值无效。,文件流式响应头值无效。
 未提供参数：%{1},未提供参数：%{1}
+"WLS 流式响应标记无效。","WLS 流式响应标记无效。"
+"WLS multipart 字段数量超过安全上限。","WLS multipart 字段数量超过安全上限。"
+"WLS multipart 字段头超过安全上限。","WLS multipart 字段头超过安全上限。"
+"WLS multipart 字段名称无效。","WLS multipart 字段名称无效。"
+"WLS multipart 文件数量超过安全上限。","WLS multipart 文件数量超过安全上限。"
+"WLS multipart 文件名无效。","WLS multipart 文件名无效。"
+"WLS multipart 文本字段超过安全上限。","WLS multipart 文本字段超过安全上限。"
+"WLS 上传临时文件清理失败：%{1} 个文件仍未删除。","WLS 上传临时文件清理失败：%{1} 个文件仍未删除。"
 请指定请求路径！,请指定请求路径！
 正确用法示例:,正确用法示例:
 "使用指定的 Session ID（值已隐藏）","使用指定的 Session ID（值已隐藏）"
@@ -1542,7 +1565,7 @@ SQL调试输出,SQL调试输出
 "请检查 app/etc/env.php 中的 area_routes.backend.prefix 配置","请检查 app/etc/env.php 中的 area_routes.backend.prefix 配置"
 "Cookie将保存到: %{1}","Cookie将保存到: %{1}"
 开始执行请求...,开始执行请求...
-"cURL错误: %{1}","cURL错误: %{1}"
+"cURL错误: %{1}",卷曲错误：%{1}
 "重定向次数: %{1}","重定向次数: %{1}"
 "请求完成，重定向次数: %{1}","请求完成，重定向次数: %{1}"
 "SSE 模式：开始接收事件流...","SSE 模式：开始接收事件流..."
@@ -1567,7 +1590,7 @@ SQL调试输出,SQL调试输出
 最慢响应:,最慢响应:
 平均响应:,平均响应:
 中位响应:,中位响应:
-QPS:,QPS:
+QPS:,每秒查询量：
 "并发请求验收失败：%{1}/%{2} 个请求失败。","并发请求验收失败：%{1}/%{2} 个请求失败。"
 "Guzzle请求失败: %{1}","Guzzle请求失败: %{1}"
 "正在搜索: %{1} (上下文行数: %{2})","正在搜索: %{1} (上下文行数: %{2})"
@@ -1586,18 +1609,18 @@ HTTP响应时间:,HTTP响应时间:
 无法创建缓存锁文件：%{1},无法创建缓存锁文件：%{1}
 写入编译缓存失败：%{1},写入编译缓存失败：%{1}
 写入元数据缓存失败：%{1},写入元数据缓存失败：%{1}
-"Failed to write template manifest temp file: %{1}","Failed to write template manifest temp file: %{1}"
-"Failed to write template manifest file: %{1}","Failed to write template manifest file: %{1}"
-"Failed to hash template source file: %{1}","Failed to hash template source file: %{1}"
+"Failed to write template manifest temp file: %{1}",无法写入模板清单临时文件：%{1}
+"Failed to write template manifest file: %{1}",无法写入模板清单文件：%{1}
+"Failed to hash template source file: %{1}",无法对模板源文件进行哈希处理：%{1}
 "w:form 结束标签缺少对应开始标签","w:form 结束标签缺少对应开始标签"
 "w:form 运行时上下文无效","w:form 运行时上下文无效"
 "w:form action 不允许使用危险协议","w:form action 不允许使用危险协议"
-KEY,KEY
+KEY,钥匙
 搜索商品...,搜索商品...
 停用,停用
 "<js> 标签路径不能为空，示例：%{1}","<js> 标签路径不能为空，示例：%{1}"
 "<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确","<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确"
-"Tag close not found.","Tag close not found."
+"Tag close not found.",未找到标记关闭。
 "标签未闭合（缺少 "">""）。标签名: <%{1}>，起始行: %{2}，起始列: %{3}。上下文: ...%{4}...","标签未闭合（缺少 "">""）。标签名: <%{1}>，起始行: %{2}，起始列: %{3}。上下文: ...%{4}..."
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
 资源不存在：%{1}，模组：%{2},资源不存在：%{1}，模组：%{2}
@@ -1623,16 +1646,15 @@ KEY,KEY
 查询范围,查询范围
 当前网站,当前网站
 全部网站（需要单独权限）,全部网站（需要单独权限）
-"网站 ID","网站 ID"
-应用筛选,应用筛选
-Delivery,Delivery
 网站,网站
+应用筛选,应用筛选
+Delivery,送货
 资源,资源
-Observer,Observer
+Observer,观察者
 "状态 / 原因","状态 / 原因"
 操作,操作
 "当前筛选范围内没有 Delivery。","当前筛选范围内没有 Delivery。"
-"Delivery 详情","Delivery 详情"
+"Delivery 详情",发货详情
 "脱敏 Payload","脱敏 Payload"
 创建一次安全重放,创建一次安全重放
 "系统将创建全新的 event_id 与 Outbox，目标仅为原 Observer；原 dead 记录不会改变。","系统将创建全新的 event_id 与 Outbox，目标仅为原 Observer；原 dead 记录不会改变。"
@@ -1652,21 +1674,21 @@ Observer,Observer
 "当前网站 #%{1}","当前网站 #%{1}"
 全部已授权网站,全部已授权网站
 "已输入 %{1} / 500 字节","已输入 %{1} / 500 字节"
-"Delivery ID","Delivery ID"
-"Outbox ID","Outbox ID"
+"Delivery ID",交货编号
+"Outbox ID","发件箱 ID"
 事件名称,事件名称
 "事件 ID","事件 ID"
 尝试次数,尝试次数
-Transport,Transport
-"Queue ID","Queue ID"
+Transport,运输
+"Queue ID",队列号
 错误码,错误码
 错误摘要（已转义）,错误摘要（已转义）
 终态原因,终态原因
-"重放源 Delivery","重放源 Delivery"
+"重放源 Delivery",重放源发货
 重放发起人,重放发起人
 重放发起时间,重放发起时间
 结束时间,结束时间
-"Delivery 摘要","Delivery 摘要"
+"Delivery 摘要",交付摘要
 请输入可审计的重放原因（必填）,请输入可审计的重放原因（必填）
 "已输入 0 / 500 字节","已输入 0 / 500 字节"
 已安装,已安装
@@ -1810,8 +1832,8 @@ Transport,Transport
 "未找到 provider 或模块：%{1}。相似项：%{2}","未找到 provider 或模块：%{1}。相似项：%{2}"
 "未找到 provider 或模块：%{1}","未找到 provider 或模块：%{1}"
 "该 provider 没有暴露给前端的 operation：%{1}","该 provider 没有暴露给前端的 operation：%{1}"
-"introspect what=operations 时，参数 provider 必填","introspect what=operations 时，参数 provider 必填"
-"introspect what=operation 时，参数 provider 和 operation 必填","introspect what=operation 时，参数 provider 和 operation 必填"
+"introspect what=operations 时，参数 provider 必填",反思什么=操作时，参数提供者必填
+"introspect what=operation 时，参数 provider 和 operation 必填",反思什么=操作时，参数提供者和操作必填
 "provider %{1} 中未找到 operation：%{2}","provider %{1} 中未找到 operation：%{2}"
 "CRUD 通用查询","CRUD 通用查询"
 "基于模型的通用增删改查操作，支持任意 AbstractModel 子类","基于模型的通用增删改查操作，支持任意 AbstractModel 子类"
@@ -1843,8 +1865,8 @@ Transport,Transport
 "商城 Scope 已过期，请刷新页面后重试","商城 Scope 已过期，请刷新页面后重试"
 后台权限服务暂不可用。,后台权限服务暂不可用。
 后台页面凭证服务暂不可用。,后台页面凭证服务暂不可用。
-"Operation authorization requirements are not satisfied.","Operation authorization requirements are not satisfied."
-"QueryProvider load failed and was skipped: %{1} - %{2}","QueryProvider load failed and was skipped: %{1} - %{2}"
+"Operation authorization requirements are not satisfied.",不满足操作授权要求。
+"QueryProvider load failed and was skipped: %{1} - %{2}","QueryProvider 加载失败并被跳过：%{1} - %{2}"
 启动RPC服务。,启动RPC服务。
 请求错误,请求错误
 未授权,未授权
@@ -1908,11 +1930,11 @@ Transport,Transport
 "事件 %{1} 跳过无效观察者配置。","事件 %{1} 跳过无效观察者配置。"
 "事件 %{1} 跳过缺少 instance 的观察者配置。","事件 %{1} 跳过缺少 instance 的观察者配置。"
 "事件 %{1} 跳过不存在的观察者类：%{2}","事件 %{1} 跳过不存在的观察者类：%{2}"
-"Event Name: %{1}","Event Name: %{1}"
-"Class Name","Class Name"
-"Start Time","Start Time"
-"End Time","End Time"
-Duration,Duration
+"Event Name: %{1}",活动名称：%{1}
+"Class Name",班级名称
+"Start Time",开始时间
+"End Time",结束时间
+Duration,期间
 事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）,事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）
 "收集模块观察者失败: %{1}","收集模块观察者失败: %{1}"
 跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）,跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）
@@ -1928,7 +1950,7 @@ Duration,Duration
 "异步事件 %{1} 的 Mapper 无法实例化：%{2}","异步事件 %{1} 的 Mapper 无法实例化：%{2}"
 "异步事件 %{1} 的 Mapper 契约或 schema 版本不匹配","异步事件 %{1} 的 Mapper 契约或 schema 版本不匹配"
 "事件 %{1} 的 Observer delivery 只允许 sync|async","事件 %{1} 的 Observer delivery 只允许 sync|async"
-"事件 %{1} 的 sync Observer failure 只允许 critical|isolated","事件 %{1} 的 sync Observer failure 只允许 critical|isolated"
+"事件 %{1} 的 sync Observer failure 只允许 critical|isolated","事件 %{1} 的同步观察者失败只允许 Critical|isolated"
 "事件 %{1} 的 sync Observer 不允许 retry/coalesce/timeout","事件 %{1} 的 sync Observer 不允许 retry/coalesce/timeout"
 "事件 %{1} 的 async Observer 不允许 failure；失败由 retry 策略处理","事件 %{1} 的 async Observer 不允许 failure；失败由 retry 策略处理"
 "事件 %{1} 的 async Observer retry/coalesce/timeout 策略无效","事件 %{1} 的 async Observer retry/coalesce/timeout 策略无效"
@@ -2000,7 +2022,7 @@ Duration,Duration
 "Relay limit 必须是 1 到 1000 的整数","Relay limit 必须是 1 到 1000 的整数"
 "已 claim 的 Outbox 无法重读","已 claim 的 Outbox 无法重读"
 "Outbox 载荷指纹校验失败","Outbox 载荷指纹校验失败"
-"Outbox observer target 必须是 object","Outbox observer target 必须是 object"
+"Outbox observer target 必须是 object",发件箱观察者目标必须是对象
 "Outbox 展开终态 CAS 冲突","Outbox 展开终态 CAS 冲突"
 "Outbox observer target 缺少字段：%{1}","Outbox observer target 缺少字段：%{1}"
 "Outbox observer target 不得包含可实例化类名","Outbox observer target 不得包含可实例化类名"
@@ -2103,7 +2125,7 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "已删除 refs/original %{1} 个、refs/replace %{2} 个备份引用。","已删除 refs/original %{1} 个、refs/replace %{2} 个备份引用。"
 没有需要删除的备份引用。,没有需要删除的备份引用。
 "reflog 已全部过期。","reflog 已全部过期。"
-"reflog expire 失败：%{1}","reflog expire 失败：%{1}"
+"reflog expire 失败：%{1}",reflog过期失败：%{1}
 "开始 git gc --prune=now --aggressive ...","开始 git gc --prune=now --aggressive ..."
 "git gc 退出码：%{1}","git gc 退出码：%{1}"
 "pack 大小：%{1} → %{2} KiB（释放 %{3} KiB）","pack 大小：%{1} → %{2} KiB（释放 %{3} KiB）"
@@ -2194,11 +2216,11 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 不存在的编译资源类型：%{1}，支持的资源类型：%{2},不存在的编译资源类型：%{1}，支持的资源类型：%{2}
 开始编译静态资源...,开始编译静态资源...
 编译中...,编译中...
+静态资源编译失败：%{1},静态资源编译失败：%{1}
 静态资源编译完成！,静态资源编译完成！
 "%{1} 资源编译器必须实现 CompilerInterface","%{1} 资源编译器必须实现 CompilerInterface"
 "%{1} 编译完成","%{1} 编译完成"
 "未找到资源类型 %{1} 的编译器","未找到资源类型 %{1} 的编译器"
-"编译 %{1} 时出错：%{2}","编译 %{1} 时出错：%{2}"
 "编译 weline.modules.js 模块配置文件","编译 weline.modules.js 模块配置文件"
 "编译 Less 样式文件","编译 Less 样式文件"
 "编译 %{1} 资源","编译 %{1} 资源"
@@ -2209,10 +2231,10 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "只编译 less","只编译 less"
 使用别名,使用别名
 "已注册的 QueryProvider（%{1} 个）","已注册的 QueryProvider（%{1} 个）"
-Provider：%{1}（%{2}）,Provider：%{1}（%{2}）
+Provider：%{1}（%{2}）,提供者：%{1}（%{2}）
 名称：%{1},名称：%{1}
 说明：%{1},说明：%{1}
-Operation：%{1}.%{2},Operation：%{1}.%{2}
+Operation：%{1}.%{2},操作：%{1}.%{2}
 "迁移底座：help/preflight/clone 与 journal 子命令（共享库零写硬拒绝；journal 持久化）","迁移底座：help/preflight/clone 与 journal 子命令（共享库零写硬拒绝；journal 持久化）"
 "Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}","Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}"
 开始预编译反射元数据与编译型工厂...,开始预编译反射元数据与编译型工厂...
@@ -2232,9 +2254,9 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 基本用法,基本用法
 详细模式,详细模式
 认证设备登记失败。,认证设备登记失败。
-认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。,认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。
 认证登录状态保存失败。,认证登录状态保存失败。
 认证设备服务不可用。,认证设备服务不可用。
+"认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。","认证设备登记失败：设备表未就绪，请先执行 setup:upgrade。"
 "当前 Session 尚未建立。","当前 Session 尚未建立。"
 "FPC 命中响应装饰器返回了无效响应","FPC 命中响应装饰器返回了无效响应"
 "Storefront 缓存上下文尚未完成版本冻结","Storefront 缓存上下文尚未完成版本冻结"
@@ -2254,22 +2276,131 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+Close,关闭
+"SQLite 版本校验朚过（连接已建立，升级可继续）：%{1}","SQLite 版本校验朚过（连接已建立，升级可继续）：%{1}"
+"SQL 准失败?{1}。SQL: %{2}","SQL 准失败?{1}。SQL: %{2}"
+文件不存在！,文件不存在！
+"网站 ID","网站 ID"
+"MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}","MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}"
+"获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 BackendToast。","获取 success/error/info/warning 结果桥接页 URL。观察者通过 data[""bridge_url""] 返回地址，供 iframe 重定向后显示 BackendToast。"
+"mdi mdi-email-alert-outline","MDI MDI-电子邮件警报大纲"
+"mdi mdi-flask-outline","MDI MDI 烧瓶大纲"
+"mdi mdi-file-tree","mdi mdi-file-tree"
+"mdi mdi-monitor-screenshot","mdi mdi-监视器屏幕截图"
+"mdi mdi-history","mdi mdi-history"
+"mdi mdi-play","mdi mdi-play"
+"mdi mdi-code-tags","mdi mdi 代码标签"
+"mdi mdi-play-circle-outline","MDI MDI 播放圆轮廓"
+"bi bi-diagram-3",双双图-3
+"编译 %{1} 时出错：%{2}","编译 %{1} 时出错：%{2}"
 "已通过 sudo 修改 php.ini","已通过 sudo 修改 php.ini"
 "当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php","当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php"
 "当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}","当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}"
-"SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}","SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}"
+"SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}","SQLite 驱动程序不可用：%{1}。可用驱动程序：%{2}.%{3}"
 "驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。","驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。"
 "Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini.","Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini."
 "PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。","PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。"
 "Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}","Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}"
-璇峰厛鐧诲綍,璇峰厛鐧诲綍
 "使用指定的 Session ID: %{1}...","使用指定的 Session ID: %{1}..."
 "找到有效的后台登录 Session: %{1}... (用户: %{2})","找到有效的后台登录 Session: %{1}... (用户: %{2})"
 "优化内容：类映射缓存、PSR-4 映射、反射编译","优化内容：类映射缓存、PSR-4 映射、反射编译"
 反射/工厂编译出现警告（exit=%{1}），不影响系统功能。,反射/工厂编译出现警告（exit=%{1}），不影响系统功能。
 反射/工厂编译跳过：%{1},反射/工厂编译跳过：%{1}
 后台执行优化缓存生成（类映射、PSR-4、反射编译）,后台执行优化缓存生成（类映射、PSR-4、反射编译）
+系统升级完成后触发，允许其他模块执行升级后的操作。,系统升级完成后触发，允许其他模块执行升级后的操作。
+错误：%{1},错误：%{1}
+"模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本","模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本"
+"SchemaProvider %{1} getTableSchemas 失败：%{2}","SchemaProvider %{1} getTableSchemas 失败：%{2}"
+模块升级失败：%{1},模块升级失败：%{1}
+模块安装失败：%{1},模块安装失败：%{1}
+指定了不存在的参数：%{1}。可用参数：%{2},指定了不存在的参数：%{1}。可用参数：%{2}
+部分注册表增量更新失败，但将继续执行。,部分注册表增量更新失败，但将继续执行。
+部分注册表更新失败，但将继续执行。,部分注册表更新失败，但将继续执行。
+"检测到模块代码版本变化，先刷新 Schema 输入版本：%{1}","检测到模块代码版本变化，先刷新 Schema 输入版本：%{1}"
+"指定模块升级模式：仅升级 %{1}","指定模块升级模式：仅升级 %{1}"
+仅运行指定阶段：%{1},仅运行指定阶段：%{1}
+"进入仅更新路由模式，使用 RouteUpdateService 处理路由更新...","进入仅更新路由模式，使用 RouteUpdateService 处理路由更新..."
+"✓ 路由更新完成（仅路由模式）","✓ 路由更新完成（仅路由模式）"
+收集模块升级任务：%{1},收集模块升级任务：%{1}
+"- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）...","- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）..."
+"- 提交 ModuleManager 引导阶段（%{1}）...","- 提交 ModuleManager 引导阶段（%{1}）..."
+"- 仅更新路由模式，跳过数据库更新阶段提交","- 仅更新路由模式，跳过数据库更新阶段提交"
+"只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}","只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}"
+显式在后台生成优化缓存；默认同步完成后才结束升级,显式在后台生成优化缓存；默认同步完成后才结束升级
+保持同步生成优化缓存（兼容旧参数，当前为默认行为）,保持同步生成优化缓存（兼容旧参数，当前为默认行为）
+显式同步生成优化缓存（当前为默认行为）,显式同步生成优化缓存（当前为默认行为）
+显式后台生成优化缓存,显式后台生成优化缓存
+同步执行优化（等待完成）,同步执行优化（等待完成）
+检测到非交互式环境，自动使用默认开发环境快速安装模式...,检测到非交互式环境，自动使用默认开发环境快速安装模式...
+"此模式将使用默认的 SQLite 数据库，仅适合开发测试使用。","此模式将使用默认的 SQLite 数据库，仅适合开发测试使用。"
+"生产环境强烈建议使用命令行安装并配置 MySQL 数据库！","生产环境强烈建议使用命令行安装并配置 MySQL 数据库！"
+"默认使用 sqlite 作为开发数据库，若要修改数据库请编辑 %{1} 下的 env.php 中 db 键。","默认使用 sqlite 作为开发数据库，若要修改数据库请编辑 %{1} 下的 env.php 中 db 键。"
+数据库配置为空！已使用默认Sqlite数据库！,数据库配置为空！已使用默认Sqlite数据库！
+"沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql","沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql"
+沙盒数据库,沙盒数据库
+无法打开文件：%{1},无法打开文件：%{1}
 "PDO execute 失败：%{1}。SQL预览：%{2}","PDO execute 失败：%{1}。SQL预览：%{2}"
+"Pest 测试框架初始化失败: %{1}","Pest 测试框架初始化失败: %{1}"
+"请先定义项目根目录常量 BP","请先定义项目根目录常量 BP"
+"Pest 测试框架未安装，请运行: composer require --dev pestphp/pest","Pest 测试框架未安装，请运行: composer require --dev pestphp/pest"
+PHPUnit报告服务器未运行,PHPUnit报告服务器未运行
+"PHPUnit报告服务器未运行 (PID: %{1})","PHPUnit报告服务器未运行 (PID: %{1})"
+"PHPUnit报告服务器已停止 (PID: %{1})","PHPUnit报告服务器已停止 (PID: %{1})"
+PHPUnit报告服务器状态检查,PHPUnit报告服务器状态检查
+================================,================================
+"PID文件不存在: %{1}","PID文件不存在: %{1}"
+"状态: 未运行","状态: 未运行"
+"PID文件: %{1}","PID文件: %{1}"
+"进程ID: %{1}","进程ID: %{1}"
+"状态: 运行中","状态: 运行中"
+"运行时间: %{1}秒","运行时间: %{1}秒"
+"启动时间: %{1}","启动时间: %{1}"
+"访问地址: http://%{1}:%{2}","访问地址: http://%{1}:%{2}"
+"端口%{1}: 已占用","端口%{1}: 已占用"
+"端口%{1}: 未占用","端口%{1}: 未占用"
+"状态: 未运行 (进程不存在)","状态: 未运行 (进程不存在)"
+"建议: 清理PID文件并重新启动","建议: 清理PID文件并重新启动"
+"注意: 端口%{1}仍被占用，可能被其他进程使用","注意: 端口%{1}仍被占用，可能被其他进程使用"
+env.php中的服务器信息:,env.php中的服务器信息:
+"主机: %{1}","主机: %{1}"
+"端口: %{1}","端口: %{1}"
+"PID: %{1}","PID: %{1}"
+"状态: %{1}","状态: %{1}"
+"未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
+"模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"
+"未找到可运行的 E2E 用例，退出。","未找到可运行的 E2E 用例，退出。"
+工作目录：%{1},工作目录：%{1}
+执行命令：%{1},执行命令：%{1}
+"E2E 测试执行成功。","E2E 测试执行成功。"
+"E2E 测试执行失败，退出码：%{1}","E2E 测试执行失败，退出码：%{1}"
+"运行 Playwright E2E（自动在 tests/e2e 目录执行）","运行 Playwright E2E（自动在 tests/e2e 目录执行）"
+"直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。","直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。"
+"可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js","可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js"
+"指定 Playwright project，如 chromium/firefox/webkit","指定 Playwright project，如 chromium/firefox/webkit"
+"只运行指定模块（基于 collected-tests.json 精准过滤）","只运行指定模块（基于 collected-tests.json 精准过滤）"
+"按测试标题关键词筛选（映射为 --grep）","按测试标题关键词筛选（映射为 --grep）"
+"按 `[case:ID]` 标签筛选，推荐新用例使用该风格","按 `[case:ID]` 标签筛选，推荐新用例使用该风格"
+列出可运行模块及文件数量,列出可运行模块及文件数量
+强制刷新测试收集映射,强制刷新测试收集映射
+有界面模式（默认会自动追加）,有界面模式（默认会自动追加）
+"无界面模式（设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（设置 PLAYWRIGHT_HEADLESS=1）"
+"Playwright UI 模式",剧作家UI模式
+按测试名过滤,按测试名过滤
+"并发 worker 数","系数 工人数"
+"运行全部 E2E","运行全部 E2E"
+运行单个后端用例,运行单个后端用例
+按模块运行,按模块运行
+按用例标题运行,按用例标题运行
+"按用例 ID 运行","按用例 ID 运行"
+列模块,列模块
+"UI 调试","UI 调试"
+"检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
+"未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。","未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。"
+"无法创建 E2E node_modules 目录：%{1}","无法创建 E2E node_modules 目录：%{1}"
+"无法创建 @playwright/test shim 目录：%{1}","无法创建 @playwright/test shim 目录：%{1}"
+"无法创建 playwright shim 目录：%{1}","无法创建 playwright shim 目录：%{1}"
+测试清单写入失败，模块过滤可能不可用。,测试清单写入失败，模块过滤可能不可用。
+"可用 E2E 模块列表：","可用 E2E 模块列表："
 "critical/async 观察者必须继承于：","critical/async 观察者必须继承于："
 事件观察者配置必须是数组：%{1},事件观察者配置必须是数组：%{1}
 "事件 %{1} 的 critical/async 观察者缺少 instance","事件 %{1} 的 critical/async 观察者缺少 instance"
@@ -2277,19 +2408,7 @@ HTTP方法,HTTP方法
 "活动模块 %{1} 的 critical/async Observer 类不存在：%{2}","活动模块 %{1} 的 critical/async Observer 类不存在：%{2}"
 "活动模块 %{1} 的 critical/async Observer 必须实现 %{2}：%{3}","活动模块 %{1} 的 critical/async Observer 必须实现 %{2}：%{3}"
 "事件 %{1} 的 event-level async 规约在模块间不一致","事件 %{1} 的 event-level async 规约在模块间不一致"
-禁用后台优化任务，改为同步执行（等待缓存生成完成）,禁用后台优化任务，改为同步执行（等待缓存生成完成）
-"同上，--skip-background-optimize 的简写","同上，--skip-background-optimize 的简写"
-同步执行优化（等待完成）,同步执行优化（等待完成）
-"SchemaProvider %{1} getTableSchemas 失败：%{2}","SchemaProvider %{1} getTableSchemas 失败：%{2}"
-错误：%{1},错误：%{1}
-沙盒数据库,沙盒数据库
-"默认 true：headed UI","默认 true：headed UI"
-"Pest 测试框架初始化失败: %{1}","Pest 测试框架初始化失败: %{1}"
-"请先定义项目根目录常量 BP","请先定义项目根目录常量 BP"
-"Pest 测试框架未安装，请运行: composer require --dev pestphp/pest","Pest 测试框架未安装，请运行: composer require --dev pestphp/pest"
-PHPUnit报告服务器未运行,PHPUnit报告服务器未运行
-"PHPUnit报告服务器未运行 (PID: %{1})","PHPUnit报告服务器未运行 (PID: %{1})"
-"PHPUnit报告服务器已停止 (PID: %{1})","PHPUnit报告服务器已停止 (PID: %{1})"
+"""SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}""","“SQLite 驱动程序不可用：%{1}。可用驱动程序：%{2}.%{3}”"
 "未检测到 Xdebug/PCOV，覆盖率模式自动切换到 phpdbg 驱动","未检测到 Xdebug/PCOV，覆盖率模式自动切换到 phpdbg 驱动"
 "未检测到可用覆盖率驱动（Xdebug/PCOV/phpdbg），PHPUnit 可能无法生成覆盖率报告","未检测到可用覆盖率驱动（Xdebug/PCOV/phpdbg），PHPUnit 可能无法生成覆盖率报告"
 "使用 Pest 测试框架运行测试...","使用 Pest 测试框架运行测试..."
@@ -2432,62 +2551,9 @@ PHPUnit报告服务器已在后台启动,PHPUnit报告服务器已在后台启�
 个方法,个方法
 个失败,个失败
 "📁 测试文件结构:","📁 测试文件结构:"
-PHPUnit报告服务器状态检查,PHPUnit报告服务器状态检查
-================================,================================
-"PID文件不存在: %{1}","PID文件不存在: %{1}"
-"状态: 未运行","状态: 未运行"
-"PID文件: %{1}","PID文件: %{1}"
-"进程ID: %{1}","进程ID: %{1}"
-"状态: 运行中","状态: 运行中"
-"运行时间: %{1}秒","运行时间: %{1}秒"
-"启动时间: %{1}","启动时间: %{1}"
-"访问地址: http://%{1}:%{2}","访问地址: http://%{1}:%{2}"
-"端口%{1}: 已占用","端口%{1}: 已占用"
-"端口%{1}: 未占用","端口%{1}: 未占用"
-"状态: 未运行 (进程不存在)","状态: 未运行 (进程不存在)"
-"建议: 清理PID文件并重新启动","建议: 清理PID文件并重新启动"
-"注意: 端口%{1}仍被占用，可能被其他进程使用","注意: 端口%{1}仍被占用，可能被其他进程使用"
-env.php中的服务器信息:,env.php中的服务器信息:
-"主机: %{1}","主机: %{1}"
-"端口: %{1}","端口: %{1}"
-"PID: %{1}","PID: %{1}"
-"状态: %{1}","状态: %{1}"
-"未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
-"模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"
-"未找到可运行的 E2E 用例，退出。","未找到可运行的 E2E 用例，退出。"
-工作目录：%{1},工作目录：%{1}
-执行命令：%{1},执行命令：%{1}
-"E2E 测试执行成功。","E2E 测试执行成功。"
-"E2E 测试执行失败，退出码：%{1}","E2E 测试执行失败，退出码：%{1}"
-"运行 Playwright E2E（自动在 tests/e2e 目录执行）","运行 Playwright E2E（自动在 tests/e2e 目录执行）"
-"直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。","直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。"
-"可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js","可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js"
-"指定 Playwright project，如 chromium/firefox/webkit","指定 Playwright project，如 chromium/firefox/webkit"
-"只运行指定模块（基于 collected-tests.json 精准过滤）","只运行指定模块（基于 collected-tests.json 精准过滤）"
-"按测试标题关键词筛选（映射为 --grep）","按测试标题关键词筛选（映射为 --grep）"
-"按 `[case:ID]` 标签筛选，推荐新用例使用该风格","按 `[case:ID]` 标签筛选，推荐新用例使用该风格"
-列出可运行模块及文件数量,列出可运行模块及文件数量
-强制刷新测试收集映射,强制刷新测试收集映射
-有界面模式（默认会自动追加）,有界面模式（默认会自动追加）
-"无界面模式（设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（设置 PLAYWRIGHT_HEADLESS=1）"
-"Playwright UI 模式","Playwright UI 模式"
-按测试名过滤,按测试名过滤
-"并发 worker 数","并发 worker 数"
-"运行全部 E2E","运行全部 E2E"
-运行单个后端用例,运行单个后端用例
-按模块运行,按模块运行
-按用例标题运行,按用例标题运行
-"按用例 ID 运行","按用例 ID 运行"
-列模块,列模块
-"UI 调试","UI 调试"
-"检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
-"未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。","未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。"
-"无法创建 E2E node_modules 目录：%{1}","无法创建 E2E node_modules 目录：%{1}"
-"无法创建 @playwright/test shim 目录：%{1}","无法创建 @playwright/test shim 目录：%{1}"
-"无法创建 playwright shim 目录：%{1}","无法创建 playwright shim 目录：%{1}"
-测试清单写入失败，模块过滤可能不可用。,测试清单写入失败，模块过滤可能不可用。
-"可用 E2E 模块列表：","可用 E2E 模块列表："
-"模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本","模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本"
+禁用后台优化任务，改为同步执行（等待缓存生成完成）,禁用后台优化任务，改为同步执行（等待缓存生成完成）
+"同上，--skip-background-optimize 的简写","同上，--skip-background-optimize 的简写"
+"默认 true：headed UI","默认 true：headed UI"
 "模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint。\n差异表：%{3}\n%{4}\n排查：php bin/w setup:schema:check -m %{1}","模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint。\n差异表：%{3}\n%{4}\n排查：php bin/w setup:schema:check -m %{1}"
 "Weline_DeveloperWorkspace: before_schema_diff_commit — DocumentUniqueKeyHealer","Weline_DeveloperWorkspace: before_schema_diff_commit — DocumentUniqueKeyHealer"
 "Weline_DeveloperWorkspace Upgrade: idempotent DocumentUniqueKeyHealer","Weline_DeveloperWorkspace Upgrade: idempotent DocumentUniqueKeyHealer"
@@ -2495,28 +2561,14 @@ env.php中的服务器信息:,env.php中的服务器信息:
 "DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3}","DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3}"
 "DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3} backup=%{4}","DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3} backup=%{4}"
 "DocumentUniqueKeyHealer: remapped document.category_id for %{1} catalog loser(s)","DocumentUniqueKeyHealer: remapped document.category_id for %{1} catalog loser(s)"
-"DocumentUniqueKeyHealer: remapped translation/job refs for %{1} document loser(s)","DocumentUniqueKeyHealer: remapped translation/job refs for %{1} document loser(s)"
+"DocumentUniqueKeyHealer: remapped translation/job refs for %{1} document loser(s)","DocumentUniqueKeyHealer：重新映射 %{1} 文档丢失者的翻译/作业参考"
 "DocumentUniqueKeyHealer: backup failed for %{1}: %{2}","DocumentUniqueKeyHealer: backup failed for %{1}: %{2}"
 "DocumentUniqueKeyHealer: backup table %{1} was not created","DocumentUniqueKeyHealer: backup table %{1} was not created"
-"进入仅更新路由模式，使用 RouteUpdateService 处理路由更新...","进入仅更新路由模式，使用 RouteUpdateService 处理路由更新..."
-"✓ 路由更新完成（仅路由模式）","✓ 路由更新完成（仅路由模式）"
-"- 仅更新路由模式，跳过数据库更新阶段提交","- 仅更新路由模式，跳过数据库更新阶段提交"
-模块升级失败：%{1},模块升级失败：%{1}
-模块安装失败：%{1},模块安装失败：%{1}
-部分注册表增量更新失败，但将继续执行。,部分注册表增量更新失败，但将继续执行。
-部分注册表更新失败，但将继续执行。,部分注册表更新失败，但将继续执行。
-"指定模块升级模式：仅升级 %{1}","指定模块升级模式：仅升级 %{1}"
-仅运行指定阶段：%{1},仅运行指定阶段：%{1}
-收集模块升级任务：%{1},收集模块升级任务：%{1}
-"- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）...","- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）..."
-"- 提交 ModuleManager 引导阶段（%{1}）...","- 提交 ModuleManager 引导阶段（%{1}）..."
-"只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}","只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}"
-无法打开文件：%{1},无法打开文件：%{1}
 "UI 测试","UI 测试"
 刷新目录,刷新目录
 模块总览,模块总览
 "收集各模块用例，默认开启 UI 测试，可按模块异步跑通 E2E。","收集各模块用例，默认开启 UI 测试，可按模块异步跑通 E2E。"
-"UI 测试默认开启（Playwright headed）。若服务器无显示器，请关闭后再运行。","UI 测试默认关闭（Playwright headless）。有显示器时可手动开启「UI 测试」。"
+"UI 测试默认开启（Playwright headed）。若服务器无显示器，请关闭后再运行。","UI 测试默认开启（Playwright headed）。若服务器无显示器，请关闭后再运行。"
 运行选中,运行选中
 运行全部,运行全部
 用例文件,用例文件
@@ -2551,3 +2603,5 @@ env.php中的服务器信息:,env.php中的服务器信息:
 "「UI 测试」开启后，总览直跑 / 详情运行都会以 headed 启动；偏好保存在系统配置。服务器无图形界面时请关闭。","「UI 测试」开启后，总览直跑 / 详情运行都会以 headed 启动；偏好保存在系统配置。服务器无图形界面时请关闭。"
 "已保存：UI 测试开启","已保存：UI 测试开启"
 "已保存：UI 测试关闭","已保存：UI 测试关闭"
+查看全部网站异步事件,查看全部网站异步事件
+重放异步事件死信,重放异步事件死信

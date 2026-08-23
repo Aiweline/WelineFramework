@@ -3,45 +3,26 @@
 
 ?>
 <!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'><?= __('URL管理') ?></h4>
-
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><span><?= __('系统配置') ?></span>
-                                    </li>
-                                    <li class="breadcrumb-item"><span><?= __('URL管理器') ?></span></li>
-                                    <li class="breadcrumb-item active"><?= __('URL管理') ?></li>
-                                </ol>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-                <!-- end page title -->
-                <div class='row'>
+                <div class="w-grid">
                     <!--消息-->
                     <template>Weline_Component::message.phtml</template>
                 </div>
                 <!--end row-->
-                <div class="row">
-                    <div class='col-lg-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <h4 class='card-title'>
+                <div class="w-grid">
+                    <div style="--w-span-lg:12;">
+                        <div class="w-card">
+                            <div class="w-card__body">
+                                <h4 class="w-card__title">
                                     <lang>路由表</lang>
                                 </h4>
-                                <p class='card-title-desc'>
+                                <p class="w-text" data-tone="muted">
                                     静态路由管理：可定制属于自己的静态url来提升seo。
-                                    <a class="btn btn-primary pull-right"
-                                       href="@admin-url('url-manager/backend/rewriter/form')">
+                                    <a class="w-button" href="@admin-url('url-manager/backend/rewriter/form')" data-tone="primary">
                                         <lang>添加</lang>
                                     </a>
                                 </p>
-                                <div class='table-responsive'>
-                                    <table class='table mb-0'>
+                                <div class="w-table-wrap">
+                                    <table class="w-table" style="--w-mb:0;">
                                         <thead>
                                         <tr>
                                             <th>#ID</th>
@@ -82,7 +63,7 @@
                                             <tr>
                                                 <td scope='row'>{{v.rewrite_id}}</td>
                                                 <td scope='row'>
-                                                    <span class="badge bg-info">{{v.website_id}}</span>
+                                                    <span class="w-badge" data-w-background="info">{{v.website_id}}</span>
                                                 </td>
                                                 <td scope='row'>
                                                     <if condition='v.url_id'>
@@ -128,8 +109,3 @@
                         </div>
                     </div>
                 </div>
-<link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
-<link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>

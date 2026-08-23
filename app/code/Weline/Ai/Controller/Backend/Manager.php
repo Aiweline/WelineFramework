@@ -13,13 +13,13 @@ use Weline\Framework\Acl\Acl;
  *
  * @package Weline_Ai
  */
-#[Acl('Weline_Ai::ai_manager', 'AI管理', 'mdi-robot-outline', 'AI管理中心', 'Weline_Backend::ai_group')]
+#[Acl('Weline_Ai::ai_manager', 'AI管理', 'robot', 'AI管理中心', 'Weline_Backend::ai_group')]
 class Manager extends BackendController
 {
     /**
      * 聚合入口：按 tab 重定向到模型/适配器/供应商页（无 iframe，统一 Tab 布局）
      */
-    #[Acl('Weline_Ai::ai_manager_index', '查看AI管理', 'mdi-view-dashboard', '查看AI管理聚合页')]
+    #[Acl('Weline_Ai::ai_manager_index', '查看AI管理', 'grid', '查看AI管理聚合页')]
     public function index()
     {
         $tab = $this->request->getGet('tab', 'model');
@@ -29,6 +29,7 @@ class Manager extends BackendController
             'agent' => 'ai/backend/agent',
             'skill' => 'ai/backend/skill',
             'style' => 'ai/backend/style',
+            'custom_vendor' => 'ai/backend/customvendor',
             'account' => 'ai/backend/provider',
         ];
         $path = $map[$tab] ?? $map['model'];

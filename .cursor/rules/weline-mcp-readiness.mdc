@@ -1,0 +1,6 @@
+---
+description: Weline 项目智能 MCP 与开发前 readiness 门禁
+alwaysApply: true
+---
+
+开发前必须启动 `weline_project_intelligence` MCP，并按根 `AGENTS.md` 调用 `prepare_project`。只有 `project-readiness.v1.status=ready` 才能继续；所有知识与编辑调用必须携带当前会话的 `readiness_id`。规范由 MCP 按任务查询，不在 Cursor 规则中复制。

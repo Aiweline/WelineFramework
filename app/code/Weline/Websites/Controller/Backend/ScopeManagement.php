@@ -7,6 +7,7 @@ namespace Weline\Websites\Controller\Backend;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Websites\Service\StoreChannelAdminService;
+use Weline\Websites\Service\WebsiteSelectOptions;
 
 final class ScopeManagement extends BackendController
 {
@@ -14,19 +15,19 @@ final class ScopeManagement extends BackendController
     {
     }
 
-    #[Acl('Weline_Websites::store_management', '商店管理', 'mdi-storefront-outline', '管理 Store', 'Weline_Websites::website_service')]
+    #[Acl('Weline_Websites::store_management', '商店管理', 'store', '管理 Store', 'Weline_Websites::website_service')]
     public function stores(): string
     {
         return $this->renderSection('stores');
     }
 
-    #[Acl('Weline_Websites::sales_channel_management', '渠道管理', 'mdi-source-branch', '管理 Sales Channel', 'Weline_Websites::website_service')]
+    #[Acl('Weline_Websites::sales_channel_management', '渠道管理', 'branch', '管理 Sales Channel', 'Weline_Websites::website_service')]
     public function channels(): string
     {
         return $this->renderSection('channels');
     }
 
-    #[Acl('Weline_Websites::store_management', '创建商店', 'mdi-store-plus-outline', '创建 Store')]
+    #[Acl('Weline_Websites::store_management', '创建商店', 'plus', '创建 Store')]
     public function postCreateStore(): string
     {
         $websiteId = 0;
@@ -49,7 +50,7 @@ final class ScopeManagement extends BackendController
         );
     }
 
-    #[Acl('Weline_Websites::sales_channel_management', '创建渠道', 'mdi-source-branch-plus', '创建 Sales Channel')]
+    #[Acl('Weline_Websites::sales_channel_management', '创建渠道', 'plus', '创建 Sales Channel')]
     public function postCreateChannel(): string
     {
         $websiteId = 0;
@@ -89,6 +90,10 @@ final class ScopeManagement extends BackendController
         $this->assign('rows', $rows);
         $this->assign('stores', $stores);
         $this->assign('error', $error);
+        $pack = WebsiteSelectOptions::forSelect((string)$websiteId);
+        $this->assign('websiteSelectValue', (string)$websiteId);
+        $this->assign('websiteSelectDisplay', $pack['display']);
+        $this->assign('websiteSelectOptionsJson', $pack['options_json']);
         return (string)$this->fetch('index');
     }
 

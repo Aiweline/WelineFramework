@@ -52,25 +52,25 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
       data-url-all-providers="<?= htmlspecialchars((string)__('全部 Provider'), ENT_QUOTES, 'UTF-8') ?>"
       data-url-all-locales="<?= htmlspecialchars((string)__('全部语言'), ENT_QUOTES, 'UTF-8') ?>"
       data-url-reconfirm-delete="<?= htmlspecialchars((string)__('再次点击确认删除选中的 URL'), ENT_QUOTES, 'UTF-8') ?>">
-    <div class="row">
-        <div class="col-12"><template>Weline_Component::message.phtml</template></div>
+    <div class="w-grid">
+        <div style="--w-span:12;"><template>Weline_Component::message.phtml</template></div>
     </div>
 
     <header class="seo-admin__header">
         <div>
             <p class="seo-admin__eyebrow"><lang>SEO 运维</lang></p>
-            <h1 class="seo-admin__title"><i class="mdi mdi-sitemap" aria-hidden="true"></i> <lang>Sitemap管理</lang></h1>
+            <h1 class="seo-admin__title"><w:icon name="tree" size="sm"></w:icon> <lang>Sitemap管理</lang></h1>
             <p class="seo-admin__description"><lang>URL 同步只更新数据库；生成负责原子发布 canonical 文件；提交只发送给已绑定的平台。</lang></p>
         </div>
         <div class="seo-admin__actions" aria-label="<?= htmlspecialchars((string)__('Sitemap 批量操作'), ENT_QUOTES, 'UTF-8') ?>">
-            <button type="button" class="btn btn-outline-primary" data-seo-operation="syncSitemapUrls">
-                <i class="mdi mdi-database-sync-outline" aria-hidden="true"></i> <lang>同步 URL</lang>
+            <button type="button" class="w-button" data-seo-operation="syncSitemapUrls" data-tone="primary" data-variant="outline">
+                <w:icon name="refresh" size="sm"></w:icon> <lang>同步 URL</lang>
             </button>
-            <button type="button" class="btn btn-primary" data-seo-operation="generateSitemaps">
-                <i class="mdi mdi-file-cog-outline" aria-hidden="true"></i> <lang>生成 canonical</lang>
+            <button type="button" class="w-button" data-seo-operation="generateSitemaps" data-tone="primary">
+                <w:icon name="settings" size="sm"></w:icon> <lang>生成 canonical</lang>
             </button>
-            <button type="button" class="btn btn-outline-success" data-seo-operation="submitSitemaps">
-                <i class="mdi mdi-send-check-outline" aria-hidden="true"></i> <lang>提交平台</lang>
+            <button type="button" class="w-button" data-seo-operation="submitSitemaps" data-tone="success" data-variant="outline">
+                <w:icon name="check" size="sm"></w:icon> <lang>提交平台</lang>
             </button>
         </div>
     </header>
@@ -78,11 +78,11 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
     <section class="seo-kpi-grid" aria-label="<?= htmlspecialchars((string)__('Sitemap 概览'), ENT_QUOTES, 'UTF-8') ?>">
         <?php
         $kpis = [
-            ['icon' => 'mdi-web', 'value' => (int)($summary['website_count'] ?? 0), 'label' => __('站点')],
-            ['icon' => 'mdi-link-variant', 'value' => (int)($summary['active_urls'] ?? 0), 'label' => __('活跃 URL')],
-            ['icon' => 'mdi-translate', 'value' => (int)($summary['locale_buckets'] ?? 0), 'label' => __('语言桶')],
-            ['icon' => 'mdi-file-check-outline', 'value' => (int)($summary['generated_websites'] ?? 0), 'label' => __('已生成')],
-            ['icon' => 'mdi-cloud-upload-outline', 'value' => (int)($summary['submission_ready_websites'] ?? 0), 'label' => __('可提交')],
+            ['icon' => 'circle', 'value' => (int)($summary['website_count'] ?? 0), 'label' => __('站点')],
+            ['icon' => 'link', 'value' => (int)($summary['active_urls'] ?? 0), 'label' => __('活跃 URL')],
+            ['icon' => 'language', 'value' => (int)($summary['locale_buckets'] ?? 0), 'label' => __('语言桶')],
+            ['icon' => 'check', 'value' => (int)($summary['generated_websites'] ?? 0), 'label' => __('已生成')],
+            ['icon' => 'upload', 'value' => (int)($summary['submission_ready_websites'] ?? 0), 'label' => __('可提交')],
         ];
         foreach ($kpis as $kpi):
         ?>
@@ -96,7 +96,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
     <section class="seo-admin__panel">
         <div class="seo-toolbar">
             <div class="seo-toolbar__websites">
-                <span class="visually-hidden"><lang>选择站点</lang></span>
+                <span class="w-visually-hidden"><lang>选择站点</lang></span>
                 <w:websites:website:select
                     id="seo_website_ids"
                     name="seo_website_ids"
@@ -111,8 +111,8 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                 />
             </div>
             <label class="seo-toolbar__filter">
-                <span class="visually-hidden"><lang>Provider 筛选</lang></span>
-                <select class="form-select" data-seo-filter="provider">
+                <span class="w-visually-hidden"><lang>Provider 筛选</lang></span>
+                <select class="w-select" data-seo-filter="provider">
                     <option value=""><lang>全部 Provider</lang></option>
                     <?php foreach ($providers as $provider): ?>
                         <option value="<?= htmlspecialchars((string)($provider['module'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
@@ -122,26 +122,26 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                 </select>
             </label>
             <label class="seo-toolbar__filter">
-                <span class="visually-hidden"><lang>生成状态筛选</lang></span>
-                <select class="form-select" data-seo-filter="status">
+                <span class="w-visually-hidden"><lang>生成状态筛选</lang></span>
+                <select class="w-select" data-seo-filter="status">
                     <option value=""><lang>全部状态</lang></option>
                     <option value="generated"><lang>已生成</lang></option>
                     <option value="pending"><lang>待生成</lang></option>
                     <option value="submission-ready"><lang>可提交</lang></option>
                 </select>
             </label>
-            <div class="form-check form-switch seo-toolbar__switch">
-                <input class="form-check-input" type="checkbox" id="seoAllSites" data-seo-all-sites>
-                <label class="form-check-label" for="seoAllSites"><lang>操作全部站点</lang></label>
+            <div class="w-switch seo-toolbar__switch">
+                <input type="checkbox" id="seoAllSites" data-seo-all-sites>
+                <label for="seoAllSites"><lang>操作全部站点</lang></label>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-secondary seo-toolbar__action" data-seo-select-all><lang>选择当前结果</lang></button>
+            <button type="button" class="w-button seo-toolbar__action" data-seo-select-all data-tone="neutral" data-variant="outline" data-size="sm"><lang>选择当前结果</lang></button>
         </div>
 
         <div class="seo-operation-result" data-seo-operation-result role="status" aria-live="polite"></div>
 
         <div class="seo-site-list" data-seo-site-list>
             <?php if ($websites === []): ?>
-                <div class="seo-empty-state"><i class="mdi mdi-web-off" aria-hidden="true"></i><p><lang>暂无可管理站点</lang></p></div>
+                <div class="seo-empty-state"><w:icon name="circle" size="sm"></w:icon><p><lang>暂无可管理站点</lang></p></div>
             <?php endif; ?>
             <?php foreach ($websites as $website):
                 $websiteId = (int)($website['website_id'] ?? $website['id'] ?? -1);
@@ -190,7 +190,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                          data-providers="<?= htmlspecialchars(implode(' ', $providerModules), ENT_QUOTES, 'UTF-8') ?>"
                          data-status="<?= $generated ? 'generated' : 'pending' ?><?= $submissionReady ? ' submission-ready' : '' ?>">
                     <div class="seo-site-card__select">
-                        <input class="form-check-input" type="checkbox" value="<?= $websiteId ?>" data-seo-website-id aria-label="<?= htmlspecialchars(__('选择站点 %{1}', (string)($website['name'] ?? $websiteId)), ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="checkbox" value="<?= $websiteId ?>" data-seo-website-id aria-label="<?= htmlspecialchars(__('选择站点 %{1}', (string)($website['name'] ?? $websiteId)), ENT_QUOTES, 'UTF-8') ?>">
                     </div>
                     <div class="seo-site-card__main">
                         <div class="seo-site-card__heading">
@@ -199,24 +199,19 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                 <p>
                                     <code><?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code>
                                     <span>ID <?= $websiteId ?></span>
-                                    <?php if ($websiteId === 0): ?><span class="badge bg-primary"><lang>系统默认站</lang></span><?php endif; ?>
+                                    <?php if ($websiteId === 0): ?><span class="w-badge" data-w-background="primary"><lang>系统默认站</lang></span><?php endif; ?>
                                 </p>
                             </div>
                             <div class="seo-status-stack">
                                 <span class="seo-status <?= $generated ? 'is-success' : 'is-warning' ?>">
-                                    <i class="mdi <?= $generated ? 'mdi-check-circle-outline' : 'mdi-clock-outline' ?>" aria-hidden="true"></i>
+                                    <i class="mdi <?= $generated ? 'check' : 'clock' ?>" aria-hidden="true"></i>
                                     <?= $generated ? __('canonical 已生成') : __('等待生成') ?>
                                 </span>
                                 <span class="seo-status <?= $submissionReady ? 'is-info' : 'is-muted' ?>">
                                     <?= $submissionReady ? __('已绑定提交账户') : __('可生成，尚未绑定提交账户') ?>
                                 </span>
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-primary"
-                                        data-seo-manage-urls
-                                        data-website-id="<?= $websiteId ?>"
-                                        data-website-name="<?= htmlspecialchars((string)($website['name'] ?? __('站点 %{1}', $websiteId)), ENT_QUOTES, 'UTF-8') ?>"
-                                        data-website-code="<?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                    <i class="mdi mdi-link-variant" aria-hidden="true"></i> <lang>管理 URL</lang>
+                                <button type="button" class="w-button" data-seo-manage-urls data-website-id="<?= $websiteId ?>" data-website-name="<?= htmlspecialchars((string)($website['name'] ?? __('站点 %{1}', $websiteId)), ENT_QUOTES, 'UTF-8') ?>" data-website-code="<?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                    <w:icon name="link" size="sm"></w:icon> <lang>管理 URL</lang>
                                 </button>
                             </div>
                         </div>
@@ -231,7 +226,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
 
                         <div class="seo-chip-row" aria-label="<?= htmlspecialchars((string)__('语言与 Provider'), ENT_QUOTES, 'UTF-8') ?>">
                             <?php foreach (array_keys($locales) as $locale): ?>
-                                <span class="seo-chip"><i class="mdi mdi-translate" aria-hidden="true"></i><?= htmlspecialchars($locale === 'default' ? __('默认桶') : $locale, ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="seo-chip"><w:icon name="language" size="sm"></w:icon><?= htmlspecialchars($locale === 'default' ? __('默认桶') : $locale, ENT_QUOTES, 'UTF-8') ?></span>
                             <?php endforeach; ?>
                             <?php foreach ($providerModules as $module): ?>
                                 <span class="seo-chip is-provider"><?= htmlspecialchars($module, ENT_QUOTES, 'UTF-8') ?></span>
@@ -240,7 +235,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
 
                         <details class="seo-sitemap-tree"<?= $generated ? ' open' : '' ?>>
                             <summary class="seo-sitemap-tree__root">
-                                <span class="seo-tree-node__icon"><i class="mdi mdi-sitemap" aria-hidden="true"></i></span>
+                                <span class="seo-tree-node__icon"><w:icon name="tree" size="sm"></w:icon></span>
                                 <span class="seo-tree-node__identity">
                                     <strong><lang>主 Sitemap 文件</lang></strong>
                                     <code>/sitemap.xml</code>
@@ -252,7 +247,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                     <span aria-hidden="true">·</span>
                                     <strong><?= count($publicSitemapUrls) ?></strong> <lang>个域名入口</lang>
                                 </span>
-                                <i class="mdi mdi-chevron-down seo-tree-node__chevron" aria-hidden="true"></i>
+                                <w:icon name="chevron-down" size="sm"></w:icon>
                             </summary>
 
                             <div class="seo-sitemap-tree__body">
@@ -295,11 +290,11 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                     <code title="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?></code>
                                                 </div>
                                                 <div class="seo-sitemap-file__actions">
-                                                    <button type="button" class="btn btn-sm btn-primary" data-seo-copy="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>">
-                                                        <i class="mdi mdi-content-copy" aria-hidden="true"></i> <lang>复制</lang>
+                                                    <button type="button" class="w-button" data-seo-copy="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-size="sm">
+                                                        <w:icon name="copy" size="sm"></w:icon> <lang>复制</lang>
                                                     </button>
-                                                    <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
-                                                        <lang>打开</lang> <i class="mdi mdi-open-in-new" aria-hidden="true"></i>
+                                                    <a class="w-button" href="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline" data-size="sm">
+                                                        <lang>打开</lang> <w:icon name="circle" size="sm"></w:icon>
                                                     </a>
                                                 </div>
                                             </div>
@@ -308,7 +303,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                 </div>
 
                                 <p class="seo-sitemap-limit">
-                                    <i class="mdi mdi-call-split" aria-hidden="true"></i>
+                                    <w:icon name="circle" size="sm"></w:icon>
                                     <?= htmlspecialchars((string)__('单个 Sitemap 最多 %{1} 个 URL、%{2} MiB；超过任一上限会自动分割。', [
                                         number_format((int)($treeLimits['max_urls'] ?? 50000)),
                                         number_format(((int)($treeLimits['max_bytes'] ?? 52428800)) / 1048576),
@@ -330,7 +325,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                     ?>
                                         <details class="seo-sitemap-target <?= $targetGenerated ? 'is-generated' : 'is-pending' ?>"<?= $targetCode === 'canonical' ? ' open' : '' ?>>
                                             <summary>
-                                                <span class="seo-tree-node__icon"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i></span>
+                                                <span class="seo-tree-node__icon"><w:icon name="file" size="sm"></w:icon></span>
                                                 <span class="seo-tree-node__identity">
                                                     <strong><?= htmlspecialchars($targetName, ENT_QUOTES, 'UTF-8') ?></strong>
                                                     <code><?= htmlspecialchars($targetCode, ENT_QUOTES, 'UTF-8') ?>/sitemap.xml</code>
@@ -342,7 +337,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                     <span aria-hidden="true">·</span>
                                                     <strong><?= number_format((int)($target['bucket_count'] ?? 0)) ?></strong> <lang>个语言分组</lang>
                                                 </span>
-                                                <i class="mdi mdi-chevron-down seo-tree-node__chevron" aria-hidden="true"></i>
+                                                <w:icon name="chevron-down" size="sm"></w:icon>
                                             </summary>
 
                                             <div class="seo-sitemap-target__body">
@@ -362,11 +357,11 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                         </div>
                                                         <?php if ($targetIndexUrl !== ''): ?>
                                                             <div class="seo-sitemap-file__actions">
-                                                                <button type="button" class="btn btn-sm btn-link" data-seo-copy="<?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?>">
-                                                                    <i class="mdi mdi-content-copy" aria-hidden="true"></i> <lang>复制索引地址</lang>
+                                                                <button type="button" class="w-button" data-seo-copy="<?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?>" data-tone="quiet" data-size="sm">
+                                                                    <w:icon name="copy" size="sm"></w:icon> <lang>复制索引地址</lang>
                                                                 </button>
-                                                                <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
-                                                                    <lang>打开索引</lang> <i class="mdi mdi-open-in-new" aria-hidden="true"></i>
+                                                                <a class="w-button" href="<?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline" data-size="sm">
+                                                                    <lang>打开索引</lang> <w:icon name="circle" size="sm"></w:icon>
                                                                 </a>
                                                             </div>
                                                         <?php endif; ?>
@@ -378,7 +373,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                 <div class="seo-sitemap-target__branch">
                                                     <?php if ($targetGroups === []): ?>
                                                         <div class="seo-language-files__empty">
-                                                            <i class="mdi mdi-translate-off" aria-hidden="true"></i>
+                                                            <w:icon name="language" size="sm"></w:icon>
                                                             <span><lang>暂无语言文件；请先同步 URL，再生成 canonical Sitemap。</lang></span>
                                                         </div>
                                                     <?php endif; ?>
@@ -394,7 +389,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                     ?>
                                                         <details class="seo-sitemap-bucket <?= $groupGenerated ? 'is-generated' : 'is-pending' ?>">
                                                             <summary>
-                                                                <span class="seo-tree-node__icon"><i class="mdi mdi-translate" aria-hidden="true"></i></span>
+                                                                <span class="seo-tree-node__icon"><w:icon name="language" size="sm"></w:icon></span>
                                                                 <span class="seo-tree-node__identity">
                                                                     <strong><?= htmlspecialchars($locale === '' ? (string)__('默认桶') : $locale, ENT_QUOTES, 'UTF-8') ?></strong>
                                                                     <span><code><?= htmlspecialchars((string)($group['module'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code> · <?= htmlspecialchars((string)($group['scope'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
@@ -404,7 +399,7 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                                     <span aria-hidden="true">·</span>
                                                                     <strong><?= number_format((int)($group['file_count'] ?? 0)) ?></strong> <lang>个 XML 分片</lang>
                                                                 </span>
-                                                                <i class="mdi mdi-chevron-down seo-tree-node__chevron" aria-hidden="true"></i>
+                                                                <w:icon name="chevron-down" size="sm"></w:icon>
                                                             </summary>
 
                                                             <div class="seo-sitemap-bucket__files">
@@ -418,12 +413,12 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                                 ?>
                                                                     <div class="seo-sitemap-file">
                                                                         <div class="seo-sitemap-file__name">
-                                                                            <i class="mdi mdi-file-xml-box" aria-hidden="true"></i>
+                                                                            <w:icon name="file" size="sm"></w:icon>
                                                                             <code title="<?= htmlspecialchars((string)($file['filename'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($file['filename'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code>
                                                                         </div>
                                                                         <div class="seo-sitemap-file__meta">
                                                                             <span class="seo-sitemap-file__locale" aria-label="<?= htmlspecialchars($fileLocaleText, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($fileLocaleText, ENT_QUOTES, 'UTF-8') ?>">
-                                                                                <i class="mdi mdi-translate" aria-hidden="true"></i>
+                                                                                <w:icon name="language" size="sm"></w:icon>
                                                                                 <?= htmlspecialchars($fileLocaleText, ENT_QUOTES, 'UTF-8') ?>
                                                                             </span>
                                                                             <span><strong><?= number_format((int)($file['count'] ?? 0)) ?></strong> <lang>URL</lang></span>
@@ -434,11 +429,11 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                                                                         </div>
                                                                         <?php if ($fileUrl !== ''): ?>
                                                                             <div class="seo-sitemap-file__actions">
-                                                                                <button type="button" class="btn btn-sm btn-link" data-seo-copy="<?= htmlspecialchars($fileUrl, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars((string)__('复制 %{1} 的 URL', (string)($file['filename'] ?? '')), ENT_QUOTES, 'UTF-8') ?>">
-                                                                                    <i class="mdi mdi-content-copy" aria-hidden="true"></i> <lang>复制文件地址</lang>
+                                                                                <button type="button" class="w-button" data-seo-copy="<?= htmlspecialchars($fileUrl, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars((string)__('复制 %{1} 的 URL', (string)($file['filename'] ?? '')), ENT_QUOTES, 'UTF-8') ?>" data-tone="quiet" data-size="sm">
+                                                                                    <w:icon name="copy" size="sm"></w:icon> <lang>复制文件地址</lang>
                                                                                 </button>
-                                                                                <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($fileUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
-                                                                                    <lang>打开文件</lang> <i class="mdi mdi-open-in-new" aria-hidden="true"></i>
+                                                                                <a class="w-button" href="<?= htmlspecialchars($fileUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline" data-size="sm">
+                                                                                    <lang>打开文件</lang> <w:icon name="circle" size="sm"></w:icon>
                                                                                 </a>
                                                                             </div>
                                                                         <?php endif; ?>
@@ -458,47 +453,47 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                 </article>
             <?php endforeach; ?>
         </div>
-        <div class="seo-empty-state d-none" data-seo-filter-empty><i class="mdi mdi-filter-off-outline" aria-hidden="true"></i><p><lang>没有符合筛选条件的站点</lang></p></div>
+        <div class="seo-empty-state" data-seo-filter-empty hidden><w:icon name="filter" size="sm"></w:icon><p><lang>没有符合筛选条件的站点</lang></p></div>
     </section>
 
-    <div class="offcanvas offcanvas-end seo-url-manager" tabindex="-1" id="seoUrlManager" aria-labelledby="seoUrlManagerLabel" data-seo-url-manager>
-        <div class="offcanvas-header">
+    <div class="w-drawer seo-url-manager" tabindex="-1" id="seoUrlManager" aria-labelledby="seoUrlManagerLabel" data-seo-url-manager data-w-component="drawer" data-state="closed" hidden aria-hidden="true">
+        <div class="w-drawer__header">
             <div>
-                <h5 class="offcanvas-title" id="seoUrlManagerLabel"><lang>Sitemap URL 管理</lang></h5>
-                <p class="seo-url-manager__subtitle mb-0" data-seo-url-manager-subtitle></p>
+                <h5 class="w-drawer__title" id="seoUrlManagerLabel"><lang>Sitemap URL 管理</lang></h5>
+                <p class="seo-url-manager__subtitle" data-seo-url-manager-subtitle style="--w-mb:0;"></p>
             </div>
-            <button type="button" class="btn-close text-reset" data-seo-url-manager-close aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>"></button>
+            <button type="button" class="w-button w-text" data-seo-url-manager-close aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>" data-w-close="" data-tone="quiet" data-size="sm"></button>
         </div>
-        <div class="offcanvas-body">
+        <div class="w-drawer__body">
             <div class="seo-url-manager__toolbar">
-                <input type="search" class="form-control form-control-sm" data-seo-url-keyword placeholder="<?= htmlspecialchars((string)__('搜索 URL'), ENT_QUOTES, 'UTF-8') ?>">
-                <select class="form-select form-select-sm" data-seo-url-module>
+                <input type="search" class="w-input" data-seo-url-keyword placeholder="<?= htmlspecialchars((string)__('搜索 URL'), ENT_QUOTES, 'UTF-8') ?>" data-size="sm">
+                <select class="w-select" data-seo-url-module data-size="sm">
                     <option value=""><lang>全部 Provider</lang></option>
                 </select>
-                <select class="form-select form-select-sm" data-seo-url-locale>
+                <select class="w-select" data-seo-url-locale data-size="sm">
                     <option value=""><lang>全部语言</lang></option>
                 </select>
-                <select class="form-select form-select-sm" data-seo-url-status>
+                <select class="w-select" data-seo-url-status data-size="sm">
                     <option value=""><lang>全部状态</lang></option>
                     <option value="1"><lang>启用</lang></option>
                     <option value="0"><lang>停用</lang></option>
                 </select>
-                <button type="button" class="btn btn-sm btn-outline-primary" data-seo-url-reload>
-                    <i class="mdi mdi-refresh" aria-hidden="true"></i> <lang>刷新</lang>
+                <button type="button" class="w-button" data-seo-url-reload data-tone="primary" data-variant="outline" data-size="sm">
+                    <w:icon name="refresh" size="sm"></w:icon> <lang>刷新</lang>
                 </button>
             </div>
             <div class="seo-url-manager__bulk">
-                <label class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" data-seo-url-select-all>
-                    <span class="form-check-label"><lang>全选当前页</lang></span>
+                <label class="w-check" style="--w-mb:0;">
+                    <input type="checkbox" data-seo-url-select-all>
+                    <span><lang>全选当前页</lang></span>
                 </label>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-bulk-status="1"><lang>批量启用</lang></button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-bulk-status="0"><lang>批量停用</lang></button>
-                <button type="button" class="btn btn-sm btn-outline-danger" data-seo-url-bulk-delete><lang>批量删除</lang></button>
+                <button type="button" class="w-button" data-seo-url-bulk-status="1" data-tone="neutral" data-variant="outline" data-size="sm"><lang>批量启用</lang></button>
+                <button type="button" class="w-button" data-seo-url-bulk-status="0" data-tone="neutral" data-variant="outline" data-size="sm"><lang>批量停用</lang></button>
+                <button type="button" class="w-button" data-seo-url-bulk-delete data-tone="danger" data-variant="outline" data-size="sm"><lang>批量删除</lang></button>
             </div>
             <div class="seo-url-manager__result" data-seo-url-result hidden></div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle seo-url-table">
+            <div class="w-table-wrap">
+                <table class="w-table seo-url-table" data-w-vertical="middle">
                     <thead>
                     <tr>
                         <th scope="col" style="width:36px"></th>
@@ -512,16 +507,16 @@ $seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCA
                     </tr>
                     </thead>
                     <tbody data-seo-url-tbody>
-                    <tr><td colspan="8" class="text-muted text-center py-4"><lang>请选择站点后打开</lang></td></tr>
+                    <tr><td colspan="8" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><lang>请选择站点后打开</lang></td></tr>
                     </tbody>
                 </table>
             </div>
             <div class="seo-url-manager__pager">
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-prev><lang>上一页</lang></button>
+                <button type="button" class="w-button" data-seo-url-prev data-tone="neutral" data-variant="outline" data-size="sm"><lang>上一页</lang></button>
                 <span data-seo-url-page-info></span>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-next><lang>下一页</lang></button>
+                <button type="button" class="w-button" data-seo-url-next data-tone="neutral" data-variant="outline" data-size="sm"><lang>下一页</lang></button>
             </div>
-            <p class="seo-url-manager__hint text-muted mb-0">
+            <p class="seo-url-manager__hint w-text" data-tone="muted" style="--w-mb:0;">
                 <lang>停用会保留记录并排除出下次生成；删除后 Provider 同步可能重建该 URL。</lang>
             </p>
         </div>

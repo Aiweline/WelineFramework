@@ -1,39 +1,11 @@
-# AGENTS.md
+# Weline AI 统一入口
 
-## Repository identity
+本仓库受 `Weline_Ai` 内置项目智能 MCP 管理。任何 AI 客户端在读取知识、分析代码、制定计划、编辑或验收前，都必须完成以下流程：
 
-- `/Users/weline/Project/Official/框架` is the canonical macOS repository for WelineFramework core.
-- Durable changes under `app/code/Weline/**` belong here first. Site repositories receive them only through an explicitly requested update/release workflow.
-- If a site-repository task changes `app/code/Weline/**` for any confirmed defect, feature, runtime, configuration, or core documentation work, merge that task's verified delta back into this canonical repository in the same task. Never overwrite either side wholesale.
-- Treat the canonical on-disk working copy, including its uncommitted hunks, as the merge base: record both path diffs, apply only the current task's semantic hunks, then prove all pre-existing canonical hunks remain. See `dev/ai/global-constraints.md` “Merge-back baseline”.
+1. 启动项目配置注册的 `weline_project_intelligence` STDIO MCP；启动失败时停止开发。
+2. 以仓库根目录和本次客户端会话标识调用 `prepare_project`。
+3. 仅当返回 `project-readiness.v1.status=ready` 时继续，并在后续工具调用中携带返回的 `readiness_id`。
+4. `needs_repair` 时只展示确定性修复 Bundle，取得用户明确授权后才能调用 `repair_project_docs`；`blocked` 时停止开发并报告原因。
+5. 开始任务前调用 `resolve_task_context`，只使用返回的 `guidance-bundle.v1`、命中文档和源码证据；临时用户决定通过 `set_session_directives` 保存，不得自动写入长期规范。
 
-## Start here
-
-1. Read `AI-ENTRY.md`.
-2. Follow `dev/ai/global-constraints.md` for repository-wide rules.
-3. Use `dev/ai/skills/_index.md` to select only the skills needed by the task.
-4. For module work, read the owning module's `doc/AI-INDEX.md`, then inspect the targeted source and existing verification surface.
-5. **WebUI 验收（强制）**：产品/UI 功能必须在真实 WLS + Cursor 内置 Browser 按用户路径测通后才能结案；详见 `global-constraints.md` §5 / §10.1 与 `.cursor/rules/real-device-acceptance.mdc`。禁止仅用 CLI/`curl`/单测冒充验收。
-
-`dev/ai/codex/SOUL.md`, `dev/ai/codex/USER.md`, and `dev/ai/codex/MEMORY.md` are context maps, not higher-priority rules.
-
-## Local boundaries
-
-- Preserve unrelated dirty working-tree changes and keep edits task-scoped.
-- Local Git policy (hard): only branches `dev` and `master`; code changes only on `dev`; no `git worktree` and no other local branches. Full text: `dev/ai/global-constraints.md` §7.
-- Core-to-site distribution is never implied by a core edit; use only the explicitly requested release or synchronization workflow.
-- Keep domain constraints, validation rules, authorization, and delivery requirements in `dev/ai/global-constraints.md` or the owning skill instead of mirroring them here.
-
-## Resources
-
-- Entry and authority: `AI-ENTRY.md`
-- Global constraints: `dev/ai/global-constraints.md`
-- Skill routing: `dev/ai/skills/_index.md`
-- Module documentation index: `dev/ai/diagrams/08-module-docs-index.txt`
-- Task records: `dev/ai/codex/tasks/`
-
-<!-- gitnexus:start -->
-## Optional GitNexus compatibility
-
-When GitNexus is intentionally selected under `dev/ai/global-constraints.md`, read the matching `.claude/skills/gitnexus/*/SKILL.md`. Its generated context is not a second rule authority.
-<!-- gitnexus:end -->
+规范正文只维护在 `app/code/Weline/Ai/doc/`、`app/code/Weline/Framework/doc/` 和各模块 `doc/`。派生索引只存在于 MCP SQLite，不维护静态 Skill、客户端规则镜像或模块级静态 AI 索引文件。

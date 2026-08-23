@@ -32,17 +32,17 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
 // 平台配置
 $platformConfig = [
-    'facebook'  => ['icon' => 'ri-facebook-fill', 'name' => 'Facebook', 'color' => '#1877f2', 'url' => 'https://www.facebook.com/sharer/sharer.php?u={url}'],
-    'twitter'   => ['icon' => 'ri-twitter-x-fill', 'name' => 'Twitter/X', 'color' => '#000', 'url' => 'https://twitter.com/intent/tweet?url={url}&text={title}'],
-    'linkedin'  => ['icon' => 'ri-linkedin-fill', 'name' => 'LinkedIn', 'color' => '#0077b5', 'url' => 'https://www.linkedin.com/shareArticle?mini=true&url={url}&title={title}'],
-    'pinterest' => ['icon' => 'ri-pinterest-fill', 'name' => 'Pinterest', 'color' => '#bd081c', 'url' => 'https://pinterest.com/pin/create/button/?url={url}&description={title}'],
-    'whatsapp'  => ['icon' => 'ri-whatsapp-fill', 'name' => 'WhatsApp', 'color' => '#25d366', 'url' => 'https://wa.me/?text={title}%20{url}'],
-    'telegram'  => ['icon' => 'ri-telegram-fill', 'name' => 'Telegram', 'color' => '#0088cc', 'url' => 'https://t.me/share/url?url={url}&text={title}'],
-    'wechat'    => ['icon' => 'ri-wechat-fill', 'name' => '微信', 'color' => '#07c160', 'url' => '#', 'action' => 'qrcode'],
-    'weibo'     => ['icon' => 'ri-weibo-fill', 'name' => '微博', 'color' => '#e6162d', 'url' => 'https://service.weibo.com/share/share.php?url={url}&title={title}'],
-    'qq'        => ['icon' => 'ri-qq-fill', 'name' => 'QQ', 'color' => '#12b7f5', 'url' => 'https://connect.qq.com/widget/shareqq/index.html?url={url}&title={title}'],
-    'email'     => ['icon' => 'ri-mail-fill', 'name' => __('邮件'), 'color' => '#666', 'url' => 'mailto:?subject={title}&body={url}'],
-    'copy'      => ['icon' => 'ri-links-fill', 'name' => __('复制链接'), 'color' => '#333', 'url' => '#', 'action' => 'copy'],
+    'facebook'  => ['icon' => 'circle', 'name' => 'Facebook', 'color' => '#1877f2', 'url' => 'https://www.facebook.com/sharer/sharer.php?u={url}'],
+    'twitter'   => ['icon' => 'circle', 'name' => 'Twitter/X', 'color' => '#000', 'url' => 'https://twitter.com/intent/tweet?url={url}&text={title}'],
+    'linkedin'  => ['icon' => 'link', 'name' => 'LinkedIn', 'color' => '#0077b5', 'url' => 'https://www.linkedin.com/shareArticle?mini=true&url={url}&title={title}'],
+    'pinterest' => ['icon' => 'pin', 'name' => 'Pinterest', 'color' => '#bd081c', 'url' => 'https://pinterest.com/pin/create/button/?url={url}&description={title}'],
+    'whatsapp'  => ['icon' => 'circle', 'name' => 'WhatsApp', 'color' => '#25d366', 'url' => 'https://wa.me/?text={title}%20{url}'],
+    'telegram'  => ['icon' => 'circle', 'name' => 'Telegram', 'color' => '#0088cc', 'url' => 'https://t.me/share/url?url={url}&text={title}'],
+    'wechat'    => ['icon' => 'circle', 'name' => '微信', 'color' => '#07c160', 'url' => '#', 'action' => 'qrcode'],
+    'weibo'     => ['icon' => 'circle', 'name' => '微博', 'color' => '#e6162d', 'url' => 'https://service.weibo.com/share/share.php?url={url}&title={title}'],
+    'qq'        => ['icon' => 'circle', 'name' => 'QQ', 'color' => '#12b7f5', 'url' => 'https://connect.qq.com/widget/shareqq/index.html?url={url}&title={title}'],
+    'email'     => ['icon' => 'mail', 'name' => __('邮件'), 'color' => '#666', 'url' => 'mailto:?subject={title}&body={url}'],
+    'copy'      => ['icon' => 'link', 'name' => __('复制链接'), 'color' => '#333', 'url' => '#', 'action' => 'copy'],
 ];
 
 $widgetId = 'social-share-' . uniqid();
@@ -68,7 +68,7 @@ $widgetId = 'social-share-' . uniqid();
                     data-action="<?= htmlspecialchars($config['action'] ?? 'share') ?>"
                     style="--btn-color: <?= $config['color'] ?>;"
                     title="<?= htmlspecialchars($config['name']) ?>">
-                <i class="<?= htmlspecialchars($config['icon']) ?>"></i>
+                <w:icon name="<?= htmlspecialchars($config['icon']) ?>" size="sm"></w:icon>
                 <?php if ($style !== 'icon'): ?>
                     <span><?= htmlspecialchars($config['name']) ?></span>
                 <?php endif; ?>
@@ -182,8 +182,8 @@ $widgetId = 'social-share-' . uniqid();
     const pageTitle = encodeURIComponent(document.title);
 
     function showShareNotice(message, type) {
-        if (window.Weline && window.Weline.Toast && typeof window.Weline.Toast.show === 'function') {
-            window.Weline.Toast.show({ message: message, type: type || 'info' });
+        if (window.Weline && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
+            window.Weline.UI.toast.show(message, {tone: type || 'info'});
             return;
         }
         const status = widget.querySelector('.share-status');
@@ -201,11 +201,9 @@ $widgetId = 'social-share-' . uniqid();
             
             if (action === 'copy') {
                 navigator.clipboard.writeText(window.location.href).then(() => {
-                    const icon = this.querySelector('i');
-                    const originalClass = icon.className;
-                    icon.className = 'ri-check-line';
+                    this.dataset.state = 'copied';
                     setTimeout(() => {
-                        icon.className = originalClass;
+                        this.dataset.state = 'idle';
                     }, 2000);
                 });
                 return;

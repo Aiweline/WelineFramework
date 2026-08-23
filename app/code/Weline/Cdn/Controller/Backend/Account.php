@@ -24,7 +24,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_account_manager', 'CDN账户管理', 'mdi-account-circle', 'CDN账户管理', 'Weline_Cdn::cdn_manager')]
+#[AclAttribute('Weline_Cdn::cdn_account_manager', 'CDN账户管理', 'user', 'CDN账户管理', 'Weline_Cdn::cdn_manager')]
 class Account extends BackendController
 {
     /**
@@ -56,7 +56,7 @@ class Account extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_account_list', '查看账户列表', 'mdi-view-list', '查看CDN账户列表')]
+    #[AclAttribute('Weline_Cdn::cdn_account_list', '查看账户列表', 'list', '查看CDN账户列表')]
     public function index(): string
     {
         try {
@@ -125,7 +125,7 @@ class Account extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_account_form', '账户表单', 'mdi-form', '创建/编辑CDN账户表单')]
+    #[AclAttribute('Weline_Cdn::cdn_account_form', '账户表单', 'circle', '创建/编辑CDN账户表单')]
     public function form(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -156,7 +156,7 @@ class Account extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_account_save', '保存账户', 'mdi-content-save', '保存CDN账户')]
+    #[AclAttribute('Weline_Cdn::cdn_account_save', '保存账户', 'save', '保存CDN账户')]
     public function save(): string
     {
         if (!$this->request->isPost()) {
@@ -306,7 +306,7 @@ class Account extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_account_delete', '删除账户', 'mdi-delete', '删除CDN账户')]
+    #[AclAttribute('Weline_Cdn::cdn_account_delete', '删除账户', 'trash', '删除CDN账户')]
     public function postDelete(): string
     {
         // 支持 JSON 和表单数据
@@ -360,7 +360,7 @@ class Account extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_account_set_default', '设置默认账户', 'mdi-star', '设置CDN默认账户')]
+    #[AclAttribute('Weline_Cdn::cdn_account_set_default', '设置默认账户', 'star', '设置CDN默认账户')]
     public function setDefault(): string
     {
         $id = (int)$this->request->getPost('id');
@@ -403,7 +403,7 @@ class Account extends BackendController
      * 
      * @return string
      */
-    #[AclAttribute('Weline_Cdn::cdn_account_domains', '查看关联域名', 'mdi-web', '查看账户关联的域名列表')]
+    #[AclAttribute('Weline_Cdn::cdn_account_domains', '查看关联域名', 'circle', '查看账户关联的域名列表')]
     public function domains(): string
     {
         $id = (int)$this->request->getGet('id');

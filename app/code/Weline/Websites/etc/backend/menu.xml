@@ -6,77 +6,77 @@
           title="&#32593;&#31449;&#26381;&#21153;"
           action=""
           parent="Weline_Backend::system_service_group"
-          icon="mdi mdi-web"
+          icon="globe"
           order="40">
 
         <menu source="Weline_Websites::website"
               name="websites"
               title="&#32593;&#31449;&#31649;&#29702;"
               action="websites/admin/website/index"
-              icon="mdi mdi-web"
+              icon="globe"
               order="10"/>
 
         <menu source="Weline_Websites::website_acl_grant"
               name="website_acl_grant"
               title="&#32593;&#31449;&#21151;&#33021;&#25480;&#26435;"
               action="websites/backend/website-acl-grant/index"
-              icon="mdi mdi-shield-key-outline"
+              icon="shield"
               order="11"/>
 
         <menu source="Weline_Websites::store_management"
               name="store_management"
               title="&#21830;&#24215;&#31649;&#29702;"
               action="websites/backend/scope-management/stores"
-              icon="mdi mdi-storefront-outline"
+              icon="store"
               order="12"/>
 
         <menu source="Weline_Websites::sales_channel_management"
               name="sales_channel_management"
               title="&#28192;&#36947;&#31649;&#29702;"
               action="websites/backend/scope-management/channels"
-              icon="mdi mdi-source-branch"
+              icon="branch"
               order="14"/>
 
         <menu source="Weline_Websites::domain_service"
               name="domain_service"
               title="&#22495;&#21517;&#26381;&#21153;"
               action="websites/admin/domain/index"
-              icon="mdi mdi-domain"
+              icon="globe"
               order="20"/>
 
         <menu source="Weline_Websites::site_builder_agent"
               name="site_builder_agent"
               title="AI &#24314;&#31449;&#24037;&#20316;&#21488;"
               action="websites/backend/site-builder-agent/index"
-              icon="mdi mdi-robot"
+              icon="robot"
               order="25"/>
 
         <menu source="Weline_Websites::website_maintenance"
               name="website_maintenance"
               title="&#32593;&#31449;&#32500;&#25252;"
               action="websites/backend/maintenance"
-              icon="mdi mdi-tools"
+              icon="settings"
               order="30"/>
 
         <menu source="Weline_Websites::website_backup"
               name="website_backup"
               title="&#32593;&#31449;&#22791;&#20221;"
               action="websites/backend/backup"
-              icon="mdi mdi-backup-restore"
+              icon="store"
               order="40"/>
 
         <menu source="Weline_Websites::store_copy"
               name="store_copy"
               title="Store &#21830;&#21697;&#22797;&#21046;"
               action="websites/admin/store-copy/wizard"
-              icon="mdi mdi-content-copy"
+              icon="copy"
               order="50"/>
 
         <menu source="Weline_Websites::provisioning"
               name="websites_provisioning"
               title="&#19968;&#31449;&#24335;&#37197;&#32622;&#35746;&#21333;"
               action="websites/backend/provisioning/index"
-              icon="mdi mdi-cogs"
+              icon="settings"
               order="55"/>
     </menu>
 </menus>

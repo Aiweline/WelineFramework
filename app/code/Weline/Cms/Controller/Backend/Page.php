@@ -7,40 +7,61 @@ use Weline\BackendActivity\Api\BusinessContextInterface;
 use Weline\Cms\Model\Page as CmsPage;
 use Weline\Cms\Service\PageLocaleService;
 use Weline\Cms\Service\PageService;
+use Weline\Cms\Service\CmsEditorContextResolver;
+use Weline\Cms\Service\CmsPageVariantService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Cms::page', 'CMS 页面', 'mdi mdi-text-box-outline', '管理 CMS 页面', 'Weline_Backend::cms_group')]
+#[Acl('Weline_Cms::page', 'CMS 页面', 'box', '管理 CMS 页面', 'Weline_Backend::cms_group')]
 class Page extends BackendController
 {
     public function __construct(
         private readonly PageService $pageService,
         private readonly BusinessContextInterface $activityContext,
         private ?PageLocaleService $pageLocaleService = null,
+        private ?CmsEditorContextResolver $cmsContextResolver = null,
+        private ?CmsPageVariantService $variantService = null,
     ) {
     }
 
-    #[Acl('Weline_Cms::page_listing', 'CMS 页面列表', 'mdi mdi-format-list-bulleted', '查看 CMS 页面列表')]
+    #[Acl('Weline_Cms::page_listing', 'CMS 页面列表', 'list', '查看 CMS 页面列表')]
     public function getListing(): string
     {
         $params = $this->request->getParams();
-        $result = $this->pageService->listPages([
+        $pageFilters = [
             'status' => $params['status'] ?? '',
             'scope' => $params['scope'] ?? '',
-            'website_id' => $params['website_id'] ?? 0,
             'path_group' => $params['path_group'] ?? '',
             'search' => $params['search'] ?? '',
             'page' => $params['page'] ?? 1,
             'page_size' => $params['page_size'] ?? 20,
-        ]);
+        ];
+        if (array_key_exists('website_id', $params) && $params['website_id'] !== '') {
+            $pageFilters['website_id'] = $params['website_id'];
+        }
+        $result = $this->pageService->listPages($pageFilters);
+        foreach ($result['items'] as &$pageItem) {
+            if (!is_array($pageItem) || (int)($pageItem['page_id'] ?? 0) <= 0) {
+                continue;
+            }
+            // Link through the ACL-protected backend action. The short-lived
+            // token is minted only when an administrator actually previews.
+            $pageItem['preview_url'] = $this->getUrl('cms/backend/page/preview', [
+                'page_id' => (int)$pageItem['page_id'],
+            ]);
+        }
+        unset($pageItem);
         $websites = $this->loadWebsiteOptions();
-        $pathGroups = $this->pageService->listPathGroups([
-            'website_id' => $params['website_id'] ?? 0,
+        $pathGroupFilters = [
             'path_group' => $params['path_group'] ?? '',
-        ]);
+        ];
+        if (array_key_exists('website_id', $params) && $params['website_id'] !== '') {
+            $pathGroupFilters['website_id'] = $params['website_id'];
+        }
+        $pathGroups = $this->pageService->listPathGroups($pathGroupFilters);
 
         $this->assign('pages', $result['items']);
         $this->assign('path_groups', $pathGroups);
@@ -63,20 +84,24 @@ class Page extends BackendController
         return $this->fetch('listing');
     }
 
-    #[Acl('Weline_Cms::page_new', '新建 CMS 页面', 'mdi mdi-plus-box-outline', '新建 CMS 页面')]
+    #[Acl('Weline_Cms::page_new', '新建 CMS 页面', 'plus', '新建 CMS 页面')]
     public function getNew(): string
     {
         try {
+            $siteParams = [
+                'website_code' => (string)$this->request->getGet('website_code', ''),
+                'path_group_id' => (int)$this->request->getGet('path_group_id', $this->request->getGet('group_id', 0)),
+                'path_group' => (string)$this->request->getGet('path_group', ''),
+                'path_group_alias' => (string)$this->request->getGet('path_group_alias', ''),
+            ];
+            $requestedWebsiteId = $this->request->getGet('website_id', null);
+            if ($requestedWebsiteId !== null && $requestedWebsiteId !== '') {
+                $siteParams['website_id'] = (int)$requestedWebsiteId;
+            }
             $page = $this->pageService->createDraftPage(
                 (string)$this->request->getGet('scope', 'default'),
                 (string)$this->request->getGet('layout_option', 'default'),
-                [
-                    'website_id' => (int)$this->request->getGet('website_id', 0),
-                    'website_code' => (string)$this->request->getGet('website_code', ''),
-                    'path_group_id' => (int)$this->request->getGet('path_group_id', $this->request->getGet('group_id', 0)),
-                    'path_group' => (string)$this->request->getGet('path_group', ''),
-                    'path_group_alias' => (string)$this->request->getGet('path_group_alias', ''),
-                ]
+                $siteParams,
             );
             $this->markActivity('cms_page', $page->getPageId(), 'create_draft', $page->getTitle(), [
                 'identifier' => $page->getIdentifier(),
@@ -96,7 +121,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::page_edit', '编辑 CMS 页面', 'mdi mdi-file-edit-outline', '编辑 CMS 页面')]
+    #[Acl('Weline_Cms::page_edit', '编辑 CMS 页面', 'edit', '编辑 CMS 页面')]
     public function getEdit(): string
     {
         $pageId = (int)$this->request->getGet('page_id', $this->request->getGet('id', 0));
@@ -107,9 +132,7 @@ class Page extends BackendController
         }
 
         $scope = $page ? $page->getScope() : 'default';
-        $layoutSelection = $page
-            ? $this->pageService->resolveLayoutSelectionForPage($page)
-            : ['layout_type' => CmsPage::LAYOUT_TYPE, 'layout_option' => 'default', 'layout_code' => 'default'];
+        $layoutSelection = ['layout_type' => CmsPage::LAYOUT_TYPE, 'layout_option' => 'default', 'layout_code' => 'default'];
         $localePayload = [
             'supported_locales' => [],
             'source_locale' => '',
@@ -118,10 +141,31 @@ class Page extends BackendController
             'titles' => [],
             'entries' => [],
         ];
+        $editorContext = [];
+        $storeOptions = [];
         if ($page !== null && $page->getPageId() > 0) {
             $localeService = $this->pageLocaleService ??= ObjectManager::getInstance(PageLocaleService::class);
             $requestedLocale = (string)$this->request->getGet('locale_code', State::getLangLocal());
-            $localePayload = $localeService->buildEditorPayload($page, $requestedLocale);
+            $requestedStoreId = (int)$this->request->getGet('store_id', 0);
+            $resolver = $this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class);
+            $context = $resolver->resolve(
+                $page,
+                $requestedStoreId > 0 ? $requestedStoreId : null,
+                $requestedLocale,
+            );
+            $scope = $context->canonicalScope;
+            $editorContext = $context->toArray();
+            $storeOptions = $resolver->activeStoreOptions($page);
+            $localePayload = $localeService->buildEditorPayload(
+                $page,
+                $context->localeCode,
+                $context->storeId,
+            );
+            $layoutSelection = $this->pageService->resolveLayoutSelectionForPage(
+                $page,
+                $context->storeId,
+                $context->localeCode,
+            );
         }
 
         $layoutOptions = $this->loadLayoutOptions($scope);
@@ -132,8 +176,14 @@ class Page extends BackendController
                 $page,
                 (string)$layoutSelection['layout_option'],
                 (string)$localePayload['current_locale'],
+                $editorContext,
             );
-            $previewUrl = $this->pageService->buildPreviewUrl($page);
+            $previewUrl = $this->pageService->buildPreviewUrl(
+                $page,
+                null,
+                (int)($editorContext['store_id'] ?? 0),
+                (string)($editorContext['locale_code'] ?? ''),
+            );
         }
 
         $websites = $this->loadWebsiteOptions();
@@ -162,13 +212,15 @@ class Page extends BackendController
         $this->assign('layout_options', $layoutOptions);
         $this->assign('layout_selection', $layoutSelection);
         $this->assign('locale_payload', $localePayload);
+        $this->assign('editor_context', $editorContext);
+        $this->assign('store_options', $storeOptions);
         $this->assign('theme_editor_url', $themeEditorUrl);
         $this->assign('preview_url', $previewUrl);
 
         return $this->fetch('Weline_Cms::templates/Backend/Page/edit.phtml');
     }
 
-    #[Acl('Weline_Cms::page_save', '保存 CMS 页面', 'mdi mdi-content-save-outline', '保存 CMS 页面')]
+    #[Acl('Weline_Cms::page_save', '保存 CMS 页面', 'save', '保存 CMS 页面')]
     public function postSave(): string
     {
         $data = $this->collectRequestData();
@@ -177,18 +229,41 @@ class Page extends BackendController
             $isCreate = (int)($data['page_id'] ?? 0) <= 0;
             $page = $this->pageService->savePage($data);
             $layoutOption = trim((string)($data['layout_option'] ?? ''));
+            $locale = trim((string)($data['locale_code'] ?? ''));
+            $storeId = (int)($data['store_id'] ?? 0);
             $layoutResult = [];
             if ($layoutOption !== '') {
                 $layoutResult = $this->pageService->saveLayoutSelection(
                     $page->getPageId(),
                     $layoutOption,
-                    $page->getScope()
+                    $page->getScope(),
+                    $locale,
+                    $storeId > 0 ? $storeId : null,
                 );
                 if (empty($layoutResult['success'])) {
                     $this->getMessageManager()->addWarning(
                         (string)($layoutResult['message'] ?? __('页面已保存，但布局选择保存失败。'))
                     );
                 }
+            }
+            $publishResult = [];
+            if ((string)($data['status'] ?? CmsPage::STATUS_DRAFT) === CmsPage::STATUS_PUBLISHED) {
+                if ($layoutOption === '' || empty($layoutResult['success'])) {
+                    throw new \RuntimeException((string)__('布局选择未保存成功，当前 CMS 变体未发布。'));
+                }
+                $this->pageService->assertPagePublishable($page);
+                $publishResult = ($this->variantService ??= ObjectManager::getInstance(CmsPageVariantService::class))
+                    ->publish(
+                        $page,
+                        $storeId,
+                        $locale,
+                        $layoutOption,
+                        max(0, (int)($this->session->getUserId() ?? 0)) ?: null,
+                    );
+                $this->pageService->notifyVariantPublished(
+                    $page,
+                    (array)($publishResult['editor_context'] ?? []),
+                );
             }
 
             $this->markActivity('cms_page', $page->getPageId(), $isCreate ? 'create' : 'save', $page->getTitle(), [
@@ -201,13 +276,18 @@ class Page extends BackendController
                 'path_group_alias' => $page->getPathGroupAlias(),
                 'slug' => $page->getSlug(),
                 'layout_option' => $layoutOption,
-            'locale' => $locale,
+                'store_id' => $storeId,
+                'locale' => $locale,
                 'layout_success' => $layoutResult === [] ? null : !empty($layoutResult['success']),
+                'publish_success' => $publishResult === [] ? null : !empty($publishResult['success']),
             ]);
-            $this->getMessageManager()->addSuccess(__('CMS 页面已保存。'));
+            $this->getMessageManager()->addSuccess(
+                $publishResult !== [] ? __('CMS 页面变体已保存并发布。') : __('CMS 页面变体已保存为草稿。'),
+            );
             return $this->redirect('cms/backend/page/edit', [
                 'page_id' => $page->getPageId(),
-                'locale_code' => (string)($data['locale_code'] ?? ''),
+                'store_id' => $storeId,
+                'locale_code' => $locale,
             ]);
         } catch (ResponseTerminateException $e) {
             throw $e;
@@ -218,11 +298,14 @@ class Page extends BackendController
             if (trim((string)($data['locale_code'] ?? '')) !== '') {
                 $params['locale_code'] = (string)$data['locale_code'];
             }
+            if ((int)($data['store_id'] ?? 0) > 0) {
+                $params['store_id'] = (int)$data['store_id'];
+            }
             return $this->redirect('cms/backend/page/edit', $params);
         }
     }
 
-    #[Acl('Weline_Cms::path_group_save', '保存 CMS 一级 path', 'mdi mdi-folder-edit-outline', '保存 CMS 一级 path')]
+    #[Acl('Weline_Cms::path_group_save', '保存 CMS 一级 path', 'edit', '保存 CMS 一级 path')]
     public function postSavePathGroup(): string
     {
         $data = $this->collectRequestData();
@@ -245,15 +328,14 @@ class Page extends BackendController
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError($e->getMessage());
             $params = [];
-            $websiteId = (int)($data['website_id'] ?? 0);
-            if ($websiteId > 0) {
-                $params['website_id'] = $websiteId;
+            if (array_key_exists('website_id', $data) && $data['website_id'] !== '') {
+                $params['website_id'] = (int)$data['website_id'];
             }
             return $this->redirect('cms/backend/page/listing', $params);
         }
     }
 
-    #[Acl('Weline_Cms::page_copy', '拷贝 CMS 页面', 'mdi mdi-content-copy', '将 CMS 页面拷贝到目标站点')]
+    #[Acl('Weline_Cms::page_copy', '拷贝 CMS 页面', 'copy', '将 CMS 页面拷贝到目标站点')]
     public function postCopy(): string
     {
         $data = $this->collectRequestData();
@@ -299,7 +381,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::path_group_copy', '拷贝 CMS 一级 path', 'mdi mdi-content-copy', '将 CMS 一级 path 及页面拷贝到目标站点')]
+    #[Acl('Weline_Cms::path_group_copy', '拷贝 CMS 一级 path', 'copy', '将 CMS 一级 path 及页面拷贝到目标站点')]
     public function postCopyPathGroup(): string
     {
         $data = $this->collectRequestData();
@@ -353,7 +435,7 @@ class Page extends BackendController
         }
     }
 
-    #[Acl('Weline_Cms::page_delete', 'CMS 页面移入回收站', 'mdi mdi-delete-outline', '将 CMS 页面移入回收站')]
+    #[Acl('Weline_Cms::page_delete', 'CMS 页面移入回收站', 'trash', '将 CMS 页面移入回收站')]
     public function postDelete(): string
     {
         $data = $this->collectRequestData();
@@ -376,7 +458,7 @@ class Page extends BackendController
         return $this->redirect('cms/backend/page/listing');
     }
 
-    #[Acl('Weline_Cms::path_group_delete', 'CMS 一级 path 移入回收站', 'mdi mdi-folder-remove-outline', '将 CMS 一级 path 移入回收站')]
+    #[Acl('Weline_Cms::path_group_delete', 'CMS 一级 path 移入回收站', 'minus', '将 CMS 一级 path 移入回收站')]
     public function postDeletePathGroup(): string
     {
         $data = $this->collectRequestData();
@@ -403,7 +485,7 @@ class Page extends BackendController
         return $this->redirect('cms/backend/page/listing');
     }
 
-    #[Acl('Weline_Cms::page_preview', '预览 CMS 页面', 'mdi mdi-eye-outline', '预览 CMS 页面')]
+    #[Acl('Weline_Cms::page_preview', '预览 CMS 页面', 'eye', '预览 CMS 页面')]
     public function getPreview(): string
     {
         $pageId = (int)$this->request->getGet('page_id', $this->request->getGet('id', 0));
@@ -413,7 +495,14 @@ class Page extends BackendController
             return $this->redirect('cms/backend/page/listing');
         }
 
-        $previewUrl = $this->pageService->buildPreviewUrl($page);
+        $requestedStoreId = (int)$this->request->getGet('store_id', 0);
+        $requestedLocale = trim((string)$this->request->getGet('locale_code', ''));
+        $previewUrl = $this->pageService->buildPreviewUrl(
+            $page,
+            null,
+            $requestedStoreId > 0 ? $requestedStoreId : null,
+            $requestedLocale,
+        );
         $this->markActivity('cms_page', $page->getPageId(), 'preview', $page->getTitle(), [
             'identifier' => $page->getIdentifier(),
             'status' => $page->getStatus(),
@@ -422,7 +511,9 @@ class Page extends BackendController
             'website_code' => $page->getWebsiteCode(),
             'path_group' => $page->getPathGroup(),
             'slug' => $page->getSlug(),
-            'preview_url' => $previewUrl,
+            'store_id' => $requestedStoreId,
+            'locale_code' => $requestedLocale,
+            'preview_requested' => true,
         ]);
 
         return $this->redirect($previewUrl);
@@ -657,7 +748,13 @@ class Page extends BackendController
         return $pathGroup !== '' ? $pathGroup : '__root__';
     }
 
-    private function buildThemeEditorUrl(CmsPage $page, string $layoutOption, string $locale = ''): string
+    /** @param array<string,mixed> $editorContext */
+    private function buildThemeEditorUrl(
+        CmsPage $page,
+        string $layoutOption,
+        string $locale = '',
+        array $editorContext = [],
+    ): string
     {
         $layoutOption = trim($layoutOption) !== '' ? trim($layoutOption) : 'default';
         $locale = trim($locale);
@@ -676,7 +773,15 @@ class Page extends BackendController
             'theme_layout_target_id' => $page->getPageId(),
             'theme_layout_source_target_type' => CmsPage::TARGET_TYPE,
             'theme_layout_source_target_id' => $page->getPageId(),
-            'scope' => $page->getScope(),
+            'scope' => (string)($editorContext['scope'] ?? $page->getScope()),
+            'store_mode' => (string)($editorContext['store_mode'] ?? 'normal'),
+            'locale' => $locale,
+            'locale_code' => $locale,
+            'website_id' => $page->getWebsiteId(),
+            'website_code' => $page->getWebsiteCode(),
+            'store_id' => (int)($editorContext['store_id'] ?? 0),
+            'store_code' => (string)($editorContext['store_code'] ?? ''),
+            'cms_page_id' => $page->getPageId(),
             'editor_area' => 'frontend',
             'preview_area' => 'frontend',
             'status' => 'draft',
@@ -700,7 +805,7 @@ class Page extends BackendController
 
         $websiteId = (int)($data['source_website_id'] ?? $data['website_id'] ?? 0);
         $pathGroup = trim((string)($data['source_path_group'] ?? $data['path_group'] ?? ''));
-        if ($websiteId > 0) {
+        if (array_key_exists('source_website_id', $data) || array_key_exists('website_id', $data)) {
             $params['website_id'] = $websiteId;
         }
         if ($pathGroup !== '') {
@@ -726,9 +831,7 @@ class Page extends BackendController
             'copy_target_label' => $this->buildWebsiteLabel($websiteId, $websiteCode, $websiteName),
         ];
 
-        if ($websiteId > 0) {
-            $params['copy_target_website_id'] = $websiteId;
-        }
+        $params['copy_target_website_id'] = $websiteId;
         if ($websiteCode !== '') {
             $params['copy_target_website_code'] = $websiteCode;
         }
@@ -772,7 +875,7 @@ class Page extends BackendController
         $goParams = [
             'copy_highlight' => $type,
         ];
-        if ($websiteId > 0) {
+        if (array_key_exists('copy_target_website_id', $params)) {
             $goParams['website_id'] = $websiteId;
             $goParams['copy_highlight_website_id'] = $websiteId;
         }
@@ -897,6 +1000,9 @@ class Page extends BackendController
             'path_group_id',
             'website_id',
             'website_code',
+            'store_id',
+            'store_code',
+            'store_mode',
             'site_id',
             'site',
             'path_group',
@@ -908,6 +1014,7 @@ class Page extends BackendController
             'locale_code',
             'source_locale',
             'locale_titles_json',
+            'translation_reviewed',
             'identifier',
             'path',
             'scope',

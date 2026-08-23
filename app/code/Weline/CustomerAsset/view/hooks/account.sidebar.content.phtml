@@ -55,7 +55,7 @@ $eventLabels = [
     AssetLedger::TYPE_RETURN => (string)__('返还'),
 ];
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section customer-asset-account" id="assets-section" data-account-section="assets" hidden aria-labelledby="customerAssetTitle" weline-code="customer_asset.hook.account_sidebar_content.assets_section">
+<section class="account-hook-section account-index__section motor-account-section customer-asset-account" id="assets-section" data-account-section="assets" hidden aria-labelledby="customerAssetTitle" weline-code="customer_asset.hook.account_sidebar_content.assets_section">
     <div class="account-card customer-asset-account__panel">
         <header class="account-card__header customer-asset-account__header">
             <div>
@@ -67,7 +67,7 @@ $eventLabels = [
         <div class="account-card__body">
             <?php if ($assetView['state'] === 'unauthenticated'): ?>
                 <div class="customer-asset-account__state" role="status">
-                    <i class="ri-lock-line" aria-hidden="true"></i>
+                    <w:icon name="lock" size="sm"></w:icon>
                     <div>
                         <strong><lang>需要登录</lang></strong>
                         <p><lang>登录后可查看当前站点的资产余额和最近变动。</lang></p>
@@ -75,7 +75,7 @@ $eventLabels = [
                 </div>
             <?php elseif ($assetView['state'] === 'error'): ?>
                 <div class="customer-asset-account__state customer-asset-account__state--error" role="alert">
-                    <i class="ri-error-warning-line" aria-hidden="true"></i>
+                    <w:icon name="warning" size="sm"></w:icon>
                     <div>
                         <strong><lang>暂时无法读取资产</lang></strong>
                         <p><lang>请稍后重试；资产账本不会因此发生变化。</lang></p>
@@ -83,7 +83,7 @@ $eventLabels = [
                 </div>
             <?php elseif ($assetView['state'] === 'empty'): ?>
                 <div class="customer-asset-account__state" role="status">
-                    <i class="ri-wallet-3-line" aria-hidden="true"></i>
+                    <w:icon name="circle" size="sm"></w:icon>
                     <div>
                         <strong><lang>还没有资产账户</lang></strong>
                         <p><lang>使用支持的储值、积分或 WCoin 后，余额会显示在这里。</lang></p>
@@ -175,7 +175,7 @@ $eventLabels = [
 .customer-asset-account__code,
 .customer-asset-account__event {
     background: var(--weline-theme-surface-subtle);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     border-radius: var(--weline-theme-radius-full);
     color: var(--weline-theme-text-muted);
     display: inline-flex;
@@ -192,7 +192,7 @@ $eventLabels = [
 
 .customer-asset-account__asset {
     background: var(--weline-theme-surface);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     border-radius: var(--weline-theme-radius-xl);
     box-shadow: var(--weline-theme-shadow-sm);
     min-width: 0;
@@ -249,7 +249,7 @@ $eventLabels = [
 }
 
 .customer-asset-account__balance--primary {
-    background: var(--weline-theme-primary-subtle);
+    background: var(--weline-theme-primary-surface);
 }
 
 .customer-asset-account__balance--primary .customer-asset-account__amount {
@@ -257,7 +257,7 @@ $eventLabels = [
 }
 
 .customer-asset-account__ledger {
-    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     margin-top: 1rem;
     padding-top: 1rem;
 }
@@ -282,7 +282,7 @@ $eventLabels = [
 }
 
 .customer-asset-account__ledger li + li {
-    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .customer-asset-account__ledger strong {
@@ -299,7 +299,7 @@ $eventLabels = [
 .customer-asset-account__state {
     align-items: flex-start;
     background: var(--weline-theme-surface-subtle);
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     border-radius: var(--weline-theme-radius-xl);
     display: flex;
     gap: 0.85rem;
@@ -311,7 +311,7 @@ $eventLabels = [
 }
 
 .customer-asset-account__state--error {
-    background: var(--weline-theme-danger-subtle);
+    background: var(--weline-theme-danger-surface);
 }
 
 @media (max-width: 640px) {

@@ -92,6 +92,17 @@ final class AgentCatalogServiceTest extends TestCase
         );
     }
 
+    public function testBackendAgentTemplateBuildsToolStatusBadgeWithValidConcatenation(): void
+    {
+        $template = (string)file_get_contents(
+            BP . '/app/code/Weline/Ai/view/templates/Backend/Agent/index.phtml'
+        );
+        $condition = "(tool.is_enabled && tool.is_present ? 'text-bg-success' : 'text-bg-secondary')";
+
+        self::assertStringContainsString($condition . " + '\">'", $template);
+        self::assertStringNotContainsString($condition . "\">'", $template);
+    }
+
     /**
      * @param array<string, mixed> $item
      * @return array<string, mixed>

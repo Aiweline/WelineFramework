@@ -12,38 +12,38 @@ $websites = $websites ?? [];
 $bindingCounts = $binding_counts ?? [];
 ?>
 <link rel="stylesheet" href="@static(Weline_Seo::css/seo-admin.css)">
-<div class='row'>
-                    <div class='col-12'>
+<div class="w-grid">
+                    <div style="--w-span:12;">
                         <template>Weline_Component::message.phtml</template>
                     </div>
                 </div>
 
-                <div class='row' data-testid="seo-website-account-management">
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-link-variant me-2"></i>
+                <div class="w-grid" data-testid="seo-website-account-management">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;">
+                                <w:icon name="link" size="sm"></w:icon>
                                 <lang>站点账户绑定</lang>
                             </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><span><lang>SEO管理</lang></span></li>
-                                    <li class='breadcrumb-item active'><lang>站点账户绑定</lang></li>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item"><span><lang>SEO管理</lang></span></li>
+                                    <li class="w-breadcrumb__item" data-state="active"><lang>站点账户绑定</lang></li>
                                 </ol>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <p class="text-muted mb-4">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
+                        <div class="w-card">
+                            <div class="w-card__body">
+                                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-6);">
                                     <lang>为不同站点绑定 SEO 账户，配置 Sitemap 提交策略。绑定后，系统将按设定频率自动生成并提交 Sitemap 到对应搜索引擎。</lang>
                                 </p>
-                                <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
+                                <div class="w-table-wrap">
+                                    <table class="w-table" style="--w-mb:0;">
                                         <thead>
                                             <tr>
                                                 <th><lang>站点</lang></th>
@@ -55,10 +55,10 @@ $bindingCounts = $binding_counts ?? [];
                                         <tbody>
                                             <?php if (empty($websites)): ?>
                                             <tr>
-                                                <td colspan="4" class="text-center text-muted py-4">
-                                                    <i class="mdi mdi-web-off" style="font-size: 40px; opacity: 0.3;"></i>
-                                                    <p class="mt-2 mb-0"><lang>暂无站点</lang></p>
-                                                    <p class="small mb-0"><lang>请先在站点管理中创建站点</lang></p>
+                                                <td colspan="4" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                                                    <w:icon name="circle" size="sm"></w:icon>
+                                                    <p style="--w-mt:var(--weline-space-2);--w-mb:0;"><lang>暂无站点</lang></p>
+                                                    <p class="w-text" data-size="sm" style="--w-mb:0;"><lang>请先在站点管理中创建站点</lang></p>
                                                 </td>
                                             </tr>
                                             <?php else: ?>
@@ -72,20 +72,20 @@ $bindingCounts = $binding_counts ?? [];
                                             <tr>
                                                 <td>
                                                     <strong><?= htmlspecialchars((string)$websiteName, ENT_QUOTES) ?></strong>
-                                                    <br><small class="text-muted"><?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES) ?></small>
-                                                    <?php if ($websiteId === 0): ?><span class="badge bg-primary ms-1"><lang>系统默认站</lang></span><?php endif; ?>
+                                                    <br><small class="w-text" data-tone="muted"><?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES) ?></small>
+                                                    <?php if ($websiteId === 0): ?><span class="w-badge ms-1" data-w-background="primary"><lang>系统默认站</lang></span><?php endif; ?>
                                                 </td>
                                                 <td><?= htmlspecialchars((string)$websiteDomain, ENT_QUOTES) ?></td>
                                                 <td>
                                                     <?php if ($boundCount > 0): ?>
-                                                    <span class="badge bg-success"><?= $boundCount ?> <lang>个账户</lang></span>
+                                                    <span class="w-badge" data-w-background="success"><?= $boundCount ?> <lang>个账户</lang></span>
                                                     <?php else: ?>
-                                                    <span class="badge bg-secondary"><lang>可生成，尚未提交</lang></span>
+                                                    <span class="w-badge" data-w-background="muted"><lang>可生成，尚未提交</lang></span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
-                                                    <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES) ?>" class="btn btn-sm btn-primary">
-                                                        <i class="mdi mdi-cog me-1" aria-hidden="true"></i><lang>管理绑定</lang>
+                                                    <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES) ?>" class="w-button" data-tone="primary" data-size="sm">
+                                                        <w:icon name="settings" size="sm"></w:icon><lang>管理绑定</lang>
                                                     </a>
                                                 </td>
                                             </tr>

@@ -7,14 +7,14 @@
 仅支持AJAX请求,"Only AJAX requests are supported"
 请求成功！,"Request succeeded!"
 请求失败！,"Request failed!"
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Initialization error, please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"
-"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Save error! Please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"
+关闭,closure
+抽屉内容,"Drawer contents"
 清空条件,"Clear Conditions"
-成功提示！,Success!
-倒计时关闭页面...,"Countdown closing page..."
-页面将在,"Page will close in"
-秒后关闭,seconds
-警告提示！,Warning!
+立即完成,"Complete now"
+操作成功,"Operation successful"
+操作失败,"Operation failed"
+操作提示,"Operation tips"
+"%s 秒后完成","Completed in %s seconds"
 总组件数,"Total Components"
 当前显示,"Currently Displayed"
 模块数,"Number of Modules"
@@ -51,3 +51,10 @@ OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
 "结构说明：参数名=>映射的字段:排序方法 英文逗号隔开每个排序","Structure: paramName=>mappedField:sortMethod, separate each sort with comma"
 控制器获取对应sorter可以获取这些排序字段,"Controller can get these sort fields by getting the corresponding sorter"
 排序器属性sorter不能为空，示例：%{1},"Sorter attribute cannot be empty, example: %{1}"
+成功提示！,Success!
+倒计时关闭页面...,"Countdown closing page..."
+页面将在,"Page will close in"
+秒后关闭,seconds
+警告提示！,Warning!
+"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Initialization error, please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"
+"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到：%{1}","DEBUG mode: Save error! Please check whether the form is correct! block [Weline\Component\Block\OffCanvas] The specified submission form form was not found: %{1}"

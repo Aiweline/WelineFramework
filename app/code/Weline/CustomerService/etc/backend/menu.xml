@@ -7,31 +7,31 @@
          title="客服服务" 
          action=""
          parent="Weline_Backend::system_service_group"
-         icon="mdi mdi-headset"
+         icon="circle"
          order="100">
         <menu source="Weline_CustomerService::config" 
              name="customer_service_config" 
              title="客服配置" 
              action="*/backend/config"
-             icon="mdi mdi-cog"
+             icon="settings"
              order="10"/>
         <menu source="Weline_CustomerService::agent" 
              name="customer_service_agent" 
              title="客服人员" 
              action="*/backend/agent"
-             icon="mdi mdi-account-tie"
+             icon="user"
              order="20"/>
         <menu source="Weline_CustomerService::console" 
              name="customer_service_console" 
              title="客服工作台" 
              action="*/backend/console"
-             icon="mdi mdi-monitor-dashboard"
+             icon="grid"
              order="25"/>
         <menu source="Weline_CustomerService::session" 
              name="customer_service_session" 
              title="会话管理" 
              action="*/backend/session"
-             icon="mdi mdi-message-text"
+             icon="message"
              order="30"/>
     </menu>
 </menus>

@@ -55,20 +55,20 @@
 支付失败,"Payment Failed"
 当支付失败时触发，允许其他模块执行失败后的操作，如记录日志、发送通知、释放库存等。,"Triggered when payment fails, allowing other modules to perform post-failure operations, such as logging, sending notifications, releasing inventory, etc."
 结账接口不支持该操作：%{1},"Checkout does not support operation: %{1}"
-购物车币种与当前请求币种不一致,购物车币种与当前请求币种不一致
+购物车币种与当前请求币种不一致,"The shopping cart currency is inconsistent with the current request currency"
 支付恢复凭据不完整，请重新进入结账流程。,"Payment recovery details are incomplete. Please restart checkout."
 "支付重试幂等键长度须为 1..128。","The payment retry idempotency key must be 1 to 128 characters."
 找不到可恢复的支付状态，请从订单列表继续。,"No recoverable payment state was found. Please continue from your order list."
-无法声明该支付重试，请从订单列表重试。,无法声明该支付重试，请从订单列表重试。
+无法声明该支付重试，请从订单列表重试。,"Unable to declare this payment retry, please try again from the order list."
 无法恢复该支付，请从订单列表重试。,"This payment cannot be resumed. Please retry from your order list."
 订单已创建，但支付未完成。请重试支付。,"Your order was created, but payment was not completed. Please retry payment."
 订单已创建，但暂时无法恢复支付，请联系支持。,"Your order was created, but payment recovery is temporarily unavailable. Please contact support."
 结账信息已加载,"Checkout data loaded"
-购物车为空，请先加入商品。,购物车为空，请先加入商品。
-暂无可用配送方式。,暂无可用配送方式。
-暂无可用支付方式。,暂无可用支付方式。
-请补全收货信息并选择配送和支付方式。,请补全收货信息并选择配送和支付方式。
-该商品暂不可售。,该商品暂不可售。
+购物车为空，请先加入商品。,"The shopping cart is empty, please add products first."
+暂无可用配送方式。,"There are currently no shipping methods available."
+暂无可用支付方式。,"No payment methods available yet."
+请补全收货信息并选择配送和支付方式。,"Please complete the delivery information and select the delivery and payment method."
+该商品暂不可售。,"This product is currently unavailable for sale."
 订单创建成功,"Order created successfully"
 "预计 %{1}-%{2} 天","Estimated %{1}-%{2} days"
 前台结账,"Storefront checkout"
@@ -108,8 +108,8 @@
 "渲染默认一页式结账中的支付方式列表；支付模块通过该 hook 将支付方式放入结账布局。","Renders the payment method list in the default one-page checkout; payment modules place payment methods into the checkout layout through this hook."
 结账支付方式详情,"Checkout Payment Method Details"
 渲染所选支付方式的补充说明、重定向提示或线下支付指引。,"Renders supplemental guidance, redirect notices, or offline payment instructions for the selected payment method."
-结账商品行列表,结账商品行列表
-"服务端渲染结账摘要中的商品行；禁止前端 JS createElement 拼商品 DOM（P2E-003）。","服务端渲染结账摘要中的商品行；禁止前端 JS createElement 拼商品 DOM（P2E-003）。"
+结账商品行列表,"Checkout item line list"
+"服务端渲染结账摘要中的商品行；禁止前端 JS createElement 拼商品 DOM（P2E-003）。","The server renders the product rows in the checkout summary; front-end JS createElement is prohibited from constructing the product DOM (P2E-003)."
 结账确认区域之前,"Before Checkout Review Area"
 在提交订单确认区域之前触发，用于促销、风控、协议或校验提示扩展。,"Triggered before the place-order review area for promotion, fraud-control, agreement, or validation notice extensions."
 结账确认区域之后,"After Checkout Review Area"
@@ -171,17 +171,23 @@
 结账成功,"Checkout Successful"
 支付处理成功,"Payment processed successfully"
 支付处理失败：%{1},"Payment processing failed: %{1}"
-该兼容入口已停用，请从订单管理更新状态,该兼容入口已停用，请从订单管理更新状态
+该兼容入口已停用，请从订单管理更新状态,"This compatible portal has been deactivated, please update the status from order management"
 订单管理,"Order Management"
-查看订单列表,查看订单列表
+cart,cart
+查看订单列表,"View order list"
+list,list
 查看订单详情,"View Order Details"
-更新订单状态,更新订单状态
-结账工作台,结账工作台
-结账会话与诊断,结账会话与诊断
-结账会话,结账会话
-查看真实结账冻结会话,查看真实结账冻结会话
-结账诊断,结账诊断
-查看结账会话状态和过期诊断,查看结账会话状态和过期诊断
+eye,eye
+更新订单状态,"Update order status"
+edit,edit
+结账工作台,"Checkout desk"
+clock,clock
+结账会话与诊断,"Checkout Sessions and Diagnostics"
+结账会话,"Checkout session"
+查看真实结账冻结会话,"View real checkout freeze sessions"
+结账诊断,"Checkout diagnostics"
+circle,circle
+查看结账会话状态和过期诊断,"View checkout session status and expiration diagnostics"
 待处理,Pending
 处理中,Processing
 已完成,Completed
@@ -194,23 +200,23 @@
 已送达,Delivered
 成功,Success
 失败,Failed
-状态待确认,状态待确认
-订单中心,订单中心
+状态待确认,"Status awaiting confirmation"
+订单中心,"Order Center"
 订单详情,"Order Details"
-返回我的订单,返回我的订单
+返回我的订单,"Return to my order"
 订单信息,"Order Information"
 订单号,"Order Number"
 订单状态,"Order Status"
-订单标识,订单标识
-订单商品,订单商品
-暂无商品明细,暂无商品明细
-订单商品明细,订单商品明细
+订单标识,"Order ID"
+订单商品,"Order items"
+暂无商品明细,"No product details yet"
+订单商品明细,"Order product details"
 产品名称,"Product Name"
 SKU,SKU
 数量,Quantity
 单价,"Unit Price"
-小计,小计
-未命名商品,未命名商品
+小计,Subtotal
+未命名商品,"Unnamed product"
 费用明细,"Cost Details"
 商品小计,Subtotal
 运费,"Shipping Fee"
@@ -223,16 +229,16 @@ SKU,SKU
 查看详情,"View Details"
 取消订单,"Cancel Order"
 确定要取消此订单吗？,"Are you sure you want to cancel this order?"
-确定取消,确定取消
-保留订单,保留订单
-取消订单失败，请稍后重试,取消订单失败，请稍后重试
+确定取消,"Confirm cancellation"
+保留订单,"reserve order"
+取消订单失败，请稍后重试,"Failed to cancel order, please try again later"
 感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
 返回订单列表,"Back to Order List"
-继续购物,继续购物
-正在加载结账信息...,正在加载结账信息...
-结账信息加载失败，请稍后重试。,结账信息加载失败，请稍后重试。
-提交订单,提交订单
-正在提交订单...,正在提交订单...
+继续购物,"continue shopping"
+正在加载结账信息...,"Loading checkout information..."
+结账信息加载失败，请稍后重试。,"Checkout information failed to load, please try again later."
+提交订单,"Submit order"
+正在提交订单...,"Submitting order..."
 订单已创建，正在继续支付。,"Order created. Continuing to payment."
 订单已创建，支付仍在处理中。,"Your order was created and payment is still processing."
 订单已创建，但支付未完成。您可以重试支付，不会重复下单。,"Your order was created, but payment was not completed. You can retry without creating another order."
@@ -240,33 +246,33 @@ SKU,SKU
 继续支付,"Continue payment"
 正在重试支付...,"Retrying payment..."
 订单编号,"Order reference"
-"Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api 尚未就绪，请刷新页面后重试。"
-安全结账,安全结账
-"购物车、配送、支付和订单创建都由 Weline 核心模块承接。","购物车、配送、支付和订单创建都由 Weline 核心模块承接。"
-返回购物车,返回购物车
-暂时无法结账,暂时无法结账
-购物车是空的,购物车是空的
-先选择需要采购的商品，再回来完成配送与支付。,先选择需要采购的商品，再回来完成配送与支付。
-返回选购,返回选购
-查看购物车,查看购物车
+"Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api is not ready yet, please refresh the page and try again."
+安全结账,"Secure checkout"
+"购物车、配送、支付和订单创建都由 Weline 核心模块承接。","Shopping cart, shipping, payment and order creation are all handled by the Weline core module."
+返回购物车,"Return to cart"
+暂时无法结账,"Unable to checkout at the moment"
+购物车是空的,"Shopping cart is empty"
+先选择需要采购的商品，再回来完成配送与支付。,"First select the products you want to purchase, then come back to complete delivery and payment."
+返回选购,"Return to shopping"
+查看购物车,"View cart"
 订单已创建,"Order created"
 支付状态待确认,"Payment status pending confirmation"
-收货信息,收货信息
-收货人,收货人
-电话,电话
-邮箱,邮箱
-国家/地区代码,国家/地区代码
-省/州,省/州
-城市,城市
-详细地址,详细地址
-邮编,邮编
+收货信息,"Receiving information"
+收货人,consignee
+电话,Telephone
+邮箱,Mail
+国家/地区代码,"Country code"
+省/州,Province/State
+城市,City
+详细地址,"Detailed address"
+邮编,"post code"
 配送方式,"Shipping Method"
-正在加载配送方式...,正在加载配送方式...
+正在加载配送方式...,"Loading shipping methods..."
 支付方式,"Payment Method"
-正在加载支付方式...,正在加载支付方式...
-订单摘要,订单摘要
-应付合计,应付合计
-请确认收货信息、配送方式和支付方式。,请确认收货信息、配送方式和支付方式。
+正在加载支付方式...,"Loading payment methods..."
+订单摘要,"Order summary"
+应付合计,"Total payable"
+请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -278,23 +284,23 @@ SKU,SKU
 总价,"Total Price"
 折扣,Discount
 返回列表,"Back to List"
-订单列表,订单列表
-订单号关键词,订单号关键词
-全部状态,全部状态
-全部支付状态,全部支付状态
-状态,状态
-金额,金额
-"第 %{1} / %{2} 页，共 %{3} 条","第 %{1} / %{2} 页，共 %{3} 条"
-筛选,筛选
-"会话 ID","会话 ID"
+订单列表,"order list"
+订单号关键词,"Order number keyword"
+全部状态,"All status"
+全部支付状态,"All payment status"
+状态,state
+金额,Amount
+"第 %{1} / %{2} 页，共 %{3} 条","Page %{1} / %{2}, total %{3} items"
+筛选,filter
+"会话 ID","Session ID"
 "Quote Token","Quote Token"
-货币,货币
-配置版本,配置版本
-过期时间,过期时间
-暂无结账会话,暂无结账会话
-统计来自当前结账会话样本，不执行迁移或写操作。,统计来自当前结账会话样本，不执行迁移或写操作。
-最近会话,最近会话
-暂无可诊断会话,暂无可诊断会话
+货币,currency
+配置版本,"Configuration version"
+过期时间,"Expiration time"
+暂无结账会话,"No checkout session yet"
+统计来自当前结账会话样本，不执行迁移或写操作。,"Statistics are from a sample of the current checkout session, no migration or write operations were performed."
+最近会话,"recent conversations"
+暂无可诊断会话,"No diagnostic sessions available yet"
 订单无法取消,"Order cannot be cancelled"
 订单ID不能为空,"Order ID cannot be empty"
 支付方式不能为空,"Payment method cannot be empty"
@@ -307,32 +313,32 @@ SKU,SKU
 "订单项 %{1} 的产品ID不能为空","Product ID of order item %{1} cannot be empty"
 "订单项 %{1} 的数量必须大于0","Quantity of order item %{1} must be greater than 0"
 "订单项 %{1} 的价格无效","Price of order item %{1} is invalid"
-"订单项 %{1} 暂不可售","订单项 %{1} 暂不可售"
+"订单项 %{1} 暂不可售","Line item %{1} is currently unavailable for sale"
 收货地址不能为空,"Shipping address cannot be empty"
-混合业务订单,混合业务订单
-多个不能共同收取运费的法务主体，当前阶段禁止结账,多个不能共同收取运费的法务主体，当前阶段禁止结账
+混合业务订单,"Mixed business orders"
+多个不能共同收取运费的法务主体，当前阶段禁止结账,"Multiple legal entities that cannot jointly collect freight are prohibited from settling accounts at this stage."
 匿名结账需要填写有效邮箱。,"Guest checkout requires a valid email address."
-结账行不能为空,结账行不能为空
-结账币种缺失,结账币种缺失
-运费配置版本已变更，请重新报价确认,运费配置版本已变更，请重新报价确认
-"quote_token 不能为空","quote_token 不能为空"
-"idempotency_key 长度须为 1..128","idempotency_key 长度须为 1..128"
-报价会话不存在或已失效,报价会话不存在或已失效
-报价会话已由其它幂等键提交,报价会话已由其它幂等键提交
-报价会话正在提交，请使用相同幂等键重试,报价会话正在提交，请使用相同幂等键重试
-当前登录身份与报价会话不一致,当前登录身份与报价会话不一致
-配置版本已变更，请重新报价确认,配置版本已变更，请重新报价确认
-"需配送商品缺少可预占的 Offer ID","需配送商品缺少可预占的 Offer ID"
-客户端金额字段被拒绝：%{1},客户端金额字段被拒绝：%{1}
-客户端交易事实字段被拒绝：%{1},客户端交易事实字段被拒绝：%{1}
-库存能力不可用，结账已阻断,库存能力不可用，结账已阻断
-已提交报价会话缺少冻结结果,已提交报价会话缺少冻结结果
-订单已创建，正在打开结果页面。,订单已创建，正在打开结果页面。
-订单已创建。,订单已创建。
-"当前请求没有可结账的 Storefront Scope","当前请求没有可结账的 Storefront Scope"
+结账行不能为空,"Checkout line cannot be empty"
+结账币种缺失,"Checkout currency missing"
+运费配置版本已变更，请重新报价确认,"The freight configuration version has changed, please re-quote and confirm."
+"quote_token 不能为空","quote_token cannot be empty"
+"idempotency_key 长度须为 1..128","idempotency_key length must be 1..128"
+报价会话不存在或已失效,"The quote session does not exist or has expired"
+报价会话已由其它幂等键提交,"The quote session has been submitted by another idempotent key"
+报价会话正在提交，请使用相同幂等键重试,"Quote session is being submitted, please try again using the same idempotent key"
+当前登录身份与报价会话不一致,"The current login identity is inconsistent with the quotation session"
+配置版本已变更，请重新报价确认,"The configuration version has changed, please re-quote for confirmation."
+"需配送商品缺少可预占的 Offer ID","The product that needs to be delivered lacks the offer ID that can be reserved."
+客户端金额字段被拒绝：%{1},"Client amount field rejected: %{1}"
+客户端交易事实字段被拒绝：%{1},"Client transaction fact field rejected: %{1}"
+库存能力不可用，结账已阻断,"Inventory capacity is unavailable and checkout is blocked"
+已提交报价会话缺少冻结结果,"Submitted quote session is missing frozen results"
+订单已创建，正在打开结果页面。,"The order has been created and the results page is opening."
+订单已创建。,"The order has been created."
+"当前请求没有可结账的 Storefront Scope","There is no Storefront Scope available for checkout for the current request"
 参数不完整,"Incomplete parameters"
 订单状态更新成功,"Order status updated successfully"
 更新失败：%{1},"Update failed: %{1}"
-提交订单并支付,提交订单并支付
-订单已创建，正在前往支付页面。,订单已创建，正在前往支付页面。
-订单已创建，支付正在处理中。,订单已创建，支付正在处理中。
+提交订单并支付,"Submit order and pay"
+订单已创建，正在前往支付页面。,"The order has been created and you are heading to the payment page."
+订单已创建，支付正在处理中。,"The order has been created and payment is being processed."

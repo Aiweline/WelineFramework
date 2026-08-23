@@ -93,9 +93,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
         ), 'DEBUG');
         
-        $apiKey = $this->getApiKey($config);
+        $apiKey = $this->resolveApiKeyForRequest($config, $model);
         
-        if (empty($apiKey)) {
+        if ($apiKey === '') {
             throw new Exception(ErrorMessageHelper::getMissingApiKeyMessage());
         }
 
@@ -305,8 +305,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
         ), 'DEBUG');
 
-        $apiKey = $this->getApiKey($config);
-        if (empty($apiKey)) {
+        $apiKey = $this->resolveApiKeyForRequest($config, $model);
+        if ($apiKey === '') {
             throw new Exception(ErrorMessageHelper::getMissingApiKeyMessage());
         }
 
@@ -591,9 +591,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             }
         }
         
-        $apiKey = $this->getApiKey($config);
+        $apiKey = $this->resolveApiKeyForRequest($config, $model);
         
-        if (empty($apiKey)) {
+        if ($apiKey === '') {
             throw new Exception(ErrorMessageHelper::getMissingApiKeyMessage());
         }
 
@@ -1847,6 +1847,29 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         // 使用配置中的密钥
         return $config['api_key'] ?? '';
+    }
+
+    /**
+     * 本地/自定义 OpenAI 兼容端点允许空 Key（占位 Bearer），云厂商仍强制要求密钥
+     */
+    private function resolveApiKeyForRequest(array $config, AiModel $model): string
+    {
+        $apiKey = trim((string)$this->getApiKey($config));
+        if ($apiKey !== '') {
+            return $apiKey;
+        }
+
+        $supplier = strtolower(trim((string)$model->getData(AiModel::schema_fields_SUPPLIER)));
+        $source = (string)$model->getData(AiModel::schema_fields_MODEL_SOURCE);
+        if (
+            $source === AiModel::SOURCE_LOCAL
+            || $supplier === 'custom_draft'
+            || VendorConfigManager::isCustomProvider($supplier)
+        ) {
+            return 'local';
+        }
+
+        return '';
     }
 
     /**

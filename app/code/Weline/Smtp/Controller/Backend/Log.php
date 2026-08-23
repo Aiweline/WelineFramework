@@ -16,7 +16,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Smtp\Model\SmtpSendLog;
 
-#[Acl('Weline_Smtp::system_smtp_log', 'SMTP 发件记录', 'mdi-email-check-outline', '查看 SMTP 发送日志', 'Weline_Smtp::system_smtp')]
+#[Acl('Weline_Smtp::system_smtp_log', 'SMTP 发件记录', 'check', '查看 SMTP 发送日志', 'Weline_Smtp::system_smtp')]
 class Log extends BackendController
 {
     /**

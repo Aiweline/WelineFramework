@@ -24,6 +24,7 @@
 
 ## 快速导航
 
+- **AI/MCP 只读部署计划** → `php bin/w deploy:plan --json --operation=<config|preflight|release> --target=<local|staging|production>`
 - **生成或刷新 Webhook 访问密码** → `php bin/w deploy:webhook:setup`（见 [webhook-secret.md](webhook-secret.md)）
 - **配置 Gitee / GitHub Webhook** → [backend-config.md](backend-config.md) 第 5 节
 - **配置 Tag 发布** → [backend-config.md](backend-config.md) 第 7 节
@@ -41,3 +42,23 @@
 - Webhook 路由缓存只能通过 `Weline\ModuleRouter\Api\RouteCache` 失效；Deploy 不得引用 ModuleRouter Observer。
 - 网站 URL 候选只通过可选的 `Weline\Websites\Api\DefaultWebsiteUrl` 读取；未安装 Websites 时返回空候选，不产生类加载错误。
 - WLS 面板扩展继续通过 `Integration/Server` Provider 注册，Deploy 不反向读取 Server 内部实现。
+
+## 机器可读只读计划
+
+`deploy:plan` 是 `Weline_Ai` MCP 可使用的唯一部署桥接。它输出 `deploy-machine-plan.v1` JSON，但绝不保存配置、写仓库或调用发布编排器。
+
+| 操作 | 用途 | 可能状态 |
+|---|---|---|
+| `config` | 按固定顺序返回缺少的仓库、目录、Webhook 和基础 URL 配置 | `ready` / `needs_configuration` |
+| `preflight` | 只读检查目录、命令白名单和 Webhook health | `ready` / `needs_configuration` / `blocked` |
+| `release` | 为用户明确选择的 `commit` 或 `tag` 生成发布参数摘要 | `ready` / `blocked` |
+
+`local` 固定返回 `not_applicable`。预发或生产计划中的 `release_executed` 与 `orchestrator_called` 始终为 `false`；`ready` 仅表示计划可供审查，不等于已获得真实发布授权。
+
+```bash
+php bin/w deploy:plan --json --operation=preflight --target=local
+php bin/w deploy:plan --json --operation=release --target=production \
+  --ref-type=tag --ref=v1.2.3 --base-url=https://example.com
+```
+
+输出仅包含允许的配置摘要，不包含 Token、Webhook secret、密码、私钥、用户名或带凭据的仓库 URL。

@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理是否展示开发面板等配置
  */
-#[Acl('Weline_DeveloperWorkspace::panel_config', '开发面板配置', 'mdi-view-dashboard', '开发面板配置', 'Weline_Backend::debug_tools')]
+#[Acl('Weline_DeveloperWorkspace::panel_config', '开发面板配置', 'grid', '开发面板配置', 'Weline_Backend::debug_tools')]
 class PanelConfig extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class PanelConfig extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_DeveloperWorkspace::panel_config_index', '查看开发面板配置', 'mdi-view-dashboard', '查看开发面板配置')]
+    #[Acl('Weline_DeveloperWorkspace::panel_config_index', '查看开发面板配置', 'grid', '查看开发面板配置')]
     public function index(): string
     {
         try {
@@ -46,7 +46,7 @@ class PanelConfig extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_DeveloperWorkspace::panel_config_save', '保存开发面板配置', 'mdi-content-save', '保存开发面板配置')]
+    #[Acl('Weline_DeveloperWorkspace::panel_config_save', '保存开发面板配置', 'save', '保存开发面板配置')]
     public function save(): string
     {
         if (!$this->isPost()) {

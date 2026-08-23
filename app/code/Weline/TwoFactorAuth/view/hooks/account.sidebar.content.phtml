@@ -36,7 +36,7 @@ try {
     return;
 }
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section" id="twofa-section" data-account-section="twofa" hidden weline-code="twofactorauth.account_sidebar_content.twofa_section">
+<section class="account-hook-section account-index__section motor-account-section" id="twofa-section" data-account-section="twofa" hidden weline-code="twofactorauth.account_sidebar_content.twofa_section">
     <div class="account-card twofa-account-panel" data-twofa-panel data-enabled="<?= $isEnabled ? '1' : '0' ?>">
         <header class="account-card__header">
             <h2 class="account-card__title"><?= __('两步验证') ?></h2>
@@ -143,5 +143,5 @@ try {
     </div>
 </section>
 
-<link href="@static(Weline_TwoFactorAuth::frontend/css/account-two-factor.css)" rel="stylesheet" type="text/css"/>
-<script src="@static(Weline_TwoFactorAuth::frontend/js/account-two-factor-inline-v2.js)"></script>
+<css>Weline_TwoFactorAuth::frontend/css/account-two-factor.css</css>
+<js>Weline_TwoFactorAuth::frontend/js/account-two-factor-inline-v2.js</js>

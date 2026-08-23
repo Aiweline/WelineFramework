@@ -25,25 +25,25 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
 <!-- 基本信息 -->
 <div class="sticker-detail-section">
     <h5 class="section-title">基本信息</h5>
-    <div class="row">
-        <div class="col-md-6">
+    <div class="w-grid">
+        <div style="--w-span-md:6;">
             <div class="info-item">
                 <label>目标模块:</label>
-                <span class="badge badge-info"><?= htmlspecialchars($targetModule) ?></span>
+                <span class="w-badge" data-tone="info"><?= htmlspecialchars($targetModule) ?></span>
             </div>
             <div class="info-item">
                 <label>目标文件:</label>
-                <code class="text-primary"><?= htmlspecialchars($targetFile) ?></code>
+                <code class="w-text" data-tone="primary"><?= htmlspecialchars($targetFile) ?></code>
             </div>
         </div>
-        <div class="col-md-6">
+        <div style="--w-span-md:6;">
             <div class="info-item">
                 <label>来源模块:</label>
-                <span class="badge badge-success"><?= htmlspecialchars($sourceModule) ?></span>
+                <span class="w-badge" data-tone="success"><?= htmlspecialchars($sourceModule) ?></span>
             </div>
             <div class="info-item">
                 <label>Sticker文件:</label>
-                <code class="text-secondary"><?= htmlspecialchars($stickerRelativePath) ?></code>
+                <code class="w-text" data-tone="muted"><?= htmlspecialchars($stickerRelativePath) ?></code>
             </div>
         </div>
     </div>
@@ -52,37 +52,37 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
 <!-- 状态信息 -->
 <div class="sticker-detail-section">
     <h5 class="section-title">状态信息</h5>
-    <div class="row">
-        <div class="col-md-6">
+    <div class="w-grid">
+        <div style="--w-span-md:6;">
             <div class="info-item">
                 <label>生效状态:</label>
                 <?php if ($isActive): ?>
-                    <span class="badge badge-success">
-                        <i class="mdi mdi-check-circle"></i> 已生效
+                    <span class="w-badge" data-tone="success">
+                        <w:icon name="check" size="sm"></w:icon> 已生效
                     </span>
                 <?php else: ?>
-                    <span class="badge badge-danger" title="<?= htmlspecialchars($errorMessage) ?>">
-                        <i class="mdi mdi-close-circle"></i> 未生效
+                    <span class="w-badge" title="<?= htmlspecialchars($errorMessage) ?>" data-tone="danger">
+                        <w:icon name="close" size="sm"></w:icon> 未生效
                     </span>
                 <?php endif; ?>
             </div>
             <div class="info-item">
                 <label>冲突状态:</label>
                 <?php if ($hasConflict): ?>
-                    <span class="badge badge-danger">
-                        <i class="mdi mdi-alert-circle"></i> 有冲突
+                    <span class="w-badge" data-tone="danger">
+                        <w:icon name="warning" size="sm"></w:icon> 有冲突
                     </span>
                 <?php else: ?>
-                    <span class="badge badge-success">
-                        <i class="mdi mdi-check-circle"></i> 无冲突
+                    <span class="w-badge" data-tone="success">
+                        <w:icon name="check" size="sm"></w:icon> 无冲突
                     </span>
                 <?php endif; ?>
             </div>
         </div>
-        <div class="col-md-6">
+        <div style="--w-span-md:6;">
             <div class="info-item">
                 <label>规则数量:</label>
-                <span class="badge badge-warning"><?= $actionsCount ?></span>
+                <span class="w-badge" data-tone="warning"><?= $actionsCount ?></span>
             </div>
             <?php if (!$isActive && !empty($errorMessage)): ?>
                 <div class="info-item">
@@ -103,7 +103,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
             <div class="action-item">
                 <div class="action-header">
                     <span class="action-index">#<?= $index + 1 ?></span>
-                    <span class="action-type badge badge-primary"><?= htmlspecialchars($action['type'] ?? 'replace') ?></span>
+                    <span class="action-type w-badge" data-tone="primary"><?= htmlspecialchars($action['type'] ?? 'replace') ?></span>
                     <span class="action-position">位置: <?= htmlspecialchars($action['position'] ?? 'all') ?></span>
                 </div>
                 <div class="action-content">
@@ -127,20 +127,20 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     <h5 class="section-title">文件内容</h5>
     
     <!-- 标签页导航 -->
-    <ul class="nav nav-tabs" id="fileTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="sticker-tab" data-bs-toggle="tab" data-bs-target="#sticker-content" type="button" role="tab" aria-controls="sticker-content" aria-selected="true">
+    <ul class="w-nav w-tabs__list" id="fileTabs" role="tablist" data-w-component="tabs">
+        <li role="presentation">
+            <button class="w-tabs__tab" id="sticker-tab" type="button" role="tab" aria-controls="sticker-content" aria-selected="true" data-w-target="#sticker-content" data-state="active">
                 Sticker文件
             </button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="source-tab" data-bs-toggle="tab" data-bs-target="#source-content" type="button" role="tab" aria-controls="source-content" aria-selected="false">
+        <li role="presentation">
+            <button class="w-tabs__tab" id="source-tab" type="button" role="tab" aria-controls="source-content" aria-selected="false" data-w-target="#source-content">
                 源文件
             </button>
         </li>
         <?php if (!empty($compiledContent)): ?>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="compiled-tab" data-bs-toggle="tab" data-bs-target="#compiled-content" type="button" role="tab" aria-controls="compiled-content" aria-selected="false">
+        <li role="presentation">
+            <button class="w-tabs__tab" id="compiled-tab" type="button" role="tab" aria-controls="compiled-content" aria-selected="false" data-w-target="#compiled-content">
                 编译后文件
             </button>
         </li>
@@ -148,27 +148,27 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     </ul>
     
     <!-- 标签页内容 -->
-    <div class="tab-content" id="fileTabsContent">
-        <div class="tab-pane fade show active" id="sticker-content" role="tabpanel" aria-labelledby="sticker-tab">
+    <div class="w-tabs__content" id="fileTabsContent">
+        <div class="w-tabs__panel" id="sticker-content" role="tabpanel" aria-labelledby="sticker-tab" data-state="active">
             <div class="file-info">
-                <small class="text-muted">文件路径: <?= htmlspecialchars($stickerFile) ?></small>
+                <small class="w-text" data-tone="muted">文件路径: <?= htmlspecialchars($stickerFile) ?></small>
             </div>
             <div class="code-container">
                 <pre class="code-block"><code><?= htmlspecialchars($stickerContent) ?></code></pre>
             </div>
         </div>
-        <div class="tab-pane fade" id="source-content" role="tabpanel" aria-labelledby="source-tab">
+        <div class="w-tabs__panel" id="source-content" role="tabpanel" aria-labelledby="source-tab" hidden>
             <div class="file-info">
-                <small class="text-muted">文件路径: <?= htmlspecialchars($sourceFilePath) ?></small>
+                <small class="w-text" data-tone="muted">文件路径: <?= htmlspecialchars($sourceFilePath) ?></small>
             </div>
             <div class="code-container">
                 <pre class="code-block"><code><?= htmlspecialchars($sourceContent) ?></code></pre>
             </div>
         </div>
         <?php if (!empty($compiledContent)): ?>
-        <div class="tab-pane fade" id="compiled-content" role="tabpanel" aria-labelledby="compiled-tab">
+        <div class="w-tabs__panel" id="compiled-content" role="tabpanel" aria-labelledby="compiled-tab" hidden>
             <div class="file-info">
-                <small class="text-muted">文件路径: <?= htmlspecialchars($compiledFilePath) ?></small>
+                <small class="w-text" data-tone="muted">文件路径: <?= htmlspecialchars($compiledFilePath) ?></small>
             </div>
             <div class="code-container">
                 <pre class="code-block"><code><?= htmlspecialchars($compiledContent) ?></code></pre>
@@ -186,7 +186,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-bottom: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] .sticker-detail-section {
+[data-theme="dark"] .sticker-detail-section {
     border-bottom-color: #2d3448;
 }
 
@@ -199,7 +199,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-bottom: 2px solid #0bb197;
 }
 
-[data-theme-mode="dark"] .section-title {
+[data-theme="dark"] .section-title {
     color: #e9ecef;
 }
 
@@ -215,7 +215,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     font-size: 14px;
 }
 
-[data-theme-mode="dark"] .info-item label {
+[data-theme="dark"] .info-item label {
     color: #8590a5;
 }
 
@@ -229,7 +229,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     margin-top: 5px;
 }
 
-[data-theme-mode="dark"] .error-message {
+[data-theme="dark"] .error-message {
     background-color: #2a1a1a;
     border-color: #4a2a2a;
     color: #fc8181;
@@ -248,7 +248,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-radius: 6px;
 }
 
-[data-theme-mode="dark"] .action-item {
+[data-theme="dark"] .action-item {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -270,7 +270,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     color: #74788d;
 }
 
-[data-theme-mode="dark"] .action-position {
+[data-theme="dark"] .action-position {
     color: #8590a5;
 }
 
@@ -298,8 +298,8 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     font-size: 14px;
 }
 
-[data-theme-mode="dark"] .action-target label, 
-[data-theme-mode="dark"] .action-code label {
+[data-theme="dark"] .action-target label, 
+[data-theme="dark"] .action-code label {
     color: #8590a5;
 }
 
@@ -317,7 +317,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     overflow-y: auto;
 }
 
-[data-theme-mode="dark"] .code-block {
+[data-theme="dark"] .code-block {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -330,7 +330,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     font-family: 'Courier New', Courier, monospace;
 }
 
-[data-theme-mode="dark"] .code-block code {
+[data-theme="dark"] .code-block code {
     color: #e9ecef;
 }
 
@@ -340,7 +340,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     margin-bottom: 15px;
 }
 
-[data-theme-mode="dark"] .nav-tabs {
+[data-theme="dark"] .nav-tabs {
     border-bottom-color: #2d3448;
 }
 
@@ -355,7 +355,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     transition: all 0.2s ease-in-out;
 }
 
-[data-theme-mode="dark"] .nav-link {
+[data-theme="dark"] .nav-link {
     color: #8590a5;
 }
 
@@ -364,7 +364,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-color: #eff2f7;
 }
 
-[data-theme-mode="dark"] .nav-link:hover {
+[data-theme="dark"] .nav-link:hover {
     border-color: #2d3448;
 }
 
@@ -375,7 +375,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     border-bottom-color: #fff;
 }
 
-[data-theme-mode="dark"] .nav-link.active {
+[data-theme="dark"] .nav-link.active {
     background-color: #252b3b;
     border-color: #2d3448;
     border-bottom-color: #252b3b;
@@ -388,7 +388,7 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     padding: 15px;
 }
 
-[data-theme-mode="dark"] .tab-content {
+[data-theme="dark"] .tab-content {
     background-color: #252b3b;
     border-color: #2d3448;
 }
@@ -417,36 +417,36 @@ $compiledFilePath = $this->getData('compiled_file_path') ?? '';
     white-space: nowrap;
 }
 
-.badge-primary { 
+.weline-badge-primary { 
     background-color: #0bb197; 
     color: white; 
 }
 
-.badge-info { 
+.weline-badge-info { 
     background-color: #4aa3ff; 
     color: white; 
 }
 
-.badge-success { 
+.weline-badge-success { 
     background-color: #0ac074; 
     color: white; 
 }
 
-.badge-warning { 
+.weline-badge-warning { 
     background-color: #fcb92c; 
     color: #212529; 
 }
 
-[data-theme-mode="dark"] .badge-warning {
+[data-theme="dark"] .weline-badge-warning {
     color: #e9ecef;
 }
 
-.badge-danger { 
+.weline-badge-danger { 
     background-color: #ff3d60; 
     color: white; 
 }
 
-.badge-secondary { 
+.weline-badge-secondary { 
     background-color: #74788d; 
     color: white; 
 }
@@ -462,7 +462,7 @@ code {
     border: 1px solid #eff2f7;
 }
 
-[data-theme-mode="dark"] code {
+[data-theme="dark"] code {
     background-color: #1e2125;
     border-color: #2d3448;
 }
@@ -475,7 +475,7 @@ code {
     color: #74788d !important;
 }
 
-[data-theme-mode="dark"] .text-secondary {
+[data-theme="dark"] .text-secondary {
     color: #8590a5 !important;
 }
 
@@ -483,7 +483,7 @@ code {
     color: #74788d !important;
 }
 
-[data-theme-mode="dark"] .text-muted {
+[data-theme="dark"] .text-muted {
     color: #8590a5 !important;
 }
 </style>

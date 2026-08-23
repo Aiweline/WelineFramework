@@ -10,6 +10,8 @@ use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Acl\Api\Authorization\ObjectAuthorizationResult;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\FrontendQueryException;
+use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
+use Weline\SystemConfig\Api\Scope\ScopeUiStateInterface;
 use Weline\SystemConfig\Extends\Module\Weline_Framework\Query\SystemConfigQueryProvider;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Model\SystemConfigVersion;
@@ -203,13 +205,22 @@ final class SystemConfigQueryProviderAuthorizationTest extends TestCase
         BackendObjectAuthorizationGuardInterface $guard,
         ?SystemConfigCenterService $center = null,
     ): SystemConfigQueryProvider {
+        $catalog = $this->createMock(ScopeIdentityCatalogInterface::class);
+        $catalog->method('websiteIdForCode')->willReturnCallback(
+            static fn(string $code): int => $code === 'shop' ? 17 : 18,
+        );
+        $catalog->method('authoritativeIdentity')->willReturnCallback(
+            static fn(ScopeIdentity $identity): ScopeIdentity => $identity,
+        );
+
         return new SystemConfigQueryProvider(
             $systemConfig,
             $this->createMock(SystemConfigTemplateService::class),
             $center ?? $this->createMock(SystemConfigCenterService::class),
             new SystemConfigTargetScopeService(
                 new SystemConfigScopeResolver(),
-                static fn(string $code): int => $code === 'shop' ? 17 : 18,
+                $catalog,
+                $this->createMock(ScopeUiStateInterface::class),
             ),
             $guard,
         );

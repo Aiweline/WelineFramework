@@ -2,6 +2,11 @@
 所指定的name找不到对应的js模板文件！,"The specified name could not find the corresponding JS template file!"
 所指定的name找不到对应的css模板文件！,"The specified name could not find the corresponding CSS template file!"
 "Scope 标签属性 container-id 不能为空！","Scope label attribute container-id cannot be empty!"
+选择作用范围,选择作用范围
+搜索作用范围,搜索作用范围
+折叠,折叠
+展开,展开
+未找到匹配作用范围,未找到匹配作用范围
 检测到标签循环依赖：%{1},"Detected circular dependency in labels: %{1}"
 "标签 '%{1}' 依赖的父标签 '%{2}' 不存在","The parent tag '%{2}' that tag '%{1}' depends on does not exist"
 "标签 '%{1}' 依赖的父标签 '%{2}' 没有parent()方法，可能不是预期的父标签","The parent tag '%{2}' that tag '%{1}' depends on has no parent() method, may not be the expected parent tag"
@@ -9,17 +14,12 @@
 保存成功,"Save successful"
 获取成功！,"Successfully got!"
 标签管理,"Tag management"
-"fa fa-tags","fa fa-tags"
-标签查看文档,标签查看文档
-标签列表,标签列表
-"fa fa-list","fa fa-list"
+circle,circle
+标签查看文档,"Tag View Document"
+标签列表,"tag list"
+list,list
 标签文档,"Tag documentation"
-查看标签文档,查看标签文档
-好的,好的
-算了,算了
-失败,失败
-成功,成功
-操作成功!,操作成功!
+查看标签文档,"View label documentation"
 开发>标签管理,"Development > Tag Management"
 开发,Development
 列表,List
@@ -63,7 +63,12 @@ json数据,"json data"
 指定要收集的模块名称（可选）,"Specify the module name to collect (optional)"
 收集所有模块的标签库,"Collect Tag Libraries for All Modules"
 收集指定模块的标签库,"Collect Tag Library for Specified Module"
-"""所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>""","所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>"
-濂界殑,濂界殑
-绠椾簡,绠椾簡
-鎿嶄綔鎴愬姛!,鎿嶄綔鎴愬姛!
+"""所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>""","""The specified name cannot find the corresponding js template file! name cannot be empty; if it is inline JS, please use the paired tag <js:part>code</js:part>"""
+好的,"The boundary is destroyed"
+算了,"Ru Chun Jian"
+失败,fail
+成功,success
+操作成功!,"Operation successful!"
+"fa fa-tags","fa fa-tags"
+"fa fa-list","fa fa-list"
+标签库,"Tag library"

@@ -3,5 +3,5 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_Mail::mail" name="mail" title="企业邮箱" action="weline_mail/backend"
-          parent="Weline_Backend::system_service_group" icon="mdi mdi-email-outline" order="40" is_backend="1"/>
+          parent="Weline_Backend::system_service_group" icon="mail" order="40" is_backend="1"/>
 </menus>

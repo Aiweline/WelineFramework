@@ -1,23 +1,18 @@
-<style>
-    .dt-demo-page{max-width:1280px;margin:0 auto;padding:24px 20px 64px}
-    .dt-demo-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
-    .dt-demo-note{padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #dfe7ef;margin-bottom:20px}
-</style>
+<?= \Weline\DataTable\Helper\UiAssets::renderBundles($this, ['datatable-demo-css', 'datatable-demo-checks-js']) ?>
 
-<?= $worker_bootstrap ?? '' ?>
-
-<div class="dt-demo-page" data-demo-page="<?= $page_key ?>">
-    <div class="dt-demo-top">
+<div class="w-container w-datatable-demo__main" data-w-datatable-demo="join" data-demo-page="<?= htmlspecialchars((string)$page_key, ENT_QUOTES, 'UTF-8') ?>">
+    <header class="w-datatable-demo__heading">
         <div>
-            <h1><?= $page_title ?></h1>
+            <p class="w-datatable-demo__eyebrow">DataTable</p>
+            <h1><?= htmlspecialchars((string)$page_title, ENT_QUOTES, 'UTF-8') ?></h1>
             <p>Read-only joined user and order data.</p>
         </div>
-        <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>">Back</a>
-    </div>
+        <a class="w-button" data-tone="neutral" href="<?= htmlspecialchars((string)$demo_links['index'], ENT_QUOTES, 'UTF-8') ?>"><w-icon name="arrow-left" size="sm"></w-icon>Back</a>
+    </header>
 
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
-    <div class="dt-demo-note">This page exercises alias-prefixed fields like <code>u.name</code> and <code>o.order_no</code>.</div>
+    <div class="w-alert" data-tone="info"><w-icon name="info" size="sm"></w-icon><span>This page exercises explicitly declared alias-prefixed fields like <code>u.name</code> and <code>o.order_no</code>.</span></div>
 
     <w:d-table id="demo-join-table"
                model="Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o"
@@ -28,15 +23,13 @@
                page-size="6"
                show-pagination="true"
                allow-frontend="true">
-        <thead>
-            <tr>
-                <th data-field="u.id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="User ID">User ID</th>
-                <th data-field="u.name" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="User Name">User Name</th>
-                <th data-field="u.email" data-type="email" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Email">Email</th>
-                <th data-field="o.order_no" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order No">Order No</th>
-                <th data-field="o.total_amount" data-type="number" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Total Amount">Total Amount</th>
-                <th data-field="o.order_status" data-type="select" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order Status">Order Status</th>
-            </tr>
-        </thead>
+        <w:t-header>
+            <w:field belong="t-header" name="u.id" type="text" sortable="true" searchable="true">User ID</w:field>
+            <w:field belong="t-header" name="u.name" type="text" sortable="true" searchable="true">User Name</w:field>
+            <w:field belong="t-header" name="u.email" type="email" sortable="true" searchable="true">Email</w:field>
+            <w:field belong="t-header" name="o.order_no" type="text" sortable="true" searchable="true">Order No</w:field>
+            <w:field belong="t-header" name="o.total_amount" type="number" sortable="true" searchable="true">Total Amount</w:field>
+            <w:field belong="t-header" name="o.order_status" type="select" sortable="true" searchable="true">Order Status</w:field>
+        </w:t-header>
     </w:d-table>
 </div>

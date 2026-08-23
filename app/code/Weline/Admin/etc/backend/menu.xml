@@ -7,25 +7,25 @@
     
     <!-- 用户管理入口 - 直接挂载到 Backend 定义的用户管理菜单下 -->
     <menu source="Weline_Admin::system_user_listing" name="system_user_listing" title="用户列表" action="admin/backend/user/listing"
-         parent="Weline_Backend::user_management" icon="mdi mdi-account-multiple-outline" order="10"/>
+         parent="Weline_Backend::user_management" icon="users" order="10"/>
     <menu source="Weline_Admin::system_user_assign_role" name="system_user_assign_role" title="角色归配" action="admin/backend/user/assign-role"
-         parent="Weline_Backend::user_management" icon="mdi mdi-account-key-outline" order="20"/>
+         parent="Weline_Backend::user_management" icon="user" order="20"/>
     
     <!-- ==================== 菜单与路由分组 ==================== -->
     
     <!-- 菜单管理 - 归入系统管理 > 菜单与路由 -->
     <menu source="Weline_Admin::system_menu_manager" name="system_menu_manager" title="菜单管理" action="admin/system/menus"
-         parent="Weline_Backend::menu_route_group" icon="mdi mdi-menu" order="10"/>
+         parent="Weline_Backend::menu_route_group" icon="menu" order="10"/>
     
     <!-- 路由管理 -->
     <menu source="Weline_Admin::system_modules_router" name="system_modules_router" title="路由管理" action="admin/system/modules/router"
-         parent="Weline_Backend::menu_route_group" icon="mdi mdi-routes" order="20"/>
+         parent="Weline_Backend::menu_route_group" icon="circle" order="20"/>
     
     <!-- 插件管理 -->
     <menu source="Weline_Admin::system_plugins" name="system_plugins" title="插件管理" action="admin/system/plugins"
-         parent="Weline_Backend::menu_route_group" icon="mdi mdi-power-plug-outline" order="30"/>
+         parent="Weline_Backend::menu_route_group" icon="circle" order="30"/>
     
     <!-- 事件管理 -->
     <menu source="Weline_Admin::system_events" name="system_events" title="事件管理" action="admin/system/events"
-         parent="Weline_Backend::menu_route_group" icon="mdi mdi-lightning-bolt-outline" order="40"/>
+         parent="Weline_Backend::menu_route_group" icon="bolt" order="40"/>
 </menus>

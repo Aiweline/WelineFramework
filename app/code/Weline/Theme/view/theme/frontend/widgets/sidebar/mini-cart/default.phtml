@@ -44,7 +44,7 @@ $widgetId = 'mini-cart-' . uniqid();
 <div class="widget-mini-cart" id="<?= $widgetId ?>">
     <div class="widget-header">
         <h3 class="widget-title">
-            <i class="ri-shopping-cart-2-line"></i>
+            <w:icon name="pin" size="sm"></w:icon>
             <?= htmlspecialchars($title) ?>
             <span class="item-count">(<?= $itemCount ?>)</span>
         </h3>
@@ -52,7 +52,7 @@ $widgetId = 'mini-cart-' . uniqid();
     
     <?php if (empty($cartItems)): ?>
         <div class="cart-empty">
-            <i class="ri-shopping-cart-line"></i>
+            <w:icon name="pin" size="sm"></w:icon>
             <p><?= __('购物车是空的') ?></p>
             <a href="/products" class="btn-shop"><?= __('去购物') ?></a>
         </div>
@@ -73,7 +73,7 @@ $widgetId = 'mini-cart-' . uniqid();
                     </div>
                     
                     <button class="item-remove" type="button" title="<?= __('删除') ?>">
-                        <i class="ri-close-line"></i>
+                        <w:icon name="close" size="sm"></w:icon>
                     </button>
                 </div>
             <?php endforeach; ?>

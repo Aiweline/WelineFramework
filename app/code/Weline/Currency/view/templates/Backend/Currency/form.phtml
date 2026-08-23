@@ -14,17 +14,17 @@ $currencyLocales = is_array($currency_locales ?? null) ? $currency_locales : [];
 $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_names : [];
 ?>
 <!-- 页面标题 -->
-<div class='row' data-testid="currency-add-management">
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="w-grid" data-testid="currency-add-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;">
                 <lang>货币管理</lang> > <?= $isEdit ? __('编辑货币') : __('添加货币') ?>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><lang>系统</lang></span></li>
-                    <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
-                    <li class='breadcrumb-item active'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></li>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>系统</lang></span></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
+                    <li class="w-breadcrumb__item" data-state="active"><?= $isEdit ? __('编辑货币') : __('添加货币') ?></li>
                 </ol>
             </div>
         </div>
@@ -32,48 +32,45 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
 </div>
 
 <!-- 消息 -->
-<div class='row'>
+<div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <!-- 货币表单 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></h4>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__body">
+                <h4 class="w-card__title"><?= $isEdit ? __('编辑货币') : __('添加货币') ?></h4>
                 
-                <w:form class='needs-validation' novalidate action="@var($action)" method="post" data-testid="currency-editor-form">
+                <w:form class="w-form" novalidate action="@var($action)" method="post" data-testid="currency-editor-form">
                     <?php if ($isEdit): ?>
                         <input type='hidden' name='currency_id' value='<?= $currency->getId() ?>'>
                     <?php endif; ?>
 
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>货币代码</lang> <span class='text-danger'>*</span></label>
-                                <input type='text' class='form-control' name='code' 
-                                       value='<?= htmlspecialchars($currency->getCode()) ?>' 
-                                       maxlength='3' required <?= $isEdit ? 'readonly' : '' ?>>
-                                <div class='form-text'><lang>3位大写字母（ISO 4217标准），如：USD, CNY</lang></div>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>货币代码</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type='text' class="w-input" name='code' value='<?= htmlspecialchars($currency->getCode()) ?>' maxlength='3' required <?= $isEdit ? 'readonly' : '' ?>>
+                                <div class="w-field__hint"><lang>3位大写字母（ISO 4217标准），如：USD, CNY</lang></div>
                             </div>
                         </div>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>货币名称</lang> <span class='text-danger'>*</span></label>
-                                <input type='text' class='form-control' name='name' 
-                                       value='<?= htmlspecialchars($currency->getName()) ?>' required>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>货币名称</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type='text' class="w-input" name='name' value='<?= htmlspecialchars($currency->getName()) ?>' required>
                             </div>
                         </div>
                     </div>
 
                     <?php if (!empty($currencyLocales)): ?>
-                        <div class='mb-4'>
-                            <div class='d-flex align-items-center justify-content-between mb-2'>
-                                <label class='form-label mb-0'><lang>货币多语言名称</lang></label>
-                                <span class='text-muted small'><lang>留空时前台回退使用基础名称</lang></span>
+                        <div style="--w-mb:var(--weline-space-6);">
+                            <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-2);">
+                                <label class="w-field__label" style="--w-mb:0;"><lang>货币多语言名称</lang></label>
+                                <span class="w-text" data-tone="muted" data-size="sm"><lang>留空时前台回退使用基础名称</lang></span>
                             </div>
-                            <div class='row'>
+                            <div class="w-grid">
                                 <?php foreach ($currencyLocales as $locale): ?>
                                     <?php
                                     $localeCode = (string)($locale['code'] ?? '');
@@ -83,17 +80,13 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
                                     $localeName = (string)($locale['name'] ?? $localeCode);
                                     $localValue = (string)($currencyLocalNames[$localeCode] ?? '');
                                     ?>
-                                    <div class='col-md-6'>
-                                        <div class='mb-3'>
-                                            <label class='form-label'>
+                                    <div style="--w-span-md:6;">
+                                        <div style="--w-mb:var(--weline-space-4);">
+                                            <label class="w-field__label">
                                                 <?= htmlspecialchars($localeName, ENT_QUOTES, 'UTF-8') ?>
                                                 <code><?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?></code>
                                             </label>
-                                            <input type='text'
-                                                   class='form-control'
-                                                   name='local_names[<?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?>]'
-                                                   value='<?= htmlspecialchars($localValue, ENT_QUOTES, 'UTF-8') ?>'
-                                                   placeholder='<?= htmlspecialchars($currency->getName(), ENT_QUOTES, 'UTF-8') ?>'>
+                                            <input type='text' class="w-input" name='local_names[<?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?>]' value='<?= htmlspecialchars($localValue, ENT_QUOTES, 'UTF-8') ?>' placeholder='<?= htmlspecialchars($currency->getName(), ENT_QUOTES, 'UTF-8') ?>'>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -101,86 +94,74 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
                         </div>
                     <?php endif; ?>
 
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>汇率</lang> <span class='text-danger'>*</span></label>
-                                <input type='number' class='form-control' name='rate' 
-                                       value='<?= $currency->getRate() ?>' step='0.0001' min='0' required>
-                                <div class='form-text'><lang>相对于基准货币的汇率</lang></div>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>汇率</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type='number' class="w-input" name='rate' value='<?= $currency->getRate() ?>' step='0.0001' min='0' required>
+                                <div class="w-field__hint"><lang>相对于基准货币的汇率</lang></div>
                             </div>
                         </div>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>货币符号</lang> <span class='text-danger'>*</span></label>
-                                <input type='text' class='form-control' name='symbol' 
-                                       value='<?= htmlspecialchars($currency->getSymbol()) ?>' required>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>货币符号</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input type='text' class="w-input" name='symbol' value='<?= htmlspecialchars($currency->getSymbol()) ?>' required>
                             </div>
                         </div>
                     </div>
 
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>符号位置</lang></label>
-                                <select class='form-select' name='position'>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>符号位置</lang></label>
+                                <select class="w-select" name='position'>
                                     <option value='left' <?= $currency->getPosition() === 'left' ? 'selected' : '' ?>><lang>左侧</lang></option>
                                     <option value='right' <?= $currency->getPosition() === 'right' ? 'selected' : '' ?>><lang>右侧</lang></option>
                                 </select>
                             </div>
                         </div>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>货币图标</lang></label>
-                                <input type='text' class='form-control' name='icon' 
-                                       value='<?= htmlspecialchars($currency->getIcon() ?? '') ?>' 
-                                       placeholder='<?= __('Unicode符号或图标路径') ?>'>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>货币图标</lang></label>
+                                <input type='text' class="w-input" name='icon' value='<?= htmlspecialchars($currency->getIcon() ?? '') ?>' placeholder='<?= __('Unicode符号或图标路径') ?>'>
                             </div>
                         </div>
                     </div>
 
-                    <div class='row'>
-                        <div class='col-md-4'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>千分位分隔符</lang></label>
-                                <input type='text' class='form-control' name='thousand_separator' 
-                                       value='<?= htmlspecialchars($currency->getThousandSeparator()) ?>' 
-                                       maxlength='1' required>
+                    <div class="w-grid">
+                        <div style="--w-span-md:4;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>千分位分隔符</lang></label>
+                                <input type='text' class="w-input" name='thousand_separator' value='<?= htmlspecialchars($currency->getThousandSeparator()) ?>' maxlength='1' required>
                             </div>
                         </div>
-                        <div class='col-md-4'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>小数分隔符</lang></label>
-                                <input type='text' class='form-control' name='decimal_separator' 
-                                       value='<?= htmlspecialchars($currency->getDecimalSeparator()) ?>' 
-                                       maxlength='1' required>
+                        <div style="--w-span-md:4;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>小数分隔符</lang></label>
+                                <input type='text' class="w-input" name='decimal_separator' value='<?= htmlspecialchars($currency->getDecimalSeparator()) ?>' maxlength='1' required>
                             </div>
                         </div>
-                        <div class='col-md-4'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>格式</lang></label>
-                                <input type='text' class='form-control' name='format' 
-                                       value='<?= htmlspecialchars($currency->getFormat()) ?>' 
-                                       placeholder='2,0' required>
-                                <div class='form-text'><lang>格式：小数位数,整数位数</lang></div>
+                        <div style="--w-span-md:4;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>格式</lang></label>
+                                <input type='text' class="w-input" name='format' value='<?= htmlspecialchars($currency->getFormat()) ?>' placeholder='2,0' required>
+                                <div class="w-field__hint"><lang>格式：小数位数,整数位数</lang></div>
                             </div>
                         </div>
                     </div>
 
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>基准货币</lang></label>
-                                <input type='text' class='form-control' name='base_currency' 
-                                       value='<?= htmlspecialchars($currency->getBaseCurrency()) ?>' 
-                                       maxlength='3' required>
-                                <div class='form-text'><lang>基准货币代码（3位大写字母）</lang></div>
+                    <div class="w-grid">
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>基准货币</lang></label>
+                                <input type='text' class="w-input" name='base_currency' value='<?= htmlspecialchars($currency->getBaseCurrency()) ?>' maxlength='3' required>
+                                <div class="w-field__hint"><lang>基准货币代码（3位大写字母）</lang></div>
                             </div>
                         </div>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label'><lang>状态</lang></label>
-                                <select class='form-select' name='status'>
+                        <div style="--w-span-md:6;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label"><lang>状态</lang></label>
+                                <select class="w-select" name='status'>
                                     <option value='1' <?= $currency->getStatus() ? 'selected' : '' ?>><lang>启用</lang></option>
                                     <option value='0' <?= !$currency->getStatus() ? 'selected' : '' ?>><lang>禁用</lang></option>
                                 </select>
@@ -188,18 +169,17 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
                         </div>
                     </div>
 
-                    <div class='mb-3'>
-                        <label class='form-label'><lang>格式化预览</lang></label>
-                        <div class='alert alert-info' id='formatPreview'>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label"><lang>格式化预览</lang></label>
+                        <div class="w-alert" id='formatPreview' data-tone="info">
                             <lang>输入金额后显示预览</lang>
                         </div>
-                        <input type='number' class='form-control' id='previewAmount'
-                               value='1234.56' step='0.01'>
+                        <input type='number' class="w-input" id='previewAmount' value='1234.56' step='0.01'>
                     </div>
 
-                    <div class='mb-3'>
-                        <button type='submit' class='btn btn-primary' data-testid="currency-editor-submit"><lang>保存</lang></button>
-                        <a href="@backend-url('currency/backend/currency/index')" class='btn btn-secondary'><lang>取消</lang></a>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <button type='submit' class="w-button" data-testid="currency-editor-submit" data-tone="primary"><lang>保存</lang></button>
+                        <a href="@backend-url('currency/backend/currency/index')" class="w-button" data-tone="neutral"><lang>取消</lang></a>
                     </div>
                 </w:form>
             </div>

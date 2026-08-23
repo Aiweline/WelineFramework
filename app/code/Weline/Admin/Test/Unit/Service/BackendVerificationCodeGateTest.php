@@ -51,6 +51,7 @@ final class BackendVerificationCodeGateTest extends TestCase
 
         self::assertTrue($result['should_display_captcha']);
         self::assertTrue($result['should_block']);
+        // Without full Phrase bootstrap __() returns the Chinese source key.
         self::assertSame('请输入验证码！', $result['error_message']);
     }
 

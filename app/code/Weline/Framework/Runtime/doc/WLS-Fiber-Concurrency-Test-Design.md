@@ -195,7 +195,7 @@
 | 系统页弱回归（Backend/Server 多路由容错） | E2E | P1 | 已加（同上开关） |
 | `app/code/Weline/Framework/Test/Integration/Runtime/StateManagerPeerOmitIntegrationTest.php` | PHPUnit | P2 | 已加 |
 | `app/code/Weline/Framework/Test/Unit/Session/SessionFiberRequestIsolationTest.php` | PHPUnit | P3 | 已加并通过 |
-| `dev/ai/codex/tasks/2026-08-09/2026-08-09-1309-wls-fiber-request-isolation-completion/session_live_probe.php` | Live harness | P3 | 已加；双 Session 2200 请求 `mismatch=0` |
+| `迁移前历史任务记录（已清理）` | Live harness | P3 | 已加；双 Session 2200 请求 `mismatch=0` |
 | P3 有界真实 WLS 报告 | 运维 | P3 | 已完成并写入任务账本 |
 | 30 分钟阶梯混合长稳态 + 至少 100 万请求报告 | 运维 | 总计划 | 待完成 |
 

@@ -5,5 +5,5 @@
     
     <!-- 计划任务 - 归入系统管理 > 系统服务 -->
     <menu source="Weline_Cron::system_cron" name="system_cron" title="计划任务" action="system/backend/cron/listing"
-          parent="Weline_Backend::system_service_group" icon="mdi mdi-clock-outline" order="30"/>
+          parent="Weline_Backend::system_service_group" icon="clock" order="30"/>
 </menus>

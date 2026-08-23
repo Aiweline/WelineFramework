@@ -1,9 +1,13 @@
 /**
  * 主题编辑器 - iframe 内编辑模式样式
- * 
+ *
  * 这个文件在编辑模式下被注入到 iframe 中
  * 不会影响前端正式页面
  */
+
+@layer reset, tokens, base, layout, components, utilities, page;
+
+@layer page {
 
 /* ========================================
    编辑模式基础样式
@@ -29,7 +33,10 @@ body.editor-mode {
     --editor-mode-selection-active: var(--editor-mode-success);
     --editor-mode-selection-invalid: var(--editor-mode-danger);
     --editor-mode-selection-subtle: var(--editor-mode-primary-subtle);
-    --editor-mode-selection-active-subtle: var(--weline-theme-success-subtle);
+    --editor-mode-selection-active-subtle: var(
+        --weline-theme-success-subtle,
+        color-mix(in srgb, var(--editor-mode-selection-active) 18%, transparent)
+    );
     --editor-mode-selection-gradient: linear-gradient(135deg, var(--editor-mode-selection) 0%, var(--editor-mode-selection-hover) 100%);
     --editor-mode-selection-shadow: var(--weline-theme-focus-ring);
     /* 防止选中文字干扰编辑 */
@@ -48,7 +55,7 @@ body.editor-mode a {
    任何模块（Hook/Widget/组件）在编辑器 iframe 中
    需要保持完整交互能力时（弹窗、表单、浮层等），
    只需在根容器加上 data-editor-interactive 属性即可。
-   
+
    用法：<div id="my-modal" data-editor-interactive> ... </div>
    ======================================== */
 body.editor-mode [data-editor-interactive] {
@@ -511,68 +518,126 @@ body.editor-mode .slot-placeholder:hover {
     color: var(--editor-mode-selection);
 }
 
+/* 根内容 slot 在正式页面可以由内容自然撑开；编辑态必须保留可见、可命中的画布。 */
+body.editor-mode [data-wslot].w-theme-preview-canvas-slot {
+    min-block-size: clamp(10rem, 42dvh, 32rem);
+}
+
+body.editor-mode [data-wslot].w-theme-preview-canvas-slot.w-theme-preview-drop-target {
+    background-color: color-mix(
+        in srgb,
+        var(--editor-mode-selection-active) 8%,
+        transparent
+    );
+}
+
 /* ========================================
    iframe 内拖拽插入指示器
    ======================================== */
 
-/* 插入位置指示线 */
-.editor-insert-indicator {
-    display: flex;
-    align-items: center;
-    height: 4px;
-    margin: 2px 0;
-    pointer-events: none;
-    z-index: 9999;
-    position: relative;
-    animation: editor-indicator-fadein 0.15s ease;
+/* 接纳容器：绿色实线 + 浅色内环，颜色之外还有位置标签。 */
+body.editor-mode [data-wslot].w-theme-preview-drop-target {
+    outline: 3px solid var(--editor-mode-selection-active);
+    outline-offset: -3px;
+    box-shadow: inset 0 0 0 4px var(--editor-mode-selection-active-subtle);
 }
 
-@keyframes editor-indicator-fadein {
-    from { opacity: 0; transform: scaleX(0.5); }
-    to   { opacity: 1; transform: scaleX(1); }
-}
-
-.editor-insert-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--editor-mode-selection);
-    flex-shrink: 0;
-    box-shadow: var(--editor-mode-selection-shadow);
-}
-
-.editor-insert-line {
-    flex: 1;
-    height: 3px;
-    background: var(--editor-mode-selection);
-    border-radius: 2px;
-    box-shadow: var(--editor-mode-selection-shadow);
-}
-
-/* 空插槽整体高亮（整块 footer/header 不叠加背景，避免深色底部/顶部被盖成浅色） */
-body.editor-mode [data-wslot].editor-drop-empty {
-    outline-color: var(--editor-mode-selection-active);
+body.editor-mode [data-wslot][data-w-drop-position="inside"].w-theme-preview-drop-target {
     outline-style: dashed;
-    outline-width: 3px;
 }
-/* 仅对非整块区域插槽叠加浅绿高亮；footer/header 不设 background，保留主题深色 */
-body.editor-mode [data-wslot].editor-drop-empty:not([data-wslot="footer"]):not([data-wslot="header"]) {
-    background-color: var(--editor-mode-selection-active-subtle);
+
+.w-theme-preview-drop-before,
+.w-theme-preview-drop-after {
+    position: relative !important;
+}
+
+.w-theme-preview-drop-before::before,
+.w-theme-preview-drop-after::after {
+    content: "";
+    position: absolute;
+    z-index: 2147482000;
+    inset-inline: 0;
+    block-size: 4px;
+    border-radius: 999px;
+    background: var(--editor-mode-selection-active);
+    box-shadow:
+        0 0 0 1px var(--editor-mode-surface),
+        0 0 0 4px var(--editor-mode-selection-active-subtle);
+    pointer-events: none;
+}
+
+.w-theme-preview-drop-before::before {
+    inset-block-start: 0;
+    translate: 0 -50%;
+}
+
+.w-theme-preview-drop-after::after {
+    inset-block-end: 0;
+    translate: 0 50%;
+}
+
+.w-theme-preview-drop-feedback {
+    position: absolute;
+    z-index: 2147483000;
+    inset-block-start: var(--w-theme-preview-drop-feedback-top, max(0.5rem, env(safe-area-inset-top)));
+    inset-inline-start: auto;
+    left: var(--w-theme-preview-drop-feedback-left, 50%);
+    max-inline-size: min(24rem, calc(100vw - 1rem), calc(100% - 1rem));
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--editor-mode-selection-active);
+    border-radius: 999px;
+    background: var(--editor-mode-surface);
+    color: var(--editor-mode-selection-active);
+    box-shadow: var(--editor-mode-shadow);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: center;
+    overflow-wrap: anywhere;
+    translate: -50% 0;
+    pointer-events: none;
+}
+
+body.editor-mode [data-wslot][data-w-drop-position="invalid"] .w-theme-preview-drop-feedback {
+    border-color: var(--editor-mode-selection-invalid);
+    color: var(--editor-mode-selection-invalid);
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
+    body.editor-mode [data-wslot].w-theme-preview-canvas-slot {
+        min-block-size: clamp(8rem, 35dvh, 20rem);
+    }
+
     .slot-placeholder {
         padding: 20px 15px;
         min-height: 100px;
     }
-    
+
     .slot-placeholder .placeholder-icon,
     .slot-placeholder > i {
         font-size: 28px;
     }
-    
+
     .slot-placeholder-large {
         min-height: 150px;
     }
+
+    .w-theme-preview-drop-feedback {
+        max-inline-size: min(24rem, calc(100vw - 0.5rem), calc(100% - 0.5rem));
+        padding: 0.3rem 0.5rem;
+        font-size: 11px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.editor-mode [data-wslot],
+    .slot-highlight,
+    .w-theme-preview-drop-before::before,
+    .w-theme-preview-drop-after::after,
+    .w-theme-preview-drop-feedback {
+        animation: none !important;
+        transition: none !important;
+    }
+}
 }

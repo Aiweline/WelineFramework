@@ -1,0 +1,57 @@
+/* Weline UI source: css/file-picker.css */
+@layer components {
+    .w-file-picker { display: grid; gap: var(--weline-space-3); min-inline-size: 0; }
+    .w-file-preview { display: flex; flex-wrap: wrap; gap: var(--weline-space-2); min-inline-size: 0; }
+    .w-file-preview:empty { display: none; }
+    .w-file-preview__item {
+        position: relative;
+        flex: 0 0 var(--w-file-preview-width, 5rem);
+        inline-size: var(--w-file-preview-width, 5rem);
+        block-size: var(--w-file-preview-height, 5rem);
+        min-inline-size: 2.75rem;
+        min-block-size: 2.75rem;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+    }
+    .w-file-preview__item[data-state="dragging"] { opacity: 0.5; }
+    .w-file-preview__item[data-state="drop-target"] { outline: 3px solid var(--weline-theme-focus); outline-offset: 2px; }
+    .w-file-preview__thumbnail { display: grid; inline-size: 100%; block-size: 100%; place-items: center; border: 0; background: transparent; cursor: zoom-in; }
+    .w-file-preview__thumbnail img { inline-size: 100%; block-size: 100%; object-fit: contain; }
+    .w-file-preview__actions {
+        position: absolute;
+        inset-block-start: var(--weline-space-1);
+        inset-inline-end: var(--weline-space-1);
+        display: flex;
+        gap: 2px;
+        padding: 2px;
+        border-radius: var(--weline-radius-md);
+        background: color-mix(in srgb, var(--weline-theme-surface) 88%, transparent);
+        box-shadow: var(--weline-theme-shadow-sm);
+        opacity: 0;
+        transition: opacity var(--weline-motion-fast);
+    }
+    .w-file-preview__item:hover .w-file-preview__actions,
+    .w-file-preview__item:focus-within .w-file-preview__actions { opacity: 1; }
+    .w-file-preview__actions .w-button { min-inline-size: 1.75rem; padding-inline: var(--weline-space-1); }
+    .w-file-picker__dialog { inline-size: min(75rem, calc(100vw - 2rem)); max-inline-size: none; }
+    .w-file-picker__dialog .w-dialog__surface { inline-size: 100%; max-inline-size: none; }
+    .w-file-picker__body { min-block-size: min(70vh, 48rem); padding: 0; overflow: hidden; }
+    .w-file-picker__frame { display: block; inline-size: 100%; block-size: min(70vh, 48rem); border: 0; background: var(--weline-theme-surface); }
+    .w-file-preview__dialog { inline-size: min(62rem, calc(100vw - 2rem)); max-inline-size: none; }
+    .w-file-preview__dialog .w-dialog__surface { inline-size: 100%; max-inline-size: none; }
+    .w-file-preview__dialog-body { display: grid; min-block-size: 12rem; place-items: center; }
+    .w-file-preview__dialog-body img { max-inline-size: 100%; max-block-size: min(72vh, 52rem); object-fit: contain; }
+
+    @media (max-width: 47.99rem) {
+        .w-file-preview__item { flex-basis: max(4.5rem, calc((100% - var(--weline-space-2) * 3) / 4)); }
+        .w-file-preview__actions { inset: auto 2px 2px; justify-content: center; opacity: 1; }
+        .w-file-picker__dialog,
+        .w-file-preview__dialog { inline-size: calc(100vw - 1rem); max-block-size: calc(100dvh - 1rem); }
+        .w-file-picker__body,
+        .w-file-picker__frame { block-size: calc(100dvh - 9rem); min-block-size: 20rem; }
+    }
+}

@@ -14,7 +14,7 @@ namespace Weline\Checkout\Controller\Backend;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 
-#[Acl('Weline_Checkout::order_manage', '订单管理', 'mdi-cart', '订单管理', 'Weline_Backend::order_group')]
+#[Acl('Weline_Checkout::order_manage', '订单管理', 'cart', '订单管理', 'Weline_Backend::order_group')]
 class Order extends BackendController
 {
     /**
@@ -22,7 +22,7 @@ class Order extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Checkout::order_list', '查看订单列表', 'mdi-format-list-bulleted', '查看订单列表')]
+    #[Acl('Weline_Checkout::order_list', '查看订单列表', 'list', '查看订单列表')]
     public function index(): string
     {
         // Compatibility route only: Weline_Order owns the canonical order workspace.
@@ -34,7 +34,7 @@ class Order extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Checkout::order_view', '查看订单详情', 'mdi-eye', '查看订单详情')]
+    #[Acl('Weline_Checkout::order_view', '查看订单详情', 'eye', '查看订单详情')]
     public function view(): string
     {
         // Compatibility route only: preserve legacy links while delegating ownership.
@@ -52,7 +52,7 @@ class Order extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Checkout::order_update_status', '更新订单状态', 'mdi-pencil', '更新订单状态')]
+    #[Acl('Weline_Checkout::order_update_status', '更新订单状态', 'edit', '更新订单状态')]
     public function updateStatus(): string
     {
         // Mutations are owned by Weline_Order; this legacy writer is deliberately retired.

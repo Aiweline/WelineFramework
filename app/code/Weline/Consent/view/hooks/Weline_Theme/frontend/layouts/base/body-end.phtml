@@ -24,18 +24,24 @@
       root.setAttribute('data-consent-error', '1');
       show();
     };
-    if (window.Weline && typeof Weline.load === 'function') {
-      Weline.load('api').then(run).then(done).catch(failed);
-    } else if (window.Weline && Weline.Api && typeof Weline.Api.resource === 'function') {
-      Promise.resolve(run(Weline.Api)).then(done).catch(failed);
-    } else {
-      failed();
-    }
+    var resolveApi = function () {
+      if (window.Weline && typeof Weline.load === 'function') {
+        return Weline.load('api');
+      }
+      if (window.Weline && Weline.Api && Weline.Api.__fallback !== true && typeof Weline.Api.resource === 'function') {
+        return Promise.resolve(Weline.Api);
+      }
+      return Promise.reject(new Error('Weline.Api unavailable'));
+    };
+    resolveApi().then(function (api) {
+      // Stub Weline.Api.resource 是 async；真实 ApiModule.resource 是 sync。统一 await。
+      return Promise.resolve(api.resource('consent')).then(run);
+    }).then(done).catch(failed);
   }
   root.querySelector('[data-consent-dismiss]')?.addEventListener('click', hide);
   root.querySelector('[data-consent-accept]')?.addEventListener('click', function () {
-    runWithApi(function (api) {
-      return api.resource('consent').accept({
+    runWithApi(function (consent) {
+      return consent.accept({
         categories: ['analytics', 'marketing']
       });
     }, function (result) {
@@ -46,8 +52,8 @@
       show();
     });
   });
-  runWithApi(function (api) {
-    return api.resource('consent').status({});
+  runWithApi(function (consent) {
+    return consent.status({});
   }, function (result) {
     if (result && result.recording_enabled !== false && result.show_banner === true) {
       show();

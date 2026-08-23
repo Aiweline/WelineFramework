@@ -9,7 +9,7 @@ use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Websites\Model\ProvisioningOrder;
 
 /** Websites 一站式配置订单后台 */
-#[AclAttribute('Weline_Websites::provisioning', '配置订单', 'mdi-format-list-bulleted', '一站式配置订单', 'Weline_Websites::website_service')]
+#[AclAttribute('Weline_Websites::provisioning', '配置订单', 'list', '一站式配置订单', 'Weline_Websites::website_service')]
 class Provisioning extends BackendController
 {
     public function __construct(
@@ -17,7 +17,7 @@ class Provisioning extends BackendController
     ) {
     }
 
-    #[AclAttribute('Weline_Websites::provisioning_list', '查看配置订单', 'mdi-view-list', '查看配置订单列表')]
+    #[AclAttribute('Weline_Websites::provisioning_list', '查看配置订单', 'list', '查看配置订单列表')]
     public function index(): string
     {
         $page = (int) $this->request->getGet('page', 1);

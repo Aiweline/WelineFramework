@@ -16,7 +16,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
  * 功能：
  * - 系统级维护模式（后台仍可访问）
  */
-#[Acl('Weline_Backend::system_maintenance', '系统维护模式', 'mdi-tools', '系统维护模式', 'Weline_Backend::system_service_group')]
+#[Acl('Weline_Backend::system_maintenance', '系统维护模式', 'settings', '系统维护模式', 'Weline_Backend::system_service_group')]
 class Maintenance extends BackendController
 {
     public function __construct(
@@ -29,7 +29,7 @@ class Maintenance extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::system_maintenance_index', '查看系统维护模式', 'mdi-tools', '查看系统维护模式')]
+    #[Acl('Weline_Backend::system_maintenance_index', '查看系统维护模式', 'settings', '查看系统维护模式')]
     public function index(): string
     {
         try {
@@ -60,7 +60,7 @@ class Maintenance extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::system_maintenance_toggle', '切换系统维护模式', 'mdi-toggle-switch', '切换系统维护模式')]
+    #[Acl('Weline_Backend::system_maintenance_toggle', '切换系统维护模式', 'switch', '切换系统维护模式')]
     public function toggle(): string
     {
         if (!$this->isPost()) {
@@ -85,7 +85,7 @@ class Maintenance extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::system_maintenance_config', '配置系统维护模式', 'mdi-cog', '配置系统维护模式')]
+    #[Acl('Weline_Backend::system_maintenance_config', '配置系统维护模式', 'settings', '配置系统维护模式')]
     public function saveConfig(): string
     {
         if (!$this->isPost()) {

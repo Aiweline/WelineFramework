@@ -1,579 +1,123 @@
-
-<script>
-(function(g){
-  if(g.__bqAdmin_eav_admin) return;
-  g.__bqAdmin_eav_admin=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['eav_admin']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('eav_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
 <?php
 /**
- * EAV统一管理界面
- * 左侧：树形导航（Entity → Set → Group → Attribute）
- * 右侧：详情编辑面板
- * 
+ * EAV unified manager.
+ *
  * @var \Weline\Framework\View\Template $this
  */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$config = [
+    'apiBase' => '@backend-url("eav/backend/manager")',
+    'types' => [
+        'entity' => (string)__('实体'),
+        'set' => (string)__('属性集'),
+        'group' => (string)__('属性组'),
+        'attribute' => (string)__('属性'),
+    ],
+    'fields' => [
+        'code' => (string)__('代码'),
+        'name' => (string)__('名称'),
+        'class' => (string)__('实体类'),
+        'eav_entity_id_field_type' => (string)__('主键字段类型'),
+        'eav_entity_id_field_length' => (string)__('主键字段长度'),
+        'type_id' => (string)__('属性类型'),
+        'basic_is_enable' => (string)__('启用'),
+        'frontend_is_filterable' => (string)__('可筛选'),
+        'frontend_is_searchable' => (string)__('可搜索'),
+        'frontend_is_visible' => (string)__('前台可见'),
+        'data_is_multiple' => (string)__('允许多值'),
+        'data_has_option' => (string)__('包含选项'),
+    ],
+    'messages' => [
+        'loading' => (string)__('加载中...'),
+        'loadFailed' => (string)__('加载失败'),
+        'empty' => (string)__('暂无 EAV 数据'),
+        'selectContext' => (string)__('请先在树中选择所属节点'),
+        'save' => (string)__('保存'),
+        'saved' => (string)__('保存成功'),
+        'deleteTitle' => (string)__('删除 EAV 节点'),
+        'deleteMessage' => (string)__('该操作无法撤销，确定删除当前节点吗？'),
+        'deleted' => (string)__('删除成功'),
+        'confirm' => (string)__('确定'),
+        'cancel' => (string)__('取消'),
+        'required' => (string)__('请填写必填字段'),
+        'system' => (string)__('系统'),
+        'new' => (string)__('新建'),
+        'unknownError' => (string)__('未知错误'),
+    ],
+];
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
-<!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>EAV管理</lang>
-            </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span><lang>系统配置</lang></span></li>
-                    <li class='breadcrumb-item active'><lang>EAV管理</lang></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
 
-<!-- EAV管理器主体 -->
-<div class="eav-manager-container" id="eav-manager">
-    
-    <!-- 左侧树形导航面板 -->
-    <div class="eav-tree-panel">
-        <div class="eav-tree-header">
-            <div class="eav-tree-search">
-                <i class="mdi mdi-magnify search-icon"></i>
-                <input type="text" class="form-control form-control-sm" 
-                       id="tree-search" placeholder="<?= __('搜索实体、属性集、属性...') ?>">
-            </div>
+<section class="w-eav-manager w-stack" data-w-component="eav-manager">
+    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-stack" data-gap="sm">
+            <h1><w:icon name="tree" size="sm" /> <?= $escape(__('EAV 管理')) ?></h1>
+            <p class="w-text" data-tone="muted"><?= $escape(__('按实体、属性集、属性组和属性维护 EAV 结构')) ?></p>
         </div>
-        <div class="eav-tree-content" id="eav-tree">
-            <div class="tree-loading">
-                <i class="mdi mdi-loading mdi-spin me-2"></i>
-                <lang>加载中...</lang>
+        <ol class="w-breadcrumb" aria-label="<?= $escape(__('面包屑导航')) ?>">
+            <li><span><?= $escape(__('系统配置')) ?></span></li>
+            <li aria-current="page"><?= $escape(__('EAV 管理')) ?></li>
+        </ol>
+    </header>
+
+    <div class="w-eav-manager__layout">
+        <aside class="w-card w-eav-manager__navigation" aria-labelledby="w-eav-tree-title">
+            <header class="w-card__header w-stack" data-gap="sm">
+                <h2 class="w-card__title" id="w-eav-tree-title"><?= $escape(__('EAV 结构')) ?></h2>
+                <label class="w-field">
+                    <span class="w-visually-hidden"><?= $escape(__('搜索已加载节点')) ?></span>
+                    <span class="w-field__control">
+                        <span class="w-field__addon" aria-hidden="true"><w:icon name="search" size="sm" /></span>
+                        <input class="w-input" type="search" data-w-eav-search placeholder="<?= $escape(__('搜索已加载节点...')) ?>" autocomplete="off">
+                    </span>
+                </label>
+            </header>
+
+            <div class="w-card__body w-eav-manager__tree-scroll">
+                <ul class="w-tree" role="tree" data-w-component="tree" data-w-eav-tree aria-label="<?= $escape(__('EAV 结构树')) ?>" aria-busy="true"></ul>
             </div>
-        </div>
-        <div class="eav-tree-actions">
-            <div class="dropup">
-                <button class="btn btn-primary btn-sm dropdown-toggle w-100" type="button" 
-                        id="addNewDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="mdi mdi-plus me-1"></i>
-                    <lang>新建</lang>
+
+            <footer class="w-card__footer">
+                <div class="w-menu-root" data-w-component="menu" data-w-placement="top-start">
+                    <button class="w-button w-eav-manager__create-trigger" type="button" data-tone="primary" data-w-menu-trigger aria-haspopup="menu" aria-expanded="false">
+                        <w:icon name="plus" size="sm" /> <?= $escape(__('新建')) ?>
+                    </button>
+                    <div class="w-menu w-eav-manager__create-menu" data-w-menu-panel role="menu" hidden>
+                        <?php foreach ($config['types'] as $type => $label): ?>
+                            <button class="w-menu__item" type="button" role="menuitem" tabindex="-1" data-w-eav-create="<?= $escape($type) ?>">
+                                <w:icon name="<?= $type === 'attribute' ? 'tag' : ($type === 'entity' ? 'box' : 'folder') ?>" size="sm" />
+                                <?= $escape(__('新建 %1', $label)) ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </footer>
+        </aside>
+
+        <section class="w-card w-eav-manager__detail" aria-labelledby="w-eav-detail-title">
+            <header class="w-card__header w-eav-manager__detail-header" data-w-eav-detail-header hidden>
+                <div class="w-stack" data-gap="sm">
+                    <h2 class="w-card__title" id="w-eav-detail-title" data-w-eav-detail-title></h2>
+                    <p class="w-text" data-tone="muted" data-family="mono" data-w-eav-detail-subtitle></p>
+                </div>
+                <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-size="sm" data-w-eav-delete hidden>
+                    <w:icon name="trash" size="sm" /> <?= $escape(__('删除')) ?>
                 </button>
-                <ul class="dropdown-menu w-100" aria-labelledby="addNewDropdown">
-                    <li><a class="dropdown-item" href="#" id="add-entity-btn">
-                        <i class="mdi mdi-cube-outline me-2"></i><lang>新建实体</lang>
-                    </a></li>
-                    <li><a class="dropdown-item" href="#" id="add-set-btn">
-                        <i class="mdi mdi-folder-outline me-2"></i><lang>新建属性集</lang>
-                    </a></li>
-                    <li><a class="dropdown-item" href="#" id="add-group-btn">
-                        <i class="mdi mdi-folder-multiple-outline me-2"></i><lang>新建属性组</lang>
-                    </a></li>
-                    <li><a class="dropdown-item" href="#" id="add-attribute-btn">
-                        <i class="mdi mdi-tag-outline me-2"></i><lang>新建属性</lang>
-                    </a></li>
-                </ul>
+            </header>
+            <div class="w-card__body w-eav-manager__detail-body">
+                <div class="w-empty" data-w-eav-placeholder>
+                    <w:icon name="info" size="xl" />
+                    <div class="w-stack" data-gap="sm">
+                        <h2><?= $escape(__('选择左侧节点查看详情')) ?></h2>
+                        <p><?= $escape(__('展开结构树并选择节点，可在此查看或修改其配置。')) ?></p>
+                    </div>
+                </div>
+                <div class="w-eav-manager__form" data-w-eav-detail hidden></div>
             </div>
-        </div>
+        </section>
     </div>
-    
-    <!-- 右侧详情编辑面板 -->
-    <div class="eav-detail-panel">
-        <div class="eav-detail-header" id="detail-header" style="display: none;">
-            <div>
-                <h5 class="mb-0" id="detail-title"></h5>
-                <small class="text-muted" id="detail-subtitle"></small>
-            </div>
-            <div class="btn-group">
-                <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete" style="display: none;">
-                    <i class="mdi mdi-delete"></i>
-                </button>
-            </div>
-        </div>
-        <div class="eav-detail-content" id="detail-content">
-            <!-- 占位提示 -->
-            <div class="eav-detail-placeholder" id="detail-placeholder">
-                <i class="mdi mdi-cursor-default-click-outline"></i>
-                <h5><lang>选择左侧节点查看详情</lang></h5>
-                <p class="text-muted"><lang>点击左侧树形导航中的节点，在此处查看和编辑详情</lang></p>
-            </div>
-            <!-- 表单容器 -->
-            <div id="detail-form" style="display: none;"></div>
-        </div>
-    </div>
-    
-</div>
+</section>
 
-<style>
-/* EAV管理器样式 */
-.eav-manager-container {
-    display: flex;
-    height: calc(100vh - 180px);
-    gap: 16px;
-}
-
-.eav-tree-panel {
-    width: 320px;
-    min-width: 280px;
-    max-width: 400px;
-    background: var(--backend-color-card-bg, #fff);
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-}
-
-.eav-tree-panel .eav-tree-actions {
-    overflow: visible;
-}
-
-.eav-tree-header {
-    padding: 16px;
-    border-bottom: 1px solid var(--backend-color-border, #e9ecef);
-    flex-shrink: 0;
-}
-
-.eav-tree-search {
-    position: relative;
-}
-
-.eav-tree-search input {
-    padding-left: 36px;
-}
-
-.eav-tree-search .search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-.eav-tree-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px;
-}
-
-.eav-tree-actions {
-    padding: 12px 16px;
-    border-top: 1px solid var(--backend-color-border, #e9ecef);
-    flex-shrink: 0;
-    position: relative;
-    z-index: 1050;
-    background: var(--backend-color-card-bg, #fff);
-}
-
-.eav-tree-actions .dropup {
-    position: static;
-}
-
-.eav-tree-actions .dropup .dropdown-menu {
-    bottom: 100%;
-    top: auto !important;
-    transform: none !important;
-    margin-bottom: 8px;
-    max-height: 300px;
-    overflow-y: auto;
-    z-index: 1051;
-    box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
-}
-
-.eav-detail-panel {
-    flex: 1;
-    background: var(--backend-color-card-bg, #fff);
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.eav-detail-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--backend-color-border, #e9ecef);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-shrink: 0;
-}
-
-.eav-detail-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-}
-
-.eav-detail-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-.eav-detail-placeholder i {
-    font-size: 64px;
-    margin-bottom: 16px;
-    opacity: 0.5;
-}
-
-/* 树形节点样式 */
-.tree-node {
-    padding: 8px 12px;
-    margin: 2px 0;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: background-color 0.15s;
-}
-
-.tree-node:hover {
-    background-color: var(--backend-color-hover-bg, #f8f9fa);
-}
-
-.tree-node.active {
-    background-color: var(--backend-color-primary-bg-subtle, #cfe2ff);
-    color: var(--backend-color-primary, #0d6efd);
-}
-
-.tree-node-toggle {
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.tree-node-toggle.empty {
-    visibility: hidden;
-}
-
-.tree-node-icon {
-    font-size: 18px;
-    flex-shrink: 0;
-}
-
-.tree-node-label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.tree-node-code {
-    font-size: 12px;
-    color: var(--backend-color-text-secondary, #6c757d);
-    margin-left: 4px;
-}
-
-.tree-node-badge {
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    flex-shrink: 0;
-}
-
-.tree-children {
-    margin-left: 20px;
-    display: none;
-}
-
-.tree-children.expanded {
-    display: block;
-}
-
-.tree-loading {
-    padding: 8px 12px;
-    color: var(--backend-color-text-secondary, #6c757d);
-    font-size: 13px;
-}
-
-/* 节点类型图标颜色 */
-.node-entity .tree-node-icon { color: #6f42c1; }
-.node-set .tree-node-icon { color: #fd7e14; }
-.node-group .tree-node-icon { color: #20c997; }
-.node-attribute .tree-node-icon { color: #0dcaf0; }
-
-/* 表单样式 */
-.form-section {
-    margin-bottom: 24px;
-}
-
-.form-section-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #495057);
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--backend-color-border, #e9ecef);
-}
-
-/* 设置分组样式 */
-.settings-group {
-    background: var(--backend-color-body-bg, #f8f9fa);
-    border-radius: 8px;
-    padding: 12px 16px;
-    border: 1px solid var(--backend-color-border, #e9ecef);
-}
-
-.settings-group-title {
-    font-weight: 500;
-    color: var(--backend-color-text-secondary, #6c757d);
-    display: flex;
-    align-items: center;
-}
-
-.settings-group-title i {
-    font-size: 16px;
-}
-
-.settings-group .form-check-label {
-    font-size: 14px;
-}
-</style>
-
-<js:part>
-(function() {
-    'use strict';
-    
-    var EavManager = {
-        config: {
-            apiBase: '@backend-url("eav/backend/manager")',
-            treeContainer: '#eav-tree',
-            detailContainer: '#detail-form',
-            searchInput: '#tree-search'
-        },
-        
-        init: function(options) {
-            var self = this;
-            if (options) {
-                Object.assign(this.config, options);
-            }
-            this.loadTree();
-            this.bindEvents();
-        },
-        
-        loadTree: function() {
-            var self = this;
-            var container = $(this.config.treeContainer);
-            container.html('<div class="tree-loading"><i class="mdi mdi-loading mdi-spin me-2"></i>加载中...</div>');
-            var req = bqAdmin['eav_admin'](this.config.apiBase + '/tree', { silent: true });
-            req.then(function(res) {
-                var data = res && res.data;
-                if (res && res.ok && data && (data.code === 0 || data.items)) {
-                    self.renderTree(data.items || data.data || []);
-                } else {
-                    container.html('<div class="text-danger p-3">加载失败</div>');
-                }
-            }).catch(function() {
-                container.html('<div class="text-danger p-3">加载失败</div>');
-            });
-        },
-        
-        renderTree: function(data) {
-            var container = $(this.config.treeContainer);
-            if (!data || data.length === 0) {
-                container.html('<div class="text-muted p-3 text-center">暂无数据</div>');
-                return;
-            }
-            var html = this.buildTreeHtml(data);
-            container.html(html);
-        },
-        
-        buildTreeHtml: function(items, level) {
-            var self = this;
-            level = level || 0;
-            var html = '';
-            
-            items.forEach(function(item) {
-                var hasChildren = item.children && item.children.length > 0;
-                var nodeClass = 'tree-node node-' + item.type;
-                var toggleClass = hasChildren ? 'tree-node-toggle' : 'tree-node-toggle empty';
-                var icon = self.getNodeIcon(item.type);
-                
-                html += '<div class="' + nodeClass + '" data-type="' + item.type + '" data-id="' + item.id + '">';
-                html += '<span class="' + toggleClass + '">';
-                if (hasChildren) {
-                    html += '<i class="mdi mdi-chevron-right"></i>';
-                }
-                html += '</span>';
-                html += '<i class="tree-node-icon ' + icon + '"></i>';
-                html += '<span class="tree-node-label">' + item.name + '</span>';
-                if (item.code) {
-                    html += '<span class="tree-node-code">(' + item.code + ')</span>';
-                }
-                html += '</div>';
-                
-                if (hasChildren) {
-                    html += '<div class="tree-children">';
-                    html += self.buildTreeHtml(item.children, level + 1);
-                    html += '</div>';
-                }
-            });
-            
-            return html;
-        },
-        
-        getNodeIcon: function(type) {
-            var icons = {
-                'entity': 'mdi mdi-cube-outline',
-                'set': 'mdi mdi-folder-outline',
-                'group': 'mdi mdi-folder-multiple-outline',
-                'attribute': 'mdi mdi-tag-outline'
-            };
-            return icons[type] || 'mdi mdi-file-outline';
-        },
-        
-        bindEvents: function() {
-            var self = this;
-            
-            $(document).on('click', '.tree-node', function(e) {
-                e.stopPropagation();
-                var $node = $(this);
-                var $toggle = $node.find('.tree-node-toggle');
-                var $children = $node.next('.tree-children');
-                
-                $('.tree-node').removeClass('active');
-                $node.addClass('active');
-                
-                if ($children.length) {
-                    $children.toggleClass('expanded');
-                    $toggle.find('i').toggleClass('mdi-chevron-right mdi-chevron-down');
-                }
-                
-                self.loadDetail($node.data('type'), $node.data('id'));
-            });
-            
-            $(this.config.searchInput).on('input', debounce(function() {
-                var keyword = $(this).val().toLowerCase();
-                self.filterTree(keyword);
-            }, 300));
-            
-            $('#add-entity-btn').on('click', function(e) {
-                e.preventDefault();
-                self.addNode('entity');
-            });
-            
-            $('#add-set-btn').on('click', function(e) {
-                e.preventDefault();
-                self.addNode('set');
-            });
-            
-            $('#add-group-btn').on('click', function(e) {
-                e.preventDefault();
-                self.addNode('group');
-            });
-            
-            $('#add-attribute-btn').on('click', function(e) {
-                e.preventDefault();
-                self.addNode('attribute');
-            });
-        },
-        
-        filterTree: function(keyword) {
-            if (!keyword) {
-                $('.tree-node').show();
-                return;
-            }
-            
-            $('.tree-node').each(function() {
-                var text = $(this).text().toLowerCase();
-                if (text.indexOf(keyword) > -1) {
-                    $(this).show();
-                    $(this).parents('.tree-children').addClass('expanded');
-                } else {
-                    $(this).hide();
-                }
-            });
-        },
-        
-        loadDetail: function(type, id) {
-            var self = this;
-            $('#detail-placeholder').hide();
-            $('#detail-form').show().html('<div class="text-center p-5"><i class="mdi mdi-loading mdi-spin fs-3"></i></div>');
-            $('#detail-header').show();
-            var url = this.config.apiBase + '/detail?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id);
-            var req = bqAdmin['eav_admin'](url, { silent: true });
-            req.then(function(res) {
-                var data = res && res.data;
-                if (res && res.ok && data && (data.code === 0 || data.data)) {
-                    self.renderDetail(data.data || data || {});
-                } else {
-                    $('#detail-form').html('<div class="text-danger p-3">加载失败</div>');
-                }
-            }).catch(function() {
-                $('#detail-form').html('<div class="text-danger p-3">加载失败</div>');
-            });
-        },
-        
-        renderDetail: function(data) {
-            $('#detail-title').text(data.name || '详情');
-            $('#detail-subtitle').text(data.code || '');
-            $('#detail-form').html(data.html || '<div class="text-muted">暂无详情</div>');
-        },
-        
-        addNode: function(type) {
-            console.log('Add node:', type);
-            Swal.fire({
-                title: '新建' + this.getTypeName(type),
-                text: '即将打开新建表单',
-                icon: 'info',
-                confirmButtonText: '确定'
-            });
-        },
-        
-        getTypeName: function(type) {
-            var names = {
-                'entity': '实体',
-                'set': '属性集',
-                'group': '属性组',
-                'attribute': '属性'
-            };
-            return names[type] || type;
-        }
-    };
-    
-    window.EavManager = EavManager;
-    
-    $(document).ready(function() {
-        EavManager.init();
-        
-        $('#addNewDropdown').on('click', function(e) {
-            e.stopPropagation();
-        });
-        
-        $('.eav-tree-actions .dropdown-item').on('click', function() {
-            var dropdown = bootstrap.Dropdown.getInstance($('#addNewDropdown')[0]);
-            if (dropdown) {
-                dropdown.hide();
-            }
-        });
-    });
-})();
-</js:part>
+<script type="application/json" data-w-eav-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>

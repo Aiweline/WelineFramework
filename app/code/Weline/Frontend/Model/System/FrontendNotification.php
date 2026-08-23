@@ -80,7 +80,7 @@ class FrontendNotification extends Model
             ->setIsRead()
             ->setIsIcon(1)
             ->setIsImg(0)
-            ->setAvatar('ri-checkbox-circle-line')
+            ->setAvatar('check')
             ->save();
         $this->unsetData(self::schema_fields_ID);
         $this->setTitle('框架开发理念！')

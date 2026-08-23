@@ -51,8 +51,15 @@ final class StoreChannelSchemaContractTest extends TestCase
             "/'Weline_Websites',\\s*__DIR__,\\s*'1\\.7\\.1'/s",
             $registration,
         );
-        $index = (string)file_get_contents($moduleRoot . '/doc/AI-INDEX.md');
-        self::assertStringContainsString('doc/store-saleschannel-scope.md', $index);
+    }
+
+    public function testDynamicDocumentEntryReferencesScopeContract(): void
+    {
+        $moduleRoot = dirname(__DIR__, 3);
+
+        self::assertFileExists($moduleRoot . '/doc/store-saleschannel-scope.md');
+        $readme = (string)file_get_contents($moduleRoot . '/doc/README.md');
+        self::assertStringContainsString('doc/store-saleschannel-scope.md', $readme);
     }
 
     /** @param list<IndexDefinition> $indexes @param list<string> $columns */

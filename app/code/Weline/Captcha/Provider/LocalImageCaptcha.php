@@ -33,19 +33,30 @@ final class LocalImageCaptcha implements VerificationProviderInterface
             ->save();
 
         $labelText = (string)__('请输入图片中的验证码');
-        $image = LocalChallengeImage::inlineSvg($answer, $labelText);
+        $image = LocalChallengeImage::markup($answer, $labelText);
         $label = \htmlspecialchars($labelText, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $inputId = 'weline-captcha-response-' . \substr($token, 0, 12);
 
         return '<div class="weline-captcha weline-captcha-local" data-weline-captcha-provider="local_image">'
             . '<input type="hidden" name="captcha_provider" value="local_image">'
             . '<input type="hidden" name="captcha_token" value="' . \htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">'
-            . '<label class="form-label">' . $label . '</label>'
+            . '<div class="w-field">'
+            . '<label class="w-field__label" for="' . \htmlspecialchars($inputId, ENT_QUOTES, 'UTF-8') . '">' . $label . '</label>'
             . '<div class="weline-captcha-row">'
             . $image
-            . '<input class="form-control" type="text" name="captcha_response" required maxlength="6" '
-            . 'autocomplete="off" autocapitalize="characters" aria-label="' . $label . '">'
-            . '</div></div>'
-            . '<style>.weline-captcha{margin-top:1rem}.weline-captcha-row{display:flex;align-items:center;gap:.75rem}.weline-captcha-image{display:block;flex:0 0 168px;border:1px solid #cbd5e1;border-radius:.5rem;background:#f8fafc}.weline-captcha-row input{min-width:0;flex:1}</style>';
+            . '<span class="weline-captcha-field">'
+            . '<input class="w-input" id="' . \htmlspecialchars($inputId, ENT_QUOTES, 'UTF-8') . '" type="text" name="captcha_response" required maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" inputmode="text" aria-label="' . $label . '" placeholder="······">'
+            . '</span>'
+            . '</div></div></div>'
+            . '<style>'
+            . '.weline-captcha{margin-block:var(--weline-space-4,1rem);max-width:100%}'
+            . '.weline-captcha .w-field{margin:0}'
+            . '.weline-captcha-row{display:flex;align-items:stretch;gap:var(--weline-space-3,.75rem);max-width:100%;flex-wrap:nowrap}'
+            . '.weline-captcha-image{display:block;flex:0 0 auto;width:168px;height:var(--weline-control-height,2.5rem);object-fit:cover;border:1px solid var(--weline-theme-border,#cbd5e1);border-radius:var(--weline-radius-md,.5rem);background:var(--weline-theme-surface,#f8fafc);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 28%,transparent)}'
+            . '.weline-captcha-field{display:flex;flex:1 1 8rem;min-width:7rem;max-width:10rem;align-items:stretch}'
+            . '.weline-captcha-field .w-input{width:100%!important;max-width:100%!important;min-width:0;height:100%;min-height:var(--weline-control-height,2.5rem);box-sizing:border-box;letter-spacing:.28em;text-align:center;text-transform:uppercase;font-weight:650}'
+            . '@media (max-width:22rem){.weline-captcha-row{flex-wrap:wrap}.weline-captcha-image{width:100%;max-width:100%;height:2.75rem}.weline-captcha-field{max-width:100%;flex-basis:100%}}'
+            . '</style>';
     }
 
     public function verify(array $submission, string $intent, string $hostname, ?string $ip = null): bool

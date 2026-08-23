@@ -3,26 +3,26 @@
 用户拒绝了定位权限,用户拒绝了定位权限
 位置信息不可用,位置信息不可用
 定位请求超时,定位请求超时
-"Weline API is not available","Weline API is not available"
+"Weline API is not available",微线API不可用
 IP定位失败,IP定位失败
 "IP定位服务不可用: %{1}","IP定位服务不可用: %{1}"
-China,China
-"Deliver to","Deliver to"
-"Select delivery address","Select delivery address"
-"Auto detect","Auto detect"
-"Manual select","Manual select"
-"Enter delivery address, format: Province/City/District","Enter delivery address, format: Province/City/District"
-Province/City/District,Province/City/District
-Save,Save
-Cancel,Cancel
-Close,Close
-"Weline API is not available.","Weline API is not available."
-"Geo module is not available.","Geo module is not available."
-"Address lookup failed.","Address lookup failed."
-"Location detection failed.","Location detection failed."
-Locating...,Locating...
-"Please enter a delivery address.","Please enter a delivery address."
-"Delivery address saved.","Delivery address saved."
+China,中国
+"Deliver to",交付至
+"Select delivery address",选择送货地址
+"Auto detect",自动检测
+"Manual select",手动选择
+"Enter delivery address, format: Province/City/District",输入送货地址，格式：省/市/区
+Province/City/District,省/市/区
+Save,节省
+Cancel,取消
+Close,关闭
+"Weline API is not available.","Weline API 不可用。"
+"Geo module is not available.",地理模块不可用。
+"Address lookup failed.",地址查找失败。
+"Location detection failed.",位置检测失败。
+Locating...,正在定位...
+"Please enter a delivery address.",请输入送货地址。
+"Delivery address saved.",已保存送货地址。
 定位成功,定位成功
 经纬度参数不能为空,经纬度参数不能为空
 经纬度格式不正确,经纬度格式不正确

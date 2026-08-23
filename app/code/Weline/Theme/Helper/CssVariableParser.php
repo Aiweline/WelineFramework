@@ -125,8 +125,26 @@ class CssVariableParser
         if (preg_match('/@meta\.category\s*\{[^}]*default\s*=\s*"([^"]+)"/', $cssContent, $matches)) {
             $meta['category'] = $matches[1];
         }
+
+        foreach (['panel', 'disk_kind', 'palette_role', 'editor_hidden'] as $metaKey) {
+            if (preg_match('/@meta\.' . preg_quote($metaKey, '/') . '\s*\{[^}]*default\s*=\s*"([^"]+)"/', $cssContent, $matches)) {
+                $meta[$metaKey] = $matches[1];
+            }
+        }
         
         return $meta;
+    }
+
+    /**
+     * Public helper for catalog / disk compile file headers.
+     */
+    public static function parseFileMeta(string $filePath): array
+    {
+        if (!is_file($filePath)) {
+            return [];
+        }
+        $content = file_get_contents($filePath);
+        return is_string($content) ? self::extractFileMeta($content) : [];
     }
     
     /**

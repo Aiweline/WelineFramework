@@ -12,26 +12,26 @@ $subjects = $this->getData('subjects') ?: [];
 $title = $this->getData('seo_page_title') ?: __('SEO总览');
 ?>
 <!-- 消息提示 -->
-                <div class='row'>
-                    <div class='col-12'>
+                <div class="w-grid">
+                    <div style="--w-span:12;">
                         <template>Weline_Component::message.phtml</template>
                     </div>
                 </div>
                 
                 <!-- Page Title -->
-                <div class='row' data-testid="seo-dashboard-management">
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-view-dashboard me-2"></i>
+                <div class="w-grid" data-testid="seo-dashboard-management">
+                    <div style="--w-span:12;">
+                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+                            <h4 style="--w-mb-sm:0;">
+                                <w:icon name="grid" size="sm"></w:icon>
                                 <?= htmlspecialchars($title) ?>
                             </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><span>
+                            <div class="w-cluster">
+                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                                    <li class="w-breadcrumb__item"><span>
                                             <lang>SEO管理</lang>
                                         </span></li>
-                                    <li class='breadcrumb-item active'>
+                                    <li class="w-breadcrumb__item" data-state="active">
                                         <lang>总览</lang>
                                     </li>
                                 </ol>
@@ -41,18 +41,18 @@ $title = $this->getData('seo_page_title') ?: __('SEO总览');
                 </div>
 
                 <!-- Stats Cards -->
-                <div class="row">
-                    <div class="col-xl-3 col-md-6 mb-3">
+                <div class="w-grid">
+                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
                         <div class="stat-card">
-                            <i class="mdi mdi-file-document-multiple stat-icon"></i>
+                            <w:icon name="file" size="sm"></w:icon>
                             <div class="stat-label"><lang>SEO主体总数</lang></div>
                             <div class="stat-number"><?= count($subjects) ?></div>
                         </div>
                     </div>
                     
-                    <div class="col-xl-3 col-md-6 mb-3">
+                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
                         <div class="stat-card success">
-                            <i class="mdi mdi-tag-multiple stat-icon"></i>
+                            <w:icon name="tag" size="sm"></w:icon>
                             <div class="stat-label"><lang>关键词总数</lang></div>
                             <div class="stat-number">
                                 <?php
@@ -66,17 +66,17 @@ $title = $this->getData('seo_page_title') ?: __('SEO总览');
                         </div>
                     </div>
                     
-                    <div class="col-xl-3 col-md-6 mb-3">
+                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
                         <div class="stat-card info">
-                            <i class="mdi mdi-check-circle stat-icon"></i>
+                            <w:icon name="check" size="sm"></w:icon>
                             <div class="stat-label"><lang>已启用主体</lang></div>
                             <div class="stat-number"><?= count($subjects) ?></div>
                         </div>
                     </div>
                     
-                    <div class="col-xl-3 col-md-6 mb-3">
+                    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
                         <div class="stat-card">
-                            <i class="mdi mdi-trending-up stat-icon"></i>
+                            <w:icon name="circle" size="sm"></w:icon>
                             <div class="stat-label"><lang>平均关键词数</lang></div>
                             <div class="stat-number">
                                 <?php
@@ -91,51 +91,50 @@ $title = $this->getData('seo_page_title') ?: __('SEO总览');
                 </div>
 
                 <!-- SEO主体列表 -->
-                <div class="row">
-                    <div class="col-12">
+                <div class="w-grid">
+                    <div style="--w-span:12;">
                         <?php if (empty($subjects)): ?>
-                            <div class="card dashboard-card">
-                                <div class="card-body">
+                            <div class="w-card dashboard-card">
+                                <div class="w-card__body">
                                     <div class="empty-state">
-                                        <i class="mdi mdi-file-document-outline"></i>
+                                        <w:icon name="file" size="sm"></w:icon>
                                         <h5><lang>暂无SEO主体</lang></h5>
-                                        <p class="text-muted"><lang>当前没有启用的SEO主体，请先创建SEO主体。</lang></p>
+                                        <p class="w-text" data-tone="muted"><lang>当前没有启用的SEO主体，请先创建SEO主体。</lang></p>
                                     </div>
                                 </div>
                             </div>
                         <?php else: ?>
                             <?php foreach ($subjects as $subject): ?>
-                                <div class="card dashboard-card">
-                                    <div class="card-body">
+                                <div class="w-card dashboard-card">
+                                    <div class="w-card__body">
                                         <div class="subject-header">
                                             <div>
                                                 <h5 class="subject-title">
                                                     <?= htmlspecialchars($subject['title'] ?? __('未命名主体')) ?>
                                                 </h5>
                                                 <?php if (!empty($subject['url'])): ?>
-                                                    <small class="text-muted">
-                                                        <i class="mdi mdi-link-variant me-1"></i>
-                                                        <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" class="text-decoration-none">
+                                                    <small class="w-text" data-tone="muted">
+                                                        <w:icon name="link" size="sm"></w:icon>
+                                                        <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" data-w-decoration="none">
                                                             <?= htmlspecialchars($subject['url']) ?>
                                                         </a>
                                                     </small>
                                                 <?php endif; ?>
                                             </div>
                                             <div class="subject-meta">
-                                                <span class="badge badge-custom bg-info">
-                                                    <i class="mdi mdi-tag me-1"></i>
+                                                <span class="w-badge badge-custom" data-w-background="info">
+                                                    <w:icon name="tag" size="sm"></w:icon>
                                                     <?= $subject['keyword_count'] ?? 0 ?> <lang>个关键词</lang>
                                                 </span>
-                                                <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" 
-                                                   class="btn btn-view-detail">
-                                                    <i class="mdi mdi-eye me-1"></i>
+                                                <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" class="w-button weline-btn-view-detail">
+                                                    <w:icon name="eye" size="sm"></w:icon>
                                                     <lang>查看详情</lang>
                                                 </a>
                                             </div>
                                         </div>
                                         
                                         <?php if (!empty($subject['description'])): ?>
-                                            <p class="text-muted mb-3">
+                                            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);">
                                                 <?= htmlspecialchars(mb_substr($subject['description'], 0, 200)) ?>
                                                 <?= mb_strlen($subject['description']) > 200 ? '...' : '' ?>
                                             </p>
@@ -148,20 +147,20 @@ $title = $this->getData('seo_page_title') ?: __('SEO总览');
                                                         <span class="priority"><?= $index + 1 ?></span>
                                                         <?= htmlspecialchars($keyword['keyword'] ?? '') ?>
                                                         <?php if (!empty($keyword['priority'])): ?>
-                                                            <span class="badge bg-secondary ms-2"><?= $keyword['priority'] ?></span>
+                                                            <span class="w-badge" data-w-background="muted"><?= $keyword['priority'] ?></span>
                                                         <?php endif; ?>
                                                     </div>
                                                 <?php endforeach; ?>
                                                 <?php if (($subject['keyword_count'] ?? 0) > count($subject['keywords'])): ?>
                                                     <div class="keyword-item">
-                                                        <i class="mdi mdi-dots-horizontal me-1"></i>
+                                                        <w:icon name="more-horizontal" size="sm"></w:icon>
                                                         <lang>还有 <?= ($subject['keyword_count'] ?? 0) - count($subject['keywords']) ?> 个关键词</lang>
                                                     </div>
                                                 <?php endif; ?>
                                             </div>
                                         <?php else: ?>
-                                            <div class="alert alert-info mb-0">
-                                                <i class="mdi mdi-information me-2"></i>
+                                            <div class="w-alert" data-tone="info" style="--w-mb:0;">
+                                                <w:icon name="info" size="sm"></w:icon>
                                                 <lang>该主体暂无关键词</lang>
                                             </div>
                                         <?php endif; ?>

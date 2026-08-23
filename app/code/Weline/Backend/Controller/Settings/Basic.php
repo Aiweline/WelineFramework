@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理站点名称、时区等基础配置
  */
-#[Acl('Weline_Backend::basic_settings', '基础设置', 'mdi-settings', '基础设置', 'Weline_Backend::system_config_group')]
+#[Acl('Weline_Backend::basic_settings', '基础设置', 'settings', '基础设置', 'Weline_Backend::system_config_group')]
 class Basic extends BackendController
 {
     /**
@@ -21,7 +21,7 @@ class Basic extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::basic_settings_index', '查看基础设置', 'mdi-settings', '查看基础设置')]
+    #[Acl('Weline_Backend::basic_settings_index', '查看基础设置', 'settings', '查看基础设置')]
     public function index(): string
     {
         try {
@@ -49,7 +49,7 @@ class Basic extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Backend::basic_settings_save', '保存基础设置', 'mdi-content-save', '保存基础设置')]
+    #[Acl('Weline_Backend::basic_settings_save', '保存基础设置', 'save', '保存基础设置')]
     public function save(): string
     {
         if (!$this->isPost()) {

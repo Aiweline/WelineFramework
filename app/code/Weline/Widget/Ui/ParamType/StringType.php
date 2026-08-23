@@ -23,7 +23,7 @@ class StringType extends AbstractParamType
         $required = $param['required'] ?? false;
         $inputAttrs = array_merge([
             'type' => 'text',
-            'class' => 'w-param-input',
+            'class' => 'w-input',
             'id' => $fieldId,
             'name' => $key,
             'value' => htmlspecialchars((string)($value ?? $this->getDefaultValue($param) ?? '')),

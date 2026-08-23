@@ -261,5 +261,5 @@
 ## 相关文档
 
 - [if 标签使用指南](03-if-elseif-else标签使用指南.md)
-- [foreach 标签使用指南](05-foreach标签使用指南.md)
+- [foreach 标签使用指南](04-foreach标签使用指南.md)
 

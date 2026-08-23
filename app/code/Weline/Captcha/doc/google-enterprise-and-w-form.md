@@ -28,8 +28,8 @@ Provider 实现 `VerificationProviderInterface`，并可通过
 
 本地挑战只保存 `password_hash`，成功或失败都会删除记录。Enterprise Token 保存 SHA-256
 摘要防重放，并校验 `valid`、`action`、`hostname`、`createTime`、风险分数。
-本地图形挑战以服务器生成的内联 SVG 渲染，SVG 仅包含匿名图形段，不含答案文本，也不依赖
-可能被 CSP 禁止的 `data:` 图片地址。
+本地图形挑战以服务器生成的图像渲染：优先 GD + TrueType 输出 PNG；若不可用则回退为
+内联 SVG 描边字形（不含答案文本节点，也不依赖可能被 CSP 禁止的外链字体）。
 
 ## Google 一键授权
 

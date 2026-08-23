@@ -47,7 +47,7 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
 ?>
 
 <style>
-    .smtp-provider-switch .form-label {
+    .smtp-provider-switch .w-field__label {
         font-weight: 600;
     }
     .smtp-mail-picker {
@@ -112,30 +112,27 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
     }
 </style>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('SMTP 发件人配置') ?></h4>
-            <div>
-                <button type="button" class="btn btn-primary" id="btnAddSender">
-                    <i class="mdi mdi-plus me-1"></i><?= __('添加发件人') ?>
-                </button>
-            </div>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-cluster" data-align="center" data-justify="end">
+            <button type="button" class="w-button" id="btnAddSender" data-tone="primary">
+                <w:icon name="plus" size="sm"></w:icon><?= __('添加发件人') ?>
+            </button>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
+<div class="w-grid">
+    <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="alert alert-info border-0 mb-3">
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-alert" data-w-border="none" data-tone="info" style="--w-mb:var(--weline-space-4);">
             <strong><?= __('说明') ?></strong>
-            <ul class="mb-0 mt-1">
+            <ul style="--w-mb:0;--w-mt:var(--weline-space-1);">
                 <li><?= __('每个发件人用 <strong>code</strong> 标识，便于消息通知和 WeShop 等模块通过 w_query 指定发件人。') ?></li>
                 <li><?= __('发件来源可选择外部 SMTP 或自建邮局账号；选择自建后会自动带出 SMTP 主机、端口、加密方式和发件邮箱。') ?></li>
                 <li><?= __('<strong>默认联系人</strong>：该发件人作为邮件渠道时的默认收件邮箱，可由系统管理员或 w_query 设置。') ?></li>
@@ -156,58 +153,58 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
             $secureValue = $normalizeSecure($s['smtp_secure'] ?? '1', $s['smtp_port'] ?? '465');
             $authValue = $normalizeAuth($s['smtp_auth'] ?? '1');
             ?>
-            <div class="card mb-3 smtp-sender-card smtp-provider-switch <?= $sourceType === 'mail_account' ? 'smtp-source-mail' : 'smtp-source-external' ?>" data-index="<?= (int)$index ?>">
-                <div class="card-header d-flex align-items-center justify-content-between py-2">
-                    <h6 class="mb-0">
+            <div class="w-card smtp-sender-card smtp-provider-switch <?= $sourceType === 'mail_account' ? 'smtp-source-mail' : 'smtp-source-external' ?>" data-index="<?= (int)$index ?>" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__header w-cluster" data-align="center" data-justify="between" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
+                    <h6 style="--w-mb:0;">
                         <?= htmlspecialchars((string)($s['name'] ?? $s['code'] ?? __('发件人')), ENT_QUOTES, 'UTF-8') ?>
-                        <code class="small"><?= htmlspecialchars((string)($s['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code>
+                        <code class="w-text" data-size="sm"><?= htmlspecialchars((string)($s['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code>
                     </h6>
                     <div>
-                        <button type="button" class="btn btn-sm btn-outline-info btn-test-sender" data-code="<?= htmlspecialchars((string)($s['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" title="<?= __('发送测试邮件') ?>">
-                            <i class="mdi mdi-send"></i> <?= __('测试') ?>
+                        <button type="button" class="w-button weline-btn-test-sender" data-code="<?= htmlspecialchars((string)($s['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" title="<?= __('发送测试邮件') ?>" data-tone="info" data-variant="outline" data-size="sm">
+                            <w:icon name="arrow-right" size="sm"></w:icon> <?= __('测试') ?>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-sender" title="<?= __('删除') ?>"><i class="mdi mdi-delete-outline"></i></button>
+                        <button type="button" class="w-button weline-btn-remove-sender" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>
                     </div>
                 </div>
-                <div class="card-body">
-                    <div class="row g-2 mb-2">
-                        <div class="col-md-3">
-                            <label class="form-label small"><?= __('标识 code') ?> <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm smtp-code" name="code" value="<?= htmlspecialchars((string)($s['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="default / notification" required>
+                <div class="w-card__body">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('标识 code') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <input type="text" class="w-input smtp-code" name="code" value="<?= htmlspecialchars((string)($s['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="default / notification" required data-size="sm">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small"><?= __('显示名称') ?></label>
-                            <input type="text" class="form-control form-control-sm smtp-name" name="name" value="<?= htmlspecialchars((string)($s['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('如：默认发件人') ?>">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('显示名称') ?></label>
+                            <input type="text" class="w-input smtp-name" name="name" value="<?= htmlspecialchars((string)($s['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('如：默认发件人') ?>" data-size="sm">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small"><?= __('发件来源') ?></label>
-                            <select class="form-select form-select-sm smtp-source-type" name="source_type">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('发件来源') ?></label>
+                            <select class="w-select smtp-source-type" name="source_type" data-size="sm">
                                 <option value="external" <?= $sourceType === 'external' ? 'selected' : '' ?>><?= __('外部 SMTP') ?></option>
                                 <option value="mail_account" <?= $sourceType === 'mail_account' ? 'selected' : '' ?>><?= __('自建邮局账号') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small"><?= __('默认联系人（收件邮箱）') ?></label>
-                            <input type="email" class="form-control form-control-sm smtp-contact" name="default_to_email" value="<?= htmlspecialchars((string)($sender_contacts[$s['code'] ?? ''] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('该发件人默认收件人，可被 w_query 设置') ?>">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('默认联系人（收件邮箱）') ?></label>
+                            <input type="email" class="w-input smtp-contact" name="default_to_email" value="<?= htmlspecialchars((string)($sender_contacts[$s['code'] ?? ''] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('该发件人默认收件人，可被 w_query 设置') ?>" data-size="sm">
                         </div>
                     </div>
 
-                    <div class="row g-2 mb-2 smtp-mail-account-row">
-                        <div class="col-md-6">
-                            <label class="form-label small"><?= __('选择自建邮箱账号') ?></label>
+                    <div class="w-grid smtp-mail-account-row" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+                        <div style="--w-span-md:6;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('选择自建邮箱账号') ?></label>
                             <div class="smtp-mail-picker">
                                 <input type="hidden" class="smtp-mail-account-id" value="<?= (int)$mailAccountId ?>">
-                                <input type="text" class="form-control form-control-sm mail-account-search" value="<?= htmlspecialchars((string)$mailLabel, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('搜索邮箱账号、域名或名称') ?>" autocomplete="off">
+                                <input type="text" class="w-input mail-account-search" value="<?= htmlspecialchars((string)$mailLabel, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('搜索邮箱账号、域名或名称') ?>" autocomplete="off" data-size="sm">
                                 <div class="smtp-mail-results"></div>
                                 <div class="smtp-mail-chip smtp-mail-selected" style="<?= $mailLabel !== '' ? '' : 'display:none' ?>">
-                                    <i class="mdi mdi-email-outline"></i>
+                                    <w:icon name="mail" size="sm"></w:icon>
                                     <span><?= htmlspecialchars((string)$mailLabel, ENT_QUOTES, 'UTF-8') ?></span>
                                 </div>
-                                <small class="text-muted smtp-mail-empty" style="<?= $mail_accounts === [] ? '' : 'display:none' ?>"><?= __('暂无可用自建邮箱账号，请先在企业邮箱模块创建并启用账号。') ?></small>
+                                <small class="w-text smtp-mail-empty" style="<?= $mail_accounts === [] ? '' : 'display:none' ?>" data-tone="muted"><?= __('暂无可用自建邮箱账号，请先在企业邮箱模块创建并启用账号。') ?></small>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small"><?= __('自动配置摘要') ?></label>
+                        <div style="--w-span-md:6;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('自动配置摘要') ?></label>
                             <div class="smtp-auto-summary">
                                 <?= $sourceType === 'mail_account'
                                     ? htmlspecialchars((string)(($s['smtp_host'] ?? '') . ':' . ($s['smtp_port'] ?? '') . ' · ' . strtoupper((string)($s['smtp_secure'] ?? '')) . ' · ' . ($s['smtp_username'] ?? '')), ENT_QUOTES, 'UTF-8')
@@ -216,154 +213,154 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
                         </div>
                     </div>
 
-                    <div class="row g-2 smtp-transport-fields">
-                        <div class="col-md-3">
-                            <label class="form-label small"><?= __('SMTP 主机') ?> <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm smtp-host" name="smtp_host" value="<?= htmlspecialchars((string)($s['smtp_host'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="smtp.example.com">
+                    <div class="w-grid smtp-transport-fields" style="--w-gap:var(--weline-space-2);">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('SMTP 主机') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <input type="text" class="w-input smtp-host" name="smtp_host" value="<?= htmlspecialchars((string)($s['smtp_host'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="smtp.example.com" data-size="sm">
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label small"><?= __('端口') ?></label>
-                            <input type="number" class="form-control form-control-sm smtp-port" name="smtp_port" value="<?= htmlspecialchars((string)($s['smtp_port'] ?? '465'), ENT_QUOTES, 'UTF-8') ?>" placeholder="465">
+                        <div style="--w-span-md:2;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('端口') ?></label>
+                            <input type="number" class="w-input smtp-port" name="smtp_port" value="<?= htmlspecialchars((string)($s['smtp_port'] ?? '465'), ENT_QUOTES, 'UTF-8') ?>" placeholder="465" data-size="sm">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small"><?= __('加密方式') ?></label>
-                            <select class="form-select form-select-sm smtp-secure" name="smtp_secure">
+                        <div style="--w-span-md:3;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('加密方式') ?></label>
+                            <select class="w-select smtp-secure" name="smtp_secure" data-size="sm">
                                 <option value="ssl" <?= $secureValue === 'ssl' ? 'selected' : '' ?>><?= __('SMTPS / SSL') ?></option>
                                 <option value="tls" <?= $secureValue === 'tls' ? 'selected' : '' ?>><?= __('STARTTLS / TLS') ?></option>
                                 <option value="none" <?= $secureValue === 'none' ? 'selected' : '' ?>><?= __('无加密') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label small"><?= __('需要认证') ?></label>
-                            <select class="form-select form-select-sm smtp-auth" name="smtp_auth">
+                        <div style="--w-span-md:2;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('需要认证') ?></label>
+                            <select class="w-select smtp-auth" name="smtp_auth" data-size="sm">
                                 <option value="1" <?= $authValue === '1' ? 'selected' : '' ?>><?= __('是') ?></option>
                                 <option value="0" <?= $authValue === '0' ? 'selected' : '' ?>><?= __('否') ?></option>
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small"><?= __('发件邮箱 / 用户名') ?> <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm smtp-username" name="smtp_username" value="<?= htmlspecialchars((string)($s['smtp_username'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="noreply@example.com">
+                        <div style="--w-span-md:4;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('发件邮箱 / 用户名') ?> <span class="w-text" data-tone="danger">*</span></label>
+                            <input type="text" class="w-input smtp-username" name="smtp_username" value="<?= htmlspecialchars((string)($s['smtp_username'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="noreply@example.com" data-size="sm">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small"><?= __('密码') ?></label>
-                            <input type="password" class="form-control form-control-sm smtp-password" name="smtp_password" value="" placeholder="<?= __('留空则不修改') ?>">
+                        <div style="--w-span-md:4;">
+                            <label class="w-field__label w-text" data-size="sm"><?= __('密码') ?></label>
+                            <input type="password" class="w-input smtp-password" name="smtp_password" value="" placeholder="<?= __('留空则不修改') ?>" data-size="sm">
                             <?php if (!empty($s['smtp_password'])): ?>
-                                <small class="text-muted"><?= __('已保存，输入新密码可覆盖') ?></small>
+                                <small class="w-text" data-tone="muted"><?= __('已保存，输入新密码可覆盖') ?></small>
                             <?php endif; ?>
-                            <small class="text-muted smtp-mail-password-help" style="<?= $sourceType === 'mail_account' ? '' : 'display:none' ?>"><?= __('自建 fake 账号无需密码；真实自建账号如需 SMTP 认证请填写密码。') ?></small>
+                            <small class="w-text smtp-mail-password-help" style="<?= $sourceType === 'mail_account' ? '' : 'display:none' ?>" data-tone="muted"><?= __('自建 fake 账号无需密码；真实自建账号如需 SMTP 认证请填写密码。') ?></small>
                         </div>
                     </div>
                 </div>
             </div>
         <?php endforeach; ?>
     </div>
-    <div class="mb-3">
-        <button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save me-1"></i><?= __('保存全部') ?></button>
+    <div style="--w-mb:var(--weline-space-4);">
+        <button type="submit" class="w-button" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= __('保存全部') ?></button>
     </div>
 </w:form>
 
 <?= '<template id="smtpSenderCardTemplate">' ?>
-    <div class="card mb-3 smtp-sender-card smtp-provider-switch smtp-source-external" data-index="">
-        <div class="card-header d-flex align-items-center justify-content-between py-2">
-            <h6 class="mb-0"><?= __('新发件人') ?> <code class="small"></code></h6>
+    <div class="w-card smtp-sender-card smtp-provider-switch smtp-source-external" data-index="" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__header w-cluster" data-align="center" data-justify="between" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);">
+            <h6 style="--w-mb:0;"><?= __('新发件人') ?> <code class="w-text" data-size="sm"></code></h6>
             <div>
-                <button type="button" class="btn btn-sm btn-outline-info btn-test-sender" data-code="" title="<?= __('测试') ?>"><i class="mdi mdi-send"></i> <?= __('测试') ?></button>
-                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-sender"><i class="mdi mdi-delete-outline"></i></button>
+                <button type="button" class="w-button weline-btn-test-sender" data-code="" title="<?= __('测试') ?>" data-tone="info" data-variant="outline" data-size="sm"><w:icon name="arrow-right" size="sm"></w:icon> <?= __('测试') ?></button>
+                <button type="button" class="w-button weline-btn-remove-sender" data-tone="danger" data-variant="outline" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>
             </div>
         </div>
-        <div class="card-body">
-            <div class="row g-2 mb-2">
-                <div class="col-md-3">
-                    <label class="form-label small"><?= __('标识 code') ?> <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm smtp-code" name="code" placeholder="notification" required>
+        <div class="w-card__body">
+            <div class="w-grid" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('标识 code') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <input type="text" class="w-input smtp-code" name="code" placeholder="notification" required data-size="sm">
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small"><?= __('显示名称') ?></label>
-                    <input type="text" class="form-control form-control-sm smtp-name" name="name" placeholder="<?= __('默认发件人') ?>">
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('显示名称') ?></label>
+                    <input type="text" class="w-input smtp-name" name="name" placeholder="<?= __('默认发件人') ?>" data-size="sm">
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small"><?= __('发件来源') ?></label>
-                    <select class="form-select form-select-sm smtp-source-type" name="source_type">
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('发件来源') ?></label>
+                    <select class="w-select smtp-source-type" name="source_type" data-size="sm">
                         <option value="external"><?= __('外部 SMTP') ?></option>
                         <option value="mail_account"><?= __('自建邮局账号') ?></option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small"><?= __('默认联系人（收件邮箱）') ?></label>
-                    <input type="email" class="form-control form-control-sm smtp-contact" name="default_to_email" placeholder="<?= __('该发件人默认收件人') ?>">
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('默认联系人（收件邮箱）') ?></label>
+                    <input type="email" class="w-input smtp-contact" name="default_to_email" placeholder="<?= __('该发件人默认收件人') ?>" data-size="sm">
                 </div>
             </div>
-            <div class="row g-2 mb-2 smtp-mail-account-row">
-                <div class="col-md-6">
-                    <label class="form-label small"><?= __('选择自建邮箱账号') ?></label>
+            <div class="w-grid smtp-mail-account-row" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('选择自建邮箱账号') ?></label>
                     <div class="smtp-mail-picker">
                         <input type="hidden" class="smtp-mail-account-id" value="">
-                        <input type="text" class="form-control form-control-sm mail-account-search" placeholder="<?= __('搜索邮箱账号、域名或名称') ?>" autocomplete="off">
+                        <input type="text" class="w-input mail-account-search" placeholder="<?= __('搜索邮箱账号、域名或名称') ?>" autocomplete="off" data-size="sm">
                         <div class="smtp-mail-results"></div>
-                        <div class="smtp-mail-chip smtp-mail-selected" style="display:none"><i class="mdi mdi-email-outline"></i><span></span></div>
-                        <small class="text-muted smtp-mail-empty" style="<?= $mail_accounts === [] ? '' : 'display:none' ?>"><?= __('暂无可用自建邮箱账号，请先在企业邮箱模块创建并启用账号。') ?></small>
+                        <div class="smtp-mail-chip smtp-mail-selected" style="display:none"><w:icon name="mail" size="sm"></w:icon><span></span></div>
+                        <small class="w-text smtp-mail-empty" style="<?= $mail_accounts === [] ? '' : 'display:none' ?>" data-tone="muted"><?= __('暂无可用自建邮箱账号，请先在企业邮箱模块创建并启用账号。') ?></small>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label small"><?= __('自动配置摘要') ?></label>
+                <div style="--w-span-md:6;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('自动配置摘要') ?></label>
                     <div class="smtp-auto-summary"><?= __('外部 SMTP 需手动填写下方连接信息。') ?></div>
                 </div>
             </div>
-            <div class="row g-2 smtp-transport-fields">
-                <div class="col-md-3">
-                    <label class="form-label small"><?= __('SMTP 主机') ?> <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm smtp-host" name="smtp_host" placeholder="smtp.example.com">
+            <div class="w-grid smtp-transport-fields" style="--w-gap:var(--weline-space-2);">
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('SMTP 主机') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <input type="text" class="w-input smtp-host" name="smtp_host" placeholder="smtp.example.com" data-size="sm">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small"><?= __('端口') ?></label>
-                    <input type="number" class="form-control form-control-sm smtp-port" name="smtp_port" value="465">
+                <div style="--w-span-md:2;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('端口') ?></label>
+                    <input type="number" class="w-input smtp-port" name="smtp_port" value="465" data-size="sm">
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small"><?= __('加密方式') ?></label>
-                    <select class="form-select form-select-sm smtp-secure" name="smtp_secure">
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('加密方式') ?></label>
+                    <select class="w-select smtp-secure" name="smtp_secure" data-size="sm">
                         <option value="ssl"><?= __('SMTPS / SSL') ?></option>
                         <option value="tls"><?= __('STARTTLS / TLS') ?></option>
                         <option value="none"><?= __('无加密') ?></option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small"><?= __('需要认证') ?></label>
-                    <select class="form-select form-select-sm smtp-auth" name="smtp_auth">
+                <div style="--w-span-md:2;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('需要认证') ?></label>
+                    <select class="w-select smtp-auth" name="smtp_auth" data-size="sm">
                         <option value="1"><?= __('是') ?></option>
                         <option value="0"><?= __('否') ?></option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label small"><?= __('发件邮箱 / 用户名') ?> <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm smtp-username" name="smtp_username" placeholder="noreply@example.com">
+                <div style="--w-span-md:4;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('发件邮箱 / 用户名') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <input type="text" class="w-input smtp-username" name="smtp_username" placeholder="noreply@example.com" data-size="sm">
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label small"><?= __('密码') ?></label>
-                    <input type="password" class="form-control form-control-sm smtp-password" name="smtp_password" placeholder="<?= __('留空则不修改') ?>">
-                    <small class="text-muted smtp-mail-password-help" style="display:none"><?= __('自建 fake 账号无需密码；真实自建账号如需 SMTP 认证请填写密码。') ?></small>
+                <div style="--w-span-md:4;">
+                    <label class="w-field__label w-text" data-size="sm"><?= __('密码') ?></label>
+                    <input type="password" class="w-input smtp-password" name="smtp_password" placeholder="<?= __('留空则不修改') ?>" data-size="sm">
+                    <small class="w-text smtp-mail-password-help" style="display:none" data-tone="muted"><?= __('自建 fake 账号无需密码；真实自建账号如需 SMTP 认证请填写密码。') ?></small>
                 </div>
             </div>
         </div>
     </div>
 <?= '</template>' ?>
 
-<div class="modal fade" id="testEmailModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('发送测试邮件') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="w-dialog" id="testEmailModal" tabindex="-1" data-w-component="dialog" data-state="closed" hidden aria-hidden="true">
+    <div class="w-dialog__frame" data-size="sm">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('发送测试邮件') ?></h5>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
             </div>
-            <div class="modal-body">
+            <div class="w-dialog__body">
                 <input type="hidden" id="testSenderCode" value="">
-                <div class="mb-3">
-                    <label class="form-label"><?= __('收件邮箱') ?></label>
-                    <input type="email" class="form-control" id="testEmailTo" placeholder="admin@example.com">
+                <div style="--w-mb:var(--weline-space-4);">
+                    <label class="w-field__label"><?= __('收件邮箱') ?></label>
+                    <input type="email" class="w-input" id="testEmailTo" placeholder="admin@example.com">
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="btnDoTest"><?= __('发送') ?></button>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                <button type="button" class="w-button" id="btnDoTest" data-tone="primary"><?= __('发送') ?></button>
             </div>
         </div>
     </div>
@@ -478,12 +475,12 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
             return !query || haystack.indexOf(query) !== -1;
         }).slice(0, 8);
         if (matches.length === 0) {
-            results.innerHTML = '<div class="p-2 text-muted small">' + text.noMailAccount + '</div>';
+            results.innerHTML = '<div class="w-text" data-tone="muted" data-size="sm" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">' + text.noMailAccount + '</div>';
         } else {
             results.innerHTML = matches.map(function(account) {
                 return '<button type="button" class="smtp-mail-option" data-account-id="' + String(account.account_id || '') + '">' +
-                    '<div class="fw-semibold">' + escapeHtml(account.email || '') + '</div>' +
-                    '<div class="small text-muted">' + escapeHtml((account.domain_name || '') + ' · ' + (account.is_fake ? 'fake' : (account.engine || ''))) + '</div>' +
+                    '<div class="w-text" data-weight="strong">' + escapeHtml(account.email || '') + '</div>' +
+                    '<div class="w-text" data-tone="muted" data-size="sm">' + escapeHtml((account.domain_name || '') + ' · ' + (account.is_fake ? 'fake' : (account.engine || ''))) + '</div>' +
                     '</button>';
             }).join('');
         }
@@ -633,13 +630,9 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
                 return;
             }
             var removeMessage = '<?= __("确定删除最后一个发件人吗？删除后仍可重新添加。") ?>';
-            if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
-                BackendConfirm.show(removeMessage).then(function(confirmed) {
-                    if (confirmed) card.remove();
-                });
-            } else {
-                card.remove();
-            }
+            Weline.UI.dialog.confirm(removeMessage).then(function(confirmed) {
+                if (confirmed) card.remove();
+            });
         }
     });
 
@@ -651,17 +644,15 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
         var code = btn.getAttribute('data-code') || (card && card.querySelector('.smtp-code') && card.querySelector('.smtp-code').value);
         document.getElementById('testSenderCode').value = code || '';
         document.getElementById('testEmailTo').value = '';
-        if (typeof bootstrap !== 'undefined') {
-            if (!testModal) testModal = new bootstrap.Modal(document.getElementById('testEmailModal'));
-            testModal.show();
-        }
+        if (!testModal) testModal = document.getElementById('testEmailModal');
+        Weline.UI.dialog.open(testModal);
     });
 
     document.getElementById('btnDoTest').addEventListener('click', function() {
         var code = document.getElementById('testSenderCode').value;
         var to = document.getElementById('testEmailTo').value.trim();
         if (!to) {
-            if (typeof BackendToast !== 'undefined') BackendToast.error(text.enterRecipient);
+            if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.error(text.enterRecipient);
             return;
         }
         var form = document.createElement('form');
@@ -684,14 +675,14 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
         var senders = collectSenders();
         var contacts = collectContacts();
         if (senders.length === 0) {
-            if (typeof BackendToast !== 'undefined') BackendToast.error(text.addSender);
+            if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.error(text.addSender);
             return;
         }
         var needsMailAccount = senders.some(function(sender) {
             return sender.source_type === 'mail_account' && !sender.mail_account_id;
         });
         if (needsMailAccount) {
-            if (typeof BackendToast !== 'undefined') BackendToast.error(text.pickMailAccount);
+            if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.error(text.pickMailAccount);
             return;
         }
         savingSenders = true;
@@ -706,15 +697,15 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
             .then(function(res) {
                 var d = (res && res.data) !== undefined ? res.data : res;
                 if (d.success) {
-                    if (typeof BackendToast !== 'undefined') BackendToast.success(d.message);
+                    if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.success(d.message);
                     setTimeout(function() { window.location.reload(); }, 800);
                 } else {
-                    if (typeof BackendToast !== 'undefined') BackendToast.error(d.message || text.saveFailed);
+                    if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.error(d.message || text.saveFailed);
                     savingSenders = false;
                 }
             })
             .catch(function() {
-                if (typeof BackendToast !== 'undefined') BackendToast.error(text.saveFailed);
+                if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.error(text.saveFailed);
                 savingSenders = false;
             });
     }

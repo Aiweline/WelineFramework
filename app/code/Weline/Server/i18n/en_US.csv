@@ -46,6 +46,12 @@
 "Ping memory service","Ping memory service"
 "Get memory stats","Get memory stats"
 "Get memory runtime","Get memory runtime"
+"不支持的 WLS 面板生命周期操作：%{1}","Unsupported WLS panel lifecycle operation: %{1}"
+"WLS 面板生命周期","WLS panel life cycle"
+"在后台权限与项目边界内控制 WLS 重载和重启","Control WLS reloads and restarts within background permissions and project boundaries"
+请先登录后台,"Please log in to backend first"
+后台操作员不可用,"Backend operator is unavailable"
+"无权执行 WLS 面板生命周期操作","Not authorized to perform WLS panel lifecycle operations"
 "Server 查询器不支持的操作：%{1}","Operation not supported by Server query: %{1}"
 "Server 查询","Server query"
 "提供 SSL 证书申请等能力","Provides SSL certificate application and other capabilities"
@@ -93,8 +99,8 @@
 挂起超过此秒数释放，0=不自动释放,"Release after this many seconds of inactivity; 0 = do not auto-release"
 "最大挂起 Fiber 数，0=不限制","Max Suspended Fibers, 0 = Unlimited"
 "通知各 Worker 立即释放闲置 Fiber","Notify all Workers to release idle Fibers immediately"
-"读取 WLS 攻击统计","读取 WLS 攻击统计"
-统计天数,统计天数
+"读取 WLS 攻击统计","Read WLS attack statistics"
+统计天数,"Statistical days"
 "Resolve a WLS Panel managed project for plugin context","Resolve a WLS Panel managed project for plugin context"
 "Managed project ID","Managed project ID"
 "Managed project domain","Managed project domain"
@@ -103,7 +109,7 @@
 "Read one WLS performance request detail","Read one WLS performance request detail"
 "Read SessionServer and MemoryServer timing snapshots","Read SessionServer and MemoryServer timing snapshots"
 "Clear short-lived WLS performance panel traces","Clear short-lived WLS performance panel traces"
-"为当前后台浏览器设置 WLS 健康检查放行 Cookie","为当前后台浏览器设置 WLS 健康检查放行 Cookie"
+"为当前后台浏览器设置 WLS 健康检查放行 Cookie","Set the WLS health check pass cookie for the current backend browser"
 域名不能为空,"Domain cannot be empty"
 "PFX 文件内容无效（Base64 解码失败）","PFX file content is invalid (Base64 decoding failed)"
 "PFX/P12 解析失败，请确认文件与密码正确","PFX/P12 parsing failed, please confirm that the file and password are correct"
@@ -126,7 +132,6 @@
 "Failed to ensure the managed local wildcard certificate","Failed to ensure the managed local wildcard certificate"
 维护模式已启用,"Maintenance mode is enabled"
 维护模式已禁用,"Maintenance mode is disabled"
-请先登录后台,"Please log in to backend first"
 "Managed project context is empty.","Managed project context is empty."
 "Managed project was not found.","Managed project was not found."
 "Managed project context resolved.","Managed project context resolved."
@@ -160,11 +165,11 @@
 包太大：%{1},"Package too large: %{1}"
 "onMessage 错误：%{1}","onMessage error: %{1}"
 "onClose 错误：%{1}","onClose error: %{1}"
-"静态文件缓存: %{1} %{2}","静态文件缓存: %{1} %{2}"
-请求边界清理失败，请稍后重试。,请求边界清理失败，请稍后重试。
+"静态文件缓存: %{1} %{2}","Static file cache: %{1} %{2}"
+请求边界清理失败，请稍后重试。,"The request for boundary cleanup failed, please try again later."
 "高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成","High-performance asynchronous persistent memory server, supports HTTP/WebSocket/TCP/UDP protocols, supports multi-instance management, server monitoring, attack logs, certificate management Hook integration"
 "WLS 通知：%{1}","WLS notification: %{1}"
-"WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。","WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。"
+"WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。","WLS instance [%s] Master failed to revive. It has been tried %d times. Please check manually and execute server:start or server:restart."
 "SSL 证书管理","SSL Certificate Management"
 "无效的证书 ID","Invalid certificate ID"
 不支持的策略字段,"Unsupported policy fields"
@@ -180,57 +185,78 @@
 "签发完成：成功 %{1} 个，失败 %{2} 个","Issue completed: %{1} succeeded, %{2} failed"
 请选择要删除的证书,"Please select the certificate to delete"
 后台批量删除,"Backend Batch Deletion"
-证书删除失败,证书删除失败
+证书删除失败,"Certificate deletion failed"
 "已删除 %{1} 个证书","Deleted %{1} certificate(s)"
 "跳过 %{1} 个本地域名（%{2}）","Skipped %{1} local domains (%{2})"
 "跳过 %{1} 个正在申请证书的域名（%{2}）","Skipped %{1} domains with pending certificate applications (%{2})"
-"%{1} 个证书删除未完成","%{1} 个证书删除未完成"
+"%{1} 个证书删除未完成","%{1} certificate deletion is incomplete"
 请选择要续签的证书,"Please select the certificate to renew"
 %{1}：证书记录不存在,"%{1}: Certificate record does not exist"
 %{1}：%{2},%{1}：%{2}
 续签失败,"Renewal failed"
 "续签完成：成功 %{1} 个，失败 %{2} 个","Renewal complete: %{1} succeeded, %{2} failed"
 "Legacy WLS Plugin Marketplace Redirect","Legacy WLS Plugin Marketplace Redirect"
+store,store
 "Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace.","Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace."
-"WLS 面板","WLS 面板"
-"WLS 项目","WLS 项目"
+"WLS 面板","WLS panel"
+"WLS 项目","WLS project"
 "Nginx 公网入口","Nginx public endpoint"
-"WLS 插件","WLS 插件"
-"WLS 插件商城","WLS 插件商城"
-"WLS 安全","WLS 安全"
-"WLS 攻击日志","WLS 攻击日志"
-"WLS 安全规则","WLS 安全规则"
-"WLS 项目安全策略","WLS 项目安全策略"
-"WLS 安全策略审计","WLS 安全策略审计"
-托管项目保存失败。,托管项目保存失败。
-托管项目删除失败。,托管项目删除失败。
-规则版本已缺失，请刷新页面后重试。,规则版本已缺失，请刷新页面后重试。
-安全规则保存失败。,安全规则保存失败。
-安全规则已提交，但后置通知仍待重试。,安全规则已提交，但后置通知仍待重试。
-插件能力,插件能力
-托管项目已保存。,托管项目已保存。
-托管项目已删除。,托管项目已删除。
-安全规则已保存。,安全规则已保存。
-面板插件能力已刷新。,面板插件能力已刷新。
-"访问 WLS 面板","访问 WLS 面板"
-"查看 WLS 面板仪表盘","查看 WLS 面板仪表盘"
-"查看 WLS 面板项目","查看 WLS 面板项目"
-"查看 WLS 面板托管项目","查看 WLS 面板托管项目"
-"查看 WLS 面板网关","查看 WLS 面板网关"
-"查看 WLS 面板插件","查看 WLS 面板插件"
-"查看 WLS 面板插件页面","查看 WLS 面板插件页面"
-"查看 WLS 插件商城","查看 WLS 插件商城"
-"刷新 WLS 面板插件能力","刷新 WLS 面板插件能力"
-"查看 WLS 安全","查看 WLS 安全"
-"查看 WLS 攻击日志","查看 WLS 攻击日志"
-"查看 WLS 安全规则","查看 WLS 安全规则"
-"查看 WLS 项目安全策略","查看 WLS 项目安全策略"
-"查看 WLS 安全策略审计","查看 WLS 安全策略审计"
-"保存 WLS 面板项目","保存 WLS 面板项目"
-"保存 WLS 面板托管项目","保存 WLS 面板托管项目"
-"删除 WLS 面板项目","删除 WLS 面板项目"
-"删除 WLS 面板托管项目","删除 WLS 面板托管项目"
-"保存 WLS 安全规则","保存 WLS 安全规则"
+"WLS 插件","WLS plug-in"
+"WLS 插件商城","WLS plug-in mall"
+"WLS 安全","WLS security"
+"WLS 攻击日志","WLS attack log"
+"WLS 安全规则","WLS security rules"
+"WLS 项目安全策略","WLS project security policy"
+"WLS 安全策略审计","WLS Security Policy Audit"
+托管项目保存失败。,"Failed to save managed project."
+托管项目删除失败。,"Managed project deletion failed."
+规则版本已缺失，请刷新页面后重试。,"The rule version is missing, please refresh the page and try again."
+安全规则保存失败。,"Failed to save security rules."
+安全规则已提交，但后置通知仍待重试。,"The security rule was submitted, but the post notification is still pending retry."
+插件能力,"Plug-in capabilities"
+托管项目已保存。,"Hosted project saved."
+托管项目已删除。,"Hosted project has been deleted."
+安全规则已保存。,"Security rules saved."
+面板插件能力已刷新。,"Panel plug-in capabilities have been refreshed."
+grid,grid
+"访问 WLS 面板","Access the WLS panel"
+"查看 WLS 面板仪表盘","View the WLS Panel Dashboard"
+"查看 WLS 面板项目","View WLS Panel Project"
+server,server
+"查看 WLS 面板托管项目","View WLS Panel Hosting Project"
+"查看 WLS 项目运行状态","View WLS project running status"
+heart,heart
+"查看项目 WLS 实例和 Ready 状态","View project WLS instance and Ready status"
+"重载 WLS 项目","Reload WLS project"
+refresh,refresh
+"滚动重载项目 WLS 工作进程","Rolling Reload Project WLS Worker Process"
+"重启 WLS 项目","Restart WLS project"
+star,star
+"保持 Master 在线并重建项目全部 WLS 工作进程","Keep the Master online and rebuild all WLS worker processes for the project"
+"查看 WLS 面板网关","View WLS Panel Gateway"
+circle,circle
+"查看 WLS 面板插件","View WLS Panel Plug-in"
+puzzle,puzzle
+"查看 WLS 面板插件页面","View the WLS Panel plugin page"
+"查看 WLS 插件商城","Check out the WLS plug-in store"
+"刷新 WLS 面板插件能力","Refresh WLS panel plug-in capabilities"
+"查看 WLS 安全","View WLS security"
+shield,shield
+"查看 WLS 攻击日志","View WLS attack logs"
+search,search
+"查看 WLS 安全规则","View WLS security rules"
+settings,settings
+"查看 WLS 项目安全策略","View WLS project security policy"
+"查看 WLS 安全策略审计","View WLS Security Policy Audit"
+clock,clock
+"保存 WLS 面板项目","Save WLS Panel Project"
+save,save
+"保存 WLS 面板托管项目","Save WLS Panel Hosting Project"
+"删除 WLS 面板项目","Delete WLS panel project"
+trash,trash
+"删除 WLS 面板托管项目","Delete WLS panel hosting project"
+"保存 WLS 安全规则","Save WLS security rules"
+check,check
 "Weline Server 管理","Weline Server Administration"
 "Session 管理","Session management"
 内存服务管理,"Memory service management"
@@ -245,36 +271,41 @@
 "命名空间清理失败，请检查 Memory Service 状态","Namespace cleanup failed, please check Memory Service status"
 命名空间或键名参数不合法,"Invalid namespace or key parameter"
 "内存服务垃圾回收执行失败，请检查 Memory Service 连接状态","Memory service garbage collection execution failed, please check the Memory Service connection status"
-"启动 Weline Server","启动 Weline Server"
-"启动 Weline Server 实例","启动 Weline Server 实例"
+"启动 Weline Server","Start Weline Server"
+play,play
+"启动 Weline Server 实例","Start the Weline Server instance"
 "停止 Weline Server","Stop Weline Server"
-"停止 Weline Server 实例","停止 Weline Server 实例"
+stop,stop
+"停止 Weline Server 实例","Stop the Weline Server instance"
 "重启 Weline Server","Restart Weline Server"
-"强制重启 Weline Server 实例","强制重启 Weline Server 实例"
-"热重载 Weline Server","热重载 Weline Server"
-"热重载 Weline Server 代码","热重载 Weline Server 代码"
-"切换 Weline Server 维护模式","切换 Weline Server 维护模式"
-"启用 Weline Server 维护模式","启用 Weline Server 维护模式"
-"禁用 Weline Server 维护模式","禁用 Weline Server 维护模式"
-"查看 Weline Server Session","查看 Weline Server Session"
-"查看 Weline Server Session 列表","查看 Weline Server Session 列表"
-"查看 Weline Server Session 详情","查看 Weline Server Session 详情"
-"销毁 Weline Server Session","销毁 Weline Server Session"
-"销毁指定 Weline Server Session","销毁指定 Weline Server Session"
-"持久化 Weline Server Session","持久化 Weline Server Session"
-"持久化 Weline Server Session 数据","持久化 Weline Server Session 数据"
-"回收 Weline Server Session","回收 Weline Server Session"
-"执行 Weline Server Session 垃圾回收","执行 Weline Server Session 垃圾回收"
-"查看 Weline Server 内存服务","查看 Weline Server 内存服务"
-"查看 Weline Server 内存命名空间","查看 Weline Server 内存命名空间"
-"查看 Weline Server 内存命名空间详情","查看 Weline Server 内存命名空间详情"
-"清理 Weline Server 内存命名空间","清理 Weline Server 内存命名空间"
-"删除 Weline Server 内存键","删除 Weline Server 内存键"
-"删除 Weline Server 内存服务键","删除 Weline Server 内存服务键"
-"持久化 Weline Server 内存服务","持久化 Weline Server 内存服务"
-"持久化 Weline Server 内存服务数据","持久化 Weline Server 内存服务数据"
-"回收 Weline Server 内存服务","回收 Weline Server 内存服务"
-"执行 Weline Server 内存服务垃圾回收","执行 Weline Server 内存服务垃圾回收"
+"强制重启 Weline Server 实例","Force restart of Weline Server instance"
+"热重载 Weline Server","Hot reload Weline Server"
+"热重载 Weline Server 代码","Hot reloading Weline Server code"
+"切换 Weline Server 维护模式","Switch Weline Server maintenance mode"
+"启用 Weline Server 维护模式","Enable Weline Server maintenance mode"
+"禁用 Weline Server 维护模式","Disabling Weline Server Maintenance Mode"
+"查看 Weline Server Session","View Weline Server Session"
+list,list
+"查看 Weline Server Session 列表","View Weline Server Session List"
+"查看 Weline Server Session 详情","View Weline Server Session details"
+"销毁 Weline Server Session","Destroy Weline Server Session"
+"销毁指定 Weline Server Session","Destroy the specified Weline Server Session"
+"持久化 Weline Server Session","Persistence Weline Server Session"
+"持久化 Weline Server Session 数据","Persisting Weline Server Session data"
+"回收 Weline Server Session","Recycle Weline Server Session"
+"执行 Weline Server Session 垃圾回收","Perform Weline Server Session garbage collection"
+"查看 Weline Server 内存服务","View Weline Server Memory Services"
+eye,eye
+"查看 Weline Server 内存命名空间","View Weline Server memory namespace"
+"查看 Weline Server 内存命名空间详情","View Weline Server memory namespace details"
+"清理 Weline Server 内存命名空间","Clean up the Weline Server memory namespace"
+"删除 Weline Server 内存键","Delete Weline Server memory key"
+minus,minus
+"删除 Weline Server 内存服务键","Delete Weline Server memory service key"
+"持久化 Weline Server 内存服务","Persistent Weline Server memory service"
+"持久化 Weline Server 内存服务数据","Persistence of Weline Server memory service data"
+"回收 Weline Server 内存服务","Recycle Weline Server memory service"
+"执行 Weline Server 内存服务垃圾回收","Perform Weline Server memory service garbage collection"
 "Weline Server 性能优化指南","Weline Server Performance Optimization Guide"
 "仅支持 AJAX 请求","Only supports AJAX requests"
 服务器监控,"Server Monitoring"
@@ -309,7 +340,7 @@
 安全规则,"Security rules"
 "规则 JSON 格式不正确","Rule JSON format is incorrect"
 规则数据不能为空,"Rule data cannot be empty"
-安全规则已提交，但外部同步通知仍待重试。,安全规则已提交，但外部同步通知仍待重试。
+安全规则已提交，但外部同步通知仍待重试。,"The security rule was submitted, but the external synchronization notification is still pending retry."
 安全规则已保存,"Security rules saved"
 保存失败：%{1},"Save failed: %{1}"
 "WLS Fiber concurrency probe is disabled.","WLS Fiber concurrency probe is disabled (enable DEV, ENV_TEST, or WLS_FIBER_CONCURRENCY_PROBE=1)."
@@ -490,11 +521,11 @@ LiteSSL,LiteSSL
 端口范围,"Port Range"
 "Worker 数","Number of Workers"
 已停止,Stopped
-服务器操作,服务器操作
+服务器操作,"Server operations"
 重启,Restart
 停止,Stop
-维护,维护
-退出维护,退出维护
+维护,maintain
+退出维护,"Exit maintenance"
 启动,Start
 性能优化,"Performance Optimization"
 可优化,Optimizable
@@ -580,317 +611,346 @@ LiteSSL,LiteSSL
 正在启动新实例...,"Starting new instance..."
 启动命令已发送，请稍后刷新状态。,"Start command sent, please refresh status later."
 启动失败：请检查网络连接后重试。,"Startup failed: Please check your network connection and try again."
-增量刷新,增量刷新
-全量兜底,全量兜底
-全量刷新,全量刷新
-无路由模块,无路由模块
+增量刷新,"incremental refresh"
+全量兜底,"Full coverage"
+全量刷新,"Full refresh"
+无路由模块,"No routing module"
 未知,Unknown
-线上应用商城,线上应用商城
-本地应用商城,本地应用商城
-已配置应用商城,已配置应用商城
-未知应用商城,未知应用商城
-插件商城,插件商城
-安全,安全
-项目安全策略,项目安全策略
-策略审计,策略审计
-项目,项目
-仪表盘,仪表盘
-暗色,暗色
-亮色,亮色
-概览,概览
-规则,规则
-项目策略,项目策略
-商城,商城
+线上应用商城,"Online application mall"
+本地应用商城,"Local app store"
+已配置应用商城,"App store configured"
+未知应用商城,"Unknown app store"
+插件商城,"Plug-in mall"
+安全,Safety
+项目安全策略,"Project security policy"
+策略审计,"Policy audit"
+项目,project
+仪表盘,Dashboard
+暗色,"dark color"
+亮色,"bright color"
+概览,Overview
+规则,rule
+项目策略,"project strategy"
+商城,Mall
 "公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源","The public endpoint is fixed to project-isolated Nginx; WLS provides only a plaintext HTTP/1.1 upstream on 127.0.0.1"
 "公网协议所有者：Nginx；WLS 仅提供内部 HTTP/1.1 回源。","Public protocol owner: Nginx; WLS provides only an internal HTTP/1.1 upstream."
-"WLS 运行时","WLS 运行时"
-工作进程、会话、内存服务,工作进程、会话、内存服务
-"%{1} 个运行中，%{2} 个工作进程","%{1} 个运行中，%{2} 个工作进程"
-攻击规则和防护日志,攻击规则和防护日志
-"7 天内拦截 %{1} 次","7 天内拦截 %{1} 次"
-"SSL 证书","SSL 证书"
-证书和域名绑定,证书和域名绑定
+"WLS 运行时","WLS runtime"
+工作进程、会话、内存服务,"Worker processes, sessions, memory services"
+"%{1} 个运行中，%{2} 个工作进程","%{1} running, %{2} worker processes"
+攻击规则和防护日志,"Attack rules and protection logs"
+"7 天内拦截 %{1} 次","%{1} interceptions in 7 days"
+"SSL 证书","SSL certificate"
+证书和域名绑定,"Certificate and domain name binding"
 就绪,Ready
-"WLS 面板导航","WLS 面板导航"
-"WLS 独立后台","WLS 独立后台"
-"%{1} 二级菜单","%{1} 二级菜单"
-插件面板,插件面板
-"展开或收起 %{1} 菜单","展开或收起 %{1} 菜单"
-插件二级菜单,插件二级菜单
-关闭菜单,关闭菜单
-打开菜单,打开菜单
-独立服务器面板,独立服务器面板
-切换主题,切换主题
-项目后台,项目后台
-返回框架后台,返回框架后台
-面板操作结果,面板操作结果
-面板操作警告,面板操作警告
-应用商城端点,应用商城端点
-商城端点,商城端点
-"本地开发使用 https://app.weline.test:9523；部署测试从 deploy current.json 读取并使用 https://app.aiweline.com。","本地开发使用 https://app.weline.test:9523；部署测试从 deploy current.json 读取并使用 https://app.aiweline.com。"
-来源,来源
-插件刷新摘要,插件刷新摘要
-能力重载,能力重载
-面板插件刷新结果,面板插件刷新结果
-路由已刷新,路由已刷新
-路由未变化,路由未变化
-注册模式,注册模式
-注册模块,注册模块
-路由模块,路由模块
-面板菜单项,面板菜单项
-商城控制区,商城控制区
-"WLS 插件来源","WLS 插件来源"
-"按 WLS 模块标签过滤应用商城","按 WLS 模块标签过滤应用商城"
-"插件安装会打开带有 %{1} 和后台面过滤条件的应用商城。模块声明 WLS 面板能力元数据后，会出现在下方已安装列表中。","插件安装会打开带有 %{1} 和后台面过滤条件的应用商城。模块声明 WLS 面板能力元数据后，会出现在下方已安装列表中。"
-已安装：%{1},已安装：%{1}
-打开应用商城,打开应用商城
-已安装应用,已安装应用
-刷新面板插件,刷新面板插件
-面板能力,面板能力
-已安装面板插件,已安装面板插件
-"已安装 %{1} 个","已安装 %{1} 个"
-已安装插件发现失败：%{1},已安装插件发现失败：%{1}
-"还没有安装 WLS 插件。","还没有安装 WLS 插件。"
-"安装带有 module:wls 标签的模块即可扩展这个独立面板。","安装带有 module:wls 标签的模块即可扩展这个独立面板。"
-插件,插件
-模块,模块
-标签,标签
-面板入口,面板入口
-无标签,无标签
-未声明,未声明
-打开面板,打开面板
-无面板入口,无面板入口
-未选择插件页面。,未选择插件页面。
-"请从侧边栏选择插件能力；安装 WLS 模块后可刷新面板插件。","请从侧边栏选择插件能力；安装 WLS 模块后可刷新面板插件。"
-安全概览,安全概览
-防护,防护
-高级规则,高级规则
-安全数据警告,安全数据警告
-"7 天事件","7 天事件"
-"7 天拦截","7 天拦截"
-"7 天严重","7 天严重"
-"已拦截 IP","已拦截 IP"
-项目安全下钻,项目安全下钻
-"每个托管项目会展示最近 7 天攻击态势，点击后可进入过滤后的日志。","每个托管项目会展示最近 7 天攻击态势，点击后可进入过滤后的日志。"
-"7 天范围","7 天范围"
-未找到项目安全范围。,未找到项目安全范围。
-添加托管项目或网关域名后，即可比较项目级攻击态势。,添加托管项目或网关域名后，即可比较项目级攻击态势。
-全部托管项目,全部托管项目
-无攻击,无攻击
-近期无事件,近期无事件
-无事件,无事件
-事件,事件
-拦截,拦截
-主要类型,主要类型
-最近事件,最近事件
-"最近 IP","最近 IP"
-查看日志,查看日志
-编辑策略,编辑策略
-为单个托管域名覆盖部分防护规则，其余规则继续使用公共兜底配置。,为单个托管域名覆盖部分防护规则，其余规则继续使用公共兜底配置。
-自定义策略,自定义策略
-全局兜底,全局兜底
-请选择一个项目来编辑策略。,请选择一个项目来编辑策略。
-可在项目卡片点击编辑策略，或在日志过滤器中选择明确的项目范围。,可在项目卡片点击编辑策略，或在日志过滤器中选择明确的项目范围。
-更新时间,更新时间
-未保存,未保存
-启用项目覆盖,启用项目覆盖
-策略继承图,策略继承图
-保存前对比公共规则和当前项目策略。,保存前对比公共规则和当前项目策略。
-继承,继承
-暂无继承详情。,暂无继承详情。
-请选择项目策略，对比公共规则和项目级规则值。,请选择项目策略，对比公共规则和项目级规则值。
-全局值,全局值
-项目生效值,项目生效值
-启用规则,启用规则
-窗口秒数,窗口秒数
+"WLS 面板导航","WLS panel navigation"
+"WLS 独立后台","WLS independent backend"
+"%{1} 二级菜单","%{1} Secondary menu"
+插件面板,"plugin panel"
+"展开或收起 %{1} 菜单","Expand or collapse the %{1} menu"
+插件二级菜单,"Plug-in secondary menu"
+关闭菜单,"Close menu"
+打开菜单,"Open menu"
+独立服务器面板,"Standalone server panel"
+切换主题,"switch theme"
+项目后台,"Project background"
+返回框架后台,"Return to frame background"
+面板操作结果,"Panel operation results"
+面板操作警告,"Panel operation warning"
+应用商城端点,"App store endpoint"
+商城端点,"Mall endpoint"
+"本地开发使用 https://app.weline.test:9523；部署测试从 deploy current.json 读取并使用 https://app.aiweline.com。","Local development uses https://app.weline.test:9523; deployment tests read from deploy current.json and use https://app.aiweline.com."
+来源,source
+插件刷新摘要,"Plugin refresh summary"
+能力重载,"Capability overloading"
+面板插件刷新结果,"Panel plugin refreshes results"
+路由已刷新,"The route has been refreshed"
+路由未变化,"The route has not changed"
+注册模式,"Registration mode"
+注册模块,"Register module"
+路由模块,"routing module"
+面板菜单项,"Panel menu items"
+商城控制区,"Mall control area"
+"WLS 插件来源","WLS plug-in source"
+"按 WLS 模块标签过滤应用商城","Filter the app store by WLS module tag"
+"插件安装会打开带有 %{1} 和后台面过滤条件的应用商城。模块声明 WLS 面板能力元数据后，会出现在下方已安装列表中。","Plugin installation will open the app store with %{1} and background filters. After a module declares WLS panel capability metadata, it will appear in the installed list below."
+已安装：%{1},"Installed: %{1}"
+打开应用商城,"Open app store"
+已安装应用,"Installed app"
+刷新面板插件,"Refresh panel plugin"
+面板能力,"Panel capabilities"
+已安装面板插件,"Panel plugin installed"
+"已安装 %{1} 个","%{1} installed"
+已安装插件发现失败：%{1},"Installed plug-in discovery failed: %{1}"
+"还没有安装 WLS 插件。","The WLS plug-in is not installed yet."
+"安装带有 module:wls 标签的模块即可扩展这个独立面板。","This standalone panel can be extended by installing a module with the module:wls tag."
+插件,plug-in
+模块,module
+标签,Label
+面板入口,"panel entrance"
+无标签,"no label"
+未声明,"Not declared"
+打开面板,"Open panel"
+无面板入口,"No panel entrance"
+未选择插件页面。,"No plugin page selected."
+"请从侧边栏选择插件能力；安装 WLS 模块后可刷新面板插件。","Please select plug-in capabilities from the sidebar; panel plug-ins can be refreshed after installing the WLS module."
+安全概览,"Security overview"
+防护,protection
+高级规则,"Advanced rules"
+安全数据警告,"Security data warning"
+"7 天事件","7 days event"
+"7 天拦截","7 days interception"
+"7 天严重","7 days severe"
+"已拦截 IP","Blocked IP"
+项目安全下钻,"Project safety drilling"
+"每个托管项目会展示最近 7 天攻击态势，点击后可进入过滤后的日志。","Each hosting project will display the attack situation in the last 7 days, and you can click to enter the filtered log."
+"7 天范围","7 day range"
+未找到项目安全范围。,"Project security scope not found."
+添加托管项目或网关域名后，即可比较项目级攻击态势。,"Once you add a hosted project or gateway domain name, you can compare project-level attack postures."
+全部托管项目,"All hosting projects"
+无攻击,"No attack"
+近期无事件,"No recent events"
+无事件,"No events"
+事件,event
+拦截,intercept
+主要类型,"Main types"
+最近事件,"recent events"
+"最近 IP","Recent IP"
+查看日志,"View log"
+编辑策略,"Editorial strategy"
+为单个托管域名覆盖部分防护规则，其余规则继续使用公共兜底配置。,"Override some protection rules for a single hosted domain name, and continue to use the public fallback configuration for the remaining rules."
+自定义策略,"Custom strategy"
+全局兜底,"Keep the whole story in mind"
+请选择一个项目来编辑策略。,"Please select a project to edit the policy."
+可在项目卡片点击编辑策略，或在日志过滤器中选择明确的项目范围。,"You can click on the project card to edit the policy, or select a specific project scope in the log filter."
+更新时间,"Update time"
+未保存,"not saved"
+启用项目覆盖,"Enable project overrides"
+策略继承图,"Strategy inheritance diagram"
+保存前对比公共规则和当前项目策略。,"Compare public rules with current project policies before saving."
+继承,inherit
+暂无继承详情。,"No inheritance details are available."
+请选择项目策略，对比公共规则和项目级规则值。,"Please select a project policy and compare the public rule and project-level rule values."
+全局值,"global value"
+项目生效值,"Project effective value"
+启用规则,"Enable rules"
+窗口秒数,"window seconds"
 最大请求数,"Max Request Count"
-封禁秒数,封禁秒数
-路径频率限制,路径频率限制
-指定路径前缀可以覆盖全局频率限制。清空路径可移除该行，填写空白行可新增规则。,指定路径前缀可以覆盖全局频率限制。清空路径可移除该行，填写空白行可新增规则。
+封禁秒数,"Ban seconds"
+路径频率限制,"path frequency limit"
+指定路径前缀可以覆盖全局频率限制。清空路径可移除该行，填写空白行可新增规则。,"Specifying a path prefix can override global frequency limits. Clear the path to remove the row, fill in the blank row to add a new rule."
 已启用,Enabled
 路径前缀,"Path prefix"
-唯一路径数,唯一路径数
-"SSL 握手","SSL 握手"
-最大失败次数,最大失败次数
-快速关闭阈值,快速关闭阈值
-未知路由封禁,未知路由封禁
-仅峰值模式,仅峰值模式
-连续次数,连续次数
-"IP 白名单","IP 白名单"
-"白名单 IP","白名单 IP"
-每行一个条目,每行一个条目
-受保护路径,受保护路径
+唯一路径数,"Number of unique paths"
+"SSL 握手","SSL handshake"
+最大失败次数,"Maximum number of failures"
+快速关闭阈值,"Quick shutdown threshold"
+未知路由封禁,"Unknown route ban"
+仅峰值模式,"Peak mode only"
+连续次数,"consecutive times"
+"IP 白名单","IP whitelist"
+"白名单 IP","Whitelist IP"
+每行一个条目,"One entry per line"
+受保护路径,"protected path"
 路径,Path
-保存项目策略,保存项目策略
-移除自定义策略,移除自定义策略
-安全策略审计,安全策略审计
-近期策略变更会记录到面板审计列表，但不会保存完整规则内容。,近期策略变更会记录到面板审计列表，但不会保存完整规则内容。
-最近变更,最近变更
-审计动作,审计动作
-全部动作,全部动作
-公共规则已保存,公共规则已保存
-项目策略已保存,项目策略已保存
-项目策略已移除,项目策略已移除
-"规则 JSON 已保存","规则 JSON 已保存"
-审计来源,审计来源
-全部来源,全部来源
-可视化编辑器,可视化编辑器
-项目策略编辑器,项目策略编辑器
-"高级 JSON","高级 JSON"
-审计域名,审计域名
-"使用 * 表示全部域名","使用 * 表示全部域名"
-变更区域,变更区域
-任意区域,任意区域
-搜索审计,搜索审计
-动作、来源、域名或区域,动作、来源、域名或区域
-审计数量,审计数量
-应用审计过滤,应用审计过滤
-重置审计,重置审计
-还没有策略变更记录。,还没有策略变更记录。
-保存公共规则或项目策略后，会在这里生成审计记录。,保存公共规则或项目策略后，会在这里生成审计记录。
-未知时间,未知时间
-范围,范围
-全部,全部
-全局规则,全局规则
-项目标签,项目标签
-变更,变更
-已变更规则区域,已变更规则区域
-公共规则编辑器,公共规则编辑器
-"可视化字段会更新公共 AttackDetector 规则键，再保存合并后的 JSON。","可视化字段会更新公共 AttackDetector 规则键，再保存合并后的 JSON。"
+保存项目策略,"Save project strategy"
+移除自定义策略,"Remove custom policy"
+安全策略审计,"Security policy audit"
+近期策略变更会记录到面板审计列表，但不会保存完整规则内容。,"Recent policy changes will be recorded in the panel audit list, but the complete rule content will not be saved."
+最近变更,"recent changes"
+审计动作,"Audit action"
+全部动作,"All actions"
+公共规则已保存,"Public rules saved"
+项目策略已保存,"Project strategy saved"
+项目策略已移除,"Project strategy removed"
+"规则 JSON 已保存","Rule JSON saved"
+审计来源,"Audit source"
+全部来源,"All sources"
+可视化编辑器,"visual editor"
+项目策略编辑器,"Project Strategy Editor"
+"高级 JSON","Advanced JSON"
+审计域名,"Audit domain name"
+"使用 * 表示全部域名","Use * to indicate all domain names"
+变更区域,"Change area"
+任意区域,"Any area"
+搜索审计,"Search audit"
+动作、来源、域名或区域,"action, source, domain or zone"
+审计数量,"Number of audits"
+应用审计过滤,"Apply audit filtering"
+重置审计,"Reset audit"
+还没有策略变更记录。,"No policy changes have been recorded yet."
+保存公共规则或项目策略后，会在这里生成审计记录。,"After saving a public rule or project policy, audit records are generated here."
+未知时间,"unknown time"
+范围,scope
+全部,all
+全局规则,"global rules"
+项目标签,"Project tags"
+变更,change
+已变更规则区域,"Rule area changed"
+公共规则编辑器,"Public Rule Editor"
+"可视化字段会更新公共 AttackDetector 规则键，再保存合并后的 JSON。","The visualization field updates the public AttackDetector rule key and then saves the merged JSON."
 AttackDetector,AttackDetector
-最大唯一路径数,最大唯一路径数
-受保护路径列表,受保护路径列表
-没有待保存的规则变更。,没有待保存的规则变更。
-"规则 JSON 无效，无法预览。","规则 JSON 无效，无法预览。"
-"%{1} 项待保存变更","%{1} 项待保存变更"
-变更前,变更前
-变更后,变更后
-规则变更预览,规则变更预览
-"预览会显示保存合并 JSON 前，可视化字段将覆盖哪些内容。","预览会显示保存合并 JSON 前，可视化字段将覆盖哪些内容。"
-修改可视化字段后，这里会显示受影响的规则键。,修改可视化字段后，这里会显示受影响的规则键。
-"合并后的规则 JSON","合并后的规则 JSON"
-"高级 JSON 仍然可用；保存时可视化字段会覆盖匹配的公共规则键。","高级 JSON 仍然可用；保存时可视化字段会覆盖匹配的公共规则键。"
-保存安全规则,保存安全规则
-安全规则摘要,安全规则摘要
-规则摘要,规则摘要
-"快速查看最重要的 WLS 防护开关。","快速查看最重要的 WLS 防护开关。"
-已停用,已停用
-最近攻击事件,最近攻击事件
-最近攻击日志,最近攻击日志
-打开完整日志,打开完整日志
-项目范围,项目范围
+最大唯一路径数,"Maximum number of unique paths"
+受保护路径列表,"List of protected paths"
+没有待保存的规则变更。,"There are no rule changes to save."
+"规则 JSON 无效，无法预览。","Rule JSON is invalid and cannot be previewed."
+"%{1} 项待保存变更","%{1} changes to be saved"
+变更前,"before change"
+变更后,"After change"
+规则变更预览,"Rule change preview"
+"预览会显示保存合并 JSON 前，可视化字段将覆盖哪些内容。","The preview shows what the visual fields will cover before saving the merged JSON."
+修改可视化字段后，这里会显示受影响的规则键。,"After modifying a visualization field, the affected rule keys are displayed here."
+"合并后的规则 JSON","Merged rules JSON"
+"高级 JSON 仍然可用；保存时可视化字段会覆盖匹配的公共规则键。","Advanced JSON is still available; visual fields overwrite matching public rule keys when saved."
+保存安全规则,"Save security rules"
+安全规则摘要,"Summary of security rules"
+规则摘要,"Summary of rules"
+"快速查看最重要的 WLS 防护开关。","A quick look at the most important WLS guard switches."
+已停用,Deactivated
+最近攻击事件,"recent attacks"
+最近攻击日志,"Recent attack logs"
+打开完整日志,"Open full log"
+项目范围,"Project scope"
 实例,Instance
 全部实例,"All Instances"
 IP,IP
-严重级别,严重级别
-全部严重级别,全部严重级别
-攻击类型,攻击类型
-全部类型,全部类型
-拦截状态,拦截状态
-全部事件,全部事件
-仅拦截,仅拦截
-仅观察,仅观察
-每页数量,每页数量
-应用过滤,应用过滤
-重置,重置
-未找到攻击事件。,未找到攻击事件。
-"WLS 检查流量后，会在这里列出最近的 AttackDetector 事件。","WLS 检查流量后，会在这里列出最近的 AttackDetector 事件。"
+严重级别,"Severity level"
+全部严重级别,"All severity levels"
+攻击类型,"Attack type"
+全部类型,"All types"
+拦截状态,"interception status"
+全部事件,"All events"
+仅拦截,"intercept only"
+仅观察,"just observe"
+每页数量,"Quantity per page"
+应用过滤,"Apply filtering"
+重置,reset
+未找到攻击事件。,"No attacks found."
+"WLS 检查流量后，会在这里列出最近的 AttackDetector 事件。","After WLS inspects traffic, the most recent AttackDetector events are listed here."
 已拦截,Blocked
-已观察,已观察
-"正在显示 %{2} 条攻击日志中的 %{1} 条","正在显示 %{2} 条攻击日志中的 %{1} 条"
-攻击日志分页,攻击日志分页
-上一页,上一页
-"第 %{1} 页，共 %{2} 页","第 %{1} 页，共 %{2} 页"
-下一页,下一页
-面板摘要,面板摘要
-托管项目,托管项目
-安全事件,安全事件
-仪表盘数据警告,仪表盘数据警告
-部分仪表盘数据加载失败。,部分仪表盘数据加载失败。
-面板插件,面板插件
-运维能力中心,运维能力中心
+已观察,Observed
+"正在显示 %{2} 条攻击日志中的 %{1} 条","Showing %{1} of %{2} attack logs"
+攻击日志分页,"Attack log paging"
+上一页,"Previous page"
+"第 %{1} 页，共 %{2} 页","Page %{1} of %{2}"
+下一页,"Next page"
+面板摘要,"Panel summary"
+托管项目,"Hosted projects"
+安全事件,"security incident"
+仪表盘数据警告,"Dashboard data warning"
+部分仪表盘数据加载失败。,"Some dashboard data failed to load."
+面板插件,"Panel plugin"
+运维能力中心,"Operation and maintenance capability center"
 "%{1} installed","%{1} installed"
 "%{1} required","%{1} required"
-"打开 WLS 商城","打开 WLS 商城"
-运维能力发现警告：%{1},运维能力发现警告：%{1}
-还没有定义运维能力。,还没有定义运维能力。
-"WLS 会在这里显示 PHP、数据库、文件管理和部署插件槽位。","WLS 会在这里显示 PHP、数据库、文件管理和部署插件槽位。"
-能力,能力
-必要信号,必要信号
-"尚未声明 WLS 面板页面。","尚未声明 WLS 面板页面。"
-"在 WLS 面板外壳内打开。","在 WLS 面板外壳内打开。"
-安装插件,安装插件
-"应用商城会带上预填的 WLS 标签打开。","应用商城会带上预填的 WLS 标签打开。"
-插件菜单,插件菜单
-"WLS 面板插件入口","WLS 面板插件入口"
-管理插件,管理插件
-插件贡献发现警告：%{1},插件贡献发现警告：%{1}
-还没有插件面板入口。,还没有插件面板入口。
-"已安装的 WLS 插件可以在模块 meta 中声明 wls_panel.menu 入口，用来扩展这个独立面板。","已安装的 WLS 插件可以在模块 meta 中声明 wls_panel.menu 入口，用来扩展这个独立面板。"
-插件入口,插件入口
-二级菜单,二级菜单
-"该已安装插件声明了 WLS 面板菜单入口。","该已安装插件声明了 WLS 面板菜单入口。"
-"由 %{1} 提供","由 %{1} 提供"
-未声明二级菜单,未声明二级菜单
-插件页面,插件页面
+"打开 WLS 商城","Open WLS Mall"
+运维能力发现警告：%{1},"Operation and maintenance capability discovery warning: %{1}"
+还没有定义运维能力。,"Operational capabilities have not yet been defined."
+"WLS 会在这里显示 PHP、数据库、文件管理和部署插件槽位。","WLS will display the PHP, database, file management, and deployment plugin slots here."
+能力,ability
+必要信号,"necessary signal"
+"尚未声明 WLS 面板页面。","The WLS panel page has not been declared yet."
+"在 WLS 面板外壳内打开。","Open within WLS panel housing."
+安装插件,"Install plugin"
+"应用商城会带上预填的 WLS 标签打开。","The app store will open with pre-populated WLS tags."
+插件菜单,"Plugin menu"
+"WLS 面板插件入口","WLS panel plug-in entrance"
+管理插件,"Manage plugins"
+插件贡献发现警告：%{1},"Plugin contribution discovery warning: %{1}"
+还没有插件面板入口。,"There is no plug-in panel entry yet."
+"已安装的 WLS 插件可以在模块 meta 中声明 wls_panel.menu 入口，用来扩展这个独立面板。","The installed WLS plug-in can declare the wls_panel.menu entry in the module meta to extend this independent panel."
+插件入口,"Plug-in entrance"
+二级菜单,"Secondary menu"
+"该已安装插件声明了 WLS 面板菜单入口。","This installed plugin declares the WLS panel menu entry."
+"由 %{1} 提供","Provided by %{1}"
+未声明二级菜单,"No secondary menu declared"
+插件页面,"Plugin page"
 "+%{1} more","+%{1} more"
-打开,打开
-"使用 WLS 侧边栏菜单和原生外壳。","使用 WLS 侧边栏菜单和原生外壳。"
-未声明面板入口,未声明面板入口
-运维,运维
+打开,Open
+"使用 WLS 侧边栏菜单和原生外壳。","Use WLS sidebar menu and native shell."
+未声明面板入口,"Panel entry not declared"
+运维,"Operation and maintenance"
 公网协议,"Public protocols"
 "Nginx 是唯一公网边缘，不能跳过其启动。","Nginx is the only public edge, so its startup cannot be skipped."
-项目切换,项目切换
-"托管 WLS 项目","托管 WLS 项目"
-新建项目,新建项目
-编辑托管项目,编辑托管项目
-新增托管项目,新增托管项目
-清除编辑,清除编辑
-项目名称,项目名称
-"项目后台 URL","项目后台 URL"
-"子 WLS 面板 URL","子 WLS 面板 URL"
-项目路径,项目路径
-"PHP 档案","PHP 档案"
-数据库档案,数据库档案
+项目切换,"Project switch"
+"托管 WLS 项目","Hosted WLS project"
+新建项目,"New project"
+编辑托管项目,"Edit hosted project"
+新增托管项目,"Add a new managed project"
+清除编辑,"clear edit"
+项目名称,"Project name"
+"项目后台 URL","Project backend URL"
+"子 WLS 面板 URL","Child WLS panel URL"
+项目路径,"Project path"
+"PHP 档案","PHP files"
+数据库档案,"database file"
 启用,Enabling
-停用,停用
+停用,deactivate
 描述,Description
-保存项目,保存项目
-项目运维,项目运维
-项目配置中心,项目配置中心
+保存项目,"Save project"
+项目运维,"Project operation and maintenance"
+项目配置中心,"Project configuration center"
 "%{1} projects","%{1} projects"
 "%{1} plugin slots ready","%{1} plugin slots ready"
-需要检查,需要检查
-"%{1} 个项目已就绪","%{1} 个项目已就绪"
+需要检查,"Need to check"
+"%{1} 个项目已就绪","%{1} items are ready"
 "%{1} / %{2} operation slots ready","%{1} / %{2} operation slots ready"
-就绪状态,就绪状态
-上下文,上下文
-快捷入口,快捷入口
-本地上下文,本地上下文
-暂无就绪状态数据,暂无就绪状态数据
-安全上下文,安全上下文
-路径就绪,路径就绪
-路径缺失,路径缺失
-后台,后台
-面板,面板
-策略,策略
-"没有匹配的 WLS 实例。","没有匹配的 WLS 实例。"
-"正在显示第 %{1}-%{2} 条，共 %{3} 个实例","正在显示第 %{1}-%{2} 条，共 %{3} 个实例"
-"WLS 实例列表工具","WLS 实例列表工具"
-"搜索 WLS 实例","搜索 WLS 实例"
-搜索名称、域名、路径或状态,搜索名称、域名、路径或状态
-每页行数,每页行数
-可编辑运行时档案,可编辑运行时档案
-点击配置档案,点击配置档案
-托管,托管
+就绪状态,"ready state"
+上下文,context
+快捷入口,"Quick entrance"
+本地上下文,"local context"
+暂无就绪状态数据,"No ready status data yet"
+安全上下文,"security context"
+路径就绪,"path ready"
+路径缺失,"Path missing"
+后台,Backstage
+面板,panel
+策略,Strategy
+"没有匹配的 WLS 实例。","No matching WLS instance."
+"正在显示第 %{1}-%{2} 条，共 %{3} 个实例","Showing %{1}-%{2} of %{3} instances"
+"WLS 实例列表工具","WLS Instance List Tool"
+"搜索 WLS 实例","Search for WLS instances"
+搜索名称、域名、路径或状态,"Search name, domain, path or status"
+每页行数,"lines per page"
+WLS,WLS
+可编辑运行时档案,"Editable runtime files"
+点击配置档案,"Click on profile"
+不可控制,Uncontrollable
+"当前项目无法从此面板控制 WLS。","The current project cannot control WLS from this panel."
+托管,hosting
+实例：%{1},"Example: %{1}"
+未绑定实例,"Unbound instance"
 详情,Details
-数据库,数据库
+重载,Overload
+数据库,database
 PHP,PHP
-"PHP 配置","PHP 配置"
-数据库配置,数据库配置
-文件,文件
-部署,部署
+"WLS 生命周期控制","WLS lifecycle control"
+"WLS 生命周期","WLS life cycle"
+"重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。","Reloading will update the code on a rolling basis; restarting will keep the master online and rebuild all worker processes."
+"Worker 代际","Worker generation"
+"Ready Worker","Ready Worker"
+重载项目,"reload project"
+重启工作进程,"Restart worker process"
+打开项目面板,"Open the project panel"
+"PHP 配置","PHP configuration"
+数据库配置,"Database configuration"
+文件,document
+部署,deploy
 编辑,Edit
+高风险操作,"high risk operations"
+"重启 WLS 工作进程","Restart the WLS worker process"
+"重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。","Restarting will keep the Master online, but will rebuild all workers and auxiliary services for the project. Please confirm the project and instance before continuing."
+输入项目名称以确认,"Enter project name to confirm"
+输入上方项目名称,"Enter the project name above"
+确认重启,"Confirm restart"
+"WLS 后台业务 API 尚未加载。","The WLS backend business API has not been loaded yet."
+"WLS 生命周期操作失败。","WLS lifecycle operation failed."
+正在提交项目重载…,"Submitting project reload..."
+正在提交项目重启…,"Submitting project for restart..."
+"操作已提交，正在等待实例恢复到 Ready…","Operation submitted, waiting for instance to be restored to Ready…"
+"项目重载完成，实例已恢复到 Ready。","Project reload is complete and the instance has been restored to Ready."
+"项目重启完成，Master 保持在线且工作进程已恢复到 Ready。","The project restart is complete, the Master remains online and the worker process is restored to Ready."
+"操作已提交，但等待 Ready 超时；请继续查看实例状态。","The operation was submitted, but waiting for Ready timed out; please continue to check the instance status."
+输入的项目名称不匹配。,"The entered project names do not match."
 "运行中 Workers","Running Workers"
 总连接数,"Total Connections"
 总请求数,"Total Request Count"
@@ -1021,9 +1081,9 @@ URI,URI
 缓存命名空间失效发布失败。,"Failed to publish cache namespace invalidation."
 "缓存命名空间失效未在所有目标 Worker 上完成。","Cache namespace invalidation did not complete on every target Worker."
 "当前 PHP 环境未启用 curl 扩展，无法执行压测。","Current PHP environment does not have the curl extension enabled, unable to run stress test."
-"WLS SSL 证书数据库已在本次启动中熔断：%{1}","WLS SSL 证书数据库已在本次启动中熔断：%{1}"
-"[SslCertificateService] SQLite 证书存储已损坏，本次启动已熔断后续探测和写入：%{1}","[SslCertificateService] SQLite 证书存储已损坏，本次启动已熔断后续探测和写入：%{1}"
-"WLS SSL 证书数据库已损坏，无法安全生成或恢复证书：%{1}","WLS SSL 证书数据库已损坏，无法安全生成或恢复证书：%{1}"
+"WLS SSL 证书数据库已在本次启动中熔断：%{1}","The WLS SSL certificate database has been blown during this startup: %{1}"
+"[SslCertificateService] SQLite 证书存储已损坏，本次启动已熔断后续探测和写入：%{1}","[SslCertificateService] The SQLite certificate storage is damaged. Subsequent detection and writing have been interrupted during this startup: %{1}"
+"WLS SSL 证书数据库已损坏，无法安全生成或恢复证书：%{1}","The WLS SSL certificate database is corrupted and the certificate cannot be safely generated or restored: %{1}"
 "当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}","On Windows, PHP event extension is required to start HTTPS after obtaining a certificate. Please install the event extension before applying for a certificate. Download: %{1}"
 "[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书","[SslCertificateService] The pan-domain name *.%{1} has expired, and the subdomain %{2} does not use the pan-domain certificate."
 "[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请","[SslCertificateService] The subdomain name %{1} has been overwritten by the pan-domain name *.%{2}. Write the pan-domain certificate directly and skip the ACME application."
@@ -1034,7 +1094,7 @@ URI,URI
 "[SslCertificateService] Local CA is now reusable across projects from %{1}","[SslCertificateService] Local CA is now reusable across projects from %{1}"
 "[SslCertificateService] Failed to restore project local CA files from global reusable CA","[SslCertificateService] Failed to restore project local CA files from global reusable CA"
 "[SslCertificateService] Reusing global Weline local CA for this project","[SslCertificateService] Reusing global Weline local CA for this project"
-"[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key","[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key"
+"[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key","[SslCertificateService] The system trust store already has Weline Local Development CA, but there is no reusable private key. A new local CA will be generated; if you need to reuse it across projects, please configure wls.ssl.local_ca_dir or copy rootCA.key"
 "Failed to generate local CA private key","Failed to generate local CA private key"
 "Failed to generate local CA CSR","Failed to generate local CA CSR"
 "Failed to sign local CA certificate","Failed to sign local CA certificate"
@@ -1083,7 +1143,7 @@ URI,URI
 签发证书失败,"Failed to sign certificate"
 导出私钥失败,"Failed to export private key"
 保存证书文件失败,"Failed to save certificate file"
-"导出 CSR 失败","导出 CSR 失败"
+"导出 CSR 失败","Failed to export CSR"
 自签证书文件已生成，但写入证书管理失败，请检查日志并重试,"Self-signed certificate file generated, but writing to certificate management failed. Please check the logs and try again."
 自签证书生成成功,"Self-signed certificate generated successfully"
 更新证书记录失败：%{1},"Update certificate record failed: %{1}"
@@ -1102,8 +1162,8 @@ URI,URI
 "[SslCertificateService] 已从等价域 %{1} 的 PEM 恢复到 %{2}","[SslCertificateService] Restored from PEM for equivalent domain %{1} to %{2}"
 "[SslCertificateService] 已从数据库恢复证书到磁盘：%{1}","[SslCertificateService] Restored certificate from database to disk: %{1}"
 "[SslCertificateService] 从数据库恢复证书失败：%{1} - %{2}","[SslCertificateService] Failed to restore certificate from database: %{1} - %{2}"
-"证书状态正在变更，已跳过同步 %{1}: %{2}","证书状态正在变更，已跳过同步 %{1}: %{2}"
-"证书目录无效 %{1}: %{2}","证书目录无效 %{1}: %{2}"
+"证书状态正在变更，已跳过同步 %{1}: %{2}","Certificate status changing, synchronization skipped %{1}: %{2}"
+"证书目录无效 %{1}: %{2}","Invalid certificate directory %{1}: %{2}"
 证书源文件不存在且无法从证书管理恢复：%{1},"Certificate Source File Not Found and Cannot Be Recovered from Certificate Management: %{1}"
 "同步证书失败 %{1}: %{2}","Failed to sync certificate %{1}: %{2}"
 "子域名 %{1} 已被泛域名覆盖，跳过申请","Subdomain %{1} is covered by a wildcard domain, skipping application"
@@ -1119,18 +1179,18 @@ URI,URI
 该域名正在申请证书中，请等待当前流程结束后再试。,"The domain is applying for a certificate. Please wait for the current process to finish before trying again."
 证书已保存到：%{1},"Certificate Saved to: %{1}"
 正在保存证书管理记录…,"Saving certificate management records..."
-证书落盘后的稳定校验失败，已拒绝替换当前有效证书,证书落盘后的稳定校验失败，已拒绝替换当前有效证书
+证书落盘后的稳定校验失败，已拒绝替换当前有效证书,"The stable verification after the certificate was placed failed and the replacement of the currently valid certificate has been refused."
 证书管理记录已保存，cert_id=%{1},"Certificate management record saved, cert_id=%{1}"
 证书申请成功,"Certificate request successful"
-域名格式无效,域名格式无效
+域名格式无效,"Domain name format is invalid"
 证书内容不能为空,"Certificate Content Cannot Be Empty"
 私钥内容不能为空,"Private key content cannot be empty"
-证书材料超出安全大小限制,证书材料超出安全大小限制
-证书必须处于有效期内、覆盖目标域名并与私钥匹配,证书必须处于有效期内、覆盖目标域名并与私钥匹配
+证书材料超出安全大小限制,"Certificate material exceeds safe size limit"
+证书必须处于有效期内、覆盖目标域名并与私钥匹配,"The certificate must be valid, cover the target domain name, and match the private key"
 证书导入失败：%{1},"Certificate Import Failed: %{1}"
 证书文件已写入，但同步证书记录失败,"Certificate File Written, but Failed to Sync Certificate Record"
-证书材料已安全写入，等待服务发布,证书材料已安全写入，等待服务发布
-"证书材料已导入，但服务发布失败；已禁用的域名必须单独显式启用 HTTPS：%{1}","证书材料已导入，但服务发布失败；已禁用的域名必须单独显式启用 HTTPS：%{1}"
+证书材料已安全写入，等待服务发布,"The certificate material has been securely written and is waiting for service release"
+"证书材料已导入，但服务发布失败；已禁用的域名必须单独显式启用 HTTPS：%{1}","Certificate material was imported, but service publishing failed; disabled domain names must be explicitly enabled for HTTPS individually: %{1}"
 证书导入成功,"Certificate Import Successful"
 "[SslCertificateService] 泛域名 %{1} 续签后已同步 PEM 到 %{2} 个子域记录","[SslCertificateService] Pan-domain name %{1} has been synchronized to PEM to %{2} subdomain record after renewal"
 "使用 DNS-01 验证（将自动添加 TXT 记录）","Use DNS-01 verification (will automatically add a TXT record)"
@@ -1157,8 +1217,8 @@ URI,URI
 正在下载证书...,"Downloading certificate..."
 下载证书失败,"Certificate download failed"
 正在保存证书到本地...,"Saving certificate locally..."
-域名私钥文件不安全或不可读,域名私钥文件不安全或不可读
-"CA 返回的证书无效、未覆盖目标域名或与本地私钥不匹配","CA 返回的证书无效、未覆盖目标域名或与本地私钥不匹配"
+域名私钥文件不安全或不可读,"The domain name private key file is unsafe or unreadable"
+"CA 返回的证书无效、未覆盖目标域名或与本地私钥不匹配","The certificate returned by the CA is invalid, does not cover the target domain name, or does not match the local private key"
 证书已写入：%{1},"Certificate Written to: %{1}"
 证书申请流程已完成,"Certificate application process completed"
 "未找到 HTTP-01 挑战","HTTP-01 challenge not found"
@@ -1167,7 +1227,7 @@ URI,URI
 创建验证文件失败,"Challenge file creation failed"
 "正在通知 CA 服务器进行验证","Notifying CA server for verification"
 "正在等待 CA 验证...","Waiting for CA verification..."
-"等待 CA 验证中… (%1秒)","等待 CA 验证中… (%1秒)"
+"等待 CA 验证中… (%1秒)","Waiting for CA verification... (%1 seconds)"
 正在清理验证文件,"Cleaning verification files"
 "未找到 DNS-01 挑战","DNS-01 challenge not found"
 获取账户指纹失败,"Failed to fetch account fingerprint"
@@ -1190,27 +1250,27 @@ URI,URI
 "（DNS 传播可能需要更长时间，请 2–5 分钟后重试）","(DNS propagation may take longer, please retry after 2–5 minutes)"
 "（DNS-01：CA 从全球多点查您权威 DNS 上的 TXT。若同款流程在把域名 NS 换到 Cloudflare 后即可签发，基本可认定原 DNS 托管（如注册商自带解析）对 TXT 的全球查询不稳定或未正确对外服务；建议长期用 Cloudflare 等做 DNS 托管。）","(DNS-01: CA queries TXT on your authoritative DNS from many locations. If the same flow succeeds after moving NS to Cloudflare, your previous DNS host likely serves TXT poorly to global resolvers; use Cloudflare or similar for DNS hosting.)"
 "（HTTP 验证场景：CA 查询 A/AAAA 超时或未生效；若站点经 CDN，请改用 DNS-01 或保证源站可达。）","(HTTP-01: CA timed out or could not resolve A/AAAA; if the site uses CDN, use DNS-01 or ensure the origin is reachable for validation.)"
-"网关未在 %{1} 秒内确认 ACME HTTP-01 challenge 发布。","网关未在 %{1} 秒内确认 ACME HTTP-01 challenge 发布。"
+"网关未在 %{1} 秒内确认 ACME HTTP-01 challenge 发布。","The gateway did not acknowledge the ACME HTTP-01 challenge release within %{1} seconds."
 "ACME HTTP 请求失败: url=%{1}, error=%{2}","ACME HTTP request failed: url=%{1}, error=%{2}"
 用户手动禁用,"User manually disabled"
-"上一次证书退役尚未完成代际事件确认，请等待自动恢复后再启用 HTTPS。","上一次证书退役尚未完成代际事件确认，请等待自动恢复后再启用 HTTPS。"
+"上一次证书退役尚未完成代际事件确认，请等待自动恢复后再启用 HTTPS。","The last certificate retirement has not completed generation event confirmation, please wait for automatic recovery before enabling HTTPS."
 未找到域名证书：%{1},"Domain certificate not found: %{1}"
-证书文件不安全、已过期、未覆盖域名或与私钥不匹配,证书文件不安全、已过期、未覆盖域名或与私钥不匹配
-"HTTPS 已写入启用事实，但服务清单尚未完成确认：%{1}","HTTPS 已写入启用事实，但服务清单尚未完成确认：%{1}"
+证书文件不安全、已过期、未覆盖域名或与私钥不匹配,"The certificate file is not secure, has expired, does not cover the domain name, or does not match the private key."
+"HTTPS 已写入启用事实，但服务清单尚未完成确认：%{1}","HTTPS enabled fact written, but service manifest has not completed confirmation: %{1}"
 "HTTPS 已启用","HTTPS enabled"
-"本地域名 %{1} 的证书受保护，不能禁用或删除","本地域名 %{1} 的证书受保护，不能禁用或删除"
-证书退役意图未能安全持久化：%{1},证书退役意图未能安全持久化：%{1}
-证书已进入安全隔离且保留可重放意图，数据库撤销待恢复：%{1},证书已进入安全隔离且保留可重放意图，数据库撤销待恢复：%{1}
-证书已进入失效安全状态，后续退役阶段将自动重放：%{1},证书已进入失效安全状态，后续退役阶段将自动重放：%{1}
+"本地域名 %{1} 的证书受保护，不能禁用或删除","The certificate for local domain name %{1} is protected and cannot be disabled or deleted"
+证书退役意图未能安全持久化：%{1},"Certificate retirement intent failed to persist securely: %{1}"
+证书已进入安全隔离且保留可重放意图，数据库撤销待恢复：%{1},"The certificate has entered security isolation and retains replayable intent. The database has been revoked and needs to be restored: %{1}"
+证书已进入失效安全状态，后续退役阶段将自动重放：%{1},"The certificate has entered the fail-safe state and will be automatically replayed in subsequent retirement phases: %{1}"
 "HTTPS 已禁用","HTTPS disabled"
-证书生命周期失败诊断写入失败：%{1},证书生命周期失败诊断写入失败：%{1}
+证书生命周期失败诊断写入失败：%{1},"Certificate lifecycle failure diagnostic write failed: %{1}"
 存在空域名证书记录，已跳过,"Empty domain certificate record exists, skipped"
 "域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载（使用 --clear 可清除并重置）","The certificate management record for domain %{1} is missing PEM content and cannot be reloaded (use --clear to clear and reset)"
 "域名 %{1} 的证书文件恢复失败（使用 --clear 可清除并重置）","Failed to restore the certificate file for domain %{1} (use --clear to clear and reset)"
 "未找到域名 %{1} 的证书记录","No certificate record found for domain %{1}"
 证书管理中没有可重载的证书记录,"No reloadable certificate records in certificate management"
 "server:ssl:reload --clear 清理","server:ssl:reload --clear cleanup"
-证书清理失败,证书清理失败
+证书清理失败,"Certificate cleanup failed"
 "WLS performance panel traces were cleared","WLS performance panel traces were cleared"
 秒,second(s)
 分,minute(s)
@@ -1218,7 +1278,7 @@ URI,URI
 天,day(s)
 "Master 初始化开始 (Orchestrator 模式)","Master initialization starts (Orchestrator mode)"
 "实例名称: %{1}","Instance name: %{1}"
-"运行拓扑: %{1}","运行拓扑: %{1}"
+"运行拓扑: %{1}","Running topology: %{1}"
 "守护进程: %{1}","Daemon: %{1}"
 是,Yes
 否,No
@@ -1238,8 +1298,8 @@ URI,URI
 "Master 启动失败: %{1}","Master startup failed: %{1}"
 "Master 正在关闭，通知所有子进程...","Master is shutting down, notifying all child processes..."
 "Master PID %{1} 已注册到索引","Master PID %{1} has been registered in the index"
-"检测到新 Master 代际，旧 Master 跳过同名 PID 索引清理","检测到新 Master 代际，旧 Master 跳过同名 PID 索引清理"
-"检测到同名新 Master PID %{1}，旧 Master 跳过索引清理","检测到同名新 Master PID %{1}，旧 Master 跳过索引清理"
+"检测到新 Master 代际，旧 Master 跳过同名 PID 索引清理","New Master generation detected, old Master skips PID index cleanup with the same name"
+"检测到同名新 Master PID %{1}，旧 Master 跳过索引清理","New Master PID %{1} with same name detected, old Master skips index cleanup"
 "Master PID 索引已移除","Master PID index has been removed"
 "检测到 Master 退出后仍有子进程存活，已保留实例记录供后续恢复控制","Detected child processes still alive after Master exit, retaining instance records for subsequent recovery control."
 实例记录已完成清理,"Instance Records Cleaned Up"
@@ -1257,10 +1317,10 @@ URI,URI
 "已注册 shutdown 清理函数（Ctrl+C 可能不会触发优雅停止）","Registered shutdown cleanup function (Ctrl+C may not trigger graceful stop)"
 "已回收子进程 PID %{1} (%{2})","Recycled child process PID %{1} (%{2})"
 启动锁已释放（回调）,"Startup lock released (callback)"
-"启动锁由启动器持有，Master 无需释放","启动锁由启动器持有，Master 无需释放"
-"SSL 启动后补偿任务未能启动：%{1}；WLS 保持 READY，后续由证书待确认队列/Agent 重试。","SSL 启动后补偿任务未能启动：%{1}；WLS 保持 READY，后续由证书待确认队列/Agent 重试。"
+"启动锁由启动器持有，Master 无需释放","The startup lock is held by the initiator and does not need to be released by the Master"
+"SSL 启动后补偿任务未能启动：%{1}；WLS 保持 READY，后续由证书待确认队列/Agent 重试。","The compensation task failed to start after SSL was started: %{1}; WLS remains READY and will be retried by the certificate pending queue/Agent."
 "跳过 SSL 启动后申请：缺少域名配置。","Skipped certificate application after SSL startup: missing domain configuration."
-"跳过 SSL 启动后申请：%{1} 已有未过期证书。","跳过 SSL 启动后申请：%{1} 已有未过期证书。"
+"跳过 SSL 启动后申请：%{1} 已有未过期证书。","Skip SSL post-start request: %{1} already has an unexpired certificate."
 "已触发 SSL 延迟重试：%{1}（pid=%{2}）","SSL delayed retry triggered: %{1} (pid=%{2})"
 "已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）","SSL delayed retry triggered: %{1} (background process PID not returned; check results via ssl:auto list)"
 未找到,"Not found"
@@ -1276,7 +1336,7 @@ URI,URI
 每次请求重新编译,"Recompile on each request"
 使用缓存的字节码,"Use cached bytecode"
 "JIT 编译器","JIT compiler"
-"Windows ARM64 的 x64 PHP 仿真不支持 WLS JIT；请使用原生 ARM64 PHP 后再按基准评估 JIT。","Windows ARM64 的 x64 PHP 仿真不支持 WLS JIT；请使用原生 ARM64 PHP 后再按基准评估 JIT。"
+"Windows ARM64 的 x64 PHP 仿真不支持 WLS JIT；请使用原生 ARM64 PHP 后再按基准评估 JIT。","x64 PHP emulation for Windows ARM64 does not support the WLS JIT; please use native ARM64 PHP before benchmarking the JIT."
 "PHP 8 即时编译器，显著提升 CPU 密集型任务性能","PHP 8 just-in-time compiler, significantly improve the performance of CPU-intensive tasks"
 解释执行,"Interpret and Execute"
 "编译执行，接近 C 语言性能","Compile and execute, with performance close to C language"
@@ -1376,6 +1436,28 @@ URI,URI
 "proc_open 函数已启用","proc_open function enabled"
 "从 disable_functions 中移除 proc_open","Remove proc_open from disable_functions"
 "找到 disable_functions 行，删除 proc_open","Found disable_functions line, removing proc_open"
+"当前项目不支持从此面板控制 WLS。","The current project does not support controlling WLS from this panel."
+"WLS Master 控制通道不可用。","WLS Master control channel is not available."
+Ready,Ready
+重载中,Reloading
+恢复中,Recovering
+"WLS 实例已就绪。","The WLS instance is ready."
+"WLS 正在重载，请等待恢复到 Ready。","WLS is reloading, please wait for recovery to Ready."
+"WLS 尚未完全就绪。","WLS is not yet fully ready."
+该项目不可控制。,"This project is not controllable."
+"WLS Master 未运行，无法提交操作。","WLS Master is not running and the operation cannot be submitted."
+该实例已有生命周期操作正在执行。,"There is already a lifecycle operation being performed on this instance."
+项目名称确认不匹配，已取消重启。,"Project name confirmation does not match, restart canceled."
+该实例的生命周期操作正在提交，请稍后重试。,"Lifecycle operations for this instance are being submitted, please try again later."
+"WLS 重启已提交；Master 保持在线，正在重建全部工作进程。","WLS restart committed; Master remains online and all worker processes are being rebuilt."
+"WLS 重载已提交，正在滚动更新工作进程。","WLS reload committed, rolling update worker process."
+"WLS 生命周期操作提交失败。","WLS lifecycle operation submission failed."
+"Current Project","Current Project"
+"WLS 项目标识无效。","The WLS project ID is invalid."
+托管项目不存在。,"The hosting project does not exist."
+"托管项目已停用，不能执行 WLS 生命周期操作。","The managed project is deactivated and cannot perform WLS lifecycle operations."
+"该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。","This project uses a separate control plane, please enter its own WLS panel to perform a reload or restart."
+"无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。","The WLS instance for this project cannot be uniquely identified. Please first confirm that the instance is running."
 缓存命名空间失效帧包含未知字段。,"The cache namespace invalidation frame contains an unknown field."
 缓存命名空间失效帧不完整。,"The cache namespace invalidation frame is incomplete."
 不支持该缓存命名空间失效协议版本。,"The cache namespace invalidation protocol version is unsupported."
@@ -1396,13 +1478,13 @@ URI,URI
 应用缓存命名空间代际失败。,"Failed to apply cache namespace generations."
 "不能同时使用 --install-deps 与 --no-auto-deps。","--install-deps and --no-auto-deps cannot be used together."
 "Dispatcher 请求与 Direct 有效拓扑冲突；已拒绝静默改写拓扑。","The Dispatcher request conflicts with the effective Direct topology; silently rewriting the topology was refused."
-"Windows Direct 使用 Nginx 直连的独立 Worker 回环端口与内置 stream_select；不需要安装或编译 ext-event。","Windows Direct 使用 Nginx 直连的独立 Worker 回环端口与内置 stream_select；不需要安装或编译 ext-event。"
+"Windows Direct 使用 Nginx 直连的独立 Worker 回环端口与内置 stream_select；不需要安装或编译 ext-event。","Windows Direct uses Nginx direct independent Worker loopback port and built-in stream_select; no need to install or compile ext-event."
 "当前平台无法履行 Direct 拓扑依赖契约；已拒绝启动。","The current platform cannot satisfy the Direct topology dependency contract; startup was refused."
-"Direct shared_fd 需要 proc_open/proc_get_status、POSIX 进程控制和可枚举的继承描述符；当前 PHP/系统不满足。","Direct shared_fd 需要 proc_open/proc_get_status、POSIX 进程控制和可枚举的继承描述符；当前 PHP/系统不满足。"
+"Direct shared_fd 需要 proc_open/proc_get_status、POSIX 进程控制和可枚举的继承描述符；当前 PHP/系统不满足。","Direct shared_fd requires proc_open/proc_get_status, POSIX process control, and enumerable inheritance descriptors; current PHP/systems do not satisfy them."
 "sockets、OpenSSL 与 ext-event 已由当前 PHP 二进制加载且可用。","sockets, OpenSSL, and ext-event are loaded and available in the current PHP binary."
 "sockets 与 ext-event 已由当前 PHP 二进制加载且可用。","sockets and ext-event are loaded and available in the current PHP binary."
-"OpenSSL、ext-event 与 POSIX shared_fd 启动原语已可用。","OpenSSL、ext-event 与 POSIX shared_fd 启动原语已可用。"
-"ext-event 与 POSIX shared_fd 启动原语已可用。","ext-event 与 POSIX shared_fd 启动原语已可用。"
+"OpenSSL、ext-event 与 POSIX shared_fd 启动原语已可用。","OpenSSL, ext-event and POSIX shared_fd startup primitives are available."
+"ext-event 与 POSIX shared_fd 启动原语已可用。","The ext-event and POSIX shared_fd startup primitives are now available."
 "OpenSSL 与 ext-event 已由当前 PHP 二进制加载且可用。","OpenSSL and ext-event are loaded and available in the current PHP binary."
 "ext-event 已由当前 PHP 二进制加载且可用。","ext-event is loaded and available in the current PHP binary."
 "HTTPS 需要当前 PHP 二进制预先加载 OpenSSL；server:start 默认不会安装或编译依赖。","HTTPS requires OpenSSL to be preloaded by the current PHP binary; server:start does not install or compile dependencies by default."
@@ -1421,22 +1503,22 @@ URI,URI
 "当前 Windows PHP ABI（%{1}）没有可实际加载的可信 event DLL；WLS 将使用稳定的 Dispatcher + stream/select 运行时，不会加载未验证 DLL。","No trusted event DLL can be loaded by the current Windows PHP ABI (%{1}); WLS will use the stable Dispatcher plus stream/select runtime and will not load an unverified DLL."
 "HTTPS 需要当前 PHP 二进制加载 OpenSSL；当前平台不支持通过 --install-deps 安全安装。","HTTPS requires OpenSSL in the current PHP binary; this platform does not support a safe --install-deps path."
 "当前平台不支持通过 --install-deps 安全安装 ext-event；WLS 将使用兼容运行时。","This platform does not support safely installing ext-event through --install-deps; WLS will use the compatible runtime."
-"ext-event 已在当前 PHP CLI 扫描目录中原子启用并由新 PHP 子进程验证。","ext-event 已在当前 PHP CLI 扫描目录中原子启用并由新 PHP 子进程验证。"
-"ext-event 配置自愈失败；未修改主 php.ini，已拒绝继续。","ext-event 配置自愈失败；未修改主 php.ini，已拒绝继续。"
+"ext-event 已在当前 PHP CLI 扫描目录中原子启用并由新 PHP 子进程验证。","ext-event is enabled atomically in the current PHP CLI scan directory and verified by the new PHP child process."
+"ext-event 配置自愈失败；未修改主 php.ini，已拒绝继续。","The ext-event configuration self-healing failed; the main php.ini has not been modified and has been refused to continue."
 "本次显式依赖安装后 sockets/OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。","sockets/OpenSSL/ext-event remain unavailable after this explicit dependency installation; another installation loop was refused."
-"本次显式依赖安装后 OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。","本次显式依赖安装后 OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。"
+"本次显式依赖安装后 OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。","OpenSSL/ext-event is still unavailable after this explicit dependency installation; repeated installation cycles have been refused."
 "Dispatcher 的 ext-event 安装后仍不可用；保持显式 Dispatcher 并使用有界 stream_select，不改写拓扑。","ext-event remains unavailable after installation; keep the explicit Dispatcher with bounded stream_select and do not rewrite the topology."
 "无法获取 WLS 运行时依赖安装锁；Direct 已拒绝启动。","Unable to acquire the WLS runtime dependency installation lock; Direct startup was refused."
 "无法获取 WLS 运行时依赖安装锁；HTTPS/OpenSSL 已拒绝启动。","Unable to acquire the WLS runtime dependency installation lock; HTTPS/OpenSSL startup was refused."
 "Dispatcher 无法获取可选 ext-event 安装锁；继续使用有界 stream_select。","Dispatcher could not acquire the optional ext-event installation lock; continue with bounded stream_select."
 "其他 WLS 启动进程已安装 sockets/OpenSSL/ext-event。","Another WLS startup process installed sockets/OpenSSL/ext-event."
-"其他 WLS 启动进程已安装 OpenSSL/ext-event。","其他 WLS 启动进程已安装 OpenSSL/ext-event。"
+"其他 WLS 启动进程已安装 OpenSSL/ext-event。","Other WLS startup processes have OpenSSL/ext-event installed."
 "其他 WLS 启动进程已安装 HTTPS/OpenSSL 与 Dispatcher 可选 ext-event。","Another WLS startup process installed HTTPS/OpenSSL and the optional Dispatcher ext-event dependency."
 "HTTPS 必需依赖已安装验证；Dispatcher 可选 ext-event 安装失败，重入后将使用有界 stream_select。","Required HTTPS dependencies were installed and verified; the optional Dispatcher ext-event installation failed, so re-entry will use bounded stream_select."
 "%{1} 本次显式安装未能为 PHP %{2} 生成可用扩展；保持显式 Dispatcher 并使用有界 stream_select。","This explicit %{1} installation did not produce a usable extension for PHP %{2}; the explicit Dispatcher topology remains active with bounded stream_select."
 "%{1} 本次显式安装未能为 PHP %{2} 生成可用扩展。","This explicit %{1} installation did not produce a usable extension for PHP %{2}."
 "sockets/OpenSSL/ext-event 已使用当前 PHP 安装并验证。","sockets/OpenSSL/ext-event were installed and verified with the current PHP binary."
-"OpenSSL/ext-event 已使用当前 PHP 安装并验证。","OpenSSL/ext-event 已使用当前 PHP 安装并验证。"
+"OpenSSL/ext-event 已使用当前 PHP 安装并验证。","OpenSSL/ext-event is installed and verified with current PHP."
 "HTTPS/OpenSSL 与 Dispatcher 可选 ext-event 已使用当前 PHP 安装并验证。","HTTPS/OpenSSL and the optional Dispatcher ext-event dependency were installed and verified with the current PHP binary."
 "wls.ssl.engine 仅支持 none/stream；收到 %{1}。","wls.ssl.engine supports only none/stream; received %{1}."
 "Nginx 模式不允许 WLS external TLS Session Cache；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。","Nginx mode does not allow an external WLS TLS session cache; the project-managed Nginx owns the TLS session cache and tickets."
@@ -1496,7 +1578,6 @@ Disabled,Disabled
 "WLS Panel","WLS Panel"
 Configured,Configured
 "%{1} entries","%{1} entries"
-"Current Project","Current Project"
 Local,Local
 Path,Path
 请求处理错误：%{1},"Request processing error: %{1}"
@@ -1551,7 +1632,7 @@ Installed,Installed
 等待控制命令响应超时（%{1}s）。,"Control command response timeout (%{1}s)."
 "启动命令已提交，但未返回有效 PID，请稍后刷新状态确认。","Start command submitted, but no valid PID returned, please refresh status later to confirm."
 "启动命令已提交，Master PID: %{1}","Start command submitted, Master PID: %{1}"
-控制命令绝对截止时间已耗尽。,控制命令绝对截止时间已耗尽。
+控制命令绝对截止时间已耗尽。,"The control command absolute deadline has expired."
 缓存命名空间失效接收超时。,"Cache namespace invalidation acceptance timed out."
 缓存命名空间失效控制帧未完整写入。,"The cache namespace invalidation control frame was not fully written."
 "Local project","Local project"
@@ -1564,7 +1645,6 @@ Installed,Installed
 "All WLS operation plugins are installed.","All WLS operation plugins are installed."
 "%{1} WLS operation plugins need installation.","%{1} WLS operation plugins need installation."
 "Security Scope","Security Scope"
-Ready,Ready
 Review,Review
 "Policy and attack-log links can be scoped safely.","Policy and attack-log links can be scoped safely."
 "Security links need project identity first.","Security links need project identity first."
@@ -1661,7 +1741,7 @@ Webroot：%{1},"Webroot: %{1}"
 "- 同步网站域名","- Sync website domains"
 "- 启用 HTTPS","- Enable HTTPS"
 "- 禁用 HTTPS","- Disable HTTPS"
-站点域名查询不可用：%{1},站点域名查询不可用：%{1}
+站点域名查询不可用：%{1},"Site domain name query is not available: %{1}"
 未找到任何网站域名,"No website domains found"
 "找到 %{1} 个域名","Found %{1} domains"
 "✓ %{1} - 已有有效证书","✓ %{1} - Valid certificate already exists"
@@ -1690,9 +1770,9 @@ Webroot：%{1},"Webroot: %{1}"
 同步并申请,"Sync and request"
 "启用 HTTPS","Enable HTTPS"
 "禁用 HTTPS","Disable HTTPS"
-"监督可恢复后台任务 Runner、租约与崩溃恢复","监督可恢复后台任务 Runner、租约与崩溃恢复"
-"作为持久 Watchdog 进程运行","作为持久 Watchdog 进程运行"
-仅执行一次检查,仅执行一次检查
+"监督可恢复后台任务 Runner、租约与崩溃恢复","Oversees resumable background task runners, leases and crash recovery"
+"作为持久 Watchdog 进程运行","Run as a persistent watchdog process"
+仅执行一次检查,"Only perform one check"
 "未检测到运行中的 WLS Master","No running WLS Master detected"
 未知子命令：%{1},"Unknown subcommand: %{1}"
 启用维护模式...,"Enable maintenance mode..."
@@ -1727,21 +1807,21 @@ Webroot：%{1},"Webroot: %{1}"
 维护模式已自动禁用,"Maintenance mode has been automatically disabled"
 "用法：server:maintenance <子命令> [实例名]","Usage: server:maintenance <subcommand> [instance name]"
 子命令：,Subcommand:
-"启用维护模式（Dispatcher 切维护池；Direct 切业务 Worker 本地门禁）","启用维护模式（Dispatcher 切维护池；Direct 切业务 Worker 本地门禁）"
-禁用维护模式并恢复业务响应,禁用维护模式并恢复业务响应
+"启用维护模式（Dispatcher 切维护池；Direct 切业务 Worker 本地门禁）","Enable maintenance mode (Dispatcher switches to maintenance pool; Direct switches to business Worker local access control)"
+禁用维护模式并恢复业务响应,"Disable maintenance mode and restore business responsiveness"
 执行滚动重启（自动管理维护模式）,"Perform rolling restart (automatically manage maintenance mode)"
 查看维护模式状态,"View Maintenance Mode Status"
 示例：,Example:
-"WLS 维护模式管理（Dispatcher 维护池 / Direct Worker 本地门禁）","WLS 维护模式管理（Dispatcher 维护池 / Direct Worker 本地门禁）"
-"管理 WLS 维护模式：Dispatcher 切换维护 Worker 池；Direct 通过 IPC ACK 切换业务 Worker 本地维护门禁。","管理 WLS 维护模式：Dispatcher 切换维护 Worker 池；Direct 通过 IPC ACK 切换业务 Worker 本地维护门禁。"
-"启用维护模式：Dispatcher 启动/切换维护池；Direct 不启动维护 Worker","启用维护模式：Dispatcher 启动/切换维护池；Direct 不启动维护 Worker"
-"禁用维护模式：恢复业务 Worker 正常响应","禁用维护模式：恢复业务 Worker 正常响应"
-"执行滚动重启：Dispatcher 使用维护池；Direct 使用业务 Worker 本地维护门禁","执行滚动重启：Dispatcher 使用维护池；Direct 使用业务 Worker 本地维护门禁"
+"WLS 维护模式管理（Dispatcher 维护池 / Direct Worker 本地门禁）","WLS maintenance mode management (Dispatcher maintenance pool/Direct Worker local access control)"
+"管理 WLS 维护模式：Dispatcher 切换维护 Worker 池；Direct 通过 IPC ACK 切换业务 Worker 本地维护门禁。","Management WLS maintenance mode: Dispatcher switches and maintains the Worker pool; Direct switches the business Worker through IPC ACK and maintains access control locally."
+"启用维护模式：Dispatcher 启动/切换维护池；Direct 不启动维护 Worker","Enable maintenance mode: Dispatcher starts/switches maintenance pool; Direct does not start maintenance Worker"
+"禁用维护模式：恢复业务 Worker 正常响应","Disable maintenance mode: restore normal response of business workers"
+"执行滚动重启：Dispatcher 使用维护池；Direct 使用业务 Worker 本地维护门禁","Perform rolling restart: Dispatcher uses maintenance pool; Direct uses business Worker to maintain access control locally."
 实例名称（默认：default）,"Instance name (default: default)"
 滚动重启,"Rolling restart"
-"按拓扑使用维护池或 Worker 本地门禁，分批替换 Worker","按拓扑使用维护池或 Worker 本地门禁，分批替换 Worker"
+"按拓扑使用维护池或 Worker 本地门禁，分批替换 Worker","Use maintenance pools or Worker local access control based on topology to replace Workers in batches"
 "维护 Worker","Maintenance Worker"
-"仅 Dispatcher 拓扑使用；Direct 的维护 Worker 目标数固定为 0","仅 Dispatcher 拓扑使用；Direct 的维护 Worker 目标数固定为 0"
+"仅 Dispatcher 拓扑使用；Direct 的维护 Worker 目标数固定为 0","Only used by Dispatcher topology; Direct's maintenance worker target number is fixed at 0"
 自动管理,Auto-manage
 "rolling 命令会自动启用/禁用维护模式，无需手动操作","rolling The command will automatically enable/disable maintenance mode without manual operation"
 滚动重启（推荐）,"Rolling restart (recommended)"
@@ -1749,27 +1829,27 @@ Webroot：%{1},"Webroot: %{1}"
 手动禁用维护模式,"Manually disable maintenance mode"
 "`--all` 与 `-pre/--prefix` 不能同时使用。","`--all` and `-pre/--prefix` cannot be used at the same time."
 请二选一：要么停止所有实例，要么只停止某个前缀。,"Please choose one: either stop all instances, or stop only a specific prefix."
-该实例的启动、停止、重载或清理任务正在处理中，请稍后再试。,该实例的启动、停止、重载或清理任务正在处理中，请稍后再试。
+该实例的启动、停止、重载或清理任务正在处理中，请稍后再试。,"Start, stop, reload, or cleanup tasks for this instance are being processed. Please try again later."
 若锁文件长期存在，请确认停止任务是否已结束后再重试。,"If the lock file persists, please confirm that the task has stopped before retrying."
-"共享网关：经本地退休栅栏和控制面状态确认，当前启动代没有待注销路由；继续停止本地 WLS。","共享网关：经本地退休栅栏和控制面状态确认，当前启动代没有待注销路由；继续停止本地 WLS。"
-共享网关：当前实例连接已自然排空并注销；网关本身与其他项目保持运行。,共享网关：当前实例连接已自然排空并注销；网关本身与其他项目保持运行。
-共享网关路由未完成签名排空/注销：%{1},共享网关路由未完成签名排空/注销：%{1}
+"共享网关：经本地退休栅栏和控制面状态确认，当前启动代没有待注销路由；继续停止本地 WLS。","Shared gateway: Confirmed by the local retirement fence and control plane status, the current startup generation has no routes to be deregistered; continue to stop the local WLS."
+共享网关：当前实例连接已自然排空并注销；网关本身与其他项目保持运行。,"Shared gateway: The current instance connection is naturally drained and logged out; the gateway itself remains running with other projects."
+共享网关路由未完成签名排空/注销：%{1},"Shared gateway routing incomplete signature drain/logout: %{1}"
 "托管 Nginx：%{1}","Managed Nginx: %{1}"
 "托管 Nginx 停止失败：%{1}","Managed Nginx stop failed: %{1}"
-"托管 Nginx 停止异常：%{1}","托管 Nginx 停止异常：%{1}"
+"托管 Nginx 停止异常：%{1}","Hosted Nginx stopped with exception: %{1}"
 "已中止残留清理：请先修复托管 Nginx 停止故障，或显式使用强制停止。","Residual cleanup was aborted; repair the managed Nginx stop failure or explicitly force the stop."
 "实例 [%{1}] 不存在","Instance [%{1}] not found"
 "已在实例文件缺失场景下安全清理 %{1} 个受管 WLS 进程","Safely cleaned up %{1} managed WLS processes when instance files were missing"
 "使用 server:listing 查看所有实例","Use server:listing to view all instances"
-"已中止 WLS 停止：请先修复边缘路由/托管 Nginx 故障，或显式使用强制停止。","已中止 WLS 停止：请先修复边缘路由/托管 Nginx 故障，或显式使用强制停止。"
+"已中止 WLS 停止：请先修复边缘路由/托管 Nginx 故障，或显式使用强制停止。","Aborted WLS stop: Please fix the edge routing/hosting Nginx failure first, or use a force stop explicitly."
 "Master 进程不存在 (PID: %{1})","Master process does not exist (PID: %{1})"
 "Master PID 缺失但控制端口仍可用，先尝试通过 IPC 自停...","Master PID is missing but the control port is still available, try to stop it through IPC first..."
 "控制端口已接受 STOP，继续复核残留进程 ✓","Control port has received STOP, continuing to check for residual processes ✓"
 "Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.","Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup."
 "实例元数据已标记停止并保留 ✓","Instance metadata marked as stopped and retained ✓"
-"实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。"
+"实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。","Instance [%{1}] still has residual WLS processes and the instance files have been retained for continued cleanup."
 "实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。","Instance Master PID or control port ownership verification failed, skipping IPC, using local cleanup instead."
-"快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...","快速清场模式：跳过 IPC 排水，并发终止旧实例子进程..."
+"快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...","Fast cleanup mode: skip IPC draining, concurrently terminate old instance child processes..."
 "实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。","Instance [%{1}] still has residual processes, instance files retained for further cleanup."
 "实例 [%{1}] 已停止（-f 强制模式） ✓","Instance [%{1}] stopped (-f force mode) ✓"
 "实例 [%{1}] 已停止（快速清场） ✓","Instance [%{1}] stopped (quick cleanup) ✓"
@@ -1777,7 +1857,7 @@ Webroot：%{1},"Webroot: %{1}"
 "发送 STOP 命令给 Master (通过 IPC)...","Sending STOP command to Master (via IPC)..."
 "所有子进程已完整退出 ✓","All child processes have fully exited ✓"
 "Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.","Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup."
-"IPC 超时，按受保护进程出生身份清理该实例下所有进程...","IPC 超时，按受保护进程出生身份清理该实例下所有进程..."
+"IPC 超时，按受保护进程出生身份清理该实例下所有进程...","IPC timeout, clean up all processes under this instance according to the birth identity of the protected process..."
 "实例 [%{1}] 已停止 ✓","Instance [%{1}] stopped ✓"
 停止服务器实例,"Stop server instance"
 实例名称：,"Instance name:"
@@ -1798,13 +1878,14 @@ Webroot：%{1},"Webroot: %{1}"
 重试次数：%{1},"Retry Count: %{1}"
 无残留进程,"No residual processes"
 "残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}","Residual cleanup not fully completed, residual processes: %{1}, residual ports: %{2}"
-"受保护进程身份仍有 %{1} 项未确认释放：%{2}","受保护进程身份仍有 %{1} 项未确认释放：%{2}"
+"受保护进程身份仍有 %{1} 项未确认释放：%{2}","The protected process identity still has %{1} items unconfirmed for release: %{2}"
 "已清理 %{1} 个残留进程（复核结束）","Cleaned %{1} residual processes (review completed)"
 "已处理 %{1} 个进程","Processed %{1} processes"
-"Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）...","Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）..."
-"已发送终止信号 %{1} 个已知子进程","已发送终止信号 %{1} 个已知子进程"
-"精确身份清理仍有 %{1} 项未确认释放：%{2}","精确身份清理仍有 %{1} 项未确认释放：%{2}"
+"Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）...","Master has exited. Quickly terminate known child processes (including Session/Memory) in the instance first..."
+"已发送终止信号 %{1} 个已知子进程","Termination signal sent to %{1} known child processes"
+"精确身份清理仍有 %{1} 项未确认释放：%{2}","Exact identity cleanup still has %{1} items unconfirmed for release: %{2}"
 "Fast-local cleanup still has residual process ids: %{1}","Fast-local cleanup still has residual process ids: %{1}"
+"Fast-local cleanup still has recoverable ports listening: %{1}","Fast-local cleanup still has recoverable ports listening: %{1}"
 "Fast-local cleanup terminated %{1} residual processes.","Fast-local cleanup terminated %{1} residual processes."
 "Fast-local cleanup found no verified residual processes.","Fast-local cleanup found no verified residual processes."
 "STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。","If the STOP command is not acknowledged within the ACK timeout (no Stopping is seen), local cleanup is performed."
@@ -1813,7 +1894,7 @@ Webroot：%{1},"Webroot: %{1}"
 停止所有服务器实例,"Stop all server instances"
 "发现 %{1} 个 Weline Server 实例","Found %{1} Weline Server instances"
 "正在停止实例 [%{1}]...","Stopping instance [%{1}]..."
-"实例 [%{1}] 正在被其他生命周期任务处理，已跳过。","实例 [%{1}] 正在被其他生命周期任务处理，已跳过。"
+"实例 [%{1}] 正在被其他生命周期任务处理，已跳过。","Instance [%{1}] is being processed by other lifecycle tasks and has been skipped."
 "部分实例因托管 Nginx 停止失败而未完成，命令将返回非零状态。","Some instances were not stopped because managed Nginx stop failed; the command will return a non-zero status."
 "所有 Weline Server 实例已停止","All Weline Server instances have stopped"
 "正在停止 PHP 内置服务器 (cli-server)...","Stopping PHP built-in server (cli-server)..."
@@ -1832,9 +1913,9 @@ Webroot：%{1},"Webroot: %{1}"
 "一个或多个实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）","One or more instance names (default: default; cli/cli-server for PHP built-in server)"
 "停止所有运行中的实例（含 Weline Server 与 CLI 服务器）","Stop all running instances (including Weline Server and CLI server)"
 "停止所有实例名以该前缀开头的 Weline Server 实例","Stop all Weline Server instances whose instance names start with this prefix"
-"强制停止：通过认证 IPC 跳过排水；IPC 失联时仅按受保护进程出生身份清理","强制停止：通过认证 IPC 跳过排水；IPC 失联时仅按受保护进程出生身份清理"
-"显式跳过 IPC；仅允许受保护 Master/子进程出生身份清理，无法证明时拒绝终止","显式跳过 IPC；仅允许受保护 Master/子进程出生身份清理，无法证明时拒绝终止"
-"兼容参数：WLS 2.0 默认始终优先使用认证 IPC","兼容参数：WLS 2.0 默认始终优先使用认证 IPC"
+"强制停止：通过认证 IPC 跳过排水；IPC 失联时仅按受保护进程出生身份清理","Forced stop: skip drainage through authenticated IPC; only clean up according to the birth identity of the protected process when IPC loses contact"
+"显式跳过 IPC；仅允许受保护 Master/子进程出生身份清理，无法证明时拒绝终止","Explicitly skip IPC; only allow protected Master/child birth identity cleanup, refuse to terminate if cannot be proven"
+"兼容参数：WLS 2.0 默认始终优先使用认证 IPC","Compatible parameters: WLS 2.0 always prefers authentication IPC by default"
 显示帮助信息,"Show help"
 停止默认实例,"Stop default instance"
 停止指定实例,"Stop specific instance"
@@ -1842,8 +1923,8 @@ Webroot：%{1},"Webroot: %{1}"
 按前缀停止实例,"Stop instances by prefix"
 "停止 PHP 内置服务器","Stop PHP built-in server"
 停止所有实例,"Stop all instances"
-"强制停止（认证 IPC，失败后精确身份清理）","强制停止（认证 IPC，失败后精确身份清理）"
-显式本地精确身份清理,显式本地精确身份清理
+"强制停止（认证 IPC，失败后精确身份清理）","Force stop (authentication IPC, precise identity cleanup after failure)"
+显式本地精确身份清理,"Explicit local precise identity cleanup"
 正在停止服务器...,"Stopping server..."
 "Weline Server 已停止！","Weline Server has stopped!"
 "server:stop only stops WLS-managed processes; independent bin/w commands such as setup:upgrade or cron:task:run must be handled separately.","server:stop only stops WLS-managed processes; independent bin/w commands such as setup:upgrade or cron:task:run must be handled separately."
@@ -1868,28 +1949,28 @@ Webroot：%{1},"Webroot: %{1}"
 重载全部证书,"Reload All Certificates"
 重载单个域名,"Reload Single Domain"
 清除不完整证书并重置,"Clear incomplete certificates and reset"
-"拒绝执行全局 PHP 进程杀伤。","拒绝执行全局 PHP 进程杀伤。"
-"如确需杀死系统中所有 PHP 进程，请显式使用 --all-php --yes。","如确需杀死系统中所有 PHP 进程，请显式使用 --all-php --yes。"
-"未发现 WLS 实例记录；不会执行全局 php.exe/pkill。","未发现 WLS 实例记录；不会执行全局 php.exe/pkill。"
-"未找到可清理的 WLS 进程前缀。","未找到可清理的 WLS 进程前缀。"
-"将仅结束当前项目 WLS 归属的 PHP 进程，不会杀死系统中所有 PHP。","将仅结束当前项目 WLS 归属的 PHP 进程，不会杀死系统中所有 PHP。"
-"已发送 WLS 归属 PHP 进程清理请求。","已发送 WLS 归属 PHP 进程清理请求。"
-"即将结束系统中所有 PHP 进程（包含非 WLS 进程）。","即将结束系统中所有 PHP 进程（包含非 WLS 进程）。"
-"已执行全局 PHP 进程清理。","已执行全局 PHP 进程清理。"
-"未检测到运行中的 PHP 进程，或系统拒绝执行。","未检测到运行中的 PHP 进程，或系统拒绝执行。"
-"结束 WLS 归属 PHP 进程；全局 PHP 清理必须显式 --all-php --yes","结束 WLS 归属 PHP 进程；全局 PHP 清理必须显式 --all-php --yes"
-"默认只结束当前项目 WLS 归属 PHP 进程","默认只结束当前项目 WLS 归属 PHP 进程"
-"危险：杀死系统中所有 PHP 进程","危险：杀死系统中所有 PHP 进程"
-"与 --all-php 同用，确认全局杀伤","与 --all-php 同用，确认全局杀伤"
-安全默认,安全默认
-"不再执行 taskkill /IM php.exe 或 pkill -9 php，除非显式 --all-php --yes","不再执行 taskkill /IM php.exe 或 pkill -9 php，除非显式 --all-php --yes"
-"清理 WLS 归属进程","清理 WLS 归属进程"
-全局清理（危险）,全局清理（危险）
+"拒绝执行全局 PHP 进程杀伤。","Deny global PHP process killing."
+"如确需杀死系统中所有 PHP 进程，请显式使用 --all-php --yes。","If you really need to kill all PHP processes in the system, please explicitly use --all-php --yes."
+"未发现 WLS 实例记录；不会执行全局 php.exe/pkill。","No WLS instance record found; global php.exe/pkill will not be executed."
+"未找到可清理的 WLS 进程前缀。","No cleanable WLS process prefix found."
+"将仅结束当前项目 WLS 归属的 PHP 进程，不会杀死系统中所有 PHP。","Will only end the PHP process owned by the current project WLS and will not kill all PHP in the system."
+"已发送 WLS 归属 PHP 进程清理请求。","WLS owned PHP process cleanup request sent."
+"即将结束系统中所有 PHP 进程（包含非 WLS 进程）。","All PHP processes on the system (including non-WLS processes) will be terminated."
+"已执行全局 PHP 进程清理。","Global PHP process cleanup has been performed."
+"未检测到运行中的 PHP 进程，或系统拒绝执行。","The running PHP process was not detected, or the system refused execution."
+"结束 WLS 归属 PHP 进程；全局 PHP 清理必须显式 --all-php --yes","End WLS owned PHP process; global PHP cleanup must be explicit --all-php --yes"
+"默认只结束当前项目 WLS 归属 PHP 进程","By default, only the PHP process belonging to WLS of the current project is ended."
+"危险：杀死系统中所有 PHP 进程","Danger: Kill all PHP processes on the system"
+"与 --all-php 同用，确认全局杀伤","Used with --all-php to confirm global killing"
+安全默认,"safe default"
+"不再执行 taskkill /IM php.exe 或 pkill -9 php，除非显式 --all-php --yes","No longer execute taskkill /IM php.exe or pkill -9 php unless explicit --all-php --yes"
+"清理 WLS 归属进程","Clean up the WLS attribution process"
+全局清理（危险）,"Global cleanup (dangerous)"
 "清除 WLS 路由缓存...","Clearing WLS route cache..."
 实例不存在,"Instance does not exist"
-发送路由缓存清除命令,发送路由缓存清除命令
-"路由缓存清除命令已被 Master 接收","路由缓存清除命令已被 Master 接收"
-状态：%{1},状态：%{1}
+发送路由缓存清除命令,"Send route cache clear command"
+"路由缓存清除命令已被 Master 接收","Route cache clear command has been received by Master"
+状态：%{1},"Status: %{1}"
 清除缓存失败,"Failed to clear cache"
 "清除 WLS Dispatcher 路由缓存","Clear WLS Dispatcher route cache"
 "📋 您的 PHP 环境","📋 Your PHP Environment"
@@ -1905,8 +1986,8 @@ Webroot：%{1},"Webroot: %{1}"
 文件：%{1},"File: %{1}"
 显示性能优化文档链接,"Show performance optimization documentation link"
 "请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁","Please specify --ip=<IP> to unblock a single IP, or --clear-all to clear all bans"
-解封命令已接收,解封命令已接收
-解封命令失败,解封命令失败
+解封命令已接收,"Unblocking order received"
+解封命令失败,"Unblock command failed"
 "公网协议所有者：纯 WLS；无需 Nginx 或其他边缘进程。","Public protocol owner: pure WLS; no Nginx or other edge process is required."
 "纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}","Pure WLS protocol: target=%{1}, effective preferred=%{2}, fallback=%{3}"
 未验证,"Not verified"
@@ -1954,8 +2035,10 @@ pending,pending
 "连接实例控制端口并发送 status，输出耗时与占用 PID","Connect to instance control port and send status, output elapsed time and occupied PID"
 "实例名（默认 default）","Instance name (default default)"
 探测默认实例,"Probe default instance"
-"Session Server %{1}","Session Server %{1}"
-"Memory Service %{1}","Memory Service %{1}"
+"Session Server stopped","Session Server stopped"
+"Session Server stop was not confirmed; runtime identity was retained for retry/repair.","Session Server stop was not confirmed; runtime identity was retained for retry/repair."
+"Memory Service stopped","Memory Service stopped"
+"Memory Service stop was not confirmed; runtime identity was retained for retry/repair.","Memory Service stop was not confirmed; runtime identity was retained for retry/repair."
 "Memory Service disabled by configuration.","Memory Service disabled by configuration."
 "停止全局共享 Session/Memory 服务","Stop global shared Session/Memory service"
 停止共享服务,"Stop shared service"
@@ -2000,8 +2083,8 @@ pending,pending
 "仅 CLI 服务器","CLI server only"
 仅运行中,"Running only"
 详细信息,"Detailed info"
-"检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。","检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。"
-将先执行平滑停机，再使用新启动参数重新拉起实例。,将先执行平滑停机，再使用新启动参数重新拉起实例。
+"检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。","If a change in startup parameters such as port/topology/Worker/SSL is detected, restart -r will automatically switch to a complete restart."
+将先执行平滑停机，再使用新启动参数重新拉起实例。,"A graceful shutdown will be performed first, and then the instance will be restarted using the new startup parameters."
 "检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）...","Detected that the server is already running, -f force mode: single batch restart Workers (Master stays running)..."
 "检测到服务器已运行，执行滚动重启（Master 保持运行）...","Detected that the server is already running, performing rolling restart (Master stays running)..."
 服务器未运行，正在启动...,"Server is not running, starting..."
@@ -2016,6 +2099,8 @@ pending,pending
 "公网域名或展示主机；WLS 回源始终监听 127.0.0.1","Public domain or display host; the WLS upstream always listens on 127.0.0.1"
 "WLS 明文 HTTP/1.1 回源端口；Nginx 公网端口由 wls.edge.nginx 配置","WLS plaintext HTTP/1.1 upstream port; Nginx public ports are configured by wls.edge.nginx"
 "Worker 进程数（默认：4）","Worker count (default: 4)"
+"与 server:start -r -f 区别","Difference from server:start -r -f"
+"server:restart -r -f 仅单批次重载 Worker 且 Master 保持；server:start -r -f 会停 Master 做完整代际重启","server:restart -r -f only reloads the Worker in a single batch and keeps the Master; server:start -r -f will stop the Master and do a complete intergenerational restart"
 确保服务器运行,"Ensure the server is running"
 强制重启服务器,"Force Restart Server"
 强制单批次重启,"Force single batch restart"
@@ -2029,9 +2114,9 @@ pending,pending
 "每 3 秒刷新","Refresh every 3 seconds"
 退出,Exit
 "Weline Server 状态","Weline Server status"
-"已拒绝 %{1} 份非 v4 endpoint；以下最多显示 10 份，文件保持不变。","已拒绝 %{1} 份非 v4 endpoint；以下最多显示 10 份，文件保持不变。"
+"已拒绝 %{1} 份非 v4 endpoint；以下最多显示 10 份，文件保持不变。","%{1} non-v4 endpoints rejected; up to 10 shown below, files remain unchanged."
 "[%{1}] %{2}","[%{1}] %{2}"
-"其余 %{1} 份已省略。","其余 %{1} 份已省略。"
+"其余 %{1} 份已省略。","The remaining %{1} copies have been omitted."
 没有运行中的服务器实例,"No running server instances"
 ╔══════════════════════════════════════════════════════════════╗,╔══════════════════════════════════════════════════════════════╗
 ╚══════════════════════════════════════════════════════════════╝,╚══════════════════════════════════════════════════════════════╝
@@ -2043,7 +2128,7 @@ workers,workers
 服务：,Services:
 "使用 server:status <name> 查看详细状态","Use server:status <name> to view detailed status"
 "使用 server:stop <name> 停止实例","Use server:stop <name> to stop an instance"
-"如有残留 endpoint 文件，可执行 server:clean 清理未运行记录","如有残留 endpoint 文件，可执行 server:clean 清理未运行记录"
+"如有残留 endpoint 文件，可执行 server:clean 清理未运行记录","If there are residual endpoint files, you can execute server:clean to clean up the non-running records."
 "实例 [%{1}] 状态","Instance [%{1}] status"
 "Worker 数：",Workers:
 unknown,unknown
@@ -2061,30 +2146,30 @@ unknown,unknown
 "未配置（请在 env.php 中设置 area_routes.rest_backend.prefix）","Not configured (please set area_routes.rest_backend.prefix in env.php)"
 "前台 REST 接口","Frontend REST API"
 服务访问地址,"Service Access Address"
-回源内部地址（当前无可验证公网入口）,回源内部地址（当前无可验证公网入口）
-"运行时选择：仅接受 endpoint schema v4，当前记录已拒绝。","运行时选择：仅接受 endpoint schema v4，当前记录已拒绝。"
+回源内部地址（当前无可验证公网入口）,"Return to the internal address of the source (currently there is no verifiable public network entrance)"
+"运行时选择：仅接受 endpoint schema v4，当前记录已拒绝。","Runtime selection: Only endpoint schema v4 accepted, current record rejected."
 实际运行时：,"Effective runtime:"
 实际运行时选择：,"Effective runtime selection:"
 拓扑：,Topology:
 数据面：,"Data plane:"
 策略：,Policy:
 Endpoint：,Endpoint:
-共享网关：,共享网关：
-边缘降级：,边缘降级：
+共享网关：,"Shared gateway:"
+边缘降级：,"Edge downgrade:"
 选择原因：,"Selection reason:"
 "原生 WLS 入口排空：","Native WLS edge draining:"
 "原生 WLS 备用入口：","Native WLS fallback edge:"
-"纯 WLS 备用入口：","纯 WLS 备用入口："
-"备用 TLS 地址：","备用 TLS 地址："
-路由域名/SNI：,路由域名/SNI：
-"当前没有可直接使用的 HTTPS URL；必须提供匹配通配符证书的具体 hostname/SNI。","当前没有可直接使用的 HTTPS URL；必须提供匹配通配符证书的具体 hostname/SNI。"
-"高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。","高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。"
-启动失败详情：,启动失败详情：
-"WLS 2.0 网关入口","WLS 2.0 网关入口"
-"纯 WLS 降级入口","纯 WLS 降级入口"
+"纯 WLS 备用入口：","Pure WLS alternative entrance:"
+"备用 TLS 地址：","Alternate TLS address:"
+路由域名/SNI：,"Routing domain name/SNI:"
+"当前没有可直接使用的 HTTPS URL；必须提供匹配通配符证书的具体 hostname/SNI。","There is currently no HTTPS URL that can be used directly; a specific hostname/SNI that matches the wildcard certificate must be provided."
+"高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。","High port is not equivalent to 80/443; please verify that DNS, firewall, or load balancing can reach the port."
+启动失败详情：,"Startup failure details:"
+"WLS 2.0 网关入口","WLS 2.0 Gateway Portal"
+"纯 WLS 降级入口","Pure WLS downgrade portal"
 "纯 WLS 公网入口","Pure WLS public edge"
-回源内部地址（公网状态未知）,回源内部地址（公网状态未知）
-回源内部地址,回源内部地址
+回源内部地址（公网状态未知）,"Return to the internal address of the source (the public network status is unknown)"
+回源内部地址,"Return to source internal address"
 "● on (默认)","● on (default)"
 "● on (env.php)","● on (env.php)"
 "○ off (env.php)","○ off (env.php)"
@@ -2097,83 +2182,83 @@ Endpoint：,Endpoint:
 "查看服务器实例状态，树形展示所有 Worker 进程","View server instance status, displaying all Worker processes in a tree view"
 实例名称（默认显示所有实例）,"Instance name (default shows all instances)"
 "Watch 模式：每 3 秒自动刷新，Ctrl+C 退出","Watch mode: automatically refresh every 3 seconds, Ctrl+C to exit"
-"显示 WLS 运行时策略、降级原因和优化建议","显示 WLS 运行时策略、降级原因和优化建议"
-"与 --doctor 同用时输出 JSON","与 --doctor 同用时输出 JSON"
+"显示 WLS 运行时策略、降级原因和优化建议","Show WLS runtime policies, reasons for degradation, and optimization recommendations"
+"与 --doctor 同用时输出 JSON","Output JSON when used with --doctor"
 查看所有实例,"View all instances"
 查看指定实例,"View specific instance"
 "实时监控（watch 模式）","Real-Time Monitoring (Watch Mode)"
-运行时诊断,运行时诊断
-清理未运行实例记录,清理未运行实例记录
-"清理未运行的 WLS 实例记录","清理未运行的 WLS 实例记录"
-未发现可安全清理的未运行实例记录。,未发现可安全清理的未运行实例记录。
-"默认 dry-run 未修改任何文件。","默认 dry-run 未修改任何文件。"
-"默认 dry-run：发现 %{1} 个可清理实例，但未删除。","默认 dry-run：发现 %{1} 个可清理实例，但未删除。"
-可清理实例：%{1},可清理实例：%{1}
-未发现需要清理的未运行实例记录。,未发现需要清理的未运行实例记录。
-"可使用 server:status 或 server:listing 查看当前实例状态。","可使用 server:status 或 server:listing 查看当前实例状态。"
-"已清理 %{1} 个未运行实例记录。","已清理 %{1} 个未运行实例记录。"
-已处理实例：%{1},已处理实例：%{1}
-"可使用 server:status 或 server:listing 查看清理后的实例状态。","可使用 server:status 或 server:listing 查看清理后的实例状态。"
-"清理已无运行进程但仍残留实例文件的 WLS 实例记录","清理已无运行进程但仍残留实例文件的 WLS 实例记录"
-"清理那些已经没有运行但仍占着实例文件的 WLS 实例记录","清理那些已经没有运行但仍占着实例文件的 WLS 实例记录"
-"执行清理；默认仅 dry-run 检查","执行清理；默认仅 dry-run 检查"
-预览未运行实例记录,预览未运行实例记录
-确认清理未运行实例记录,确认清理未运行实例记录
-清理后查看实例状态,清理后查看实例状态
-"停止本项目托管 Nginx","停止本项目托管 Nginx"
-"停止本项目 var/server/nginx 下的托管 Nginx 进程","停止本项目 var/server/nginx 下的托管 Nginx 进程"
+运行时诊断,"Runtime diagnostics"
+清理未运行实例记录,"Clear records of non-running instances"
+"清理未运行的 WLS 实例记录","Clean up WLS instance records that are not running"
+未发现可安全清理的未运行实例记录。,"No records of non-running instances found that are safe to clean."
+"默认 dry-run 未修改任何文件。","The default dry-run does not modify any files."
+"默认 dry-run：发现 %{1} 个可清理实例，但未删除。","Default dry-run: %{1} cleanable instances found but not deleted."
+可清理实例：%{1},"Cleanable instance: %{1}"
+未发现需要清理的未运行实例记录。,"No records of non-running instances that need to be cleaned were found."
+"可使用 server:status 或 server:listing 查看当前实例状态。","You can use server:status or server:listing to view the current instance status."
+"已清理 %{1} 个未运行实例记录。","Cleaned %{1} non-running instance records."
+已处理实例：%{1},"Processed instance: %{1}"
+"可使用 server:status 或 server:listing 查看清理后的实例状态。","You can use server:status or server:listing to view the cleaned instance status."
+"清理已无运行进程但仍残留实例文件的 WLS 实例记录","Clean up WLS instance records that have no running processes but still have instance files remaining"
+"清理那些已经没有运行但仍占着实例文件的 WLS 实例记录","Clean up WLS instance records that are no longer running but still occupy instance files"
+"执行清理；默认仅 dry-run 检查","Perform cleanup; default only dry-run checks"
+预览未运行实例记录,"Preview non-running instance records"
+确认清理未运行实例记录,"Confirm to clean up non-running instance records"
+清理后查看实例状态,"View instance status after cleaning"
+"停止本项目托管 Nginx","Stop hosting this project on Nginx"
+"停止本项目 var/server/nginx 下的托管 Nginx 进程","Stop the managed Nginx process under var/server/nginx of this project"
 示例,Example
 "安装本项目托管 Nginx","Install per-project managed Nginx"
 "本命令可能联网下载钉死版本的 Nginx 源码/压缩包，并写入项目隔离的本地安装根。","This command may download the pinned Nginx source/archive and write it to the project-isolated local install root."
-安装失败,安装失败
-二进制：%{1},二进制：%{1}
-"HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）","HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）"
+安装失败,"Installation failed"
+二进制：%{1},"Binary: %{1}"
+"HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）","HTTP listening: %{1}, HTTPS listening: %{2} (offset=%{3})"
 "安装本项目托管 Nginx 到项目隔离的本地安装根","Install the project-managed Nginx into its project-isolated local install root"
-"按平台下载并安装本项目独立 Nginx 实例；普通 server:start 不会静默下载","按平台下载并安装本项目独立 Nginx 实例；普通 server:start 不会静默下载"
+"按平台下载并安装本项目独立 Nginx 实例；普通 server:start 不会静默下载","Download and install the independent Nginx instance of this project according to the platform; ordinary server:start will not download silently"
 "强制重新获取并按平台重新安装（macOS/Linux 编译，Windows 解压官方预编译包）","Reacquire and reinstall for the current platform (compile on macOS/Linux; extract the official prebuilt package on Windows)"
-隔离,隔离
+隔离,isolation
 "每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压","Each project uses an isolated install root; Windows always uses local LOCALAPPDATA to avoid UNC/shared-volume extraction."
-"未配置时使用 8080/8443 + projectPortOffset","未配置时使用 8080/8443 + projectPortOffset"
+"未配置时使用 8080/8443 + projectPortOffset","Use 8080/8443 + projectPortOffset when not configured"
 macOS,macOS
-"需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2","需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2"
+"需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2","Requires Xcode CLT, OpenSSL 3 and PCRE2; executable brew install openssl@3 pcre2"
 Linux,Linux
-"需 gcc/make 与 OpenSSL/PCRE 头文件（apt/dnf/apk 对应 *-devel/*-dev）","需 gcc/make 与 OpenSSL/PCRE 头文件（apt/dnf/apk 对应 *-devel/*-dev）"
+"需 gcc/make 与 OpenSSL/PCRE 头文件（apt/dnf/apk 对应 *-devel/*-dev）","Requires gcc/make and OpenSSL/PCRE header files (apt/dnf/apk corresponds to *-devel/*-dev)"
 Windows,Windows
 "下载官方 nginx.zip 到本机项目隔离目录；需 ZipArchive 或 PowerShell/tar","Download the official nginx.zip into the local project-isolated directory; requires ZipArchive or PowerShell/tar."
-安装,安装
-"本项目托管 Nginx 状态","本项目托管 Nginx 状态"
-二进制,二进制
-项目偏移,项目偏移
-安装目录,安装目录
-运行目录,运行目录
-"查看本项目托管 Nginx 状态","查看本项目托管 Nginx 状态"
-"查看本项目托管 Nginx 安装与运行状态","查看本项目托管 Nginx 安装与运行状态"
-"JSON 输出","JSON 输出"
-"请提供 --upstream=<WLS端口>，例如 --upstream=9981","请提供 --upstream=<WLS端口>，例如 --upstream=9981"
+安装,Install
+"本项目托管 Nginx 状态","This project hosts Nginx status"
+二进制,binary
+项目偏移,"Project offset"
+安装目录,"Installation directory"
+运行目录,"Run directory"
+"查看本项目托管 Nginx 状态","Check the status of this project’s hosting Nginx"
+"查看本项目托管 Nginx 安装与运行状态","Check the installation and running status of Nginx hosted by this project"
+"JSON 输出","JSON output"
+"请提供 --upstream=<WLS端口>，例如 --upstream=9981","Please provide --upstream=<WLS port>, for example --upstream=9981"
 "请提供 --owner=<WLS实例名>，托管 Nginx 不接受未归因的回源接管","Provide --owner=<WLS instance>; managed Nginx refuses unattributed upstream takeover"
 "owner 必须是运行中的 Nginx-edge WLS 实例，且其端口必须等于 --upstream","owner must be a running Nginx-edge WLS instance whose port equals --upstream"
-"边缘 HTTP：%{1} → %{2}","边缘 HTTP：%{1} → %{2}"
-"边缘 HTTPS：%{1}","边缘 HTTPS：%{1}"
-"启动本项目托管 Nginx","启动本项目托管 Nginx"
-"生成本项目 nginx.conf 并启动托管 Nginx","生成本项目 nginx.conf 并启动托管 Nginx"
-"WLS 明文回源端口","WLS 明文回源端口"
-"回源主机，默认 127.0.0.1","回源主机，默认 127.0.0.1"
+"边缘 HTTP：%{1} → %{2}","Edge HTTP: %{1} → %{2}"
+"边缘 HTTPS：%{1}","Edge HTTPS: %{1}"
+"启动本项目托管 Nginx","Start this project hosting Nginx"
+"生成本项目 nginx.conf 并启动托管 Nginx","Generate this project nginx.conf and start hosting Nginx"
+"WLS 明文回源端口","WLS plaintext return-to-origin port"
+"回源主机，默认 127.0.0.1","Back to the origin host, default 127.0.0.1"
 "拥有该托管边缘的 WLS 实例名","WLS instance that owns this managed edge"
-"热重载本项目托管 Nginx","热重载本项目托管 Nginx"
-"对本项目托管 Nginx 执行 -s reload（证书续签后亦可自动触发）","对本项目托管 Nginx 执行 -s reload（证书续签后亦可自动触发）"
-"--tls-version 仅适用于 HTTPS 压测，请同时使用 --ssl 或选择 HTTPS 实例。","--tls-version 仅适用于 HTTPS 压测，请同时使用 --ssl 或选择 HTTPS 实例。"
-"--physical-connections 必须是正整数。","--physical-connections 必须是正整数。"
-"--physical-connections 必须在 1 到并发数 %{1} 之间。","--physical-connections 必须在 1 到并发数 %{1} 之间。"
-"--physical-connections 不能与 --no-keepalive 同时使用；fresh 模式每个请求都必须新建连接。","--physical-connections 不能与 --no-keepalive 同时使用；fresh 模式每个请求都必须新建连接。"
-"--max-tls-p95-ms 仅适用于 HTTPS 压测。","--max-tls-p95-ms 仅适用于 HTTPS 压测。"
-"--physical-connections 仅用于 HTTP/2 或 HTTP/3 多路复用压测。","--physical-connections 仅用于 HTTP/2 或 HTTP/3 多路复用压测。"
+"热重载本项目托管 Nginx","Hot reloading this project is hosted on Nginx"
+"对本项目托管 Nginx 执行 -s reload（证书续签后亦可自动触发）","Execute -s reload on Nginx hosted by this project (it can also be triggered automatically after the certificate is renewed)"
+"--tls-version 仅适用于 HTTPS 压测，请同时使用 --ssl 或选择 HTTPS 实例。","--tls-version is only applicable to HTTPS stress testing, please use --ssl at the same time or select an HTTPS instance."
+"--physical-connections 必须是正整数。","--physical-connections must be a positive integer."
+"--physical-connections 必须在 1 到并发数 %{1} 之间。","--physical-connections must be between 1 and the concurrency number %{1}."
+"--physical-connections 不能与 --no-keepalive 同时使用；fresh 模式每个请求都必须新建连接。","--physical-connections cannot be used together with --no-keepalive; each request in fresh mode must create a new connection."
+"--max-tls-p95-ms 仅适用于 HTTPS 压测。","--max-tls-p95-ms only applies to HTTPS stress testing."
+"--physical-connections 仅用于 HTTP/2 或 HTTP/3 多路复用压测。","--physical-connections Only used for HTTP/2 or HTTP/3 multiplexing stress testing."
 "无法连接到服务器 %{1}:%{2}","Unable to connect to server %{1}:%{2}"
 "Managed Nginx 配置 generation 探针不匹配，已拒绝开始压测。","The Managed Nginx configuration generation probe did not match; the benchmark was refused."
 "Weline Server 压力测试","Weline Server Stress Test"
 "未指定 --path，默认使用轻量端点 %{1} 测 WLS 吞吐；压业务页请显式传 --path /xxx","--path not specified, using lightweight endpoint %{1} by default to measure WLS throughput; to stress test a business page, explicitly pass --path /xxx"
-"业务路径压测会执行完整安全策略；X-WLS-Benchmark-Worker 仅用于 Worker 归因，不绕过 Origin Token、封禁、限流或攻击规则。高压前请仅为专用测试源 IP 显式配置 whitelist CIDR。","业务路径压测会执行完整安全策略；X-WLS-Benchmark-Worker 仅用于 Worker 归因，不绕过 Origin Token、封禁、限流或攻击规则。高压前请仅为专用测试源 IP 显式配置 whitelist CIDR。"
-内容编码探针失败：%{1},内容编码探针失败：%{1}
-"内容编码探针：Content-Encoding=%{encoding}，Vary=%{vary}，wire body=%{wire}B，logical body=%{logical}B","内容编码探针：Content-Encoding=%{encoding}，Vary=%{vary}，wire body=%{wire}B，logical body=%{logical}B"
+"业务路径压测会执行完整安全策略；X-WLS-Benchmark-Worker 仅用于 Worker 归因，不绕过 Origin Token、封禁、限流或攻击规则。高压前请仅为专用测试源 IP 显式配置 whitelist CIDR。","The business path stress test will implement a complete security policy; X-WLS-Benchmark-Worker is only used for Worker attribution and does not bypass Origin Token, bans, current limiting or attack rules. Please explicitly configure the whitelist CIDR only for the dedicated test source IP before high voltage."
+内容编码探针失败：%{1},"Content encoding probe failed: %{1}"
+"内容编码探针：Content-Encoding=%{encoding}，Vary=%{vary}，wire body=%{wire}B，logical body=%{logical}B","Content encoding probe: Content-Encoding=%{encoding}, Vary=%{vary}, wire body=%{wire}B, logical body=%{logical}B"
 服务器连接成功，开始压测...,"Server connected successfully, starting stress test..."
 "检测到多个运行中的 WLS 实例，已拒绝自动选择，避免误压生产实例。","Multiple running WLS instances were detected; automatic selection was rejected to avoid benchmarking the wrong production instance."
 "请使用 --instance <name> 明确指定实例：%{1}","Use --instance <name> to select an exact instance: %{1}"
@@ -2187,50 +2272,50 @@ Windows,Windows
 "实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。","Instance [%{1}] is not running; refusing to attribute the port owner to it."
 "实例 [%{1}] 未达到网关压测就绪状态：运行 Gateway Backend %{2}/%{3}。","Instance [%{1}] is not ready for gateway benchmarking: running Gateway Backend %{2}/%{3}."
 "实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。","The WLS health endpoint for instance [%{1}] is healthy; the Worker process index is %{2}/%{3}, but public benchmarking still requires the current edge identity gate."
-"实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。","实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。"
-"已停止 Worker：%{1}","已停止 Worker：%{1}"
+"实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。","Example [%{1}] has not reached the stress test ready state: run Worker %{2}/%{3}."
+"已停止 Worker：%{1}","Stopped Worker: %{1}"
 "压测端口必须在 1-65535 范围内。","The benchmark port must be in the 1-65535 range."
-"实例 [%{1}] 状态不可读，已拒绝开始压测。","实例 [%{1}] 状态不可读，已拒绝开始压测。"
+"实例 [%{1}] 状态不可读，已拒绝开始压测。","Instance [%{1}] status is unreadable and the pressure test has been refused to start."
 "--authority-host 与已归因实例的公网 authority 不一致；请使用实例配置中的 %{1}。","--authority-host does not match the attributed instance public authority; use %{1} from the instance configuration."
 "手动端口唯一匹配到运行实例 [%{1}] 的 %{2}，报告将使用该实例的 schema v%{3} 运行时元数据。","The manual port uniquely matched %{2} for running instance [%{1}]; the report will use that instance's schema v%{3} runtime metadata."
-"WLS 2.0 网关公网入口","WLS 2.0 网关公网入口"
+"WLS 2.0 网关公网入口","WLS 2.0 gateway public network entrance"
 "Managed Nginx 公网入口","Managed Nginx public endpoint"
 "内部 HTTP/1.1 回源","Internal HTTP/1.1 upstream"
 手动端口匹配到多个实例记录（%{1}）；压测可继续，但报告不归因任何运行时。,"The manual port matched multiple instance records (%{1}); the benchmark can continue, but the report will not attribute any runtime."
 "请使用 --instance <name> 消除歧义。","Use --instance <name> to remove the ambiguity."
 "手动 host/port 未唯一匹配 Managed Nginx 公网入口或内部 WLS 回源；报告仅记录地址，不伪造运行时证据。","The manual host/port did not uniquely match a Managed Nginx public endpoint or internal WLS upstream; the report records only the address and does not fabricate runtime evidence."
 手动指定（未归因）,"Manual target (unattributed)"
-"已跳过 %{1} 个无效 WLS 实例记录%{2}","已跳过 %{1} 个无效 WLS 实例记录%{2}"
-"该 WLS 备用入口只有通配符路由，自动压测无法推导具体 TLS Host/SNI。","该 WLS 备用入口只有通配符路由，自动压测无法推导具体 TLS Host/SNI。"
-监听：%{1}；路由域名：%{2}。请显式提供匹配证书的具体目标域名后重试。,监听：%{1}；路由域名：%{2}。请显式提供匹配证书的具体目标域名后重试。
+"已跳过 %{1} 个无效 WLS 实例记录%{2}","%{1} invalid WLS instance records %{2} skipped"
+"该 WLS 备用入口只有通配符路由，自动压测无法推导具体 TLS Host/SNI。","This WLS backup entrance only has wildcard routing, and the automatic stress test cannot deduce the specific TLS Host/SNI."
+监听：%{1}；路由域名：%{2}。请显式提供匹配证书的具体目标域名后重试。,"Monitoring: %{1}; Routing domain name: %{2}. Please explicitly provide the specific target domain name that matches the certificate and try again."
 "--authority-host 必须是不含 scheme、端口或路径的有效主机名/IP。","--authority-host must be a valid hostname or IP without a scheme, port, or path."
 "Managed Nginx owner 在正式压测前已变化，已拒绝运行。","The Managed Nginx owner changed before the measured benchmark; execution was refused."
-"宿主级 WLS 2.0 网关身份或活动路由在正式压测前已变化，已拒绝运行。","宿主级 WLS 2.0 网关身份或活动路由在正式压测前已变化，已拒绝运行。"
+"宿主级 WLS 2.0 网关身份或活动路由在正式压测前已变化，已拒绝运行。","The host-level WLS 2.0 gateway identity or active routes have changed before the official stress test and have been refused to run."
 "需要 curl 扩展支持","curl extension required"
-"多路复用连接模型：逻辑并发 %{1}，物理连接目标 %{2}，READY Worker 目标 %{3}，每连接 Stream 目标 %{4}/服务端上限 %{5}，MAX_CONCURRENT_STREAMS=%{6}，PIPEWAIT=%{7}","多路复用连接模型：逻辑并发 %{1}，物理连接目标 %{2}，READY Worker 目标 %{3}，每连接 Stream 目标 %{4}/服务端上限 %{5}，MAX_CONCURRENT_STREAMS=%{6}，PIPEWAIT=%{7}"
-"进度：%{1}%（完成 %{2}/%{3}，活动请求 %{4}，已发送 %{5}/%{3}，耗时 %{6}s，实时 QPS %{7}）","进度：%{1}%（完成 %{2}/%{3}，活动请求 %{4}，已发送 %{5}/%{3}，耗时 %{6}s，实时 QPS %{7}）"
+"多路复用连接模型：逻辑并发 %{1}，物理连接目标 %{2}，READY Worker 目标 %{3}，每连接 Stream 目标 %{4}/服务端上限 %{5}，MAX_CONCURRENT_STREAMS=%{6}，PIPEWAIT=%{7}","Multiplexed connection model: logical concurrency %{1}, physical connection target %{2}, READY Worker target %{3}, per-connection Stream target %{4}/server limit %{5}, MAX_CONCURRENT_STREAMS=%{6}, PIPEWAIT=%{7}"
+"进度：%{1}%（完成 %{2}/%{3}，活动请求 %{4}，已发送 %{5}/%{3}，耗时 %{6}s，实时 QPS %{7}）","Progress: %{1}% (completed %{2}/%{3}, active request %{4}, sent %{5}/%{3}, time taken %{6}s, real-time QPS %{7})"
 "压测模式：禁用 keep-alive（更利于分流验证），并发连接数=%{1}","Stress Test Mode: Keep-alive disabled (better for traffic distribution), concurrent connections = %{1}"
-"压测模式：%{1} 个隔离多路复用 lane，%{2} 个逻辑 easy handle；lane 内复用、lane 间连接缓存隔离。","压测模式：%{1} 个隔离多路复用 lane，%{2} 个逻辑 easy handle；lane 内复用、lane 间连接缓存隔离。"
-"压测模式：启用 keep-alive（性能模式），使用 %{1} 个逻辑 easy handle...","压测模式：启用 keep-alive（性能模式），使用 %{1} 个逻辑 easy handle..."
-"物理连接 lane：请求 %{1}，创建 %{2}，实际建连 %{3}，累计新连接 %{4}。","物理连接 lane：请求 %{1}，创建 %{2}，实际建连 %{3}，累计新连接 %{4}。"
-"物理连接 lane 未达到请求值（请求 %{1}，实际 %{2}），本次基准无效。","物理连接 lane 未达到请求值（请求 %{1}，实际 %{2}），本次基准无效。"
+"压测模式：%{1} 个隔离多路复用 lane，%{2} 个逻辑 easy handle；lane 内复用、lane 间连接缓存隔离。","Stress test mode: %{1} isolated multiplexing lanes, %{2} logical easy handles; intra-lane multiplexing, inter-lane connection cache isolation."
+"压测模式：启用 keep-alive（性能模式），使用 %{1} 个逻辑 easy handle...","Stress test mode: enable keep-alive (performance mode), use %{1} logic easy handle..."
+"物理连接 lane：请求 %{1}，创建 %{2}，实际建连 %{3}，累计新连接 %{4}。","Physical connection lane: request %{1}, create %{2}, actually establish connection %{3}, accumulate new connections %{4}."
+"物理连接 lane 未达到请求值（请求 %{1}，实际 %{2}），本次基准无效。","The physical connection lane does not reach the requested value (requested %{1}, actual %{2}), and this benchmark is invalid."
 "Managed Nginx owner 在压测期间发生变化，本次结果无效。","The Managed Nginx owner changed during the benchmark, invalidating this result."
-"宿主级 WLS 2.0 网关身份或活动路由在压测期间发生变化，本次结果无效。","宿主级 WLS 2.0 网关身份或活动路由在压测期间发生变化，本次结果无效。"
-"%{1} 必须是非负数字。","%{1} 必须是非负数字。"
-"%{1} 必须在 %{2} 范围内。","%{1} 必须在 %{2} 范围内。"
+"宿主级 WLS 2.0 网关身份或活动路由在压测期间发生变化，本次结果无效。","The host-level WLS 2.0 gateway identity or active routes changed during the stress test, and the results are invalid."
+"%{1} 必须是非负数字。","%{1} must be a non-negative number."
+"%{1} 必须在 %{2} 范围内。","%{1} must be in the range %{2}."
 压测结果报告,"Benchmark Report"
 总请求数：%{1},"Total requests: %{1}"
 成功请求：%{1},"Successful requests: %{1}"
 失败请求：%{1},"Failed requests: %{1}"
 错误率：%{1}%,"Error rate: %{1}%"
 "总耗时：%{1} 秒","Total time: %{1} seconds"
-"完成 QPS：%{1}","完成 QPS：%{1}"
-"成功 QPS：%{1}","成功 QPS：%{1}"
-"连接复用估算：新建连接 %{1}/可复用请求 %{2}，复用率 %{3}%","连接复用估算：新建连接 %{1}/可复用请求 %{2}，复用率 %{3}%"
-"TLS 握手样本：%{1} 次，P95 %{2}ms","TLS 握手样本：%{1} 次，P95 %{2}ms"
-"HTTP 实际协商：%{1}","HTTP 实际协商：%{1}"
-"HTTP 协议命中：%{1}","HTTP 协议命中：%{1}"
-延迟统计（全部已完成请求，毫秒）,延迟统计（全部已完成请求，毫秒）
+"完成 QPS：%{1}","Complete QPS: %{1}"
+"成功 QPS：%{1}","Successful QPS: %{1}"
+"连接复用估算：新建连接 %{1}/可复用请求 %{2}，复用率 %{3}%","Connection reuse estimate: new connection %{1}/reusable request %{2}, reuse rate %{3}%"
+"TLS 握手样本：%{1} 次，P95 %{2}ms","TLS handshake sample: %{1} times, P95 %{2}ms"
+"HTTP 实际协商：%{1}","HTTP actual negotiation: %{1}"
+"HTTP 协议命中：%{1}","HTTP protocol hit: %{1}"
+延迟统计（全部已完成请求，毫秒）,"Latency statistics (all completed requests, milliseconds)"
 平均：%{1},"Avg: %{1}"
 最小：%{1},"Min: %{1}"
 最大：%{1},"Max: %{1}"
@@ -2239,42 +2324,42 @@ P95：%{1},"P95: %{1}"
 P99：%{1},"P99: %{1}"
 "Worker 命中分布","Worker hit distribution"
 "%{1}：%{2} (%{3}%)","%{1}：%{2} (%{3}%)"
-"持久连接会粘滞到已选 Worker；本次仅记录分布，不执行 fresh-connection 均衡门禁。","持久连接会粘滞到已选 Worker；本次仅记录分布，不执行 fresh-connection 均衡门禁。"
-分流均衡门禁：PASS（max/min=%{1}，阈值=%{2}）,分流均衡门禁：PASS（max/min=%{1}，阈值=%{2}）
-"分流均衡门禁：FAIL（预期 %{1}，命中 %{2}，缺失 %{3}，额外 %{4}，未归因成功请求 %{5}，max/min=%{6}）","分流均衡门禁：FAIL（预期 %{1}，命中 %{2}，缺失 %{3}，额外 %{4}，未归因成功请求 %{5}，max/min=%{6}）"
-质量门禁：PASS,质量门禁：PASS
-质量门禁：FAIL（%{1}）,质量门禁：FAIL（%{1}）
-"报告 JSON 编码失败，未保存：%{1}","报告 JSON 编码失败，未保存：%{1}"
-"报告 JSON 内容为空，未保存：%{1}","报告 JSON 内容为空，未保存：%{1}"
-报告目录创建失败，未保存：%{1},报告目录创建失败，未保存：%{1}
-报告写入失败，未保存：%{1},报告写入失败，未保存：%{1}
-报告发布失败，未保存：%{1},报告发布失败，未保存：%{1}
+"持久连接会粘滞到已选 Worker；本次仅记录分布，不执行 fresh-connection 均衡门禁。","The persistent connection will stick to the selected Worker; this time only the distribution is recorded, and fresh-connection balancing gate control is not performed."
+分流均衡门禁：PASS（max/min=%{1}，阈值=%{2}）,"Shunt equalization access control: PASS (max/min=%{1}, threshold=%{2})"
+"分流均衡门禁：FAIL（预期 %{1}，命中 %{2}，缺失 %{3}，额外 %{4}，未归因成功请求 %{5}，max/min=%{6}）","Triage equalization gate: FAIL (expected %{1}, hit %{2}, missing %{3}, extra %{4}, unattributed successful request %{5}, max/min=%{6})"
+质量门禁：PASS,"Quality access control: PASS"
+质量门禁：FAIL（%{1}）,"Quality gate: FAIL (%{1})"
+"报告 JSON 编码失败，未保存：%{1}","Report JSON encoding failed, not saved: %{1}"
+"报告 JSON 内容为空，未保存：%{1}","Report JSON content is empty and not saved: %{1}"
+报告目录创建失败，未保存：%{1},"Report directory creation failed, not saved: %{1}"
+报告写入失败，未保存：%{1},"Report write failed, not saved: %{1}"
+报告发布失败，未保存：%{1},"Report publishing failed, not saved: %{1}"
 报告已保存：%{1},"Report saved: %{1}"
 "对 Weline Server 进行压力测试","Stress test Weline Server"
 自动探测运行中的服务器并进行压力测试,"Automatically Detect Running Servers and Perform Stress Testing"
 并发数（默认：100）,"Concurrency Count (Default: 100)"
 总请求数（默认：10000）,"Total Request Count (Default: 10000)"
 请求路径（默认：/_wls/health）,"Request path (default: /_wls/health)"
-"精确指定运行中的 WLS 实例，并归因当前 endpoint schema 运行时元数据","精确指定运行中的 WLS 实例，并归因当前 endpoint schema 运行时元数据"
+"精确指定运行中的 WLS 实例，并归因当前 endpoint schema 运行时元数据","Precisely specify the running WLS instance and attribute the current endpoint schema runtime metadata"
 指定端口（可选，默认自动探测）,"Specify port (optional, auto-detected by default)"
-"指定主机（可选，默认 127.0.0.1；-h 保留给全局帮助）","指定主机（可选，默认 127.0.0.1；-h 保留给全局帮助）"
+"指定主机（可选，默认 127.0.0.1；-h 保留给全局帮助）","Specify host (optional, defaults to 127.0.0.1; -h reserved for global help)"
 "为跨主机压测指定 TLS SNI/HTTP Host；TCP 仍连接 --host 指定地址","Set TLS SNI/HTTP Host for a cross-host benchmark while TCP still connects to the address supplied by --host"
 "指定端口为 HTTPS（与 -p 合用；自动探测时根据实例配置）","Specify port as HTTPS (used with -p; auto-detection uses instance configuration)"
-"强制 HTTPS 压测使用指定 TLS 版本（默认 auto）","强制 HTTPS 压测使用指定 TLS 版本（默认 auto）"
+"强制 HTTPS 压测使用指定 TLS 版本（默认 auto）","Force HTTPS stress testing to use the specified TLS version (default auto)"
 "强制压测请求使用指定 HTTP 版本；auto 对 Managed Nginx 公网入口只选择已实测协议，内部回源固定 HTTP/1.1，未归因目标交由 cURL 协商","Force benchmark requests to use the selected HTTP version; auto chooses only live-verified protocols for a Managed Nginx public endpoint, fixes internal upstreams to HTTP/1.1, and lets cURL negotiate unattributed targets"
-"HTTP/2/3 物理连接目标；默认按 READY Worker 数和服务端 Stream 容量自动计算，设为 1 可测单连接多路复用","HTTP/2/3 物理连接目标；默认按 READY Worker 数和服务端 Stream 容量自动计算，设为 1 可测单连接多路复用"
-"请求内容编码；默认 identity 保持旧基线，auto 模拟浏览器并启用 cURL 支持的全部压缩","请求内容编码；默认 identity 保持旧基线，auto 模拟浏览器并启用 cURL 支持的全部压缩"
-"禁用 keep-alive/连接复用（更利于验证连接级分流；HTTPS 时亦是 fresh TLS）","禁用 keep-alive/连接复用（更利于验证连接级分流；HTTPS 时亦是 fresh TLS）"
-"命中 Worker 统计使用的响应头（逗号分隔；默认自动探测 X-WLS-Worker-PID/Id/Port）","命中 Worker 统计使用的响应头（逗号分隔；默认自动探测 X-WLS-Worker-PID/Id/Port）"
-"fresh-connection 分流 max/min 硬门禁（默认 1.5）","fresh-connection 分流 max/min 硬门禁（默认 1.5）"
-"成功 QPS 下限；0 表示不设置性能下限（--min-qps 为别名）","成功 QPS 下限；0 表示不设置性能下限（--min-qps 为别名）"
-"错误率上限百分比（默认 0）","错误率上限百分比（默认 0）"
-"全部完成请求 P95 上限；0 表示禁用","全部完成请求 P95 上限；0 表示禁用"
-"TLS 握手 P95 上限；0 表示禁用，启用后无握手样本亦失败","TLS 握手 P95 上限；0 表示禁用，启用后无握手样本亦失败"
-"预期压测期间发生滚动 reload：要求 Master 不变、前后 Worker 身份证据健康且代际指纹发生变化","预期压测期间发生滚动 reload：要求 Master 不变、前后 Worker 身份证据健康且代际指纹发生变化"
+"HTTP/2/3 物理连接目标；默认按 READY Worker 数和服务端 Stream 容量自动计算，设为 1 可测单连接多路复用","HTTP/2/3 physical connection target; automatically calculated based on the number of READY Workers and server Stream capacity by default, set to 1 to test single connection multiplexing"
+"请求内容编码；默认 identity 保持旧基线，auto 模拟浏览器并启用 cURL 支持的全部压缩","Request content encoding; default identity maintains the old baseline, auto emulates the browser and enables all compression supported by cURL"
+"禁用 keep-alive/连接复用（更利于验证连接级分流；HTTPS 时亦是 fresh TLS）","Disable keep-alive/connection reuse (better for verifying connection-level offloading; also fresh TLS for HTTPS)"
+"命中 Worker 统计使用的响应头（逗号分隔；默认自动探测 X-WLS-Worker-PID/Id/Port）","Hit the response headers used by Worker statistics (comma separated; automatically detect X-WLS-Worker-PID/Id/Port by default)"
+"fresh-connection 分流 max/min 硬门禁（默认 1.5）","fresh-connection shunt max/min hard access control (default 1.5)"
+"成功 QPS 下限；0 表示不设置性能下限（--min-qps 为别名）","Success QPS lower limit; 0 means no performance lower limit is set (--min-qps is an alias)"
+"错误率上限百分比（默认 0）","Error rate upper limit percentage (default 0)"
+"全部完成请求 P95 上限；0 表示禁用","Complete all requests P95 cap; 0 means disabled"
+"TLS 握手 P95 上限；0 表示禁用，启用后无握手样本亦失败","TLS handshake P95 upper limit; 0 means disabled, even if there is no handshake sample after enabling it, it will fail."
+"预期压测期间发生滚动 reload：要求 Master 不变、前后 Worker 身份证据健康且代际指纹发生变化","Rolling reload is expected to occur during the stress test: it is required that the Master remains unchanged, the identity evidence of the previous and subsequent Workers is healthy, and the intergenerational fingerprints change"
 基本压测（自动探测）,"Basic Stress Test (Auto Detect)"
 "指定 WLS 实例","Select a WLS instance"
-浏览器压缩首页,浏览器压缩首页
+浏览器压缩首页,"Browser compressed homepage"
 高并发,"High concurrency"
 "分流验证（禁用 keep-alive）","Shard validation (keep-alive disabled)"
 "统计 Worker 分布","Worker Distribution Statistics"
@@ -2282,17 +2367,17 @@ P99：%{1},"P99: %{1}"
 指定端口,"Specify port"
 "指定 HTTPS 端口","Specify HTTPS port"
 "跨主机 HTTP/2 压测","Cross-host HTTP/2 benchmark"
-"HTTP/2 协商验证","HTTP/2 协商验证"
-"HTTP/2 单物理连接多路复用","HTTP/2 单物理连接多路复用"
-"HTTP/3 协商验证","HTTP/3 协商验证"
+"HTTP/2 协商验证","HTTP/2 Negotiation Authentication"
+"HTTP/2 单物理连接多路复用","HTTP/2 single physical connection multiplexing"
+"HTTP/3 协商验证","HTTP/3 Negotiation Authentication"
 "TLS 1.3 fresh connection","TLS 1.3 fresh connection"
-"--accept-encoding 仅允许：auto、br,gzip、gzip、identity。","--accept-encoding 仅允许：auto、br,gzip、gzip、identity。"
-"当前 PHP 未安装 curl 扩展。","当前 PHP 未安装 curl 扩展。"
-"无法初始化内容编码 cURL 探针。","无法初始化内容编码 cURL 探针。"
-内容编码探针失败。,内容编码探针失败。
+"--accept-encoding 仅允许：auto、br,gzip、gzip、identity。","--accept-encoding only allows: auto, br, gzip, gzip, identity."
+"当前 PHP 未安装 curl 扩展。","Currently PHP does not have the curl extension installed."
+"无法初始化内容编码 cURL 探针。","Unable to initialize content-encoding cURL probe."
+内容编码探针失败。,"Content encoding probe failed."
 已归因目标缺少完整的边缘身份或协议运行证据，拒绝开始压测。,"The attributed target lacks complete edge identity or runtime protocol evidence; benchmark startup was refused."
 "目标没有任何已完成运行验证的 HTTP 协议。","The target has no HTTP protocol with completed runtime verification."
-"Nginx 公网入口（共享网关或项目托管）","Nginx 公网入口（共享网关或项目托管）"
+"Nginx 公网入口（共享网关或项目托管）","Nginx public network entrance (shared gateway or project hosting)"
 "内部 WLS HTTP/1.1 回源","Internal WLS HTTP/1.1 upstream"
 "%{1} 尚未实测验证 HTTP/%{2}，拒绝把配置能力当作压测证据。","%{1} has not been live-verified for HTTP/%{2}; configured capability is not accepted as benchmark evidence."
 "当前 Nginx 公网 HTTP/2 与 HTTP/3 门禁要求 HTTPS 目标。","The current Nginx public HTTP/2 and HTTP/3 gates require an HTTPS target."
@@ -2320,10 +2405,10 @@ P99：%{1},"P99: %{1}"
 "如果确定要杀死该进程，请使用 -f 参数:","If you are sure you want to kill the process, use the -f parameter:"
 或手动执行:,"or manually execute:"
 "taskkill /F /PID %{1}","taskkill /F /PID %{1}"
-"拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。","拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。"
-"如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。","如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。"
+"拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。","Refuse to kill non-WLS processes: -f can only force the release of WLS-owned processes."
+"如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。","To confirm that you want to kill non-WLS processes, explicitly append --allow-foreign."
 "警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。","Warning: The port occupant is in an abnormal state (PID invalid). Force mode may still not release the port."
-"警告：即将杀死非 WLS 进程！","警告：即将杀死非 WLS 进程！"
+"警告：即将杀死非 WLS 进程！","Warning: Non-WLS processes are about to be killed!"
 正在释放端口...,"Releasing port..."
 "端口 %{1} 已成功释放","Port %{1} has been successfully released"
 端口释放失败，请尝试：,"Port release failed, please try:"
@@ -2333,172 +2418,171 @@ P99：%{1},"P99: %{1}"
 结束占用指定端口的进程,"End the process occupying the specified port"
 "端口号（默认 443）","Port Number (default 443)"
 端口号,"Port Number"
-"强制模式：仅强制释放 WLS 归属进程","强制模式：仅强制释放 WLS 归属进程"
-"与 -f 同用时允许杀死非 WLS 进程（危险）","与 -f 同用时允许杀死非 WLS 进程（危险）"
+"强制模式：仅强制释放 WLS 归属进程","Force mode: Force release of WLS owned process only"
+"与 -f 同用时允许杀死非 WLS 进程（危险）","Use with -f to allow killing of non-WLS processes (dangerous)"
 "结束占用 443 的框架进程","End the framework process occupying port 443"
-"强制杀死非 WLS 进程（危险）","强制杀死非 WLS 进程（危险）"
+"强制杀死非 WLS 进程（危险）","Force killing of non-WLS processes (dangerous)"
 未收到回执,"No receipt received"
 "IPC stop_test 诊断","IPC stop_test diagnostics"
 "发送 stop_test，输出 Orchestrator 诊断 JSON","Sending stop_test, outputting Orchestrator diagnostic JSON"
 诊断默认实例,"Default diagnostic instance"
-"WLS 运行时策略校验通过。","WLS 运行时策略校验通过。"
+"WLS 运行时策略校验通过。","WLS runtime policy verification passed."
 Digest：%{1},Digest：%{1}
-规则：%{1},规则：%{1}
-"校验 WLS 编译型运行时策略","校验 WLS 编译型运行时策略"
-"WLS 运行时策略编译完成。","WLS 运行时策略编译完成。"
-"编译 WLS 运行时策略包","编译 WLS 运行时策略包"
-"WLS 运行时策略回滚已受理。","WLS 运行时策略回滚已受理。"
-"回滚 WLS 运行时策略","回滚 WLS 运行时策略"
-"WLS 运行时策略状态","WLS 运行时策略状态"
-实例：%{1},实例：%{1}
+规则：%{1},"Rules: %{1}"
+"校验 WLS 编译型运行时策略","Verify WLS compiled runtime policy"
+"WLS 运行时策略编译完成。","WLS runtime policy compilation is complete."
+"编译 WLS 运行时策略包","Compile the WLS runtime policy package"
+"WLS 运行时策略回滚已受理。","WLS runtime policy rollback accepted."
+"回滚 WLS 运行时策略","Rolling back a WLS runtime policy"
+"WLS 运行时策略状态","WLS runtime policy status"
 Active：%{1},Active：%{1}
 Staged：%{1},Staged：%{1}
 Previous：%{1},Previous：%{1}
-"查看 WLS 运行时策略状态","查看 WLS 运行时策略状态"
-"topology 必须是 both、direct 或 dispatcher。","topology 必须是 both、direct 或 dispatcher。"
-"Master 拒绝了策略发布。","Master 拒绝了策略发布。"
-所有关键进程已完成运行时策略提交。,所有关键进程已完成运行时策略提交。
-运行时策略在所有关键进程提交前失败。,运行时策略在所有关键进程提交前失败。
-"运行时策略在控制时限内未进入 active 状态（state=%{1}）。","运行时策略在控制时限内未进入 active 状态（state=%{1}）。"
-"WLS 运行时策略发布已受理。","WLS 运行时策略发布已受理。"
-模式：%{1},模式：%{1}
-"两阶段发布 WLS 运行时策略","两阶段发布 WLS 运行时策略"
-"共享网关停止会影响所有租户；请提供 --confirm。","共享网关停止会影响所有租户；请提供 --confirm。"
-"宿主级 WLS 2.0 Gateway 已持久停止；平台守护不会自动拉起。","宿主级 WLS 2.0 Gateway 已持久停止；平台守护不会自动拉起。"
-"显式停止共享网关；普通 server:stop 不会执行此操作","显式停止共享网关；普通 server:stop 不会执行此操作"
-"确认写入签名 ADMIN_STOPPED 意图并禁用平台服务","确认写入签名 ADMIN_STOPPED 意图并禁用平台服务"
-存在活动路由时仍强制停止,存在活动路由时仍强制停止
-"输出稳定 JSON 文档","输出稳定 JSON 文档"
-危险,危险
-"优先逐项目 server:stop 或 gateway:revoke；共享入口停止会影响所有租户。","优先逐项目 server:stop 或 gateway:revoke；共享入口停止会影响所有租户。"
-"维护项目到 WLS 2.0 网关的租约、重注册和纯 WLS 降级","维护项目到 WLS 2.0 网关的租约、重注册和纯 WLS 降级"
-"作为 WLS 子进程持续运行","作为 WLS 子进程持续运行"
-"宿主级安装必须由管理员显式携带 --confirm。","宿主级安装必须由管理员显式携带 --confirm。"
-"必须通过 --package 指定离线或 CI 生成的签名自包含包目录。","必须通过 --package 指定离线或 CI 生成的签名自包含包目录。"
-"--profile 只允许 default 或 ipv4-only。","--profile 只允许 default 或 ipv4-only。"
-"WLS 2.0 Gateway 安装失败。","WLS 2.0 Gateway 安装失败。"
-"测试包已安装到隔离根；它不会被生产客户端信任，也不会报告 release ready。","测试包已安装到隔离根；它不会被生产客户端信任，也不会报告 release ready。"
-"WLS 2.0 Gateway 自包含包和系统服务安装完成。","WLS 2.0 Gateway 自包含包和系统服务安装完成。"
-"显式安装签名、自包含的宿主级 WLS 2.0 Gateway","显式安装签名、自包含的宿主级 WLS 2.0 Gateway"
-签名自包含包目录,签名自包含包目录
-"default（IPv4+IPv6）或 ipv4-only","default（IPv4+IPv6）或 ipv4-only"
-确认写入系统信任根并安装系统服务,确认写入系统信任根并安装系统服务
-安全边界,安全边界
-"普通 server:start/auto 不会调用本命令；未知 80/443 owner 永不被终止。","普通 server:start/auto 不会调用本命令；未知 80/443 owner 永不被终止。"
-命令执行失败。,命令执行失败。
-诊断失败。,诊断失败。
-"WLS 项目状态原子写运行时不可用。","WLS 项目状态原子写运行时不可用。"
-"WLS 2.0 网关诊断","WLS 2.0 网关诊断"
-"诊断网关控制面、数据面、generation、LKG 与 A/B 槽","诊断网关控制面、数据面、generation、LKG 与 A/B 槽"
-"显式提升必须携带 --confirm，且只能由当前 80/443 的受管 owner 执行。","显式提升必须携带 --confirm，且只能由当前 80/443 的受管 owner 执行。"
-"显式提升必须通过 --package 提供签名、自包含的 WLS 2.0 宿主包。","显式提升必须通过 --package 提供签名、自包含的 WLS 2.0 宿主包。"
-提升事务无法安全启动：%{1},提升事务无法安全启动：%{1}
-"没有未完成的 WLS Gateway 提升事务。","没有未完成的 WLS Gateway 提升事务。"
-"WLS Gateway 提升事务恢复完成。","WLS Gateway 提升事务恢复完成。"
-已先恢复上次未完成的提升事务。,已先恢复上次未完成的提升事务。
-"只有身份已验证、正在占用目标公共端口的项目托管 Nginx 才能提升。","只有身份已验证、正在占用目标公共端口的项目托管 Nginx 才能提升。"
-"当前项目缺少可迁移身份或域名/证书期望状态，旧 Nginx 保持不变。","当前项目缺少可迁移身份或域名/证书期望状态，旧 Nginx 保持不变。"
-"旧 Nginx 的真实 HTTP/1.1 与 HTTP/2 响应未通过交接前门禁，保持原状。","旧 Nginx 的真实 HTTP/1.1 与 HTTP/2 响应未通过交接前门禁，保持原状。"
-"WLS 1.x 公共端口 owner 已显式提升为宿主级 WLS 2.0 Gateway。","WLS 1.x 公共端口 owner 已显式提升为宿主级 WLS 2.0 Gateway。"
-"实测维护窗：%{1} 秒。","实测维护窗：%{1} 秒。"
-"Gateway Agent 已提交；已从丢失的本地日志确认中前滚恢复。","Gateway Agent 已提交；已从丢失的本地日志确认中前滚恢复。"
-提升提交状态无法安全对账：%{1},提升提交状态无法安全对账：%{1}
-提升事务自动恢复失败：%{1},提升事务自动恢复失败：%{1}
-"旧项目 Nginx 未进入交接，仍保持原状。","旧项目 Nginx 未进入交接，仍保持原状。"
-提升失败：%{1},提升失败：%{1}
-"已回滚并恢复原项目托管 Nginx。","已回滚并恢复原项目托管 Nginx。"
-"失败恢复窗：%{1} 秒。","失败恢复窗：%{1} 秒。"
-"原项目 Nginx 回滚也失败：%{1}","原项目 Nginx 回滚也失败：%{1}"
-"已保留可恢复的提升事务日志；下次 promote 会先继续恢复。","已保留可恢复的提升事务日志；下次 promote 会先继续恢复。"
-"将当前 80/443 的 WLS 1.x 受管 owner 显式提升为 WLS 2.0 Gateway","将当前 80/443 的 WLS 1.x 受管 owner 显式提升为 WLS 2.0 Gateway"
-"签名、自包含的 WLS 2.0 宿主包目录","签名、自包含的 WLS 2.0 宿主包目录"
-确认进入有实测维护窗的公共端口所有权切换,确认进入有实测维护窗的公共端口所有权切换
-仅恢复/修复未完成事务；无需宿主包或再次确认,仅恢复/修复未完成事务；无需宿主包或再次确认
-回滚,回滚
-"先在旧入口在线时完成影子预检；交接失败时先停宿主服务，再用冻结快照恢复旧 Nginx。","先在旧入口在线时完成影子预检；交接失败时先停宿主服务，再用冻结快照恢复旧 Nginx。"
-"域名转移会原子改变宿主入口归属；请提供 --confirm。","域名转移会原子改变宿主入口归属；请提供 --confirm。"
-"必须提供 --domain、--from、--to 和目标项目 --instance。","必须提供 --domain、--from、--to 和目标项目 --instance。"
-"--to 必须等于当前目标项目 UUID：%{1}","--to 必须等于当前目标项目 UUID：%{1}"
-"域名已在同一网关 generation 内转移到当前项目。","域名已在同一网关 generation 内转移到当前项目。"
-"将域名原子转移到当前已 enrollment 的项目","将域名原子转移到当前已 enrollment 的项目"
-待转移的精确域名或通配符域名,待转移的精确域名或通配符域名
-"当前源项目 UUID","当前源项目 UUID"
-"目标项目 UUID，必须是当前项目","目标项目 UUID，必须是当前项目"
-目标项目中用于证明后端和证书的运行实例,目标项目中用于证明后端和证书的运行实例
-确认短租约预检、目标证明和原子归属切换,确认短租约预检、目标证明和原子归属切换
-"输出 JSON 结果","输出 JSON 结果"
-安全语义,安全语义
-"网关升级必须由管理员显式携带 --confirm。","网关升级必须由管理员显式携带 --confirm。"
-"必须通过 --package 指定签名自包含候选包目录。","必须通过 --package 指定签名自包含候选包目录。"
-"WLS 2.0 Gateway 全包已切换到候选 A/B 槽；Root Broker 正在执行五分钟观察。","WLS 2.0 Gateway 全包已切换到候选 A/B 槽；Root Broker 正在执行五分钟观察。"
-"安装并激活经过自检的 WLS 2.0 Gateway A/B 候选槽","安装并激活经过自检的 WLS 2.0 Gateway A/B 候选槽"
-签名自包含候选包目录,签名自包含候选包目录
-"确认进入 A/B 升级事务","确认进入 A/B 升级事务"
-"撤销会使当前项目凭据和路由不可恢复；请提供 --confirm。","撤销会使当前项目凭据和路由不可恢复；请提供 --confirm。"
-撤销失败,撤销失败
-"网关安全撤销已提交，但项目凭据清理不完整；修复权限后请重新执行 revoke。","网关安全撤销已提交，但项目凭据清理不完整；修复权限后请重新执行 revoke。"
-当前项目路由和凭据已撤销；共享网关保持运行。,当前项目路由和凭据已撤销；共享网关保持运行。
-撤销当前项目的网关路由与宿主凭据,撤销当前项目的网关路由与宿主凭据
-确认写入不可逆撤销状态并删除本项目宿主凭据,确认写入不可逆撤销状态并删除本项目宿主凭据
-"WLS 2.0 宿主网关状态","WLS 2.0 宿主网关状态"
-读取网关状态失败。,读取网关状态失败。
-"查看宿主级 WLS 2.0 Gateway 状态","查看宿主级 WLS 2.0 Gateway 状态"
-"宿主 enrollment 会授权域名和证书目录并轮换项目凭据；请提供 --confirm。","宿主 enrollment 会授权域名和证书目录并轮换项目凭据；请提供 --confirm。"
-"项目 UUID 轮换已在宿主提交前安全中止。","项目 UUID 轮换已在宿主提交前安全中止。"
-"项目 UUID、宿主授权与本地凭据已完成可恢复原子轮换。","项目 UUID、宿主授权与本地凭据已完成可恢复原子轮换。"
-无法解析项目根目录。,无法解析项目根目录。
-无法验证项目根目录所有者。,无法验证项目根目录所有者。
-证书根别名重复：%{1},证书根别名重复：%{1}
-"未找到可授权域名；请先配置项目证书，或显式重复提供 --domain。","未找到可授权域名；请先配置项目证书，或显式重复提供 --domain。"
-授权失败,授权失败
-"宿主 enrollment 已提交，但本地项目凭据未持久化；修复 var 目录权限后重试相同命令即可幂等续传。","宿主 enrollment 已提交，但本地项目凭据未持久化；修复 var 目录权限后重试相同命令即可幂等续传。"
-"宿主 enrollment 与新项目凭据均已提交，但克隆身份恢复标记尚未清理；重试相同命令将幂等完成。","宿主 enrollment 与新项目凭据均已提交，但克隆身份恢复标记尚未清理；重试相同命令将幂等完成。"
-"克隆项目已生成独立 UUID 并完成全新宿主 enrollment；原项目授权和路由保持不变。","克隆项目已生成独立 UUID 并完成全新宿主 enrollment；原项目授权和路由保持不变。"
-"当前项目已授权到 WLS 2.0 宿主网关；项目凭据已写入 var，证书仅通过 Broker AUTH/SNAP 读取。","当前项目已授权到 WLS 2.0 宿主网关；项目凭据已写入 var，证书仅通过 Broker AUTH/SNAP 读取。"
-授权域名：%{1},授权域名：%{1}
-授权当前项目及其证书根目录到宿主网关,授权当前项目及其证书根目录到宿主网关
-附加项目内证书目录，可重复；别名用于可迁移证书引用,附加项目内证书目录，可重复；别名用于可迁移证书引用
-显式授权域名或通配符，可重复；省略时读取当前证书域名,显式授权域名或通配符，可重复；省略时读取当前证书域名
-"不授权精确 HTTP-01 challenge 短租约（默认授权）","不授权精确 HTTP-01 challenge 短租约（默认授权）"
-"授权项目使用 DNS-01 能力","授权项目使用 DNS-01 能力"
-声明项目后端可按无状态策略分流；仍需运行时证明,声明项目后端可按无状态策略分流；仍需运行时证明
-"声明项目后端共享 Session；仍需运行时证明","声明项目后端共享 Session；仍需运行时证明"
-"存活克隆根生成新 UUID 并全新 enrollment；同根才以双凭据证明转移","存活克隆根生成新 UUID 并全新 enrollment；同根才以双凭据证明转移"
-"允许已完成 clone enrollment 的项目再次执行同根双凭据身份转移","允许已完成 clone enrollment 的项目再次执行同根双凭据身份转移"
-"仅在宿主 commit 前中止未完成 UUID 轮换","仅在宿主 commit 前中止未完成 UUID 轮换"
-"确认 enrollment、域名能力和项目凭据轮换","确认 enrollment、域名能力和项目凭据轮换"
-"WLS 2.0 网关路由","WLS 2.0 网关路由"
-读取网关路由失败。,读取网关路由失败。
-查看宿主网关的项目路由与租约状态,查看宿主网关的项目路由与租约状态
-"整代重引导会持久停止共享入口；必须显式携带 --confirm。","整代重引导会持久停止共享入口；必须显式携带 --confirm。"
-"必须通过 --package 指定签名自包含候选包的绝对目录。","必须通过 --package 指定签名自包含候选包的绝对目录。"
-"必须通过 --nonce 提供 32 位小写十六进制维护事务标识；崩溃恢复时重用同一值。","必须通过 --nonce 提供 32 位小写十六进制维护事务标识；崩溃恢复时重用同一值。"
+"查看 WLS 运行时策略状态","View WLS runtime policy status"
+"topology 必须是 both、direct 或 dispatcher。","topology must be both, direct, or dispatcher."
+"Master 拒绝了策略发布。","The Master rejected the policy release."
+所有关键进程已完成运行时策略提交。,"All critical processes have completed runtime policy submission."
+运行时策略在所有关键进程提交前失败。,"The runtime policy fails before all critical processes commit."
+"运行时策略在控制时限内未进入 active 状态（state=%{1}）。","The runtime policy did not enter the active state (state=%{1}) within the control time limit."
+"WLS 运行时策略发布已受理。","WLS runtime policy publication accepted."
+模式：%{1},"Mode: %{1}"
+"两阶段发布 WLS 运行时策略","Two-Phase Release WLS Runtime Policy"
+"共享网关停止会影响所有租户；请提供 --confirm。","Shared gateway downtime affects all tenants; please provide --confirm."
+"宿主级 WLS 2.0 Gateway 已持久停止；平台守护不会自动拉起。","The host-level WLS 2.0 Gateway has been stopped persistently; the platform daemon will not automatically pull up."
+"显式停止共享网关；普通 server:stop 不会执行此操作","Explicitly stop the shared gateway; normal server:stop will not do this"
+"确认写入签名 ADMIN_STOPPED 意图并禁用平台服务","Confirm write signature ADMIN_STOPPED intent and disable platform services"
+存在活动路由时仍强制停止,"Forced stop even when there are active routes"
+"输出稳定 JSON 文档","Output stable JSON document"
+危险,Danger
+"优先逐项目 server:stop 或 gateway:revoke；共享入口停止会影响所有租户。","Prioritize server:stop or gateway:revoke on a project-by-project basis; shared ingress stopping affects all tenants."
+"维护项目到 WLS 2.0 网关的租约、重注册和纯 WLS 降级","Maintenance project lease, re-registration and pure WLS downgrade to WLS 2.0 gateway"
+"作为 WLS 子进程持续运行","Run continuously as a WLS child process"
+"宿主级安装必须由管理员显式携带 --confirm。","Host-level installations must be explicitly carried by the administrator with --confirm."
+"必须通过 --package 指定离线或 CI 生成的签名自包含包目录。","The signed self-contained package directory for offline or CI generation must be specified via --package."
+"--profile 只允许 default 或 ipv4-only。","--profile only allows default or ipv4-only."
+"WLS 2.0 Gateway 安装失败。","WLS 2.0 Gateway installation failed."
+"测试包已安装到隔离根；它不会被生产客户端信任，也不会报告 release ready。","The test package is installed to the isolation root; it will not be trusted by production clients and will not report release ready."
+"WLS 2.0 Gateway 自包含包和系统服务安装完成。","The WLS 2.0 Gateway self-contained package and system services are installed."
+"显式安装签名、自包含的宿主级 WLS 2.0 Gateway","Explicitly install a signed, self-contained host-level WLS 2.0 Gateway"
+签名自包含包目录,"Signed self-contained package directory"
+"default（IPv4+IPv6）或 ipv4-only","default (IPv4+IPv6) or ipv4-only"
+确认写入系统信任根并安装系统服务,"Confirm writing to the system root of trust and installing system services"
+安全边界,"security boundary"
+"普通 server:start/auto 不会调用本命令；未知 80/443 owner 永不被终止。","Ordinary server:start/auto will not call this command; unknown 80/443 owner will never be terminated."
+命令执行失败。,"Command execution failed."
+诊断失败。,"Diagnosis failed."
+"WLS 项目状态原子写运行时不可用。","WLS project status atomic write runtime is not available."
+"WLS 2.0 网关诊断","WLS 2.0 Gateway Diagnostics"
+"诊断网关控制面、数据面、generation、LKG 与 A/B 槽","Diagnose gateway control plane, data plane, generation, LKG and A/B slots"
+"显式提升必须携带 --confirm，且只能由当前 80/443 的受管 owner 执行。","Explicit promotion must carry --confirm and can only be performed by the current 80/443 managed owner."
+"显式提升必须通过 --package 提供签名、自包含的 WLS 2.0 宿主包。","Explicit promotion must provide a signed, self-contained WLS 2.0 host package via --package."
+提升事务无法安全启动：%{1},"Promotion transaction cannot be started safely: %{1}"
+"没有未完成的 WLS Gateway 提升事务。","There are no outstanding WLS Gateway promotion transactions."
+"WLS Gateway 提升事务恢复完成。","WLS Gateway promoted transaction recovery completed."
+已先恢复上次未完成的提升事务。,"The last unfinished promotion transaction has been restored first."
+"只有身份已验证、正在占用目标公共端口的项目托管 Nginx 才能提升。","Only authenticated project-hosted Nginx that is occupying the target public port can be promoted."
+"当前项目缺少可迁移身份或域名/证书期望状态，旧 Nginx 保持不变。","The current project lacks migratory identity or domain/certificate desired status, legacy Nginx remains unchanged."
+"旧 Nginx 的真实 HTTP/1.1 与 HTTP/2 响应未通过交接前门禁，保持原状。","Real HTTP/1.1 and HTTP/2 responses from old Nginx did not pass the pre-handover gate and remained as is."
+"WLS 1.x 公共端口 owner 已显式提升为宿主级 WLS 2.0 Gateway。","The WLS 1.x public port owner has been explicitly promoted to the host-level WLS 2.0 Gateway."
+"实测维护窗：%{1} 秒。","Measured maintenance window: %{1} seconds."
+"Gateway Agent 已提交；已从丢失的本地日志确认中前滚恢复。","Gateway Agent committed; rolled forward to recover from missing local log acknowledgments."
+提升提交状态无法安全对账：%{1},"Promotion submission status cannot be reconciled safely: %{1}"
+提升事务自动恢复失败：%{1},"Promotion transaction automatic recovery failed: %{1}"
+"旧项目 Nginx 未进入交接，仍保持原状。","The old project Nginx has not entered the handover and remains as is."
+提升失败：%{1},"Promotion failed: %{1}"
+"已回滚并恢复原项目托管 Nginx。","Rolled back and restored original project hosting Nginx."
+"失败恢复窗：%{1} 秒。","Failure recovery window: %{1} seconds."
+"原项目 Nginx 回滚也失败：%{1}","The original project Nginx rollback also failed: %{1}"
+"已保留可恢复的提升事务日志；下次 promote 会先继续恢复。","Recoverable promotion transaction logs have been retained; next time promote will continue recovery first."
+"将当前 80/443 的 WLS 1.x 受管 owner 显式提升为 WLS 2.0 Gateway","Explicitly promote the current WLS 1.x managed owner of 80/443 to a WLS 2.0 Gateway"
+"签名、自包含的 WLS 2.0 宿主包目录","Signed, self-contained WLS 2.0 host package directory"
+确认进入有实测维护窗的公共端口所有权切换,"Confirm entry into public port ownership switch with measured maintenance window"
+仅恢复/修复未完成事务；无需宿主包或再次确认,"Only restore/repair outstanding transactions; no host package or reconfirmation required"
+回滚,rollback
+"先在旧入口在线时完成影子预检；交接失败时先停宿主服务，再用冻结快照恢复旧 Nginx。","First complete the shadow pre-check when the old portal is online; if the handover fails, first stop the host service, and then use the frozen snapshot to restore the old Nginx."
+"域名转移会原子改变宿主入口归属；请提供 --confirm。","Domain name transfer will atomically change the host entry ownership; please provide --confirm."
+"必须提供 --domain、--from、--to 和目标项目 --instance。","--domain, --from, --to, and the target project --instance must be provided."
+"--to 必须等于当前目标项目 UUID：%{1}","--to must equal the current target project UUID: %{1}"
+"域名已在同一网关 generation 内转移到当前项目。","The domain has been transferred to the current project within the same gateway generation."
+"将域名原子转移到当前已 enrollment 的项目","Atomic transfer of a domain name to the currently enrolled project"
+待转移的精确域名或通配符域名,"Exact domain name or wildcard domain name to be transferred"
+"当前源项目 UUID","Current source project UUID"
+"目标项目 UUID，必须是当前项目","Target project UUID, must be the current project"
+目标项目中用于证明后端和证书的运行实例,"A running instance in the target project to prove the backend and certificates"
+确认短租约预检、目标证明和原子归属切换,"Confirm short lease preflight, target proof and atomic ownership handover"
+"输出 JSON 结果","Output JSON results"
+安全语义,"security semantics"
+"网关升级必须由管理员显式携带 --confirm。","Gateway upgrades must be explicitly carried by the administrator with --confirm."
+"必须通过 --package 指定签名自包含候选包目录。","The signed self-contained candidate package directory must be specified via --package."
+"WLS 2.0 Gateway 全包已切换到候选 A/B 槽；Root Broker 正在执行五分钟观察。","WLS 2.0 Gateway wraparound switched to candidate A/B slot; Root Broker is performing five minute observation."
+"安装并激活经过自检的 WLS 2.0 Gateway A/B 候选槽","Install and activate the self-checked WLS 2.0 Gateway A/B candidate slot"
+签名自包含候选包目录,"Signed self-contained candidate package directory"
+"确认进入 A/B 升级事务","Confirm to enter A/B upgrade transaction"
+"撤销会使当前项目凭据和路由不可恢复；请提供 --confirm。","Revoking makes current project credentials and routes unrecoverable; provide --confirm."
+撤销失败,"Undo failed"
+"网关安全撤销已提交，但项目凭据清理不完整；修复权限后请重新执行 revoke。","Gateway security revoke has been submitted, but cleanup of project credentials is incomplete; please re-execute revoke after repairing permissions."
+当前项目路由和凭据已撤销；共享网关保持运行。,"Current project routing and credentials are revoked; the shared gateway remains running."
+撤销当前项目的网关路由与宿主凭据,"Revoke the gateway routing and hosting credentials of the current project"
+确认写入不可逆撤销状态并删除本项目宿主凭据,"Confirm writing the irreversible undo status and delete the project host credentials"
+"WLS 2.0 宿主网关状态","WLS 2.0 hosting gateway status"
+读取网关状态失败。,"Failed to read gateway status."
+"查看宿主级 WLS 2.0 Gateway 状态","View host-level WLS 2.0 Gateway status"
+"宿主 enrollment 会授权域名和证书目录并轮换项目凭据；请提供 --confirm。","Host enrollment authorizes domain names and certificate directories and rotates project credentials; provide --confirm."
+"项目 UUID 轮换已在宿主提交前安全中止。","Project UUID rotation has been safely aborted before host commit."
+"项目 UUID、宿主授权与本地凭据已完成可恢复原子轮换。","Resumable atomic rotation of project UUIDs, host authorizations, and local credentials has been completed."
+无法解析项目根目录。,"Unable to resolve project root directory."
+无法验证项目根目录所有者。,"Unable to verify project root owner."
+证书根别名重复：%{1},"Duplicate certificate root alias: %{1}"
+"未找到可授权域名；请先配置项目证书，或显式重复提供 --domain。","Delegable domain name not found; please configure project certificate first, or explicitly repeat --domain."
+授权失败,"Authorization failed"
+"宿主 enrollment 已提交，但本地项目凭据未持久化；修复 var 目录权限后重试相同命令即可幂等续传。","The host enrollment has been submitted, but the local project credentials are not persisted; repair the var directory permissions and retry the same command to resume the transfer idempotently."
+"宿主 enrollment 与新项目凭据均已提交，但克隆身份恢复标记尚未清理；重试相同命令将幂等完成。","The host enrollment and new project credentials have been committed, but the clone identity recovery flag has not yet been cleared; retrying the same command will complete idempotently."
+"克隆项目已生成独立 UUID 并完成全新宿主 enrollment；原项目授权和路由保持不变。","The cloned project has generated an independent UUID and completed a new host enrollment; the original project authorization and routing remain unchanged."
+"当前项目已授权到 WLS 2.0 宿主网关；项目凭据已写入 var，证书仅通过 Broker AUTH/SNAP 读取。","The current project is authorized to the WLS 2.0 hosting gateway; project credentials are written to var and the certificate is only read via Broker AUTH/SNAP."
+授权域名：%{1},"Authorized domain name: %{1}"
+授权当前项目及其证书根目录到宿主网关,"Authorize the current project and its certificate root to the hosting gateway"
+附加项目内证书目录，可重复；别名用于可迁移证书引用,"Additional certificate directory within the project, repeatable; alias used for portable certificate reference"
+显式授权域名或通配符，可重复；省略时读取当前证书域名,"Explicitly authorized domain name or wildcard, can be repeated; when omitted, the current certificate domain name is read"
+"不授权精确 HTTP-01 challenge 短租约（默认授权）","Do not authorize precise HTTP-01 challenge short leases (default authorization)"
+"授权项目使用 DNS-01 能力","Authorize projects to use DNS-01 capabilities"
+声明项目后端可按无状态策略分流；仍需运行时证明,"Declares that the project backend can be offloaded according to the stateless strategy; runtime proof is still required"
+"声明项目后端共享 Session；仍需运行时证明","Declare that the project backend shares the Session; still requires runtime proof"
+"存活克隆根生成新 UUID 并全新 enrollment；同根才以双凭据证明转移","The surviving clone root generates a new UUID and a new enrollment; the same root is transferred with dual credentials."
+"允许已完成 clone enrollment 的项目再次执行同根双凭据身份转移","Allow projects that have completed clone enrollment to perform same-root dual-credential identity transfer again"
+"仅在宿主 commit 前中止未完成 UUID 轮换","Abort outstanding UUID rotation only before host commit"
+"确认 enrollment、域名能力和项目凭据轮换","Confirm enrollment, domain capabilities, and project credential rotation"
+"WLS 2.0 网关路由","WLS 2.0 gateway routing"
+读取网关路由失败。,"Failed to read gateway route."
+查看宿主网关的项目路由与租约状态,"Check the project routing and lease status of the host gateway"
+"整代重引导会持久停止共享入口；必须显式携带 --confirm。","A full-generation reboot will permanently stop the shared entry; --confirm must be carried explicitly."
+"必须通过 --package 指定签名自包含候选包的绝对目录。","The absolute directory of the signed self-contained candidate package must be specified via --package."
+"必须通过 --nonce 提供 32 位小写十六进制维护事务标识；崩溃恢复时重用同一值。","A 32-bit lowercase hexadecimal maintenance transaction ID must be provided via --nonce; the same value is reused during crash recovery."
 "WLS 2.0 Gateway 整代重引导失败，已恢复并重新启用身份验证通过的旧代；请诊断候选包。","WLS 2.0 Gateway rebootstrap failed; the identity-verified previous generation was restored and re-enabled. Diagnose the candidate package."
 "WLS 2.0 Gateway 整代重引导已完成，原 gateway epoch 保持不变。","WLS 2.0 Gateway whole-generation rebootstrap completed; the gateway epoch was preserved."
 "WLS 2.0 Gateway 整代重引导已完成，CA 信任代与 gateway epoch 已轮换。","WLS 2.0 Gateway whole-generation rebootstrap completed; the CA trust generation and gateway epoch were rotated."
 "显式替换 WLS 2.0 Gateway 稳定 Launcher、CA 信任与完整 A/B 代","Explicitly replace the WLS 2.0 Gateway stable launcher, CA trust, and complete A/B generation"
-签名自包含候选包绝对目录,签名自包含候选包绝对目录
-"32 位小写十六进制事务标识；恢复时必须复用","32 位小写十六进制事务标识；恢复时必须复用"
-确认进入持久停止的整代维护事务,确认进入持久停止的整代维护事务
-恢复,恢复
+签名自包含候选包绝对目录,"Signed self-contained candidate package absolute directory"
+"32 位小写十六进制事务标识；恢复时必须复用","32-bit lowercase hexadecimal transaction identifier; must be reused during recovery"
+确认进入持久停止的整代维护事务,"Confirmation of entering a persistently stopped full-generation maintenance transaction"
+恢复,recover
 "进程或宿主异常后，由管理员使用同一 package、nonce 与 profile 重跑本命令；事务会从已认证 journal 幂等恢复。","After a process or host interruption, rerun with the same package, nonce, and profile; the transaction resumes idempotently from its authenticated journal."
 "停止承诺后任一步失败都会先撤销候选启动权限，再整代恢复旧运行时、平台定义与旧 gateway epoch；只有旧代通过身份校验并连续健康 15 秒才重新开放。回滚恢复本身失败时保持 ADMIN_STOPPED。","After the persistent stop is committed, any failure first revokes candidate start authorization and then restores the previous runtime generation, platform definition, and gateway epoch. The entry reopens only after the previous generation passes identity checks and remains healthy for 15 seconds. ADMIN_STOPPED remains when rollback recovery itself fails."
-"重新启用共享网关会清除签名 ADMIN_STOPPED 意图；请提供 --confirm。","重新启用共享网关会清除签名 ADMIN_STOPPED 意图；请提供 --confirm。"
-"宿主级 WLS 2.0 Gateway 已由管理员显式重新启用。","宿主级 WLS 2.0 Gateway 已由管理员显式重新启用。"
-"清除已验证的 ADMIN_STOPPED 意图并重新启用共享网关","清除已验证的 ADMIN_STOPPED 意图并重新启用共享网关"
-确认清除停止意图并启用宿主平台服务,确认清除停止意图并启用宿主平台服务
-"输出 JSON 状态","输出 JSON 状态"
-修复失败,修复失败
-网关已执行身份安全的配置重发、LKG/数据面恢复。,网关已执行身份安全的配置重发、LKG/数据面恢复。
-触发网关安全恢复并解除当前熔断等待,触发网关安全恢复并解除当前熔断等待
-"H3 重新探测不能与时钟、存储或 journal 信任恢复合并执行。","H3 重新探测不能与时钟、存储或 journal 信任恢复合并执行。"
-"journal 信任重置必须同时指定 --accept-storage。","journal 信任重置必须同时指定 --accept-storage。"
-"管理员确认宿主时钟已校准并清除 CLOCK_UNTRUSTED","管理员确认宿主时钟已校准并清除 CLOCK_UNTRUSTED"
-"确认磁盘/配额已恢复并重新验证 journal、重建恢复预留","确认磁盘/配额已恢复并重新验证 journal、重建恢复预留"
-"--accept-storage 的协议字段兼容别名","--accept-storage 的协议字段兼容别名"
-"确认丢弃不可信 journal 链并从当前受信状态重新建立","确认丢弃不可信 journal 链并从当前受信状态重新建立"
-"清除当前运行时的 H3 隔离并执行一次显式重新探测","清除当前运行时的 H3 隔离并执行一次显式重新探测"
-"实例 [%{1}] 正在执行启动、停止或其他生命周期操作，已拒绝并发重载。","实例 [%{1}] 正在执行启动、停止或其他生命周期操作，已拒绝并发重载。"
+"重新启用共享网关会清除签名 ADMIN_STOPPED 意图；请提供 --confirm。","Re-enabling the shared gateway clears the signed ADMIN_STOPPED intent; provide --confirm."
+"宿主级 WLS 2.0 Gateway 已由管理员显式重新启用。","The host-level WLS 2.0 Gateway has been explicitly re-enabled by the administrator."
+"清除已验证的 ADMIN_STOPPED 意图并重新启用共享网关","Clear the authenticated ADMIN_STOPPED intent and re-enable the shared gateway"
+确认清除停止意图并启用宿主平台服务,"Confirm clear stop intent and enable hosting platform services"
+"输出 JSON 状态","Output JSON status"
+修复失败,"Repair failed"
+网关已执行身份安全的配置重发、LKG/数据面恢复。,"The gateway has performed identity-safe configuration retransmission and LKG/data plane recovery."
+触发网关安全恢复并解除当前熔断等待,"Trigger gateway security recovery and release the current circuit breaker wait"
+"H3 重新探测不能与时钟、存储或 journal 信任恢复合并执行。","H3 reprobing cannot be performed in conjunction with clock, store, or journal trust recovery."
+"journal 信任重置必须同时指定 --accept-storage。","Journal trust reset must also specify --accept-storage."
+"管理员确认宿主时钟已校准并清除 CLOCK_UNTRUSTED","Administrator confirms host clock is calibrated and clears CLOCK_UNTRUSTED"
+"确认磁盘/配额已恢复并重新验证 journal、重建恢复预留","Confirm disk/quota recovered and re-verify journal, rebuild recovery reservation"
+"--accept-storage 的协议字段兼容别名","Protocol field compatible aliases for --accept-storage"
+"确认丢弃不可信 journal 链并从当前受信状态重新建立","Confirm to drop the untrusted journal chain and re-establish it from the current trusted state"
+"清除当前运行时的 H3 隔离并执行一次显式重新探测","Clear the current runtime's H3 isolation and perform an explicit reprobing"
+"实例 [%{1}] 正在执行启动、停止或其他生命周期操作，已拒绝并发重载。","Instance [%{1}] is performing a start, stop, or other lifecycle operation and has rejected concurrent reloads."
 "实例 [%{1}] 自动匹配到 [%{2}]","Instance [%{1}] automatically matched to [%{2}]"
 "实例 [%{1}] 未检测到运行中的 WLS Worker","Instance [%{1}] no running WLS Worker detected"
 "可执行 server:listing -r 查看当前运行中的实例","Run server:listing -r to view currently running instances."
@@ -2514,7 +2598,7 @@ Previous：%{1},Previous：%{1}
 "✓ 热重载命令已发送","✓ Hot reload command sent"
 "等待实例 [%{1}] 的 Orchestrator 完成滚动重启...","Waiting for Orchestrator of instance [%{1}] to complete rolling restart..."
 "控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果","Control connection disconnected, Orchestrator may still be running in the background; use server:status to view results"
-"仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。","仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。"
+"仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。","Still waiting for Master to return reload progress (waited %{1}s, remaining %{2}s); will not actively disconnect the control connection."
 "可用 server:status 查看当前状态","Use server:status to check current state"
 "✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）","✓ The rolling restart is completed (Time consuming: %{1}, Worker: %{2})"
 "✗ 滚动重启失败：Worker #%{1} - %{2}","✗ Rolling restart failed: Worker #%{1} - %{2}"
@@ -2543,8 +2627,8 @@ Previous：%{1},Previous：%{1}
 "批量重启：直接杀死所有 Worker，属于停机型更新，快速但会中断请求","Batch Restart: Directly kills all Workers. This is a shutdown-type update, fast but will interrupt requests"
 "-n 不等待","-n do not wait"
 发送命令后立即返回，适合脚本调用,"Returns immediately after sending the command, suitable for script invocation"
-优雅排水三态,优雅排水三态
-"完成=退出码0且滚动重启完成；保留排水=仍有在途写/半包请求时非零并提示 live old Workers；空闲 keep-alive 会在 Worker 软期限主动关闭，不再单独构成失败","完成=退出码0且滚动重启完成；保留排水=仍有在途写/半包请求时非零并提示 live old Workers；空闲 keep-alive 会在 Worker 软期限主动关闭，不再单独构成失败"
+优雅排水三态,"Elegant drainage three states"
+"完成=退出码0且滚动重启完成；保留排水=仍有在途写/半包请求时非零并提示 live old Workers；空闲 keep-alive 会在 Worker 软期限主动关闭，不再单独构成失败","Completion = exit code 0 and rolling restart is completed; retain drainage = non-zero when there are still writes/half packet requests in progress and prompt live old Workers; idle keep-alive will be automatically closed during the Worker soft period and will no longer constitute a separate failure"
 适用场景,"Applicable Scenarios"
 "修改了 Worker 代码、业务代码、模板、配置等","Modified Worker code, business code, templates, configuration, etc."
 不适用场景,"Not applicable scenarios"
@@ -2552,38 +2636,40 @@ Previous：%{1},Previous：%{1}
 滚动重载（默认等待）,"Rolling reload (wait by default)"
 不等待,"don't wait"
 强制重载,"Force Reload"
-"没有已登记的退役 PHP 内置服务器。","没有已登记的退役 PHP 内置服务器。"
-"无法持久化清理后的退役 PHP 服务器记录。","无法持久化清理后的退役 PHP 服务器记录。"
-"已清理无效的退役 PHP 内置服务器运行时记录。","已清理无效的退役 PHP 内置服务器运行时记录。"
-进程已退出，但无法持久化清理后的运行时记录。,进程已退出，但无法持久化清理后的运行时记录。
-"退役 PHP 内置服务器已退出；仅清理运行时记录，未发送信号。","退役 PHP 内置服务器已退出；仅清理运行时记录，未发送信号。"
-"进程已退出，但精确 lease 清理失败；已保留运行时记录以便重试。","进程已退出，但精确 lease 清理失败；已保留运行时记录以便重试。"
-进程已释放，但运行时记录持久化失败；已保留记录以便重试。,进程已释放，但运行时记录持久化失败；已保留记录以便重试。
-"已按精确出生身份停止退役 PHP 内置服务器。","已按精确出生身份停止退役 PHP 内置服务器。"
-"旧 lease 已失效，未向当前 PID 发送信号；运行时记录已清理。","旧 lease 已失效，未向当前 PID 发送信号；运行时记录已清理。"
-"已拒绝自动停止退役 PHP 内置服务器：%{1}。","已拒绝自动停止退役 PHP 内置服务器：%{1}。"
-"持久化 PID、端口或进程名不构成终止授权；请由宿主管理员核对实际进程后处理。","持久化 PID、端口或进程名不构成终止授权；请由宿主管理员核对实际进程后处理。"
-"停止已退役的 PHP 内置服务器（仅精确出生 lease）","停止已退役的 PHP 内置服务器（仅精确出生 lease）"
-兼容参数；不会绕过精确进程出生身份校验,兼容参数；不会绕过精确进程出生身份校验
-无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
-"已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
-"已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+"没有已登记的退役 PHP 内置服务器。","There are no retired PHP built-in servers registered."
+"无法持久化清理后的退役 PHP 服务器记录。","Unable to persist decommissioned PHP server records after cleaning."
+"已清理无效的退役 PHP 内置服务器运行时记录。","Cleaned up invalid retired PHP built-in server runtime records."
+进程已退出，但无法持久化清理后的运行时记录。,"The process exited, but the cleaned runtime record could not be persisted."
+"退役 PHP 内置服务器已退出；仅清理运行时记录，未发送信号。","Retirement The PHP built-in server has exited; only runtime records were cleaned, no signals were sent."
+"进程已退出，但精确 lease 清理失败；已保留运行时记录以便重试。","Process exited, but precise lease cleanup failed; runtime record retained for retry."
+进程已释放，但运行时记录持久化失败；已保留记录以便重试。,"Process was released, but runtime record persistence failed; record retained for retry."
+"已按精确出生身份停止退役 PHP 内置服务器。","Stopped decommissioning the PHP built-in server by exact birth status."
+"旧 lease 已失效，未向当前 PID 发送信号；运行时记录已清理。","The old lease has expired and no signal was sent to the current PID; the runtime record has been cleared."
+"已拒绝自动停止退役 PHP 内置服务器：%{1}。","Rejected auto-stop decommissioning PHP built-in server: %{1}."
+"持久化 PID、端口或进程名不构成终止授权；请由宿主管理员核对实际进程后处理。","Persistent PID, port or process name does not constitute termination authorization; please let the host administrator verify the actual process before processing."
+"停止已退役的 PHP 内置服务器（仅精确出生 lease）","Stop retired PHP built-in server (exact birth lease only)"
+兼容参数；不会绕过精确进程出生身份校验,"Compatible parameters; does not bypass precise process birth identity verification"
+无法证明受管代次时拒绝发送任何终止信号,"Refuse to send any termination signal when the managed generation cannot be proven"
+"已退役：console:server:start 不再启动 PHP 内置 Web Server。","Retired: console:server:start no longer starts the PHP built-in web server."
+"已退役：PHP 内置 Web Server 启动入口","Retired: PHP built-in Web Server startup entry"
+"Session Server %{1}","Session Server %{1}"
+"Memory Service %{1}","Memory Service %{1}"
 请输入后端主机,"Enter backend host"
 "端口必须在 1-65535 范围内","Port must be in the range 1-65535"
 连接成功,"Connection Successful"
 "连接失败: %{1}","Connection Failed: %{1}"
-"应用 WLS 网关路由","应用 WLS 网关路由"
-"保存 WLS 网关配置","保存 WLS 网关配置"
+"应用 WLS 网关路由","Apply WLS gateway routing"
+"保存 WLS 网关配置","Save WLS gateway configuration"
 "域名格式无效: %{1}","Invalid domain format: %{1}"
 "Gateway backend host is required.","Gateway backend host is required."
 "Gateway backend port must be between 1 and 65535.","Gateway backend port must be between 1 and 65535."
-自动,自动
-主监听,主监听
-拓扑,拓扑
-网关,网关
-直连监听,直连监听
-派遣器监听,派遣器监听
-运行时监听,运行时监听
+自动,automatic
+主监听,"main monitor"
+拓扑,Topology
+网关,gateway
+直连监听,"Direct connection monitoring"
+派遣器监听,"dispatcher listening"
+运行时监听,"Runtime monitoring"
 "配置 WLS Gateway 的域名路由规则","Configure domain routing rules for WLS Gateway"
 总规则数,"Total Rules"
 新建规则,"New Rule"
@@ -2597,7 +2683,7 @@ Previous：%{1},Previous：%{1}
 应用失败,"Application Failed"
 请求失败,"Request failed"
 连接失败,"Connection Failed"
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+确认组件不可用，请刷新页面后重试,"Confirm that the component is unavailable, please refresh the page and try again"
 编辑代理规则,"Edit proxy rule"
 新建代理规则,"Create Proxy Rule"
 返回列表,"Return to List"
@@ -2629,9 +2715,9 @@ Unknown,Unknown
 Direct,Direct
 Dispatcher,Dispatcher
 Auto,Auto
-"所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。","所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。"
+"所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。","All platforms are hosted by the project and Nginx loads directly into workers: Windows uses independent worker_ports, Linux/macOS uses losslessly reloadable shared_fd by default; Linux reuseport only as an explicit performance option."
 "仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。","Use the WLS Dispatcher only for explicit compatibility or diagnostics; project-managed Nginx remains the public edge."
-"所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。","所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。"
+"所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。","Auto selects Direct for all platforms: Windows uses Nginx’s balanced independent Worker port, and Linux/macOS uses the shared_fd held by the Master to avoid resetting queued connections when the Worker is replaced."
 "Direct listener supported","Direct listener supported"
 "Direct listener unavailable","Direct listener unavailable"
 "This runtime supports the native direct listener selected by WLS.","This runtime supports the native direct listener selected by WLS."
@@ -2644,21 +2730,21 @@ Auto,Auto
 "WLS Gateway - 多项目统一入口","WLS Gateway - Multi-project Unified Entrance"
 "自动发现 %{1} 个项目实例","Auto-Discovered %{1} Project Instances"
 "%{1} 已验证：%{2}","%{1} verified: %{2}"
-"时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。","时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。"
-证书已写入撤销事实，但证书生成选择器尚未停用：%{1},证书已写入撤销事实，但证书生成选择器尚未停用：%{1}
-证书已写入撤销事实，但服务清单尚未完成确认：%{1},证书已写入撤销事实，但服务清单尚未完成确认：%{1}
-证书服务已安全撤销，但实例端点派生状态更新失败：%{1},证书服务已安全撤销，但实例端点派生状态更新失败：%{1}
-服务路由已撤销，但证书源清理未完成：%{1},服务路由已撤销，但证书源清理未完成：%{1}
-证书路由和源文件已撤销，但数据库清理未完成：%{1},证书路由和源文件已撤销，但数据库清理未完成：%{1}
+"时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。","Clock trust recovery must be performed separately; run only --accept-clock first before performing other fixes."
+证书已写入撤销事实，但证书生成选择器尚未停用：%{1},"The certificate has written revocation fact, but the certificate generation selector has not been deactivated: %{1}"
+证书已写入撤销事实，但服务清单尚未完成确认：%{1},"The revocation fact has been written to the certificate, but the service list has not completed confirmation: %{1}"
+证书服务已安全撤销，但实例端点派生状态更新失败：%{1},"Certificate Services was securely revoked, but instance endpoint derived status update failed: %{1}"
+服务路由已撤销，但证书源清理未完成：%{1},"Service routing was revoked, but certificate source cleanup was not completed: %{1}"
+证书路由和源文件已撤销，但数据库清理未完成：%{1},"Certificate routing and source files were revoked, but database cleanup was not completed: %{1}"
 "Security rules saved. WLS workers will reload rules from the update flag.","Security rules saved. WLS workers will reload rules from the update flag."
 "检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…","Port %{1} is in use by WLS process (PID: %{2}); terminating…"
 "ROOT PID: %{1}","ROOT PID: %{1}"
-"IPC 超时，验证 Master 实时身份后清理该实例下所有进程...","IPC 超时，验证 Master 实时身份后清理该实例下所有进程..."
+"IPC 超时，验证 Master 实时身份后清理该实例下所有进程...","IPC timeout, verify the real-time identity of the Master and clean up all processes under the instance..."
 "强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc","Force stop: default local quick cleanup (no IPC); if you still need to send STOP via Master, add --ipc"
 "与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略","Used in conjunction with -f: Explicitly use IPC to force shutdown (short ACK/hard timeout); ignored without -f"
 强制停止（本地快速清场）,"Force stop (local quick cleanup)"
 "强制但走 IPC（短超时）","Force but go through IPC (short timeout)"
-"以旧凭据+新凭据双证明执行可恢复 UUID/授权转移","以旧凭据+新凭据双证明执行可恢复 UUID/授权转移"
+"以旧凭据+新凭据双证明执行可恢复 UUID/授权转移","Perform recoverable UUID/Authorization transfer with dual attestation of old credentials + new credentials"
 正在停止配置中的服务器进程，进程ID：%{1},"Stopping server process in configuration, process ID: %{1}"
 配置中的服务器进程已停止！进程ID：%{1},"The server process in the configuration has stopped! Process ID: %{1}"
 停止配置中的服务器进程失败！进程ID：%{1},"Failed to stop the server process during configuration! Process ID: %{1}"
@@ -2748,26 +2834,26 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 "WLS 边缘 reload 失败","WLS edge reload failed"
 "证书 PEM 已更新，但边缘 reload 命令失败（exit=%{1}）。Nginx 可能仍使用旧证书。","PEM files were updated, but the edge reload command failed (exit=%{1}). Nginx may keep the old certificate."
 "另一个 server:stop 任务正在处理中，请稍后再试。","Another server:stop task is in progress, please try again later."
-共享网关路由注销失败：%{1},共享网关路由注销失败：%{1}
+共享网关路由注销失败：%{1},"Shared gateway route logout failed: %{1}"
 "已中止 WLS 停止：请先修复托管 Nginx 停止故障，或显式使用强制停止。","WLS stop was aborted. Repair the managed Nginx stop failure first, or explicitly force the stop."
 "启动锁已释放 ✓","Startup lock released ✓"
 "实例 [%{1}] 正在被其他 stop 任务处理，已跳过。","Instance [%{1}] is being processed by another stop task, skipped."
 地址：,Address:
 监听地址：,"Listen address:"
-宿主网关清理失败：%{1},宿主网关清理失败：%{1}
-当前项目路由和宿主授权已撤销；共享网关保持运行。,当前项目路由和宿主授权已撤销；共享网关保持运行。
-撤销当前项目的网关路由与证书目录授权,撤销当前项目的网关路由与证书目录授权
-"项目身份已显式轮换：%{1} → %{2}","项目身份已显式轮换：%{1} → %{2}"
-"当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。","当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。"
-"为复制项目显式生成新 UUID；必须配合 --confirm","为复制项目显式生成新 UUID；必须配合 --confirm"
-"WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。","WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。"
+宿主网关清理失败：%{1},"Host gateway cleanup failed: %{1}"
+当前项目路由和宿主授权已撤销；共享网关保持运行。,"Current project routing and hosting authorizations have been revoked; the shared gateway remains running."
+撤销当前项目的网关路由与证书目录授权,"Revoke the gateway routing and certificate directory authorization of the current project"
+"项目身份已显式轮换：%{1} → %{2}","Project identity has been explicitly rotated: %{1} → %{2}"
+"当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。","The current project is authorized to the WLS 2.0 hosting gateway; the hosting credentials have been written to the project var directory."
+"为复制项目显式生成新 UUID；必须配合 --confirm","Explicitly generate new UUID for copied items; must be used with --confirm"
+"WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。","WLS no longer supports independent topologies; use --direct on all platforms and --dispatcher explicitly for compatibility diagnostics."
 "Conflicting WLS topology CLI options: --direct and --dispatcher.","Conflicting WLS topology CLI options: --direct and --dispatcher."
-"--no-nginx 只能与 --edge=wls 一起使用。","--no-nginx 只能与 --edge=wls 一起使用。"
+"--no-nginx 只能与 --edge=wls 一起使用。","--no-nginx can only be used with --edge=wls."
 "WLS 启动不使用 PHP 内置 CLI 服务器；需要纯 WLS 时请使用 --no-nginx。","WLS startup does not use PHP's built-in CLI server; use --no-nginx for pure WLS."
 "检测到 Windows ARM64 上运行 x64 PHP 仿真；WLS 已对后续 PHP 子进程关闭 CLI OPcache 与 JIT，避免已确认的原生访问冲突；请使用原生 ARM64 PHP 恢复字节码缓存。","Detected x64 PHP emulation on Windows ARM64. WLS disabled CLI OPcache and JIT for descendant PHP processes after reproduced native access violations; use native ARM64 PHP to restore bytecode caching."
 "Weline Server 不可用：%{1}","Weline Server unavailable: %{1}"
 "WLS 不执行 PHP CLI 回退；请修复 WLS 运行时依赖。","WLS does not fall back to the PHP CLI server; fix the WLS runtime dependency."
-"Master 启动失败：%{1}","Master 启动失败：%{1}"
+"Master 启动失败：%{1}","Master startup failed: %{1}"
 "无法启动：实例 [%{1}] 正在被另一个进程启动中","Unable to start: instance [%{1}] is being started by another process"
 "锁持有进程 PID：%{1}","Lock holding process PID: %{1}"
 请稍后重试，或在交互式终端中确认是否强制启动。,"Please try again later, or confirm in the interactive terminal whether to force start."
@@ -2776,33 +2862,33 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 "正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留...","Forcefully terminating another startup process and cleaning up startup remnants of instance [%{1}]..."
 "已强制接管启动锁，继续启动实例 [%{1}]","Forcibly took over startup lock, continuing to start instance [%{1}]"
 "强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。","Failed to acquire startup lock after force clean, will proceed to start instance as confirmed by user [%{1}]."
-"WLS 2.0 边缘模式解析失败：%{1}","WLS 2.0 边缘模式解析失败：%{1}"
-"已为项目分配稳定的宿主协调 loopback 回源端口：%{1}","已为项目分配稳定的宿主协调 loopback 回源端口：%{1}"
-"WLS 2.0 网关回源端口分配失败：%{1}","WLS 2.0 网关回源端口分配失败：%{1}"
-"WLS 2.0 边缘模式：%{1}（请求：%{2}）","WLS 2.0 边缘模式：%{1}（请求：%{2}）"
-"共享网关不可用，已降级纯 WLS：%{1}","共享网关不可用，已降级纯 WLS：%{1}"
-"备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。","备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。"
+"WLS 2.0 边缘模式解析失败：%{1}","WLS 2.0 edge mode parsing failed: %{1}"
+"已为项目分配稳定的宿主协调 loopback 回源端口：%{1}","A stable host coordination loopback return-to-origin port has been assigned to the project: %{1}"
+"WLS 2.0 网关回源端口分配失败：%{1}","WLS 2.0 gateway return port allocation failed: %{1}"
+"WLS 2.0 边缘模式：%{1}（请求：%{2}）","WLS 2.0 edge mode: %{1} (request: %{2})"
+"共享网关不可用，已降级纯 WLS：%{1}","Shared gateway unavailable, downgraded pure WLS: %{1}"
+"备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。","Alternate entry port: %{1}; this address is not equivalent to 80/443, please check the firewall, DNS or load balancing simultaneously."
 "WLS 运行时依赖检查或显式安装失败：%{1}","WLS runtime dependency validation or explicit installation failed: %{1}"
 "Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。","Direct never silently switches to Dispatcher. Linux auto validates reuseport first (requires sockets/SO_REUSEPORT) and falls back to shared_fd (requires ext-event and POSIX FD/process primitives); macOS uses shared_fd; Windows with Nginx uses worker_ports. You may explicitly select --dispatcher. The selected edge owns public TLS and HTTP: Nginx by default, or pure WLS with --no-nginx."
 "WLS 运行时依赖已按显式请求安装并验证。","WLS runtime dependencies were installed and verified by explicit request."
 "正在使用已加载新扩展的 PHP 进程继续启动...","Continuing startup with a PHP process that loads the new extension..."
 "依赖安装后的 WLS 重新启动失败，退出码：%{1}","WLS relaunch after dependency installation failed with exit code %{1}."
 "使用已保存的实例配置：%{1} (%{2}:%{3})","Using saved instance configuration: %{1} (%{2}:%{3})"
-"WLS 公开 Host 规范化失败：%{1}","WLS 公开 Host 规范化失败：%{1}"
-"WLS 2.0 备用入口监听地址无效：%{1}","WLS 2.0 备用入口监听地址无效：%{1}"
+"WLS 公开 Host 规范化失败：%{1}","WLS public host normalization failed: %{1}"
+"WLS 2.0 备用入口监听地址无效：%{1}","WLS 2.0 backup ingress listening address is invalid: %{1}"
 "Nginx-only 启动必须使用后台 Master，才能在 Worker READY 后完成 Nginx 配置事务与真实协议门禁；请移除 --foreground/--no-daemon。","Nginx-only startup must use a background Master to complete the Nginx configuration transaction and live protocol gates after Worker READY; remove --foreground/--no-daemon."
 "Nginx-only 公网端点强制 TLS 1.3；--no-ssl 与 wls.https=false 已停用。","The Nginx-only public endpoint enforces TLS 1.3; --no-ssl and wls.https=false are retired."
-新证书未通过完整校验，继续使用上一代有效证书：%{1},新证书未通过完整校验，继续使用上一代有效证书：%{1}
-无法激活项目证书代际：%{1},无法激活项目证书代际：%{1}
-"项目将先运行 loopback HTTP 回源；网关仅开放精确 ACME challenge，证书激活前普通 HTTPS 路由保持关闭。","项目将先运行 loopback HTTP 回源；网关仅开放精确 ACME challenge，证书激活前普通 HTTPS 路由保持关闭。"
-"HTTPS 未启用：%{1}","HTTPS 未启用：%{1}"
-"SSL 证书服务返回 HTTP 模式","SSL 证书服务返回 HTTP 模式"
-"本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。","本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。"
+新证书未通过完整校验，继续使用上一代有效证书：%{1},"The new certificate has not passed complete verification and continues to use the previous generation valid certificate: %{1}"
+无法激活项目证书代际：%{1},"Unable to activate project certificate generation: %{1}"
+"项目将先运行 loopback HTTP 回源；网关仅开放精确 ACME challenge，证书激活前普通 HTTPS 路由保持关闭。","The project will first run loopback HTTP back to the origin; the gateway will only open the precise ACME challenge, and the ordinary HTTPS route will remain closed before the certificate is activated."
+"HTTPS 未启用：%{1}","HTTPS not enabled: %{1}"
+"SSL 证书服务返回 HTTP 模式","SSL Certificate Service returns HTTP mode"
+"本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。","This time it will run over HTTP; if HTTPS is required, check the domain name HTTPS switch in the wls.https configuration and certificate management."
 已生成新证书：%{1},"Generated new certificate: %{1}"
 使用已有证书：%{1},"Using existing certificate: %{1}"
 证书有效期至：%{1},"Certificate valid until: %{1}"
-"WLS 运行时解析器未返回完整 RuntimeSelection；已拒绝启动。","WLS 运行时解析器未返回完整 RuntimeSelection；已拒绝启动。"
-"WLS 依赖预检与最终 RuntimeSelection 拓扑不一致；已拒绝启动。","WLS 依赖预检与最终 RuntimeSelection 拓扑不一致；已拒绝启动。"
+"WLS 运行时解析器未返回完整 RuntimeSelection；已拒绝启动。","The WLS runtime parser did not return a complete RuntimeSelection; startup refused."
+"WLS 依赖预检与最终 RuntimeSelection 拓扑不一致；已拒绝启动。","WLS dependency preflight is inconsistent with final RuntimeSelection topology; startup refused."
 "WLS 边缘适配器无效：%{1}","Invalid WLS edge adapter: %{1}"
 "Nginx-only 公网端点要求 TLS 1.3；已拒绝 --no-ssl。","The Nginx-only public endpoint requires TLS 1.3; --no-ssl was refused."
 "WLS HTTP 协议配置无效：%{1}","Invalid WLS HTTP protocol configuration: %{1}"
@@ -2811,9 +2897,9 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 "WLS 回源协议：HTTP/1.1（公网协议协商由 Nginx 负责）","WLS upstream protocol: HTTP/1.1 (Nginx handles public protocol negotiation)"
 边缘适配器：%{1},"Edge adapter: %{1}"
 "纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。","Pure WLS owns public TLS/HTTP; HTTP/3 is disabled."
-"WLS 2.0 网关没有返回有效 HTTPS 监听端口。","WLS 2.0 网关没有返回有效 HTTPS 监听端口。"
-"WLS 2.0 网关公网 origin 固化失败：%{1}","WLS 2.0 网关公网 origin 固化失败：%{1}"
-"宿主级 Weline Gateway 负责公网 TLS/HTTP；本项目只提供 loopback WLS 后端。","宿主级 Weline Gateway 负责公网 TLS/HTTP；本项目只提供 loopback WLS 后端。"
+"WLS 2.0 网关没有返回有效 HTTPS 监听端口。","The WLS 2.0 gateway did not return a valid HTTPS listening port."
+"WLS 2.0 网关公网 origin 固化失败：%{1}","WLS 2.0 gateway public network origin solidification failed: %{1}"
+"宿主级 Weline Gateway 负责公网 TLS/HTTP；本项目只提供 loopback WLS 后端。","The host-level Weline Gateway is responsible for public network TLS/HTTP; this project only provides the loopback WLS backend."
 "Nginx 负责公网 TLS/HTTP；WLS 后端固定为回环地址明文 HTTP/1.1。","Nginx handles public TLS/HTTP; the WLS backend is fixed to plaintext HTTP/1.1 on loopback."
 "Nginx 默认启动要求 wls.edge.nginx.managed=true；不可用时请显式使用 --no-nginx。","Default Nginx startup requires wls.edge.nginx.managed=true; explicitly use --no-nginx when unavailable."
 "Nginx 默认启动要求 wls.edge.nginx.auto_start=true；不可用时请显式使用 --no-nginx。","Default Nginx startup requires wls.edge.nginx.auto_start=true; explicitly use --no-nginx when unavailable."
@@ -2831,20 +2917,20 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 "2. 查看占用进程：","2. Inspect the occupying process:"
 "3. 或前往实际项目目录处理：","3. Or go to that project's directory to manage it:"
 "端口 %{1} 已被 PHP 内置服务器占用，正在停止...","Port %{1} is already in use by the PHP built-in server, stopping it..."
-"WLS 编译运行时预检失败：%{1}","WLS 编译运行时预检失败：%{1}"
-"WLS 运行时策略不支持当前拓扑：%{1}","WLS 运行时策略不支持当前拓扑：%{1}"
-"Direct 不会静默忽略关键策略；请修复策略能力，或显式使用 --dispatcher。","Direct 不会静默忽略关键策略；请修复策略能力，或显式使用 --dispatcher。"
+"WLS 编译运行时预检失败：%{1}","WLS compile runtime preflight failed: %{1}"
+"WLS 运行时策略不支持当前拓扑：%{1}","WLS runtime policy does not support current topology: %{1}"
+"Direct 不会静默忽略关键策略；请修复策略能力，或显式使用 --dispatcher。","Direct does not silently ignore critical policies; please fix policy capabilities, or use --dispatcher explicitly."
 "检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场...","Detected that only the HTTP Redirect child process remains from the old instance, performing local quick cleanup first..."
 "检测到服务器已运行，-f 强制完整重启：先停止实例再启动...","Detected that the server is already running; -f force full restart: stop the instance first, then start it..."
 "注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。","Note: -f force switch is a downtime update and will not automatically wait for request draining; for external upgrades, please confirm maintenance mode is enabled first. Rolling mode does not require this."
-"检测到服务器已运行，平滑重启：先开启维护模式并等待全部 Worker 请求排空...","检测到服务器已运行，平滑重启：先开启维护模式并等待全部 Worker 请求排空..."
-"全部 READY Worker 已完成维护门禁与请求排水，开始切换...","全部 READY Worker 已完成维护门禁与请求排水，开始切换..."
+"检测到服务器已运行，平滑重启：先开启维护模式并等待全部 Worker 请求排空...","It is detected that the server is running and restarts smoothly: first enable maintenance mode and wait for all Worker requests to be drained..."
+"全部 READY Worker 已完成维护门禁与请求排水，开始切换...","All READY Workers have completed maintaining access control and requesting drainage, and started switching..."
 "Worker基础端口: %{1}","Worker base port: %{1}"
 "共享状态运行时: %{1}","Shared State Runtime: %{1}"
 "共享状态运行时解析失败: %{1}","Shared State Runtime Parse Failed: %{1}"
 "强制重启后主端口 %{1} 仍被占用，已中止启动，避免同名实例切换到新端口。","Main port %{1} is still occupied after force restart, startup aborted to prevent same-name instance from switching to a new port."
 请先确认旧实例已完全停止，再重新执行启动命令。,"Please confirm the old instance has fully stopped before re-executing the start command."
-"强制重启后主端口 %{1} 仍被占用，启动已中止。","强制重启后主端口 %{1} 仍被占用，启动已中止。"
+"强制重启后主端口 %{1} 仍被占用，启动已中止。","After a forced restart, the main port %{1} is still occupied and the startup has been aborted."
 "默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}","Default port %{1} occupied (likely by BT Panel/nginx), downgraded to %{2}"
 "主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），已自动切换到 %{2}","The main port %{1} is in an abnormally occupied state (the PID returned by the system has expired) and has been automatically switched to %{2}"
 自动切换仅对未显式指定端口的异常占用生效；启动成功后会记住新端口,"Auto-switching only applies to abnormal port usage without explicit port specification; the new port will be remembered after successful startup"
@@ -2858,17 +2944,17 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 请稍后重试，或等待其他实例启动完成,"Please try again later, or wait for other instances to finish starting"
 "强制重启前仍检测到旧实例 [%{1}] 的残留 WLS 进程或端口，已中止启动。","Old instance [%{1}] residual WLS process or port detected before force restart, startup aborted."
 "必须先完成旧实例清理，禁止自动切换主端口或 Worker 端口启动第二个同名实例。","Must complete cleanup of the old instance first. Starting a second instance with the same name by automatically switching the primary port or Worker port is prohibited."
-"旧实例 [%{1}] 仍有残留 WLS 进程或端口，启动已中止。","旧实例 [%{1}] 仍有残留 WLS 进程或端口，启动已中止。"
+"旧实例 [%{1}] 仍有残留 WLS 进程或端口，启动已中止。","The old instance [%{1}] still has residual WLS processes or ports and the startup was aborted."
 "Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}","Worker port segment %{1}-%{2} There is a port conflict or system reservation, automatically switch to %{3}-%{4}"
 "HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）","HTTP redirection port %{1} In an abnormally occupied state (the PID returned by the system has expired)"
 "HTTP 重定向端口 %{1} 被非框架进程占用","HTTP redirect port %{1} is occupied by a non-framework process"
 占用进程：%{1},"Occupied Process: %{1}"
 PID：%{1},PID：%{1}
 命令行：%{1},"Command line: %{1}"
-"WLS 不会操作未知端口 owner；本次仅禁用可选的 HTTP→HTTPS 重定向监听。","WLS 不会操作未知端口 owner；本次仅禁用可选的 HTTP→HTTPS 重定向监听。"
-"提示：当前为 Nginx 直连模式，Worker 独立监听回环端口 %{1}-%{2}。","提示：当前为 Nginx 直连模式，Worker 独立监听回环端口 %{1}-%{2}。"
-"Master 共享监听 FD","Master 共享监听 FD"
-"提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。","提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。"
+"WLS 不会操作未知端口 owner；本次仅禁用可选的 HTTP→HTTPS 重定向监听。","WLS will not operate on unknown port owners; only the optional HTTP→HTTPS redirection listening is disabled this time."
+"提示：当前为 Nginx 直连模式，Worker 独立监听回环端口 %{1}-%{2}。","Tip: It is currently in Nginx direct connection mode, and the Worker independently monitors the loopback ports %{1}-%{2}."
+"Master 共享监听 FD","Master shared monitoring FD"
+"提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。","Tip: It is currently in %{1} direct connection mode, and multiple Workers share the same port %{2}."
 维护状态已恢复到重启前配置（端口检查未通过）。,"The pre-restart maintenance state has been restored because the port check failed."
 "HTTP Redirect 端口 %{1} 已被实例 [%{2}] 占用: %{3}","HTTP Redirect port %{1} Already occupied by instance [%{2}]: %{3}"
 "请先停止实例 [%{1}]，或改用非 443 主端口启动。","Please stop the instance [%{1}] first, or start using a non-443 main port."
@@ -2882,7 +2968,7 @@ PID：%{1},PID：%{1}
 "正在强制停用占用端口 %{1} 的进程...","Forcefully stopping the process occupying port %{1}..."
 "端口 %{1} 已释放，HTTP Redirect 将正常启动","Port %{1} has been released, HTTP Redirect will start normally"
 "无法释放端口 %{1}，HTTP Redirect 将不启用","Unable to release port %{1}, HTTP Redirect will not be enabled"
-"WLS 启动策略激活失败：%{1}","WLS 启动策略激活失败：%{1}"
+"WLS 启动策略激活失败：%{1}","WLS startup policy activation failed: %{1}"
 "Master 进程启动中，将管理所有 Worker 和 Dispatcher...","Master process is starting and will manage all Workers and Dispatchers..."
 "新 Master 未在预期时间内就绪，已回滚到重启前的维护态，禁止在启动失败后污染持久配置。","The new Master was not ready in time. The pre-restart maintenance state was restored so a failed startup cannot pollute persistent configuration."
 已恢复重启前的维护模式（保持开启）。,"The pre-restart maintenance state has been restored and remains enabled."
@@ -2896,20 +2982,20 @@ PID：%{1},PID：%{1}
 "请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","Please configure app/etc/env.php -> wls.servers.%{1}.host (recommended) or wls.host (not 0.0.0.0)."
 后台域名池域名不需要写入此处。,"Backend domain pool domains do not need to be written here."
 如果默认内网访问可忽略该提示。,"If the default intranet access works, you can ignore this prompt."
-"WLS Master 进程创建失败：%{1}","WLS Master 进程创建失败：%{1}"
+"WLS Master 进程创建失败：%{1}","WLS Master process creation failed: %{1}"
 "Master 已启动，等待所有服务就绪...","Master started, waiting for all services to be ready..."
 "服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）","Server is already running in the background (Master PID: %{1}, Control Port: %{2})"
 "纯 WLS Worker 已就绪；TLS/HTTP 由 WLS 直接提供。","Pure WLS Workers are ready; WLS provides TLS/HTTP directly."
 "WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；默认 Nginx 启动失败，将回收本次实例。","WLS Workers are READY, but managed Nginx failed the public protocol gates; default Nginx startup failed and this instance will be reclaimed."
-"WLS 与宿主级 WLS 2.0 Gateway 均已就绪，启动完成。","WLS 与宿主级 WLS 2.0 Gateway 均已就绪，启动完成。"
-"WLS 与项目托管 Nginx 均已就绪，启动完成。","WLS 与项目托管 Nginx 均已就绪，启动完成。"
-"Master 已运行，但未在 %{1} 秒内等到所有服务 READY（当前阶段：%{2}）。","Master 已运行，但未在 %{1} 秒内等到所有服务 READY（当前阶段：%{2}）。"
-启动失败原因：%{1},启动失败原因：%{1}
-"WLS Master 控制面启动失败。","WLS Master 控制面启动失败。"
+"WLS 与宿主级 WLS 2.0 Gateway 均已就绪，启动完成。","Both WLS and the host-level WLS 2.0 Gateway are ready and startup is complete."
+"WLS 与项目托管 Nginx 均已就绪，启动完成。","Both WLS and project hosting Nginx are ready and the startup is completed."
+"Master 已运行，但未在 %{1} 秒内等到所有服务 READY（当前阶段：%{2}）。","Master is running but has not waited until all services READY within %{1} seconds (current phase: %{2})."
+启动失败原因：%{1},"Reason for startup failure: %{1}"
+"WLS Master 控制面启动失败。","The WLS Master control plane failed to start."
 日志目录：%{1},"Log directory: %{1}"
 启动准备,"Start preparation"
 启动服务,"Start service"
-"Master 已退出","Master 已退出"
+"Master 已退出","Master has exited"
 ╔══════════════════════════════════════════════════════════════════════════════╗,╔══════════════════════════════════════════════════════════════════════════════╗
 ╚══════════════════════════════════════════════════════════════════════════════╝,╚══════════════════════════════════════════════════════════════════════════════╝
 "Master PID: %{1}","Master PID: %{1}"
@@ -2919,7 +3005,7 @@ PID：%{1},PID：%{1}
 服务器启动失败,"Server startup failed"
 "1. 停止占用端口的进程","1. Stop the process occupying the port"
 "2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","2. Or start using a non-443 main port (independent HTTP redirection Worker will not be enabled)"
-"WLS 启动失败后释放共享服务 consumer token 异常：%{1}","WLS 启动失败后释放共享服务 consumer token 异常：%{1}"
+"WLS 启动失败后释放共享服务 consumer token 异常：%{1}","Exception in releasing shared service consumer token after WLS startup failure: %{1}"
 "实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","Instance [%{1}] created shared %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
 "实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","Instance [%{1}] reuses shared %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
 "WLS 维护模式已确认落地：%{1}","WLS maintenance state confirmed: %{1}"
@@ -2929,8 +3015,8 @@ PID：%{1},PID：%{1}
 env.wls,env.wls
 env.wls.servers.%{1},env.wls.servers.%{1}
 命令行参数,"Command line arguments"
-"命令行参数 --edge","命令行参数 --edge"
-环境变量,环境变量
+"命令行参数 --edge","Command line parameter --edge"
+环境变量,"environment variables"
 "命令行参数 --no-nginx","Command-line option --no-nginx"
 "参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。","Parameter --http-redirect-port/--redirect-port is deprecated and ignored. HTTP redirect rule is fixed: use port 80 only when HTTPS=443."
 "真实 Host 解析校验失败","Real Host DNS validation failed"
@@ -2943,9 +3029,9 @@ env.wls.servers.%{1},env.wls.servers.%{1}
 "使用已有证书：%{1}（签发方：%{2}，耗时 %{3}ms）","Using existing certificate: %{1} (Issued by: %{2}, took %{3}ms)"
 使用已有证书：%{1}（签发方：%{2}）,"Using existing certificate: %{1} (Issued by: %{2})"
 "SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}","SSL certificate preparation failed: %{1} (took %{2}ms) - %{3}"
-"PENDING_CERTIFICATE：%{1} 尚无可用证书；当前只允许精确 ACME HTTP-01 challenge，证书激活前不发布普通 443 路由。","PENDING_CERTIFICATE：%{1} 尚无可用证书；当前只允许精确 ACME HTTP-01 challenge，证书激活前不发布普通 443 路由。"
-"TLS_CERTIFICATE_UNAVAILABLE：纯 WLS/备用入口没有 %{1} 的有效证书，已拒绝生成隐式自签名证书。","TLS_CERTIFICATE_UNAVAILABLE：纯 WLS/备用入口没有 %{1} 的有效证书，已拒绝生成隐式自签名证书。"
-已有证书,已有证书
+"PENDING_CERTIFICATE：%{1} 尚无可用证书；当前只允许精确 ACME HTTP-01 challenge，证书激活前不发布普通 443 路由。","PENDING_CERTIFICATE: No certificate available for %{1} yet; only exact ACME HTTP-01 challenges are currently allowed, no normal 443 routes will be published until the certificate is activated."
+"TLS_CERTIFICATE_UNAVAILABLE：纯 WLS/备用入口没有 %{1} 的有效证书，已拒绝生成隐式自签名证书。","TLS_CERTIFICATE_UNAVAILABLE: Pure WLS/Alternate portal does not have a valid certificate for %{1}, generation of implicit self-signed certificate has been refused."
+已有证书,"Already have a certificate"
 "启动已阻止：真实 Host %{1} 尚未解析到 A/AAAA 记录。请先把域名解析到当前服务器 IP 后再启动 WLS。","Startup blocked: real Host %{1} has no A/AAAA records yet. Point the domain to the current server IP before starting WLS."
 "启动已阻止：无法确认当前服务器 IP，不能校验真实 Host %{1} 是否指向本机。请配置 app/etc/env.php -> wls.public_ip 后重试。","Startup blocked: cannot determine the current server IP, so real Host %{1} cannot be checked against this machine. Configure app/etc/env.php -> wls.public_ip and retry."
 "启动已阻止：真实 Host %{1} 未解析到当前服务器 IP。当前解析：%{2}；本机 IP：%{3}。请先修正 DNS A/AAAA 后再启动 WLS。","Startup blocked: real Host %{1} does not resolve to the current server IP. Current DNS: %{2}; server IP: %{3}. Fix DNS A/AAAA records before starting WLS."
@@ -2953,10 +3039,10 @@ env.wls.servers.%{1},env.wls.servers.%{1}
 "已临时启用自签证书启动实例；待 Dispatcher/Worker 就绪后将自动重试正式证书申请。","Temporarily enabled self-signed certificate to start instance; will automatically retry formal certificate application once Dispatcher/Worker is ready."
 "附加 Host 证书就绪：%{1}（签发方：%{2}）","Additional Host certificate ready: %{1} (Issuer: %{2})"
 "附加 Host 证书准备失败：%{1} - %{2}","Additional Host certificate preparation failed: %{1} - %{2}"
-"Windows server:start 默认不自动写 hosts，避免 UAC/权限弹窗阻塞启动。","Windows server:start 默认不自动写 hosts，避免 UAC/权限弹窗阻塞启动。"
-请按需以管理员身份执行：,请按需以管理员身份执行：
-"或手动添加到 hosts：127.0.0.1 %{1}","或手动添加到 hosts：127.0.0.1 %{1}"
-"如需恢复启动时自动写 hosts，可显式设置 WLS_AUTO_WRITE_WINDOWS_HOSTS=1。","如需恢复启动时自动写 hosts，可显式设置 WLS_AUTO_WRITE_WINDOWS_HOSTS=1。"
+"Windows server:start 默认不自动写 hosts，避免 UAC/权限弹窗阻塞启动。","Windows server:start does not automatically write hosts by default to avoid UAC/permission pop-ups blocking startup."
+请按需以管理员身份执行：,"Please execute as administrator if necessary:"
+"或手动添加到 hosts：127.0.0.1 %{1}","Or manually add to hosts: 127.0.0.1 %{1}"
+"如需恢复启动时自动写 hosts，可显式设置 WLS_AUTO_WRITE_WINDOWS_HOSTS=1。","If you want to restore automatic writing of hosts at startup, you can explicitly set WLS_AUTO_WRITE_WINDOWS_HOSTS=1."
 "已将 %{1} 的 hosts 记录纠正为 127.0.0.1","Repaired hosts entry for %{1} to 127.0.0.1"
 "已将 %{1} 添加到 hosts 文件","Added %{1} to hosts file"
 "无法自动配置 hosts 文件（需要管理员权限）","Unable to automatically configure hosts file (requires administrator privileges)"
@@ -2965,9 +3051,9 @@ env.wls.servers.%{1},env.wls.servers.%{1}
 "或以管理员身份运行 PowerShell 执行：","or run PowerShell as Administrator and execute:"
 "Linux/Mac 执行：","Linux/Mac execution:"
 "配置 hosts 文件失败: %{1}","Failed to configure hosts file: %{1}"
-"正在为本地泛域名 %{1} 准备 SSL 证书...","正在为本地泛域名 %{1} 准备 SSL 证书..."
-本地泛域名证书已就绪：%{1},本地泛域名证书已就绪：%{1}
-本地泛域名证书准备失败：%{1},本地泛域名证书准备失败：%{1}
+"正在为本地泛域名 %{1} 准备 SSL 证书...","Preparing SSL certificate for local domain name %{1}..."
+本地泛域名证书已就绪：%{1},"The local domain name certificate is ready: %{1}"
+本地泛域名证书准备失败：%{1},"Local pan-domain name certificate preparation failed: %{1}"
 "已为 %{1} 生成自签证书","Self-signed certificate generated for %{1}"
 无效的实例名称：%{1}，只允许字母开头，包含字母、数字、下划线和横线,"Invalid instance name: %{1}, must start with a letter and can only contain letters, numbers, underscores, and hyphens"
 内部拓扑,"Internal topology"
@@ -2982,10 +3068,10 @@ HTTP/3,HTTP/3
 平台,Platform
 配置来源,"Configuration source"
 智能模式,"Smart Mode"
-网关公网端点未验证,网关公网端点未验证
+网关公网端点未验证,"Gateway public network endpoint not verified"
 "WLS 私网回源","WLS private upstream"
-网关状态,网关状态
-"网关 epoch","网关 epoch"
+网关状态,"Gateway status"
+"网关 epoch","gateway epoch"
 "Nginx 公网端点未验证","Nginx public endpoint is unverified"
 "HTTP/3 QUIC pending","HTTP/3 QUIC pending"
 "shared cache/tickets；live Reused 已验证：%{1}","shared cache/tickets; live Reused verified: %{1}"
@@ -3044,7 +3130,7 @@ HTTP/3,HTTP/3
 "WLS 进程（实例 %{1}）","WLS process (instance %{1})"
 "PID %{1}","PID %{1}"
 未知进程,"Unknown process"
-"WLS 跳过无效实例拓扑元数据并保守预留 Worker 端口：%{1}（%{2}）","WLS 跳过无效实例拓扑元数据并保守预留 Worker 端口：%{1}（%{2}）"
+"WLS 跳过无效实例拓扑元数据并保守预留 Worker 端口：%{1}（%{2}）","WLS skips invalid instance topology metadata and conservatively reserves Worker ports: %{1} (%{2})"
 "字节码缓存，提升 PHP 执行速度 50%+","Bytecode cache, improves PHP execution speed by 50%+"
 "原生 Socket 支持，提升网络性能","Native Socket Support for Improved Network Performance"
 内存限制,"Memory limit"
@@ -3085,64 +3171,64 @@ HTTP/3,HTTP/3
 "📁 PHP 配置文件：%{1}","📁 PHP configuration file: %{1}"
 "🔥 解决关键问题后，性能将提升 100-200%%！","🔥 After resolving critical issues, performance will improve by 100-200%!"
 "💪 优化后，服务器性能将有质的飞跃！","💪 After optimization, server performance will see a qualitative leap!"
-证书状态,证书状态
-"ACME HTTP-01 入口","ACME HTTP-01 入口"
-"网关 HTTP challenge 端点未验证","网关 HTTP challenge 端点未验证"
+证书状态,"Certificate status"
+"ACME HTTP-01 入口","ACME HTTP-01 Portal"
+"网关 HTTP challenge 端点未验证","Gateway HTTP challenge endpoint not verified"
 停止服务,"Stop service"
-"普通 HTTPS、前后台页面与 REST 地址尚未发布；证书激活并由网关验证后才会开放 443 路由。","普通 HTTPS、前后台页面与 REST 地址尚未发布；证书激活并由网关验证后才会开放 443 路由。"
-"WLS 私网回源：http://127.0.0.1:%{1}。","WLS 私网回源：http://127.0.0.1:%{1}。"
-"无法生成访问地址：WLS 2.0 Gateway HTTPS 端点未验证。","无法生成访问地址：WLS 2.0 Gateway HTTPS 端点未验证。"
+"普通 HTTPS、前后台页面与 REST 地址尚未发布；证书激活并由网关验证后才会开放 443 路由。","Ordinary HTTPS, front and back pages, and REST addresses have not yet been released; the 443 route will not be opened until the certificate is activated and verified by the gateway."
+"WLS 私网回源：http://127.0.0.1:%{1}。","WLS private network back to origin: http://127.0.0.1:%{1}."
+"无法生成访问地址：WLS 2.0 Gateway HTTPS 端点未验证。","Unable to generate access address: WLS 2.0 Gateway HTTPS endpoint not authenticated."
 "无法生成访问地址：实例绑定的 Nginx HTTPS 端点未验证。","Cannot generate an access URL: the Nginx HTTPS endpoint bound to the instance is unverified."
 默认外网地址,"Default External Network Address"
 "纯 WLS 直接提供公网 %{1}；HTTP/3 需要托管 Nginx。","Pure WLS directly provides public %{1}; HTTP/3 requires managed Nginx."
-"WLS 私网回源：http://127.0.0.1:%{1}；公网访问由宿主级 WLS 2.0 Gateway 提供。","WLS 私网回源：http://127.0.0.1:%{1}；公网访问由宿主级 WLS 2.0 Gateway 提供。"
+"WLS 私网回源：http://127.0.0.1:%{1}；公网访问由宿主级 WLS 2.0 Gateway 提供。","WLS private network back to the source: http://127.0.0.1:%{1}; public network access is provided by the host-level WLS 2.0 Gateway."
 "WLS 私网回源：%{1}；公网访问必须经过项目托管 Nginx。","WLS private upstreams: %{1}; all public access must pass through the project-managed Nginx."
 测试请求,"Test Request"
 压力测试,"Stress Test"
 "启动 Weline 常驻内存 HTTP 服务器","Start Weline persistent HTTP server"
 "启动 Weline 高性能常驻内存服务器","Start Weline high-performance persistent server"
-"公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听","公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听"
-"gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口","gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口"
+"公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听","Public domain name or display host; gateway/legacy mode back-to-source monitoring 127.0.0.1, wls mode direct monitoring"
+"gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口","WLS back-to-origin port in gateway/legacy mode; pure WLS HTTPS port in wls mode"
 "Worker 进程数（默认：auto 智能模式）","Number of Worker processes (default: auto smart mode)"
-"Windows 子进程使用可见控制台窗口","Windows 子进程使用可见控制台窗口"
+"Windows 子进程使用可见控制台窗口","Windows child process uses visible console window"
 "运行模式：io（I/O密集）或 cpu（CPU密集）","Run mode: io (I/O intensive) or cpu (CPU intensive)"
-"平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换","平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换"
+"平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换","Smooth restart: Turn on maintenance mode and switch after all READY Workers confirm that the request is drained"
 "与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）","Switch immediately when combined with -r (downtime update; does not wait for draining; enable maintenance mode first)"
 "公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）","Public TLS certificate path (Nginx by default; pure WLS with --no-nginx)"
 "公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）","Public TLS private-key path (Nginx by default; pure WLS with --no-nginx)"
 "Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）","Worker process PHP memory_limit (such as 512M, numbers are processed in MB, -1 is unlimited)"
 "Dispatcher 进程 PHP memory_limit（默认跟随 Worker）","Dispatcher process PHP memory_limit (default follows Worker)"
-"运行策略：auto/performance/stability（默认 auto）","运行策略：auto/performance/stability（默认 auto）"
-"事件循环：auto/event/select（默认 auto）","事件循环：auto/event/select（默认 auto）"
+"运行策略：auto/performance/stability（默认 auto）","Running strategy: auto/performance/stability (default auto)"
+"事件循环：auto/event/select（默认 auto）","Event loop: auto/event/select (default auto)"
 "仅为 POSIX Direct 显式安装 ext-event/reuseport 依赖；Windows worker_ports 不需要编译扩展","Explicitly install ext-event/reuseport dependencies only for POSIX Direct; Windows worker_ports requires no compiled extension"
 "已退役：请先单独执行 server:nginx:install；启动路径不会下载或编译","Retired: run server:nginx:install separately first; the startup path never downloads or compiles."
-"WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）","WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）"
-"兼容别名，等价于 --edge=wls","兼容别名，等价于 --edge=wls"
+"WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）","WLS 2.0 edge mode: auto/gateway/wls (default auto)"
+"兼容别名，等价于 --edge=wls","Compatible with aliases, equivalent to --edge=wls"
 "兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用","Compatibility for older scripts: explicitly forbid dependency installation. Normal startup already behaves this way, and this option cannot be combined with --install-deps."
-"Supervisor：auto/true/false（默认 auto）","Supervisor：auto/true/false（默认 auto）"
+"Supervisor：auto/true/false（默认 auto）","Supervisor: auto/true/false (default auto)"
 "直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用","Direct mode: Windows uses independent Worker ports behind Nginx; pure WLS Direct is available only on macOS/Linux"
 "Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断","Dispatcher mode: the default for pure WLS Windows auto; it may be selected explicitly for compatibility or diagnostics elsewhere"
 配置优先级,"Configuration Priority"
 "命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值","Command line arguments > Saved instance configuration > wls.servers.[name] > wls > Default value"
-拓扑优先级,拓扑优先级
-"--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto","--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto"
+拓扑优先级,"Topology priority"
+"--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto","--direct/--dispatcher > current instance wls.runtime.topology > global wls.runtime.topology > auto"
 默认边缘,"Default edge"
-"auto 加入可信 wls-edge/2 网关；无法建立时不接管未知端口 owner，自动分配 20000–29999 纯 WLS 地址","auto 加入可信 wls-edge/2 网关；无法建立时不接管未知端口 owner，自动分配 20000–29999 纯 WLS 地址"
+"auto 加入可信 wls-edge/2 网关；无法建立时不接管未知端口 owner，自动分配 20000–29999 纯 WLS 地址","auto joins the trusted wls-edge/2 gateway; does not take over the unknown port owner when it cannot be established, and automatically assigns 20000–29999 pure WLS addresses"
 启动副作用,"Startup side effects"
-"建立网关前需要显式安装项目钉死版本 Nginx；网关复制到宿主 A/B 槽后不依赖引导项目","建立网关前需要显式安装项目钉死版本 Nginx；网关复制到宿主 A/B 槽后不依赖引导项目"
-多项目支持,多项目支持
-"多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离","多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离"
+"建立网关前需要显式安装项目钉死版本 Nginx；网关复制到宿主 A/B 槽后不依赖引导项目","Before establishing the gateway, you need to explicitly install the project-pinned version of Nginx; the gateway does not depend on the boot project after it is copied to the host A/B slot."
+多项目支持,"Multiple project support"
+"多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离","Multiple projects share hosting 80/443 and are isolated by project UUID, domain name collision checking, generation and lease"
 配置记忆,"Configuration memory"
 "首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用","The first server:start api -p 9981 saves the upstream port; later server:start api runs reuse it automatically"
-"worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算","worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算"
+"worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算","When worker_count is set to ""auto"", it is automatically calculated by OS/CPU/memory by runtime policy."
 事件循环,"Event Loop"
 "Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps","Windows Direct uses built-in stream_select; Linux reuseport/shared_fd and macOS shared_fd Direct use preinstalled ext-event and fail with an explicit --install-deps hint when missing"
 "仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending","Configure QUIC/Alt-Svc only when nginx -V proves ngx_http_v3_module; an available verifier must pass an owner-bound live QUIC request, otherwise status remains explicitly pending."
-默认拓扑,默认拓扑
+默认拓扑,"Default topology"
 "Nginx 模式所有平台 auto 均为 Direct；纯 WLS 的 macOS/Linux 为 Direct，Windows 固定 Dispatcher","Nginx auto uses Direct on every platform; pure WLS uses Direct on macOS/Linux and Dispatcher on Windows"
 多进程,Multi-process
 "优先级：proc_open > pcntl_fork > exec","Priority: proc_open > pcntl_fork > exec"
-"gateway/legacy 由 Nginx 终结；wls 模式由纯 WLS 启用 TLS 1.3","gateway/legacy 由 Nginx 终结；wls 模式由纯 WLS 启用 TLS 1.3"
+"gateway/legacy 由 Nginx 终结；wls 模式由纯 WLS 启用 TLS 1.3","gateway/legacy terminated by Nginx; wls mode enabled by pure WLS TLS 1.3"
 "HTTP 协议","HTTP protocols"
 "Nginx 公网支持 HTTP/3（能力可用时）、HTTP/2、HTTP/1.1；纯 WLS 默认 HTTP/2 并自动回退 HTTP/1.1","Public Nginx supports HTTP/3 when available, HTTP/2, and HTTP/1.1; pure WLS defaults to HTTP/2 and automatically falls back to HTTP/1.1"
 连接复用,"Connection reuse"
@@ -3155,14 +3241,14 @@ HTTP/3,HTTP/3
 "可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker","Can be set via wls.worker_memory_limit or --worker-memory-limit; if wls.dispatcher_memory_limit is not set, it follows the Worker"
 "显式安装 Nginx","Explicitly install Nginx"
 启动默认实例,"Start default instance"
-强制加入共享网关,强制加入共享网关
-"纯 WLS HTTPS","纯 WLS HTTPS"
+强制加入共享网关,"Force joining shared gateway"
+"纯 WLS HTTPS","Pure WLS HTTPS"
 启动命名实例（首次指定回源端口）,"Start a named instance (specify its upstream port the first time)"
 再次启动已配置实例,"Start a configured instance again"
-"Direct 模式","Direct 模式"
-"Dispatcher 模式","Dispatcher 模式"
+"Direct 模式","Direct mode"
+"Dispatcher 模式","Dispatcher mode"
 显式安装依赖后启动,"Explicitly install dependencies and start"
-"Windows 可见窗口","Windows 可见窗口"
+"Windows 可见窗口","Windows visible window"
 平滑重启,"Graceful restart"
 强制重启（停机型更新）,"Force Restart (Shutdown Type Update)"
 "指定 Nginx TLS 证书","Specify the Nginx TLS certificate"
@@ -3175,16 +3261,16 @@ HTTP/3,HTTP/3
 "检查间隔：%{1} 秒","Check interval: %{1} seconds"
 "按 Ctrl+C 停止监控...","Press Ctrl+C to stop monitoring..."
 创建文件监控子进程失败,"Failed to create file monitoring child process"
-"纯 WLS 模式不应进入 Nginx/网关发布阶段。","纯 WLS 模式不应进入 Nginx/网关发布阶段。"
-"WLS 2.0 网关注册后主域 %{1} 未达到 ACTIVE 或受限 challenge-only：%{2}","WLS 2.0 网关注册后主域 %{1} 未达到 ACTIVE 或受限 challenge-only：%{2}"
-"项目已以 PENDING_CERTIFICATE 注册到宿主级 WLS 2.0 Gateway","项目已以 PENDING_CERTIFICATE 注册到宿主级 WLS 2.0 Gateway"
-"主域 %{1} 当前仅开放精确 ACME HTTP-01 challenge；普通 443 路由仍关闭。","主域 %{1} 当前仅开放精确 ACME HTTP-01 challenge；普通 443 路由仍关闭。"
-"项目已注册到宿主级 WLS 2.0 Gateway","项目已注册到宿主级 WLS 2.0 Gateway"
-协议：%{1}，epoch：%{2}，活动路由：%{3},协议：%{1}，epoch：%{2}，活动路由：%{3}
+"纯 WLS 模式不应进入 Nginx/网关发布阶段。","Pure WLS mode should not enter the Nginx/gateway publishing phase."
+"WLS 2.0 网关注册后主域 %{1} 未达到 ACTIVE 或受限 challenge-only：%{2}","After WLS 2.0 gateway registration, the main domain %{1} is not ACTIVE or restricted challenge-only: %{2}"
+"项目已以 PENDING_CERTIFICATE 注册到宿主级 WLS 2.0 Gateway","The project is registered with the host-level WLS 2.0 Gateway with PENDING_CERTIFICATE"
+"主域 %{1} 当前仅开放精确 ACME HTTP-01 challenge；普通 443 路由仍关闭。","The main domain %{1} is currently only open to the precise ACME HTTP-01 challenge; the normal 443 route is still closed."
+"项目已注册到宿主级 WLS 2.0 Gateway","The project is registered to the host-level WLS 2.0 Gateway"
+协议：%{1}，epoch：%{2}，活动路由：%{3},"Protocol: %{1}, epoch: %{2}, active route: %{3}"
 "运行态实例不是 Nginx-only 边缘，已拒绝发布。","The runtime instance is not a Nginx-only edge; publication was refused."
 "Nginx-only 默认启动要求 wls.edge.nginx.managed=true。","Default Nginx-only startup requires wls.edge.nginx.managed=true."
 "Nginx-only 默认启动要求 wls.edge.nginx.auto_start=true。","Default Nginx-only startup requires wls.edge.nginx.auto_start=true."
-"托管 Nginx 启动失败：%{1}","托管 Nginx 启动失败：%{1}"
+"托管 Nginx 启动失败：%{1}","Hosted Nginx startup failed: %{1}"
 "托管 Nginx 启动成功但缺少已验证的公网端点详情。","Managed Nginx started successfully but lacks verified public endpoint details."
 "托管 Nginx 未同时通过 TLS 1.3、HTTP/2 与 HTTP/1.1 真实门禁。","Managed Nginx did not pass the live TLS 1.3, HTTP/2, and HTTP/1.1 gates together."
 "托管 Nginx 返回了无效的公网监听端口。","Managed Nginx returned an invalid public listen port."
@@ -3193,28 +3279,28 @@ HTTP/3,HTTP/3
 "边缘 HTTPS %{1} → WLS %{2}","Edge HTTPS %{1} → WLS %{2}"
 公网已验证协议：%{1},"Verified public protocols: %{1}"
 "Nginx HTTP/3 已配置并发布 Alt-Svc，但真实 QUIC 请求门禁仍为 pending。","Nginx HTTP/3 is configured and publishes Alt-Svc, but the live QUIC request gate is still pending."
-"托管 Nginx 启动异常：%{1}","托管 Nginx 启动异常：%{1}"
+"托管 Nginx 启动异常：%{1}","Hosted Nginx startup exception: %{1}"
 "Weline Server 启动完成！","Weline Server Startup Completed!"
 "Weline Server 启动失败","Weline Server Startup Failed"
-"--edge 仅允许 auto、gateway 或 wls；legacy 只保留给已保存的 WLS 1.x 实例。","--edge 仅允许 auto、gateway 或 wls；legacy 只保留给已保存的 WLS 1.x 实例。"
+"--edge 仅允许 auto、gateway 或 wls；legacy 只保留给已保存的 WLS 1.x 实例。","--edge only allows auto, gateway, or wls; legacy is reserved only for saved WLS 1.x instances."
 证书持久层恢复失败，已跳过并继续启动：%{1},"Certificate store restore failed; skipped and continuing startup: %{1}"
 "SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动","The SSL certificate file does not exist: %{1}, the invalid configuration has been cleared, please restart"
 "SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动","The SSL private key file does not exist: %{1}, the invalid configuration has been cleaned up, please restart"
-"WLS 2.0 网关注册完成但没有 ACTIVE 路由：%{1}","WLS 2.0 网关注册完成但没有 ACTIVE 路由：%{1}"
+"WLS 2.0 网关注册完成但没有 ACTIVE 路由：%{1}","WLS 2.0 gateway registration complete but no ACTIVE route: %{1}"
 "所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux 自动优先 reuseport 并在能力不可用时回退 shared_fd，macOS 使用 shared_fd。","All platforms let project-managed Nginx load-balance directly to Workers: per-Worker ports on Windows, reuseport first with shared_fd fallback on Linux, and shared_fd on macOS."
 "所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux 优先已验证 reuseport 并回退 shared_fd，macOS 使用 shared_fd。","Auto selects Direct on every platform: Nginx-balanced per-Worker ports on Windows, verified reuseport first with shared_fd fallback on Linux, and shared_fd on macOS."
 "Linux/Mac: pecl install event && echo ""extension=event"" >> php.ini","Linux/Mac: pecl install event && echo ""extension=event"" >> php.ini"
-"共享网关：已将当前项目路由置为 DRAINING；网关本身与其他项目保持运行。","共享网关：已将当前项目路由置为 DRAINING；网关本身与其他项目保持运行。"
-"宿主级 WLS 2.0 Gateway 正在停止。","宿主级 WLS 2.0 Gateway 正在停止。"
-"旧 Nginx 未安全停止，提升已中止：%{1}","旧 Nginx 未安全停止，提升已中止：%{1}"
-确认公共端口所有权切换,确认公共端口所有权切换
-"提升失败时使用冻结的 owner/upstream/server_name 快照恢复旧 Nginx。","提升失败时使用冻结的 owner/upstream/server_name 快照恢复旧 Nginx。"
-升级失败,升级失败
-"WLS 2.0 Gateway 已切换到候选 A/B 槽；五分钟崩溃循环将自动回滚。","WLS 2.0 Gateway 已切换到候选 A/B 槽；五分钟崩溃循环将自动回滚。"
-附加项目内证书目录，可重复,附加项目内证书目录，可重复
-"轮换项目身份会生成新的 UUID；请同时提供 --confirm。","轮换项目身份会生成新的 UUID；请同时提供 --confirm。"
-"当前项目已授权到 WLS 2.0 宿主网关。","当前项目已授权到 WLS 2.0 宿主网关。"
-"确认项目 UUID 轮换","确认项目 UUID 轮换"
+"共享网关：已将当前项目路由置为 DRAINING；网关本身与其他项目保持运行。","Shared Gateway: Current project routing has been set to DRAINING; the gateway itself remains running with other projects."
+"宿主级 WLS 2.0 Gateway 正在停止。","Host-level WLS 2.0 Gateway is stopping."
+"旧 Nginx 未安全停止，提升已中止：%{1}","Old Nginx was not safely stopped, promotion aborted: %{1}"
+确认公共端口所有权切换,"Confirm public port ownership switch"
+"提升失败时使用冻结的 owner/upstream/server_name 快照恢复旧 Nginx。","Restore old Nginx using frozen owner/upstream/server_name snapshot when promotion fails."
+升级失败,"Upgrade failed"
+"WLS 2.0 Gateway 已切换到候选 A/B 槽；五分钟崩溃循环将自动回滚。","WLS 2.0 Gateway has switched to candidate A/B slot; the five-minute crash loop will automatically roll back."
+附加项目内证书目录，可重复,"Additional certificate directory within the project, repeatable"
+"轮换项目身份会生成新的 UUID；请同时提供 --confirm。","Rotating the project identity generates a new UUID; please also provide --confirm."
+"当前项目已授权到 WLS 2.0 宿主网关。","The current project is licensed to a WLS 2.0 hosting gateway."
+"确认项目 UUID 轮换","Confirm project UUID rotation"
 "是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:","Force terminate the process and release the HTTP redirect port %{1}? [y/N]:"
 "- Windows: taskkill /F /PID %{1}","- Windows: taskkill /F /PID %{1}"
 "- Linux/macOS: kill -9 %{1}","- Linux/macOS: kill -9 %{1}"
@@ -3236,7 +3322,7 @@ HTTP/3,HTTP/3
 "WLS 与托管 Nginx 均已就绪，启动完成。","WLS and managed Nginx are both ready; startup is complete."
 "当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker","Dispatcher is explicitly enabled; on every platform, auto/direct lets Nginx balance directly to Workers"
 "Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制","Windows uses per-Worker loopback ports, Linux auto prefers reuseport with shared_fd fallback, and macOS uses shared_fd; removing the PHP relay avoids one scheduling and copy hop"
-"移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","移除 --dispatcher，或配置 wls.runtime.topology = auto/direct"
+"移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","Remove --dispatcher, or configure wls.runtime.topology = auto/direct"
 "Nginx 公网 TLS 证书文件路径","Nginx public TLS certificate file path"
 "Nginx 公网 TLS 私钥文件路径","Nginx public TLS private-key file path"
 "直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd","Direct mode: Nginx balances independent Worker ports on Windows; Linux auto prefers reuseport with shared_fd fallback; macOS uses shared_fd"
@@ -3272,62 +3358,9 @@ Nginx-only,Nginx-only
 "默认由 Nginx 终结；--no-nginx 时由纯 WLS 默认启用 TLS 1.3","Terminated by Nginx by default; with --no-nginx, pure WLS enables TLS 1.3 by default"
 "公网访问由宿主级 WLS 2.0 Gateway 提供。","Public access is provided by the host-level WLS 2.0 Gateway."
 "公网访问必须经过项目托管 Nginx。","All public access must pass through the project-managed Nginx."
-"不支持的 WLS 面板生命周期操作：%{1}","不支持的 WLS 面板生命周期操作：%{1}"
-"WLS 面板生命周期","WLS 面板生命周期"
-"在后台权限与项目边界内控制 WLS 重载和重启","在后台权限与项目边界内控制 WLS 重载和重启"
-后台操作员不可用,后台操作员不可用
-"无权执行 WLS 面板生命周期操作","无权执行 WLS 面板生命周期操作"
-WLS,WLS
-不可控制,不可控制
-"当前项目无法从此面板控制 WLS。","当前项目无法从此面板控制 WLS。"
-未绑定实例,未绑定实例
-重载,重载
-"WLS 生命周期控制","WLS 生命周期控制"
-"WLS 生命周期","WLS 生命周期"
-"重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。","重载会滚动更新代码；重启会保持 Master 在线并重建全部工作进程。"
-"Worker 代际","Worker 代际"
-"Ready Worker","Ready Worker"
-重载项目,重载项目
-重启工作进程,重启工作进程
-打开项目面板,打开项目面板
-高风险操作,高风险操作
-"重启 WLS 工作进程","重启 WLS 工作进程"
-"重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。","重启会保持 Master 在线，但会重建该项目的全部 Worker 与辅助服务。请确认项目和实例后继续。"
-输入项目名称以确认,输入项目名称以确认
-输入上方项目名称,输入上方项目名称
-确认重启,确认重启
-"WLS 后台业务 API 尚未加载。","WLS 后台业务 API 尚未加载。"
-"WLS 生命周期操作失败。","WLS 生命周期操作失败。"
-正在提交项目重载…,正在提交项目重载…
-正在提交项目重启…,正在提交项目重启…
-"操作已提交，正在等待实例恢复到 Ready…","操作已提交，正在等待实例恢复到 Ready…"
-"项目重载完成，实例已恢复到 Ready。","项目重载完成，实例已恢复到 Ready。"
-"项目重启完成，Master 保持在线且工作进程已恢复到 Ready。","项目重启完成，Master 保持在线且工作进程已恢复到 Ready。"
-"操作已提交，但等待 Ready 超时；请继续查看实例状态。","操作已提交，但等待 Ready 超时；请继续查看实例状态。"
-输入的项目名称不匹配。,输入的项目名称不匹配。
-"当前项目不支持从此面板控制 WLS。","当前项目不支持从此面板控制 WLS。"
-"WLS Master 控制通道不可用。","WLS Master 控制通道不可用。"
-重载中,重载中
-恢复中,恢复中
-"WLS 实例已就绪。","WLS 实例已就绪。"
-"WLS 正在重载，请等待恢复到 Ready。","WLS 正在重载，请等待恢复到 Ready。"
-"WLS 尚未完全就绪。","WLS 尚未完全就绪。"
-该项目不可控制。,该项目不可控制。
-"WLS Master 未运行，无法提交操作。","WLS Master 未运行，无法提交操作。"
-该实例已有生命周期操作正在执行。,该实例已有生命周期操作正在执行。
-项目名称确认不匹配，已取消重启。,项目名称确认不匹配，已取消重启。
-该实例的生命周期操作正在提交，请稍后重试。,该实例的生命周期操作正在提交，请稍后重试。
-"WLS 重启已提交；Master 保持在线，正在重建全部工作进程。","WLS 重启已提交；Master 保持在线，正在重建全部工作进程。"
-"WLS 重载已提交，正在滚动更新工作进程。","WLS 重载已提交，正在滚动更新工作进程。"
-"WLS 生命周期操作提交失败。","WLS 生命周期操作提交失败。"
-"WLS 项目标识无效。","WLS 项目标识无效。"
-托管项目不存在。,托管项目不存在。
-"托管项目已停用，不能执行 WLS 生命周期操作。","托管项目已停用，不能执行 WLS 生命周期操作。"
-"该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。","该项目使用独立控制面，请进入它自己的 WLS 面板执行重载或重启。"
-"无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。","无法唯一识别该项目的 WLS 实例，请先确认实例正在运行。"
 "滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）","Rolling drain restart: Master stays running; Orchestrator replaces Workers in batches (default three batches)"
 "与 -r 同用时强制完整重启（停 Master，跳过排水等待）","With -r: force full restart (stop Master, skip drain wait)"
 "检测到端口/拓扑/Worker/SSL 等启动参数变更，start -r 将自动切换为完整重启。","Startup args changed (port/topology/worker/SSL); start -r will perform a full generation restart."
 "检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...","Server already running; full generation restart: enable maintenance and drain all Workers before switching..."
-"滚动排水重启","Rolling drain restart"
-"强制完整重启","Force full restart"
+滚动排水重启,"Rolling drain restart"
+强制完整重启,"Force full restart"

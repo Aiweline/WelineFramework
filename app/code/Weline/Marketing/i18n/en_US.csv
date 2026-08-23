@@ -1,45 +1,49 @@
 ﻿加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
-加载促销活动表单失败：%{1},加载促销活动表单失败：%{1}
-促销活动保存成功,促销活动保存成功
-保存促销活动失败：%{1},保存促销活动失败：%{1}
-促销活动,促销活动
-促销活动管理,促销活动管理
-活动列表,活动列表
-查看促销活动列表,查看促销活动列表
-添加促销活动,添加促销活动
-打开促销活动新建表单,打开促销活动新建表单
-保存促销活动,保存促销活动
+加载促销活动表单失败：%{1},"Failed to load promotion form: %{1}"
+促销活动保存成功,"Promotion saved successfully"
+保存促销活动失败：%{1},"Failed to save promotion: %{1}"
+促销活动,promotions
+circle,circle
+促销活动管理,"Promotional event management"
+活动列表,"Activity list"
+list,list
+查看促销活动列表,"View a list of promotions"
+添加促销活动,"Add promotion"
+plus,plus
+打开促销活动新建表单,"Open the new promotion form"
+保存促销活动,"Save promotion"
+save,save
 加载规则列表失败：%{1},"Failed to load rule list: %{1}"
 加载规则表单失败：%{1},"Failed to load rule form: %{1}"
-规则名称和有效类型不能为空,规则名称和有效类型不能为空
-规则状态无效,规则状态无效
+规则名称和有效类型不能为空,"Rule name and valid type cannot be empty"
+规则状态无效,"Rule status is invalid"
 规则保存成功,"Rule saved successfully"
 保存规则失败：%{1},"Failed to save rule: %{1}"
 营销规则,"Marketing Rule"
-营销规则管理,营销规则管理
+营销规则管理,"Marketing rule management"
 规则列表,"Rule List"
-查看营销规则列表,查看营销规则列表
+查看营销规则列表,"View a list of marketing rules"
 添加规则,"Add Rule"
-添加营销规则,添加营销规则
-保存规则,保存规则
-保存营销规则,保存营销规则
+添加营销规则,"Add marketing rules"
+保存规则,"save rule"
+保存营销规则,"Save marketing rules"
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
-加载优惠券表单失败：%{1},加载优惠券表单失败：%{1}
-优惠券保存成功,优惠券保存成功
-保存优惠券失败：%{1},保存优惠券失败：%{1}
+加载优惠券表单失败：%{1},"Failed to load coupon form: %{1}"
+优惠券保存成功,"Coupon saved successfully"
+保存优惠券失败：%{1},"Failed to save coupon: %{1}"
 优惠券管理,"Coupon Management"
 优惠券列表,"Coupon List"
-查看优惠券列表,查看优惠券列表
+查看优惠券列表,"View coupon list"
 添加优惠券,"Add Coupon"
-打开优惠券新建表单,打开优惠券新建表单
-保存优惠券,保存优惠券
+打开优惠券新建表单,"Open the coupon creation form"
+保存优惠券,"Save Coupon"
 优惠券代码不能为空,"Coupon Code Cannot Be Empty"
 优惠券无效或已过期,"Coupon is invalid or expired"
 免运费,"Free Shipping"
 免除订单运费,"Free shipping for order"
 百分比折扣,"Percentage Discount"
 按百分比折扣，支持设置最大折扣金额,"Percentage discount with maximum discount amount support"
-"享受 %.2f%% 折扣，优惠 %.2f 元","享受 %.2f%% 折扣，优惠 %.2f 元"
+"享受 %.2f%% 折扣，优惠 %.2f 元","Enjoy %.2f%% discount, save %.2f yuan"
 折扣百分比,"Discount Percentage"
 最大折扣金额,"Maximum Discount Amount"
 应用于,"Apply To"
@@ -47,9 +51,9 @@
 运费,Shipping
 买X送Y,"Buy X Get Y"
 购买X件商品，赠送Y件商品（或折扣）,"Buy X items, get Y items (or discount)"
-"买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元","买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元"
-"买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元","买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元"
-"买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元","买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元"
+"买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元","Buy %d and get %d for free. A total of %d products will be given away, with a discount of %.2f yuan."
+"买 %d 送 %d，享受 %.2f%% 折扣，优惠 %.2f 元","Buy %d and get %d free, enjoy %.2f%% discount, %.2f yuan discount"
+"买 %d 送 %d，每次优惠 %.2f 元，共优惠 %.2f 元","Buy %d and get %d free, discount %.2f yuan each time, total discount %.2f yuan"
 购买数量（X）,"Buy Quantity (X)"
 赠送数量（Y）,"Get Quantity (Y)"
 赠送类型,"Gift Type"
@@ -57,11 +61,11 @@
 固定金额折扣,"Fixed Amount Discount"
 折扣值（百分比或金额）,"Discount Value (Percentage or Amount)"
 按固定金额折扣,"Fixed amount discount"
-"优惠 %.2f 元","优惠 %.2f 元"
+"优惠 %.2f 元","Discount %.2f yuan"
 折扣金额,"Discount Amount"
 赠品产品,"Gift Product"
 赠送指定产品,"Gift specified product"
-"赠送产品 ID: %d，数量: %d","赠送产品 ID: %d，数量: %d"
+"赠送产品 ID: %d，数量: %d","Free product ID: %d, quantity: %d"
 产品ID,"Product ID"
 数量,Quantity
 支付方式,"Payment Method"
@@ -189,25 +193,25 @@ ID,ID
 使用次数,"Usage Count"
 操作,Action
 编辑,Edit
-新建优惠券,新建优惠券
-返回列表,返回列表
-请选择,请选择
-优惠类型,优惠类型
-固定金额,固定金额
-赠品,赠品
+新建优惠券,"Create new coupon"
+返回列表,"Return to list"
+请选择,"Please select"
+优惠类型,"Offer type"
+固定金额,"fixed amount"
+赠品,giveaway
 启用,Enable
 禁用,Disable
-最低订单金额,最低订单金额
-总使用次数,总使用次数
-每客户次数,每客户次数
+最低订单金额,"Minimum order amount"
+总使用次数,"total number of uses"
+每客户次数,"times per customer"
 规则管理,"Rule Management"
 规则名称,"Rule Name"
 优先级,Priority
-新建营销规则,新建营销规则
-规则描述,规则描述
-规则类型,规则类型
-自动规则,自动规则
-已过期,已过期
+新建营销规则,"Create new marketing rules"
+规则描述,"Rule description"
+规则类型,"Rule type"
+自动规则,"Automated rules"
+已过期,Expired
 促销活动列表,"Campaign List"
 添加活动,"Add Campaign"
 活动名称,"Campaign Name"
@@ -215,15 +219,15 @@ ID,ID
 结束时间,"End time"
 预算,Budget
 已花费,Spent
-新建促销活动,新建促销活动
-活动描述,活动描述
-草稿,草稿
-暂停,暂停
-活动名称和有效营销规则不能为空,活动名称和有效营销规则不能为空
-活动状态无效,活动状态无效
-活动结束时间必须晚于开始时间,活动结束时间必须晚于开始时间
-活动预算不能为负数,活动预算不能为负数
-优惠券必须绑定有效营销规则,优惠券必须绑定有效营销规则
-优惠券类型无效,优惠券类型无效
-优惠券状态无效,优惠券状态无效
-优惠券代码已存在,优惠券代码已存在
+新建促销活动,"Create new promotion"
+活动描述,"Activity description"
+草稿,draft
+暂停,pause
+活动名称和有效营销规则不能为空,"Campaign name and active marketing rules cannot be empty"
+活动状态无效,"Activity status is invalid"
+活动结束时间必须晚于开始时间,"Event end time must be later than start time"
+活动预算不能为负数,"Campaign budget cannot be negative"
+优惠券必须绑定有效营销规则,"Coupons must be bound to valid marketing rules"
+优惠券类型无效,"Invalid coupon type"
+优惠券状态无效,"Coupon status is invalid"
+优惠券代码已存在,"Coupon code already exists"

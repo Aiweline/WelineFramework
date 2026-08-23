@@ -6,6 +6,9 @@
  * @meta.name {default="暗色主题颜色",name="暗色主题颜色",description="暗色主题颜色，用于描述色系的名称"}
  * @meta.description {default="暗色主题的颜色覆盖，提供深色背景和浅色文本",name="暗色主题的颜色覆盖，提供深色背景和浅色文本",description="暗色主题的颜色覆盖，提供深色背景和浅色文本，用于描述色系的用途"}
  * @meta.theme {default="dark",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
+ * @meta.palette_role {default="mode",name="palette_role",description="palette_role"}
  */
 
 [data-theme="dark"] {
@@ -64,7 +67,7 @@
 
 /* Complete semantic dark palette; every global component consumes these tokens. */
 [data-theme="dark"],
-[data-bs-theme="dark"] {
+[data-theme="dark"] {
     --color-text: #e5e7eb; --color-text-primary: var(--color-text); --color-text-secondary: #cbd5e1; --color-text-tertiary: #94a3b8; --color-text-muted: #94a3b8; --color-text-disabled: #64748b; --color-text-placeholder: #94a3b8; --color-text-inverse: #0f172a;
     --color-bg-canvas: #020617; --color-bg-primary: #0f172a; --color-bg-secondary: #172033; --color-bg-tertiary: #1e293b; --color-surface: var(--color-bg-primary); --color-surface-subtle: var(--color-bg-secondary); --color-surface-muted: var(--color-bg-tertiary);
     --color-border-default: #64748b; --color-border-subtle: #475569; --color-border-strong: #94a3b8; --color-border-focus: #93c5fd;

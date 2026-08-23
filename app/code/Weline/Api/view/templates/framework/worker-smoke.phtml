@@ -1,0 +1,31 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$runtime = is_array($runtime ?? null) ? $runtime : [];
+$flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP
+    | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+?>
+<!doctype html>
+<html lang="en" data-w-area="frontend" data-theme-preference="system" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <title>Weline Frontend Worker API Smoke</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <script type="application/json" data-weline-runtime-config><?= json_encode($runtime, $flags) ?: '{}' ?></script>
+    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/weline-foundation.css">
+    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/weline-frontend.css">
+    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/pages/weline-api-worker-smoke.css">
+    <script src="/Weline/Frontend/view/statics/js/runtime.js"></script>
+    <script src="/Weline/Frontend/view/statics/js/weline-api-business.js"></script>
+    <script src="/Weline/Frontend/view/statics/js/weline.js"></script>
+    <script type="module" src="/Weline/Theme/view/statics/ui/weline-ui.js"></script>
+    <script type="module" src="/Weline/Theme/view/statics/ui/pages/weline-api-worker-smoke.js"></script>
+</head>
+<body>
+    <main class="w-container w-api-worker-smoke">
+        <section class="w-card">
+            <div class="w-card__header"><h1 class="w-card__title">Weline Frontend Worker API Smoke</h1></div>
+            <div class="w-card__body"><pre class="w-api-worker-smoke__result" data-worker-smoke-result>running</pre></div>
+        </section>
+    </main>
+</body>
+</html>

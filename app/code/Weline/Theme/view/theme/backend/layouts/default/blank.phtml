@@ -1,59 +1,24 @@
 <?php
 /**
- * Backend blank layout.
- *
- * @meta.name {default="Backend Blank Layout",name="Backend Blank Layout",description="Blank backend layout without menus or footer."}
- * @meta.description {default="Blank backend layout for iframe, offcanvas, and popup pages.",name="Blank backend layout",description="Blank backend layout for iframe, offcanvas, and popup pages."}
- * @param.title {default="",name="Page Title",description="Page title"}
- * @param.content {default="",name="Content",description="Main content HTML"}
- * @param.class {default="",name="Extra CSS Class",description="Extra CSS class"}
- *
+ * @meta.name {default="Weline UI 2.0 后台空白布局",name="Weline UI 2.0 后台空白布局"}
+ * @meta.description {default="Backend content without navigation chrome.",name="不含导航壳层的后台内容布局"}
+ * @param.class {default="",name="额外 Weline CSS 类"}
  * @var \Weline\Framework\View\Template $this
  */
-
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
-$meta = $this->getData('meta') ?? [];
-$extraClass = $meta['class'] ?? '';
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$classes = array_values(array_filter(preg_split('/\s+/', trim((string)($meta['class'] ?? ''))) ?: [], static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1));
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme-area="backend" <?= $themeConfig->getThemeHtmlAttributes() ?><?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" <?= $themeConfig->getThemeHtmlAttributes() ?><?= $themeConfig->getThemeModel() === 'rtl' ? ' dir="rtl"' : '' ?>>
 <head>
-    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
     <w:template>Weline_Admin::common/head.phtml</w:template>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
-    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::backend::layouts::blank::head-after</w:hook>
-
-    <style>
-    body {
-        margin: 0;
-        padding: 0;
-        background-color: var(--backend-theme-surface);
-        color: var(--backend-theme-text);
-    }
-
-    .backend-blank-content {
-        padding: var(--backend-spacing-md, 16px);
-    }
-    </style>
 </head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-    <w:hook>Weline_Theme::backend::layouts::base::body-start</w:hook>
+<body>
     <w:hook>Weline_Theme::backend::layouts::blank::body-start</w:hook>
-    <w:hook>Weline_Theme::backend::layouts::blank::content-before</w:hook>
-
-    <?php
-    $layoutMainClass = trim('backend-blank-content ' . (string)$extraClass);
-    echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
-    ?>
-
-    <w:hook>Weline_Theme::backend::layouts::blank::content-after</w:hook>
-
-    <w:hook>Weline_Theme::backend::layouts::base::scripts-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="backend" type="scripts" default-option="default"/>
-    <w:hook>Weline_Theme::backend::layouts::base::scripts-after</w:hook>
-
+    <?php $layoutMainClass = trim('w-backend-page w-backend-standalone__content ' . implode(' ', $classes)); echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml'); ?>
     <w:hook>Weline_Theme::backend::layouts::blank::body-end</w:hook>
-    <w:hook>Weline_Theme::backend::layouts::base::body-end</w:hook>
 </body>
 </html>

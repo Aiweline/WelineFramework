@@ -64,6 +64,8 @@ class CmsPageTargetTypeProvider implements TargetTypeProviderInterface, TargetPr
         $payload = $this->pageService->renderPagePayload([
             'page_id' => $targetId,
             'scope' => (string)($context['scope'] ?? ''),
+            'store_id' => (int)($context['store_id'] ?? 0),
+            'locale_code' => (string)($context['locale_code'] ?? $context['locale'] ?? ''),
             'preview' => true,
         ]);
 

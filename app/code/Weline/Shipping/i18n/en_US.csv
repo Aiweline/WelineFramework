@@ -24,82 +24,95 @@
 启用成功,"Enabled successfully"
 禁用成功,"Disabled successfully"
 发货地址管理,"Shipping Address Management"
-查看发货地址,查看发货地址
-查看发货地址列表,查看发货地址列表
+pin,pin
+查看发货地址,"View shipping address"
+list,list
+查看发货地址列表,"View a list of shipping addresses"
 编辑发货地址,"Edit Shipping Address"
-保存发货地址,保存发货地址
-删除发货地址,删除发货地址
-设置默认发货地址,设置默认发货地址
-启用发货地址,启用发货地址
-禁用发货地址,禁用发货地址
-"仅允许 POST 请求。","仅允许 POST 请求。"
-配送服务创建成功。,配送服务创建成功。
-配送服务管理,配送服务管理
-查看配送服务,查看配送服务
-查看配送服务列表,查看配送服务列表
-保存配送服务,保存配送服务
-创建配送服务,创建配送服务
+edit,edit
+保存发货地址,"Save shipping address"
+save,save
+删除发货地址,"Delete shipping address"
+trash,trash
+设置默认发货地址,"Set default shipping address"
+star,star
+启用发货地址,"Enable shipping address"
+check,check
+禁用发货地址,"Disable shipping address"
+close,close
+"仅允许 POST 请求。","Only POST requests are allowed."
+配送服务创建成功。,"Delivery service created successfully."
+配送服务管理,"Delivery service management"
+truck,truck
+查看配送服务,"View delivery services"
+查看配送服务列表,"View a list of delivery services"
+保存配送服务,"Save delivery service"
+创建配送服务,"Create a shipping service"
 地区编辑功能暂未开放，请通过数据库或后续版本管理。,"Region editing is not yet available. Please manage via the database or a future version."
-地区创建成功。,地区创建成功。
+地区创建成功。,"Region created successfully."
 同步完成，新增国家数量：%{1},"Sync completed, number of new countries: %{1}"
 同步失败：%{1},"Sync failed: %{1}"
 地区管理,"Region Management"
-查看地区,查看地区
-查看地区列表,查看地区列表
-编辑地区,编辑地区
-保存地区,保存地区
-创建地区,创建地区
-同步国家数据,同步国家数据
-从i18n同步国家数据,从i18n同步国家数据
+查看地区,"View area"
+查看地区列表,"View list of regions"
+编辑地区,"Edit region"
+保存地区,"save area"
+创建地区,"Create a region"
+同步国家数据,"Synchronize country data"
+globe,globe
+从i18n同步国家数据,"Sync country data from i18n"
 快递公司不存在,"Courier company does not exist"
 快递公司代码不能为空,"Carrier code cannot be empty"
 快递公司名称不能为空,"Carrier name cannot be empty"
 物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"
 快递公司代码已存在,"Carrier code already exists"
 API配置JSON格式错误,"API configuration JSON format error"
-快递公司管理,快递公司管理
-查看快递公司,查看快递公司
-查看快递公司列表,查看快递公司列表
+快递公司管理,"Express company management"
+查看快递公司,"View courier companies"
+查看快递公司列表,"View list of courier companies"
 编辑快递公司,"Edit Carrier"
-保存快递公司,保存快递公司
-删除快递公司,删除快递公司
-切换快递公司状态,切换快递公司状态
-切换快递公司启用/禁用状态,切换快递公司启用/禁用状态
-费用模板创建成功。,费用模板创建成功。
-费用模板管理,费用模板管理
-查看费用模板,查看费用模板
-查看费用模板列表,查看费用模板列表
-保存费用模板,保存费用模板
-创建费用模板,创建费用模板
-物流跟踪管理,物流跟踪管理
-查看物流跟踪,查看物流跟踪
-查看物流跟踪记录,查看物流跟踪记录
-免邮规则创建成功。,免邮规则创建成功。
-免邮规则管理,免邮规则管理
-查看免邮规则,查看免邮规则
-查看免邮规则列表,查看免邮规则列表
-保存免邮规则,保存免邮规则
-创建免邮规则,创建免邮规则
+保存快递公司,"Save courier company"
+删除快递公司,"Delete courier company"
+切换快递公司状态,"Switch courier company status"
+circle,circle
+切换快递公司启用/禁用状态,"Switch courier company enable/disable status"
+费用模板创建成功。,"The expense template is created successfully."
+费用模板管理,"Expense template management"
+查看费用模板,"View fee template"
+查看费用模板列表,"View a list of fee templates"
+保存费用模板,"Save expense template"
+创建费用模板,"Create expense template"
+物流跟踪管理,"Logistics tracking management"
+search,search
+查看物流跟踪,"View logistics tracking"
+查看物流跟踪记录,"View logistics tracking records"
+免邮规则创建成功。,"Free shipping rule created successfully."
+免邮规则管理,"Free shipping rule management"
+查看免邮规则,"View free shipping rules"
+查看免邮规则列表,"View the list of free shipping rules"
+保存免邮规则,"Save free shipping rules"
+创建免邮规则,"Create a free shipping rule"
 配送系统,"Shipping System"
-配送系统管理聚合页,配送系统管理聚合页
-查看配送系统,查看配送系统
-查看配送系统聚合页,查看配送系统聚合页
-配送区域创建成功。,配送区域创建成功。
-配送区域管理,配送区域管理
-查看配送区域,查看配送区域
-查看配送区域列表,查看配送区域列表
-保存配送区域,保存配送区域
-创建配送区域,创建配送区域
+配送系统管理聚合页,"Delivery system management aggregation page"
+查看配送系统,"View delivery system"
+grid,grid
+查看配送系统聚合页,"View the delivery system aggregation page"
+配送区域创建成功。,"The delivery area is created successfully."
+配送区域管理,"Delivery area management"
+查看配送区域,"View delivery area"
+查看配送区域列表,"View a list of delivery areas"
+保存配送区域,"Save shipping area"
+创建配送区域,"Create shipping area"
 客户ID不能为空,"Customer ID cannot be empty"
 运送地址管理,"Shipping address management"
-查看运送地址,查看运送地址
-查看运送地址列表,查看运送地址列表
+查看运送地址,"View shipping address"
+查看运送地址列表,"View a list of shipping addresses"
 编辑运送地址,"Edit Delivery Address"
-保存运送地址,保存运送地址
-删除运送地址,删除运送地址
-设置默认运送地址,设置默认运送地址
-启用运送地址,启用运送地址
-禁用运送地址,禁用运送地址
+保存运送地址,"Save shipping address"
+删除运送地址,"Delete shipping address"
+设置默认运送地址,"Set default shipping address"
+启用运送地址,"Enable shipping address"
+禁用运送地址,"Disable shipping address"
 待发货,Pending
 运输中,"In Transit"
 已送达,Delivered
@@ -149,7 +162,7 @@ API配置JSON格式错误,"API configuration JSON format error"
 街道、门牌号、仓库或收件说明,"Street, House Number, Warehouse, or Delivery Instructions"
 联系人,Contact
 收货人,Recipient
-确认操作,确认操作
+确认操作,"Confirm action"
 确定,Confirm
 操作失败,"Operation failed"
 确定要设置为默认地址吗？,"Are you sure you want to set this as the default address?"
@@ -209,36 +222,36 @@ ID,ID
 选项,Options
 返回,Back
 配送区域,"Shipping Zone"
-新增配送区域,新增配送区域
+新增配送区域,"Add new delivery area"
 区域名称,"Region Name"
 区域代码,"Region Code"
-描述,描述
+描述,describe
 排序,Sort
-创建,创建
+创建,create
 配送区域列表,"Shipping area list"
 当前暂无配送区域，请后续在此页面完善配置。,"There are currently no delivery zones configured. Please complete the configuration on this page later."
 费用模板,"Rate Template"
-新增费用模板,新增费用模板
+新增费用模板,"Add expense template"
 模板名称,"Template name"
 模板代码,"Template code"
 计算类型,"Calculation type"
-固定费用,固定费用
-按重量,按重量
-按体积,按体积
-按件数,按件数
-基础费用,基础费用
-货币,货币
+固定费用,"fixed fee"
+按重量,"by weight"
+按体积,"by volume"
+按件数,"By number of pieces"
+基础费用,"Basic fee"
+货币,currency
 费用模板列表,"Fee template list"
 当前暂无费用模板配置，请后续在此页面完善配置。,"There are currently no fee templates configured. Please complete the configuration on this page later."
-配送总览,配送总览
+配送总览,"Shipping overview"
 配送管理,"Shipping Management"
 快递公司,Carrier
 免邮规则,"Free Shipping Rule"
 配送服务,"Shipping Service"
 物流跟踪,Tracking
 确定要从i18n同步国家数据吗？,"Are you sure you want to sync country data from i18n?"
-新增地区,新增地区
-国家代码,国家代码
+新增地区,"Add new area"
+国家代码,"country code"
 地区代码,"Region Code"
 地区名称,"Region Name"
 类型,Type
@@ -246,30 +259,30 @@ ID,ID
 从i18n同步国家,"Sync countries from i18n"
 当前国家暂无地区数据，请先从i18n同步或手动添加。,"No region data for the current country. Please sync from i18n or add manually."
 物流跟踪记录列表,"Tracking Record List"
-物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。,物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。
+物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。,"Logistics tracking records are generated by the shipment and carrier inquiry process. This workbench is only used for audit viewing."
 当前暂无物流跟踪记录。,"There are currently no logistics tracking records."
 物流单号,"Tracking Number"
 快递公司ID,"Courier Company ID"
 当前位置,"Current location"
 最后查询时间,"Last query time"
-新增配送服务,新增配送服务
+新增配送服务,"New delivery service"
 服务名称,"Service name"
 服务代码,"Service code"
-请选择,请选择
-最少天数,最少天数
-最多天数,最多天数
+请选择,"Please select"
+最少天数,"Minimum number of days"
+最多天数,"Maximum number of days"
 配送服务列表,"Shipping service list"
 当前暂无配送服务配置，请后续在此页面完善配置。,"There are currently no delivery service configurations. Please complete the configuration on this page later."
 区域ID,"Region ID"
 发货地址列表,"Shipping Address List"
 全部状态,"All Status"
 请输入联系人姓名,"Please enter contact name"
-新增免邮规则,新增免邮规则
+新增免邮规则,"Add free shipping rules"
 规则名称,"Rule Name"
 规则代码,"Rule Code"
 条件类型,"Condition type"
-订单金额,订单金额
-最低金额,最低金额
+订单金额,"Order amount"
+最低金额,"Minimum amount"
 优先级,Priority
 免邮规则列表,"Free Shipping Rule List"
 当前暂无免邮规则配置，请后续在此页面完善配置。,"There are currently no free shipping rules configured. Please complete the configuration on this page later."
@@ -306,27 +319,27 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 追踪支持状态,"Tracking Support Status"
 数字越小越靠前，默认为0,"Smaller numbers appear first, default is 0"
 配送服务不存在,"Shipping service does not exist"
-配送报价小计溢出,配送报价小计溢出
-免邮金额格式非法,免邮金额格式非法
-免邮金额溢出,免邮金额溢出
-运费配置版本已变更，请重新报价,运费配置版本已变更，请重新报价
-无可用配送模板（币种/区域）,无可用配送模板（币种/区域）
-"service_code 不能为空","service_code 不能为空"
-配送服务不可用：%{1},配送服务不可用：%{1}
-配送服务不支持币种：%{1},配送服务不支持币种：%{1}
-配送配置服务不可用,配送配置服务不可用
-结账币种缺失,结账币种缺失
-币种精度非法,币种精度非法
-"国家代码必须是 2 位大写字母。","国家代码必须是 2 位大写字母。"
-地区代码格式无效。,地区代码格式无效。
-"地区名称不能为空且不能超过 255 个字符。","地区名称不能为空且不能超过 255 个字符。"
-地区类型无效。,地区类型无效。
-费用计算类型无效。,费用计算类型无效。
-免邮条件类型无效。,免邮条件类型无效。
-"%{1}名称不能为空且不能超过 255 个字符。","%{1}名称不能为空且不能超过 255 个字符。"
-%{1}代码格式无效。,%{1}代码格式无效。
-代码已存在。,代码已存在。
-%{1}不存在。,%{1}不存在。
+配送报价小计溢出,"Delivery quote subtotal overflow"
+免邮金额格式非法,"Free shipping amount format is illegal"
+免邮金额溢出,"Free shipping amount exceeds"
+运费配置版本已变更，请重新报价,"The freight configuration version has been changed, please re-quote."
+无可用配送模板（币种/区域）,"No shipping template available (currency/region)"
+"service_code 不能为空","service_code cannot be empty"
+配送服务不可用：%{1},"Shipping service unavailable: %{1}"
+配送服务不支持币种：%{1},"The delivery service does not support currency: %{1}"
+配送配置服务不可用,"Shipping configuration service is unavailable"
+结账币种缺失,"Checkout currency missing"
+币种精度非法,"Currency precision is illegal"
+"国家代码必须是 2 位大写字母。","Country code must be 2 uppercase letters."
+地区代码格式无效。,"The region code format is invalid."
+"地区名称不能为空且不能超过 255 个字符。","Region name cannot be empty and cannot exceed 255 characters."
+地区类型无效。,"Invalid region type."
+费用计算类型无效。,"Invalid charge calculation type."
+免邮条件类型无效。,"Free shipping condition type is invalid."
+"%{1}名称不能为空且不能超过 255 个字符。","The %{1} name cannot be empty and cannot exceed 255 characters."
+%{1}代码格式无效。,"The %{1} code format is invalid."
+代码已存在。,"The code already exists."
+%{1}不存在。,"%{1} does not exist."
 电话号码格式不正确,"Invalid phone number format"
 邮政编码格式不正确,"Invalid postal code format"
 无权操作此地址,"No permission to operate this address"
@@ -336,8 +349,9 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 客服电话：400-xxx-xxxx,"Customer Service: 400-xxx-xxxx"
 查询失败：%{1},"Query failed: %{1}"
 费用模板不存在,"Rate template does not exist"
-费用模板未启用,费用模板未启用
-未知配送计费类型：%{1},未知配送计费类型：%{1}
-配送金额格式非法,配送金额格式非法
-配送金额加法溢出,配送金额加法溢出
-配送金额乘法溢出,配送金额乘法溢出
+费用模板未启用,"Fee template is not enabled"
+未知配送计费类型：%{1},"Unknown delivery billing type: %{1}"
+配送金额格式非法,"Shipping amount format is illegal"
+配送金额加法溢出,"Delivery amount addition overflows"
+配送金额乘法溢出,"Shipping amount multiplication overflows"
+运送地址,"Shipping addresses"
