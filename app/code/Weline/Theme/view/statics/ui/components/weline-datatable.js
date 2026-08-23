@@ -28,6 +28,9 @@ function registerDataTable(UI) {
             if (length) element.style.setProperty(property, length);
         }
         const table = element.querySelector('table');
+        if (table && config.stickyActions !== false) {
+            table.setAttribute('data-w-sticky-end', '');
+        }
         const body = table?.querySelector('.w-datatable__body');
         const filterForm = table?.querySelector('[data-w-datatable-filter]');
         const footer = table?.querySelector('.w-datatable__footer');
@@ -122,6 +125,7 @@ function registerDataTable(UI) {
             }
             if (config.editable || config.modalEdit) {
                 const th = document.createElement('th');
+                th.dataset.wSticky = 'end';
                 th.textContent = translate('操作');
                 row.append(th);
             }
@@ -155,6 +159,7 @@ function registerDataTable(UI) {
                 for (const field of state.displayFields) row.append(renderCell(rowData, field, rowIndex));
                 if (config.editable || config.modalEdit) {
                     const actions = document.createElement('td');
+                    actions.dataset.wSticky = 'end';
                     const group = document.createElement('div');
                     group.className = 'w-datatable__cell-actions';
                     const edit = button(translate('编辑'), {tone: 'neutral', size: 'sm', action: 'row.edit', icon: 'edit'});
