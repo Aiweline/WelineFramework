@@ -179,6 +179,16 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('data-default-dir="banner"', $fallbackHtml);
     }
 
+    public function testClosingMediaManagerWithoutSelectionDoesNotEmitAnImageChange(): void
+    {
+        $script = file_get_contents(BP . '/app/code/Weline/Widget/view/statics/js/widget-param-types.js');
+
+        $this->assertIsString($script);
+        $this->assertStringContainsString('var mediaSelectionChanged = false;', $script);
+        $this->assertStringContainsString('mediaSelectionChanged = true;', $script);
+        $this->assertStringContainsString('if (!mediaSelectionChanged) return;', $script);
+    }
+
     public function testQuerySelectIsDeclarativeAndKeepsAsyncBehaviourInTheOwnedModule(): void
     {
         $renderer = new ParamTypeRenderer();
