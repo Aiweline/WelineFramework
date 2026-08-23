@@ -2,15 +2,14 @@
 
 ## 当前有效入口
 
-如果你现在要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，先读：
+如果要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，先完成 `prepare_project`，调用 `resolve_task_context` 获取当前任务命中的 Theme 文档，然后按需阅读：
 
-1. [`AI-INDEX.md`](./AI-INDEX.md)
-2. [`需求.md`](./需求.md)
-3. [`开发日志.md`](./开发日志.md)
-4. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
-5. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
-6. [`../view/theme/README.md`](../view/theme/README.md)
-7. 按任务继续读：
+1. [`需求.md`](./需求.md)
+2. [`开发日志.md`](./开发日志.md)
+3. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
+4. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
+5. [`../view/theme/README.md`](../view/theme/README.md)
+6. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
@@ -254,7 +253,7 @@ Theme 对外提供 `w_query('theme', 'copyTargetLayoutData', ...)`，供 CMS 等
 - [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
 - [`layout-discovery-guide.md`](./layout-discovery-guide.md)
 - [`../../Frontend/doc/Weline.Api使用指南.md`](../../Frontend/doc/Weline.Api使用指南.md)
-- `dev/ai/global-constraints.md`
+- `app/code/Weline/Ai/doc/AI开发治理.md`
 
 ## 前台只读契约
 

@@ -14,4 +14,4 @@ scheduler/migration 的 owning module。
 - rollout：`SubscriptionRolloutGate` 持久化
   `commerce.rollout.subscription`；capability=`subscription`，默认 mode off
 - 详细合同：[`subscription.md`](subscription.md)
-- AI 索引：[`AI-INDEX.md`](AI-INDEX.md)
+- AI 上下文：`prepare_project` 就绪后由 `resolve_task_context` 动态返回

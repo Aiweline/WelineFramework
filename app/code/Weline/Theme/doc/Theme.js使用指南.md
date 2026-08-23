@@ -777,9 +777,9 @@ const config = Weline.getConfig();
 
 ## 相关文档
 
-- [Theme 模块 README](../README.md)
+- [Theme 模块 README](./README.md)
 - [Partials 配置系统使用指南](./Partials配置系统使用指南.md)
-- [Frontend 主题设计文档](../../Weline/Frontend/doc/主题设计/README.md)
+- [Frontend 主题设计文档](../../Frontend/doc/主题设计/README.md)
 
 ## 更新日志
 

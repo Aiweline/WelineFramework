@@ -752,7 +752,7 @@ class Index
 
 - 📖 [完整占位符使用指南](../../Framework/doc/i18n-placeholder-usage.md)
 - 🧪 [测试示例页面](../../Framework/doc/i18n-test-example.phtml)
-- 📝 [变更日志](../../Framework/doc/CHANGELOG-i18n-enhancement.md)
+- 📝 [变更日志](../../Framework/doc/开发日志.md)
 
 ## 配置说明
 

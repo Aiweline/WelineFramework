@@ -11,7 +11,7 @@ WelineFramework는 모듈형 웹 애플리케이션, 관리자 시스템, 커머
 - 새 로컬 환경: 원클릭 설치 프로그램을 사용합니다.
 - PHP, Composer, 데이터베이스가 이미 있음: 클린 설치를 사용합니다.
 - 아키텍처: [Weline architecture](../weline/README.md).
-- AI / Codex 작업: [AI-ENTRY.md](../../AI-ENTRY.md)에서 시작합니다.
+- AI / Codex 작업: [AGENTS.md](../../AGENTS.md)에서 시작합니다.
 
 ## 요구 사항
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [아키텍처 개요](../weline/架构总览.md)
 - [개발 가이드](../开发文档.md)
 - [배포 가이드](../部署文档.md)
-- [AI 어시스턴트 입구](../../AI-README.md)
+- [AI 어시스턴트 입구](../../AGENTS.md)
 
 ## 참고
 

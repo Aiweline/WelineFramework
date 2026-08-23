@@ -7,7 +7,7 @@
 > 状态边界：当前源码已经包含 edge 决策、宿主包、Platform Broker、Gateway
 > Controller、锁定 Nginx、`wls-edge/2`、证书快照、LKG/A-B 恢复和同 Master
 > 高端口降级等实现面；但“源码中存在”不等于“三平台生产就绪”。最终状态以
-> [WLS 2.0 实施计划](../../../../../dev/ai/plans/2026-07-27-WLS-2.0-多项目共享网关与自动恢复.md)
+> WLS 2.0 迁移前实施记录已清理；当前架构以本文及源码为准。
 > 的最新检查点为准。当前仍是静态修复与统一验收阶段，不得跳过 PostgreSQL、
 > 当前源码百万请求、macOS/Windows 系统服务和外部 CA/DNS 门禁。
 

@@ -1,17 +1,11 @@
 <!-- weline:module-readme:auto-generated -->
 # Weline_Extends 模块文档
 
-> 本 README 由 `dev/ai/scripts/generate-missing-module-readmes.php` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
+> 本 README 由 `prepare_project 文档修复流程` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
 
 ## 当前入口
 
-开发前先读：
-
-1. `app/code/Weline/Extends/doc/AI-INDEX.md`
-2. `dev/ai/diagrams/08-module-docs-index.txt`
-3. `dev/ai/global-constraints.md`
-4. `app/code/Weline/Theme/doc/AI-INDEX.md`
-5. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+开发前先调用项目 MCP `prepare_project`；返回 `ready` 后，使用 `resolve_task_context` 按任务从本 README、`需求.md`、`开发日志.md` 和专题文档取得必要上下文。
 
 ## 模块定位
 
@@ -46,7 +40,7 @@
 
 ## 本模块文档资产
 
-- 当前除 `AI-INDEX.md` 外没有其他模块文档。后续一旦涉及稳定行为、接口或配置约定，请把长期说明补到本目录。
+- 本模块长期知识由当前 `doc/` 文档维护；新增稳定行为、接口或配置约定时继续补到本目录，由 MCP 动态索引。
 
 ## 维护规则
 

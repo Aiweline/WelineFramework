@@ -11,13 +11,11 @@
 - 覆盖默认主题
 - 新增 widget / slot / partial / component
 
-请先去读：
+请先完成 `prepare_project`，调用 `resolve_task_context` 获取 Frontend 与 Theme 的任务上下文，再按命中结果阅读：
 
-1. [`AI-INDEX.md`](./AI-INDEX.md)
-2. [`../../Theme/doc/AI-INDEX.md`](../../Theme/doc/AI-INDEX.md)
-3. [`../../Theme/doc/theme-inheritance-and-file-conventions.md`](../../Theme/doc/theme-inheritance-and-file-conventions.md)
-4. [`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
-5. [`../../Theme/view/theme/README.md`](../../Theme/view/theme/README.md)
+1. [`../../Theme/doc/theme-inheritance-and-file-conventions.md`](../../Theme/doc/theme-inheritance-and-file-conventions.md)
+2. [`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
+3. [`../../Theme/view/theme/README.md`](../../Theme/view/theme/README.md)
 
 ## Frontend 模块真正该看的内容
 
@@ -45,7 +43,7 @@
 - `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
 - `app/code/Weline/Theme/doc/layout-discovery-guide.md`
 - `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
-- `dev/ai/global-constraints.md`
+- `app/code/Weline/Ai/doc/AI开发治理.md`
 
 ## 重要迁移说明
 
@@ -66,8 +64,8 @@
 
 ## 推荐阅读顺序
 
-1. AI 入口：[`AI-INDEX.md`](./AI-INDEX.md)
-2. Theme AI 入口：[`../../Theme/doc/AI-INDEX.md`](../../Theme/doc/AI-INDEX.md)
+1. AI 入口：`prepare_project` 就绪后调用 `resolve_task_context`
+2. Theme 约束：由同一 Guidance Bundle 返回命中的 Theme 文档与 Hash
 3. Theme 总指南：[`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
 4. 浏览器请求：[`Weline.Api使用指南.md`](./Weline.Api使用指南.md)
 5. 主题资料索引：[`主题设计/README.md`](./主题设计/README.md)

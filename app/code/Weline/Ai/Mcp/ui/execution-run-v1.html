@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Weline 执行面板</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --panel-soft: #f1f4f8;
+      --text: #172033;
+      --muted: #667085;
+      --line: #d9e0ea;
+      --brand: #3267e3;
+      --brand-soft: #e8efff;
+      --ok: #14804a;
+      --ok-soft: #e8f7ef;
+      --warn: #a15c00;
+      --warn-soft: #fff4dd;
+      --bad: #b42318;
+      --bad-soft: #ffebe9;
+      --code: #101827;
+      --code-text: #d8e2f0;
+      --shadow: 0 1px 2px rgb(16 24 40 / 7%);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    :root[data-theme="dark"] {
+      --bg: #0d1422;
+      --panel: #121c2e;
+      --panel-soft: #18243a;
+      --text: #edf2f8;
+      --muted: #9eabc0;
+      --line: #2b3950;
+      --brand: #7aa2ff;
+      --brand-soft: #1d315d;
+      --ok: #55d490;
+      --ok-soft: #153c2b;
+      --warn: #ffc46b;
+      --warn-soft: #493518;
+      --bad: #ff8d83;
+      --bad-soft: #4b211f;
+      --code: #080e19;
+      --code-text: #dbe7f7;
+      --shadow: none;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0d1422; --panel: #121c2e; --panel-soft: #18243a; --text: #edf2f8;
+        --muted: #9eabc0; --line: #2b3950; --brand: #7aa2ff; --brand-soft: #1d315d;
+        --ok: #55d490; --ok-soft: #153c2b; --warn: #ffc46b; --warn-soft: #493518;
+        --bad: #ff8d83; --bad-soft: #4b211f; --code: #080e19; --code-text: #dbe7f7;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.45; }
+    button, summary { font: inherit; }
+    button:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    .app { padding: 10px; max-width: 100%; }
+    .shell { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); overflow: hidden; }
+    header { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px 9px; border-bottom: 1px solid var(--line); }
+    .identity { min-width: 0; flex: 1; }
+    h1 { margin: 0; font-size: 15px; line-height: 1.3; letter-spacing: -.01em; }
+    .subtitle { margin-top: 3px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .actions { display: flex; gap: 6px; }
+    button { border: 1px solid var(--line); border-radius: 7px; background: var(--panel-soft); color: var(--text); padding: 5px 8px; cursor: pointer; }
+    button:hover { border-color: var(--brand); }
+    button:disabled { opacity: .5; cursor: default; }
+    .status { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 8px; font-weight: 700; white-space: nowrap; }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .running { color: var(--brand); background: var(--brand-soft); }
+    .passed { color: var(--ok); background: var(--ok-soft); }
+    .attention { color: var(--warn); background: var(--warn-soft); }
+    .failed { color: var(--bad); background: var(--bad-soft); }
+    .summary { display: grid; grid-template-columns: repeat(6, minmax(72px, 1fr)); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+    .metric { background: var(--panel); padding: 8px 10px; min-width: 0; }
+    .metric b { display: block; font-size: 14px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .metric span { color: var(--muted); font-size: 10px; }
+    .body { padding: 0 10px 10px; }
+    details.section { border-bottom: 1px solid var(--line); }
+    details.section:last-child { border-bottom: 0; }
+    summary { list-style: none; display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 9px 2px; user-select: none; font-weight: 700; }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "›"; color: var(--muted); font-size: 18px; line-height: 12px; transition: transform .15s ease; }
+    details[open] > summary::before { transform: rotate(90deg); }
+    .count { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 11px; }
+    .section-content { padding: 0 2px 9px 18px; }
+    .requirement { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .kv { display: grid; grid-template-columns: minmax(110px, 26%) 1fr; gap: 4px 10px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; overflow-wrap: anywhere; }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip { padding: 2px 6px; border-radius: 999px; background: var(--panel-soft); color: var(--muted); font-size: 10px; }
+    .phases { display: grid; grid-template-columns: repeat(9, minmax(58px, 1fr)); gap: 5px; overflow-x: auto; padding-bottom: 3px; }
+    .phase { min-width: 58px; border: 1px solid var(--line); border-radius: 7px; padding: 6px; color: var(--muted); background: var(--panel-soft); }
+    .phase.active { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+    .phase.done { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); color: var(--ok); background: var(--ok-soft); }
+    .phase.bad { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+    .phase b { display: block; font-size: 10px; }
+    .phase span { font-size: 9px; }
+    .file { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 6px; overflow: hidden; background: var(--panel-soft); }
+    .file > summary { padding: 7px 8px; font-weight: 600; }
+    .file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-tags { margin-left: auto; display: flex; gap: 4px; }
+    .tag { border-radius: 4px; padding: 1px 5px; color: var(--muted); background: var(--panel); font-size: 9px; font-weight: 600; }
+    .tag.changed { color: var(--ok); background: var(--ok-soft); }
+    .tag.excluded { color: var(--warn); background: var(--warn-soft); }
+    .file-body { padding: 0 8px 8px 25px; }
+    .region { border-left: 2px solid var(--brand); padding: 3px 7px; margin: 5px 0; color: var(--muted); font-size: 11px; }
+    pre { margin: 6px 0 0; max-height: 360px; overflow: auto; border-radius: 7px; padding: 9px; background: var(--code); color: var(--code-text); font: 10.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; tab-size: 2; }
+    .timeline { margin: 0; padding: 0; list-style: none; }
+    .event { display: grid; grid-template-columns: 58px 118px 1fr; gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+    .event:last-child { border-bottom: 0; }
+    .event time, .event .type { color: var(--muted); font-size: 10px; }
+    .empty { color: var(--muted); text-align: center; padding: 12px; border: 1px dashed var(--line); border-radius: 8px; }
+    .validation { display: grid; gap: 5px; }
+    .check { display: flex; gap: 8px; align-items: flex-start; padding: 6px 7px; background: var(--panel-soft); border-radius: 7px; }
+    .check b { min-width: 62px; }
+    .error { color: var(--bad); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .privacy { padding: 7px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 760px) {
+      .summary { grid-template-columns: repeat(3, 1fr); }
+      .phases { grid-template-columns: repeat(9, 82px); }
+      .event { grid-template-columns: 48px 92px 1fr; }
+    }
+    @media (max-width: 440px) {
+      header { flex-wrap: wrap; }
+      .actions { width: 100%; }
+      .actions button { flex: 1; }
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      .kv { grid-template-columns: 1fr; }
+      .kv dd { margin-bottom: 5px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="shell" aria-label="Weline 执行状态">
+      <header>
+        <div class="identity">
+          <h1>Weline 执行面板</h1>
+          <div class="subtitle" id="ids">等待运行数据</div>
+        </div>
+        <span class="status running" id="status" aria-live="polite">等待</span>
+        <div class="actions">
+          <button id="refresh" type="button" title="刷新状态">刷新</button>
+          <button id="export" type="button" title="导出脱敏 JSON">导出</button>
+        </div>
+      </header>
+      <div class="summary" id="summary" aria-label="运行摘要"></div>
+      <div class="body">
+        <details class="section" open>
+          <summary>执行阶段 <span class="count" id="phase-count"></span></summary>
+          <div class="section-content"><div class="phases" id="phases"></div></div>
+        </details>
+        <details class="section">
+          <summary>任务与约束 <span class="count" id="task-count"></span></summary>
+          <div class="section-content" id="task"></div>
+        </details>
+        <details class="section" open>
+          <summary>相关文件 <span class="count" id="file-count">0</span></summary>
+          <div class="section-content" id="files"></div>
+        </details>
+        <details class="section">
+          <summary>验证与回滚 <span class="count" id="validation-count"></span></summary>
+          <div class="section-content validation" id="validation"></div>
+        </details>
+        <details class="section">
+          <summary>事件时间线 <span class="count" id="event-count">0</span></summary>
+          <div class="section-content"><ol class="timeline" id="events"></ol></div>
+        </details>
+      </div>
+      <div class="privacy">仅展示确定性摘要与脱敏证据；不包含隐藏推理、密钥或任意命令。</div>
+    </section>
+  </main>
+  <script>
+    "use strict";
+    const phaseOrder = [
+      "REQUIREMENT_PARSE", "CONTEXT_COLLECT", "CONTEXT_CHECK", "EDIT_PLAN_WAIT",
+      "ATOMIC_APPLY", "SYNTAX_VALIDATE", "REGRESSION_VALIDATE", "IMPACT_REVIEW", "COMPLETED"
+    ];
+    const phaseLabels = {
+      REQUIREMENT_PARSE: "需求", CONTEXT_COLLECT: "上下文", CONTEXT_CHECK: "完整性",
+      EDIT_PLAN_WAIT: "计划", ATOMIC_APPLY: "原子修改", SYNTAX_VALIDATE: "语法",
+      REGRESSION_VALIDATE: "回归", IMPACT_REVIEW: "影响", COMPLETED: "完成",
+      FAILED: "失败", ROLLED_BACK: "已回滚", SUPERSEDED: "已替代"
+    };
+    const workflowLabels = {
+      NORMAL: "", COMPLETED: "完成", CONTEXT_BATCH_PLANNED: "上下文已分批规划",
+      CONTEXT_BATCHING: "上下文分批中", CONTEXT_INDEX_RETRY: "索引等待重试",
+      CONTEXT_TARGET_NOT_FOUND: "目标不存在", CONTEXT_TARGET_AMBIGUOUS: "目标不唯一",
+      CONTEXT_INCOMPLETE: "上下文不完整", CONFLICT_REPLAN: "冲突重规划",
+      VALIDATION_REPAIR: "验证修复", IMPACT_EXPANSION: "影响扩展",
+      EDIT_BATCHING: "修改分批中", FAILED: "失败"
+    };
+    const state = {
+      repository: "", run: null, events: [], files: new Map(), seed: {},
+      afterSequence: 0, polling: false, timer: null, lastError: ""
+    };
+    const byId = id => document.getElementById(id);
+    const text = value => value == null ? "" : String(value);
+    const list = value => Array.isArray(value) ? value : [];
+    const object = value => value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+    function el(tag, attrs = {}, children = []) {
+      const node = document.createElement(tag);
+      for (const [key, value] of Object.entries(attrs)) {
+        if (key === "class") node.className = value;
+        else if (key === "text") node.textContent = text(value);
+        else if (key === "title") node.title = text(value);
+        else if (value !== false && value != null) node.setAttribute(key, text(value));
+      }
+      for (const child of Array.isArray(children) ? children : [children]) {
+        if (child instanceof Node) node.append(child);
+        else if (child != null) node.append(document.createTextNode(text(child)));
+      }
+      return node;
+    }
+
+    function unwrap(raw) {
+      let value = raw;
+      for (let i = 0; i < 5; i += 1) {
+        if (!value || typeof value !== "object") break;
+        if (value.structuredContent && typeof value.structuredContent === "object") value = value.structuredContent;
+        else if (value.toolOutput && typeof value.toolOutput === "object") value = value.toolOutput;
+        else if (value.globals && value.globals.toolOutput) value = value.globals.toolOutput;
+        else break;
+      }
+      return object(value);
+    }
+
+    function mergeFile(file) {
+      const path = text(file.path);
+      if (!path) return;
+      state.files.set(path, Object.assign({}, state.files.get(path) || {}, file));
+    }
+
+    function ingest(raw) {
+      const data = unwrap(raw);
+      if (!Object.keys(data).length) return;
+      state.seed = Object.assign({}, state.seed, data);
+      const input = object(window.openai && window.openai.toolInput);
+      state.repository = text(data.repository || input.repository || state.repository);
+      const run = object(data.execution_run || data.status);
+      if (run.run_id) state.run = Object.assign({}, state.run || {}, run);
+      if (data.run_id && !state.run) state.run = data;
+      for (const event of list(data.events)) {
+        const sequence = Number(event.sequence || 0);
+        if (!state.events.some(item => Number(item.sequence || 0) === sequence)) state.events.push(event);
+        state.afterSequence = Math.max(state.afterSequence, sequence);
+      }
+      for (const file of list(data.files)) mergeFile(file);
+      for (const file of list(data.candidate_files)) mergeFile(file);
+      for (const file of list(data.selected_files)) mergeFile(Object.assign({}, file, { selected: true }));
+      for (const file of list(data.excluded_files)) mergeFile(Object.assign({}, file, { excluded: true }));
+      for (const file of list(object(data.change_report).files)) {
+        mergeFile(Object.assign({}, file, { modified: true, selected: true }));
+      }
+      const regions = list(data.exact_regions || data.regions);
+      for (const region of regions) {
+        const current = state.files.get(text(region.path)) || { path: region.path, candidate: true };
+        const currentRegions = list(current.regions);
+        if (!currentRegions.some(item => text(item.path) === text(region.path) && Number(item.start_line) === Number(region.start_line))) {
+          currentRegions.push(region);
+        }
+        mergeFile(Object.assign({}, current, { regions: currentRegions, materialized: true, selected: true }));
+      }
+      render();
+      schedule();
+    }
+
+    function statusClass(run) {
+      const status = text(run.status).toLowerCase();
+      const workflow = text(run.workflow_state).toUpperCase();
+      if (status === "completed") return "passed";
+      if (["failed", "rolled_back"].includes(status)) return "failed";
+      if (workflow && workflow !== "NORMAL") return "attention";
+      return "running";
+    }
+
+    function completedPhaseSet(run) {
+      const completed = new Set();
+      for (const event of state.events) {
+        const phase = text(event.phase).toUpperCase();
+        const status = text(event.status).toLowerCase();
+        if (phaseOrder.includes(phase) && ["completed", "passed", "success"].includes(status)) {
+          completed.add(phase);
+        }
+      }
+      if (text(run.status).toLowerCase() === "completed") {
+        for (const phase of phaseOrder) completed.add(phase);
+      }
+      return completed;
+    }
+
+    function runStatusLabel(run) {
+      const workflow = text(run.workflow_state).toUpperCase();
+      if (workflow && workflow !== "NORMAL") return workflowLabels[workflow] || workflow;
+      return phaseLabels[run.current_phase] || run.current_phase || run.status || "等待";
+    }
+
+    function metric(value, label) {
+      return el("div", { class: "metric" }, [
+        el("b", { text: value || "0", title: value || "0" }),
+        el("span", { text: label })
+      ]);
+    }
+
+    function renderSummary(run) {
+      const counters = object(run.counters);
+      const summary = byId("summary");
+      summary.replaceChildren(
+        metric(runStatusLabel(run), "当前阶段"),
+        metric(counters.candidate_file_count || state.files.size, "候选文件"),
+        metric(counters.materialized_file_count || [...state.files.values()].filter(f => f.materialized).length, "已取上下文"),
+        metric(counters.modified_file_count || [...state.files.values()].filter(f => f.modified).length, "修改文件"),
+        metric(counters.apply_compact_edit_calls || 0, "原子提交"),
+        metric(run.index_revision || 0, "索引版本")
+      );
+    }
+
+    function renderPhases(run) {
+      const current = text(run.current_phase);
+      const completed = completedPhaseSet(run);
+      const nodes = phaseOrder.map((phase, index) => {
+        let cls = "phase";
+        const done = completed.has(phase);
+        if (done) cls += " done";
+        if (phase === current && !done) cls += " active";
+        return el("div", { class: cls, title: phase }, [
+          el("b", { text: phaseLabels[phase] || phase }),
+          el("span", { text: done ? "已完成" : (phase === current ? "进行中" : "等待") })
+        ]);
+      });
+      byId("phases").replaceChildren(...nodes);
+      byId("phase-count").textContent = runStatusLabel(run);
+    }
+
+    function showValue(value) {
+      if (Array.isArray(value)) return value.length ? value.join(" · ") : "—";
+      if (value && typeof value === "object") return JSON.stringify(value);
+      return text(value) || "—";
+    }
+
+    function renderTask(run) {
+      const contract = object(run.task_contract || state.seed.task_contract);
+      const root = byId("task");
+      const requirement = el("p", { class: "requirement", text: run.original_requirement || state.seed.task_summary || "暂无需求摘要" });
+      const labels = {
+        goal: "目标", background: "背景", requirements: "要求", known_paths: "已知路径",
+        known_symbols: "已知符号", acceptance_criteria: "验收标准", allowed_scope: "允许范围",
+        forbidden_scope: "禁止范围", authorized_actions: "授权动作", assumptions: "假设",
+        active_skills: "活动技能", instruction_sources: "指令来源",
+        validation_expectations: "验证预期"
+      };
+      const dl = el("dl", { class: "kv" });
+      for (const [key, label] of Object.entries(labels)) {
+        let value = contract[key];
+        if (key === "active_skills" && value == null) value = contract.active_skills_display || "宿主未提供";
+        dl.append(el("dt", { text: label }), el("dd", { text: showValue(value) }));
+      }
+      root.replaceChildren(requirement, dl);
+      byId("task-count").textContent = run.task_id ? run.task_id.slice(-8) : "";
+    }
+
+    function renderFiles() {
+      const root = byId("files");
+      const files = [...state.files.values()].sort((a, b) =>
+        Number(Boolean(b.modified)) - Number(Boolean(a.modified)) ||
+        Number(Boolean(b.selected || b.materialized)) - Number(Boolean(a.selected || a.materialized)) ||
+        text(a.path).localeCompare(text(b.path))
+      );
+      if (!files.length) {
+        root.replaceChildren(el("div", { class: "empty", text: "等待候选文件与精确区域" }));
+      } else {
+        root.replaceChildren(...files.map(file => {
+          const details = el("details", { class: "file" });
+          const tags = el("span", { class: "file-tags" });
+          if (file.modified) tags.append(el("span", { class: "tag changed", text: "已修改" }));
+          else if (file.selected || file.materialized) tags.append(el("span", { class: "tag", text: "已选" }));
+          else tags.append(el("span", { class: "tag excluded", text: "未选" }));
+          const diff = text(file.diff || file.bounded_diff);
+          const summary = el("summary", {}, [
+            el("span", { class: "file-path", text: file.path, title: file.path }),
+            tags
+          ]);
+          const body = el("div", { class: "file-body" });
+          const reason = text(file.candidate_reason || file.excluded_reason || list(file.reasons).join("; "));
+          if (reason) body.append(el("div", { class: "region", text: reason }));
+          for (const region of list(file.regions)) {
+            const label = [
+              region.symbol || region.target_ref || region.kind || "区域",
+              region.start_line ? "L" + region.start_line + (region.end_line ? "–" + region.end_line : "") : ""
+            ].filter(Boolean).join(" · ");
+            body.append(el("div", { class: "region", text: label }));
+          }
+          const hashes = [file.pre_sha256 || file.before_sha256, file.post_sha256 || file.after_sha256].filter(Boolean);
+          if (hashes.length) body.append(el("div", { class: "chips" }, hashes.map(hash => el("span", { class: "chip", text: text(hash).slice(0, 20) + "…" }))));
+          if (diff) body.append(el("pre", { text: diff, tabindex: "0", "aria-label": file.path + " 差异" }));
+          else if (file.modified) body.append(el("div", { class: "empty", text: "差异尚未进入追踪结果" }));
+          details.append(summary, body);
+          return details;
+        }));
+      }
+      byId("file-count").textContent = files.length + " · 修改 " + files.filter(file => file.modified).length;
+    }
+
+    function renderValidation(run) {
+      const root = byId("validation");
+      const result = object(run.result_summary);
+      const validation = object(result.validation || state.seed.validation);
+      const regression = object(result.regression_validation || state.seed.regression_validation);
+      const nodes = [];
+      const add = (name, value) => {
+        if (!Object.keys(value).length) return;
+        nodes.push(el("div", { class: "check" }, [
+          el("b", { text: name }),
+          el("div", { text: showValue(value.status || value) })
+        ]));
+      };
+      add("语法检查", validation);
+      add("回归验证", regression);
+      if (result.rolled_back || state.seed.rolled_back) {
+        nodes.push(el("div", { class: "check" }, [el("b", { text: "回滚" }), el("div", { text: "已自动回滚，未留下部分修改" })]));
+      }
+      const error = object(run.error);
+      if (Object.keys(error).length) nodes.push(el("div", { class: "error", text: (error.code || "ERROR") + " · " + (error.message || "") }));
+      if (!nodes.length) nodes.push(el("div", { class: "empty", text: "尚未进入验证阶段" }));
+      root.replaceChildren(...nodes);
+      byId("validation-count").textContent = validation.status || regression.status || (result.rolled_back ? "已回滚" : "");
+    }
+
+    function renderEvents() {
+      const root = byId("events");
+      const events = [...state.events].sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+      if (!events.length) {
+        root.replaceChildren(el("li", { class: "empty", text: "事件将在执行时持续写入" }));
+      } else {
+        root.replaceChildren(...events.map(event => el("li", { class: "event" }, [
+          el("time", { text: text(event.created_at || "").slice(11, 19) || "#" + event.sequence }),
+          el("span", { class: "type", text: event.event_type || event.phase || "EVENT" }),
+          el("span", { text: event.reason_text || event.operation_name || event.status || "" })
+        ])));
+      }
+      byId("event-count").textContent = events.length;
+    }
+
+    function render() {
+      const run = state.run || object(state.seed.execution_run) || {};
+      const status = byId("status");
+      status.className = "status " + statusClass(run);
+      status.textContent = runStatusLabel(run);
+      byId("ids").textContent = [
+        run.run_id ? "Run " + run.run_id : "",
+        run.trace_id ? "Trace " + run.trace_id : "",
+        run.project_id ? "Project " + run.project_id : ""
+      ].filter(Boolean).join(" · ") || "等待运行数据";
+      renderSummary(run);
+      renderPhases(run);
+      renderTask(run);
+      renderFiles();
+      renderValidation(run);
+      renderEvents();
+      byId("refresh").disabled = !run.run_id || !state.repository || state.polling;
+    }
+
+    async function call(name, args) {
+      if (!window.openai || typeof window.openai.callTool !== "function") throw new Error("宿主未开放工具调用");
+      return unwrap(await window.openai.callTool(name, args));
+    }
+
+    async function refresh() {
+      const run = state.run;
+      if (!run || !run.run_id || !state.repository || state.polling) return;
+      state.polling = true;
+      render();
+      try {
+        const base = { repository: state.repository, project_id: run.project_id, run_id: run.run_id };
+        ingest(await call("get_run_status", base));
+        const latest = Number((state.run && state.run.latest_sequence) || 0);
+        if (latest > state.afterSequence || !state.events.length) {
+          ingest(await call("get_run_trace", Object.assign({}, base, {
+            after_sequence: state.afterSequence,
+            limit: 100,
+            include_files: true,
+            include_diffs: Boolean(state.run && state.run.terminal)
+          })));
+        }
+        state.lastError = "";
+      } catch (error) {
+        state.lastError = text(error && error.message || error);
+      } finally {
+        state.polling = false;
+        render();
+        schedule();
+      }
+    }
+
+    function schedule() {
+      if (state.timer) clearTimeout(state.timer);
+      const run = state.run;
+      if (!run || run.terminal || ["completed", "planned", "failed", "rolled_back", "superseded"].includes(text(run.status).toLowerCase())) return;
+      state.timer = setTimeout(() => {
+        if (document.visibilityState === "visible") refresh();
+        else schedule();
+      }, 1400);
+    }
+
+    function exportJson() {
+      const payload = {
+        exported_at: new Date().toISOString(),
+        execution_run: state.run,
+        events: state.events,
+        files: [...state.files.values()],
+        privacy: { redacted: true, hidden_reasoning_included: false }
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "weline-" + text(state.run && state.run.run_id || "execution-run") + ".json";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function applyTheme(value) {
+      const theme = text(value || (window.openai && window.openai.theme)).toLowerCase();
+      if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+    }
+
+    byId("refresh").addEventListener("click", refresh);
+    byId("export").addEventListener("click", exportJson);
+    document.addEventListener("visibilitychange", schedule);
+    window.addEventListener("message", event => {
+      if (event.data && event.data.type === "openai:set_globals") {
+        applyTheme(event.data.globals && event.data.globals.theme);
+        ingest(event.data.globals && event.data.globals.toolOutput);
+      }
+      if (event.data && event.data.type === "ui/notifications/tool-result") ingest(event.data);
+    });
+    window.addEventListener("openai:set_globals", event => {
+      const globals = object(event.detail && event.detail.globals || event.detail);
+      applyTheme(globals.theme);
+      ingest(globals.toolOutput);
+    });
+    window.addEventListener("ui/notifications/tool-result", event => ingest(event.detail));
+    applyTheme();
+    ingest(window.openai && window.openai.toolOutput);
+    render();
+  </script>
+</body>
+</html>

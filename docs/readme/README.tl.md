@@ -11,7 +11,7 @@ Ang WelineFramework ay isang PHP framework para sa modular web applications, adm
 - Bagong local setup: gamitin ang one-click installer.
 - May PHP, Composer, at database na: gamitin ang clean install.
 - Architecture: [Weline architecture](../weline/README.md).
-- AI / Codex work: magsimula sa [AI-ENTRY.md](../../AI-ENTRY.md).
+- AI / Codex work: magsimula sa [AGENTS.md](../../AGENTS.md).
 
 ## Requirements
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [Architecture overview](../weline/架构总览.md)
 - [Development guide](../开发文档.md)
 - [Deployment guide](../部署文档.md)
-- [AI assistant entry](../../AI-README.md)
+- [AI assistant entry](../../AGENTS.md)
 
 ## Notes
 

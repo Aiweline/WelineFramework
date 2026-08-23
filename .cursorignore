@@ -138,9 +138,8 @@ desktop.ini
 # ============================================
 # Project Specific Exclusions
 # ============================================
-# Exclude dev directory, but keep dev/ai directory
+# Exclude local dev directory
 dev/*
-!dev/ai/
 !dev/.gitignore
 !dev/.gitkeep
 

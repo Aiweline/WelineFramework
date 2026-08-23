@@ -1,18 +1,11 @@
 <!-- weline:module-readme:auto-generated -->
 # Weline_Captcha 模块文档
 
-> 本 README 由 `dev/ai/scripts/generate-missing-module-readmes.php` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
+> 本 README 由 `prepare_project 文档修复流程` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
 
 ## 当前入口
 
-开发前先读：
-
-1. `app/code/Weline/Captcha/doc/AI-INDEX.md`
-2. `app/code/Weline/Captcha/doc/google-enterprise-and-w-form.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. `dev/ai/global-constraints.md`
-5. `app/code/Weline/Theme/doc/AI-INDEX.md`
-6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+开发前必须先完成 `prepare_project`；进入 `ready` 后调用 `resolve_task_context`，由 MCP 按当前任务返回本模块的最小文档集合。全局门禁见 `app/code/Weline/Ai/doc/AI开发治理.md`。
 
 ## 模块定位
 

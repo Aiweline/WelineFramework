@@ -11,7 +11,7 @@ declare(strict_types=1);
  * 【硬性】本标签为自定义（非 HTML）标签：属性上禁止 PHP，须用静态标签（@lang/@var/{{}} 等）或字面量；
  * 勿写 <?php、<?=。编译期 taglib 会抽取/还原占位符，属性内嵌 PHP 易 ParseError（如 unexpected identifier "true"）。
  * 动态值：在标签前的 <?php ?> 块赋给普通变量，属性只写变量名（Weline_Taglib_resolve，如 value="domainSelectValueEscaped"）；
- * 常量可用字面量或 var|默认值 语法。详见 dev/ai/skills/theme-development/SKILL.md。
+ * 常量可用字面量或 var|默认值语法。详见 Weline_Websites 与 Weline_Theme 模块文档。
  */
 
 namespace Weline\Websites\Taglib;

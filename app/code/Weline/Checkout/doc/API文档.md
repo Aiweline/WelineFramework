@@ -542,5 +542,5 @@ echo "支付状态：" . $order->getPaymentStatusText();
 ## 相关文档
 
 - [使用指南](./使用指南.md)
-- [Hook使用指南](./Hook使用指南.md)
+- [Hook使用指南](./事件使用指南.md)
 - [README](./README.md)

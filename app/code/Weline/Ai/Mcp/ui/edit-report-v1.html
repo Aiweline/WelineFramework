@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weline 变更报告</title>
+<style>
+:root{color-scheme:light dark;--bg:#f7f8fb;--panel:#fff;--muted:#667085;--text:#152033;--line:#d8dee9;--brand:#356df3;--good:#16805b;--warn:#b76b00;--bad:#c23545;--code:#101828;--codeText:#e6edf7}
+@media(prefers-color-scheme:dark){:root{--bg:#0c1424;--panel:#111c30;--muted:#99a7bd;--text:#edf3ff;--line:#2b3950;--brand:#79a1ff;--good:#54d2a0;--warn:#ffc46b;--bad:#ff7e8d;--code:#08101d;--codeText:#dce7f8}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.app{padding:16px;max-width:1180px;margin:auto}.top{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:14px}.title{font-size:18px;font-weight:750}.sub{color:var(--muted);font-size:12px}.badge{border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-weight:650}.ok{color:var(--good)}.warning{color:var(--warn)}.error{color:var(--bad)}.stats{display:grid;grid-template-columns:repeat(5,minmax(110px,1fr));gap:8px}.stat,.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}.stat{padding:11px}.stat b{display:block;font-size:20px}.stat span{color:var(--muted);font-size:12px}.layout{display:grid;grid-template-columns:minmax(280px,38%) 1fr;gap:12px;margin-top:12px}.panel{overflow:hidden}.panelHead{padding:11px 13px;border-bottom:1px solid var(--line);font-weight:700;display:flex;justify-content:space-between}.files{max-height:440px;overflow:auto}.file{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:inherit;padding:10px 13px;cursor:pointer}.file:hover,.file.active{background:color-mix(in srgb,var(--brand) 11%,transparent)}.path{overflow-wrap:anywhere;font-weight:650}.meta{color:var(--muted);font-size:12px;margin-top:3px}.plus{color:var(--good)}.minus{color:var(--bad)}pre{margin:0;padding:13px;min-height:260px;max-height:440px;overflow:auto;background:var(--code);color:var(--codeText);font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre}.flags{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.flag{border:1px solid var(--line);border-radius:8px;padding:6px 9px;color:var(--muted)}.empty{padding:34px;text-align:center;color:var(--muted)}details{margin-top:12px}.details{padding:10px 13px;background:var(--panel);border:1px solid var(--line);border-radius:12px;color:var(--muted);overflow-wrap:anywhere}@media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}.top{flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="app">
+<div class="top"><div><div class="title">Weline 变更报告</div><div class="sub" id="subtitle">等待工具结果…</div></div><div class="badge" id="state">等待</div></div>
+<section class="stats" id="stats"></section>
+<section class="layout">
+<div class="panel"><div class="panelHead"><span>修改文件</span><span id="fileCount">0</span></div><div class="files" id="files"><div class="empty">暂无变更数据</div></div></div>
+<div class="panel"><div class="panelHead"><span id="diffTitle">差异预览</span><span id="hunks"></span></div><pre id="diff">选择文件查看差异</pre></div>
+</section>
+<div class="flags" id="flags"></div>
+<details><summary>事务详情</summary><div class="details" id="details"></div></details>
+</main>
+<script>
+(function(){
+var latest={};
+function number(value){var n=Number(value);return Number.isFinite(n)?n:0}
+function text(value){return value===undefined||value===null?"":String(value)}
+function escapeHtml(value){return text(value).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]})}
+function pick(source,keys){for(var i=0;i<keys.length;i++){if(source&&source[keys[i]]!==undefined)return source[keys[i]]}}
+function unwrap(payload){return payload&&payload.structuredContent||payload&&payload.result&&payload.result.structuredContent||payload&&payload.result||payload||{}}
+function selectFile(files,index){
+ var file=files[index]||{},preview=text(file.unified_diff||file.diff||file.patch||"");
+ document.getElementById("diffTitle").textContent=text(file.path||file.file||"差异预览");
+ document.getElementById("hunks").textContent=number(file.hunks||file.hunk_count)+" hunks";
+ if(!preview){
+  preview=file.error?"差异不可用："+text(file.error):file.binary?"二进制文件无法进行文本审核":file.diff_truncated?"该文件差异已截断；请与其他缺失路径一起批量补充审核":"该文件没有可展示的文本差异";
+ }
+ document.getElementById("diff").textContent=preview;
+}
+function render(payload){
+ latest=unwrap(payload);var report=latest.change_report||latest.changeReport||{},summary=report.summary||{},files=Array.isArray(report.files)?report.files:[];
+ var fileTotal=number(pick(report,["file_count","files_changed"])||pick(summary,["file_count","files_changed"])||files.length);
+ var insertions=number(pick(report,["insertions","additions"])||pick(summary,["insertions","additions"]));
+ var deletions=number(pick(report,["deletions"])||pick(summary,["deletions"]));
+ var changed=number(pick(report,["changed_lines"])||pick(summary,["changed_lines"])||(insertions+deletions));
+ var validation=latest.validation||latest.validation_result||{},validationState=text(pick(validation,["status","state"])||latest.validation_status||"未提供");
+ var state=text(pick(latest,["state","status"])||"完成");
+ document.getElementById("subtitle").textContent="Edit "+text(latest.edit_id||"—")+" · "+text(report.workspace_effect||latest.workspace_effect||"工作区结果");
+ var stateEl=document.getElementById("state");stateEl.textContent=state;stateEl.className="badge "+(/fail|error|rollback/i.test(state)?"error":/warn|pending|partial/i.test(state)?"warning":"ok");
+ var cards=[["文件",fileTotal],["新增","+"+insertions],["删除","-"+deletions],["变更行",changed],["验证",validationState]];
+ document.getElementById("stats").innerHTML=cards.map(function(card){return '<div class="stat"><b>'+escapeHtml(card[1])+'</b><span>'+escapeHtml(card[0])+'</span></div>'}).join("");
+ document.getElementById("fileCount").textContent=text(fileTotal);
+ var filesEl=document.getElementById("files");
+ if(!files.length){filesEl.innerHTML='<div class="empty">报告没有可展示的文件差异</div>';document.getElementById("diff").textContent=text(report.unified_diff||report.diff||"暂无差异预览")}
+ else{
+  filesEl.innerHTML=files.map(function(file,index){var path=text(file.path||file.file||("文件 "+(index+1))),reviewState=file.error?"不可用":file.binary?"二进制":file.diff_truncated?"已截断":file.diff_included?"可审核":"无文本差异";return '<button class="file'+(index===0?' active':'')+'" data-index="'+index+'"><div class="path">'+escapeHtml(path)+'</div><div class="meta"><span class="plus">+'+number(file.insertions||file.additions)+'</span> · <span class="minus">-'+number(file.deletions)+'</span> · '+number(file.hunks||file.hunk_count)+' hunks · '+escapeHtml(file.status||"modified")+' · '+escapeHtml(reviewState)+'</div></button>'}).join("");
+  Array.prototype.forEach.call(filesEl.querySelectorAll(".file"),function(button){button.addEventListener("click",function(){selectFile(files,number(button.dataset.index));Array.prototype.forEach.call(filesEl.querySelectorAll(".file"),function(x){x.classList.remove("active")});button.classList.add("active")})});selectFile(files,0)
+ }
+ var review=report.review_contract||{},flags=[];if(review.complete===true)flags.push("全部变更已具备审核上下文");if(review.complete===false)flags.push("审核上下文不完整");if(report.diff_truncated)flags.push("差异已截断");if(number(report.binary_files))flags.push(number(report.binary_files)+" 个二进制文件");if(number(report.unavailable_files))flags.push(number(report.unavailable_files)+" 个预览不可用");if(latest.recovery||latest.rollback_available)flags.push("可恢复/回滚");
+ var index=latest.index||latest.index_state||{};if(/pending|stale/i.test(text(index.status||index.state)))flags.push("索引 "+text(index.status||index.state));
+ document.getElementById("flags").innerHTML=flags.map(function(flag){return '<span class="flag">'+escapeHtml(flag)+'</span>'}).join("");
+ document.getElementById("details").innerHTML=["Edit ID: "+text(latest.edit_id||"—"),"索引修订: "+text(latest.index_revision||index.revision||"—"),"回滚: "+text(latest.rollback_available===true?"可用":latest.rollback_available===false?"不可用":"未提供"),"耗时: "+text(latest.duration_ms||latest.timing&&latest.timing.total_ms||"—")+" ms"].map(escapeHtml).join("<br>");
+}
+window.addEventListener("message",function(event){var message=event.data||{};if(message.method==="ui/notifications/tool-result")render(message.params||{})});
+if(window.openai&&window.openai.toolOutput)render(window.openai.toolOutput);
+})();
+</script>
+</body>
+</html>

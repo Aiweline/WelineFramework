@@ -2,9 +2,10 @@
 
 ## 开发前先读
 
-1. `app/code/Weline/Eav/doc/AI-INDEX.md`
-2. `app/code/Weline/Eav/doc/eav-entity-and-attribute-conventions.md`
-3. 本模块实际命中的 `Model/`、`Schema/`、`Service/`、`Controller/` 源码
+先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：
+
+1. `app/code/Weline/Eav/doc/eav-entity-and-attribute-conventions.md`
+2. 本模块实际命中的 `Model/`、`Schema/`、`Service/`、`Controller/` 源码
 
 ## 模块定位
 

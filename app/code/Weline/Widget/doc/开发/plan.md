@@ -1,6 +1,6 @@
 # Widget 模块：媒体选择与分辨率配置
 
-本模块子计划，总计划见 [.cursor/plans/媒体选择与分辨率配置_676aad06.plan.md](../../../../.cursor/plans/媒体选择与分辨率配置_676aad06.plan.md)。
+本模块子计划，总计划见 [.cursor/plans/媒体选择与分辨率配置_676aad06.plan.md](../需求.md)。
 
 ## 目标
 
@@ -26,7 +26,7 @@
 
 ## 语义化 Param Type 与 ParamSchema 注册表
 
-总计划见 [.cursor/plans/widget_语义化_paramschema_架构.plan.md](../../../../.cursor/plans/widget_语义化_paramschema_架构_c2eaa33f.plan.md)。
+总计划见 [.cursor/plans/widget_语义化_paramschema_架构.plan.md](../需求.md)。
 
 ### 目标
 

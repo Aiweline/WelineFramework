@@ -11,7 +11,7 @@ WelineFramework मॉड्यूलर वेब एप्लिकेशन, 
 - नया स्थानीय सेटअप: one-click installer उपयोग करें।
 - PHP, Composer और database पहले से उपलब्ध हैं: clean install उपयोग करें।
 - Architecture: [Weline architecture](../weline/README.md).
-- AI / Codex कार्य: [AI-ENTRY.md](../../AI-ENTRY.md) से शुरू करें।
+- AI / Codex कार्य: [AGENTS.md](../../AGENTS.md) से शुरू करें।
 
 ## आवश्यकताएँ
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [Architecture overview](../weline/架构总览.md)
 - [Development guide](../开发文档.md)
 - [Deployment guide](../部署文档.md)
-- [AI assistant entry](../../AI-README.md)
+- [AI assistant entry](../../AGENTS.md)
 
 ## Notes
 

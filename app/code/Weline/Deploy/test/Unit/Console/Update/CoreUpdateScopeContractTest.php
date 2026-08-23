@@ -94,7 +94,7 @@ final class CoreUpdateScopeContractTest extends TestCase
         );
 
         self::assertTrue($noise->invoke($core, '.DS_Store'));
-        self::assertTrue($noise->invoke($core, 'dev/ai/skills/ui-ux-pro-max/scripts/__pycache__/core.pyc'));
+        self::assertTrue($noise->invoke($core, 'var/cache/__pycache__/core.pyc'));
         self::assertTrue($skip->invoke($core, 'app/code/GuoLaiRen/PageBuilder/X.php'));
         self::assertTrue($skip->invoke($core, 'app/etc/env.php'));
         self::assertFalse($skip->invoke($core, 'app/code/Weline/Deploy/Console/Update/Core.php'));

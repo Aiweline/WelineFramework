@@ -60,11 +60,11 @@
 
 | 技能 | 路径 | 用途 |
 |------|------|------|
-| module-development | `dev/ai/skills/module-development/SKILL.md` | 升级与模块级验证流程 |
-| quality-assurance | `dev/ai/skills/quality-assurance/SKILL.md` | 验证闭环与通过标准 |
-| php-unit-testing | `dev/ai/skills/php-unit-testing/SKILL.md` | 单测/命令验证优先级 |
-| weline-server | `dev/ai/skills/weline-server/SKILL.md` | WLS 进程与 reload/restart 规范 |
-| http-request-testing | `dev/ai/skills/http-request-testing/SKILL.md` | 接口可达性与响应验证 |
+| module-development | `归属模块文档（由 MCP 动态检索）` | 升级与模块级验证流程 |
+| quality-assurance | `归属模块文档（由 MCP 动态检索）` | 验证闭环与通过标准 |
+| php-unit-testing | `归属模块文档（由 MCP 动态检索）` | 单测/命令验证优先级 |
+| weline-server | `归属模块文档（由 MCP 动态检索）` | WLS 进程与 reload/restart 规范 |
+| http-request-testing | `归属模块文档（由 MCP 动态检索）` | 接口可达性与响应验证 |
 
 ---
 

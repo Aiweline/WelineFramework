@@ -10,5 +10,5 @@
 **补充资源**
 
 - 开发全流程参考：[开发文档.md](../开发文档.md)
-- 精简 ASCII 架构图（省 token）：`dev/ai/diagrams/00-INDEX.txt`
-- AI 入口与约束：`AI-ENTRY.md`、`CLAUDE.md`
+- 框架架构正文：[Framework 架构文档](../../app/code/Weline/Framework/doc/architecture/README.md)
+- AI 入口与约束：[AGENTS.md](../../AGENTS.md)；具体知识由项目 MCP 按任务返回

@@ -2,9 +2,10 @@
 
 ## 开发前先读
 
-1. `app/code/Weline/Api/doc/AI-INDEX.md`
-2. `app/code/Weline/Api/doc/framework-api-and-auth-contract.md`
-3. 涉及浏览器交互时，同时读 `app/code/Weline/Frontend/doc/AI-INDEX.md`
+先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：
+
+1. `app/code/Weline/Api/doc/framework-api-and-auth-contract.md`
+2. 涉及浏览器交互时，让同一 Guidance Bundle 同时检索 Frontend 请求规范
 
 ## 模块定位
 

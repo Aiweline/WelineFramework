@@ -120,9 +120,7 @@ final class CommerceAdminMenuContractTest extends TestCase
                 $isPhpUnit = \str_ends_with($filename, 'Test.php')
                     && (\str_contains($path, '/Test/') || \str_contains($path, '/test/'));
                 $isPlaywright = \str_ends_with($filename, '.spec.js');
-                $isValidationScript = \str_starts_with($path, BP . 'dev/ai/scripts/')
-                    && \in_array($file->getExtension(), ['php', 'js', 'sh'], true);
-                if (!$isPhpUnit && !$isPlaywright && !$isValidationScript) {
+                if (!$isPhpUnit && !$isPlaywright) {
                     continue;
                 }
 
@@ -400,22 +398,16 @@ final class CommerceAdminMenuContractTest extends TestCase
         $manifest = self::manifest();
         $traceability = $manifest['originalPlanTraceability'] ?? null;
         self::assertIsArray($traceability, 'Missing original-plan traceability');
-        self::assertSame('preserve-not-current', $traceability['historicalEvidencePolicy'] ?? null);
+        self::assertSame('self-contained-manifest', $traceability['historicalEvidencePolicy'] ?? null);
         self::assertIsInt($traceability['expectedOriginalCaseCount'] ?? null);
         self::assertIsArray($traceability['groups'] ?? null);
         self::assertNotSame([], $traceability['groups']);
 
-        $sourcePlan = BP . \ltrim((string)($traceability['sourcePlanPath'] ?? ''), '/');
-        $sourceInventory = BP . \ltrim((string)($traceability['sourceInventoryPath'] ?? ''), '/');
-        $historicalLedger = BP . \ltrim((string)($traceability['historicalLedgerPath'] ?? ''), '/');
-        self::assertFileExists($sourcePlan);
-        self::assertFileExists($sourceInventory);
-        self::assertFileExists($historicalLedger);
-
-        \preg_match_all('/^\|\s*(TEST-[A-Z0-9-]+)\s*\|/m', (string)\file_get_contents($historicalLedger), $ledgerMatches);
-        $ledgerCaseIds = \array_values(\array_unique($ledgerMatches[1] ?? []));
-        \sort($ledgerCaseIds, SORT_STRING);
-        self::assertCount($traceability['expectedOriginalCaseCount'], $ledgerCaseIds);
+        self::assertMatchesRegularExpression(
+            '/^[a-f0-9]{64}$/',
+            (string)($traceability['sourcePlanSha256'] ?? ''),
+        );
+        self::assertNotSame('', (string)($traceability['historyMigration'] ?? ''));
 
         $capabilityIds = [];
         $currentCaseIds = \array_fill_keys($manifest['globalCaseIds'], true);
@@ -474,27 +466,6 @@ final class CommerceAdminMenuContractTest extends TestCase
         $ownedCaseIds = \array_keys($ownedOriginalCases);
         \sort($ownedCaseIds, SORT_STRING);
         self::assertCount($traceability['expectedOriginalCaseCount'], $ownedCaseIds);
-        self::assertSame($ledgerCaseIds, $ownedCaseIds, 'Original 160-case ledger and R4.3 traceability differ');
-
-        $externalSourcePlan = (string)($traceability['externalSourcePlanPath'] ?? '');
-        $authoritativePlan = $externalSourcePlan !== '' && \is_file($externalSourcePlan)
-            ? $externalSourcePlan
-            : $sourcePlan;
-        if ($authoritativePlan === $externalSourcePlan) {
-            self::assertSame(
-                (string)($traceability['externalSourcePlanSha256'] ?? ''),
-                \hash_file('sha256', $externalSourcePlan),
-                'External source plan changed without a manifest preimage update',
-            );
-        }
-        $planSource = (string)\file_get_contents($authoritativePlan);
-        \preg_match_all('/^\|\s*`?(TEST-[A-Z0-9-]+)`?\s*\|/m', $planSource, $planMatches);
-        $planCaseIds = \array_values(\array_unique($planMatches[1] ?? []));
-        \sort($planCaseIds, SORT_STRING);
-        self::assertSame($ledgerCaseIds, $planCaseIds, 'Source plan, ledger and R4.3 traceability differ');
-        foreach ($ownedCaseIds as $caseId) {
-            self::assertStringContainsString($caseId, $planSource, 'Traceability case is absent from source plan: ' . $caseId);
-        }
     }
 
     public function testEveryOriginalPlanCaseHasCurrentExecutableEvidenceDeclaration(): void

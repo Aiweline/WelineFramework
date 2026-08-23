@@ -4,15 +4,11 @@
 
 ## 当前入口
 
-开发前先读：
+开发前先完成 `prepare_project` 并调用 `resolve_task_context`，再读：
 
-1. `app/code/Weline/Index/doc/AI-INDEX.md`
-2. `app/code/Weline/Index/doc/需求.md`
-3. `app/code/Weline/Index/doc/开发日志.md`
-4. `dev/ai/diagrams/08-module-docs-index.txt`
-5. `dev/ai/global-constraints.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+1. `app/code/Weline/Index/doc/需求.md`
+2. `app/code/Weline/Index/doc/开发日志.md`
+3. `app/code/Weline/Ai/doc/AI开发治理.md`
 
 ## 模块定位
 

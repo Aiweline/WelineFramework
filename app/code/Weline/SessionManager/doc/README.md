@@ -4,13 +4,12 @@
 
 ## 当前入口
 
-开发前先读：
+开发前先完成 `prepare_project` 并调用 `resolve_task_context`，再读：
 
-1. `AI-ENTRY.md` 与 `dev/ai/global-constraints.md`
-2. `app/code/Weline/SessionManager/doc/AI-INDEX.md`
-3. `app/code/Weline/SessionManager/doc/需求.md`
-4. `app/code/Weline/SessionManager/doc/设备管理架构.md`
-5. 运营或故障处理再读 `app/code/Weline/SessionManager/doc/运营/设备管理.md`
+1. `AGENTS.md` 与 `app/code/Weline/Ai/doc/AI开发治理.md`
+2. `app/code/Weline/SessionManager/doc/需求.md`
+3. `app/code/Weline/SessionManager/doc/设备管理架构.md`
+4. 运营或故障处理再读 `app/code/Weline/SessionManager/doc/运营/设备管理.md`
 
 ## 模块定位
 
