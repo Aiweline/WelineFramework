@@ -452,6 +452,7 @@
                 if (recommendW) params.push('recommend_width=' + encodeURIComponent(recommendW));
                 if (recommendH) params.push('recommend_height=' + encodeURIComponent(recommendH));
                 var url = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
+                var mediaSelectionChanged = false;
                 openMediaManagerDialog({
                     targetId: targetId,
                     closeId: closeId,
@@ -464,9 +465,11 @@
                         if (input && storedValue) {
                             input.value = storedValue;
                             delete input.dataset.previewUrl;
+                            mediaSelectionChanged = true;
                         }
                     },
                     onClose: function () {
+                        if (!mediaSelectionChanged) return;
                         var input = doc.getElementById(targetId);
                         if (input) {
                             updateMediaImagePreview(input);
