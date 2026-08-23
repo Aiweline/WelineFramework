@@ -20,6 +20,7 @@
  * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
  */
 $meta = $this->getData('meta') ?? [];
+$rawContent = (string)$this->getData('content');
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
@@ -45,12 +46,16 @@ $meta = $this->getData('meta') ?? [];
                 reject="header,footer"
                 position="content"
                 class="cms-page-blank__content-slot">
-            <w:hook name="Weline_Theme::frontend::layouts::cms_page::blank::content">
-                <div class="cms-page-blank__placeholder" data-placeholder="content">
-                    <span class="cms-page-blank__placeholder-title"><?= __('拖拽部件或容器到此处') ?></span>
-                    <span class="cms-page-blank__placeholder-hint"><?= __('空白布局不会渲染 header、footer 或面包屑') ?></span>
-                </div>
-            </w:hook>
+            <?php if (trim($rawContent) !== ''): ?>
+                <?= $rawContent ?>
+            <?php else: ?>
+                <w:hook name="Weline_Theme::frontend::layouts::cms_page::blank::content">
+                    <div class="cms-page-blank__placeholder" data-placeholder="content">
+                        <span class="cms-page-blank__placeholder-title"><?= __('拖拽部件或容器到此处') ?></span>
+                        <span class="cms-page-blank__placeholder-hint"><?= __('空白布局不会渲染 header、footer 或面包屑') ?></span>
+                    </div>
+                </w:hook>
+            <?php endif; ?>
         </w:slot>
 
         <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::main-after</w:hook>

@@ -529,13 +529,17 @@ final class ThemeLegacyResourceAdapter implements ThemeScopedResourceAdapterInte
                 }
                 $layoutKey = $this->translationParamForIdentify($entry->word, $layoutIdentify);
                 if ($layoutKey !== null) {
-                    $translations['layout'][$layoutKey] = $entry->translation;
+                    $translations['layout'][$layoutKey] = ThemeData::decodeProjectedTranslationValue(
+                        $entry->translation,
+                    );
                     continue;
                 }
                 foreach ($nodeIdentifies as $nodeUid => $identify) {
                     $param = $this->translationParamForIdentify($entry->word, $identify);
                     if ($param !== null) {
-                        $translations[$nodeUid][$param] = $entry->translation;
+                        $translations[$nodeUid][$param] = ThemeData::decodeProjectedTranslationValue(
+                            $entry->translation,
+                        );
                         break;
                     }
                 }
@@ -723,7 +727,7 @@ final class ThemeLegacyResourceAdapter implements ThemeScopedResourceAdapterInte
                 if ($scope !== 'default') {
                     $word .= '|scope:' . $scope;
                 }
-                $expected[$word] = (string)$value;
+                $expected[$word] = ThemeData::encodeProjectedTranslationValue($value);
             }
         }
 
