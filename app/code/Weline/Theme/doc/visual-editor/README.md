@@ -58,7 +58,7 @@
 - [Slot 嵌套规则](./slot-nesting-rules.md)
 - [局部刷新机制](./partial-refresh.md)
 - [组件库筛选](./component-library-filtering.md)
-- [component.json 规范](./component-json-spec.md)
+- [component.json 规范](./component-library-filtering.md)
 
 ## 相关服务
 

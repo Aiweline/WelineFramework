@@ -97,7 +97,7 @@ WELINE_CUSTOMER_ASSET_TEST_DATABASE=<registered-migration-clone> php \
   --bootstrap app/code/Weline/CustomerAsset/Test/Unit/bootstrap.php \
   app/code/Weline/CustomerAsset/Test/Integration/CustomerAssetPaymentRefundPostgresqlIntegrationTest.php
 P2F005_TEST_DATABASE=<registered-migration-clone> php \
-  dev/ai/codex/tasks/2026-07-27/2026-07-27-1112-p2f-005-persistent-refund-orchestration/verify-persistent-refund.php
+  迁移前历史任务记录（已清理）
 php bin/w e2e:run \
   app/code/Weline/Order/Test/e2e/frontend/plan-refund02-pending-customer-view.spec.js \
   --project=chromium --headless

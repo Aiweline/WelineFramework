@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weline.local/schemas/edit-plan.v1.json",
+  "title": "Learning MCP guarded edit plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "project_revision",
+    "base_commit",
+    "operations",
+    "validation_profile"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "edit-plan.v1"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "project_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "base_commit": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 128
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/replaceText"
+          },
+          {
+            "$ref": "#/$defs/replaceRange"
+          },
+          {
+            "$ref": "#/$defs/replaceSymbol"
+          },
+          {
+            "$ref": "#/$defs/insertBeforeSymbol"
+          },
+          {
+            "$ref": "#/$defs/insertAfterSymbol"
+          },
+          {
+            "$ref": "#/$defs/replaceDocumentSection"
+          },
+          {
+            "$ref": "#/$defs/createFile"
+          }
+        ]
+      }
+    },
+    "validation_profile": {
+      "enum": [
+        "default",
+        "weline.php.module",
+        "php_lint",
+        "json",
+        "diff_check"
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^(?:sha256:)?[A-Fa-f0-9]{64}$"
+    },
+    "replacement": {
+      "type": "string",
+      "maxLength": 16777216
+    },
+    "replaceText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "expected_file_sha256", "search", "replacement"],
+      "properties": {
+        "kind": {"const": "replace_text"},
+        "path": {"$ref": "#/$defs/path"},
+        "expected_file_sha256": {"$ref": "#/$defs/hash"},
+        "search": {"type": "string", "minLength": 1, "maxLength": 16777216},
+        "replacement": {"$ref": "#/$defs/replacement"},
+        "occurrence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "replaceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "expected_file_sha256", "start_byte", "end_byte", "replacement"],
+      "properties": {
+        "kind": {"const": "replace_range"},
+        "path": {"$ref": "#/$defs/path"},
+        "expected_file_sha256": {"$ref": "#/$defs/hash"},
+        "start_byte": {"type": "integer", "minimum": 0},
+        "end_byte": {"type": "integer", "minimum": 0},
+        "replacement": {"$ref": "#/$defs/replacement"}
+      }
+    },
+    "symbolProperties": {
+      "type": "object"
+    },
+    "replaceSymbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "expected_file_sha256", "expected_digest", "replacement"],
+      "anyOf": [
+        {"required": ["symbol_uid"]},
+        {"required": ["target_ref"]}
+      ],
+      "properties": {
+        "kind": {"const": "replace_symbol"},
+        "path": {"$ref": "#/$defs/path"},
+        "symbol_uid": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "target_ref": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "expected_file_sha256": {"$ref": "#/$defs/hash"},
+        "expected_digest": {"$ref": "#/$defs/hash"},
+        "replacement": {"$ref": "#/$defs/replacement"}
+      }
+    },
+    "insertBeforeSymbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "expected_file_sha256", "expected_digest", "replacement"],
+      "anyOf": [
+        {"required": ["symbol_uid"]},
+        {"required": ["target_ref"]}
+      ],
+      "properties": {
+        "kind": {"const": "insert_before_symbol"},
+        "path": {"$ref": "#/$defs/path"},
+        "symbol_uid": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "target_ref": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "expected_file_sha256": {"$ref": "#/$defs/hash"},
+        "expected_digest": {"$ref": "#/$defs/hash"},
+        "replacement": {"$ref": "#/$defs/replacement"}
+      }
+    },
+    "insertAfterSymbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "expected_file_sha256", "expected_digest", "replacement"],
+      "anyOf": [
+        {"required": ["symbol_uid"]},
+        {"required": ["target_ref"]}
+      ],
+      "properties": {
+        "kind": {"const": "insert_after_symbol"},
+        "path": {"$ref": "#/$defs/path"},
+        "symbol_uid": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "target_ref": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "expected_file_sha256": {"$ref": "#/$defs/hash"},
+        "expected_digest": {"$ref": "#/$defs/hash"},
+        "replacement": {"$ref": "#/$defs/replacement"}
+      }
+    },
+    "replaceDocumentSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "expected_file_sha256", "expected_digest", "replacement"],
+      "oneOf": [
+        {"required": ["heading"]},
+        {"required": ["start_byte", "end_byte"]}
+      ],
+      "properties": {
+        "kind": {"const": "replace_document_section"},
+        "path": {"$ref": "#/$defs/path"},
+        "expected_file_sha256": {"$ref": "#/$defs/hash"},
+        "expected_digest": {"$ref": "#/$defs/hash"},
+        "heading": {"type": "string", "minLength": 1, "maxLength": 512},
+        "start_byte": {"type": "integer", "minimum": 0},
+        "end_byte": {"type": "integer", "minimum": 0},
+        "replacement": {"$ref": "#/$defs/replacement"}
+      }
+    },
+    "createFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "content"],
+      "properties": {
+        "kind": {"const": "create_file"},
+        "path": {"$ref": "#/$defs/path"},
+        "content": {"$ref": "#/$defs/replacement"}
+      }
+    }
+  }
+}

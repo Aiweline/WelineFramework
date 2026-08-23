@@ -1,6 +1,6 @@
 # Theme 继承与文件式约定
 
-> 适用范围：主题继承、`app/design` 覆盖、模块 `view/theme` 资源贡献、模块模板覆盖、layout/partial/component/widget 文件落点。开发前先读 `app/code/Weline/Theme/doc/AI-INDEX.md`。
+> 适用范围：主题继承、`app/design` 覆盖、模块 `view/theme` 资源贡献、模块模板覆盖、layout/partial/component/widget 文件落点。开发前先调用 `resolve_task_context` 获取本任务所需约束。
 
 ## 实现来源
 
@@ -145,7 +145,7 @@ theme/{area}/layouts/{layoutType}/{option}.phtml
 | 新增 partial | 默认能力放 `Weline_Theme/view/theme/{area}/partials/...`，主题定制放 `app/design/.../{area}/partials/...` | layout 文件内堆重复片段 |
 | 新增基础 UI 原语 | `components/` | widget 或 Taglib |
 | 新增可视化编辑器部件 | 模板放 `view/theme/{area}/widgets/...`，注册放 `extends/module/Weline_Widget/{ModuleName}/widget.php` | 旧式 `extends/Weline_Widget/...` |
-| 新增模板语义标签 | 对应模块 `Taglib/`，并读 `Weline_Taglib/doc/AI-INDEX.md` | 为普通页面片段滥建 Taglib |
+| 新增模板语义标签 | 对应模块 `Taglib/`，并通过 `resolve_task_context` 检索 `Weline_Taglib` | 为普通页面片段滥建 Taglib |
 | 改前端业务请求 | QueryProvider + `Weline.Api.*` | 禁止 `fetch`、`XMLHttpRequest`、`$.ajax`、`axios` |
 | 看到问题在 `view/tpl` | 反查源模板、Taglib、Hook 或生成链路 | 直接编辑 `view/tpl` |
 
@@ -157,7 +157,7 @@ theme/{area}/layouts/{layoutType}/{option}.phtml
 2. 当前文件应该落在默认主题、设计主题、父主题、模块贡献层，还是普通模板覆盖层？
 3. 真实源文件在哪里？是否误把 `view/tpl` 或 `generated/` 当源文件？
 4. 是否涉及浏览器业务请求？如果涉及，后端 QueryProvider 和前端 `Weline.Api.*` 链路是什么？
-5. 需要读哪些模块 `doc/AI-INDEX.md` 和专项文档？
+5. 需要读哪些模块 `resolve_task_context` 和专项文档？
 
 这 5 个问题答不出来时，不要开始写代码。
 
@@ -180,7 +180,7 @@ app/code/Weline/Theme/view/tpl/zh_Hans_CN/theme/frontend/layouts/homepage/com_de
 
 ## 推荐最小流程
 
-1. 读 `app/code/Weline/Theme/doc/AI-INDEX.md`。
+1. 调用 `resolve_task_context` 获取本任务的最小上下文。
 2. 按任务读本文、`layout-discovery-guide.md`、`部件开发指南.md`、`widget-slot-attributes.md`、`Weline.Api使用指南.md`。
 3. 用当前主题和 area 推导目标路径。
 4. 只改源文件。

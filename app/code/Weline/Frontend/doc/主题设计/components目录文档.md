@@ -1,4 +1,4 @@
-> 警告：本文是历史主题设计资料，仅用于理解早期设计思路，不是当前开发规范。当前主题开发先读 `app/code/Weline/Theme/doc/AI-INDEX.md`、`app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`、`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`；浏览器业务请求只使用 `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`。
+> 警告：本文是历史主题设计资料，仅用于理解早期设计思路，不是当前开发规范。当前主题开发先调用 `resolve_task_context` 获取任务约束，再参考 `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`、`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`；浏览器业务请求只使用 `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`。
 
 # components/ 目录文档
 
@@ -421,6 +421,5 @@ $param2 = $this->getData('param2') ?? '';
 
 ## 相关文档
 
-- [组件设计规范](./组件规范.md)（待创建）
+- 组件设计规范（待补充专题文档）
 - [assets/css/components.css 文档](./assets目录文档.md#componentscss)
-

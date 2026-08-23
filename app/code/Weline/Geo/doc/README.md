@@ -116,7 +116,7 @@ start-page SystemConfig 已写入、但外层主库事务尚未提交时执行�
 ## 🔗 相关链接
 
 - [模块README](../README.md)
-- [WelineFramework文档](../../../docs/dev/开发文档.md)
+- [WelineFramework文档](../../../../../docs/dev/开发文档.md)
 
 ---
 

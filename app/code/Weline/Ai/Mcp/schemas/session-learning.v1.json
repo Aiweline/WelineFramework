@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Weline session learning extraction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "decision", "experiences"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "session-learning.v1"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["candidate", "no_learning", "discard"]
+    },
+    "experiences": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "category",
+          "knowledge_type",
+          "surface",
+          "environment_constraints",
+          "problem_pattern",
+          "trigger",
+          "root_cause",
+          "correct_approach",
+          "reusable_rule",
+          "positive_example",
+          "negative_example",
+          "evidence_ids",
+          "exceptions",
+          "paths",
+          "languages",
+          "wrong_approaches"
+        ],
+        "properties": {
+          "title": {"type": "string", "minLength": 1, "maxLength": 180},
+          "category": {
+            "type": "string",
+            "enum": [
+              "user_preference",
+              "project_constraint",
+              "project_fact",
+              "architecture_decision",
+              "debugging_strategy",
+              "anti_pattern",
+              "workflow_rule",
+              "tool_usage",
+              "test_oracle",
+              "security_boundary",
+              "temporary_context"
+            ]
+          },
+          "knowledge_type": {
+            "type": "string",
+            "enum": ["global_rule", "project_rule", "skill_knowledge", "operational_observation"]
+          },
+          "surface": {"type": "string", "minLength": 1, "maxLength": 120},
+          "environment_constraints": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {"type": "string", "minLength": 1, "maxLength": 300}
+          },
+          "problem_pattern": {"type": "string", "minLength": 1, "maxLength": 1600},
+          "trigger": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "root_cause": {"type": "string", "maxLength": 1600},
+          "correct_approach": {"type": "string", "minLength": 1, "maxLength": 2400},
+          "reusable_rule": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "positive_example": {"type": "string", "minLength": 1, "maxLength": 1600},
+          "negative_example": {"type": "string", "minLength": 1, "maxLength": 1600},
+          "evidence_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 40,
+            "items": {"type": "string", "minLength": 1, "maxLength": 200}
+          },
+          "exceptions": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {"type": "string", "maxLength": 600}
+          },
+          "paths": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {"type": "string", "maxLength": 500}
+          },
+          "languages": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {"type": "string", "maxLength": 50}
+          },
+          "wrong_approaches": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {"type": "string", "maxLength": 1000}
+          }
+        }
+      }
+    }
+  }
+}

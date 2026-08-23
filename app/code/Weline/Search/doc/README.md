@@ -22,8 +22,8 @@
   CAS、精确 Website/Store/Channel allowlist；
 - rollback 恢复 Product direct，同时保留 Search generation 与 checkpoint。
 
-详细设计与验证见 [`search-index.md`](search-index.md)，代码入口见
-[`AI-INDEX.md`](AI-INDEX.md)。
+详细设计与验证见 [`search-index.md`](search-index.md)；代码与文档上下文由
+`prepare_project` 就绪后的 `resolve_task_context` 动态返回。
 
 `TASK-MIG-P3C` 已完成工程验收，`GATE-P3C=GO` 已由独立任务重跑
 TEST-P3C-01..04 后签署；P3A/P3B/P3C 聚合复验后 `GATE-P3=GO`。

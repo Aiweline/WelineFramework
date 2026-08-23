@@ -1,10 +1,10 @@
 # 如何自定义 Weline Taglib 标签
 
-权威开发与目录维护流程已迁移到技能：
+权威开发与目录维护流程由本模块文档和 MCP 动态检索共同提供：
 
-1. **场景映射（先查再用）**：`dev/ai/skills/framework-taglib-catalog/SKILL.md`
-2. **全量标签目录**：`dev/ai/skills/framework-taglib-catalog/tag-catalog.md`
-3. **开发与维护门禁**：`dev/ai/skills/framework-taglib-catalog/tag-development.md`
+1. **场景映射（先查再用）**：`app/code/Weline/Taglib/doc/README.md`
+2. **全量标签目录**：`app/code/Weline/Taglib/doc/README.md`
+3. **开发与维护门禁**：`app/code/Weline/Taglib/doc/README.md`
 
 ## 摘要
 
@@ -13,7 +13,7 @@
 3. `name()` 使用稳定名（如 `websites:website:select`）
 4. 运行 `php bin/w taglib:collect`（或含收集的 `setup:upgrade`）
 5. 模板使用 `<w:your-tag .../>`
-6. **同一任务内**更新 `tag-catalog.md`；若是选择器/控件场景，同步更新 `SKILL.md` 映射表
+6. **同一任务内**更新本 README 的场景映射及相关专题文档，MCP 会在下一次受保护调用前自动重索引
 
 ## 不要做
 

@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "php /absolute/path/to/Weline-Codex-Mcp/bin/learningctl hook session-start --config /absolute/path/to/config.yaml",
+            "timeout": 5,
+            "statusMessage": "Starting the Weline project intelligence session adapter"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "php /absolute/path/to/Weline-Codex-Mcp/bin/learningctl hook user-prompt --config /absolute/path/to/config.yaml",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|functions\\.exec|apply_patch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "php /absolute/path/to/Weline-Codex-Mcp/bin/learningctl hook post-tool-use --config /absolute/path/to/config.yaml",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

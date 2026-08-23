@@ -460,6 +460,6 @@ DELETE /api/v1/api-key/{id}         # 撤销密钥
 ## 开发文档
 
 详细的开发指南请参考：
-- [WelineFramework模块开发完整指南](../../../Framework/doc/模块开发完整指南.md) - **新增，必读**
-- [Weline_Ai最终状态报告](../../docs/FINAL_STATUS.md)
-- [Weline_Ai实施进度](../../docs/IMPLEMENTATION_PROGRESS.md)
+- [WelineFramework模块开发完整指南](../../../Framework/doc/3-开发/模块开发完整指南.md) - **新增，必读**
+- [Weline_Ai最终状态报告](../开发日志.md)
+- [Weline_Ai实施进度](../开发日志.md)

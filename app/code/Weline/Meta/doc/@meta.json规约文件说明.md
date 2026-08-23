@@ -322,6 +322,6 @@ view/theme/frontend/layouts/
 ## 相关文档
 
 - [Meta 模块使用指南](./使用指南.md)
-- [w:meta 标签使用说明](../Theme/doc/w-meta标签使用说明.md)
-- [组件 Meta 信息格式规范](../Theme/doc/组件Meta信息格式规范.md)
+- [w:meta 标签使用说明](../../Theme/doc/组件Meta信息格式规范.md)
+- [组件 Meta 信息格式规范](../../Theme/doc/组件Meta信息格式规范.md)
 

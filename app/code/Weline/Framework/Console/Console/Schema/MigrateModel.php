@@ -406,7 +406,7 @@ class MigrateModel extends CommandAbstract
         $this->printer->printing('  - app/code/Aws/Domains/Model/AwsConfig.php');
         $this->printer->printing('  - app/code/Aws/Domains/Model/DomainOperation.php');
         $this->printer->printing('');
-        $this->printer->printing('受影响清单: dev/ai/plans/model-declarative-schema-migration-affected-models.txt');
+        $this->printer->printing('受影响清单: 请保存本命令 dry-run 输出并逐项复核');
     }
 
     public function tip(): string

@@ -17,7 +17,7 @@ use Weline\Server\Console\Server\WlsErrorScanner;
  */
 class WlsErrorConsumerService
 {
-    private const TASKS_FILE = 'dev/ai/agents/tasks.json';
+    private const TASKS_FILE = 'var/ai/agents/tasks.json';
 
     /** 每次最多消费任务数 */
     private int $maxConsumePerRun = 5;

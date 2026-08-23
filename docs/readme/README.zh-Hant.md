@@ -11,7 +11,7 @@ WelineFramework 是面向模組化 Web 應用、後台系統與電商業務場�
 - 零基礎快速搭建本地環境：使用一鍵安裝腳本。
 - 已有 PHP、Composer、資料庫：使用純淨安裝。
 - 架構文件：[Weline 架構](../weline/README.md)。
-- AI / Codex 在本倉工作：從 [AI-ENTRY.md](../../AI-ENTRY.md) 開始。
+- AI / Codex 在本倉工作：從 [AGENTS.md](../../AGENTS.md) 開始。
 
 ## 環境要求
 
@@ -70,7 +70,7 @@ php bin/w server:start
 - [架構總覽](../weline/架构总览.md)
 - [開發文件](../开发文档.md)
 - [部署文件](../部署文档.md)
-- [AI 助手入口](../../AI-README.md)
+- [AI 助手入口](../../AGENTS.md)
 
 ## 注意
 

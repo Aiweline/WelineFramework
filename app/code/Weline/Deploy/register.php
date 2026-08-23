@@ -15,7 +15,6 @@ Register::register(
     Register::MODULE,
     'Weline_Deploy',
     __DIR__,
-    '1.1.1',
+    '1.1.2',
     'WelineFramework 部署模块，提供基于 Git 的代码更新、发布系统与版本探测功能。'
 );
-

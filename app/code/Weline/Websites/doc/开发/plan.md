@@ -2,7 +2,7 @@
 
 > 最后更新：2026-02-27  
 > 状态：规划中  
-> 总计划链接：[.cursor/plans/域名模型重构计划_db9c4f72.plan.md](../../../../../.cursor/plans/域名模型重构计划_db9c4f72.plan.md)
+> 总计划链接：[.cursor/plans/域名模型重构计划_db9c4f72.plan.md](../需求.md)
 
 ## 一、概述
 

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weline.local/schemas/guidance-bundle.v1.json",
+  "title": "Task-bounded Weline guidance bundle",
+  "type": "object",
+  "required": [
+    "schema_version", "guidance_id", "project_id", "repository", "readiness_id",
+    "client_session_id", "project_revision", "task", "session_directives", "rules",
+    "fragments", "sources", "token_usage", "query", "routing_contract"
+  ],
+  "properties": {
+    "schema_version": {"const": "guidance-bundle.v1"},
+    "guidance_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "repository": {"type": "string", "minLength": 1},
+    "readiness_id": {"type": "string", "minLength": 1},
+    "client_session_id": {"type": "string", "minLength": 1},
+    "project_revision": {"type": "integer", "minimum": 0},
+    "task": {"type": "string", "minLength": 1},
+    "session_directives": {"type": "array", "maxItems": 50, "items": {"type": "string"}},
+    "rules": {"type": "array", "items": {"type": "object"}},
+    "fragments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path", "content", "file_hash", "content_hash", "token_estimate"],
+        "properties": {
+          "kind": {"enum": ["documents", "rules", "configuration", "code"]},
+          "path": {"type": "string"},
+          "content": {"type": "string"},
+          "file_hash": {"type": "string"},
+          "content_hash": {"type": "string"},
+          "token_estimate": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": true
+      }
+    },
+    "sources": {"type": "array", "items": {"type": "object"}},
+    "token_usage": {"type": "object"},
+    "query": {"type": "object"},
+    "routing_contract": {"type": "object"}
+  },
+  "additionalProperties": true
+}

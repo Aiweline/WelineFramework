@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://learning-mcp.local/schemas/proposal.v1.json",
+  "title": "Learning MCP Promotion Proposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proposal_id", "project_id", "schema_version", "source_experience_ids", "target", "scope", "proposed_rule", "rationale", "exceptions", "validation_plan", "rollback", "status", "created_at", "updated_at"],
+  "properties": {
+    "proposal_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "schema_version": {"const": "proposal.v1"},
+    "source_experience_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "target": {"type": "string", "minLength": 1},
+    "scope": {"type": "object"},
+    "proposed_rule": {"type": "string", "minLength": 1},
+    "rationale": {"type": "string", "minLength": 1},
+    "exceptions": {"type": "array", "items": {"type": "string"}},
+    "validation_plan": {"type": "array", "items": {"type": "string"}},
+    "rollback": {"type": "string", "minLength": 1},
+    "status": {"type": "string"},
+    "caller_suggestion": {"type": "string"},
+    "metadata": {"type": "object"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

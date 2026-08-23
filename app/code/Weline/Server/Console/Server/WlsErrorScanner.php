@@ -48,7 +48,7 @@ class WlsErrorScanner extends CommandAbstract
     private const ALERT_LOG = 'log/wls/wls_monitor.log';
 
     /** 任务池文件 */
-    private const TASKS_FILE = 'dev/ai/agents/tasks.json';
+    private const TASKS_FILE = 'var/ai/agents/tasks.json';
 
     /** 去重有效期：秒（30分钟内同类错误不重复记录） */
     private const DEDUP_TTL_SECONDS = 1800;

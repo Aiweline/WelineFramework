@@ -162,14 +162,11 @@
   ],
   "originalPlanTraceability": {
     "expectedOriginalCaseCount": 160,
-    "sourcePlanPath": "dev/ai/plans/2026-07-25-万能商城内核_f0b923cd.plan.md",
-    "externalSourcePlanPath": "/Users/weline/.cursor/plans/万能商城内核_f0b923cd.plan.md",
-    "externalSourcePlanSha256": "4e26370b2e98597916531862311de8faa64dec2af878300ded00d539e4ba1fbf",
-    "sourceInventoryPath": "dev/ai/codex/tasks/2026-07-25/2026-07-25-1202-plan-test-case-solidification/evidence/e2e/PLAN-TEST-INVENTORY.md",
-    "historicalLedgerPath": "dev/ai/codex/tasks/2026-07-29/2026-07-29-0537-commerce-kernel-acceptance-ledger/evidence/acceptance-ledger.md",
-    "historicalEvidencePolicy": "preserve-not-current",
+    "sourcePlanSha256": "4e26370b2e98597916531862311de8faa64dec2af878300ded00d539e4ba1fbf",
+    "historyMigration": "The retired AI task archive is not runtime evidence; its canonical 160 case identifiers are embedded in the groups below.",
+    "historicalEvidencePolicy": "self-contained-manifest",
     "currentEvidencePolicy": "exact-id-in-current-executable-source-plus-current-head-run",
-    "currentEvidenceRoots": ["app/code/Weline", "tests/e2e", "dev/ai/scripts"],
+    "currentEvidenceRoots": ["app/code/Weline", "tests/e2e"],
     "fixtureOnlyEvidenceAllowed": false,
     "groups": [
       {"groupId":"R43-TRACE-WEBSITES-MIGRATION","validationLayer":"webui-cli-postgresql","originalCaseIds":["TEST-P1A-01","TEST-P1A-02","TEST-MIG-FOUNDATION-01","TEST-MIG-FOUNDATION-02","TEST-MIG-P1A-01","TEST-MIG-P1A-02","TEST-MIG-P1A-03","TEST-MIG-P1A-04","TEST-MIG-P1A-05","TEST-MIG-P1A-06","TEST-MIG-P1A-07","TEST-MIG-P1A-08","TEST-MIG-P1B-01","TEST-MIG-P1B-02","TEST-MIG-P1B-03","TEST-MIG-P1B-04","TEST-MIG-P1B-05","TEST-MIG-P1B-06","TEST-MIG-P1B-07"],"r43CapabilityIds":["CK-CONTROL-WEBSITES","CK-CONTROL-STORES","CK-CONTROL-SALES-CHANNELS","CK-CONTROL-PROVISIONING","CK-OPERATIONS-MIGRATION-DIAGNOSTICS","CK-CORE-MIGRATION-EXECUTION"],"r43CaseIds":["CK-R43-WEBSITES-WEBSITE-001","CK-R43-WEBSITES-STORE-001","CK-R43-WEBSITES-CHANNEL-001","CK-R43-OPERATIONS-MIGRATION-001"]},

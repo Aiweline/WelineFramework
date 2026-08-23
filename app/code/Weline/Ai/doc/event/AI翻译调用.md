@@ -224,7 +224,7 @@ class TranslationCronTask implements CronTaskInterface
 
 - [AI模块开发文档](../README.md)
 - [I18n模块集成指南](../../../I18n/doc/README.md)
-- [事件系统使用指南](../../../Framework/doc/event.md)
+- [事件系统使用指南](../../../Framework/doc/3-开发/服务器事件系统.md)
 
 ## 更新记录
 

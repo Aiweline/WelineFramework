@@ -375,6 +375,6 @@ protected function tearDown(): void
 
 ## 参考资源
 
-- [WelineFramework 单元测试指南](../../../../docs/dev/单元测试.md)
+- [WelineFramework 单元测试指南](../../../../../../docs/dev/单元测试.md)
 - [LocalModel 接口定义](../../../I18n/Api/Localization/LocalModelInterface.php)
 - [测试用例文档](../测试/规则名称多语言翻译测试用例.md)

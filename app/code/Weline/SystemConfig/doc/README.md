@@ -6,7 +6,7 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 
 ## 当前规划入口
 
-- AI 技能入口：开发或读取模块配置前先使用 [system-config-scope](../../../../.codex/skills/system-config-scope/SKILL.md)。
+- AI 知识入口：开发或读取模块配置前先完成 `prepare_project`，再由 MCP 动态检索本模块文档；协议见 [统一知识库与 MCP 协议](../../Ai/doc/统一知识库与MCP协议.md)。
 - [SystemConfig Scope 配置树计划](./scope-config-tree-plan.md)：配置模块子计划，定义 `system_config` 如何升级为统一 scope 配置系统。
 - [SystemConfig 与 Theme 虚拟布局总计划](./scope-config-theme-layout-master-plan.md)：跨模块总计划，关联 SystemConfig、Framework Scope、Theme 虚拟布局、产品/分类布局接入。
 - [Theme 虚拟布局与产品/分类布局计划](../../Theme/doc/virtual-layout-scope-plan.md)：Theme 模块子计划，说明虚拟布局、源码编辑、可视化编辑、AI 创建和定时恢复策略。

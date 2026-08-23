@@ -152,4 +152,4 @@ try {
 - [ ] 未手工构造、复制或持久化 bootstrap ID；身份/Worker 失效时要求刷新页面。
 - [ ] 后台页面未使用当前禁用的 `auth=backend` stream。
 - [ ] 失败提示使用 `Weline.ApiBusiness.formatApiError`，能展开 `errors`。
-- [ ] `php dev/ai/scripts/check-browser-business-requests.php`（可加 `--module=`）`true_violations=0`。
+- [ ] `php 迁移前 AI 资料（已清理）`（可加 `--module=`）`true_violations=0`。

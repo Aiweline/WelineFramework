@@ -6,8 +6,8 @@
 
 建议按下面顺序建立上下文，再动源码：
 
-1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
+1. `AGENTS.md`
+2. `app/code/Weline/Ai/doc/AI开发治理.md`
 3. `app/code/Weline/Theme/doc/README.md`
 4. `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
 5. `app/code/Weline/Theme/view/theme/README.md`

@@ -3478,7 +3478,7 @@ php -l app\code\Weline\Server\Service\WlsPanelPluginRefreshService.php
 php -l app\code\Weline\Server\Controller\Backend\WlsPanel.php
 node --check tests\e2e\specs\backend\Weline_Server-panel-shell.spec.js
 rg -n "\b(sleep|usleep|die|exit|alert|confirm|prompt)\s*\(" app\code\Weline\Server\Service\WlsPanelPluginRefreshService.php app\code\Weline\Server\Controller\Backend\WlsPanel.php app\code\Weline\Server\view\templates\Backend\WlsPanel\index.phtml tests\e2e\specs\backend\Weline_Server-panel-shell.spec.js
-git diff --check -- app/code/Weline/Server/Service/WlsPanelPluginRefreshService.php app/code/Weline/Server/Controller/Backend/WlsPanel.php app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/20-plugin-tag-logic.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md dev/ai/codex/tasks/2026-06-18/2026-06-18-0151-setup-upgrade-composer-timeout-for-wls-panel/plan.md dev/ai/codex/tasks/2026-06-18/2026-06-18-0151-setup-upgrade-composer-timeout-for-wls-panel/progress.md dev/ai/codex/tasks/2026-06-18/2026-06-18-0151-setup-upgrade-composer-timeout-for-wls-panel/result.md
+git diff --check -- app/code/Weline/Server/Service/WlsPanelPluginRefreshService.php app/code/Weline/Server/Controller/Backend/WlsPanel.php app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/20-plugin-tag-logic.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md 迁移前历史任务记录（已清理） 迁移前历史任务记录（已清理） 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -8268,7 +8268,7 @@ Cleanup evidence:
 php bin/w server:stop ai-test-wls-direct-feas-9994
 Test-NetConnection -ComputerName 127.0.0.1 -Port 9994
 Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" | Where-Object { ($_.CommandLine -like '*ai-test-wls-direct-feas-9994*') }
-rg -n "ai-test-wls-direct-feas-9994" app/etc var app/code/Weline/Server/doc/wls-panel-plan dev/ai/codex/tasks/2026-06-19/2026-06-19-0737-wls-gateway-direct-listen-feasibility
+rg -n "ai-test-wls-direct-feas-9994" app/etc var app/code/Weline/Server/doc/wls-panel-plan 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -8379,14 +8379,14 @@ Focused browser validation:
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0348-wls-file-manager-text-edit-slice/artifacts/wls-file-manager-preview-edit-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0348-wls-file-manager-text-edit-slice/artifacts/wls-file-manager-preview-edit-mobile.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Runtime cleanup:
 
 ```text
-app/etc/env.php restored from dev/ai/codex/tasks/2026-06-19/2026-06-19-0348-wls-file-manager-text-edit-slice/artifacts/env-before-file-edit.php
+app/etc/env.php restored from 迁移前历史任务记录（已清理）
 maintenance=true verified after restore
 extend\server\php\php.exe bin\w server:stop ai-test-wls-file-edit-9992
 Port 9992 only had transient TIME_WAIT entries after stop
@@ -8479,8 +8479,8 @@ Assertions covered:
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0428-wls-project-config-center-scoped-editors/artifacts/wls-project-config-center-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0428-wls-project-config-center-scoped-editors/artifacts/wls-project-config-center-mobile-dark.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Runtime cleanup:
@@ -8570,18 +8570,18 @@ Assertions:
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/route-sweep-report.json
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/anchor-fix-report.json
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/panel-dashboard-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/panel-marketplace-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/panel-security-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/deploy-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/filemanager-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/phpmanager-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/dbmanager-desktop.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/panel-dashboard-mobile.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/deploy-mobile.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0710-wls-panel-plugin-heavy-smoke/artifacts/filemanager-mobile.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Runtime cleanup:
@@ -8618,7 +8618,7 @@ Changed files:
 ```text
 app/code/Weline/Server/Service/WlsPanelGatewaySettingsService.php
 app/code/Weline/Server/Test/Unit/Service/WlsPanelGatewaySettingsServiceTest.php
-dev/ai/codex/tasks/2026-06-19/2026-06-19-0920-wls-gateway-target-selector-service-guard/
+迁移前历史任务记录（已清理）
 ```
 
 Validation:
@@ -8843,7 +8843,7 @@ Browser URL:
 http://pf9938bb3.weline.test:9991/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel#gateway-settings
 
 The in-app browser performed a real backend login using the local development
-admin account documented in dev/ai/AI-开发与测试指南.md, then opened the
+admin account documented in 迁移前 AI 资料（已清理） then opened the
 standalone WLS Panel.
 
 The native `.wls-gateway-apply-form` was present:
@@ -8955,7 +8955,7 @@ app/code/Weline/FileManager/i18n/en_US.csv
 app/code/Weline/FileManager/i18n/zh_Hans_CN.csv
 app/code/Weline/FileManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1020-wls-file-manager-editor-ergonomics/
+迁移前历史任务记录（已清理）
 ```
 
 Static validation:
@@ -9042,8 +9042,8 @@ editorVisible=true
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1020-wls-file-manager-editor-ergonomics/artifacts/desktop-editor-final-verified.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1020-wls-file-manager-editor-ergonomics/artifacts/mobile-editor-final-verified.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Runtime cache note:
@@ -9087,8 +9087,8 @@ Validation commands:
 
 ```text
 rg -n "FileManager rich-editor|rich-editor ergonomics|richer editing|optional richer editing|Executable-source writes|source-code editing|broader source-tree write|remain future|future slices" app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/FileManager/doc/README.md
-rg -n "[ \t]+$" app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md dev/ai/codex/tasks/2026-06-19/2026-06-19-1431-wls-panel-plan-remaining-map-sync
-git diff --check -- app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md dev/ai/codex/tasks/2026-06-19/2026-06-19-1431-wls-panel-plan-remaining-map-sync
+rg -n "[ \t]+$" app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md 迁移前历史任务记录（已清理）
+git diff --check -- app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md 迁移前历史任务记录（已清理）
 ```
 
 Validation result:
@@ -9123,14 +9123,14 @@ Changed docs:
 - `00-INDEX.md`
 - `10-prototype.md`
 - `30-atomic-task-plan.md`
-- `dev/ai/codex/tasks/2026-06-20/2026-06-20-0346-wls-file-manager-source-tree-policy-split/*`
+- `迁移前历史任务记录（已清理）`
 
 Validation:
 
 ```text
-rg -n "FileManager Source-Tree Policy Split|WLS-FILE-SOURCE-002|SOURCE_CREATE_FILE|SOURCE_RENAME|SOURCE_TRASH|Source-tree writes must keep" app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md dev/ai/codex/tasks/2026-06-20/2026-06-20-0346-wls-file-manager-source-tree-policy-split
-rg -n "[ \t]+$" app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md dev/ai/codex/tasks/2026-06-20/2026-06-20-0346-wls-file-manager-source-tree-policy-split
-git diff --check -- app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md dev/ai/codex/tasks/2026-06-20/2026-06-20-0346-wls-file-manager-source-tree-policy-split
+rg -n "FileManager Source-Tree Policy Split|WLS-FILE-SOURCE-002|SOURCE_CREATE_FILE|SOURCE_RENAME|SOURCE_TRASH|Source-tree writes must keep" app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md 迁移前历史任务记录（已清理）
+rg -n "[ \t]+$" app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md 迁移前历史任务记录（已清理）
+git diff --check -- app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md 迁移前历史任务记录（已清理）
 ```
 
 - Targeted wording scan found the new prototype/evidence/backlog rows.
@@ -9254,9 +9254,9 @@ The policy file did not exist after reset.
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1440-wls-file-manager-source-edit-policy/artifacts/filemanager-source-policy.html
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1440-wls-file-manager-source-edit-policy/artifacts/filemanager-source-preview.html
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1440-wls-file-manager-source-edit-policy/artifacts/filemanager-source-reset.html
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 The temporary backend cookie jar was deleted after validation.
@@ -9352,7 +9352,7 @@ No output, confirming the authenticated WLS Panel response did not fall back to 
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1520-wls-panel-responsive-theme-shell/artifacts/panel-marketplace.html
+迁移前历史任务记录（已清理）
 ```
 
 The temporary login and login-post captures were removed because login POST
@@ -9388,7 +9388,7 @@ Status: passed for screenshot-level standalone shell UI smoke.
 Scope:
 
 - Added a task-local CDP smoke script under
-  `dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts`.
+  `迁移前历史任务记录（已清理）`.
 - The script launches headless Microsoft Edge through Chrome DevTools Protocol,
   performs a real backend login, opens the WLS Panel marketplace route, toggles
   dark mode, captures screenshots, and writes JSON layout assertions.
@@ -9398,13 +9398,13 @@ Scope:
 Validation commands:
 
 ```text
-node --check dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/wls-panel-cdp-smoke.mjs
+node --check 迁移前历史任务记录（已清理）
 Passed.
 
 php bin/w server:start ai-test-wls-panel-visual-9996 -p 9996 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
 Started successfully on http://p11005ce4.weline.test:9996.
 
-node dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/wls-panel-cdp-smoke.mjs
+node 迁移前历史任务记录（已清理）
 Exit code 0.
 ```
 
@@ -9439,12 +9439,12 @@ buttonsFit=true, failures=[]
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/desktop-light-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/tablet-dark-1024.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/tablet-dark-768.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts/cdp-smoke-result.json
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Visual review notes:
@@ -9459,7 +9459,7 @@ Visual review notes:
 Sensitive artifact check:
 
 ```text
-rg -n "Set-Cookie|Cookie:|PHPSESSID|WELINE_BACKEND|form_key" dev/ai/codex/tasks/2026-06-19/2026-06-19-1542-wls-panel-headless-visual-smoke/artifacts
+rg -n "Set-Cookie|Cookie:|PHPSESSID|WELINE_BACKEND|form_key" 迁移前历史任务记录（已清理）
 No output.
 ```
 
@@ -9553,7 +9553,7 @@ workers had loaded the restored route files.
 Validation command:
 
 ```text
-node dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs
+node 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -9577,21 +9577,21 @@ Assertions:
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/dashboard-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/dashboard-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/marketplace-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/marketplace-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/security-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/security-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/php-manager-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/php-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/db-manager-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/db-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/file-manager-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/file-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/deploy-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/deploy-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/multi-page-cdp-smoke-result.json
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Visual review notes:
@@ -9632,16 +9632,16 @@ Scope:
 Task directory:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke
+迁移前历史任务记录（已清理）
 ```
 
 Script checks:
 
 ```text
-node --check dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs
+node --check 迁移前历史任务记录（已清理）
 exit 0
 
-node --check dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs
+node --check 迁移前历史任务记录（已清理）
 exit 0
 ```
 
@@ -9677,7 +9677,7 @@ WLS Panel application surface.
 Full panel CDP sweep:
 
 ```text
-node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost'; process.env.WLS_BASE_URL='http://127.0.0.1:9994'; process.env.CDP_PORT='9344'; await import('./dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs');"
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理） process.env.WLS_BASE_URL='http://127.0.0.1:9994'; process.env.CDP_PORT='9344'; await import('./迁移前历史任务记录（已清理）);"
 ```
 
 Result:
@@ -9697,7 +9697,7 @@ expected text matched for every page
 Theme spotcheck:
 
 ```text
-node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost'; process.env.WLS_BASE_URL='http://127.0.0.1:9994'; process.env.CDP_PORT='9345'; await import('./dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs');"
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理） process.env.WLS_BASE_URL='http://127.0.0.1:9994'; process.env.CDP_PORT='9345'; await import('./迁移前历史任务记录（已清理）);"
 ```
 
 Result:
@@ -9715,19 +9715,19 @@ fatalHits=[] for every combination
 Result artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/multi-page-cdp-smoke-result.json
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/dashboard-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/marketplace-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/security-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/php-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/db-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/file-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/deploy-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/theme-cdp-spotcheck-result.json
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/dashboard-phone-390-light.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/dashboard-phone-390-dark.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/file-manager-phone-390-dark.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/deploy-desktop-1280-dark.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Visual review notes:
@@ -9777,7 +9777,7 @@ app/code/Weline/DbManager/i18n/en_US.csv
 app/code/Weline/DbManager/i18n/zh_Hans_CN.csv
 app/code/Weline/DbManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary
+迁移前历史任务记录（已清理）
 ```
 
 Execution boundary:
@@ -9846,7 +9846,7 @@ Runtime/browser validation:
 
 ```text
 php bin/w server:start ai-test-wls-db-exec-9993 -p 9993 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
-node dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke.mjs
+node 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -9863,10 +9863,10 @@ negativePost: status=200 blocked=true executedNotice=false hasShell=true
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-desktop-light-1280.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-desktop-dark-1280.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke-result.json
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Visual review notes:
@@ -9905,8 +9905,8 @@ Changed files:
 app/code/Weline/Server/view/statics/assets/js/wls-panel-plugins.js
 app/code/Weline/Admin/view/templates/common/footer.phtml
 app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0440-wls-panel-plugin-interactions
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke.mjs
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Behavior:
@@ -9941,7 +9941,7 @@ attributes:
 
 ```text
 php bin/w server:start ai-test-wls-db-exec-9993 -p 9993 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
-node dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke.mjs
+node 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -9991,7 +9991,7 @@ app/code/Weline/DbManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
 app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer
+迁移前历史任务记录（已清理）
 ```
 
 Static validation:
@@ -10006,10 +10006,10 @@ No syntax errors detected.
 php -l app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
 No syntax errors detected.
 
-php -l dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-lifecycle-adapter-probe.php
+php -l 迁移前历史任务记录（已清理）
 No syntax errors detected.
 
-php -l dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-csv-parse-probe.php
+php -l 迁移前历史任务记录（已清理）
 No syntax errors detected.
 ```
 
@@ -10019,11 +10019,11 @@ syntax output; the lint results themselves passed.
 CSV and adapter probes:
 
 ```text
-php dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-csv-parse-probe.php
+php 迁移前历史任务记录（已清理）
 app/code/Weline/DbManager/i18n/en_US.csv OK 324
 app/code/Weline/DbManager/i18n/zh_Hans_CN.csv OK 324
 
-php dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-lifecycle-adapter-probe.php
+php 迁移前历史任务记录（已清理）
 passed=true
 mysql_grant: state=dry_run_only adapter_state=planned sql=GRANT SELECT ON `app_db`.* TO 'app_user'@'127.0.0.1';
 pgsql_create_user: state=dry_run_only adapter_state=planned sql=CREATE ROLE "app_role" LOGIN PASSWORD '<profile-secret>';
@@ -10051,7 +10051,7 @@ Browser smoke:
 
 ```text
 php bin/w server:start ai-test-wls-db-adapter-9992 -p 9992 -c 1 --no-ssl --supervisor false --worker-memory-limit=512M
-$env:WLS_BASE_URL='http://127.0.0.1:9992'; node dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-cdp-smoke.mjs
+$env:WLS_BASE_URL='http://127.0.0.1:9992'; node 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -10069,11 +10069,11 @@ fatalHits=[]
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-cdp-smoke-result.json
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-desktop-1280-light.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-desktop-1280-dark.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-phone-390-light.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-phone-390-dark.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Notes:
@@ -10185,7 +10185,7 @@ Master, two HTTP workers, and Dispatcher were running on the dedicated instance.
 Multi-page visual smoke:
 
 ```text
-node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts'; process.env.WLS_BASE_URL='http://p11005ce4.weline.test:9996'; process.env.CDP_PORT='9338'; await import('./dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs');"
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理） process.env.WLS_BASE_URL='http://p11005ce4.weline.test:9996'; process.env.CDP_PORT='9338'; await import('./迁移前历史任务记录（已清理）);"
 ```
 
 Result:
@@ -10200,8 +10200,8 @@ all cases: shell=true, loginFallback=false, overflow=0, fatalHits=[], buttonsFit
 Theme spot-check:
 
 ```text
-node --check dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs
-node dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs
+node --check 迁移前历史任务记录（已清理）
+node 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -10217,15 +10217,15 @@ all cases: expected theme matched actual shell theme, overflow=0, fatalHits=[]
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/multi-page-cdp-smoke-result.json
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/theme-cdp-spotcheck-result.json
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/dashboard-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/marketplace-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/file-manager-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/deploy-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/dashboard-phone-390-light.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/file-manager-phone-390-light.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/deploy-phone-390-light.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Visual review notes:
@@ -10294,7 +10294,7 @@ app/code/Weline/FileManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
 app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue
+迁移前历史任务记录（已清理）
 ```
 
 Route refresh:
@@ -10368,13 +10368,13 @@ HTTP smoke used http://127.0.0.1:9988
 HTTP/queue smoke:
 
 ```text
-node dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue/artifacts/filemanager-source-archive-tree-queue-smoke.mjs
+node 迁移前历史任务记录（已清理）
 ```
 
 Result file:
 
 ```text
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue/artifacts/filemanager-source-archive-tree-queue-smoke-result.json
+迁移前历史任务记录（已清理）
 ```
 
 Result summary:
@@ -10390,7 +10390,7 @@ queuePayload.max_bytes=10485760
 queueFinal.status=done
 sourceExistsAfterQueue=true
 archiveRoot=var/wls-panel/file-manager/source-archives
-zipEntry=source/dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue/artifacts/source-tree-mqn0cvu0/Example.php
+zipEntry=source/迁移前历史任务记录（已清理）
 path-policy-reset=true
 ```
 
@@ -10453,7 +10453,7 @@ app/code/Weline/FileManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
 app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue
+迁移前历史任务记录（已清理）
 ```
 
 Generated route evidence:
@@ -10512,7 +10512,7 @@ node dev\ai\codex\tasks\2026-06-20\2026-06-20-0757-wls-file-manager-source-archi
 Result file:
 
 ```text
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-queue-smoke-result.json
+迁移前历史任务记录（已清理）
 ```
 
 Result summary:
@@ -10528,7 +10528,7 @@ queuePayload.source_policy=true
 queueFinal.status=done
 sourceExistsAfterQueue=true
 archivePath=E:\WelineFramework\DEV-workspace\var\wls-panel\file-manager\source-archives\source-archive-20260620-083244-1d7d112cc8cc-source-archive-http-mqm3nvrj.md.zip
-zipEntry=source/dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/source-archive-http-mqm3nvrj.md
+zipEntry=source/迁移前历史任务记录（已清理）
 path-policy-reset=true
 ```
 
@@ -10556,11 +10556,11 @@ Browser smoke:
 Browser artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-desktop.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-desktop-queue.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-mobile.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-mobile-queue.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-result.json
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Runtime note:
@@ -10608,7 +10608,7 @@ app/code/Weline/FileManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
 app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0715-wls-file-manager-source-queue-policy
+迁移前历史任务记录（已清理）
 ```
 
 Validation:
@@ -10631,7 +10631,7 @@ Generated backend routes:
 weline_filemanager/backend/wls-file-manager/source-trash-queue::POST -> postSourceTrashQueue
 weline_filemanager/backend/wls-file-manager/post-source-trash-queue::POST -> postSourceTrashQueue
 
-node --check dev/ai/codex/tasks/2026-06-20/2026-06-20-0715-wls-file-manager-source-queue-policy/artifacts/filemanager-source-trash-queue-smoke.mjs
+node --check 迁移前历史任务记录（已清理）
 ```
 
 Runtime smoke:
@@ -10641,7 +10641,7 @@ php bin/w server:start ai-test-wls-file-source-queue-9985 -p 9985 -c 1 --no-ssl 
 curl.exe -I http://127.0.0.1:9985/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin/login
 HTTP/1.1 200 OK
 
-node dev/ai/codex/tasks/2026-06-20/2026-06-20-0715-wls-file-manager-source-queue-policy/artifacts/filemanager-source-trash-queue-smoke.mjs
+node 迁移前历史任务记录（已清理）
 status=passed
 functional_http=passed
 baseUrl=http://127.0.0.1:9985
@@ -10701,7 +10701,7 @@ app/code/Weline/FileManager/i18n/zh_Hans_CN.csv
 app/code/Weline/FileManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0451-wls-file-manager-source-trash
+迁移前历史任务记录（已清理）
 ```
 
 Route refresh:
@@ -10775,7 +10775,7 @@ php bin/w server:start ai-test-wls-file-source-trash-9976 -p 9976 -c 1 --no-ssl 
 Result file:
 
 ```text
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0451-wls-file-manager-source-trash/artifacts/filemanager-source-trash-smoke-result.json
+迁移前历史任务记录（已清理）
 ```
 
 Result summary:
@@ -10817,7 +10817,7 @@ netstat -ano | Select-String -Pattern ':9976'
 Only TIME_WAIT entries remained; no LISTEN entry.
 
 Artifacts directory:
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0451-wls-file-manager-source-trash/artifacts/filemanager-source-trash-smoke-result.json
+迁移前历史任务记录（已清理）
 ```
 
 ## 2026-06-20 - FileManager SOURCE_RENAME Slice
@@ -10855,7 +10855,7 @@ app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
 app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
 app/code/Weline/Server/doc/wls-panel-plan/75-stage-1-panel-shell-e2e-evidence.md
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename
+迁移前历史任务记录（已清理）
 ```
 
 Generated by framework route refresh, not edited manually:
@@ -10897,7 +10897,7 @@ app/code/Weline/FileManager/i18n/zh_Hans_CN.csv OK 414
 rg -n "\b(sleep|usleep|die|exit)\b|alert\(|confirm\(|prompt\(" app/code/Weline/FileManager/Controller/Backend/WlsFileManager.php app/code/Weline/FileManager/view/templates/Backend/WlsFileManager/index.phtml
 No output.
 
-node --check dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename/artifacts/filemanager-source-rename-smoke.mjs
+node --check 迁移前历史任务记录（已清理）
 No output.
 
 git diff --check -- <changed FileManager/WLS Panel Plan files>
@@ -10925,7 +10925,7 @@ Runtime/browser validation:
 
 ```text
 extend/server/php/php.exe bin/w server:start ai-test-wls-file-rename-9996 -p 9996 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
-node dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename/artifacts/filemanager-source-rename-smoke.mjs
+node 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -10934,8 +10934,8 @@ Result:
 passed=true
 baseUrl=http://p11005ce4.weline.test:9996
 domain=codex-source-rename-9996.local
-before=dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename/artifacts/source-rename-before-1781930361753.md
-after=dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename/artifacts/source-rename-after-1781930361753.md
+before=迁移前历史任务记录（已清理）
+after=迁移前历史任务记录（已清理）
 policySave=wfm_notice=path_policy_saved
 sourceRename=wfm_notice=source_renamed
 policyReset=wfm_notice=path_policy_reset
@@ -10946,9 +10946,9 @@ phone overflow=0 shell=true loginFallback=false sourceCreateForm=true sourceRena
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename/artifacts/filemanager-source-rename-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename/artifacts/filemanager-source-rename-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0428-wls-file-manager-source-rename/artifacts/filemanager-source-rename-smoke-result.json
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Visual review notes:
@@ -11003,7 +11003,7 @@ app/code/Weline/FileManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
 app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0354-wls-file-manager-source-create-file
+迁移前历史任务记录（已清理）
 ```
 
 Generated by framework route refresh, not edited manually:
@@ -11073,7 +11073,7 @@ Runtime/browser validation:
 
 ```text
 extend/server/php/php.exe bin/w server:start ai-test-wls-file-create-9997 -p 9997 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
-node dev/ai/codex/tasks/2026-06-20/2026-06-20-0354-wls-file-manager-source-create-file/artifacts/filemanager-source-create-smoke.mjs
+node 迁移前历史任务记录（已清理）
 ```
 
 Result:
@@ -11082,7 +11082,7 @@ Result:
 passed=true
 baseUrl=http://p11005ce4.weline.test:9997
 domain=codex-source-create-9997.local
-created=dev/ai/codex/tasks/2026-06-20/2026-06-20-0354-wls-file-manager-source-create-file/artifacts/source-create-smoke-1781929186185.md
+created=迁移前历史任务记录（已清理）
 policySave=wfm_notice=path_policy_saved
 sourceCreate=wfm_notice=source_created
 policyReset=wfm_notice=path_policy_reset
@@ -11093,9 +11093,9 @@ phone overflow=0 shell=true loginFallback=false sourceCreateForm=true sourceCrea
 Screenshots:
 
 ```text
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0354-wls-file-manager-source-create-file/artifacts/filemanager-source-create-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0354-wls-file-manager-source-create-file/artifacts/filemanager-source-create-phone-dark-390.png
-dev/ai/codex/tasks/2026-06-20/2026-06-20-0354-wls-file-manager-source-create-file/artifacts/filemanager-source-create-smoke-result.json
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Visual review notes:
@@ -11137,7 +11137,7 @@ Scope:
 Task directory:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0610-wls-db-lifecycle-harness-readiness
+迁移前历史任务记录（已清理）
 ```
 
 Environment summary:
@@ -11186,7 +11186,7 @@ Scope:
 Task directory:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile
+迁移前历史任务记录（已清理）
 ```
 
 Startup:
@@ -11223,7 +11223,7 @@ Memory checkpoints:
 Full panel CDP smoke:
 
 ```text
-node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m'; process.env.WLS_BASE_URL='http://127.0.0.1:9995'; process.env.CDP_PORT='9351'; await import('./dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs');"
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理） process.env.WLS_BASE_URL='http://127.0.0.1:9995'; process.env.CDP_PORT='9351'; await import('./迁移前历史任务记录（已清理）);"
 ```
 
 Result:
@@ -11241,15 +11241,15 @@ buttonsFit=true
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m/multi-page-cdp-smoke-result.json
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m/file-manager-desktop-dark-1440.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m/file-manager-phone-dark-390.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Theme CDP spotcheck:
 
 ```text
-node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m'; process.env.WLS_BASE_URL='http://127.0.0.1:9995'; process.env.CDP_PORT='9352'; await import('./dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs');"
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理） process.env.WLS_BASE_URL='http://127.0.0.1:9995'; process.env.CDP_PORT='9352'; await import('./迁移前历史任务记录（已清理）);"
 ```
 
 Result:
@@ -11268,9 +11268,9 @@ fatalHits=[]
 Artifacts:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m/theme-cdp-spotcheck-result.json
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m/dashboard-desktop-1280-light.png
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m/file-manager-phone-390-light.png
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
+迁移前历史任务记录（已清理）
 ```
 
 Runtime observation:
@@ -11326,7 +11326,7 @@ Purpose:
 Task directory:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0558-wls-panel-worker-self-heal-soak
+迁移前历史任务记录（已清理）
 ```
 
 Startup:
@@ -11461,7 +11461,7 @@ Conclusion:
 Task:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0628-wls-worker-exit-reason-observability
+迁移前历史任务记录（已清理）
 ```
 
 Scope:
@@ -11565,7 +11565,7 @@ Notes:
 Task:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-1516-wls-panel-worker-exit-reason-soak
+迁移前历史任务记录（已清理）
 ```
 
 Scope:
@@ -11663,7 +11663,7 @@ Conclusion:
 Task:
 
 ```text
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0738-wls-panel-memory-retention-optimization
+迁移前历史任务记录（已清理）
 ```
 
 Scope:
@@ -11785,7 +11785,7 @@ Changed files:
 app/code/Weline/Server/Console/Server/Start.php
 app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php
 app/etc/env.sample.php
-dev/ai/codex/tasks/2026-06-21/2026-06-21-0930-wls-panel-mode-memory-default
+迁移前历史任务记录（已清理）
 ```
 
 Syntax validation:
@@ -11874,7 +11874,7 @@ Changed files:
 
 ```text
 app/code/Weline/Deploy/view/templates/Backend/WlsDeploy/index.phtml
-dev/ai/codex/tasks/2026-06-21/2026-06-21-1750-wls-deploy-rollback-ui-gate
+迁移前历史任务记录（已清理）
 ```
 
 Syntax validation:
@@ -11967,7 +11967,7 @@ Changed files:
 ```text
 app/code/Weline/PhpManager/i18n/en_US.csv
 app/code/Weline/PhpManager/i18n/zh_Hans_CN.csv
-dev/ai/codex/tasks/2026-06-21/2026-06-21-1029-wls-panel-next-local-slice
+迁移前历史任务记录（已清理）
 ```
 
 Read-only follow-up audits:
@@ -12074,7 +12074,7 @@ app/code/Weline/DbManager/i18n/zh_Hans_CN.csv
 app/code/Weline/DbManager/doc/README.md
 app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
 app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
-dev/ai/codex/tasks/2026-06-21/2026-06-21-1453-wls-db-restore-preflight-boundary/restore-preflight-probe.php
+迁移前历史任务记录（已清理）
 ```
 
 Validation:

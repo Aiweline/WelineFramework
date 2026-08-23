@@ -1,6 +1,6 @@
 # WLS Master 自愈默认开启 HA 设计稿 (2026-04-23)
 
-> 关联任务：`dev/ai/codex/tasks/2026-04-23/2026-04-23-2330-wls-master-self-heal-default-on`
+> 关联任务：`迁移前历史任务记录（已清理）`
 > 关联宏观蓝图：`WLS-HA-IPC-REDESIGN-2026-04-15.md`（长期重构方向，本设计稿**不冲突、不替代**）
 > 状态：v2 — 按老板反馈"跨项目/多实例要支持"更新了 fencing 论证
 

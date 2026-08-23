@@ -227,7 +227,7 @@ class NormalizeUriObserver implements ObserverInterface
 
 ## 相关资源
 
-- [Weline Framework 事件系统文档](../../doc/开发/服务器事件系统.md)
-- [事件调试功能使用指南](../../../../../docs/事件调试功能使用指南.md)
-- [观察者模式最佳实践](../../../../../docs/dev/开发文档.md)
+- [Weline Framework 事件系统文档](../../3-开发/服务器事件系统.md)
+- [事件调试功能使用指南](../../../../../../../docs/事件调试功能使用指南.md)
+- [观察者模式最佳实践](../../../../../../../docs/dev/开发文档.md)
 

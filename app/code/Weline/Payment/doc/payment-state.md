@@ -46,6 +46,6 @@ Provider reference 非空时同时写规范化 guard 和原始三元组唯一键
 php vendor/bin/phpunit --bootstrap app/code/Weline/Payment/Test/Unit/bootstrap.php \
   app/code/Weline/Payment/Test/Unit
 P2F002_TEST_DATABASE=mig_clone_p2f002_... php \
-  dev/ai/codex/tasks/2026-07-27/2026-07-27-1633-p2f-002-persistent-orchestrator/verify-persistent-orchestrator.php
+  迁移前历史任务记录（已清理）
 php bin/w setup:schema:check -m Weline_Payment
 ```
