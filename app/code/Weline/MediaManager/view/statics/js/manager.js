@@ -75,24 +75,33 @@
 
     /**
      * Iframe media pickers never receive a backend bootstrap meta (only top-level
-     * document navigations mint one). Reuse the same-origin parent page's already
-     * attested Backend Worker API, matching Queue/AI OffCanvas.
+     * document navigations mint one). Walk only the same-origin ancestor chain and
+     * reuse the page that owns the single authenticated Backend Worker marker.
      */
     function resolveBackendApiHost() {
-        if (window.parent && window.parent !== window) {
+        var candidate = window;
+        while (candidate) {
             try {
+                if (candidate.location.origin !== window.location.origin) {
+                    break;
+                }
                 if (
-                    window.parent.location.origin === window.location.origin
-                    && window.parent.Weline
+                    candidate.document.querySelectorAll('meta[name="weline-worker-backend-bootstrap"]').length === 1
+                    && candidate.Weline
                     && (
-                        typeof window.parent.Weline.load === 'function'
-                        || window.parent.Weline.Api
+                        typeof candidate.Weline.load === 'function'
+                        || candidate.Weline.Api
                     )
                 ) {
-                    return window.parent;
+                    return candidate;
                 }
+                if (!candidate.parent || candidate.parent === candidate) {
+                    break;
+                }
+                candidate = candidate.parent;
             } catch (_error) {
                 // Cross-origin parents must never receive or proxy backend authority.
+                break;
             }
         }
         return window;
@@ -1076,7 +1085,7 @@
                 if (!f) return;
                 if (openDirectoryFromInteraction(hash, el.dataset.mime)) {
                     return;
-                } else if (IFRAME_MODE && GET_FILE_CALLBACK) {
+                } else if (IFRAME_MODE) {
                     confirmSelection();
                 } else if (isImageMime(f.mime)) {
                     openLightbox(hash);

@@ -22,10 +22,18 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString("resource('media_manager')", $source);
         self::assertStringContainsString("mmResource('connector'", $source);
         self::assertStringContainsString('function resolveBackendApiHost()', $source);
+        self::assertStringContainsString('var candidate = window;', $source);
+        self::assertStringContainsString('while (candidate)', $source);
         self::assertStringContainsString(
-            'window.parent.location.origin === window.location.origin',
-            $source
+            'candidate.location.origin !== window.location.origin',
+            $source,
         );
+        self::assertStringContainsString(
+            'candidate.document.querySelectorAll(\'meta[name="weline-worker-backend-bootstrap"]\').length === 1',
+            $source,
+        );
+        self::assertStringContainsString('candidate = candidate.parent;', $source);
+        self::assertStringNotContainsString('return window.parent;', $source);
         self::assertStringContainsString('var host = resolveBackendApiHost();', $source);
         self::assertStringContainsString('host.Weline.load(\'api\')', $source);
         self::assertStringContainsString('function uploadMultipart(fileList, metadataList, targetHash)', $source);
@@ -124,6 +132,11 @@ final class ManagerJsBinQueryContractTest extends TestCase
         );
         self::assertStringContainsString("CONFIG.target = String(e.data.target).trim()", $source);
         self::assertStringContainsString("target: CONFIG.target || ''", $source);
+        self::assertStringContainsString('} else if (IFRAME_MODE) {', $source);
+        self::assertStringNotContainsString(
+            '} else if (IFRAME_MODE && GET_FILE_CALLBACK) {',
+            $source,
+        );
     }
 
     public function testPickerEnforcesLockedRootTypeAndSizeBeforeSelection(): void
@@ -187,6 +200,10 @@ final class ManagerJsBinQueryContractTest extends TestCase
         );
         self::assertStringContainsString('.mmf-iframe-confirm {', $style);
         self::assertStringContainsString('.mmf-iframe-mode .mmf-iframe-confirm {', $style);
+        self::assertStringContainsString('body:has(.mmf-wrap:not(.mmf-iframe-mode)) .w-backend-shell', $style);
+        self::assertStringContainsString('height: 100dvh;', $style);
+        self::assertStringContainsString('body:has(.mmf-wrap:not(.mmf-iframe-mode)) .w-backend-footer', $style);
+        self::assertStringNotContainsString('height: calc(100vh - 120px)', $style);
     }
 
     public function testDirectoryContextMenuIsProviderAwareAccessibleAndViewportBounded(): void
@@ -354,6 +371,10 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('updatePreviewPanel();', $script);
         self::assertStringNotContainsString("showSuccess(t('assetMetadataSaved'));\n                openDir(CWD_HASH);", $script);
         self::assertStringContainsString('data-mmf-preview-meta', $template);
+        self::assertStringContainsString('class="mmf-preview-info-scroll"', $template);
+        self::assertStringContainsString('class="mmf-preview-actions"', $template);
+        self::assertStringContainsString('.mmf-preview-info-scroll {', $style);
+        self::assertStringContainsString('.mmf-preview-actions { flex: 0 0 auto;', $style);
         self::assertStringContainsString('data-mmf-details-list', $template);
         self::assertStringContainsString('role="dialog" aria-modal="true" aria-labelledby="mmf-details-title"', $template);
         self::assertStringContainsString('.mmf-details-overlay {', $style);
