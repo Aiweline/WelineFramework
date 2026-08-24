@@ -417,15 +417,18 @@ const CustomerServiceWidget = (function() {
             return;
         }
         
+        const widget = document.getElementById('customer-service-widget');
         if (state.isOpen) {
             state.isOpen = false;
             chatWindow.style.display = 'none';
             chatButton.style.display = 'flex';
+            widget?.classList.remove('is-open');
             stopPolling();
         } else {
             state.isOpen = true;
             chatWindow.style.display = 'flex';
             chatButton.style.display = 'none';
+            widget?.classList.add('is-open');
             await activateChat();
         }
     }

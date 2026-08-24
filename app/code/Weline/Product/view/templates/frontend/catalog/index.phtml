@@ -35,7 +35,8 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 $uuid = trim((string)($offer['global_offer_uuid'] ?? ''));
                 $productId = max(0, (int)($offer['product_id'] ?? 0));
                 $productName = trim((string)($offer['name'] ?? ''));
-                $productUrl = $productId > 0 ? (string)$this->getUrl('product/' . $productId) : '';
+                $productSlug = trim((string)($offer['slug'] ?? ''));
+                $productUrl = $productSlug !== '' ? (string)$this->getUrl('product/' . $productSlug) : '';
                 ?>
                 <article class="product-storefront__card"
                          data-testid="storefront-product-card"
