@@ -8,8 +8,8 @@
  */
 ?>
 
-<w:config:group code="captcha_google_enterprise" label="Google reCAPTCHA Enterprise" description="未启用或配置不完整时使用本地图形验证码；完整启用后远端失败会拒绝提交，不会静默降级。" sort="20">
-    <w:config:field key="captcha/google/enabled" label="启用 Google Enterprise" type="switch" value-type="bool" default="0" scope="global,website" />
+<w:config:group code="captcha_google_enterprise" label="Google reCAPTCHA Enterprise" description="默认启用 Google；配置不完整时自动回退本地图形验证码；完整配置后远端失败会拒绝提交，不会静默降级。" sort="20">
+    <w:config:field key="captcha/google/enabled" label="启用 Google Enterprise" type="switch" value-type="bool" default="1" scope="global,website" />
     <w:config:field key="captcha/google/project_id" label="Google Cloud Project ID" type="text" value-type="string" default="" scope="global,website" validation="max:128" />
     <w:config:field key="captcha/google/site_key" label="Enterprise Site Key" type="text" value-type="string" default="" scope="global,website" sensitive="0" validation="max:255" />
     <w:config:field key="captcha/google/api_key" label="Enterprise API Key（可选）" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />

@@ -114,8 +114,8 @@ $customerServiceJsVersion = (string) ((int) (@filemtime($customerServiceStaticDi
         <span class="cs-badge" id="cs-unread-badge" style="display: none;">0</span>
     </div>
 
-    <div id="cs-chat-window" class="cs-chat-window" style="display: none;">
-        <div class="cs-chat-header">
+    <div id="cs-chat-window" class="cs-chat-window w-panel" style="display: none;">
+        <div class="cs-chat-header w-panel-header">
             <div class="cs-chat-title">
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
@@ -139,7 +139,7 @@ $customerServiceJsVersion = (string) ((int) (@filemtime($customerServiceStaticDi
             </div>
         </div>
 
-        <div class="cs-settings-panel" id="cs-settings-panel" style="display: none;">
+        <div class="cs-settings-panel w-panel-body cs-settings-panel--compact" id="cs-settings-panel" style="display: none;">
             <div class="cs-settings-item">
                 <label>
                     <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -168,14 +168,14 @@ $customerServiceJsVersion = (string) ((int) (@filemtime($customerServiceStaticDi
             </div>
         </div>
 
-        <div class="cs-chat-body" id="cs-chat-messages">
+        <div class="cs-chat-body w-panel-body" id="cs-chat-messages">
             <div class="cs-welcome-message">
                 <p id="cs-welcome-title"><?= __('欢迎使用客服服务！') ?></p>
                 <p id="cs-welcome-copy"><?= __('请输入您的问题，我们的客服将尽快为您解答。') ?></p>
             </div>
         </div>
 
-        <div class="cs-chat-footer">
+        <div class="cs-chat-footer w-panel-footer">
             <div class="cs-input-area">
                 <textarea
                     id="cs-message-input"
@@ -195,31 +195,33 @@ $customerServiceJsVersion = (string) ((int) (@filemtime($customerServiceStaticDi
 <?php
 // 用户发送客服消息后再创建真实弹窗节点，避免首屏承担未使用的交互 DOM。
 $bindModalHtml = <<<'BIND_MODAL_HTML'
-<div id="cs-bind-modal" class="cs-modal" style="display: none;" data-editor-interactive>
-    <div class="cs-modal-content">
-        <div class="cs-modal-header">
-            <h3>{{title}}</h3>
-            <button type="button" class="w-button cs-modal-close" data-tone="quiet" data-icon-only="true" data-size="sm" data-cs-bind-close>
-                <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-            </button>
-        </div>
-        <div class="cs-modal-body">
-            <p class="cs-modal-copy">{{copy}}</p>
-            <p class="cs-modal-note">{{note}}</p>
-            <div class="cs-w-field">
-                <label>{{email_label}}</label>
-                <input type="email" id="cs-bind-email" class="w-input cs-form-input" placeholder="{{email_placeholder}}">
+<div id="cs-bind-modal" class="cs-modal w-modal" style="display: none;" data-editor-interactive>
+    <div class="w-modal-dialog w-modal-sm">
+        <div class="cs-modal-content w-modal-content">
+            <div class="cs-modal-header w-modal-header">
+                <h3 class="w-modal-title">{{title}}</h3>
+                <button type="button" class="w-button cs-modal-close w-modal-close" data-tone="quiet" data-icon-only="true" data-size="sm" data-cs-bind-close>
+                    <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
             </div>
-        </div>
-        <div class="cs-modal-footer">
-            <button type="button" class="w-button cs-btn cs-btn-secondary" data-tone="neutral" data-variant="outline" data-cs-bind-close>
-                {{later}}
-            </button>
-            <button type="button" class="w-button cs-btn cs-btn-primary" data-cs-bind-send>
-                {{send}}
-            </button>
+            <div class="cs-modal-body w-modal-body">
+                <p class="cs-modal-copy">{{copy}}</p>
+                <p class="cs-modal-note">{{note}}</p>
+                <div class="cs-w-field">
+                    <label>{{email_label}}</label>
+                    <input type="email" id="cs-bind-email" class="w-input cs-form-input" placeholder="{{email_placeholder}}">
+                </div>
+            </div>
+            <div class="cs-modal-footer w-modal-footer">
+                <button type="button" class="w-button cs-btn cs-btn-secondary" data-tone="neutral" data-variant="outline" data-cs-bind-close>
+                    {{later}}
+                </button>
+                <button type="button" class="w-button cs-btn cs-btn-primary" data-cs-bind-send>
+                    {{send}}
+                </button>
+            </div>
         </div>
     </div>
 </div>

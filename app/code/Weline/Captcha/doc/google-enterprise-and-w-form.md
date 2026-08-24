@@ -9,8 +9,8 @@
 
 `<w:form>` 的 `captcha` 默认值为 `off`，普通 GET/POST 表单都不注入挑战。只有显式设置
 `captcha="auto"` 或 `captcha="required"` 才会启用：`auto` 仅对 POST 注入，
-`required` 声明入口必须验证。启用后，Google Enterprise 未启用或配置不完整时必须使用
-`local_image`，不能出现已经选择验证却静默跳过的状态。
+`required` 声明入口必须验证。启用后，默认优先 Google Enterprise；配置不完整或未显式关闭
+Google 时必须使用 `local_image`，不能出现已经选择验证却静默跳过的状态。
 
 登录入口使用固定 intent：
 
@@ -22,9 +22,9 @@ Captcha 模块未启用时，登录模块保持可选依赖兼容，页面不会
 模块阻断。
 
 Provider 实现 `VerificationProviderInterface`，并可通过
-`Weline_Captcha::providers::collect` 注册。只有 Google 已启用且配置完整时才选择
-`google_enterprise`；此后远端失败必须拒绝，不能回退本地图形验证码。其余状态始终选择
-`local_image`。
+`Weline_Captcha::providers::collect` 注册。`captcha/google/enabled` 默认开启；只有
+Google 已启用且配置完整时才选择 `google_enterprise`；此后远端失败必须拒绝，不能回退本地
+图形验证码。未配置完整或显式关闭 Google 时始终选择 `local_image`。
 
 本地挑战只保存 `password_hash`，成功或失败都会删除记录。Enterprise Token 保存 SHA-256
 摘要防重放，并校验 `valid`、`action`、`hostname`、`createTime`、风险分数。
