@@ -28,13 +28,13 @@
 - `app/code/Weline/MediaManager/composer.json`
 
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：1
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：5
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：5
 - `Controller/Router.php`：ModuleRouter 自定义 URL 匹配入口。只有自定义公网路径/动态路由匹配才改这里。 文件数：1
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：1
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：2
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：9
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：3
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
+- `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：4
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：3
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：3

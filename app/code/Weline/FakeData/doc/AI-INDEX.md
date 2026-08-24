@@ -28,7 +28,7 @@
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：1
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：1
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：4
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：1
+- `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：1
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
