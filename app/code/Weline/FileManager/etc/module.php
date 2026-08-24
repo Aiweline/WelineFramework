@@ -12,6 +12,7 @@ return [
     "optional" => [
         'Weline_Server' => '*',
         'Weline_Theme' => '*',
+        'Weline_Widget' => '*',
     ],
     "provides" => [
         'storage.disk_usage_guard.file_assets' => \Weline\FileManager\Service\FileAssetStorageUsageGuard::class,
@@ -21,6 +22,7 @@ return [
         \Weline\FileManager\Api\LayoutContentValidatorInterface::class => \Weline\FileManager\Service\LayoutContentValidator::class,
         'theme.layout_content_validator.file_assets' => \Weline\FileManager\Extends\Module\Weline_Theme\Integration\FileAssetLayoutContentValidator::class,
         'theme.layout_value_hydrator.file_image' => \Weline\FileManager\Extends\Module\Weline_Theme\Integration\FileImageLayoutValueHydrator::class,
+        \Weline\Widget\Api\Param\FileImagePreviewResolverInterface::class => \Weline\FileManager\Extends\Module\Weline_Widget\Integration\WidgetFileImagePreviewResolver::class,
         'wls_panel.operation_definition.Weline_FileManager' => \Weline\FileManager\Integration\Server\WlsPanelOperationDefinitionProvider::class,
     ],
 ];

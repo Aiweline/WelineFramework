@@ -77,7 +77,7 @@ final class ProjectAutoContext
             'Single-call context contract: submit one TaskContract (goal, requirements, known_paths, known_symbols, acceptance_criteria, allowed_scope, forbidden_scope, authorized_actions, assumptions) with the complete task. The server closes architecture, dependencies, contracts, tests, docs, consumers, continuation paths, and semantic goals internally; never use native per-file reads.',
             'Primary write contract: when ready_for_edit=true, one writer emits one complete edit-plan.v1 and calls apply_compact_edit exactly once. Fixed validation, rollback, targeted reindex, impact_delta, and the full diff are returned together. Only CONFLICT_REPLAN, IMPACT_EXPANSION, VALIDATION_REPAIR, or USER_SCOPE_CHANGE may recurse within limits 2/2/2/1; stop the same error at three and never ask for ordinary retry confirmation.',
             'Usage receipt contract: only after an actual MCP tools/call in the current turn, begin every subsequent user-visible progress update and the final report with the exact prefix "Weline：".',
-            'This SessionStart block alone is not usage evidence. Verify the tool result contains _weline_mcp.used=true and a receipt_id before claiming the marker.',
+            'This SessionStart block alone is not usage evidence. Verify content[0].text or structuredContent._weline_mcp.usage_line starts with "Weline：" and contains _weline_mcp.used=true plus receipt_id before claiming the marker.',
             'All writes remain inside the host approval/policy boundary; this MCP never bypasses Codex safeguards.',
         ]);
 

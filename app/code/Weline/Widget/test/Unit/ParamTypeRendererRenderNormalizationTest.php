@@ -128,6 +128,39 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('data-variant="outline"', $form);
     }
 
+    public function testRenderFormMaterializesDottedArrayPathsForFileImageItems(): void
+    {
+        $renderer = new ParamTypeRenderer();
+        $params = [
+            'slides' => [
+                'type' => 'array',
+                'label' => '轮播图片',
+                'item_schema' => [
+                    'image' => ['type' => 'image', 'label' => '图片'],
+                    'title' => ['type' => 'string', 'label' => '标题'],
+                ],
+            ],
+        ];
+        $config = [
+            'slides.0.image' => [
+                'type' => 'file-image',
+                'usage' => [
+                    'version' => 1,
+                    'asset_id' => '123e4567-e89b-42d3-a456-426614174000',
+                    'locale_code' => 'zh_Hans_CN',
+                    'alt' => '统一存储验收图标',
+                ],
+            ],
+            'slides.0.title' => 'Hero Title',
+        ];
+
+        $html = $renderer->renderForm(10, $params, $config);
+
+        $this->assertStringContainsString('Hero Title', $html);
+        $this->assertStringContainsString('&quot;type&quot;:&quot;file-image&quot;', $html);
+        $this->assertStringNotContainsString('暂无项目，点击下方按钮添加', $html);
+    }
+
     public function testImageFieldUsesOnlyTypedMediaManagerSelectionForNewValues(): void
     {
         $renderer = new ParamTypeRenderer();

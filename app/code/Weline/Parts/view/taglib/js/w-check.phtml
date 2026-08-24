@@ -1,0 +1,114 @@
+<?php
+/**
+ * w-check — bin-query 唯一性/存在性校验
+ *
+ * 必填：data-provider + data-operation（兼容窗后）
+ * 参数：输入值作为 q；另可读 data-params / w-check-* 字段映射
+ * 废弃：w-check-url / w-url（remove_by=2026-08-08）
+ */
+?>
+<css>jquery-ui.min.css</css>
+<js>jquery-ui.min.js</js>
+<script defer>
+    $(function () {
+        let can_run = true
+        if (!window.debounce) {
+            console.error('@lang{w-check: debounce method is missing.}')
+            can_run = false;
+        }
+        if (!$) {
+            console.error('@lang{w-check: jQuery is missing.}')
+            can_run = false;
+        }
+        if (!can_run) {
+            return
+        }
+
+        const callResource = function (provider, operation, params) {
+            if (!window.Weline) {
+                return Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+            const run = function (api) {
+                const resource = api.resource(provider);
+                if (!resource || typeof resource[operation] !== 'function') {
+                    throw new Error('Unknown operation: ' + provider + '.' + operation);
+                }
+                return resource[operation](params || {});
+            };
+            if (typeof window.Weline.load === 'function') {
+                return window.Weline.load('api').then(run);
+            }
+            return Promise.resolve(run(window.Weline.Api));
+        };
+
+        $('[w-check="true"]').each(function () {
+            let checkInput = $(this)
+            let provider = String(checkInput.attr('data-provider') || '').trim()
+            let operation = String(checkInput.attr('data-operation') || '').trim()
+            let legacyUrl = checkInput.attr('w-check-url') ?? checkInput.attr('w-url') ?? '';
+            let type = checkInput.attr('w-check-type') ?? '';
+            if (!type) {
+                console.error('@lang{w-check: w-check-type is required.}', checkInput.get(0))
+                return
+            }
+            let field = checkInput.attr('w-check-field') ?? 'name';
+            let id = checkInput.attr('w-check-id') ?? '';
+            let id_field = checkInput.attr('w-check-id-field') ?? '';
+            if (!id_field) {
+                console.error('@lang{w-check: w-check-id-field is required.}', checkInput.get(0))
+                return
+            }
+            let invalid_class = checkInput.attr('w-invalid-class') ?? 'is-invalid';
+            let valid_class = checkInput.attr('w-valid-class') ?? 'is-valid';
+            // Compat window: remove_by=2026-08-08
+            if ((!provider || !operation) && legacyUrl) {
+                console.warn('[w-check] deprecated w-url; use data-provider + data-operation. remove_by=2026-08-08', checkInput.get(0))
+            }
+            if (!provider || !operation) {
+                console.error('w-check requires data-provider and data-operation.', checkInput.get(0))
+                return
+            }
+            checkInput.change(debounce(function () {
+                let input = $(this)
+                if(!input.val() && input.attr('required')){
+                    input.removeClass(valid_class).addClass(invalid_class);
+                    return
+                }
+                callResource(provider, operation, { q: input.val(), field: field, id: id, id_field: id_field }).then(function (payload) {
+                    let data = payload;
+                    if (payload && Array.isArray(payload.data)) data = payload.data;
+                    else if (payload && Array.isArray(payload.items)) data = payload.items;
+                    data = Array.isArray(data) ? data : [];
+                    if (type === 'unique') {
+                        for (let i = 0; i < data.length; i++) {
+                            if (data[i][field] === input.val()) {
+                                if(id != data[i][id_field]){
+                                    input.removeClass(valid_class).addClass(invalid_class);
+                                    return
+                                }
+                                input.removeClass(id ? invalid_class : valid_class).addClass(id ? valid_class : invalid_class);
+                                return
+                            }
+                        }
+                        input.removeClass(invalid_class).addClass(valid_class);
+                    } else {
+                        for (let i = 0; i < data.length; i++) {
+                            const currentValue = data[i] && data[i][field] ? String(data[i][field]) : '';
+                            if (currentValue.indexOf(input.val()) !== -1 ) {
+                                if(id != data[i][id_field]){
+                                    input.removeClass(valid_class).addClass(invalid_class);
+                                    return
+                                }
+                                input.removeClass(id ? invalid_class : valid_class).addClass(id ? valid_class : invalid_class);
+                                return
+                            }
+                        }
+                        input.removeClass(id ? invalid_class : valid_class).addClass(id ? valid_class : invalid_class);
+                    }
+                }).catch(function () {
+                    input.removeClass(valid_class).addClass(invalid_class);
+                });
+            }, 500));
+        });
+    })
+</script>

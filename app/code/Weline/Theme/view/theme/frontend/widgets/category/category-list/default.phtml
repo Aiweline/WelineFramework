@@ -1,9 +1,9 @@
 <?php
 /**
  * 分类列表部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {category-list}
  * @widget.name {分类列表}
  * @widget.description {以列表形式展示商品分类，支持多级嵌套}
@@ -12,7 +12,7 @@
  * @widget.position {["sidebar", "content"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
+ *
  * @param title {default="商品分类",type="string",label="标题"}
  * @param parent_id {default=0,type="number",label="父分类ID",description="0表示显示所有顶级分类"}
  * @param max_depth {default=2,type="number",label="最大层级"}
@@ -20,15 +20,21 @@
  * @param show_image {default=false,type="bool",label="显示分类图片"}
  */
 
-$title = $this->getData('title') ?? __('商品分类');
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('category-list');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$title = (string)($this->getData('title') ?? __('商品分类'));
 $parentId = (int)($this->getData('parent_id') ?? 0);
-$maxDepth = (int)($this->getData('max_depth') ?? 2);
+$maxDepth = max(1, min(5, (int)($this->getData('max_depth') ?? 2)));
 $showCount = (bool)($this->getData('show_count') ?? true);
 $showImage = (bool)($this->getData('show_image') ?? false);
 $collapsed = (bool)($this->getData('collapsed') ?? false);
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
-// 示例分类数据
 $categories = [
     [
         'id' => 1,
@@ -80,185 +86,221 @@ $categories = [
     ],
 ];
 
-$widgetId = 'category-list-' . uniqid();
+$renderCategoryList = static function (
+    array $items,
+    int $depth = 0,
+    int $maxDepth = 2,
+    bool $showCount = true,
+    bool $showImage = false,
+    bool $collapsed = false
+) use (&$renderCategoryList, $esc): void {
+    if ($depth >= $maxDepth || $items === []) {
+        return;
+    }
 
-// 递归渲染分类（闭包，避免模板多次包含时重复声明）
-$renderCategoryList = function ($categories, $depth = 0, $maxDepth = 2, $showCount = true, $showImage = false, $collapsed = false) use (&$renderCategoryList) {
-    if ($depth >= $maxDepth || empty($categories)) return;
-    
     $isCollapsed = $collapsed && $depth > 0;
-    ?>
-    <ul class="category-list depth-<?= $depth ?>" <?= $isCollapsed ? 'style="display: none;"' : '' ?>>
-        <?php foreach ($categories as $category): ?>
-            <li class="category-item <?= !empty($category['children']) ? 'has-children' : '' ?>">
-                <a href="<?= htmlspecialchars($category['url']) ?>" class="category-link">
-                    <?php if ($showImage && !empty($category['image'])): ?>
-                        <img src="<?= htmlspecialchars($category['image']) ?>" 
-                             alt="<?= htmlspecialchars($category['name']) ?>"
-                             class="category-image">
-                    <?php endif; ?>
-                    
-                    <span class="category-name"><?= htmlspecialchars($category['name']) ?></span>
-                    
-                    <?php if ($showCount && isset($category['count'])): ?>
-                        <span class="category-count">(<?= $category['count'] ?>)</span>
-                    <?php endif; ?>
-                </a>
-                
-                <?php if (!empty($category['children'])): ?>
-                    <button class="toggle-btn <?= $isCollapsed ? 'collapsed' : '' ?>"
-                            type="button"
-                            aria-expanded="<?= $isCollapsed ? 'false' : 'true' ?>">
-                        <w:icon name="chevron-right" size="sm"></w:icon>
-                    </button>
-                    <?php $renderCategoryList($category['children'], $depth + 1, $maxDepth, $showCount, $showImage, $collapsed); ?>
-                <?php endif; ?>
-            </li>
-        <?php endforeach; ?>
-    </ul>
-    <?php
+    echo '<ul class="category-list depth-' . $depth . '"' . ($isCollapsed ? ' hidden' : '') . '>';
+    foreach ($items as $category) {
+        $hasChildren = !empty($category['children']);
+        echo '<li class="category-item' . ($hasChildren ? ' has-children' : '') . '">';
+        echo '<a href="' . $esc((string)($category['url'] ?? '#')) . '" class="category-link">';
+
+        if ($showImage && !empty($category['image'])) {
+            echo '<img src="' . $esc((string)$category['image']) . '" alt="' . $esc((string)($category['name'] ?? '')) . '" class="category-image" loading="lazy">';
+        }
+
+        echo '<span class="category-name">' . $esc((string)($category['name'] ?? '')) . '</span>';
+
+        if ($showCount && isset($category['count'])) {
+            echo '<span class="category-count">(' . (int)$category['count'] . ')</span>';
+        }
+
+        echo '</a>';
+
+        if ($hasChildren) {
+            echo '<button class="toggle-btn' . ($isCollapsed ? ' is-collapsed' : '') . '" type="button" aria-expanded="' . ($isCollapsed ? 'false' : 'true') . '">';
+            echo '<w:icon name="chevron-right" size="sm"></w:icon>';
+            echo '</button>';
+            $renderCategoryList(
+                $category['children'],
+                $depth + 1,
+                $maxDepth,
+                $showCount,
+                $showImage,
+                $collapsed
+            );
+        }
+
+        echo '</li>';
+    }
+    echo '</ul>';
 };
 ?>
 
-<div class="widget-category-list" id="<?= $widgetId ?>">
-    <?php if ($title): ?>
-        <h3 class="widget-title">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+
+    <?php if ($title !== ''): ?>
+        <h3 class="list-title">
             <w:icon name="grid" size="sm"></w:icon>
-            <?= htmlspecialchars($title) ?>
+            <?= $esc($title) ?>
         </h3>
     <?php endif; ?>
-    
+
     <?php $renderCategoryList($categories, 0, $maxDepth, $showCount, $showImage, $collapsed); ?>
-</div>
+</section>
 
 <style>
-.widget-category-list {
-    background: #fff;
-    border-radius: 10px;
-    padding: 20px;
+.<?= $wc ?> {
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-lg, 10px);
+    padding: var(--weline-space-5, 20px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    color: var(--weline-theme-text);
 }
 
-.widget-category-list .widget-title {
-    font-size: 16px;
+.<?= $wc ?> .list-title {
+    font-size: var(--weline-font-size-base, 16px);
     font-weight: 600;
-    margin: 0 0 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
+    margin: 0 0 var(--weline-space-4, 15px);
+    padding-bottom: var(--weline-space-4, 15px);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--weline-space-2, 8px);
+    color: var(--weline-theme-text);
 }
 
-.widget-category-list .widget-title i {
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .list-title w-icon,
+.<?= $wc ?> .list-title [class*="icon"] {
+    color: var(--weline-theme-primary);
 }
 
-.widget-category-list .category-list {
+.<?= $wc ?> .category-list {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-.widget-category-list .category-list.depth-1 {
-    padding-left: 15px;
-    margin-top: 5px;
+.<?= $wc ?> .category-list[hidden] {
+    display: none;
 }
 
-.widget-category-list .category-list.depth-2 {
-    padding-left: 15px;
-    margin-top: 5px;
+.<?= $wc ?> .category-list.depth-1,
+.<?= $wc ?> .category-list.depth-2 {
+    padding-left: var(--weline-space-4, 15px);
+    margin-top: var(--weline-space-1, 5px);
 }
 
-.widget-category-list .category-item {
+.<?= $wc ?> .category-item {
     position: relative;
 }
 
-.widget-category-list .category-link {
+.<?= $wc ?> .category-link {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 30px 10px 0;
-    color: var(--text-color, #333);
+    gap: var(--weline-space-3, 10px);
+    padding: var(--weline-space-3, 10px) var(--weline-space-8, 30px) var(--weline-space-3, 10px) 0;
+    color: var(--weline-theme-text);
     text-decoration: none;
-    border-bottom: 1px solid #f5f5f5;
-    transition: all 0.2s;
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+        color-mix(in srgb, var(--weline-theme-border) 50%, transparent);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-category-list .category-item:last-child .category-link {
+.<?= $wc ?> .category-item:last-child > .category-link {
     border-bottom: none;
 }
 
-.widget-category-list .category-link:hover {
-    color: var(--primary-color, #007bff);
-    padding-left: 5px;
+.<?= $wc ?> .category-link:hover {
+    color: var(--weline-theme-primary);
+    padding-left: var(--weline-space-1, 5px);
 }
 
-.widget-category-list .category-image {
+.<?= $wc ?> .category-image {
     width: 30px;
     height: 30px;
-    border-radius: 6px;
+    border-radius: var(--weline-radius-md, 6px);
     object-fit: cover;
 }
 
-.widget-category-list .category-name {
+.<?= $wc ?> .category-name {
     flex: 1;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm, 14px);
 }
 
-.widget-category-list .category-count {
-    font-size: 12px;
-    color: #999;
+.<?= $wc ?> .category-count {
+    font-size: var(--weline-font-size-xs, 12px);
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-category-list .toggle-btn {
+.<?= $wc ?> .toggle-btn {
     position: absolute;
     right: 0;
     top: 8px;
     width: 24px;
     height: 24px;
-    background: none;
-    border: none;
+    background: transparent;
+    border: 0;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #999;
-    transition: all 0.2s;
+    color: var(--weline-theme-text-muted);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-category-list .toggle-btn:hover {
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .toggle-btn:hover {
+    color: var(--weline-theme-primary);
 }
 
-/* 子分类样式 */
-.widget-category-list .depth-1 .category-link {
-    padding: 8px 30px 8px 0;
-    font-size: 13px;
+.<?= $wc ?> .toggle-btn.is-collapsed {
+    transform: rotate(0deg);
 }
 
-.widget-category-list .depth-2 .category-link {
-    padding: 6px 30px 6px 0;
-    font-size: 12px;
-    color: #666;
+.<?= $wc ?> .toggle-btn:not(.is-collapsed) {
+    transform: rotate(90deg);
+}
+
+.<?= $wc ?> .depth-1 .category-link {
+    padding: var(--weline-space-2, 8px) var(--weline-space-8, 30px) var(--weline-space-2, 8px) 0;
+    font-size: var(--weline-font-size-sm, 13px);
+}
+
+.<?= $wc ?> .depth-2 .category-link {
+    padding: var(--weline-space-1, 6px) var(--weline-space-8, 30px) var(--weline-space-1, 6px) 0;
+    font-size: var(--weline-font-size-xs, 12px);
+    color: var(--weline-theme-text-muted);
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    min-height: 80px;
 }
 </style>
 
 <script>
-(function() {
-    const widget = document.getElementById('<?= $widgetId ?>');
-    if (!widget) return;
-    
-    widget.querySelectorAll('.toggle-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const item = this.closest('.category-item');
-            const subList = item.querySelector('.category-list');
-            
-            if (subList) {
-                const isHidden = subList.style.display === 'none';
-                subList.style.display = isHidden ? '' : 'none';
-                this.classList.toggle('collapsed');
-                this.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    root.querySelectorAll('.toggle-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var item = btn.closest('.category-item');
+            if (!item) return;
+            var subList = item.querySelector(':scope > .category-list');
+            if (!subList) return;
+
+            var isHidden = subList.hasAttribute('hidden');
+            if (isHidden) {
+                subList.removeAttribute('hidden');
+            } else {
+                subList.setAttribute('hidden', '');
             }
+            btn.classList.toggle('is-collapsed', !isHidden);
+            btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
         });
     });
 })();

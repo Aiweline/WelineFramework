@@ -6,6 +6,7 @@ namespace Weline\Theme\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
@@ -411,6 +412,23 @@ class ThemeEditor extends BackendController
                 $this->layoutService->initDraftFromPublished($currentThemeId, $pageType, $layoutIdentity);
             }
             $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity);
+            if (!$scopeLegacyReadonly) {
+                /** @var WidgetDefaultInjectionService $defaultInjectionService */
+                $defaultInjectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+                $appliedDefaults = $defaultInjectionService->applyMissingForAllPageTypes(
+                    $currentThemeId,
+                    $layoutIdentity,
+                    $editorArea === PreviewContextService::AREA_BACKEND
+                        ? PreviewContextService::AREA_BACKEND
+                        : PreviewContextService::AREA_FRONTEND,
+                    ThemeLayout::STATUS_DRAFT
+                );
+                if ($appliedDefaults > 0) {
+                    $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity);
+                    $hasDraft = true;
+                    ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+                }
+            }
         }
 
         // 部件库改为前端异步加载（页面与主预览就绪后再拉取），首屏不再同步渲染全部部件预览，
@@ -1367,7 +1385,7 @@ class ThemeEditor extends BackendController
         // 注意：user-area（多个图标）和 footer-links（多个链接组）是 multiple，不是 exclusive
         $exclusiveSlots = [
             // Header 区域
-            'header', 'logo', 'search', 'navigation',
+            'header', 'logo', 'search', 'navigation', 'category-menu',
             // Footer 区域
             'footer', 'footer-social', 'footer-copyright',
             // Content 容器
@@ -2333,6 +2351,8 @@ class ThemeEditor extends BackendController
             }
         }
 
+        $config = $this->materializeWidgetConfigPaths($config, []);
+
         $previewHtml = $this->buildPreviewHtmlForLayoutId(
             $layoutId,
             $config,
@@ -3081,7 +3101,7 @@ class ThemeEditor extends BackendController
     {
         // Header 相关的插槽名
         $headerSlots = [
-            'logo', 'search', 'main-nav', 'user-area', 'cart', 'language', 'currency',
+            'logo', 'search', 'main-nav', 'category-menu', 'user-area', 'cart', 'language', 'currency',
             'header-left', 'header-center', 'header-right', 'header-container',
             'top-bar', 'top-bar-left', 'top-bar-right', 'navigation',
         ];
@@ -3180,9 +3200,7 @@ class ThemeEditor extends BackendController
             }
         }
 
-        $resolvedLocale = $locale !== ''
-            ? $locale
-            : trim((string)($layoutData['locale_code'] ?? RequestContext::getWelineUserLang()));
+        $resolvedLocale = $this->resolvePreviewHydrationLocale($locale, $layoutData);
         $scopeIdentity = null;
         try {
             $scopeIdentity = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class)
@@ -3231,6 +3249,31 @@ class ThemeEditor extends BackendController
             return '<div class="widget-preview-error">' . htmlspecialchars((string)$err) . '</div>';
         }
         return is_string($html) ? $html : '<div class="widget-preview-placeholder">' . htmlspecialchars((string)$widgetCode) . '</div>';
+    }
+
+    /**
+     * Resolve the concrete locale for typed layout hydration during editor preview.
+     *
+     * Default/all-language layouts and the media picker both stamp file-image usage
+     * with the site default locale (see ThemeEditor shell data-default-locale).
+     */
+    private function resolvePreviewHydrationLocale(string $explicitLocale, array $layoutData): string
+    {
+        $resolvedLocale = trim($explicitLocale);
+        if ($resolvedLocale === '') {
+            $resolvedLocale = trim((string)($layoutData['locale_code'] ?? ''));
+        }
+        if ($resolvedLocale === '' || strcasecmp($resolvedLocale, 'default') === 0) {
+            $resolvedLocale = trim((string)Env::default_LANGUAGE_CODE);
+        }
+        if ($resolvedLocale === '' || strcasecmp($resolvedLocale, 'default') === 0) {
+            $resolvedLocale = trim((string)RequestContext::getWelineUserLang());
+        }
+        if ($resolvedLocale === '' || strcasecmp($resolvedLocale, 'default') === 0) {
+            throw new \RuntimeException((string)__('主题预览缺少可用的布局语言。'));
+        }
+
+        return $resolvedLocale;
     }
 
     /**
@@ -3781,7 +3824,7 @@ class ThemeEditor extends BackendController
                 if (in_array($name, $uriAttributes, true)) {
                     $hasScheme = preg_match('/^[a-z][a-z0-9+.-]*:/i', $value) === 1;
                     $allowedScheme = preg_match('/^(https?:|mailto:|tel:|ftp:)/i', $value) === 1;
-                    $allowedDataImage = preg_match('/^data:image\/(?:png|gif|jpe?g|webp|bmp);base64,/i', $value) === 1;
+                    $allowedDataImage = $this->isAllowedWidgetPreviewDataImageUri($value);
                     $blockedScheme = str_starts_with($compactValue, 'javascript:')
                         || str_starts_with($compactValue, 'vbscript:')
                         || (str_starts_with($compactValue, 'data:') && !$allowedDataImage);
@@ -3814,6 +3857,16 @@ class ThemeEditor extends BackendController
         libxml_use_internal_errors($prev);
 
         return $cleanHtml;
+    }
+
+    private function isAllowedWidgetPreviewDataImageUri(string $value): bool
+    {
+        if (preg_match('/^data:image\/(?:png|gif|jpe?g|webp|bmp);base64,/i', $value) === 1) {
+            return true;
+        }
+
+        // ThemeDemoCatalog demo placeholders use percent-encoded SVG data URIs.
+        return preg_match('/^data:image\/svg\+xml(?:;charset=[^,]+)?,/i', $value) === 1;
     }
 
     private function isSafeWidgetPreviewCss(string $css): bool

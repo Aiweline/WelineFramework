@@ -459,6 +459,41 @@ final class IntelligenceService
                     ];
                 }
             }
+            $workflowCatalog = new GuidanceWorkflowCatalog();
+            $pinnedBudget = max(
+                384,
+                min(1_800, (int) ($this->config->get('guidance.pinned_token_budget', 1_200))),
+            );
+            $pinnedFragments = $workflowCatalog->pinnedFragments($retriever, $pinnedBudget);
+            $fragments = GuidanceWorkflowCatalog::mergeFragments($fragments, $pinnedFragments);
+            $sources = [];
+            foreach ($fragments as $fragment) {
+                $path = (string) ($fragment['path'] ?? '');
+                if ($path === '') {
+                    continue;
+                }
+                $sources[$path] = [
+                    'path' => $path,
+                    'file_hash' => (string) ($fragment['file_hash'] ?? ''),
+                    'kind' => (string) ($fragment['kind'] ?? 'documents'),
+                    'pinned' => (bool) ($fragment['pinned'] ?? false),
+                ];
+            }
+            foreach ($pinnedFragments as $pinned) {
+                if (!is_array($pinned)) {
+                    continue;
+                }
+                $content = trim((string) ($pinned['content'] ?? ''));
+                if ($content === '') {
+                    continue;
+                }
+                $ruleSummaries[] = [
+                    'summary' => Text::truncate($content, 500),
+                    'source' => (string) ($pinned['path'] ?? 'workflow_pin'),
+                    'file_hash' => (string) ($pinned['file_hash'] ?? ''),
+                    'pinned' => true,
+                ];
+            }
             $sessionId = trim((string) ($input['client_session_id'] ?? ''));
 
             return [
@@ -478,9 +513,11 @@ final class IntelligenceService
                 'session_directives' => $this->readiness->directives($index, $sessionId),
                 'rules' => $ruleSummaries,
                 'fragments' => $fragments,
+                'pinned_fragments' => $pinnedFragments,
                 'sources' => array_values($sources),
                 'token_usage' => [
                     'budget' => $tokenBudget,
+                    'pinned_budget' => $pinnedBudget,
                     'estimated' => array_sum(array_map(
                         static fn (array $fragment): int => (int) $fragment['token_estimate'],
                         $fragments,
@@ -491,12 +528,15 @@ final class IntelligenceService
                     'result_count' => count($fragments),
                     'warnings' => is_array($context['warnings'] ?? null) ? $context['warnings'] : [],
                 ],
+                'workflow_contract' => GuidanceWorkflowCatalog::contract(),
                 'routing_contract' => [
                     'authoritative_sources' => 'Framework/doc and app/code/*/*/doc',
                     'use_get_edit_bundle_for_code' => true,
                     'static_skill_files' => false,
                     'scan_fallback' => false,
-                    'note' => 'Use only task-matched fragments and their hashes; ask the MCP for another bounded query when more evidence is needed.',
+                    'extension_point_selection_required' => true,
+                    'workflow_doc' => GuidanceWorkflowCatalog::contract()['authoritative_workflow_doc'],
+                    'note' => 'Complete extension-point selection and plan before code changes. Use task-matched fragments and hashes; request another bounded query when evidence is insufficient.',
                 ],
             ];
         });
@@ -832,6 +872,15 @@ final class IntelligenceService
                         : 0,
                 ];
                 $bundle['execution_run'] = $runs->completeBundle($runId, $index->projectId(), $bundle);
+                $bundle['workflow_contract'] = GuidanceWorkflowCatalog::contract();
+                $bundle['routing'] = array_replace(
+                    is_array($bundle['routing'] ?? null) ? $bundle['routing'] : [],
+                    [
+                        'extension_point_selection_required' => true,
+                        'workflow_doc' => GuidanceWorkflowCatalog::contract()['authoritative_workflow_doc'],
+                        'mandatory_before_apply' => GuidanceWorkflowCatalog::contract()['mandatory_before_code'],
+                    ],
+                );
 
                 return $bundle;
                 } catch (Throwable $exception) {

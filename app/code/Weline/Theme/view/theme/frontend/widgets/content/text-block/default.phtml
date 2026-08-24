@@ -1,9 +1,9 @@
 <?php
 /**
  * 文本块部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {text-block}
  * @widget.name {文本块}
  * @widget.description {富文本内容区块，支持标题和样式设置}
@@ -12,79 +12,121 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
- * @param title {default="",type="string",label="标题"}
- * @param content {default="",type="textarea",label="内容"}
+ *
+ * @param title {default="品牌故事",type="string",label="标题"}
+ * @param content {default="<p>我们专注提供高品质日常好物，从选材到交付都经过严格质检。</p><p>默认内容可直接预览排版效果，接入 CMS 后可替换为正式文案。</p>",type="textarea",label="内容"}
  * @param alignment {default="left",type="select",label="对齐方式",options={left:"左对齐",center:"居中",right:"右对齐"}}
  * @param background_color {default="transparent",type="color",label="背景颜色"}
  * @param padding {default="20px",type="string",label="内边距"}
  */
 
-$title = $this->getData('title') ?? '';
-$content = $this->getData('content') ?? '';
-$alignment = $this->getData('alignment') ?? 'left';
-$backgroundColor = $this->getData('background_color') ?? 'transparent';
-$padding = $this->getData('padding') ?? '20px';
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
 
-$widgetId = 'text-block-' . uniqid();
+$scope = WidgetUiScope::forWidget('text-block');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$title = trim((string)($this->getData('title') ?? __('品牌故事')));
+$content = (string)($this->getData('content') ?? '<p>' . __('我们专注提供高品质日常好物，从选材到交付都经过严格质检。') . '</p><p>' . __('默认内容可直接预览排版效果，接入 CMS 后可替换为正式文案。') . '</p>');
+$alignment = strtolower(trim((string)($this->getData('alignment') ?? 'left')));
+if (!in_array($alignment, ['left', 'center', 'right'], true)) {
+    $alignment = 'left';
+}
+$backgroundColor = ThemeUiColor::sanitize(
+    $this->getData('background_color') ?? '',
+    'transparent'
+);
+$padding = trim((string)($this->getData('padding') ?? '20px'));
+if (preg_match('/^(?:0|[0-9]+(?:\\.[0-9]+)?(?:px|rem|em|%))$/D', $padding) !== 1) {
+    $padding = '20px';
+}
+
+$rootStyle = '--wc-text-bg:' . $backgroundColor . ';--wc-text-padding:' . $padding . ';';
 ?>
 
-<div class="widget-text-block text-<?= htmlspecialchars($alignment) ?>" 
-     id="<?= $widgetId ?>"
-     style="background-color: <?= htmlspecialchars($backgroundColor) ?>; padding: <?= htmlspecialchars($padding) ?>;">
-    
-    <?php if ($title): ?>
-        <h2 class="block-title"><?= htmlspecialchars($title) ?></h2>
+<section class="<?= $esc($wc) ?> align-<?= $esc($alignment) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="<?= $esc($rootStyle) ?>">
+
+    <?php if ($title !== ''): ?>
+        <h2 class="block-title"><?= $esc($title) ?></h2>
     <?php endif; ?>
-    
-    <?php if ($content): ?>
-        <div class="block-content">
-            <?= $content // 允许HTML ?>
-        </div>
+
+    <?php if ($content !== ''): ?>
+        <div class="block-content"><?= $content ?></div>
     <?php endif; ?>
-</div>
+</section>
 
 <style>
-.widget-text-block {
-    border-radius: 8px;
+.<?= $wc ?> {
+    border-radius: var(--weline-radius-lg, 8px);
+    background-color: var(--wc-text-bg, transparent);
+    padding: var(--wc-text-padding, var(--weline-space-5, 20px));
+    color: var(--weline-theme-text);
 }
 
-.widget-text-block.text-left { text-align: left; }
-.widget-text-block.text-center { text-align: center; }
-.widget-text-block.text-right { text-align: right; }
+.<?= $wc ?>.align-left { text-align: left; }
+.<?= $wc ?>.align-center { text-align: center; }
+.<?= $wc ?>.align-right { text-align: right; }
 
-.widget-text-block .block-title {
-    font-size: 24px;
+.<?= $wc ?> .block-title {
+    font-size: var(--weline-font-size-2xl, 24px);
     font-weight: 700;
-    margin: 0 0 15px;
-    color: var(--heading-color, #222);
+    margin: 0 0 var(--weline-space-4, 15px);
+    color: var(--weline-theme-text);
 }
 
-.widget-text-block .block-content {
-    font-size: 16px;
+.<?= $wc ?> .block-content {
+    font-size: var(--weline-font-size-base, 16px);
     line-height: 1.7;
-    color: var(--text-color, #444);
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-text-block .block-content p {
-    margin: 0 0 15px;
+.<?= $wc ?> .block-content p {
+    margin: 0 0 var(--weline-space-4, 15px);
 }
 
-.widget-text-block .block-content p:last-child {
+.<?= $wc ?> .block-content p:last-child {
     margin-bottom: 0;
 }
 
-.widget-text-block .block-content a {
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .block-content a {
+    color: var(--weline-theme-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
 
-.widget-text-block .block-content ul,
-.widget-text-block .block-content ol {
-    margin: 15px 0;
-    padding-left: 25px;
+.<?= $wc ?> .block-content a:hover {
+    color: var(--weline-theme-primary-hover);
 }
 
-.widget-text-block .block-content li {
-    margin-bottom: 8px;
+.<?= $wc ?> .block-content ul,
+.<?= $wc ?> .block-content ol {
+    margin: var(--weline-space-4, 15px) 0;
+    padding-left: var(--weline-space-6, 25px);
+}
+
+.<?= $wc ?> .block-content li {
+    margin-bottom: var(--weline-space-2, 8px);
+}
+
+.<?= $wc ?> .block-content--placeholder {
+    opacity: 0.65;
+    font-style: italic;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    min-height: 48px;
+}
+
+@media (max-width: 768px) {
+    .<?= $wc ?> .block-title {
+        font-size: var(--weline-font-size-xl, 20px);
+    }
 }
 </style>

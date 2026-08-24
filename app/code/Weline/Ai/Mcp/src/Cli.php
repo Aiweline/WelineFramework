@@ -152,7 +152,7 @@ final class Cli
             }
             $additionalContext = [];
             if ($injectProjectContext || self::bool($options['inject-project-rules'] ?? false)) {
-                $additionalContext[] = 'Weline project development requires prepare_project status=ready and a session-bound readiness_id. Resolve task guidance through the MCP; no repository rules are injected by this Hook.';
+                $additionalContext[] = 'Step 0: run `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php` and auto-repair host guidance when status is not ready. Then git switch dev if needed, call prepare_project status=ready, and carry a session-bound readiness_id. Resolve task guidance through the MCP; no repository rules are injected by this Hook.';
             }
             if ($additionalContext !== []) {
                 self::writeJson([

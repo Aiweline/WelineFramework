@@ -14,10 +14,9 @@ namespace Weline\CustomerService\Service;
 use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
 use Weline\CustomerService\Model\ChatSession;
 use Weline\CustomerService\Model\CustomerLanguage;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
-use Weline\Framework\System\Text;
-use Weline\Smtp\Api\MailSenderInterface;
 
 /**
  * 邮件绑定服务
@@ -25,84 +24,106 @@ use Weline\Smtp\Api\MailSenderInterface;
  */
 class EmailBindingService
 {
-    private MailSenderInterface $smtpSender;
+    private string $lastErrorMessage = '';
 
-    public function __construct(
-        MailSenderInterface $smtpSender
-    ) {
-        $this->smtpSender = $smtpSender;
+    public function getLastErrorMessage(): string
+    {
+        return $this->lastErrorMessage;
     }
 
     /**
      * 发送绑定验证邮件
-     * 
+     *
      * @param string $email 邮箱地址
      * @param string $sessionToken 会话令牌
      * @return bool
      */
     public function sendVerificationEmail(string $email, string $sessionToken): bool
     {
-        // 生成验证令牌
+        $this->lastErrorMessage = '';
+
         $verificationToken = $this->generateVerificationToken($email, $sessionToken);
-
-        // 构建验证链接
         $verificationUrl = $this->buildVerificationUrl($verificationToken);
-
-        // 邮件内容
-        $subject = __('客服服务 - 邮箱绑定验证');
+        $subject = (string) __('客服服务 - 邮箱绑定验证');
         $content = $this->buildVerificationEmailContent($email, $verificationUrl);
 
-        try {
-            // 发送邮件
-            $this->smtpSender->sender(
-                ['email' => 'noreply@example.com', 'name' => __('客服系统')],
-                ['email' => $email, 'name' => $email],
-                $subject,
-                $content,
-                '',
-                '',
-                '',
-                '',
-                '',
-                'Weline_CustomerService'
-            );
+        $module = $this->resolveSmtpModule();
+        if ($module === null) {
+            if ($this->shouldUseDevFallback()) {
+                return $this->sendVerificationEmailDevFallback($email, $sessionToken, $verificationUrl);
+            }
 
-            return true;
-        } catch (\Exception $e) {
+            $this->lastErrorMessage = (string) __(
+                '邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。'
+            );
+            w_log_error('EmailBindingService sendVerificationEmail: SMTP unavailable for CustomerService and Weline_Smtp');
+
+            return false;
+        }
+
+        try {
+            $result = w_query('smtp', 'send', [
+                'module' => $module,
+                'to' => ['email' => $email, 'name' => $email],
+                'subject' => $subject,
+                'content' => $content,
+            ]);
+
+            if (is_array($result) && !empty($result['success'])) {
+                return true;
+            }
+
+            $this->lastErrorMessage = trim((string) ($result['message'] ?? ''));
+            if ($this->lastErrorMessage === '') {
+                $this->lastErrorMessage = (string) __('Unable to send verification email. Please try again later.');
+            }
+
+            w_log_error('EmailBindingService sendVerificationEmail smtp.send failed: ' . $this->lastErrorMessage);
+
+            if ($this->shouldUseDevFallback()) {
+                return $this->sendVerificationEmailDevFallback($email, $sessionToken, $verificationUrl);
+            }
+
+            return false;
+        } catch (\Throwable $e) {
+            $this->lastErrorMessage = $e->getMessage();
             w_log_error('EmailBindingService sendVerificationEmail error: ' . $e->getMessage());
+
+            if ($this->shouldUseDevFallback()) {
+                return $this->sendVerificationEmailDevFallback($email, $sessionToken, $verificationUrl);
+            }
+
             return false;
         }
     }
 
     /**
      * 验证绑定令牌
-     * 
+     *
      * @param string $verificationToken 验证令牌
      * @return array|null 返回 ['email' => string, 'session_token' => string] 或 null
      */
     public function verifyToken(string $verificationToken): ?array
     {
-        // 解码令牌（简单实现，实际应该使用更安全的方式）
         $data = $this->decodeVerificationToken($verificationToken);
-        
+
         if (!$data || !isset($data['email']) || !isset($data['session_token'])) {
             return null;
         }
 
-        // 验证令牌是否过期（24小时）
         if (isset($data['expire_time']) && $data['expire_time'] < time()) {
             return null;
         }
 
         return [
             'email' => $data['email'],
-            'session_token' => $data['session_token']
+            'session_token' => $data['session_token'],
         ];
     }
 
     /**
      * 绑定客户到会话
-     * 
+     *
      * @param string $email 邮箱
      * @param string $sessionToken 会话令牌
      * @param int|null $customerId 客户ID（如果已登录）
@@ -114,63 +135,56 @@ class EmailBindingService
         ?int $customerId = null
     ): bool {
         try {
-            // 如果提供了客户ID，直接绑定
             if ($customerId) {
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
                 $session->where(ChatSession::schema_fields_SESSION_TOKEN, $sessionToken)
                     ->find()
                     ->fetch();
-                
+
                 if ($session->getId()) {
                     $session->setCustomerId($customerId)
                         ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                         ->save();
-                    
-                    // 更新客户语言配置
+
                     $this->updateCustomerLanguageFromSession($customerId, $sessionToken);
-                    
+
                     return true;
                 }
             }
 
-            // 尝试通过邮箱查找客户
             $customer = $this->customerAccounts()->findByEmail($email);
 
             if ($customer !== null) {
                 $resolvedCustomerId = $customer->getId();
-                // 找到客户，绑定到会话
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
                 $session->where(ChatSession::schema_fields_SESSION_TOKEN, $sessionToken)
                     ->find()
                     ->fetch();
-                
+
                 if ($session->getId()) {
                     $session->setCustomerId($resolvedCustomerId)
                         ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                         ->save();
-                    
-                    // 更新客户语言配置
+
                     $this->updateCustomerLanguageFromSession($resolvedCustomerId, $sessionToken);
-                    
+
                     return true;
                 }
             }
 
-            // 如果客户不存在，只更新语言配置中的邮箱
             /** @var CustomerLanguage $language */
             $language = ObjectManager::getInstance(CustomerLanguage::class);
             $language->where(CustomerLanguage::schema_fields_session_id, $sessionToken)
                 ->find()
                 ->fetch();
-            
+
             if ($language->getId()) {
                 $language->setEmail($email)
                     ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'))
                     ->save();
             } else {
-                // 创建新的语言配置
                 $language->reset()
                     ->setEmail($email)
                     ->setSessionId($sessionToken)
@@ -187,12 +201,38 @@ class EmailBindingService
         }
     }
 
-    /**
-     * 从会话更新客户语言配置
-     * 
-     * @param int $customerId 客户ID
-     * @param string $sessionToken 会话令牌
-     */
+    private function resolveSmtpModule(): ?string
+    {
+        foreach (['Weline_CustomerService', 'Weline_Smtp'] as $module) {
+            $check = w_query('smtp', 'isAvailable', ['module' => $module]);
+            if (is_array($check) && !empty($check['available'])) {
+                return $module;
+            }
+        }
+
+        return null;
+    }
+
+    private function shouldUseDevFallback(): bool
+    {
+        return defined('DEV') && DEV;
+    }
+
+    private function sendVerificationEmailDevFallback(
+        string $email,
+        string $sessionToken,
+        string $verificationUrl
+    ): bool {
+        $this->bindCustomerToSession($email, $sessionToken, null);
+        w_log_info(sprintf(
+            'EmailBindingService DEV fallback: bind email saved for session; verification URL: %s',
+            $verificationUrl
+        ));
+        $this->lastErrorMessage = '';
+
+        return true;
+    }
+
     private function updateCustomerLanguageFromSession(int $customerId, string $sessionToken): void
     {
         /** @var CustomerLanguage $sessionLanguage */
@@ -202,7 +242,6 @@ class EmailBindingService
             ->fetch();
 
         if ($sessionLanguage->getId()) {
-            // 查找或创建客户的语言配置
             /** @var CustomerLanguage $customerLanguage */
             $customerLanguage = ObjectManager::getInstance(CustomerLanguage::class);
             $customerLanguage->where(CustomerLanguage::schema_fields_customer_id, $customerId)
@@ -212,11 +251,11 @@ class EmailBindingService
             $customerLanguage->setCustomerId($customerId)
                 ->setTargetLocale($sessionLanguage->getTargetLocale())
                 ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'));
-            
+
             if (!$customerLanguage->getId()) {
                 $customerLanguage->setData(CustomerLanguage::schema_fields_created_at, date('Y-m-d H:i:s'));
             }
-            
+
             $customerLanguage->save();
         }
     }
@@ -232,31 +271,17 @@ class EmailBindingService
         return $accounts;
     }
 
-    /**
-     * 生成验证令牌
-     * 
-     * @param string $email 邮箱
-     * @param string $sessionToken 会话令牌
-     * @return string
-     */
     private function generateVerificationToken(string $email, string $sessionToken): string
     {
         $data = [
             'email' => $email,
             'session_token' => $sessionToken,
-            'expire_time' => time() + (24 * 60 * 60) // 24小时过期
+            'expire_time' => time() + (24 * 60 * 60),
         ];
 
-        // 简单编码（实际应该使用更安全的方式，如JWT）
         return base64_encode(json_encode($data));
     }
 
-    /**
-     * 解码验证令牌
-     * 
-     * @param string $token
-     * @return array|null
-     */
     private function decodeVerificationToken(string $token): ?array
     {
         try {
@@ -267,25 +292,19 @@ class EmailBindingService
         }
     }
 
-    /**
-     * 构建验证URL
-     * 
-     * @param string $token
-     * @return string
-     */
     private function buildVerificationUrl(string $token): string
     {
-        // 这里需要根据实际路由调整
-        return '/customerservice/frontend/bind/verify?token=' . urlencode($token);
+        $path = '/customerservice/frontend/bind/verify?token=' . urlencode($token);
+
+        try {
+            /** @var Url $url */
+            $url = ObjectManager::getInstance(Url::class);
+            return $url->getUrl($path);
+        } catch (\Throwable) {
+            return $path;
+        }
     }
 
-    /**
-     * 构建验证邮件内容
-     * 
-     * @param string $email
-     * @param string $verificationUrl
-     * @return string
-     */
     private function buildVerificationEmailContent(string $email, string $verificationUrl): string
     {
         return <<<HTML

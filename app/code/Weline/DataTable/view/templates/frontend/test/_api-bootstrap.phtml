@@ -1,0 +1,23 @@
+<script>
+    (function () {
+        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
+
+        if (!document.getElementById('weline-theme-js')) {
+            var script = document.createElement('script');
+            script.id = 'weline-theme-js';
+            script.src = '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2';
+            script.async = false;
+            document.head.appendChild(script);
+        }
+    })();
+</script>

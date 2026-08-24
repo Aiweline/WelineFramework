@@ -17,36 +17,80 @@
 @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
 -->
 <?php
-$label = $this->getData('label') ?? '';
-$input = $this->getData('input') ?? '';
-$help = $this->getData('help') ?? '';
-$error = $this->getData('error') ?? '';
-$required = $this->getData('required') ?? false;
-$class = $this->getData('class') ?? '';
+use Weline\Theme\Helper\WidgetUiScope;
 
-// 构建CSS类
-$formGroupClass = 'w-form-group';
-if ($class) {
-    $formGroupClass .= ' ' . htmlspecialchars($class);
-}
+$scope = WidgetUiScope::forComponent('form-group');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$label = (string)($this->getData('label') ?? $this->getData('meta.label') ?? '');
+$input = (string)($this->getData('input') ?? $this->getData('meta.input') ?? '');
+$help = (string)($this->getData('help') ?? $this->getData('meta.help') ?? '');
+$error = (string)($this->getData('error') ?? $this->getData('meta.error') ?? '');
+$required = (bool)($this->getData('required') ?? $this->getData('meta.required') ?? false);
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+
+$rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : '') . ($class !== '' ? ' ' . $class : ''));
 ?>
-<div class="<?= $formGroupClass ?>">
-    <?php if ($label): ?>
-        <label class="w-form-label">
-            <?= htmlspecialchars($label) ?>
+
+<div class="<?= $esc($rootClass) ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?php if ($label !== ''): ?>
+        <label class="w-form-label form-group-label">
+            <?= $esc($label) ?>
             <?php if ($required): ?>
-                <span class="w-text-danger">*</span>
+                <span class="required-mark"><?= $esc('*') ?></span>
             <?php endif; ?>
         </label>
     <?php endif; ?>
-    
-    {{input}}
-    
-    <?php if ($help && !$error): ?>
-        <small class="w-form-text"><?= htmlspecialchars($help) ?></small>
+
+    <div class="form-group-input">
+        <?= $input !== '' ? $input : '{{input}}' ?>
+    </div>
+
+    <?php if ($help !== '' && $error === ''): ?>
+        <small class="w-form-text form-group-help"><?= $esc($help) ?></small>
     <?php endif; ?>
-    
-    <?php if ($error): ?>
-        <div class="w-invalid-feedback"><?= htmlspecialchars($error) ?></div>
+
+    <?php if ($error !== ''): ?>
+        <div class="w-invalid-feedback form-group-error"><?= $esc($error) ?></div>
     <?php endif; ?>
 </div>
+
+<style>
+.<?= $wc ?> {
+    display: grid;
+    gap: var(--weline-space-2, 8px);
+    margin-bottom: var(--weline-space-4, 16px);
+}
+
+.<?= $wc ?> .form-group-label {
+    color: var(--weline-theme-text);
+    font-size: var(--weline-font-size-sm, 13px);
+    font-weight: var(--weline-font-weight-medium, 500);
+}
+
+.<?= $wc ?> .required-mark {
+    color: var(--weline-theme-danger);
+    margin-left: var(--weline-space-1, 4px);
+}
+
+.<?= $wc ?> .form-group-help {
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs, 11px);
+}
+
+.<?= $wc ?> .form-group-error {
+    color: var(--weline-theme-danger);
+    font-size: var(--weline-font-size-xs, 11px);
+}
+
+.<?= $wc ?>.has-error .w-form-control,
+.<?= $wc ?>.has-error .w-input,
+.<?= $wc ?>.has-error .w-textarea,
+.<?= $wc ?>.has-error .w-select {
+    border-color: var(--weline-theme-danger);
+}
+</style>

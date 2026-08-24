@@ -26,7 +26,7 @@ class MediaImageType extends AbstractParamType
         $currentValue = $value ?? $this->getDefaultValue($param) ?? '';
         $hasImage = !empty($currentValue);
         $storedValue = $this->serializeImageFormValue($currentValue);
-        $previewUrl = $this->legacyImagePreviewUrl($currentValue);
+        $previewUrl = $this->imagePreviewUrl($currentValue);
 
         $inputHtml = '<div class="w-param-media-image">';
         $inputHtml .= '<div class="w-param-image-preview' . ($hasImage ? ' w-param-has-image' : '') . '" id="' . htmlspecialchars($fieldId) . '_preview">';
@@ -45,7 +45,7 @@ class MediaImageType extends AbstractParamType
             $inputHtml .= '<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="' . htmlspecialchars($fieldId) . '" aria-label="' . __('清除图片') . '">×</button>';
         }
         $inputHtml .= '</div></div>';
-        $inputHtml .= '<input type="hidden" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($storedValue) . '" data-preview="' . htmlspecialchars($fieldId) . '_preview" data-clear-label="' . __('清除图片') . '">';
+        $inputHtml .= '<input type="hidden" id="' . htmlspecialchars($fieldId) . '" name="' . htmlspecialchars($key) . '" value="' . htmlspecialchars($storedValue) . '" data-preview="' . htmlspecialchars($fieldId) . '_preview" data-clear-label="' . __('清除图片') . '"' . $this->buildImageHiddenInputExtraAttrs($currentValue) . '>';
         $inputHtml .= '</div>';
         return $this->wrapField($key, $param, $inputHtml, $layoutId);
     }

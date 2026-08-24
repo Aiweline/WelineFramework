@@ -1,9 +1,9 @@
 <?php
 /**
  * 促销横幅部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {promo-banner}
  * @widget.name {促销横幅}
  * @widget.description {顶部促销横幅，支持倒计时和关闭功能}
@@ -12,15 +12,23 @@
  * @widget.position {["content", "header"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-homepage-promo","layout-homepage-hero","layout-cms-hero","layout-default-content"]}
- * 
+ * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-promo","area":"content","sort_order":0}]}
+ *
  * @param background_image {default="",type="image",label="背景图片"}
- * @param background_color {default="#f8d7da",type="color",label="背景颜色"}
+ * @param background_color {default="var(--weline-theme-danger-surface)",type="color",label="背景颜色"}
  * @param text {default="限时特惠！全场满300减50",type="string",label="促销文字"}
- * @param text_color {default="#721c24",type="color",label="文字颜色"}
+ * @param text_color {default="var(--weline-theme-danger)",type="color",label="文字颜色"}
  * @param link {default="",type="string",label="链接地址"}
  * @param closeable {default=true,type="bool",label="允许关闭"}
  * @param countdown_end {default="",type="string",label="倒计时结束时间",description="格式：2026-12-31 23:59:59"}
  */
+
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('promo-banner');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
@@ -28,44 +36,44 @@ $backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
     true,
 );
 $backgroundImageFileHtml = (string)($this->getData('background_image_file_html') ?? '');
-$backgroundColor = $this->getData('background_color') ?? '#f8d7da';
+$backgroundColor = ThemeUiColor::sanitize(
+    $this->getData('background_color') ?? '',
+    'var(--weline-theme-danger-surface)'
+);
 $text = $this->getData('text') ?? __('限时特惠！全场满300减50');
-$textColor = $this->getData('text_color') ?? '#721c24';
+$textColor = ThemeUiColor::sanitize(
+    $this->getData('text_color') ?? '',
+    'var(--weline-theme-danger)'
+);
 $link = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('link') ?? '');
 $closeable = (bool)($this->getData('closeable') ?? true);
-$countdownEnd = $this->getData('countdown_end') ?? '';
+$countdownEnd = trim((string)($this->getData('countdown_end') ?? ''));
+$hasCountdown = $countdownEnd !== '';
 
-$bannerId = 'promo-banner-' . uniqid();
-$hasCountdown = !empty($countdownEnd);
-$backgroundColor = preg_match('/^(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\([0-9.,%\s]+\)|transparent)$/D', (string)$backgroundColor) === 1
-    ? (string)$backgroundColor
-    : '#f8d7da';
-$textColor = preg_match('/^(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\([0-9.,%\s]+\)|currentColor)$/D', (string)$textColor) === 1
-    ? (string)$textColor
-    : '#721c24';
-$bannerStyles = ['background-color:' . $backgroundColor];
+$rootStyle = '--wc-promo-bg:' . $backgroundColor . ';--wc-promo-text:' . $textColor . ';';
 if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
-    $bannerStyles[] = 'background-image:url("' . $backgroundImage . '")';
+    $rootStyle .= 'background-image:url("' . $esc($backgroundImage) . '");';
 }
 ?>
 
-<div class="widget-promo-banner<?= $isPreviewMode ? ' widget-promo-banner--preview' : '' ?>" id="<?= $bannerId ?>"
-     style="<?= htmlspecialchars(implode(';', $bannerStyles), ENT_QUOTES, 'UTF-8') ?>">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="<?= $esc($rootStyle) ?>">
     <?php if ($backgroundImageFileHtml !== ''): ?>
         <div class="promo-background"><?= $backgroundImageFileHtml ?></div>
     <?php endif; ?>
-    
+
     <div class="promo-content">
-        <?php if ($link): ?>
-            <a href="<?= htmlspecialchars($link) ?>" class="promo-link" style="color: <?= htmlspecialchars($textColor) ?>;">
+        <?php if ($link !== ''): ?>
+            <a href="<?= $esc($link) ?>" class="promo-link">
         <?php endif; ?>
-        
-        <span class="promo-text" style="color: <?= htmlspecialchars($textColor) ?>;">
-            <?= htmlspecialchars($text) ?>
-        </span>
-        
+
+        <span class="promo-text"><?= $esc((string)$text) ?></span>
+
         <?php if ($hasCountdown): ?>
-            <span class="promo-countdown" data-end="<?= htmlspecialchars($countdownEnd) ?>">
+            <span class="promo-countdown" data-end="<?= $esc($countdownEnd) ?>">
                 <span class="countdown-label"><?= __('剩余') ?>:</span>
                 <span class="countdown-timer">
                     <span class="time-part" data-unit="days"><span class="time-value">00</span><span class="time-label"><?= __('天') ?></span></span>
@@ -75,46 +83,47 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
                 </span>
             </span>
         <?php endif; ?>
-        
-        <?php if ($link): ?>
-            <span class="promo-arrow">
-                <w:icon name="arrow-right" size="sm"></w:icon>
-            </span>
+
+        <?php if ($link !== ''): ?>
+            <span class="promo-arrow"><w:icon name="arrow-right" size="sm"></w:icon></span>
             </a>
         <?php endif; ?>
     </div>
-    
+
     <?php if ($closeable): ?>
         <button class="promo-close" type="button" aria-label="<?= __('关闭') ?>">
             <w:icon name="close" size="sm"></w:icon>
         </button>
     <?php endif; ?>
-</div>
+</section>
 
 <style>
-.widget-promo-banner {
+.<?= $wc ?> {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 12px 50px;
+    padding: var(--weline-space-3, 12px) var(--weline-space-12, 48px);
+    background-color: var(--wc-promo-bg, var(--weline-theme-danger-surface));
     background-size: cover;
     background-position: center;
+    color: var(--wc-promo-text, var(--weline-theme-danger));
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
 }
 
-.widget-promo-banner .promo-content {
+.<?= $wc ?> .promo-content {
     position: relative;
     z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 15px;
+    gap: var(--weline-space-4, 15px);
     flex-wrap: wrap;
 }
 
-.widget-promo-banner .promo-background,
-.widget-promo-banner .promo-background figure,
-.widget-promo-banner .promo-background img {
+.<?= $wc ?> .promo-background,
+.<?= $wc ?> .promo-background figure,
+.<?= $wc ?> .promo-background img {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -122,195 +131,167 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     margin: 0;
 }
 
-.widget-promo-banner .promo-background img {
+.<?= $wc ?> .promo-background img {
     object-fit: cover;
 }
 
-.widget-promo-banner .promo-link {
+.<?= $wc ?> .promo-link {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: var(--weline-space-4, 15px);
+    color: inherit;
     text-decoration: none;
-    transition: opacity 0.3s;
+    transition: opacity var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-promo-banner .promo-link:hover {
-    opacity: 0.8;
+.<?= $wc ?> .promo-link:hover {
+    opacity: 0.85;
 }
 
-.widget-promo-banner .promo-text {
-    font-size: 15px;
+.<?= $wc ?> .promo-text {
+    font-size: var(--weline-font-size-base, 15px);
     font-weight: 600;
 }
 
-.widget-promo-banner .promo-arrow {
+.<?= $wc ?> .promo-arrow {
     display: flex;
     align-items: center;
 }
 
-/* 倒计时 */
-.widget-promo-banner .promo-countdown {
+.<?= $wc ?> .promo-countdown {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 5px 12px;
-    background: rgba(0,0,0,0.1);
-    border-radius: 20px;
+    gap: var(--weline-space-2, 8px);
+    padding: var(--weline-space-1, 4px) var(--weline-space-3, 12px);
+    background: color-mix(in srgb, var(--wc-promo-text, var(--weline-theme-danger)) 12%, transparent);
+    border-radius: var(--weline-radius-round, 999px);
 }
 
-.widget-promo-banner .countdown-label {
-    font-size: 13px;
+.<?= $wc ?> .countdown-label {
+    font-size: var(--weline-font-size-sm, 13px);
 }
 
-.widget-promo-banner .countdown-timer {
+.<?= $wc ?> .countdown-timer {
     display: flex;
-    gap: 5px;
+    gap: var(--weline-space-1, 5px);
 }
 
-.widget-promo-banner .time-part {
+.<?= $wc ?> .time-part {
     display: flex;
     align-items: baseline;
     gap: 2px;
 }
 
-.widget-promo-banner .time-value {
+.<?= $wc ?> .time-value {
     font-weight: 700;
-    font-size: 15px;
-    font-family: monospace;
+    font-size: var(--weline-font-size-base, 15px);
+    font-family: var(--weline-font-mono, monospace);
 }
 
-.widget-promo-banner .time-label {
-    font-size: 11px;
+.<?= $wc ?> .time-label {
+    font-size: var(--weline-font-size-xs, 11px);
 }
 
-/* 关闭按钮 */
-.widget-promo-banner .promo-close {
+.<?= $wc ?> .promo-close {
     position: absolute;
-    right: 15px;
+    right: var(--weline-space-4, 15px);
     top: 50%;
     transform: translateY(-50%);
-    background: none;
-    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    color: inherit;
     cursor: pointer;
-    padding: 5px;
-    opacity: 0.6;
-    transition: opacity 0.3s;
+    padding: var(--weline-space-1, 4px);
+    opacity: 0.65;
+    transition: opacity var(--weline-theme-transition-base, 0.2s ease);
     z-index: 3;
 }
 
-.widget-promo-banner .promo-close:hover {
+.<?= $wc ?> .promo-close:hover {
     opacity: 1;
 }
 
-.widget-promo-banner .promo-close i {
-    font-size: 20px;
-}
-
-/* 隐藏状态 */
-.widget-promo-banner.hidden {
+.<?= $wc ?>.is-hidden {
     display: none;
 }
 
-/* 部件库 / 编辑器预览 */
-.widget-preview-canvas .widget-promo-banner,
-.widget-promo-banner--preview {
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
     min-height: 48px;
-    padding: 8px 36px 8px 12px;
+    padding: var(--weline-space-2, 8px) var(--weline-space-9, 36px) var(--weline-space-2, 8px) var(--weline-space-3, 12px);
 }
 
-.widget-preview-canvas .widget-promo-banner .promo-text,
-.widget-promo-banner--preview .promo-text {
-    font-size: 11px;
+.widget-preview-canvas .<?= $wc ?> .promo-text,
+.<?= $wc ?>.is-preview .promo-text {
+    font-size: var(--weline-font-size-xs, 11px);
     line-height: 1.3;
 }
 
-.widget-preview-canvas .widget-promo-banner .promo-countdown,
-.widget-promo-banner--preview .promo-countdown {
-    padding: 2px 8px;
-    font-size: 10px;
-}
-
-.widget-preview-canvas .widget-promo-banner .promo-close,
-.widget-promo-banner--preview .promo-close {
-    width: 24px;
-    height: 24px;
-    top: 4px;
-    right: 4px;
-}
-
-/* 响应式 */
 @media (max-width: 768px) {
-    .widget-promo-banner {
-        padding: 10px 40px 10px 15px;
+    .<?= $wc ?> {
+        padding: var(--weline-space-2, 10px) var(--weline-space-10, 40px) var(--weline-space-2, 10px) var(--weline-space-4, 15px);
     }
-    
-    .widget-promo-banner .promo-text {
-        font-size: 13px;
-    }
-    
-    .widget-promo-banner .promo-countdown {
-        padding: 4px 10px;
+
+    .<?= $wc ?> .promo-text {
+        font-size: var(--weline-font-size-sm, 13px);
     }
 }
 </style>
 
 <script>
-(function() {
-    const banner = document.getElementById('<?= $bannerId ?>');
-    if (!banner) return;
-    
-    // 关闭功能
-    const closeBtn = banner.querySelector('.promo-close');
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var storageKey = '<?= $esc($scope->jsNs) ?>-closed-' + root.getAttribute('data-uid');
+
+    var closeBtn = root.querySelector('.promo-close');
     if (closeBtn) {
-        closeBtn.addEventListener('click', function() {
-            banner.classList.add('hidden');
-            // 可以存储到 localStorage 避免重复显示
-            localStorage.setItem('promo-banner-closed-<?= $bannerId ?>', Date.now());
+        closeBtn.addEventListener('click', function () {
+            root.classList.add('is-hidden');
+            try { localStorage.setItem(storageKey, String(Date.now())); } catch (e) {}
         });
-        
-        // 检查是否已关闭
-        const closedTime = localStorage.getItem('promo-banner-closed-<?= $bannerId ?>');
-        if (closedTime) {
-            // 24小时后可再次显示
-            const hoursSinceClosed = (Date.now() - parseInt(closedTime)) / (1000 * 60 * 60);
-            if (hoursSinceClosed < 24) {
-                banner.classList.add('hidden');
+
+        try {
+            var closedTime = localStorage.getItem(storageKey);
+            if (closedTime) {
+                var hoursSinceClosed = (Date.now() - parseInt(closedTime, 10)) / (1000 * 60 * 60);
+                if (hoursSinceClosed < 24) {
+                    root.classList.add('is-hidden');
+                }
             }
-        }
+        } catch (e) {}
     }
-    
-    // 倒计时功能
-    const countdown = banner.querySelector('.promo-countdown');
-    if (countdown) {
-        const endDate = new Date(countdown.dataset.end).getTime();
-        
-        function updateCountdown() {
-            const now = Date.now();
-            const diff = endDate - now;
-            
-            if (diff <= 0) {
-                banner.classList.add('hidden');
-                return;
-            }
-            
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-            
-            const daysEl = countdown.querySelector('[data-unit="days"] .time-value');
-            const hoursEl = countdown.querySelector('[data-unit="hours"] .time-value');
-            const minutesEl = countdown.querySelector('[data-unit="minutes"] .time-value');
-            const secondsEl = countdown.querySelector('[data-unit="seconds"] .time-value');
-            
-            if (daysEl) daysEl.textContent = String(days).padStart(2, '0');
-            if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
-            if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
-            if (secondsEl) secondsEl.textContent = String(seconds).padStart(2, '0');
+
+    var countdown = root.querySelector('.promo-countdown');
+    if (!countdown) return;
+
+    var endDate = new Date(countdown.dataset.end).getTime();
+    if (!Number.isFinite(endDate)) return;
+
+    function updateCountdown() {
+        var diff = endDate - Date.now();
+        if (diff <= 0) {
+            root.classList.add('is-hidden');
+            return;
         }
-        
-        updateCountdown();
-        setInterval(updateCountdown, 1000);
+
+        var days = Math.floor(diff / 86400000);
+        var hours = Math.floor((diff % 86400000) / 3600000);
+        var minutes = Math.floor((diff % 3600000) / 60000);
+        var seconds = Math.floor((diff % 60000) / 1000);
+
+        var map = { days: days, hours: hours, minutes: minutes, seconds: seconds };
+        Object.keys(map).forEach(function (unit) {
+            var el = countdown.querySelector('[data-unit="' + unit + '"] .time-value');
+            if (el) el.textContent = String(map[unit]).padStart(2, '0');
+        });
     }
+
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
 })();
 </script>

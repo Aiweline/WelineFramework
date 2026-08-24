@@ -1,9 +1,7 @@
 <?php
 /**
  * 页脚社交图标部件
- * 
- * 显示社交媒体链接图标，支持多种样式和布局
- * 
+ *
  * @widget.code {footer-social}
  * @widget.name {页脚社交图标}
  * @widget.description {Footer 区域的社交媒体图标链接}
@@ -13,56 +11,40 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {social}
  * @widget.supports {["layout-footer-social","layout-global-footer-social"]}
+ * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"footer-social","area":"footer","sort_order":0}]}
  * @widget.exclusive {true}
- * 
+ *
  * @param title {default="",name="标题",description="部件标题，可选",type=string}
- * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置，格式：[{\"platform\":\"facebook\",\"url\":\"https://...\"}]",type=string}
+ * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置",type=string}
  * @param alignment {default="left",name="对齐方式",description="图标对齐方式",type=select,options={left:"左对齐",center:"居中",right:"右对齐"}}
  * @param icon_size {default="medium",name="图标尺寸",description="图标大小",type=select,options={small:"小号",medium:"中号",large:"大号"}}
  * @param icon_style {default="colored",name="图标样式",description="图标显示样式",type=select,options={colored:"彩色",mono:"单色",outline:"线框"}}
- * @param gap {default="10px",name="图标间距",description="图标之间的间距，支持CSS单位（如10px、1rem）",type=string}
- * @param facebook {default="",name="Facebook链接",description="Facebook主页链接",type=string}
- * @param twitter {default="",name="Twitter/X链接",description="Twitter/X主页链接",type=string}
- * @param instagram {default="",name="Instagram链接",description="Instagram主页链接",type=string}
- * @param youtube {default="",name="YouTube链接",description="YouTube频道链接",type=string}
- * @param linkedin {default="",name="LinkedIn链接",description="LinkedIn主页链接",type=string}
- * @param pinterest {default="",name="Pinterest链接",description="Pinterest主页链接",type=string}
- * @param tiktok {default="",name="TikTok链接",description="TikTok主页链接",type=string}
- * @param weibo {default="",name="微博链接",description="微博主页链接",type=string}
- * @param wechat {default="",name="微信链接",description="微信公众号链接",type=string}
- * @param github {default="",name="GitHub链接",description="GitHub主页链接",type=string}
- * @param telegram {default="",name="Telegram链接",description="Telegram频道链接",type=string}
- * @param whatsapp {default="",name="WhatsApp链接",description="WhatsApp联系链接",type=string}
- * @param discord {default="",name="Discord链接",description="Discord服务器链接",type=string}
- * @param reddit {default="",name="Reddit链接",description="Reddit社区链接",type=string}
- * @param snapchat {default="",name="Snapchat链接",description="Snapchat主页链接",type=string}
- * 
+ * @param gap {default="10px",name="图标间距",description="图标之间的间距",type=string}
+ *
  * @var \Weline\Framework\View\Template $this
  */
 
 use Weline\Theme\Helper\SocialIconHelper;
+use Weline\Theme\Helper\WidgetUiScope;
 
+$scope = WidgetUiScope::forWidget('footer-social');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = $this->getData('title') ?? '';
-$alignment = $this->getData('alignment') ?? 'left'; // left, center, right
-$iconSize = $this->getData('icon_size') ?? 'medium'; // small, medium, large
-$iconStyle = $this->getData('icon_style') ?? 'colored'; // colored, mono, outline
-$gap = $this->getData('gap') ?? '10px'; // 图标间距
+$alignment = $this->getData('alignment') ?? 'left';
+$iconSize = $this->getData('icon_size') ?? 'medium';
+$iconStyle = $this->getData('icon_style') ?? 'colored';
+$gap = $this->getData('gap') ?? '10px';
 
 $safeHref = static function (mixed $url): string {
     $url = trim((string)$url);
-    if ($url === '') {
-        return '#';
-    }
+    if ($url === '') return '#';
     $normalized = strtolower(str_replace(["\r", "\n", "\t", ' '], '', $url));
-    if ($url[0] === '#') {
-        return preg_match('/^#[A-Za-z0-9_\-:.]*$/', $url) ? $url : '#';
-    }
-    if (preg_match('#^(javascript:|data:|vbscript:)#i', $normalized)) {
-        return '#';
-    }
-    if (str_starts_with($url, '//')) {
-        return '#';
-    }
+    if ($url[0] === '#') return preg_match('/^#[A-Za-z0-9_\-:.]*$/', $url) ? $url : '#';
+    if (preg_match('#^(javascript:|data:|vbscript:)#i', $normalized)) return '#';
+    if (str_starts_with($url, '//')) return '#';
     if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $url)) {
         $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
         return in_array($scheme, ['http', 'https', 'mailto', 'tel'], true) ? $url : '#';
@@ -70,74 +52,50 @@ $safeHref = static function (mixed $url): string {
     return preg_match('#^(/(?!/)|\./|\.\./|[A-Za-z0-9_\-./?=&%+#:]+)$#', $url) ? $url : '#';
 };
 
-$safeGap = static function (mixed $value): string {
-    $value = trim((string)$value);
-    if (preg_match('/^(\d{1,3}(?:\.\d{1,2})?)(px|rem|em)$/', $value, $matches)) {
-        $amount = (float)$matches[1];
-        if ($amount >= 0 && $amount <= 100) {
-            return rtrim(rtrim(number_format($amount, 2, '.', ''), '0'), '.') . $matches[2];
-        }
-    }
-    return '10px';
-};
+if (preg_match('/^(\d{1,3}(?:\.\d{1,2})?)(px|rem|em)$/', trim((string)$gap), $gapMatch)) {
+    $gap = rtrim(rtrim(number_format((float)$gapMatch[1], 2, '.', ''), '0'), '.') . $gapMatch[2];
+} else {
+    $gap = '10px';
+}
 
-$safeToken = static function (mixed $value, array $allowed, string $fallback): string {
-    $value = (string)$value;
-    return in_array($value, $allowed, true) ? $value : $fallback;
-};
+if (!in_array($alignment, ['left', 'center', 'right'], true)) $alignment = 'left';
+if (!in_array($iconSize, ['small', 'medium', 'large'], true)) $iconSize = 'medium';
+if (!in_array($iconStyle, ['colored', 'mono', 'outline'], true)) $iconStyle = 'colored';
 
-$safePlatform = static function (mixed $platform): string {
-    $platform = strtolower((string)$platform);
-    $platform = preg_replace('/[^a-z0-9_-]/', '', $platform) ?: '';
-    return $platform !== '' ? $platform : 'link';
-};
-
-$alignment = $safeToken($alignment, ['left', 'center', 'right'], 'left');
-$iconSize = $safeToken($iconSize, ['small', 'medium', 'large'], 'medium');
-$iconStyle = $safeToken($iconStyle, ['colored', 'mono', 'outline'], 'colored');
-$gap = $safeGap($gap);
-
-// 获取自定义社交链接配置（JSON 格式）
 $customLinks = $this->getData('custom_links') ?? '';
 $socials = [];
 
-// 如果有自定义配置，解析 JSON
 if ($customLinks) {
-    $customLinksArray = json_decode($customLinks, true);
+    $customLinksArray = json_decode((string)$customLinks, true);
     if (is_array($customLinksArray)) {
         foreach ($customLinksArray as $link) {
             if (!empty($link['platform']) && !empty($link['url'])) {
-                $platform = $safePlatform($link['platform']);
-                $url = $safeHref($link['url']);
+                $platform = preg_replace('/[^a-z0-9_-]/', '', strtolower((string)$link['platform'])) ?: 'link';
                 $socials[] = [
                     'platform' => $platform,
                     'name' => SocialIconHelper::getName($platform) ?? $link['name'] ?? $platform,
-                    'url' => $url,
-                    'color' => SocialIconHelper::getColor($platform) ?? '#666'
+                    'url' => $safeHref($link['url']),
+                    'color' => SocialIconHelper::getColor($platform) ?? '#666',
                 ];
             }
         }
     }
 }
 
-// 如果没有自定义配置，使用传统的单独字段配置
 if (empty($socials)) {
-    $platforms = ['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'];
-    
-    foreach ($platforms as $platform) {
+    foreach (['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'] as $platform) {
         $url = $this->getData($platform) ?? '';
         if ($url) {
             $socials[] = [
                 'platform' => $platform,
                 'name' => SocialIconHelper::getName($platform) ?? ucfirst($platform),
                 'url' => $safeHref($url),
-                'color' => SocialIconHelper::getColor($platform) ?? '#666'
+                'color' => SocialIconHelper::getColor($platform) ?? '#666',
             ];
         }
     }
 }
 
-// 示例数据（如果没有任何配置）
 if (empty($socials)) {
     $socials = [
         ['platform' => 'facebook', 'name' => 'Facebook', 'url' => '#', 'color' => '#1877f2'],
@@ -146,148 +104,99 @@ if (empty($socials)) {
         ['platform' => 'youtube', 'name' => 'YouTube', 'url' => '#', 'color' => '#ff0000'],
     ];
 }
-
-$widgetId = 'footer-social-' . uniqid();
 ?>
 
-<div class="widget-footer-social" id="<?= $widgetId ?>" data-size="<?= htmlspecialchars($iconSize) ?>" data-style="<?= htmlspecialchars($iconStyle) ?>" data-align="<?= htmlspecialchars($alignment) ?>">
-    <?php if ($title): ?>
-        <h4 class="social-title"><?= htmlspecialchars($title) ?></h4>
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-size="<?= $esc($iconSize) ?>"
+         data-style="<?= $esc($iconStyle) ?>"
+         data-align="<?= $esc($alignment) ?>"
+         style="--wc-social-gap: <?= $esc($gap) ?>;">
+    <?php if ($title !== ''): ?>
+        <h4 class="social-title"><?= $esc((string)$title) ?></h4>
     <?php endif; ?>
-    
-    <div class="social-links" style="--social-gap: <?= htmlspecialchars($gap) ?>;">
+    <div class="social-links">
         <?php foreach ($socials as $social): ?>
-            <a href="<?= htmlspecialchars($social['url']) ?>" 
-               class="social-link social-link-<?= htmlspecialchars($social['platform']) ?>"
-               title="<?= htmlspecialchars($social['name']) ?>"
+            <a href="<?= $esc((string)$social['url']) ?>"
+               class="social-link social-link-<?= $esc((string)$social['platform']) ?>"
+               title="<?= $esc((string)$social['name']) ?>"
                target="_blank"
                rel="noopener noreferrer"
-               style="--brand-color: <?= htmlspecialchars($social['color']) ?>;">
+               style="--brand-color: <?= $esc((string)$social['color']) ?>;">
                 <?= SocialIconHelper::renderIcon($social['platform'], ['class' => 'social-icon', 'width' => '20', 'height' => '20']) ?>
             </a>
         <?php endforeach; ?>
     </div>
-</div>
+</section>
 
 <style>
-/* 部件作用域样式 - 使用 ID 选择器确保样式隔离 */
-#<?= $widgetId ?> {
-    /* 重置外部样式影响 */
-    all: initial;
-    display: block;
-    box-sizing: border-box;
-}
-
-#<?= $widgetId ?> * {
-    box-sizing: border-box;
-}
-
-#<?= $widgetId ?> .social-title {
-    font-size: 16px;
+.<?= $wc ?> .social-title {
+    font-size: var(--weline-font-size-base, 16px);
     font-weight: 600;
-    margin: 0 0 15px;
-    color: #fff;
-    font-family: inherit;
+    margin: 0 0 var(--weline-space-4, 15px);
+    color: var(--weline-theme-on-primary);
 }
 
-#<?= $widgetId ?> .social-links {
+.<?= $wc ?> .social-links {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--social-gap, 10px);
+    gap: var(--wc-social-gap, var(--weline-space-3, 10px));
 }
 
-/* 对齐方式 */
-#<?= $widgetId ?>[data-align="left"] .social-links {
-    justify-content: flex-start;
-}
+.<?= $wc ?>[data-align="left"] .social-links { justify-content: flex-start; }
+.<?= $wc ?>[data-align="center"] .social-links { justify-content: center; }
+.<?= $wc ?>[data-align="right"] .social-links { justify-content: flex-end; }
 
-#<?= $widgetId ?>[data-align="center"] .social-links {
-    justify-content: center;
-}
-
-#<?= $widgetId ?>[data-align="right"] .social-links {
-    justify-content: flex-end;
-}
-
-#<?= $widgetId ?> .social-link {
+.<?= $wc ?> .social-link {
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: all 0.3s ease;
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
     text-decoration: none;
-    cursor: pointer;
 }
 
-#<?= $widgetId ?> .social-link .social-icon {
-    display: block;
-}
-
-/* 彩色样式 */
-#<?= $widgetId ?>[data-style="colored"] .social-link {
+.<?= $wc ?>[data-style="colored"] .social-link {
     background: var(--brand-color);
-    color: #fff;
+    color: var(--weline-theme-on-primary);
 }
 
-#<?= $widgetId ?>[data-style="colored"] .social-link:hover {
+.<?= $wc ?>[data-style="colored"] .social-link:hover {
     transform: translateY(-3px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: var(--weline-theme-shadow-md);
 }
 
-/* 单色样式 */
-#<?= $widgetId ?>[data-style="mono"] .social-link {
-    background: rgba(255,255,255,0.1);
-    color: #fff;
+.<?= $wc ?>[data-style="mono"] .social-link {
+    background: color-mix(in srgb, var(--weline-theme-on-primary) 10%, transparent);
+    color: var(--weline-theme-on-primary);
 }
 
-#<?= $widgetId ?>[data-style="mono"] .social-link:hover {
+.<?= $wc ?>[data-style="mono"] .social-link:hover {
     background: var(--brand-color);
-    transform: translateY(-3px);
 }
 
-/* 线框样式 */
-#<?= $widgetId ?>[data-style="outline"] .social-link {
+.<?= $wc ?>[data-style="outline"] .social-link {
     background: transparent;
-    border: 2px solid rgba(255,255,255,0.3);
-    color: #fff;
+    border: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) color-mix(in srgb, var(--weline-theme-on-primary) 30%, transparent);
+    color: var(--weline-theme-on-primary);
 }
 
-#<?= $widgetId ?>[data-style="outline"] .social-link:hover {
+.<?= $wc ?>[data-style="outline"] .social-link:hover {
     border-color: var(--brand-color);
     background: var(--brand-color);
-    transform: translateY(-3px);
 }
 
-/* 尺寸 - small */
-#<?= $widgetId ?>[data-size="small"] .social-link {
-    width: 32px;
-    height: 32px;
-}
+.<?= $wc ?>[data-size="small"] .social-link { width: 32px; height: 32px; }
+.<?= $wc ?>[data-size="small"] .social-icon { width: 16px; height: 16px; }
+.<?= $wc ?>[data-size="medium"] .social-link { width: 40px; height: 40px; }
+.<?= $wc ?>[data-size="medium"] .social-icon { width: 20px; height: 20px; }
+.<?= $wc ?>[data-size="large"] .social-link { width: 48px; height: 48px; }
+.<?= $wc ?>[data-size="large"] .social-icon { width: 24px; height: 24px; }
 
-#<?= $widgetId ?>[data-size="small"] .social-icon {
-    width: 16px;
-    height: 16px;
-}
-
-/* 尺寸 - medium */
-#<?= $widgetId ?>[data-size="medium"] .social-link {
-    width: 40px;
-    height: 40px;
-}
-
-#<?= $widgetId ?>[data-size="medium"] .social-icon {
-    width: 20px;
-    height: 20px;
-}
-
-/* 尺寸 - large */
-#<?= $widgetId ?>[data-size="large"] .social-link {
-    width: 48px;
-    height: 48px;
-}
-
-#<?= $widgetId ?>[data-size="large"] .social-icon {
-    width: 24px;
-    height: 24px;
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-2, 8px) 0;
 }
 </style>

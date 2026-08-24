@@ -20,6 +20,8 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                 'image' => '/media/primary.jpg',
             ],
             [
+                $this->attribute(0, 'name', '', 'Website name'),
+                $this->attribute(3, 'name', 'zh_Hans_CN', '门店商品名'),
                 $this->attribute(0, 'short_description', '', 'Website summary'),
                 $this->attribute(3, 'short_description', 'zh_Hans_CN', '门店简介'),
                 $this->attribute(0, 'description', '', 'Website description'),
@@ -40,6 +42,7 @@ final class StorefrontProductDetailProjectorTest extends TestCase
             'zh_Hans_CN',
         );
 
+        self::assertSame('门店商品名', $detail['name']);
         self::assertSame('门店简介', $detail['short_description']);
         self::assertSame('Website description', $detail['description']);
         self::assertSame(
@@ -55,6 +58,30 @@ final class StorefrontProductDetailProjectorTest extends TestCase
         );
         self::assertArrayNotHasKey('source_catalog', $detail);
         self::assertTrue($detail['quote_only']);
+    }
+
+    public function testItExposesNormalizedSourceSlugForPublicUrls(): void
+    {
+        $projector = new StorefrontProductDetailProjector();
+
+        $detail = $projector->project(
+            ['product_id' => 7, 'name' => 'Website name', 'image' => ''],
+            [
+                $this->attribute(0, 'name', '', 'Website name'),
+                $this->attribute(0, 'slug', '', 'gasoline-atvs'),
+                $this->attribute(0, 'source_slug', '', 'ztot-z7l-yb300h-gasoline-dirt-bike'),
+                $this->attribute(0, 'engine', '', 'LONCIN'),
+            ],
+            [],
+            0,
+            '',
+        );
+
+        self::assertSame('ztot-z7l-yb300h-gasoline-dirt-bike', $detail['slug']);
+        self::assertSame(
+            [['code' => 'engine', 'value' => 'LONCIN']],
+            $detail['specifications'],
+        );
     }
 
     public function testClearedStoreValueStopsWebsiteFallback(): void

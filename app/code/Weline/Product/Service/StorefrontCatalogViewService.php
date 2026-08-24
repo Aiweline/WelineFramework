@@ -137,27 +137,54 @@ final class StorefrontCatalogViewService
 
         foreach ($this->publishedOffers(200) as $offer) {
             if ((int)($offer['product_id'] ?? 0) === $productId) {
-                $scope = $this->currentScope();
-                $websiteId = (int)$scope->websiteId;
-                $storeId = max(0, RequestContext::getWelineStoreId());
-                $storeIds = array_values(array_unique([0, $storeId]));
-
-                return $this->detailProjector->project(
-                    $offer,
-                    $this->attributeValues->listExplicitRows(
-                        $websiteId,
-                        'product',
-                        [$productId],
-                        $storeIds,
-                    ),
-                    $this->media->listByProductIds($websiteId, [$productId]),
-                    $storeId,
-                    trim((string)RequestContext::getWelineUserLang()),
-                );
+                return $this->hydrateDetailOffer($offer);
             }
         }
 
         return null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function publishedOfferBySlug(string $slug): ?array
+    {
+        $slug = strtolower(trim($slug));
+        if ($slug === '' || preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return null;
+        }
+
+        foreach ($this->publishedOffers(200) as $offer) {
+            if (strtolower(trim((string)($offer['slug'] ?? ''))) === $slug) {
+                return $this->hydrateDetailOffer($offer);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    private function hydrateDetailOffer(array $offer): array
+    {
+        $productId = (int)($offer['product_id'] ?? 0);
+        $scope = $this->currentScope();
+        $websiteId = (int)$scope->websiteId;
+        $storeId = max(0, RequestContext::getWelineStoreId());
+        $storeIds = array_values(array_unique([0, $storeId]));
+
+        return $this->detailProjector->project(
+            $offer,
+            $this->attributeValues->listExplicitRows(
+                $websiteId,
+                'product',
+                [$productId],
+                $storeIds,
+            ),
+            $this->media->listByProductIds($websiteId, [$productId]),
+            $storeId,
+            trim((string)RequestContext::getWelineUserLang()),
+        );
     }
 
     private function currentScope(): ScopeIdentity

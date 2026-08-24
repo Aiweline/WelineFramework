@@ -14,26 +14,47 @@
  * @param.content {default="",name="兼容内容",description="旧版 HTML 字符串内容"}
  * @param.footer {default="",name="兼容底部",description="旧版 HTML 字符串底部"}
  */
+
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forComponent('modal');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
 $layoutId = (string)($this->getData('layout_id') ?? $this->getData('_layout_id') ?? 'preview');
-$title = (string)($this->getData('title') ?? $this->getData('meta.title') ?? '弹窗标题');
+$title = (string)($this->getData('title') ?? $this->getData('meta.title') ?? __('弹窗标题'));
 $content = (string)($this->getData('content') ?? $this->getData('meta.content') ?? '');
 $footer = (string)($this->getData('footer') ?? $this->getData('meta.footer') ?? '');
 $editorMode = (bool)($this->getData('editor_mode') ?? $this->getData('preview_mode') ?? false);
 $bodySlotId = 'modal-body:' . ($layoutId !== '' ? $layoutId : 'preview');
 $footerSlotId = 'modal-footer:' . ($layoutId !== '' ? $layoutId : 'preview');
 ?>
-<section class="w-modal w-dialog__surface w-builder-modal" weline-code="theme.components.section_1">
-    <header class="w-modal-header w-dialog__header">
-        <h3 class="w-modal-title w-dialog__title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h3>
+
+<section class="<?= $esc($wc) ?> w-modal w-dialog__surface w-builder-modal"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         role="dialog"
+         aria-modal="true">
+    <header class="w-modal-header w-dialog__header modal-header">
+        <h3 class="w-modal-title w-dialog__title modal-title"><?= $esc($title) ?></h3>
     </header>
-    <div class="w-modal-body w-dialog__body" data-wslot="<?= htmlspecialchars($bodySlotId, ENT_QUOTES, 'UTF-8') ?>" data-wslot-name="<?= htmlspecialchars(__('弹窗内容'), ENT_QUOTES, 'UTF-8') ?>" data-wslot-accept="builder-component,builder-form,builder-display,builder-container" data-wslot-multiple="true">
+    <div class="w-modal-body w-dialog__body modal-body"
+         data-wslot="<?= $esc($bodySlotId) ?>"
+         data-wslot-name="<?= $esc((string)__('弹窗内容')) ?>"
+         data-wslot-accept="builder-component,builder-form,builder-display,builder-container"
+         data-wslot-multiple="true">
         <?php if ($content !== ''): ?>
             <?= $content ?>
         <?php elseif ($editorMode): ?>
             <div class="w-builder-slot-placeholder slot-placeholder"><?= __('拖入弹窗内容') ?></div>
         <?php endif; ?>
     </div>
-    <footer class="w-modal-footer w-dialog__footer" data-wslot="<?= htmlspecialchars($footerSlotId, ENT_QUOTES, 'UTF-8') ?>" data-wslot-name="<?= htmlspecialchars(__('弹窗底部'), ENT_QUOTES, 'UTF-8') ?>" data-wslot-accept="builder-action,builder-component" data-wslot-multiple="true">
+    <footer class="w-modal-footer w-dialog__footer modal-footer"
+            data-wslot="<?= $esc($footerSlotId) ?>"
+            data-wslot-name="<?= $esc((string)__('弹窗底部')) ?>"
+            data-wslot-accept="builder-action,builder-component"
+            data-wslot-multiple="true">
         <?php if ($footer !== ''): ?>
             <?= $footer ?>
         <?php elseif ($editorMode): ?>
@@ -41,3 +62,45 @@ $footerSlotId = 'modal-footer:' . ($layoutId !== '' ? $layoutId : 'preview');
         <?php endif; ?>
     </footer>
 </section>
+
+<style>
+.<?= $wc ?> {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 640px);
+    max-height: min(90vh, 720px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg, 12px);
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-text);
+    box-shadow: var(--weline-shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.16));
+    overflow: hidden;
+}
+
+.<?= $wc ?> .modal-header {
+    padding: var(--weline-space-4, 16px) var(--weline-space-5, 20px);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+}
+
+.<?= $wc ?> .modal-title {
+    margin: 0;
+    font-size: var(--weline-font-size-lg, 17px);
+    font-weight: var(--weline-font-weight-semibold, 600);
+}
+
+.<?= $wc ?> .modal-body {
+    flex: 1;
+    overflow: auto;
+    padding: var(--weline-space-4, 16px) var(--weline-space-5, 20px);
+}
+
+.<?= $wc ?> .modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2, 8px);
+    justify-content: flex-end;
+    padding: var(--weline-space-4, 16px) var(--weline-space-5, 20px);
+    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    background: var(--weline-theme-surface-muted);
+}
+</style>

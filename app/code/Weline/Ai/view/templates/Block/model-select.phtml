@@ -1,0 +1,292 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+?>
+<style id="weline-ai-model-select-style">
+.weline-ai-model-select{position:relative;}
+.weline-ai-model-select.is-open{z-index:2000;}
+.weline-ai-model-select-dropdown{
+  position:absolute;left:0;min-width:100%;width:max(100%,280px);z-index:2001;display:none;padding:0.5rem;
+  background-color:#ffffff;color:#212529;
+  border:1px solid #ced4da;border-radius:0.375rem;
+  box-shadow:0 12px 28px rgba(0,0,0,.45);
+}
+.weline-ai-model-select-dropdown.is-dark{
+  background-color:#0b1220;color:#e6eef8;border-color:#64748b;
+}
+.weline-ai-model-select-search{margin-bottom:0.5rem;}
+.weline-ai-model-select-supplier{margin-bottom:0.5rem;}
+.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-search,
+.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-supplier{
+  background-color:#0f172a;color:#e6eef8;border-color:rgba(148,163,184,0.25);
+}
+.weline-ai-model-select-list{
+  max-height:260px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:#4c5b73 rgba(15,23,42,0.35);
+  border:1px solid rgba(148,163,184,0.22);border-radius:0.25rem;
+  background-color:#ffffff;
+}
+.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-list{background-color:#0b1220;}
+.weline-ai-model-select-list::-webkit-scrollbar{width:8px;}
+.weline-ai-model-select-list::-webkit-scrollbar-track{background:rgba(15,23,42,0.35);border-radius:4px;}
+.weline-ai-model-select-list::-webkit-scrollbar-thumb{background:#4c5b73;border-radius:4px;}
+.weline-ai-model-select-item{color:inherit;cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.18);}
+.weline-ai-model-select-item:last-child{border-bottom:none;}
+.weline-ai-model-select-item:hover{background-color:rgba(85,110,230,.12);}
+.weline-ai-model-select-item.active{background-color:rgba(85,110,230,.18);color:#556ee6;}
+.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-item.active{color:#8ea2ff;}
+</style>
+<div class="position-relative weline-ai-model-select <?= htmlspecialchars($class ?? '') ?>" style="<?= htmlspecialchars($style ?? '') ?>">
+    <button type="button" class="btn btn-outline-secondary w-100 text-start" id="<?= htmlspecialchars($id) ?>_trigger" style="height: 38px;">
+        <span id="<?= htmlspecialchars($id) ?>_display"><?= !empty($display) ? htmlspecialchars($display) : '<lang>' . __('使用默认模型') . '</lang>' ?></span>
+    </button>
+    <div id="<?= htmlspecialchars($id) ?>_container" class="weline-ai-model-select-dropdown">
+        <select class="form-select form-select-sm weline-ai-model-select-supplier" id="<?= htmlspecialchars($id) ?>_supplier" aria-label="<?= htmlspecialchars((string)__('供应商筛选')) ?>">
+            <option value=""><?= htmlspecialchars((string)__('全部供应商')) ?></option>
+        </select>
+        <input type="text" class="form-control weline-ai-model-select-search" id="<?= htmlspecialchars($id) ?>_search" placeholder="<?= htmlspecialchars($placeholder ?? '') ?>" autocomplete="off">
+        <input type="hidden" id="<?= htmlspecialchars($id) ?>_code" name="<?= htmlspecialchars($name ?? '') ?>" value="<?= htmlspecialchars($value ?? '') ?>">
+        <div id="<?= htmlspecialchars($id) ?>_loading" style="padding:1rem; text-align:center; display:none;"></div>
+        <div id="<?= htmlspecialchars($id) ?>_list" class="weline-ai-model-select-list" style="padding:0.25rem;"></div>
+    </div>
+    <small class="text-muted d-block mt-1"><lang><?= __('提示：先选供应商，再搜索并点击选择模型') ?></lang></small>
+</div>
+<script>(function(){
+  const id = <?= json_encode($id, $jsonForScriptFlags) ?>;
+  const limit = <?= (int)($limit ?? 50) ?>;
+  const serviceType = <?= json_encode($service_type ?? '', $jsonForScriptFlags) ?>;
+  const trigger = document.getElementById(id+"_trigger");
+  const box = document.getElementById(id+"_container");
+  const list = document.getElementById(id+"_list");
+  const loading = document.getElementById(id+"_loading");
+  const search = document.getElementById(id+"_search");
+  const supplierSelect = document.getElementById(id+"_supplier");
+  const hidden = document.getElementById(id+"_code");
+  const display = document.getElementById(id+"_display");
+  let aiApiPromise = null;
+  let cache = null;
+  let loadPromise = null;
+  function getAiApi(){
+    if(!aiApiPromise){
+      aiApiPromise = window.Weline.load('api').then(function(api){ return api.resource('ai'); });
+    }
+    return aiApiPromise;
+  }
+  function modelCode(model){
+    return String((model && (model.model_code || model.code)) || '');
+  }
+  function modelText(model){
+    const code = modelCode(model);
+    const name = String((model && model.name) || code);
+    const supplier = String((model && model.supplier) || '');
+    let text = name;
+    if(supplier) text += ' (' + supplier + ')';
+    return text;
+  }
+  function normalizeModels(res){
+    if(Array.isArray(res)) return res;
+    if(res && Array.isArray(res.data)) return res.data;
+    if(res && res.data && Array.isArray(res.data.data)) return res.data.data;
+    return [];
+  }
+  function renderStatus(className, text){
+    list.replaceChildren();
+    const row = document.createElement('div');
+    row.className = className;
+    row.textContent = text;
+    list.appendChild(row);
+  }
+  function render(items){
+    if(!items||!items.length){ renderStatus('p-2 text-muted', <?= json_encode(__('未找到匹配的模型'), $jsonForScriptFlags) ?>); return; }
+    list.replaceChildren();
+    items.slice(0,limit).forEach(function(m){
+      const code = modelCode(m);
+      if(!code) return;
+      const txt = modelText(m);
+      const row = document.createElement('div');
+      row.className = 'p-2 border-bottom model-item weline-ai-model-select-item';
+      row.dataset.code = code;
+      row.dataset.text = txt;
+      row.textContent = txt;
+      list.appendChild(row);
+    });
+    if(!list.children.length){ renderStatus('p-2 text-muted', <?= json_encode(__('未找到匹配的模型'), $jsonForScriptFlags) ?>); return; }
+    list.querySelectorAll('[data-code]').forEach(function(el){
+      el.addEventListener('click', function(){
+        hidden.value = this.dataset.code;
+        try{ hidden.setAttribute('value', this.dataset.code); }catch(e){}
+        try{ hidden.dispatchEvent(new Event('change')); }catch(e){}
+        try{ window.AiModelSelectSelected = window.AiModelSelectSelected||{}; window.AiModelSelectSelected[serviceType]=this.dataset.code; }catch(e){}
+        display.textContent = this.dataset.text;
+        closeDropdown();
+        list.querySelectorAll('.model-item').forEach(function(li){ li.classList.remove('active'); });
+        this.classList.add('active');
+      });
+    });
+    if(hidden.value){
+      list.querySelectorAll('.model-item').forEach(function(el){
+        if(el.dataset.code === hidden.value) el.classList.add('active');
+      });
+    }
+  }
+  function fillSuppliers(models){
+    if(!supplierSelect) return;
+    const current = String(supplierSelect.value || '');
+    const suppliers = [];
+    (models || []).forEach(function(m){
+      const s = String((m && m.supplier) || '').trim();
+      if(s && suppliers.indexOf(s) === -1) suppliers.push(s);
+    });
+    suppliers.sort();
+    supplierSelect.innerHTML = '';
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = <?= json_encode((string)__('全部供应商'), $jsonForScriptFlags) ?>;
+    supplierSelect.appendChild(all);
+    suppliers.forEach(function(s){
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      supplierSelect.appendChild(opt);
+    });
+    if(current && suppliers.indexOf(current) !== -1) supplierSelect.value = current;
+  }
+  function applyFilter(kw){
+    kw = String(kw || '').toLowerCase().trim();
+    if(!cache) return;
+    const supplier = supplierSelect ? String(supplierSelect.value || '').trim().toLowerCase() : '';
+    const data = cache.filter(function(m){
+      const modelSupplier = String((m && m.supplier) || '').trim().toLowerCase();
+      if(supplier && modelSupplier !== supplier) return false;
+      if(!kw) return true;
+      return (`${m.name || ''} ${m.supplier || ''} ${modelCode(m)}`).toLowerCase().includes(kw);
+    });
+    render(data);
+  }
+  function ensureLoaded(){
+    if(cache) return Promise.resolve(cache);
+    if(loadPromise) return loadPromise;
+    loading.style.display = 'block';
+    const modalityAliases = { text: 'text2text', image: 'text2image', video: 'text2video', code: 'text2text', translation: 'text2text', embedding: 'embedding' };
+    const primaryModality = modalityAliases[serviceType] || (/^(text2text|text2image|text2video|embedding)$/.test(serviceType) ? serviceType : '');
+    loadPromise = getAiApi()
+      .then(function(aiApi){ return aiApi.listModels(primaryModality ? { primary_modality: primaryModality } : {}); })
+      .then(function(res){
+        loading.style.display = 'none';
+        var body = (res && res.data) || res;
+        cache = Array.isArray(body) ? body : normalizeModels(body);
+        fillSuppliers(cache);
+        loadPromise = null;
+        return cache;
+      })
+      .catch(function(){
+        loading.style.display = 'none';
+        loadPromise = null;
+        renderStatus('p-2 text-danger', <?= json_encode(__('加载失败'), $jsonForScriptFlags) ?>);
+        throw new Error('load failed');
+      });
+    return loadPromise;
+  }
+  function isDarkTheme(){
+    const root = document.documentElement;
+    const body = document.body;
+    return root.getAttribute('data-bs-theme') === 'dark'
+      || root.getAttribute('data-theme-mode') === 'dark'
+      || root.getAttribute('data-layout-mode') === 'dark'
+      || (body && (body.getAttribute('data-bs-theme') === 'dark' || body.getAttribute('data-layout-mode') === 'dark'));
+  }
+  function paintShell(){
+    const dark = isDarkTheme();
+    const bg = dark ? '#0b1220' : '#ffffff';
+    const fg = dark ? '#e6eef8' : '#212529';
+    box.classList.toggle('is-dark', dark);
+    box.style.setProperty('background-color', bg, 'important');
+    box.style.setProperty('background-image', 'none', 'important');
+    box.style.setProperty('opacity', '1', 'important');
+    box.style.color = fg;
+    box.style.border = dark ? '1px solid #64748b' : '1px solid #ced4da';
+    box.style.boxShadow = '0 16px 40px rgba(0,0,0,.65)';
+    list.style.setProperty('background-color', bg, 'important');
+    list.style.color = fg;
+    if(search){
+      search.style.setProperty('background-color', dark ? '#111827' : '#ffffff', 'important');
+      search.style.color = fg;
+    }
+    if(supplierSelect){
+      supplierSelect.style.setProperty('background-color', dark ? '#111827' : '#ffffff', 'important');
+      supplierSelect.style.color = fg;
+    }
+  }
+  function placeFixed(){
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.max(rect.width, 300);
+    let left = rect.left;
+    if(left + width > window.innerWidth - 8){ left = Math.max(8, window.innerWidth - width - 8); }
+    box.style.position = 'fixed';
+    box.style.top = (rect.bottom + 6) + 'px';
+    box.style.left = left + 'px';
+    box.style.right = 'auto';
+    box.style.width = width + 'px';
+    box.style.minWidth = width + 'px';
+    box.style.zIndex = '20000';
+    box.style.display = 'block';
+  }
+  function closeDropdown(){
+    box.style.display = 'none';
+    trigger.style.display = 'block';
+    const root = trigger.closest('.weline-ai-model-select');
+    if(root) root.classList.remove('is-open');
+    if(box._welineOriginParent && box.parentElement === document.body){
+      box._welineOriginParent.appendChild(box);
+    }
+    document.removeEventListener('click', closeOutside);
+    document.removeEventListener('keydown', esc);
+    window.removeEventListener('resize', placeFixed);
+    window.removeEventListener('scroll', placeFixed, true);
+  }
+  function closeOutside(ev){
+    if(!(box.contains(ev.target) || trigger.contains(ev.target))) closeDropdown();
+  }
+  function esc(e){ if(e.key === 'Escape') closeDropdown(); }
+  function openDropdown(e){
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    const root = trigger.closest('.weline-ai-model-select');
+    if(root) root.classList.add('is-open');
+    if(box.parentElement !== document.body){
+      box._welineOriginParent = box.parentElement;
+      document.body.appendChild(box);
+    }
+    paintShell();
+    placeFixed();
+    ensureLoaded().then(function(){ applyFilter(search.value); paintShell(); }).catch(function(){});
+    setTimeout(function(){ try{ search.focus(); search.select(); }catch(err){} }, 30);
+    document.removeEventListener('click', closeOutside);
+    document.removeEventListener('keydown', esc);
+    window.removeEventListener('resize', placeFixed);
+    window.removeEventListener('scroll', placeFixed, true);
+    setTimeout(function(){
+      document.addEventListener('click', closeOutside);
+      document.addEventListener('keydown', esc);
+      window.addEventListener('resize', placeFixed);
+      window.addEventListener('scroll', placeFixed, true);
+    }, 0);
+  }
+  const debounce=(fn,t)=>{let timer=null;return (...a)=>{clearTimeout(timer);timer=setTimeout(()=>fn.apply(null,a),t);}};
+  const doFilter = debounce(function(){ applyFilter(search.value); }, 200);
+  trigger.addEventListener('click', openDropdown);
+  search.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+  search.addEventListener('click', function(e){ e.stopPropagation(); });
+  search.addEventListener('keydown', function(e){ e.stopPropagation(); if(e.key==='Escape') closeDropdown(); });
+  search.addEventListener('input', function(){ doFilter(); });
+  if(supplierSelect){
+    supplierSelect.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+    supplierSelect.addEventListener('click', function(e){ e.stopPropagation(); });
+    supplierSelect.addEventListener('change', function(){ applyFilter(search.value); });
+  }
+})();</script>

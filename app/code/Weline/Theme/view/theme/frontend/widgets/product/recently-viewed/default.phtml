@@ -12,6 +12,7 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-product-list-recommendations","layout-search-recommendations"]}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-recently-viewed","area":"content","sort_order":0}]}
  * @widget.compatible {true}
  *
  * @param title {default="最近浏览",type="string",label="标题"}
@@ -21,8 +22,15 @@
  * @param show_price {default=true,type="bool",label="显示价格"}
  */
 
-use Weline\Theme\Helper\WidgetI18n;
 
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('recently-viewed');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $titleSource = trim((string)($this->getData('title') ?? '')) ?: '最近浏览';
 $widgetTitle = WidgetI18n::label($titleSource, '最近浏览');
 $limit = max(1, (int)($this->getData('limit') ?? 6));
@@ -84,15 +92,15 @@ try {
     $products = [];
 }
 
-$widgetInstanceKey = (string)($this->getData('_widget_instance_key') ?: sha1(json_encode([$titleSource, $limit, $columns, $layout, $showPrice]) ?: 'recently-viewed'));
-$widgetId = 'recently-viewed-' . substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $widgetInstanceKey) ?: sha1($widgetInstanceKey), 0, 12);
-
 if (empty($products)) {
     return;
 }
 ?>
 
-<div class="widget-recently-viewed widget-products" id="<?= $widgetId ?>" style="width:100%;max-width:var(--layout-max-width,1600px);margin:0 auto;padding:var(--spacing-6,2rem) var(--spacing-4,1.5rem);box-sizing:border-box;">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="widget-header">
         <h2 class="widget-title">
             <w:icon name="history" size="sm"></w:icon>
@@ -102,9 +110,9 @@ if (empty($products)) {
 
     <div class="products-container layout-<?= htmlspecialchars($layout, ENT_QUOTES, 'UTF-8') ?>">
         <div class="products-wrapper">
-            <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--spacing-4,1rem);width:100%;box-sizing:border-box;">
+            <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>">
                 <?php foreach ($products as $product): ?>
-                    <article class="product-card compact-card" style="display:flex;min-width:0;flex-direction:column;overflow:hidden;border:1px solid var(--color-border-light,#e5e7eb);border-radius:var(--radius-lg,12px);background:var(--color-bg-primary,#fff);box-shadow:var(--shadow-sm,0 1px 2px rgba(15,23,42,.04));">
+                    <article class="product-card compact-card">
                         <a href="<?= htmlspecialchars((string)$product['url'], ENT_QUOTES, 'UTF-8') ?>" class="card-link">
                             <div class="product-image-wrapper">
                                 <img src="<?= htmlspecialchars((string)$product['image'], ENT_QUOTES, 'UTF-8') ?>"
@@ -112,7 +120,7 @@ if (empty($products)) {
                                      class="product-image"
                                      loading="lazy">
                             </div>
-                            <div class="product-info" style="display:flex;width:auto;min-width:0;flex:1;flex-direction:column;gap:.45rem;padding:var(--spacing-3,0.875rem);box-sizing:border-box;">
+                            <div class="product-info">
                                 <h3 class="product-name"><?= htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8') ?></h3>
                                 <?php if ($showPrice): ?>
                                     <span class="price-current">¥<?= number_format((float)$product['price'], 2) ?></span>
@@ -124,20 +132,66 @@ if (empty($products)) {
             </div>
         </div>
     </div>
-</div>
+</section>
 
 <style>
-.widget-recently-viewed { background: var(--color-bg-secondary, #f8fafc); }
-.widget-recently-viewed .widget-header { margin-bottom: var(--spacing-5, 1.5rem); }
-.widget-recently-viewed .widget-title { display: flex; align-items: center; gap: .5rem; margin: 0; color: var(--color-text-primary, #111827); font-size: clamp(1.25rem, 1.6vw, 1.6rem); font-weight: var(--font-weight-bold, 700); line-height: 1.2; }
-.widget-recently-viewed .widget-title i { color: var(--color-text-secondary, #64748b); }
-.widget-recently-viewed .products-wrapper { width: 100%; overflow: hidden; }
-.widget-recently-viewed .card-link { display: flex; height: 100%; flex-direction: column; color: inherit; text-decoration: none; }
-.widget-recently-viewed .product-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
-.widget-recently-viewed .product-card:hover { transform: translateY(-2px); border-color: var(--color-primary, #2563eb); box-shadow: var(--shadow-md, 0 12px 30px rgba(15,23,42,.10)); }
-.widget-recently-viewed .product-image-wrapper { position: relative; overflow: hidden; background: var(--color-bg-primary, #fff); aspect-ratio: 1 / 1; }
-.widget-recently-viewed .product-image { display: block; width: 100%; height: 100%; object-fit: cover; }
-.widget-recently-viewed .product-name { margin: 0; color: var(--color-text-primary, #111827); font-size: .875rem; font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.widget-recently-viewed .card-link:hover .product-name { color: var(--color-primary, #2563eb); }
-.widget-recently-viewed .price-current { color: var(--color-primary, #2563eb); font-weight: 800; }
+.<?= $wc ?> {
+    width: 100%;
+    max-width: var(--layout-max-width, 1600px);
+    margin: 0 auto;
+    padding: var(--weline-space-8, 2rem) var(--weline-space-6, 1.5rem);
+    box-sizing: border-box;
+    background: var(--weline-theme-surface-muted);
+}
+
+.<?= $wc ?> .widget-header { margin-bottom: var(--weline-space-5, 1.5rem); }
+.<?= $wc ?> .widget-title {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2, 0.5rem);
+    margin: 0;
+    color: var(--weline-theme-text);
+    font-size: clamp(1.25rem, 1.6vw, 1.6rem);
+    font-weight: var(--weline-font-weight-bold, 700);
+    line-height: 1.2;
+}
+.<?= $wc ?> .widget-title :is(i, svg) { color: var(--weline-theme-text-muted); }
+.<?= $wc ?> .products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--weline-space-4, 1rem);
+    width: 100%;
+    box-sizing: border-box;
+}
+.<?= $wc ?> .product-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg, 12px);
+    background: var(--weline-theme-surface-raised);
+    box-shadow: var(--weline-theme-shadow-sm);
+}
+.<?= $wc ?> .product-info {
+    display: flex;
+    width: auto;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--weline-space-2, 0.45rem);
+    padding: var(--weline-space-3, 0.875rem);
+    box-sizing: border-box;
+}
+.<?= $wc ?> .products-wrapper { width: 100%; overflow: hidden; }
+.<?= $wc ?> .card-link { display: flex; height: 100%; flex-direction: column; color: inherit; text-decoration: none; }
+.<?= $wc ?> .product-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.<?= $wc ?> .product-card:hover { transform: translateY(-2px); border-color: var(--weline-theme-primary); box-shadow: var(--shadow-md, 0 12px 30px rgba(15,23,42,.10)); }
+.<?= $wc ?> .product-image-wrapper { position: relative; overflow: hidden; background: var(--weline-theme-surface-raised); aspect-ratio: 1 / 1; }
+.<?= $wc ?> .product-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.<?= $wc ?> .product-name { margin: 0; color: var(--weline-theme-text); font-size: .875rem; font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.<?= $wc ?> .product-rating { display: flex; align-items: center; gap: .45rem; }
+.<?= $wc ?> .stars { display: flex; align-items: center; gap: 2px; }
+.<?= $wc ?> .card-link:hover .product-name { color: var(--weline-theme-primary); }
+.<?= $wc ?> .price-current { color: var(--weline-theme-primary); font-weight: 800; }
 </style>

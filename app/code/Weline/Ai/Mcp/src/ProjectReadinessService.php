@@ -42,6 +42,16 @@ final class ProjectReadinessService
     public function prepare(ProjectIndex $index, array $input): array
     {
         $sessionId = $this->sessionId($input);
+        $branchBlocker = FrameworkBranchGuard::developmentBlocker($index->root());
+        if ($branchBlocker !== null) {
+            return $this->blocked(
+                $index,
+                $branchBlocker['code'],
+                $branchBlocker['message'],
+                $branchBlocker['details'],
+            );
+        }
+
         try {
             $snapshot = $this->snapshot($index);
         } catch (Throwable $exception) {
@@ -225,6 +235,20 @@ final class ProjectReadinessService
             throw new ToolException('READINESS_SESSION_MISMATCH', 'readiness_id belongs to another client session.');
         }
 
+        $branchBlocker = FrameworkBranchGuard::developmentBlocker($index->root());
+        if ($branchBlocker !== null) {
+            unset($this->readiness[$readinessId]);
+            throw new ToolException(
+                'PROJECT_BLOCKED',
+                $branchBlocker['message'],
+                false,
+                array_merge($branchBlocker['details'], [
+                    'blocker_code' => $branchBlocker['code'],
+                    'development_allowed' => false,
+                ]),
+            );
+        }
+
         $snapshot = $this->snapshot($index);
         if ($snapshot['conflicts'] !== []) {
             unset($this->readiness[$readinessId]);
@@ -403,6 +427,13 @@ final class ProjectReadinessService
             'gate' => [
                 'development_allowed' => true,
                 'required_on_every_tool' => ['readiness_id', 'client_session_id'],
+                'development_branch' => FrameworkBranchGuard::DEVELOPMENT_BRANCH,
+                'release_branch' => FrameworkBranchGuard::RELEASE_BRANCH,
+            ],
+            'git' => [
+                'branch' => FrameworkBranchGuard::DEVELOPMENT_BRANCH,
+                'development_branch' => FrameworkBranchGuard::DEVELOPMENT_BRANCH,
+                'release_branch' => FrameworkBranchGuard::RELEASE_BRANCH,
             ],
             'validated_at' => $record['validated_at'],
         ];

@@ -16,7 +16,7 @@ use Weline\Product\Model\Shard\Media;
 final class StorefrontProductDetailProjector
 {
     private const CONTENT_CODES = ['name', 'short_description', 'description'];
-    private const INTERNAL_CODES = ['quote_only'];
+    private const INTERNAL_CODES = ['quote_only', 'slug'];
 
     public function __construct(
         private readonly CatalogOverlayResolver $resolver = new CatalogOverlayResolver(),
@@ -93,12 +93,29 @@ final class StorefrontProductDetailProjector
             }
         }
 
+        $localizedName = trim((string)($resolved['name'] ?? ''));
+        $slug = $this->normalizeSlug(
+            (string)($resolved['source_slug'] ?? $resolved['slug'] ?? $offer['slug'] ?? ''),
+        );
+
         return array_merge($offer, [
+            'name' => $localizedName !== '' ? $localizedName : (string)($offer['name'] ?? ''),
             'short_description' => $resolved['short_description'] ?? '',
             'description' => $resolved['description'] ?? '',
+            'slug' => $slug,
             'quote_only' => ($resolved['quote_only'] ?? '0') === '1',
             'specifications' => $specifications,
             'images' => array_keys($images),
         ]);
+    }
+
+    private function normalizeSlug(string $slug): string
+    {
+        $slug = strtolower(trim($slug));
+        if ($slug === '' || preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return '';
+        }
+
+        return $slug;
     }
 }

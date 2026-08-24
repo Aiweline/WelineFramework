@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
+use Weline\Framework\App\Env;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\KeyBuilder;
@@ -1102,10 +1103,16 @@ class SlotRendererService
     private function hydrateTypedLayoutValues(array $config, string $renderArea, array $widget): array
     {
         $locale = trim((string)($widget['locale_code'] ?? ''));
-        if ($locale === '') {
+        // Empty/default layout locale means all-language identity. Typed file-image
+        // usage is stamped with the site default locale by the media picker, so
+        // hydration must use that same locale — not the browser/request language.
+        if ($locale === '' || strcasecmp($locale, 'default') === 0) {
+            $locale = trim((string)Env::default_LANGUAGE_CODE);
+        }
+        if ($locale === '' || strcasecmp($locale, 'default') === 0) {
             $locale = $this->resolveRenderLocale() ?? '';
         }
-        if ($locale === '') {
+        if ($locale === '' || strcasecmp($locale, 'default') === 0) {
             throw new \RuntimeException((string)__('类型化布局值解析缺少冻结的 locale_code。'));
         }
         $scope = null;
@@ -1415,15 +1422,32 @@ class SlotRendererService
         // 1. 按指定状态获取数据
         $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
         
-        // 2. 检查是否有部件配置；slot 结构来自模板，即使没有部件也会继续渲染默认内容。
+        // 2. 检查是否有部件配置；slot 结构来自模板，空布局时按 default_injections 自动补齐真实部件。
         $hasWidgets = $this->hasWidgetsInLayout($layout);
         $hasNoWidgetPlacements = $this->layoutService->hasNoWidgetPlacements($themeId, $pageType, $status, $identity);
         
         // Published runtime must never read or auto-publish a draft. Empty
         // published layouts remain empty until an immutable Release is created.
         
-        // Default widgets are suggestions only. Do not auto-seed an empty
-        // published layout; the user can restore suggestions from the editor.
+        // 未显式标记“无部件”时，按部件 default_injections 为空白 slot 写入真实部件。
+        if (!$hasNoWidgetPlacements && !$hasTargetIdentity) {
+            $componentArea = $area === 'backend'
+                ? PreviewContextService::AREA_BACKEND
+                : PreviewContextService::AREA_FRONTEND;
+            /** @var WidgetDefaultInjectionService $defaultInjectionService */
+            $defaultInjectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+            $applied = $defaultInjectionService->applyMissingForLayout(
+                $themeId,
+                $pageType,
+                $identity,
+                $componentArea,
+                $status
+            );
+            if ($applied > 0) {
+                $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
+                $hasWidgets = $this->hasWidgetsInLayout($layout);
+            }
+        }
         
         // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据。
         // 已明确保存为“没有部件配置”的布局必须保持这个状态，只渲染 slot 默认内容。

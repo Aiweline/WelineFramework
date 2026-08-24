@@ -1,0 +1,65 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 作者：Admin
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ * 日期：2023/3/22 20:54:47
+ */
+
+namespace Weline\Eav\Controller\Backend;
+
+use Weline\Eav\Model\EavEntity;
+use Weline\Framework\Http\Cookie;
+
+/**
+ * @deprecated 请使用 Manager 控制器 (/eav/backend/manager) 统一管理EAV
+ * @see \Weline\Eav\Controller\Backend\Manager
+ */
+class Entity extends \Weline\Framework\App\Controller\BackendController
+{
+    /**
+     * @var \Weline\Eav\Model\EavEntity
+     */
+    private EavEntity $eavEntity;
+
+    public function __construct(
+        EavEntity $eavEntity
+    )
+    {
+        $this->eavEntity = $eavEntity;
+    }
+
+    public function __init()
+    {
+        parent::__init();
+        // OffCanvas / iframe / embed 外部嵌入时用空白布局，避免嵌套后台顶栏侧栏
+        if ($this->request->isIframe() || $this->request->getParam('embed') === '1') {
+            $this->layoutType = 'default.blank';
+        }
+        $this->eavEntity->loadLocalDescription();
+    }
+
+    public function index()
+    {
+        if ($search = $this->request->getGet('search')) {
+            $this->eavEntity->where('concat(main_table.code,main_table.name,main_table.class,local.name)', "%$search%", 'like');
+        }
+        $entities = $this->eavEntity->pagination()->select()->fetchArray();
+        $this->assign('entities', $entities);
+        $this->assign('pagination', $this->eavEntity->getPagination());
+        return $this->fetch();
+    }
+
+    public function search(): string
+    {
+        if ($search = $this->request->getGet('search')) {
+            $this->eavEntity->where('concat(code,name,class)', "%$search%", 'like');
+        }
+        return $this->fetchJson(['items' => $this->eavEntity->select()->fetchArray()]);
+    }
+}

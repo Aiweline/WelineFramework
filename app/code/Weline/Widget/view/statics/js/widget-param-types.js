@@ -206,6 +206,22 @@
         }
     }
 
+    function readMediaImagePreviewUrl(input, preview, node) {
+        if (!input) return '';
+        var fromAttr = String(input.getAttribute('data-preview-url') || input.dataset.previewUrl || '').trim();
+        var resolved = sanitizeLegacyImagePreviewUrl(fromAttr);
+        if (resolved) return resolved;
+        if (!node) {
+            return sanitizeLegacyImagePreviewUrl(String(input.value || '').trim());
+        }
+        var inner = preview ? q(preview, 'img') : null;
+        if (inner) {
+            resolved = sanitizeLegacyImagePreviewUrl(inner.currentSrc || inner.getAttribute('src') || '');
+            if (resolved) return resolved;
+        }
+        return '';
+    }
+
     function updateMediaImagePreview(input) {
         if (!input) return;
         var previewId = input.getAttribute('data-preview');
@@ -213,9 +229,7 @@
         if (!preview) return;
         var val = (input.value || '').trim();
         var node = parseFileImageNode(val);
-        var previewUrl = sanitizeLegacyImagePreviewUrl(
-            node ? String(input.dataset.previewUrl || '').trim() : val,
-        );
+        var previewUrl = readMediaImagePreviewUrl(input, preview, node);
         var inner = q(preview, 'img');
         var placeholder = q(preview, '.w-param-image-placeholder');
         var mediaWrap = preview.closest('.w-param-media-image');
@@ -228,11 +242,18 @@
                 preview.insertBefore(inner, placeholder || preview.firstChild);
             }
             if (inner && previewUrl) inner.src = previewUrl;
-            if (inner && !previewUrl) inner.remove();
+            if (inner && !previewUrl) {
+                previewUrl = sanitizeLegacyImagePreviewUrl(inner.currentSrc || inner.getAttribute('src') || '');
+                if (!previewUrl) inner.remove();
+            }
             preview.classList.add('w-param-has-image');
             if (placeholder) {
                 placeholder.hidden = !!previewUrl;
-                if (!previewUrl && node) placeholder.textContent = node.usage.alt || node.usage.asset_id;
+                if (!previewUrl) {
+                    placeholder.textContent = placeholder.dataset.emptyLabel
+                        || placeholder.getAttribute('data-empty-label')
+                        || '从媒体库选择';
+                }
             }
             if (actions && !clearBtn) {
                 clearBtn = doc.createElement('button');
@@ -304,11 +325,30 @@
         return node ? JSON.stringify(node) : '';
     }
 
+    function selectedMediaPreviewUrl(file) {
+        if (!file || typeof file !== 'object') return '';
+        return sanitizeLegacyImagePreviewUrl(
+            file.editor_preview_url || file.preview_url || file.thumb || file.url || file.path || ''
+        );
+    }
+
     function resolvePickerLocale(themeEl) {
         var locale = '';
         try { locale = new URLSearchParams(window.location.search).get('locale') || ''; } catch (error) {}
-        if (!locale && themeEl) locale = themeEl.getAttribute('data-config-locale') || themeEl.getAttribute('data-locale-code') || '';
-        return String(locale || document.documentElement.lang || 'zh_Hans_CN').replace(/-/g, '_');
+        if (!locale && themeEl) {
+            locale = themeEl.getAttribute('data-config-locale')
+                || themeEl.getAttribute('data-locale-code')
+                || '';
+        }
+        // "default / 全语言" is a layout identity, not a FileAsset locale.
+        // Stamp images with the site default locale so preview hydration matches.
+        if (!locale || locale === 'default') {
+            locale = (themeEl && themeEl.getAttribute('data-default-locale')) || '';
+        }
+        if (!locale || locale === 'default') {
+            locale = document.documentElement.lang || 'zh_Hans_CN';
+        }
+        return String(locale).replace(/-/g, '_');
     }
 
     function getSelectedMediaValue(files) {
@@ -463,7 +503,15 @@
                         var storedValue = selectedFileImageValue(file);
                         if (input && storedValue) {
                             input.value = storedValue;
-                            delete input.dataset.previewUrl;
+                            var previewUrl = selectedMediaPreviewUrl(file);
+                            if (previewUrl) {
+                                input.dataset.previewUrl = previewUrl;
+                                input.setAttribute('data-preview-url', previewUrl);
+                            } else {
+                                delete input.dataset.previewUrl;
+                                input.removeAttribute('data-preview-url');
+                            }
+                            updateMediaImagePreview(input);
                             mediaSelectionChanged = true;
                         }
                     },
@@ -488,6 +536,7 @@
                 if (input) {
                     input.value = '';
                     delete input.dataset.previewUrl;
+                    input.removeAttribute('data-preview-url');
                 }
                 if (preview) {
                     var img = q(preview, 'img');
@@ -665,7 +714,10 @@
                 if (removeBtn) removeBtn.addEventListener('click', function () { removeItem(div); });
                 itemsEl.appendChild(div);
                 qa(div, 'input[type="hidden"][data-preview]').forEach(function (input) {
-                    if (previewUrl) input.dataset.previewUrl = previewUrl;
+                    if (previewUrl) {
+                        input.dataset.previewUrl = previewUrl;
+                        input.setAttribute('data-preview-url', previewUrl);
+                    }
                     updateMediaImagePreview(input);
                 });
                 initMediaImagePicker(div);
@@ -776,11 +828,13 @@
                         url: url,
                         title: '\u6279\u91cf\u9009\u62e9\u5a92\u4f53',
                         onSelect: function (value, files) {
-                            var selectedValues = getSelectedMediaValues(files);
-                            selectedValues.forEach(function (selectedValue) {
-                                addItemWithImage(imageFieldKey, selectedValue, '');
+                            (files || []).forEach(function (file) {
+                                var selectedValue = selectedFileImageValue(file);
+                                if (!selectedValue) return;
+                                addItemWithImage(imageFieldKey, selectedValue, selectedMediaPreviewUrl(file));
                             });
                             tempInput.value = '';
+                            delete tempInput.dataset.previewUrl;
                         },
                         onClose: function () {
                             var selectedValue = (tempInput.value || '').trim();
@@ -894,7 +948,12 @@
                     syncTransparentState();
                 });
                 textInput.addEventListener('input', function () {
-                    if (/^#[0-9a-fA-F]{6}$/.test(textInput.value)) picker.value = textInput.value;
+                    var raw = textInput.value.trim();
+                    if (/^var\(\s*--/i.test(raw)) {
+                        syncTransparentState();
+                        return;
+                    }
+                    if (/^#[0-9a-fA-F]{6}$/.test(raw)) picker.value = raw;
                     syncTransparentState();
                 });
             }

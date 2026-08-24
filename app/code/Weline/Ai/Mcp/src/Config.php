@@ -202,6 +202,15 @@ final class Config
                 'token_budget' => 1_800,
                 'include_candidates' => false,
             ],
+            'guidance' => [
+                'pinned_token_budget' => 1_200,
+                'pinned_documents' => [
+                    'app/code/Weline/Ai/doc/AI工程交付流程.md',
+                    'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
+                    'app/code/Weline/Ai/doc/文档索引.md',
+                    'app/code/Weline/Theme/doc/部件开发指南.md',
+                ],
+            ],
             'promotion' => [
                 'automatic' => false,
                 'allowed_targets' => [

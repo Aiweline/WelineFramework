@@ -1,80 +1,128 @@
 <?php
 /**
  * 组件：Pagination
- * 
+ *
  * 分页组件，用于数据分页导航
  * 字段
  * @meta.name {default="Pagination分页组件",name="Pagination分页组件",description="Pagination分页组件，用于描述组件的名称"}
  * @meta.description {default="分页组件，用于数据分页导航",name="分页组件，用于数据分页导航",description="分页组件，用于数据分页导航，用于描述组件的用途"}
  * @param currentPage {default=1,name="当前页码",description="当前页码，必填参数"}
- * @param totalPages {default=1,name="总页数",description="总页数，必填参数"}
+ * @param totalPages {default=8,name="总页数",description="总页数，必填参数"}
  * @param baseUrl {default="",name="基础URL",description="基础URL，必填参数"}
  * @param pageParam {default="page",name="页码参数名",description="页码参数名，用于URL参数"}
  * @param showFirstLast {default=true,name="是否显示首页/末页",description="是否显示首页/末页，用于控制首页末页按钮的显示"}
  * @param showPrevNext {default=true,name="是否显示上一页/下一页",description="是否显示上一页/下一页，用于控制上一页下一页按钮的显示"}
  * @param maxVisible {default=5,name="最大可见页码数",description="最大可见页码数，用于控制显示的页码数量"}
- * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
  */
-$currentPage = (int)($this->getData('currentPage') ?? 1);
-$totalPages = (int)($this->getData('totalPages') ?? 1);
-$baseUrl = $this->getData('baseUrl') ?? '';
-$pageParam = $this->getData('pageParam') ?? 'page';
-$showFirstLast = $this->getData('showFirstLast') ?? true;
-$showPrevNext = $this->getData('showPrevNext') ?? true;
-$maxVisible = (int)($this->getData('maxVisible') ?? 5);
-$class = $this->getData('class') ?? '';
 
-// 构建CSS类
-$paginationClass = 'w-pagination';
-if ($class) {
-    $paginationClass .= ' ' . htmlspecialchars($class);
-}
+use Weline\Theme\Helper\WidgetUiScope;
 
-// 构建URL函数
-$buildUrl = function($page) use ($baseUrl, $pageParam) {
+$scope = WidgetUiScope::forComponent('pagination');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$currentPage = max(1, (int)($this->getData('currentPage') ?? $this->getData('meta.currentPage') ?? 1));
+$totalPages = max(1, (int)($this->getData('totalPages') ?? $this->getData('meta.totalPages') ?? 8));
+$baseUrl = (string)($this->getData('baseUrl') ?? $this->getData('meta.baseUrl') ?? '');
+$pageParam = (string)($this->getData('pageParam') ?? $this->getData('meta.pageParam') ?? 'page');
+$showFirstLast = (bool)($this->getData('showFirstLast') ?? $this->getData('meta.showFirstLast') ?? true);
+$showPrevNext = (bool)($this->getData('showPrevNext') ?? $this->getData('meta.showPrevNext') ?? true);
+$maxVisible = max(1, (int)($this->getData('maxVisible') ?? $this->getData('meta.maxVisible') ?? 5));
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+
+$buildUrl = static function (int $page) use ($baseUrl, $pageParam, $esc): string {
     $url = $baseUrl;
-    $separator = strpos($url, '?') !== false ? '&' : '?';
-    return $url . $separator . $pageParam . '=' . $page;
+    $separator = str_contains($url, '?') ? '&' : '?';
+    return $esc($url . $separator . $pageParam . '=' . $page);
 };
 
-// 计算显示的页码范围
-$startPage = max(1, $currentPage - floor($maxVisible / 2));
+$startPage = max(1, $currentPage - (int)floor($maxVisible / 2));
 $endPage = min($totalPages, $startPage + $maxVisible - 1);
 if ($endPage - $startPage < $maxVisible - 1) {
     $startPage = max(1, $endPage - $maxVisible + 1);
 }
+
+$rootClass = trim($wc . ' w-pagination' . ($class !== '' ? ' ' . $class : ''));
 ?>
-<nav class="<?= $paginationClass ?>">
-    <ul class="w-pagination-list">
+
+<nav class="<?= $esc($rootClass) ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     aria-label="<?= $esc((string)__('分页')) ?>">
+    <ul class="w-pagination-list pagination-list">
         <?php if ($showFirstLast && $currentPage > 1): ?>
             <li class="w-page-item">
-                <a class="w-page-link" href="<?= $buildUrl(1) ?>"><?= __('首页') ?></a>
+                <a class="w-page-link page-link" href="<?= $buildUrl(1) ?>"><?= __('首页') ?></a>
             </li>
         <?php endif; ?>
-        
+
         <?php if ($showPrevNext && $currentPage > 1): ?>
             <li class="w-page-item">
-                <a class="w-page-link" href="<?= $buildUrl($currentPage - 1) ?>"><?= __('上一页') ?></a>
+                <a class="w-page-link page-link" href="<?= $buildUrl($currentPage - 1) ?>"><?= __('上一页') ?></a>
             </li>
         <?php endif; ?>
-        
+
         <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-            <li class="w-page-item <?= $i === $currentPage ? 'w-active' : '' ?>">
-                <a class="w-page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+            <li class="w-page-item<?= $i === $currentPage ? ' w-active is-active' : '' ?>">
+                <?php if ($i === $currentPage): ?>
+                    <span class="w-page-link page-link is-current" aria-current="page"><?= $i ?></span>
+                <?php else: ?>
+                    <a class="w-page-link page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+                <?php endif; ?>
             </li>
         <?php endfor; ?>
-        
+
         <?php if ($showPrevNext && $currentPage < $totalPages): ?>
             <li class="w-page-item">
-                <a class="w-page-link" href="<?= $buildUrl($currentPage + 1) ?>"><?= __('下一页') ?></a>
+                <a class="w-page-link page-link" href="<?= $buildUrl($currentPage + 1) ?>"><?= __('下一页') ?></a>
             </li>
         <?php endif; ?>
-        
+
         <?php if ($showFirstLast && $currentPage < $totalPages): ?>
             <li class="w-page-item">
-                <a class="w-page-link" href="<?= $buildUrl($totalPages) ?>"><?= __('末页') ?></a>
+                <a class="w-page-link page-link" href="<?= $buildUrl($totalPages) ?>"><?= __('末页') ?></a>
             </li>
         <?php endif; ?>
     </ul>
 </nav>
 
+<style>
+.<?= $wc ?> .pagination-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-1, 4px);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.<?= $wc ?> .page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    padding: var(--weline-space-1, 4px) var(--weline-space-2, 8px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md, 8px);
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
+    font-size: var(--weline-font-size-sm, 13px);
+    text-decoration: none;
+    transition: background var(--weline-theme-transition-base, 0.2s ease), color var(--weline-theme-transition-base, 0.2s ease);
+}
+
+.<?= $wc ?> a.page-link:hover {
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-primary);
+}
+
+.<?= $wc ?> .is-current,
+.<?= $wc ?> .w-active .page-link {
+    background: var(--weline-theme-primary);
+    border-color: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+}
+</style>

@@ -16,18 +16,17 @@
 @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
 -->
 <?php
-$id = $this->getData('id') ?? '';
-$trigger = $this->getData('trigger') ?? '';
-$items = $this->getData('items') ?? [];
-$position = $this->getData('position') ?? 'left';
-$class = $this->getData('class') ?? '';
+use Weline\Theme\Helper\WidgetUiScope;
 
-if (!function_exists('weline_dropdown_escape')) {
-    function weline_dropdown_escape(mixed $value): string
-    {
-        return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-    }
-}
+$scope = WidgetUiScope::forComponent('dropdown');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$id = trim((string)($this->getData('id') ?? $this->getData('meta.id') ?? ''));
+$trigger = (string)($this->getData('trigger') ?? $this->getData('meta.trigger') ?? '');
+$items = $this->getData('items') ?? $this->getData('meta.items') ?? [];
+$position = strtolower(trim((string)($this->getData('position') ?? $this->getData('meta.position') ?? 'left')));
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
 
 if (!function_exists('weline_dropdown_safe_url')) {
     function weline_dropdown_safe_url(mixed $url): string
@@ -46,38 +45,153 @@ if (!function_exists('weline_dropdown_safe_url')) {
     }
 }
 
-$dropdownClass = 'w-dropdown';
-if ($position === 'right') {
-    $dropdownClass .= ' w-dropdown-right';
+if ($id === '') {
+    $id = 'dropdown-' . substr($scope->uid, -8);
 }
-if ($class) {
-    $dropdownClass .= ' ' . weline_dropdown_escape($class);
-}
-$idEsc = weline_dropdown_escape($id);
+
+$rootClass = trim($wc . ' w-dropdown' . ($position === 'right' ? ' w-dropdown-right is-right' : '') . ($class !== '' ? ' ' . $class : ''));
+$triggerHtml = $trigger !== '' ? $trigger : '{{trigger}}';
 ?>
-<div class="<?= $dropdownClass ?>" data-w-component="menu">
-    <button class="w-button w-dropdown-toggle" type="button" id="<?= $idEsc ?>" data-w-menu-trigger data-tone="neutral" data-variant="outline" aria-haspopup="menu" aria-expanded="false">
-        {{trigger}}
+
+<div class="<?= $esc($rootClass) ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-w-component="menu">
+    <button class="w-button w-dropdown-toggle dropdown-trigger"
+            type="button"
+            id="<?= $esc($id) ?>"
+            data-w-menu-trigger
+            data-tone="neutral"
+            data-variant="outline"
+            aria-haspopup="menu"
+            aria-expanded="false">
+        <?= $triggerHtml ?>
     </button>
-    <div class="w-dropdown-menu w-menu" aria-labelledby="<?= $idEsc ?>" data-w-menu-panel role="menu" data-state="closed" aria-hidden="true" hidden>
+    <div class="w-dropdown-menu w-menu dropdown-panel"
+         aria-labelledby="<?= $esc($id) ?>"
+         data-w-menu-panel
+         role="menu"
+         data-state="closed"
+         aria-hidden="true"
+         hidden>
         <?php foreach ($items as $item): ?>
             <?php if (isset($item['divider']) && $item['divider']): ?>
-                <div class="w-dropdown-divider w-menu__divider"></div>
+                <div class="w-dropdown-divider w-menu__divider dropdown-divider" role="separator"></div>
             <?php elseif (isset($item['header'])): ?>
-                <h6 class="w-dropdown-header w-menu__header"><?= weline_dropdown_escape($item['header']) ?></h6>
+                <h6 class="w-dropdown-header w-menu__header dropdown-header"><?= $esc((string)$item['header']) ?></h6>
             <?php else: ?>
                 <?php
-                $itemUrl = weline_dropdown_escape(weline_dropdown_safe_url($item['url'] ?? '#'));
-                $itemClickAttr = isset($item['onclick']) ? ' data-weline-click="' . weline_dropdown_escape($item['onclick']) . '"' : '';
-                $itemIcon = isset($item['icon']) ? weline_dropdown_escape($item['icon']) : '';
+                $itemUrl = $esc(weline_dropdown_safe_url($item['url'] ?? '#'));
+                $itemClickAttr = isset($item['onclick']) ? ' data-weline-click="' . $esc((string)$item['onclick']) . '"' : '';
+                $itemIcon = isset($item['icon']) ? $esc((string)$item['icon']) : '';
                 ?>
-                <a class="w-dropdown-item w-menu__item" href="<?= $itemUrl ?>"<?= $itemClickAttr ?> role="menuitem" tabindex="-1">
+                <a class="w-dropdown-item w-menu__item dropdown-item"
+                   href="<?= $itemUrl ?>"<?= $itemClickAttr ?>
+                   role="menuitem"
+                   tabindex="-1">
                     <?php if ($itemIcon !== ''): ?>
-                        <span class="w-menu__icon" data-icon="<?= $itemIcon ?>" aria-hidden="true"></span>
+                        <span class="w-menu__icon dropdown-icon" data-icon="<?= $itemIcon ?>" aria-hidden="true"></span>
                     <?php endif; ?>
-                    <?= weline_dropdown_escape($item['text'] ?? '') ?>
+                    <?= $esc((string)($item['text'] ?? '')) ?>
                 </a>
             <?php endif; ?>
         <?php endforeach; ?>
     </div>
 </div>
+
+<style>
+.<?= $wc ?> {
+    position: relative;
+    display: inline-block;
+}
+
+.<?= $wc ?> .dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-2, 8px);
+    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md, 8px);
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
+    cursor: pointer;
+}
+
+.<?= $wc ?> .dropdown-panel {
+    position: absolute;
+    top: calc(100% + var(--weline-space-1, 4px));
+    left: 0;
+    z-index: 20;
+    min-width: 12rem;
+    padding: var(--weline-space-1, 4px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md, 8px);
+    background: var(--weline-theme-surface-raised);
+    box-shadow: var(--weline-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+}
+
+.<?= $wc ?>.is-right .dropdown-panel {
+    left: auto;
+    right: 0;
+}
+
+.<?= $wc ?> .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2, 8px);
+    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    border-radius: var(--weline-radius-sm, 6px);
+    color: var(--weline-theme-text);
+    text-decoration: none;
+}
+
+.<?= $wc ?> .dropdown-item:hover {
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-primary);
+}
+
+.<?= $wc ?> .dropdown-header {
+    margin: 0;
+    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs, 11px);
+    font-weight: var(--weline-font-weight-semibold, 600);
+    text-transform: uppercase;
+}
+
+.<?= $wc ?> .dropdown-divider {
+    height: 1px;
+    margin: var(--weline-space-1, 4px) 0;
+    background: var(--weline-theme-border);
+}
+</style>
+
+<script>
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var trigger = root.querySelector('[data-w-menu-trigger]');
+    var panel = root.querySelector('[data-w-menu-panel]');
+    if (!trigger || !panel) return;
+
+    function setOpen(open) {
+        trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        panel.setAttribute('data-state', open ? 'open' : 'closed');
+        panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        panel.hidden = !open;
+    }
+
+    trigger.addEventListener('click', function (event) {
+        event.preventDefault();
+        setOpen(panel.hidden);
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!root.contains(event.target)) {
+            setOpen(false);
+        }
+    });
+})();
+</script>

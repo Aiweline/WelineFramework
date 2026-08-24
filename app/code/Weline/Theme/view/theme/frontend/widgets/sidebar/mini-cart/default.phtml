@@ -1,9 +1,9 @@
 <?php
 /**
  * 迷你购物车部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {mini-cart}
  * @widget.name {迷你购物车}
  * @widget.description {侧边栏购物车预览，显示商品列表和小计}
@@ -12,7 +12,7 @@
  * @widget.position {["sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
+ *
  * @param title {default="购物车",type="string",label="标题"}
  * @param max_items {default=5,type="number",label="最多显示数量"}
  * @param show_subtotal {default=true,type="bool",label="显示小计"}
@@ -20,6 +20,13 @@
  * @param show_view_cart_button {default=true,type="bool",label="显示查看购物车按钮"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('mini-cart');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = $this->getData('title') ?? __('购物车');
 $maxItems = (int)($this->getData('max_items') ?? 5);
 $showSubtotal = (bool)($this->getData('show_subtotal') ?? true);
@@ -27,29 +34,28 @@ $showCheckoutButton = (bool)($this->getData('show_checkout_button') ?? true);
 $showViewCartButton = (bool)($this->getData('show_view_cart_button') ?? true);
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
-// 示例购物车数据
 $cartItems = [
     ['id' => 1, 'name' => __('示例商品 1'), 'image' => $placeholder, 'price' => 99.00, 'qty' => 2],
     ['id' => 2, 'name' => __('示例商品 2'), 'image' => $placeholder, 'price' => 149.00, 'qty' => 1],
     ['id' => 3, 'name' => __('示例商品 3'), 'image' => $placeholder, 'price' => 79.00, 'qty' => 1],
 ];
-
 $cartItems = array_slice($cartItems, 0, $maxItems);
-$subtotal = array_sum(array_map(fn($item) => $item['price'] * $item['qty'], $cartItems));
+$subtotal = array_sum(array_map(fn ($item) => $item['price'] * $item['qty'], $cartItems));
 $itemCount = count($cartItems);
-
-$widgetId = 'mini-cart-' . uniqid();
 ?>
 
-<div class="widget-mini-cart" id="<?= $widgetId ?>">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="widget-header">
         <h3 class="widget-title">
             <w:icon name="pin" size="sm"></w:icon>
-            <?= htmlspecialchars($title) ?>
+            <?= $esc((string)$title) ?>
             <span class="item-count">(<?= $itemCount ?>)</span>
         </h3>
     </div>
-    
+
     <?php if (empty($cartItems)): ?>
         <div class="cart-empty">
             <w:icon name="pin" size="sm"></w:icon>
@@ -59,233 +65,171 @@ $widgetId = 'mini-cart-' . uniqid();
     <?php else: ?>
         <div class="cart-items">
             <?php foreach ($cartItems as $item): ?>
-                <div class="cart-item" data-item-id="<?= $item['id'] ?>">
-                    <img src="<?= htmlspecialchars($item['image'] ?? '') ?>" 
-                         alt="<?= htmlspecialchars($item['name'] ?? '') ?>"
-                         class="item-image">
-                    
+                <div class="cart-item" data-item-id="<?= (int)$item['id'] ?>">
+                    <img src="<?= $esc((string)($item['image'] ?? '')) ?>" alt="<?= $esc((string)($item['name'] ?? '')) ?>" class="item-image">
                     <div class="item-details">
-                        <h4 class="item-name"><?= htmlspecialchars($item['name'] ?? '') ?></h4>
+                        <h4 class="item-name"><?= $esc((string)($item['name'] ?? '')) ?></h4>
                         <div class="item-meta">
                             <span class="item-price">¥<?= number_format($item['price'], 2) ?></span>
-                            <span class="item-qty">× <?= $item['qty'] ?></span>
+                            <span class="item-qty">× <?= (int)$item['qty'] ?></span>
                         </div>
                     </div>
-                    
                     <button class="item-remove" type="button" title="<?= __('删除') ?>">
                         <w:icon name="close" size="sm"></w:icon>
                     </button>
                 </div>
             <?php endforeach; ?>
         </div>
-        
         <?php if ($showSubtotal): ?>
             <div class="cart-subtotal">
                 <span class="label"><?= __('小计') ?>:</span>
                 <span class="value">¥<?= number_format($subtotal, 2) ?></span>
             </div>
         <?php endif; ?>
-        
         <div class="cart-actions">
             <?php if ($showViewCartButton): ?>
-                <a href="/cart" class="w-btn w-btn-outline"><?= __('查看购物车') ?></a>
+                <a href="/cart" class="action-btn action-btn-outline"><?= __('查看购物车') ?></a>
             <?php endif; ?>
             <?php if ($showCheckoutButton): ?>
-                <a href="/checkout" class="w-btn w-btn-primary"><?= __('去结算') ?></a>
+                <a href="/checkout" class="action-btn action-btn-primary"><?= __('去结算') ?></a>
             <?php endif; ?>
         </div>
     <?php endif; ?>
-</div>
+</section>
 
 <style>
-.widget-mini-cart {
-    background: #fff;
-    border-radius: 10px;
-    padding: 20px;
+.<?= $wc ?> {
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-lg, 10px);
+    padding: var(--weline-space-5, 20px);
 }
 
-.widget-mini-cart .widget-header {
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
+.<?= $wc ?> .widget-header {
+    margin-bottom: var(--weline-space-4, 15px);
+    padding-bottom: var(--weline-space-4, 15px);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
 }
 
-.widget-mini-cart .widget-title {
-    font-size: 16px;
+.<?= $wc ?> .widget-title {
+    font-size: var(--weline-font-size-base, 16px);
     font-weight: 600;
     margin: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--weline-space-2, 8px);
+    color: var(--weline-theme-text);
 }
 
-.widget-mini-cart .widget-title i {
-    color: var(--primary-color, #007bff);
-}
-
-.widget-mini-cart .item-count {
+.<?= $wc ?> .item-count {
     font-weight: 400;
-    color: #666;
+    color: var(--weline-theme-text-muted);
 }
 
-/* 空购物车 */
-.widget-mini-cart .cart-empty {
+.<?= $wc ?> .cart-empty {
     text-align: center;
-    padding: 30px 0;
+    padding: var(--weline-space-8, 30px) 0;
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-mini-cart .cart-empty i {
-    font-size: 48px;
-    color: #ddd;
-}
-
-.widget-mini-cart .cart-empty p {
-    color: #999;
-    margin: 10px 0 20px;
-}
-
-.widget-mini-cart .btn-shop {
+.<?= $wc ?> .btn-shop {
     display: inline-block;
-    padding: 10px 25px;
-    background: var(--primary-color, #007bff);
-    color: #fff;
+    padding: var(--weline-space-3, 10px) var(--weline-space-6, 25px);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
     text-decoration: none;
-    border-radius: 6px;
+    border-radius: var(--weline-radius-sm, 6px);
     font-weight: 500;
 }
 
-/* 购物车商品 */
-.widget-mini-cart .cart-items {
+.<?= $wc ?> .cart-items {
     max-height: 300px;
     overflow-y: auto;
 }
 
-.widget-mini-cart .cart-item {
+.<?= $wc ?> .cart-item {
     display: flex;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid #f5f5f5;
+    gap: var(--weline-space-3, 12px);
+    padding: var(--weline-space-3, 12px) 0;
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
 }
 
-.widget-mini-cart .cart-item:last-child {
-    border-bottom: none;
-}
-
-.widget-mini-cart .item-image {
+.<?= $wc ?> .item-image {
     width: 60px;
     height: 60px;
     object-fit: cover;
-    border-radius: 6px;
-    flex-shrink: 0;
+    border-radius: var(--weline-radius-sm, 6px);
 }
 
-.widget-mini-cart .item-details {
-    flex: 1;
-    min-width: 0;
-}
-
-.widget-mini-cart .item-name {
-    margin: 0 0 5px;
-    font-size: 13px;
+.<?= $wc ?> .item-name {
+    margin: 0 0 var(--weline-space-1, 5px);
+    font-size: var(--weline-font-size-sm, 13px);
     font-weight: 500;
     line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
 }
 
-.widget-mini-cart .item-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-}
-
-.widget-mini-cart .item-price {
-    color: var(--danger-color, #dc3545);
+.<?= $wc ?> .item-price {
+    color: var(--weline-theme-danger);
     font-weight: 600;
 }
 
-.widget-mini-cart .item-qty {
-    color: #999;
+.<?= $wc ?> .item-qty {
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-mini-cart .item-remove {
-    width: 24px;
-    height: 24px;
-    border: none;
+.<?= $wc ?> .item-remove {
     background: none;
-    color: #ccc;
+    border: none;
+    color: var(--weline-theme-text-muted);
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition: all 0.2s;
-    flex-shrink: 0;
 }
 
-.widget-mini-cart .item-remove:hover {
-    background: #fee;
-    color: var(--danger-color, #dc3545);
+.<?= $wc ?> .item-remove:hover {
+    color: var(--weline-theme-danger);
 }
 
-/* 小计 */
-.widget-mini-cart .cart-subtotal {
+.<?= $wc ?> .cart-subtotal {
     display: flex;
     justify-content: space-between;
-    padding: 15px 0;
-    border-top: 1px solid #eee;
-    margin-top: 10px;
+    padding: var(--weline-space-4, 15px) 0;
+    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin-top: var(--weline-space-3, 10px);
 }
 
-.widget-mini-cart .cart-subtotal .label {
-    font-weight: 500;
-}
-
-.widget-mini-cart .cart-subtotal .value {
-    font-size: 18px;
+.<?= $wc ?> .cart-subtotal .value {
+    font-size: var(--weline-font-size-lg, 18px);
     font-weight: 700;
-    color: var(--danger-color, #dc3545);
+    color: var(--weline-theme-danger);
 }
 
-/* 操作按钮 */
-.widget-mini-cart .cart-actions {
+.<?= $wc ?> .cart-actions {
     display: flex;
-    gap: 10px;
-    margin-top: 15px;
+    gap: var(--weline-space-3, 10px);
+    margin-top: var(--weline-space-4, 15px);
 }
 
-.widget-mini-cart .cart-actions .w-btn {
+.<?= $wc ?> .action-btn {
     flex: 1;
-    padding: 10px 15px;
+    padding: var(--weline-space-3, 10px) var(--weline-space-4, 15px);
     text-align: center;
-    border-radius: 6px;
+    border-radius: var(--weline-radius-sm, 6px);
     font-weight: 500;
     text-decoration: none;
-    font-size: 13px;
-    transition: all 0.3s;
+    font-size: var(--weline-font-size-sm, 13px);
 }
 
-.widget-mini-cart .w-btn-outline {
-    border: 1px solid #ddd;
-    color: #333;
-    background: #fff;
+.<?= $wc ?> .action-btn-outline {
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    color: var(--weline-theme-text);
+    background: var(--weline-theme-surface);
 }
 
-.widget-mini-cart .w-btn-outline:hover {
-    border-color: var(--primary-color, #007bff);
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .action-btn-primary {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
 }
 
-.widget-mini-cart .w-btn-primary {
-    background: var(--primary-color, #007bff);
-    color: #fff;
-    border: none;
-}
-
-.widget-mini-cart .w-btn-primary:hover {
-    background: var(--primary-dark, #0056b3);
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-3, 12px);
 }
 </style>

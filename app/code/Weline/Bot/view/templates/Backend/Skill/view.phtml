@@ -1,0 +1,68 @@
+<?php
+/**
+ * Skill detail page.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$skill = $skill ?? null;
+$listingUrl = $this->getBackendUrl('*/backend/skill/listing');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            $value = $item->getData($key);
+            return $value ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('Skill Detail') ?></h4>
+            <a href="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>" class="btn btn-light"><?= __('Back') ?></a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6"><strong><?= __('ID') ?>:</strong> <?= (int) $get($skill, 'skill_id', 0) ?></div>
+                    <div class="col-md-6"><strong><?= __('Code') ?>:</strong> <?= htmlspecialchars((string) $get($skill, 'code', '')) ?></div>
+                    <div class="col-md-6"><strong><?= __('Name') ?>:</strong> <?= htmlspecialchars((string) $get($skill, 'name', '')) ?></div>
+                    <div class="col-md-6"><strong><?= __('Category') ?>:</strong> <?= htmlspecialchars((string) $get($skill, 'category', '')) ?></div>
+                    <div class="col-md-6"><strong><?= __('Class') ?>:</strong> <?= htmlspecialchars((string) $get($skill, 'class_name', '')) ?></div>
+                    <div class="col-md-6"><strong><?= __('File Path') ?>:</strong> <?= htmlspecialchars((string) $get($skill, 'file_path', '')) ?></div>
+                    <div class="col-md-6"><strong><?= __('Dangerous') ?>:</strong> <?= (int)$get($skill, 'is_dangerous', 0) === 1 ? __('Yes') : __('No') ?></div>
+                    <div class="col-md-6"><strong><?= __('Requires Confirmation') ?>:</strong> <?= (int)$get($skill, 'requires_confirmation', 0) === 1 ? __('Yes') : __('No') ?></div>
+                    <div class="col-12"><strong><?= __('Description') ?>:</strong>
+                        <div class="border rounded p-2 mt-1"><?= nl2br(htmlspecialchars((string) $get($skill, 'description', ''))) ?></div>
+                    </div>
+                    <div class="col-12"><strong><?= __('Parameters') ?>:</strong>
+                        <pre class="border rounded p-2 mt-1 mb-0"><?= htmlspecialchars((string) $get($skill, 'parameters', '')) ?></pre>
+                    </div>
+                    <div class="col-12"><strong><?= __('Permission Required') ?>:</strong>
+                        <pre class="border rounded p-2 mt-1 mb-0"><?= htmlspecialchars((string) $get($skill, 'permission_required', '')) ?></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

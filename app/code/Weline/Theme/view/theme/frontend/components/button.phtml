@@ -1,7 +1,7 @@
 <?php
 /**
  * 组件：Button
- * 
+ *
  * 按钮组件，支持多种样式和状态
  * 字段
  * @meta.name {default="Button按钮组件",name="Button按钮组件",description="Button按钮组件，用于描述组件的名称"}
@@ -30,32 +30,20 @@
  * @param.attributes {default="",name="额外的HTML属性字符串",description="额外的HTML属性字符串，用于设置额外的HTML属性"}
  */
 
-// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
-$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.button');
+use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forComponent('button');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$metaParams = ThemeData::getFileParams('components.button');
 foreach ($metaParams as $key => $value) {
     if ($this->getData("meta.{$key}") === null) {
         $this->setData("meta.{$key}", $value);
     }
 }
-
-$text = $this->getData('text') ?? $this->getData("meta.text") ?? __('了解更多');
-$type = $this->getData('type') ?? $this->getData("meta.type") ?? 'primary';
-$size = $this->getData('size') ?? $this->getData("meta.size") ?? 'md';
-$icon = $this->getData('icon') ?? $this->getData("meta.icon") ?? '';
-$iconPosition = $this->getData('iconPosition') ?? $this->getData("meta.iconPosition") ?? 'left';
-$align = strtolower(trim((string)($this->getData('align') ?? $this->getData("meta.align") ?? 'start')));
-$fullWidth = filter_var($this->getData('fullWidth') ?? $this->getData("meta.fullWidth") ?? false, FILTER_VALIDATE_BOOL);
-$radius = $this->getData('radius') ?? $this->getData("meta.radius") ?? '';
-$backgroundColor = $this->getData('backgroundColor') ?? $this->getData("meta.backgroundColor") ?? '';
-$textColor = $this->getData('textColor') ?? $this->getData("meta.textColor") ?? '';
-$class = $this->getData('class') ?? $this->getData("meta.class") ?? '';
-$id = $this->getData('id') ?? $this->getData("meta.id") ?? '';
-$disabled = $this->getData('disabled') ?? $this->getData("meta.disabled") ?? false;
-$loading = $this->getData('loading') ?? $this->getData("meta.loading") ?? false;
-$href = $this->getData('href') ?? $this->getData("meta.href") ?? '';
-$clickAction = $this->getData('onclick') ?? $this->getData("meta.onclick") ?? '';
-$data = $this->getData('data') ?? $this->getData("meta.data") ?? [];
-$attributes = $this->getData('attributes') ?? $this->getData("meta.attributes") ?? '';
 
 if (!function_exists('weline_component_escape')) {
     function weline_component_escape(mixed $value): string
@@ -106,103 +94,184 @@ if (!function_exists('weline_builder_component_css_length')) {
     }
 }
 
-if (!function_exists('weline_builder_component_css_color')) {
-    function weline_builder_component_css_color(mixed $value): string
-    {
-        $value = trim((string)$value);
-        if ($value === '') {
-            return '';
-        }
-        if (preg_match('/^#[0-9a-fA-F]{3,8}$/', $value)
-            || preg_match('/^(rgba?|hsla?)\([0-9.,%\s]+\)$/i', $value)
-            || preg_match('/^var\(--[a-zA-Z0-9_-]+\)$/', $value)
-            || in_array(strtolower($value), ['transparent', 'currentcolor', 'inherit'], true)) {
-            return $value;
-        }
-        return '';
-    }
+$text = $this->getData('text') ?? $this->getData('meta.text') ?? __('了解更多');
+$type = strtolower(trim((string)($this->getData('type') ?? $this->getData('meta.type') ?? 'primary')));
+$size = strtolower(trim((string)($this->getData('size') ?? $this->getData('meta.size') ?? 'md')));
+$icon = (string)($this->getData('icon') ?? $this->getData('meta.icon') ?? '');
+$iconPosition = (string)($this->getData('iconPosition') ?? $this->getData('meta.iconPosition') ?? 'left');
+$align = strtolower(trim((string)($this->getData('align') ?? $this->getData('meta.align') ?? 'start')));
+$fullWidth = filter_var($this->getData('fullWidth') ?? $this->getData('meta.fullWidth') ?? false, FILTER_VALIDATE_BOOL);
+$radius = weline_builder_component_css_length($this->getData('radius') ?? $this->getData('meta.radius') ?? '');
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+$id = trim((string)($this->getData('id') ?? $this->getData('meta.id') ?? ''));
+$disabled = (bool)($this->getData('disabled') ?? $this->getData('meta.disabled') ?? false);
+$loading = (bool)($this->getData('loading') ?? $this->getData('meta.loading') ?? false);
+$href = (string)($this->getData('href') ?? $this->getData('meta.href') ?? '');
+$clickAction = (string)($this->getData('onclick') ?? $this->getData('meta.onclick') ?? '');
+$data = $this->getData('data') ?? $this->getData('meta.data') ?? [];
+$attributes = (string)($this->getData('attributes') ?? $this->getData('meta.attributes') ?? '');
+
+$typeDefaults = [
+    'primary' => ['bg' => 'var(--weline-theme-primary)', 'color' => 'var(--weline-theme-on-primary)'],
+    'secondary' => ['bg' => 'var(--weline-theme-surface-muted)', 'color' => 'var(--weline-theme-text)'],
+    'danger' => ['bg' => 'var(--weline-theme-danger)', 'color' => 'var(--weline-theme-on-primary)'],
+    'success' => ['bg' => 'var(--weline-theme-success)', 'color' => 'var(--weline-theme-on-primary)'],
+    'info' => ['bg' => 'var(--weline-theme-info)', 'color' => 'var(--weline-theme-on-primary)'],
+];
+if (!isset($typeDefaults[$type])) {
+    $type = 'primary';
 }
+$defaults = $typeDefaults[$type];
+
+$backgroundColor = ThemeUiColor::sanitize(
+    $this->getData('backgroundColor') ?? $this->getData('meta.backgroundColor') ?? '',
+    $defaults['bg']
+);
+$textColor = ThemeUiColor::sanitize(
+    $this->getData('textColor') ?? $this->getData('meta.textColor') ?? '',
+    $defaults['color']
+);
 
 $allowedAlign = ['start', 'center', 'end'];
 if (!in_array($align, $allowedAlign, true)) {
     $align = 'start';
 }
-$radius = weline_builder_component_css_length($radius);
-$backgroundColor = weline_builder_component_css_color($backgroundColor);
-$textColor = weline_builder_component_css_color($textColor);
-$styles = [];
-if ($radius !== '') $styles[] = '--w-builder-button-radius:' . $radius;
-if ($backgroundColor !== '') $styles[] = '--w-builder-button-bg:' . $backgroundColor;
-if ($textColor !== '') $styles[] = '--w-builder-button-color:' . $textColor;
-$styleAttr = $styles ? ' style="' . weline_component_escape(implode(';', $styles)) . '"' : '';
-
-// 构建CSS类
-$btnClass = 'w-btn w-builder-button w-btn-' . weline_component_escape($type) . ' w-btn-' . weline_component_escape($size) . ' w-builder-align-' . weline_component_escape($align);
-if ($fullWidth) {
-    $btnClass .= ' w-builder-button-full';
-}
-if ($backgroundColor !== '' || $textColor !== '') {
-    $btnClass .= ' w-builder-button-custom';
-}
-if ($class) {
-    $btnClass .= ' ' . weline_component_escape($class);
-}
-if ($loading) {
-    $btnClass .= ' w-btn-loading';
+$allowedSizes = ['sm', 'md', 'lg'];
+if (!in_array($size, $allowedSizes, true)) {
+    $size = 'md';
 }
 
-// 构建属性
-$attrs = [];
-if ($id) {
-    $attrs[] = 'id="' . weline_component_escape($id) . '"';
+$rootStyle = '--wc-button-bg:' . $backgroundColor . ';--wc-button-color:' . $textColor . ';';
+if ($radius !== '') {
+    $rootStyle .= '--wc-button-radius:' . $radius . ';';
+}
+
+$wrapperClass = trim($wc . ' w-builder-button-wrap w-builder-align-' . $align . ($fullWidth ? ' is-full-width' : '') . ($class !== '' ? ' ' . $class : ''));
+$btnClass = trim('w-btn w-builder-button w-btn-' . $type . ' w-btn-' . $size . ($fullWidth ? ' w-builder-button-full' : '') . ($loading ? ' w-btn-loading' : ''));
+
+$attrs = [
+    'class="' . $esc($btnClass) . '"',
+    'data-tone="' . $esc($type) . '"',
+];
+if ($id !== '') {
+    $attrs[] = 'id="' . $esc($id) . '"';
 }
 if ($disabled) {
     $attrs[] = 'disabled';
 }
-if ($clickAction) {
-    $attrs[] = 'data-weline-click="' . weline_component_escape($clickAction) . '"';
+if ($clickAction !== '') {
+    $attrs[] = 'data-weline-click="' . $esc($clickAction) . '"';
 }
 foreach ($data as $key => $value) {
     $safeKey = weline_component_safe_data_key($key);
     if ($safeKey !== '') {
-        $attrs[] = 'data-' . $safeKey . '="' . weline_component_escape($value) . '"';
+        $attrs[] = 'data-' . $safeKey . '="' . $esc((string)$value) . '"';
     }
 }
 
-// 构建图标HTML
-$iconHtml = '';
-if ($icon) {
-    $iconHtml = '<i class="' . weline_component_escape($icon) . '"></i>';
-}
-
-// 构建内容
-$content = '';
-if ($icon && $iconPosition === 'left') {
-    $content = $iconHtml . ' ' . weline_component_escape($text);
-} elseif ($icon && $iconPosition === 'right') {
-    $content = weline_component_escape($text) . ' ' . $iconHtml;
+$iconHtml = $icon !== '' ? '<i class="' . $esc($icon) . '"></i>' : '';
+if ($icon !== '' && $iconPosition === 'right') {
+    $content = $esc((string)$text) . ' ' . $iconHtml;
+} elseif ($icon !== '') {
+    $content = $iconHtml . ' ' . $esc((string)$text);
 } else {
-    $content = weline_component_escape($text);
+    $content = $esc((string)$text);
 }
 
-// 如果是链接按钮
-if ($href) {
-    $safeHref = weline_component_safe_url($href);
-    if ($safeHref === '') {
-        $attrs[] = 'aria-disabled="true"';
-        echo '<button type="button" class="' . $btnClass . '"' . $styleAttr . ' ' . implode(' ', $attrs) . '>' . $content . '</button>';
-    } else {
-        echo '<a href="' . weline_component_escape($safeHref) . '" class="' . $btnClass . '"' . $styleAttr . ' ' . implode(' ', $attrs) . '>' . $content . '</a>';
-    }
-} else {
-    // 检查是否有自定义属性指定了type
-    $buttonType = 'button';
-    if ($attributes && preg_match('/type=["\']([^"\']+)["\']/', $attributes, $matches)) {
-        $candidateType = strtolower(trim($matches[1]));
-        if (in_array($candidateType, ['button', 'submit', 'reset'], true)) {
-            $buttonType = $candidateType;
-        }
-    }
-    echo '<button type="' . weline_component_escape($buttonType) . '" class="' . $btnClass . '"' . $styleAttr . ' ' . implode(' ', $attrs) . '>' . $content . '</button>';
-}
+$attrString = implode(' ', $attrs);
 ?>
+
+<section class="<?= $esc($wrapperClass) ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="<?= $esc($rootStyle) ?>"
+         data-align="<?= $esc($align) ?>">
+    <?php if ($href !== ''): ?>
+        <?php $safeHref = weline_component_safe_url($href); ?>
+        <?php if ($safeHref === ''): ?>
+            <button type="button" <?= $attrString ?> aria-disabled="true"><?= $content ?></button>
+        <?php else: ?>
+            <a href="<?= $esc($safeHref) ?>" <?= $attrString ?>><?= $content ?></a>
+        <?php endif; ?>
+    <?php else: ?>
+        <?php
+        $buttonType = 'button';
+        if ($attributes !== '' && preg_match('/type=["\']([^"\']+)["\']/', $attributes, $matches)) {
+            $candidateType = strtolower(trim($matches[1]));
+            if (in_array($candidateType, ['button', 'submit', 'reset'], true)) {
+                $buttonType = $candidateType;
+            }
+        }
+        ?>
+        <button type="<?= $esc($buttonType) ?>" <?= $attrString ?>><?= $content ?></button>
+    <?php endif; ?>
+</section>
+
+<style>
+.<?= $wc ?> {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.<?= $wc ?>[data-align="center"] {
+    justify-content: center;
+}
+
+.<?= $wc ?>[data-align="end"] {
+    justify-content: flex-end;
+}
+
+.<?= $wc ?>.is-full-width .w-btn,
+.<?= $wc ?>.is-full-width .w-builder-button {
+    width: 100%;
+}
+
+.<?= $wc ?> .w-btn,
+.<?= $wc ?> .w-builder-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-2, 8px);
+    padding: var(--weline-space-2, 8px) var(--weline-space-4, 16px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) transparent;
+    border-radius: var(--wc-button-radius, var(--weline-radius-md, 8px));
+    background: var(--wc-button-bg, var(--weline-theme-primary));
+    color: var(--wc-button-color, var(--weline-theme-on-primary));
+    font-size: var(--weline-font-size-base, 15px);
+    font-weight: var(--weline-font-weight-semibold, 600);
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity var(--weline-theme-transition-base, 0.2s ease), transform var(--weline-theme-transition-base, 0.2s ease);
+}
+
+.<?= $wc ?> .w-btn-sm,
+.<?= $wc ?> .w-btn.w-btn-sm {
+    padding: var(--weline-space-1, 4px) var(--weline-space-3, 12px);
+    font-size: var(--weline-font-size-sm, 13px);
+}
+
+.<?= $wc ?> .w-btn-lg,
+.<?= $wc ?> .w-btn.w-btn-lg {
+    padding: var(--weline-space-3, 12px) var(--weline-space-6, 24px);
+    font-size: var(--weline-font-size-lg, 17px);
+}
+
+.<?= $wc ?> .w-btn:hover,
+.<?= $wc ?> .w-builder-button:hover {
+    opacity: 0.9;
+}
+
+.<?= $wc ?> .w-btn:disabled,
+.<?= $wc ?> .w-builder-button:disabled,
+.<?= $wc ?> .w-btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.<?= $wc ?> .w-btn-loading {
+    pointer-events: none;
+    opacity: 0.75;
+}
+</style>

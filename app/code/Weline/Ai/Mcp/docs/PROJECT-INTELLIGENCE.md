@@ -6,7 +6,7 @@
 
 - `ready`: module documents and index are current; includes `readiness_id`.
 - `needs_repair`: development is denied; includes missing paths and a deterministic repair Bundle.
-- `blocked`: project identity, index refresh, document conflict, or safety validation failed.
+- `blocked`: project identity, index refresh, document conflict, Git branch policy, or safety validation failed. Framework repositories with a `dev` branch require `git switch dev` before development (`GIT_BRANCH_FORBIDDEN` on `master` or other branches).
 
 The receipt contains project ID, revision, module count, inventory Hash and document Hash. Every guarded knowledge/edit tool requires `repository`, `client_session_id`, and `readiness_id`.
 
@@ -18,7 +18,9 @@ The receipt contains project ID, revision, module count, inventory Hash and docu
 - source paths, content Hashes and index revision;
 - relevant code/edit regions when requested;
 - temporary session directives;
-- explicit truncation and token-budget metadata.
+- explicit truncation and token-budget metadata;
+- **`workflow_contract.v1`**: mandatory phase order, extension-point matrix, acceptance tiers;
+- **`pinned_fragments`**: bounded slices from AI工程交付流程, 扩展点选型, and 文档索引.
 
 It never returns the entire framework corpus by default. `resolve_skill` and `get_skill` translate legacy task/path fields and return the same dynamic Bundle.
 

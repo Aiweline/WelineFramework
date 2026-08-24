@@ -1,9 +1,9 @@
 <?php
 /**
  * 图文组合部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {image-text}
  * @widget.name {图文组合}
  * @widget.description {图片和文字的组合布局，支持多种排列方式}
@@ -12,208 +12,220 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
+ *
  * @param image {default="",type="image",label="图片"}
- * @param title {default="",type="string",label="标题"}
- * @param content {default="",type="textarea",label="内容"}
- * @param button_text {default="",type="string",label="按钮文字"}
- * @param button_link {default="",type="string",label="按钮链接"}
- * @param layout {default="image-left",type="select",label="布局",options={image-left:"图左文右",image-right:"图右文左",image-top:"图上文下"}}
+ * @param title {default="春季系列上新",type="string",label="标题"}
+ * @param content {default="采用轻盈面料与极简剪裁，适合通勤与周末出行。现在下单可享限时包邮。",type="textarea",label="内容"}
+ * @param button_text {default="立即选购",type="string",label="按钮文字"}
+ * @param button_link {default="/products",type="string",label="按钮链接"}
+ * @param layout {default="image-left",type="select",label="布局",options={image-left:"图左文右",image-right:"图右文左",image-top:"图上文下",image-bg:"图片背景"}}
  * @param image_width {default="50",type="select",label="图片宽度",options={33:"33%",40:"40%",50:"50%",60:"60%"}}
  */
 
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
-$image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
-    $this->getData('image') ?? $placeholder,
-);
+use Weline\Theme\Helper\ThemeDemoCatalog;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('image-text');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$defaultImage = ThemeDemoCatalog::productImage(1);
+$image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('image') ?? $defaultImage);
 $backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($image, true);
 $imageFileHtml = (string)($this->getData('image_file_html') ?? '');
-$title = $this->getData('title') ?? '';
-$content = $this->getData('content') ?? '';
-$buttonText = $this->getData('button_text') ?? '';
-$buttonLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('button_link') ?? '');
-$layout = $this->getData('layout') ?? 'image-left';
-$imageWidth = $this->getData('image_width') ?? '50';
+$title = trim((string)($this->getData('title') ?? __('春季系列上新')));
+$content = (string)($this->getData('content') ?? __('采用轻盈面料与极简剪裁，适合通勤与周末出行。现在下单可享限时包邮。'));
+$buttonText = trim((string)($this->getData('button_text') ?? __('立即选购')));
+$buttonLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('button_link') ?? '/products');
+$layout = strtolower(trim((string)($this->getData('layout') ?? 'image-left')));
+$imageWidth = (string)($this->getData('image_width') ?? '50');
 
 if (!in_array($layout, ['image-left', 'image-right', 'image-top', 'image-bg'], true)) {
     $layout = 'image-left';
 }
-if (!in_array((string)$imageWidth, ['33', '40', '50', '60'], true)) {
+if (!in_array($imageWidth, ['33', '40', '50', '60'], true)) {
     $imageWidth = '50';
 }
 
-$widgetId = 'image-text-' . uniqid();
+$rootStyle = '--wc-image-width:' . $imageWidth . '%;';
+if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') {
+    $rootStyle .= 'background-image:url("' . $esc($backgroundImage) . '");';
+}
 ?>
 
-<div class="widget-image-text layout-<?= htmlspecialchars($layout) ?>" id="<?= $widgetId ?>">
+<section class="<?= $esc($wc) ?> layout-<?= $esc($layout) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="<?= $esc($rootStyle) ?>">
+
     <?php if ($layout === 'image-bg'): ?>
-        <!-- 图片背景布局 -->
-        <div class="bg-container"<?= $imageFileHtml === '' && $backgroundImage !== '' ? ' style="background-image:url(&quot;' . htmlspecialchars($backgroundImage, ENT_QUOTES, 'UTF-8') . '&quot;)"' : '' ?>>
+        <div class="bg-container">
             <?php if ($imageFileHtml !== ''): ?>
                 <div class="bg-media"><?= $imageFileHtml ?></div>
             <?php endif; ?>
             <div class="bg-overlay"></div>
             <div class="text-content">
-                <?php if ($title): ?>
-                    <h2 class="content-title"><?= htmlspecialchars($title) ?></h2>
+                <?php if ($title !== ''): ?>
+                    <h2 class="content-title"><?= $esc($title) ?></h2>
                 <?php endif; ?>
-                <?php if ($content): ?>
+                <?php if ($content !== ''): ?>
                     <div class="content-text"><?= $content ?></div>
                 <?php endif; ?>
-                <?php if ($buttonText && $buttonLink): ?>
-                    <a href="<?= htmlspecialchars($buttonLink ?? '') ?>" class="content-button"><?= htmlspecialchars($buttonText ?? '') ?></a>
+                <?php if ($buttonText !== '' && $buttonLink !== ''): ?>
+                    <a href="<?= $esc($buttonLink) ?>" class="content-button"><?= $esc($buttonText) ?></a>
                 <?php endif; ?>
             </div>
         </div>
     <?php elseif ($layout === 'image-top'): ?>
-        <!-- 图上文下布局 -->
         <div class="image-section">
             <?php if ($imageFileHtml !== ''): ?>
                 <div class="content-image content-image--asset"><?= $imageFileHtml ?></div>
             <?php else: ?>
-                <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
+                <img src="<?= $esc($image) ?>" alt="<?= $esc($title) ?>" class="content-image" loading="lazy">
             <?php endif; ?>
         </div>
         <div class="text-section">
-            <?php if ($title): ?>
-                <h2 class="content-title"><?= htmlspecialchars($title) ?></h2>
+            <?php if ($title !== ''): ?>
+                <h2 class="content-title"><?= $esc($title) ?></h2>
             <?php endif; ?>
-            <?php if ($content): ?>
+            <?php if ($content !== ''): ?>
                 <div class="content-text"><?= $content ?></div>
             <?php endif; ?>
-            <?php if ($buttonText && $buttonLink): ?>
-                <a href="<?= htmlspecialchars($buttonLink) ?>" class="content-button"><?= htmlspecialchars($buttonText) ?></a>
+            <?php if ($buttonText !== '' && $buttonLink !== ''): ?>
+                <a href="<?= $esc($buttonLink) ?>" class="content-button"><?= $esc($buttonText) ?></a>
             <?php endif; ?>
         </div>
     <?php else: ?>
-        <!-- 图左文右 / 图右文左 -->
         <div class="content-row">
-            <div class="image-section" style="flex: 0 0 <?= $imageWidth ?>%;">
+            <div class="image-section">
                 <?php if ($imageFileHtml !== ''): ?>
                     <div class="content-image content-image--asset"><?= $imageFileHtml ?></div>
                 <?php else: ?>
-                    <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
+                    <img src="<?= $esc($image) ?>" alt="<?= $esc($title) ?>" class="content-image" loading="lazy">
                 <?php endif; ?>
             </div>
             <div class="text-section">
-                <?php if ($title): ?>
-                    <h2 class="content-title"><?= htmlspecialchars($title) ?></h2>
+                <?php if ($title !== ''): ?>
+                    <h2 class="content-title"><?= $esc($title) ?></h2>
                 <?php endif; ?>
-                <?php if ($content): ?>
+                <?php if ($content !== ''): ?>
                     <div class="content-text"><?= $content ?></div>
                 <?php endif; ?>
-                <?php if ($buttonText && $buttonLink): ?>
-                    <a href="<?= htmlspecialchars($buttonLink ?? '') ?>" class="content-button"><?= htmlspecialchars($buttonText ?? '') ?></a>
+                <?php if ($buttonText !== '' && $buttonLink !== ''): ?>
+                    <a href="<?= $esc($buttonLink) ?>" class="content-button"><?= $esc($buttonText) ?></a>
                 <?php endif; ?>
             </div>
         </div>
     <?php endif; ?>
-</div>
+</section>
 
 <style>
-.widget-image-text {
-    margin: 30px 0;
+.<?= $wc ?> {
+    margin: var(--weline-space-8, 30px) 0;
+    color: var(--weline-theme-text);
 }
 
-/* 横向布局 */
-.widget-image-text .content-row {
+.<?= $wc ?> .content-row {
     display: flex;
     align-items: center;
-    gap: 40px;
+    gap: var(--weline-space-10, 40px);
 }
 
-.widget-image-text.layout-image-right .content-row {
+.<?= $wc ?>.layout-image-right .content-row {
     flex-direction: row-reverse;
 }
 
-.widget-image-text .image-section {
+.<?= $wc ?> .image-section {
     overflow: hidden;
-    border-radius: 12px;
+    border-radius: var(--weline-radius-xl, 12px);
 }
 
-.widget-image-text .content-image {
+.<?= $wc ?>.layout-image-left .image-section,
+.<?= $wc ?>.layout-image-right .image-section {
+    flex: 0 0 var(--wc-image-width, 50%);
+}
+
+.<?= $wc ?> .content-image {
     width: 100%;
     height: auto;
     display: block;
-    transition: transform 0.5s;
+    transition: transform var(--weline-theme-transition-slow, 0.5s ease);
 }
 
-.widget-image-text .content-image--asset img {
+.<?= $wc ?> .content-image--asset img {
     display: block;
     width: 100%;
     height: auto;
 }
 
-.widget-image-text:hover .content-image {
+.<?= $wc ?>:hover .content-image {
     transform: scale(1.03);
 }
 
-.widget-image-text .text-section {
+.<?= $wc ?> .text-section {
     flex: 1;
 }
 
-.widget-image-text .content-title {
-    font-size: 28px;
+.<?= $wc ?> .content-title {
+    font-size: var(--weline-font-size-3xl, 28px);
     font-weight: 700;
-    margin: 0 0 15px;
-    color: var(--heading-color, #222);
+    margin: 0 0 var(--weline-space-4, 15px);
+    color: var(--weline-theme-text);
 }
 
-.widget-image-text .content-text {
-    font-size: 16px;
+.<?= $wc ?> .content-text {
+    font-size: var(--weline-font-size-base, 16px);
     line-height: 1.7;
-    color: #666;
-    margin-bottom: 20px;
+    color: var(--weline-theme-text-muted);
+    margin-bottom: var(--weline-space-5, 20px);
 }
 
-.widget-image-text .content-button {
+.<?= $wc ?> .content-button {
     display: inline-block;
-    padding: 12px 30px;
-    background: var(--primary-color, #007bff);
-    color: #fff;
+    padding: var(--weline-space-3, 12px) var(--weline-space-8, 30px);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
     text-decoration: none;
-    border-radius: 8px;
+    border-radius: var(--weline-radius-lg, 8px);
     font-weight: 600;
-    transition: all 0.3s;
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
 }
 
-.widget-image-text .content-button:hover {
-    background: var(--primary-dark, #0056b3);
+.<?= $wc ?> .content-button:hover {
+    background: var(--weline-theme-primary-hover);
     transform: translateY(-2px);
+    box-shadow: var(--weline-theme-shadow-md);
 }
 
-/* 图上文下布局 */
-.widget-image-text.layout-image-top .text-section {
+.<?= $wc ?>.layout-image-top .text-section {
     text-align: center;
-    padding: 30px 0;
+    padding: var(--weline-space-8, 30px) 0;
 }
 
-/* 图片背景布局 */
-.widget-image-text.layout-image-bg .bg-container {
+.<?= $wc ?>.layout-image-bg .bg-container {
     position: relative;
     min-height: 400px;
     background-size: cover;
     background-position: center;
-    border-radius: 12px;
+    border-radius: var(--weline-radius-xl, 12px);
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.widget-image-text.layout-image-bg .bg-overlay {
+.<?= $wc ?>.layout-image-bg .bg-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
+    inset: 0;
+    background: color-mix(in srgb, var(--weline-theme-overlay) 50%, transparent);
     z-index: 1;
 }
 
-.widget-image-text.layout-image-bg .bg-media,
-.widget-image-text.layout-image-bg .bg-media figure,
-.widget-image-text.layout-image-bg .bg-media img {
+.<?= $wc ?>.layout-image-bg .bg-media,
+.<?= $wc ?>.layout-image-bg .bg-media figure,
+.<?= $wc ?>.layout-image-bg .bg-media img {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -221,52 +233,57 @@ $widgetId = 'image-text-' . uniqid();
     margin: 0;
 }
 
-.widget-image-text.layout-image-bg .bg-media img {
+.<?= $wc ?>.layout-image-bg .bg-media img {
     object-fit: cover;
 }
 
-.widget-image-text.layout-image-bg .text-content {
+.<?= $wc ?>.layout-image-bg .text-content {
     position: relative;
     z-index: 2;
     text-align: center;
-    padding: 40px;
+    padding: var(--weline-space-10, 40px);
     max-width: 700px;
 }
 
-.widget-image-text.layout-image-bg .content-title {
-    color: #fff;
-    font-size: 36px;
+.<?= $wc ?>.layout-image-bg .content-title {
+    color: var(--weline-theme-on-primary);
+    font-size: var(--weline-font-size-4xl, 36px);
 }
 
-.widget-image-text.layout-image-bg .content-text {
-    color: rgba(255,255,255,0.9);
+.<?= $wc ?>.layout-image-bg .content-text {
+    color: color-mix(in srgb, var(--weline-theme-on-primary) 90%, transparent);
 }
 
-.widget-image-text.layout-image-bg .content-button {
-    background: #fff;
-    color: #333;
+.<?= $wc ?>.layout-image-bg .content-button {
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-text);
 }
 
-.widget-image-text.layout-image-bg .content-button:hover {
-    background: rgba(255,255,255,0.9);
+.<?= $wc ?>.layout-image-bg .content-button:hover {
+    background: var(--weline-theme-surface);
+}
+
+.widget-preview-canvas .<?= $wc ?>.layout-image-bg .bg-container,
+.<?= $wc ?>.is-preview.layout-image-bg .bg-container {
+    min-height: 120px;
 }
 
 @media (max-width: 768px) {
-    .widget-image-text .content-row {
+    .<?= $wc ?> .content-row {
         flex-direction: column;
     }
-    
-    .widget-image-text.layout-image-right .content-row {
+
+    .<?= $wc ?>.layout-image-right .content-row {
         flex-direction: column;
     }
-    
-    .widget-image-text .image-section {
+
+    .<?= $wc ?> .image-section {
         flex: none !important;
         width: 100%;
     }
-    
-    .widget-image-text .content-title {
-        font-size: 22px;
+
+    .<?= $wc ?> .content-title {
+        font-size: var(--weline-font-size-xl, 22px);
     }
 }
 </style>

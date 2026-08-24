@@ -1,0 +1,19 @@
+<?php
+/**
+ * Geo模块 - 布局Body结束Hook
+ * 
+ * 在body结束前声明Geo定位模块，使用Weline.declare()方式引入
+ * Hook名称：Weline_Theme::frontend::layouts::base::body-end
+ * 
+ * @hook-priority 100      Hook优先级：100（framework位置默认优先级）
+ * @hook-sort-order 0      Hook排序顺序：0（默认值）
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+?>
+<script>
+    // 声明Geo定位模块（按需加载）
+    if (typeof Weline !== 'undefined' && Weline.declare) {
+        Weline.declare('geo');
+    }
+</script>
+

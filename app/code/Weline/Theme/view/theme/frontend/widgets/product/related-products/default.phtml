@@ -1,6 +1,6 @@
 <?php
 /**
- * Related products widget.
+ * Related products root.
  *
  * @var \Weline\Framework\View\Template $this
  *
@@ -12,6 +12,7 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product"]}
  * @widget.supports {["layout-product-related-products","layout-product-sidebar"]}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-related-products","area":"content","sort_order":0}]}
  *
  * @param title {default="相关产品",type="string",label="标题"}
  * @param limit {default=4,type="number",label="显示数量"}
@@ -19,8 +20,15 @@
  * @param layout {default="carousel",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
-use Weline\Theme\Helper\WidgetI18n;
 
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('related-products');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $titleSource = trim((string)($this->getData('title') ?? '')) ?: '相关产品';
 $widgetTitle = WidgetI18n::label($titleSource, '相关产品');
 $limit = max(1, (int)($this->getData('limit') ?? 4));
@@ -91,8 +99,6 @@ if ($realProducts !== []) {
     unset($product);
 }
 
-$widgetKey = (string)($this->getData('_widget_instance_key') ?? ($titleSource . '|' . $limit . '|' . $columns . '|' . $layout));
-$widgetId = 'related-products-' . substr(sha1($widgetKey), 0, 12);
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -102,7 +108,10 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
-<div class="widget-related-products widget-products" id="<?= $widgetId ?>" style="width:100%;max-width:var(--layout-max-width,1600px);margin:0 auto;padding:0 var(--spacing-4,1.5rem);box-sizing:border-box;">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="widget-header">
         <h2 class="widget-title"><?= htmlspecialchars($widgetTitle, ENT_QUOTES, 'UTF-8') ?></h2>
     </div>
@@ -115,13 +124,13 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         <?php endif; ?>
 
         <div class="products-wrapper">
-            <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--spacing-4,1rem);width:100%;box-sizing:border-box;">
+            <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>">
                 <?php foreach ($products as $product): ?>
                     <?php
                     $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0);
                     $actionProductUrl = (string)($product['url'] ?? '');
                     ?>
-                    <article class="product-card" style="display:flex;min-width:0;flex-direction:column;overflow:hidden;border:1px solid var(--color-border-light,#e5e7eb);border-radius:var(--radius-lg,12px);background:var(--color-bg-primary,#fff);box-shadow:var(--shadow-sm,0 1px 2px rgba(15,23,42,.04));">
+                    <article class="product-card">
                         <div class="product-image-wrapper">
                             <a href="<?= htmlspecialchars((string)($product['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="product-image-link">
                                 <img src="<?= htmlspecialchars((string)($product['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
@@ -144,7 +153,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                             </div>
                         </div>
 
-                        <div class="product-info" style="display:flex;width:auto;min-width:0;flex:1;flex-direction:column;gap:.6rem;padding:var(--spacing-4,1rem);box-sizing:border-box;">
+                        <div class="product-info">
                             <h3 class="product-name">
                                 <a href="<?= htmlspecialchars((string)($product['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                     <?= htmlspecialchars((string)($product['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
@@ -183,15 +192,15 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             </button>
         <?php endif; ?>
     </div>
-</div>
+</section>
 
 <script>
 (function () {
-    var widget = document.getElementById(<?= json_encode($widgetId, $jsonForScriptFlags) ?>);
-    if (!widget || widget.dataset.wishlistActionsBound === '1') {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root || root.dataset.wishlistActionsBound === '1') {
         return;
     }
-    widget.dataset.wishlistActionsBound = '1';
+    root.dataset.wishlistActionsBound = '1';
 
     var texts = {
         added: <?= json_encode((string)__('已加入收藏'), $jsonForScriptFlags) ?>,
@@ -238,9 +247,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         });
     }
 
-    widget.addEventListener('click', function (event) {
+    root.addEventListener('click', function (event) {
         var button = event.target && event.target.closest ? event.target.closest('.btn-wishlist') : null;
-        if (!button || !widget.contains(button)) {
+        if (!button || !root.contains(button)) {
             return;
         }
         event.preventDefault();
@@ -291,81 +300,85 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 </script>
 
 <style>
-.widget-related-products {
+.<?= $wc ?> {
     width: 100%;
+    max-width: var(--layout-max-width, 1600px);
+    margin: 0 auto;
+    padding: 0 var(--weline-space-6, 1.5rem);
+    box-sizing: border-box;
 }
 
-.widget-related-products .widget-header {
-    margin-bottom: var(--spacing-5, 1.5rem);
+.<?= $wc ?> .widget-header {
+    margin-bottom: var(--weline-space-5, 1.5rem);
 }
 
-.widget-related-products .widget-title {
+.<?= $wc ?> .widget-title {
     margin: 0;
-    color: var(--color-text-primary, #111827);
+    color: var(--weline-theme-text);
     font-size: clamp(1.5rem, 2vw, 2rem);
     font-weight: var(--font-weight-bold, 700);
     line-height: 1.2;
 }
 
-.widget-related-products .products-container {
+.<?= $wc ?> .products-container {
     position: relative;
     width: 100%;
 }
 
-.widget-related-products .products-wrapper {
+.<?= $wc ?> .products-wrapper {
     width: 100%;
     overflow: hidden;
 }
 
-.widget-related-products .products-grid {
+.<?= $wc ?> .products-grid {
     display: grid;
     gap: var(--spacing-4, 1rem);
     width: 100%;
 }
 
-.widget-related-products .products-grid.columns-2 {
+.<?= $wc ?> .products-grid.columns-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.widget-related-products .products-grid.columns-3 {
+.<?= $wc ?> .products-grid.columns-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.widget-related-products .products-grid.columns-4,
-.widget-related-products .products-grid.columns-5 {
+.<?= $wc ?> .products-grid.columns-4,
+.<?= $wc ?> .products-grid.columns-5 {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-.widget-related-products .product-card {
+.<?= $wc ?> .product-card {
     display: flex;
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--color-border-light, #e5e7eb);
+    border: 1px solid var(--weline-theme-border);
     border-radius: var(--radius-lg, 12px);
-    background: var(--color-bg-primary, #fff);
+    background: var(--weline-theme-surface-raised);
     box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
 }
 
-.widget-related-products .product-image-wrapper {
+.<?= $wc ?> .product-image-wrapper {
     position: relative;
     overflow: hidden;
-    background: var(--color-bg-secondary, #f8fafc);
+    background: var(--weline-theme-surface-muted);
 }
 
-.widget-related-products .product-image-link {
+.<?= $wc ?> .product-image-link {
     display: block;
     aspect-ratio: 1 / 1;
 }
 
-.widget-related-products .product-image {
+.<?= $wc ?> .product-image {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.widget-related-products .product-actions {
+.<?= $wc ?> .product-actions {
     position: absolute;
     top: .75rem;
     right: .75rem;
@@ -373,7 +386,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     gap: .5rem;
 }
 
-.widget-related-products .action-btn {
+.<?= $wc ?> .action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -382,29 +395,29 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     border: 0;
     border-radius: 999px;
     background: rgba(255, 255, 255, .92);
-    color: var(--color-text-primary, #111827);
+    color: var(--weline-theme-text);
     cursor: pointer;
     box-shadow: 0 8px 20px rgba(15, 23, 42, .12);
     text-decoration: none;
 }
 
-.widget-related-products .action-btn:disabled {
+.<?= $wc ?> .action-btn:disabled {
     cursor: wait;
     opacity: .7;
 }
 
-.widget-related-products .btn-wishlist.is-active {
-    color: var(--color-error, #ef4444);
+.<?= $wc ?> .btn-wishlist.is-active {
+    color: var(--weline-theme-danger);
 }
 
-.widget-related-products .action-icon {
+.<?= $wc ?> .action-icon {
     display: block;
     width: 1.125rem;
     height: 1.125rem;
     fill: currentColor;
 }
 
-.widget-related-products .product-info {
+.<?= $wc ?> .product-info {
     display: flex;
     width: auto;
     min-width: 0;
@@ -414,55 +427,55 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     padding: var(--spacing-4, 1rem);
 }
 
-.widget-related-products .product-name {
+.<?= $wc ?> .product-name {
     margin: 0;
     font-size: 1rem;
     line-height: 1.35;
 }
 
-.widget-related-products .product-name a {
-    color: var(--color-text-primary, #111827);
+.<?= $wc ?> .product-name a {
+    color: var(--weline-theme-text);
     text-decoration: none;
 }
 
-.widget-related-products .product-name a:hover {
-    color: var(--color-primary, #2563eb);
+.<?= $wc ?> .product-name a:hover {
+    color: var(--weline-theme-primary);
 }
 
-.widget-related-products .product-rating {
+.<?= $wc ?> .product-rating {
     display: flex;
     align-items: center;
     gap: .5rem;
-    color: var(--color-text-secondary, #64748b);
+    color: var(--weline-theme-text-muted);
     font-size: .875rem;
 }
 
-.widget-related-products .product-rating .stars i {
-    color: #ffc107;
+.<?= $wc ?> .product-rating .stars i {
+    color: var(--weline-theme-warning);
 }
 
-.widget-related-products .product-rating .stars .w-rating-star[data-state="empty"] {
-    color: #ddd;
+.<?= $wc ?> .product-rating .stars .w-rating-star[data-state="empty"] {
+    color: var(--weline-theme-border);
 }
 
-.widget-related-products .product-price {
+.<?= $wc ?> .product-price {
     display: flex;
     align-items: baseline;
     gap: .5rem;
     margin-top: auto;
 }
 
-.widget-related-products .price-original {
-    color: var(--color-text-tertiary, #94a3b8);
+.<?= $wc ?> .price-original {
+    color: var(--weline-theme-text-muted);
     text-decoration: line-through;
 }
 
-.widget-related-products .price-current {
-    color: var(--color-primary, #2563eb);
+.<?= $wc ?> .price-current {
+    color: var(--weline-theme-primary);
     font-weight: 800;
 }
 
-.widget-related-products .btn-add-to-cart {
+.<?= $wc ?> .btn-add-to-cart {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -471,32 +484,32 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     min-height: 2.75rem;
     border: 0;
     border-radius: var(--radius-md, 10px);
-    background: var(--color-primary, #2563eb);
-    color: #fff;
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
     cursor: pointer;
     font-weight: 700;
 }
 
-.widget-related-products .carousel-arrow {
+.<?= $wc ?> .carousel-arrow {
     display: none;
 }
 
 @media (max-width: 768px) {
-    .widget-related-products .products-grid,
-    .widget-related-products .products-grid.columns-2,
-    .widget-related-products .products-grid.columns-3,
-    .widget-related-products .products-grid.columns-4,
-    .widget-related-products .products-grid.columns-5 {
+    .<?= $wc ?> .products-grid,
+    .<?= $wc ?> .products-grid.columns-2,
+    .<?= $wc ?> .products-grid.columns-3,
+    .<?= $wc ?> .products-grid.columns-4,
+    .<?= $wc ?> .products-grid.columns-5 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 520px) {
-    .widget-related-products .products-grid,
-    .widget-related-products .products-grid.columns-2,
-    .widget-related-products .products-grid.columns-3,
-    .widget-related-products .products-grid.columns-4,
-    .widget-related-products .products-grid.columns-5 {
+    .<?= $wc ?> .products-grid,
+    .<?= $wc ?> .products-grid.columns-2,
+    .<?= $wc ?> .products-grid.columns-3,
+    .<?= $wc ?> .products-grid.columns-4,
+    .<?= $wc ?> .products-grid.columns-5 {
         grid-template-columns: 1fr;
     }
 }

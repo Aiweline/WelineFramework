@@ -1,0 +1,720 @@
+/* DataTable 增强样式 */
+
+/* 批量操作工具栏 */
+.batch-action-toolbar {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.batch-action-toolbar .selected-count {
+    color: #495057;
+    font-weight: 500;
+}
+
+/* 复选框列样式 */
+.checkbox-column {
+    width: 40px !important;
+    text-align: center;
+    padding: 0.5rem !important;
+}
+
+.checkbox-column .form-check {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+}
+
+/* 表格行选中状态 */
+tr.selected {
+    background-color: #e3f2fd !important;
+}
+
+tr.selected:hover {
+    background-color: #bbdefb !important;
+}
+
+/* 删除确认对话框样式 */
+.delete-details {
+    margin-top: 1rem;
+}
+
+.delete-details .card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+}
+
+.delete-details .card-body {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.row-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+}
+
+/* 加载覆盖层 */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    border-radius: 0.375rem;
+}
+
+.loading-overlay .spinner-border {
+    width: 2rem;
+    height: 2rem;
+}
+
+/* 列宽调整手柄 */
+.resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 5px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 10;
+}
+
+.resize-handle:hover {
+    background: rgba(0, 123, 255, 0.3);
+}
+
+/* 表头增强样式 */
+th.resizable {
+    position: relative;
+    user-select: none;
+}
+
+th.sortable {
+    cursor: pointer;
+}
+
+th.sortable:hover {
+    background-color: #f8f9fa;
+}
+
+/* 排序图标样式 */
+.sort-icon {
+    margin-left: 0.5rem;
+    color: #6c757d;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.sort-icon:hover {
+    color: #007bff;
+}
+
+.sort-icon.asc::before {
+    content: "\f0de";
+    /* fa-sort-up */
+}
+
+.sort-icon.desc::before {
+    content: "\f0dd";
+    /* fa-sort-down */
+}
+
+/* 编辑图标样式 */
+.edit-icon {
+    margin-left: 0.25rem;
+    color: #6c757d;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.edit-icon:hover {
+    color: #28a745;
+}
+
+/* 单元格编辑样式 */
+.editable-cell {
+    position: relative;
+    cursor: pointer;
+}
+
+.editable-cell:hover {
+    background-color: #f8f9fa;
+}
+
+.editable-cell .edit-overlay {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.editable-cell:hover .edit-overlay {
+    opacity: 1;
+}
+
+.edit-overlay i {
+    color: #6c757d;
+    font-size: 0.75rem;
+}
+
+/* 操作按钮样式 */
+.actions-cell {
+    white-space: nowrap;
+    width: 120px;
+}
+
+.actions-cell .btn {
+    margin-right: 0.25rem;
+}
+
+.actions-cell .btn:last-child {
+    margin-right: 0;
+}
+
+/* 导出按钮样式 */
+.export-excel-btn i {
+    color: #28a745;
+}
+
+.export-csv-btn i {
+    color: #ffc107;
+}
+
+.export-json-btn i {
+    color: #17a2b8;
+}
+
+/* 多表分组样式 */
+.multi-table-group {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+}
+
+.multi-table-group legend {
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+
+.multi-table-group.collapsed legend {
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.table-group-container {
+    position: relative;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .batch-action-toolbar .d-flex {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .batch-action-toolbar .btn-group {
+        width: 100%;
+    }
+
+    .batch-action-toolbar .btn {
+        flex: 1;
+    }
+
+    .actions-cell {
+        width: auto;
+    }
+
+    .resize-handle {
+        display: none;
+    }
+}
+
+/* 暗色主题支持 */
+@media (prefers-color-scheme: dark) {
+    .batch-action-toolbar {
+        background: #343a40;
+        border-color: #495057;
+        color: #fff;
+    }
+
+    .loading-overlay {
+        background: rgba(52, 58, 64, 0.9);
+        color: #fff;
+    }
+
+    tr.selected {
+        background-color: #1e3a5f !important;
+    }
+
+    tr.selected:hover {
+        background-color: #2c5282 !important;
+    }
+
+    .multi-table-group {
+        background: #343a40;
+        border-color: #495057;
+        color: #fff;
+    }
+}
+
+/* 动画效果 */
+.batch-action-toolbar {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.loading-overlay {
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* 表格斑马纹增强 */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* 字段配置面板增强 */
+.w-field-item {
+    transition: all 0.2s ease;
+}
+
+.w-field-item:hover {
+    background-color: #f8f9fa;
+    border-color: #007bff;
+}
+
+.w-field-item.dragging {
+    opacity: 0.5;
+    transform: rotate(2deg);
+}
+
+/* 文件字段样式 */
+.w-file-field {
+    margin-bottom: 1rem;
+}
+
+.w-file-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.w-file-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid #007bff;
+    background-color: transparent;
+    color: #007bff;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.w-file-btn:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+.w-file-info {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.w-file-list {
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    min-height: 2.5rem;
+    background-color: #f8f9fa;
+}
+
+.w-file-placeholder {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 0.5rem;
+}
+
+.w-file-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.w-file-item:last-child {
+    margin-bottom: 0;
+}
+
+.w-file-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.w-file-size {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+.w-file-remove {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s ease;
+}
+
+.w-file-remove:hover {
+    background-color: #f8d7da;
+}
+
+/* 图片字段样式 */
+.w-image-field {
+    margin-bottom: 1rem;
+}
+
+.w-image-preview {
+    border: 2px dashed #dee2e6;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.w-image-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: #f8f9fa;
+}
+
+.w-image-placeholder:hover {
+    background-color: #e9ecef;
+    border-color: #007bff;
+}
+
+.w-image-placeholder i {
+    font-size: 2rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+}
+
+.w-placeholder-text {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.25rem;
+}
+
+.w-placeholder-info {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.w-image-preview-img {
+    width: 100%;
+    height: auto;
+    max-height: 200px;
+    object-fit: contain;
+    display: block;
+}
+
+.w-image-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* 上传进度样式 */
+.w-upload-progress {
+    margin-top: 0.5rem;
+}
+
+.w-progress-bar {
+    width: 100%;
+    height: 0.5rem;
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    overflow: hidden;
+    margin-bottom: 0.25rem;
+}
+
+.w-progress-fill {
+    height: 100%;
+    background-color: #007bff;
+    transition: width 0.3s ease;
+}
+
+.w-progress-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    text-align: center;
+}
+
+/* 表单模态框样式 */
+.w-form-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1050;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.w-form-modal.show {
+    display: flex;
+}
+
+.w-form-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+}
+
+.w-form-modal-container {
+    position: relative;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90%;
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px) scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.w-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+}
+
+.w-form-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.w-form-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+}
+
+.w-form-close:hover {
+    color: #495057;
+    background-color: #e9ecef;
+}
+
+.w-form-body {
+    padding: 1.5rem;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.w-form-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+}
+
+.w-form-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* 表单字段样式 */
+.w-form-field {
+    margin-bottom: 1rem;
+}
+
+.w-field-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #495057;
+}
+
+.w-required-mark {
+    color: #dc3545;
+    margin-left: 0.25rem;
+}
+
+.w-field-control {
+    position: relative;
+}
+
+.w-form-control {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.w-form-control:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.w-form-control.is-invalid {
+    border-color: #dc3545;
+}
+
+.w-field-help {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.invalid-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: #dc3545;
+}
+
+/* 暗色主题文件字段样式 */
+@media (prefers-color-scheme: dark) {
+    .w-file-list {
+        background-color: #2d2d2d;
+        border-color: #404040;
+    }
+
+    .w-file-item {
+        background-color: #3d3d3d;
+        border-color: #404040;
+        color: #e0e0e0;
+    }
+
+    .w-image-placeholder {
+        background-color: #2d2d2d;
+        border-color: #404040;
+        color: #e0e0e0;
+    }
+
+    .w-image-placeholder:hover {
+        background-color: #3d3d3d;
+    }
+
+    .w-progress-bar {
+        background-color: #404040;
+    }
+
+    .w-form-modal-container {
+        background-color: #2d2d2d;
+        color: #e0e0e0;
+    }
+
+    .w-form-header {
+        background-color: #343a40;
+        border-color: #495057;
+    }
+
+    .w-form-footer {
+        background-color: #343a40;
+        border-color: #495057;
+    }
+
+    .w-form-control {
+        background-color: #3d3d3d;
+        border-color: #495057;
+        color: #e0e0e0;
+    }
+
+    .w-form-control:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+}

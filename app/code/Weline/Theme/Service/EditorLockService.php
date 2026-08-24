@@ -101,6 +101,11 @@ class EditorLockService
                 $userName,
                 $contextKey,
             ),
+            fn (): array => [
+                'success' => false,
+                'message' => (string)__('编辑锁服务正忙，请稍后重试'),
+                'lock_info' => null,
+            ],
         );
     }
 
@@ -198,6 +203,7 @@ class EditorLockService
                 $this->cache->delete($this->getTakeoverCacheKey($themeId, $pageType, $contextKey));
                 return true;
             },
+            static fn (): bool => false,
         );
     }
 
@@ -229,6 +235,7 @@ class EditorLockService
                 );
                 return $updated;
             },
+            static fn (): bool => false,
         );
     }
 
@@ -261,6 +268,10 @@ class EditorLockService
                 $userName,
                 $contextKey,
             ),
+            fn (): array => [
+                'success' => false,
+                'message' => (string)__('编辑锁服务正忙，请稍后重试'),
+            ],
         );
     }
 
@@ -380,6 +391,10 @@ class EditorLockService
                 $userName,
                 $contextKey,
             ),
+            fn (): array => [
+                'success' => false,
+                'message' => (string)__('编辑锁服务正忙，请稍后重试'),
+            ],
         );
     }
 
@@ -481,12 +496,13 @@ class EditorLockService
         return self::TAKEOVER_PREFIX . $themeId . '_' . $pageType . $this->contextKeySuffix($contextKey);
     }
 
-    /** @template T @param callable():T $operation @return T */
+    /** @template T @param callable():T $operation @param callable():T|null $onBusy @return T */
     private function synchronized(
         int $themeId,
         string $pageType,
         string $contextKey,
         callable $operation,
+        ?callable $onBusy = null,
     ): mixed {
         $this->assertLockIdentity($themeId, $pageType, $contextKey);
         $coordinationKey = 'theme_editor_lock_mutation_' . hash(
@@ -495,6 +511,9 @@ class EditorLockService
         );
         $token = $this->coordinator->acquire($coordinationKey, 2000, 10);
         if ($token === null) {
+            if ($onBusy !== null) {
+                return $onBusy();
+            }
             throw new \RuntimeException((string)__('编辑锁服务正忙，请稍后重试'));
         }
         try {

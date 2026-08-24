@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "0439553e8b7c01e17ac83c27161fd7b93e687a9201904adc701cac91e613f379",
+    "build_id": "6f0f40821c8cca443e548d450019db3e50b88e405b629c71244c330fe2034e95",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -266,10 +266,10 @@
             "type": "css"
         },
         "frontend": {
-            "bytes": 9047,
+            "bytes": 9612,
             "file": "weline-frontend.css",
-            "gzip_bytes": 1845,
-            "sha256": "12cbfc0b0576c0e0ea18b2f3c1bce6654cb626289b371209db11f033d05f4734",
+            "gzip_bytes": 1929,
+            "sha256": "0a478000568e42e4449700e6c66bf5c04a372f4de5c54e953c59141c394fd0a7",
             "type": "css"
         },
         "icons": {
@@ -406,17 +406,17 @@
             "type": "js"
         },
         "theme-editor-css": {
-            "bytes": 144055,
+            "bytes": 145154,
             "file": "pages/weline-theme-editor.css",
-            "gzip_bytes": 20859,
-            "sha256": "8bd3652bd14b2bca745efe9136aad022f5a74d567baf57ae9bb4d15642d1205f",
+            "gzip_bytes": 21075,
+            "sha256": "009ee80db78b2d9d052e636d1efd671d0d312f0d846a3b55df4ca1e5edcd27da",
             "type": "css"
         },
         "theme-editor-js": {
-            "bytes": 744970,
+            "bytes": 750511,
             "file": "pages/weline-theme-editor.js",
-            "gzip_bytes": 148586,
-            "sha256": "ce565b8f83d23697798875e1f4ea48f4eb4f2cfb6e31fc2907837eac81a852b1",
+            "gzip_bytes": 149646,
+            "sha256": "ceedfd29e5569708bfb929259a513aa110a3bae25eab7e7d02cb2eb9e86d6442",
             "type": "js"
         },
         "theme-editor-overlay-css": {
@@ -441,10 +441,10 @@
             "type": "css"
         },
         "theme-editor-widget-param-js": {
-            "bytes": 78569,
+            "bytes": 81198,
             "file": "pages/weline-theme-editor-widget-param.js",
-            "gzip_bytes": 16091,
-            "sha256": "02d4a22491330d93d3dacd059be278b00127c7497e914f5d2033254bb674dfd0",
+            "gzip_bytes": 16519,
+            "sha256": "e3c83fe9dc4fc8ffa26c3b283952286f4852249ec9faddc5fe30083e70c4748d",
             "type": "js"
         },
         "theme-prepaint": {

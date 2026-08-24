@@ -165,6 +165,14 @@ try {
         'module' => 'Acme_Demo',
     ]);
     readinessCheck($guidance['schema_version'] === 'guidance-bundle.v1', 'resolve_task_context returns guidance-bundle.v1 after readiness');
+    readinessCheck(
+        ($guidance['workflow_contract']['schema_version'] ?? '') === 'workflow-contract.v1',
+        'resolve_task_context returns workflow_contract.v1',
+    );
+    readinessCheck(
+        ($guidance['routing_contract']['extension_point_selection_required'] ?? false) === true,
+        'resolve_task_context requires extension-point selection before code changes',
+    );
     readinessCheck(($guidance['_project_readiness']['status'] ?? '') === 'ready', 'guarded tool response carries compact readiness evidence');
     $alias = $tools->call('resolve_skill', [
         'repository' => $repository,
@@ -189,6 +197,86 @@ try {
         $missingAfterReadyRejected = $exception->errorCode === 'PROJECT_NEEDS_REPAIR';
     }
     readinessCheck($missingAfterReadyRejected, 'document removal invalidates readiness before knowledge access');
+
+    $gitProject = $temporary . DIRECTORY_SEPARATOR . 'git-branch-project';
+    mkdir($gitProject . '/app/code/Acme/Demo/doc', 0700, true);
+    file_put_contents($gitProject . '/app/code/Acme/Demo/register.php', "<?php\n");
+    foreach (['README.md', '需求.md', '开发日志.md'] as $document) {
+        file_put_contents(
+            $gitProject . '/app/code/Acme/Demo/doc/' . $document,
+            "# Acme_Demo {$document}\n",
+        );
+    }
+    $gitInit = proc_open(
+        ['git', '-C', $gitProject, 'init', '-b', 'master'],
+        [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $gitPipes,
+        null,
+        null,
+        ['bypass_shell' => true],
+    );
+    if (is_resource($gitInit)) {
+        stream_get_contents($gitPipes[1]);
+        stream_get_contents($gitPipes[2]);
+        fclose($gitPipes[1]);
+        fclose($gitPipes[2]);
+        proc_close($gitInit);
+    }
+    foreach ([
+        ['git', '-C', $gitProject, 'config', 'user.email', 'readiness@test.local'],
+        ['git', '-C', $gitProject, 'config', 'user.name', 'Readiness Test'],
+        ['git', '-C', $gitProject, 'add', '.'],
+        ['git', '-C', $gitProject, 'commit', '-m', 'init'],
+        ['git', '-C', $gitProject, 'branch', 'dev'],
+    ] as $gitCommand) {
+        $process = proc_open(
+            $gitCommand,
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            null,
+            ['bypass_shell' => true],
+        );
+        if (!is_resource($process)) {
+            continue;
+        }
+        stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+    }
+    $gitResolved = ProjectResolver::resolve($gitProject, false);
+    $gitIndex = new ProjectIndex($config, $gitResolved);
+    $gitService = new ProjectReadinessService($config, new ProcessRunner());
+    $masterBlocked = $gitService->prepare($gitIndex, ['client_session_id' => 'session-git']);
+    readinessCheck(
+        ($masterBlocked['status'] ?? '') === 'blocked'
+            && (($masterBlocked['blocker']['code'] ?? '') === 'GIT_BRANCH_FORBIDDEN'),
+        'prepare_project blocks development on master when dev branch exists',
+    );
+    $switchDev = proc_open(
+        ['git', '-C', $gitProject, 'switch', 'dev'],
+        [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $switchPipes,
+        null,
+        null,
+        ['bypass_shell' => true],
+    );
+    if (is_resource($switchDev)) {
+        stream_get_contents($switchPipes[1]);
+        stream_get_contents($switchPipes[2]);
+        fclose($switchPipes[1]);
+        fclose($switchPipes[2]);
+        proc_close($switchDev);
+    }
+    $devReady = $gitService->prepare($gitIndex, ['client_session_id' => 'session-git']);
+    readinessCheck(
+        ($devReady['status'] ?? '') === 'ready'
+            && (($devReady['git']['branch'] ?? '') === 'dev'),
+        'prepare_project reaches ready on dev branch',
+    );
+    $gitIndex->close();
 
     $index->close();
 } catch (Throwable $exception) {

@@ -141,4 +141,34 @@ final class Table implements TaglibInterface
 
         return $value;
     }
+
+    public static function tag_self_close(): bool
+    {
+        return false;
+    }
+
+    public static function tag_self_close_with_attrs(): bool
+    {
+        return false;
+    }
+
+    public static function parent(): ?string
+    {
+        return null;
+    }
+
+    public static function document(): string
+    {
+        return <<<'DOC'
+<w:theme:table> 自研主题表格
+
+输出 w-table-wrap + w-table，并支持首尾列悬浮（data-w-sticky-start / data-w-sticky-end）。
+
+示例：
+<w:theme:table sticky-end="true" sticky-end-min="8.5rem">
+  <thead>...</thead>
+  <tbody>...</tbody>
+</w:theme:table>
+DOC;
+    }
 }

@@ -15,6 +15,8 @@ return [
     ],
     "provides" => [
         \Weline\Widget\Api\WidgetRegistryInterface::class => \Weline\Widget\Service\WidgetRegistry::class,
+        // File-image preview is provided by Weline_FileManager when installed;
+        // NullFileImagePreviewResolver remains a local fallback class only.
         \Weline\Widget\Api\Param\ParamFormRendererInterface::class => \Weline\Widget\Service\ParamTypeRenderer::class,
         \Weline\Widget\Api\Rendering\RuntimeTemplateRendererInterface::class => \Weline\Widget\Service\WidgetRuntimeTemplateRenderer::class,
         'request_resetter.Weline_Widget' => \Weline\Widget\Api\Runtime\RequestResetter::class,

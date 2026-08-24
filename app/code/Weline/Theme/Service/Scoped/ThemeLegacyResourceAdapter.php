@@ -46,11 +46,11 @@ final class ThemeLegacyResourceAdapter implements ThemeScopedResourceAdapterInte
             ThemeEditorContext::RESOURCE_THEME_BINDING => [
                 'theme_id' => $this->activeThemeId($context->area),
             ],
-            ThemeEditorContext::RESOURCE_LAYOUT => [
-                'theme_id' => $context->themeId,
-                'nodes' => [],
-                'selection' => [],
-            ],
+            // Until a scoped Release exists, the editor still dual-writes legacy
+            // ThemeLayout rows. An empty package base would make the first Scope
+            // patch projectDraft wipe every sibling widget that was never
+            // add_node'd into the workspace.
+            ThemeEditorContext::RESOURCE_LAYOUT => $this->loadLegacyLayoutBaseline($context),
             ThemeEditorContext::RESOURCE_META => ['values' => []],
             ThemeEditorContext::RESOURCE_APPEARANCE => ['tokens' => [], 'disks' => []],
             ThemeEditorContext::RESOURCE_I18N => ['translations' => []],
@@ -218,11 +218,29 @@ final class ThemeLegacyResourceAdapter implements ThemeScopedResourceAdapterInte
     }
 
     /** @return array{theme_id:int,nodes:array<string,array<string,mixed>>,selection:array<string,mixed>} */
-    private function loadLegacyLayout(ThemeEditorContext $context, bool $allowFallback = false): array
+    private function loadLegacyLayoutBaseline(ThemeEditorContext $context): array
+    {
+        $draft = $this->loadLegacyLayout($context, false, ThemeLayout::STATUS_DRAFT);
+        if (($draft['nodes'] ?? []) !== []) {
+            return $draft;
+        }
+
+        return $this->loadLegacyLayout($context, true, ThemeLayout::STATUS_PUBLISHED);
+    }
+
+    /** @return array{theme_id:int,nodes:array<string,array<string,mixed>>,selection:array<string,mixed>} */
+    private function loadLegacyLayout(
+        ThemeEditorContext $context,
+        bool $allowFallback = false,
+        string $status = ThemeLayout::STATUS_PUBLISHED,
+    ): array
     {
         $themeId = $context->themeId > 0 ? $context->themeId : $this->activeThemeId($context->area);
         if ($themeId <= 0) {
             return ['theme_id' => 0, 'nodes' => [], 'selection' => []];
+        }
+        if (!\in_array($status, [ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED], true)) {
+            throw new \InvalidArgumentException('theme_layout_legacy_status_invalid');
         }
 
         $identity = [
@@ -245,7 +263,7 @@ final class ThemeLegacyResourceAdapter implements ThemeScopedResourceAdapterInte
                     ->where(ThemeLayout::schema_fields_LOCALE_CODE, $localeCode)
                     ->where(ThemeLayout::schema_fields_TARGET_TYPE, $context->targetType)
                     ->where(ThemeLayout::schema_fields_TARGET_ID, $context->targetId)
-                    ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_PUBLISHED)
+                    ->where(ThemeLayout::schema_fields_STATUS, $status)
                     ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
                     ->order(ThemeLayout::schema_fields_ID, 'ASC')
                     ->select()

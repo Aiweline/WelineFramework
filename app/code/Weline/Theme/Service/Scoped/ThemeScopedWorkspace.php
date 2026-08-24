@@ -6,6 +6,7 @@ namespace Weline\Theme\Service\Scoped;
 
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
@@ -1088,7 +1089,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
             $this->layoutSnapshots->denormalize($context, $effectivePayload),
             [
                 'scope_identity' => $context->scope->identity,
-                'locale_code' => $context->locale === 'default' ? '' : $context->locale,
+                'locale_code' => $this->resolveFileAssetLocale($context),
                 'actor_id' => $fileActorId,
                 'roles' => $fileRoles,
                 'purpose' => 'publish',
@@ -1107,7 +1108,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         if ($context->resourceType !== ThemeEditorContext::RESOURCE_LAYOUT || $revisionId < 1) {
             return;
         }
-        $localeCode = $context->locale === 'default' ? '' : $context->locale;
+        $localeCode = $this->resolveFileAssetLocale($context);
         [$fileActorId, $fileRoles] = $this->fileAccessClaims($actorId);
         $validationContext = [
             'scope_identity' => $context->scope->identity,
@@ -1130,6 +1131,23 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
             $this->layoutSnapshots->denormalize($context, $effectivePayload),
             $validationContext,
         );
+    }
+
+    /**
+     * Default/all-language editor contexts still stamp file-image usage with the
+     * site default locale. File layout validation needs that concrete locale.
+     */
+    private function resolveFileAssetLocale(ThemeEditorContext $context): string
+    {
+        $localeCode = trim($context->locale === 'default' ? '' : $context->locale);
+        if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
+            $localeCode = trim((string)Env::default_LANGUAGE_CODE);
+        }
+        if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
+            throw new \InvalidArgumentException('theme_scope_file_locale_unresolved');
+        }
+
+        return $localeCode;
     }
 
     private function numericBackendActorId(string $actorId): ?int

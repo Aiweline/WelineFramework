@@ -457,6 +457,8 @@ class ThemeResourceCatalog
         $data['page_layouts'] = $this->parseWidgetListValue($data['page_layouts']) ?: ['*'];
         $slots = $this->extractWidgetBraceValue($content, 'slots');
         $data['slots'] = is_array($slots) ? $slots : [];
+        $defaultInjections = $this->extractWidgetBraceValue($content, 'default_injections');
+        $data['default_injections'] = is_array($defaultInjections) ? $defaultInjections : [];
 
         return $data;
     }

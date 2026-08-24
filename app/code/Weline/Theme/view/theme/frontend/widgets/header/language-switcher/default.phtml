@@ -1,9 +1,9 @@
 <?php
 /**
  * Header 语言切换部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {language-switcher}
  * @widget.name {语言切换}
  * @widget.description {Header 语言切换器，支持多语言切换}
@@ -12,17 +12,26 @@
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {user-area}
- * 
+ *
  * @param show_flag {default=true,type="bool",label="显示国旗"}
  * @param show_name {default=true,type="bool",label="显示语言名"}
  * @param display_style {default="dropdown",type="select",label="显示样式",options={dropdown:"下拉菜单",inline:"内联显示"}}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('language-switcher');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $showFlag = (bool)($this->getData('show_flag') ?? true);
 $showName = (bool)($this->getData('show_name') ?? true);
 $displayStyle = $this->getData('display_style') ?? 'dropdown';
+if (!in_array($displayStyle, ['dropdown', 'inline'], true)) {
+    $displayStyle = 'dropdown';
+}
 
-// 示例语言列表（实际应从系统配置获取）
 $languages = [
     ['code' => 'zh_CN', 'name' => '简体中文', 'flag' => '🇨🇳', 'active' => true],
     ['code' => 'en_US', 'name' => 'English', 'flag' => '🇺🇸', 'active' => false],
@@ -30,32 +39,33 @@ $languages = [
     ['code' => 'ko_KR', 'name' => '한국어', 'flag' => '🇰🇷', 'active' => false],
 ];
 
-$currentLang = array_filter($languages, fn($l) => $l['active']);
+$currentLang = array_filter($languages, fn ($l) => $l['active']);
 $currentLang = reset($currentLang) ?: $languages[0];
 ?>
 
-<div class="widget-language-switcher style-<?= htmlspecialchars($displayStyle) ?>">
+<section class="<?= $esc($wc) ?> style-<?= $esc((string)$displayStyle) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <?php if ($displayStyle === 'dropdown'): ?>
-        <!-- 下拉菜单样式 -->
         <div class="language-dropdown">
-            <button class="language-current" type="button">
+            <button class="language-current" type="button" aria-haspopup="listbox">
                 <?php if ($showFlag): ?>
                     <span class="lang-flag"><?= $currentLang['flag'] ?></span>
                 <?php endif; ?>
                 <?php if ($showName): ?>
-                    <span class="lang-name"><?= htmlspecialchars($currentLang['name']) ?></span>
+                    <span class="lang-name"><?= $esc($currentLang['name']) ?></span>
                 <?php endif; ?>
                 <w:icon name="arrow-down" size="sm"></w:icon>
             </button>
-            
-            <ul class="language-list">
+            <ul class="language-list" role="listbox">
                 <?php foreach ($languages as $lang): ?>
                     <li class="<?= $lang['active'] ? 'active' : '' ?>">
-                        <a href="?lang=<?= htmlspecialchars($lang['code']) ?>">
+                        <a href="?lang=<?= $esc($lang['code']) ?>">
                             <?php if ($showFlag): ?>
                                 <span class="lang-flag"><?= $lang['flag'] ?></span>
                             <?php endif; ?>
-                            <span class="lang-name"><?= htmlspecialchars($lang['name']) ?></span>
+                            <span class="lang-name"><?= $esc($lang['name']) ?></span>
                             <?php if ($lang['active']): ?>
                                 <w:icon name="check" size="sm"></w:icon>
                             <?php endif; ?>
@@ -65,132 +75,162 @@ $currentLang = reset($currentLang) ?: $languages[0];
             </ul>
         </div>
     <?php else: ?>
-        <!-- 水平排列样式 -->
         <div class="language-inline">
             <?php foreach ($languages as $lang): ?>
-                <a href="?lang=<?= htmlspecialchars($lang['code']) ?>" 
+                <a href="?lang=<?= $esc($lang['code']) ?>"
                    class="lang-item <?= $lang['active'] ? 'active' : '' ?>"
-                   title="<?= htmlspecialchars($lang['name']) ?>">
+                   title="<?= $esc($lang['name']) ?>">
                     <?php if ($showFlag): ?>
                         <span class="lang-flag"><?= $lang['flag'] ?></span>
                     <?php endif; ?>
                     <?php if ($showName): ?>
-                        <span class="lang-name"><?= htmlspecialchars($lang['name']) ?></span>
+                        <span class="lang-name"><?= $esc($lang['name']) ?></span>
                     <?php endif; ?>
                 </a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
-</div>
+</section>
 
 <style>
-.widget-language-switcher {
+.<?= $wc ?> {
     position: relative;
 }
 
-/* 下拉菜单样式 */
-.widget-language-switcher .language-dropdown {
+.<?= $wc ?> .language-dropdown {
     position: relative;
 }
 
-.widget-language-switcher .language-current {
+.<?= $wc ?> .language-current {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
+    gap: var(--weline-space-2, 6px);
+    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
     background: none;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-sm, 6px);
     cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s;
+    font-size: var(--weline-font-size-sm, 14px);
+    color: var(--weline-theme-text);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-language-switcher .language-current:hover {
-    border-color: var(--primary-color, #007bff);
+.<?= $wc ?> .language-current:hover {
+    border-color: var(--weline-theme-primary);
 }
 
-.widget-language-switcher .lang-flag {
-    font-size: 16px;
+.<?= $wc ?> .lang-flag {
+    font-size: var(--weline-font-size-base, 16px);
 }
 
-.widget-language-switcher .lang-name {
-    font-size: 13px;
+.<?= $wc ?> .lang-name {
+    font-size: var(--weline-font-size-sm, 13px);
 }
 
-.widget-language-switcher .language-list {
+.<?= $wc ?> .language-list {
     position: absolute;
     top: 100%;
     left: 0;
     min-width: 160px;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-md, 8px);
+    box-shadow: var(--weline-theme-shadow-md);
     list-style: none;
-    margin: 5px 0 0;
-    padding: 8px 0;
+    margin: var(--weline-space-1, 5px) 0 0;
+    padding: var(--weline-space-2, 8px) 0;
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px);
-    transition: all 0.3s;
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
     z-index: 1000;
 }
 
-.widget-language-switcher .language-dropdown:hover .language-list {
+.<?= $wc ?> .language-dropdown:hover .language-list,
+.<?= $wc ?> .language-dropdown.is-open .language-list {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
 }
 
-.widget-language-switcher .language-list li a {
+.<?= $wc ?> .language-list li a {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 15px;
-    color: var(--text-color, #333);
+    gap: var(--weline-space-3, 10px);
+    padding: var(--weline-space-2, 8px) var(--weline-space-4, 15px);
+    color: var(--weline-theme-text);
     text-decoration: none;
-    transition: background-color 0.2s;
+    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-language-switcher .language-list li a:hover {
-    background-color: #f5f5f5;
+.<?= $wc ?> .language-list li a:hover {
+    background-color: var(--weline-theme-surface-muted);
 }
 
-.widget-language-switcher .language-list li.active a {
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .language-list li.active a {
+    color: var(--weline-theme-primary);
 }
 
-.widget-language-switcher .language-list li a i {
+.<?= $wc ?> .language-list li a w-icon:last-child {
     margin-left: auto;
-    color: var(--primary-color, #007bff);
+    color: var(--weline-theme-primary);
 }
 
-/* 水平排列样式 */
-.widget-language-switcher .language-inline {
+.<?= $wc ?> .language-inline {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--weline-space-1, 5px);
 }
 
-.widget-language-switcher .lang-item {
+.<?= $wc ?> .lang-item {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
-    color: var(--text-color, #666);
+    gap: var(--weline-space-1, 4px);
+    padding: var(--weline-space-2, 6px) var(--weline-space-3, 10px);
+    color: var(--weline-theme-text-muted);
     text-decoration: none;
-    border-radius: 4px;
-    font-size: 13px;
-    transition: all 0.3s;
+    border-radius: var(--weline-radius-sm, 4px);
+    font-size: var(--weline-font-size-sm, 13px);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-language-switcher .lang-item:hover {
-    background-color: var(--hover-bg, rgba(0,0,0,0.05));
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .lang-item:hover {
+    background-color: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-primary);
 }
 
-.widget-language-switcher .lang-item.active {
-    background-color: var(--primary-color, #007bff);
-    color: #fff;
+.<?= $wc ?> .lang-item.active {
+    background-color: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+}
+
+.widget-preview-canvas .<?= $wc ?> .language-list,
+.<?= $wc ?>.is-preview .language-list {
+    position: static;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    box-shadow: none;
+    margin-top: var(--weline-space-2, 8px);
 }
 </style>
+
+<script>
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var dropdown = root.querySelector('.language-dropdown');
+    var trigger = root.querySelector('.language-current');
+    if (!dropdown || !trigger) return;
+
+    trigger.addEventListener('click', function () {
+        dropdown.classList.toggle('is-open');
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!root.contains(e.target)) {
+            dropdown.classList.remove('is-open');
+        }
+    });
+})();
+</script>

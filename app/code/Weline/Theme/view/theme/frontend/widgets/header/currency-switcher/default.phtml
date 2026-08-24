@@ -1,9 +1,9 @@
 <?php
 /**
  * Header 货币切换部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {currency-switcher}
  * @widget.name {货币切换}
  * @widget.description {Header 货币切换器，支持多货币切换}
@@ -12,15 +12,21 @@
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {user-area}
- * 
+ *
  * @param show_symbol {default=true,type="bool",label="显示货币符号"}
  * @param show_code {default=true,type="bool",label="显示货币代码"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('currency-switcher');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $showSymbol = (bool)($this->getData('show_symbol') ?? true);
 $showCode = (bool)($this->getData('show_code') ?? true);
 
-// 示例货币列表（实际应从系统配置获取）
 $currencies = [
     ['code' => 'CNY', 'symbol' => '¥', 'name' => '人民币', 'active' => true],
     ['code' => 'USD', 'symbol' => '$', 'name' => '美元', 'active' => false],
@@ -29,30 +35,32 @@ $currencies = [
     ['code' => 'GBP', 'symbol' => '£', 'name' => '英镑', 'active' => false],
 ];
 
-$currentCurrency = array_filter($currencies, fn($c) => $c['active']);
+$currentCurrency = array_filter($currencies, fn ($c) => $c['active']);
 $currentCurrency = reset($currentCurrency) ?: $currencies[0];
 ?>
 
-<div class="widget-currency-switcher">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="currency-dropdown">
-        <button class="currency-current" type="button">
+        <button class="currency-current" type="button" aria-haspopup="listbox">
             <?php if ($showSymbol): ?>
-                <span class="currency-symbol"><?= htmlspecialchars($currentCurrency['symbol']) ?></span>
+                <span class="currency-symbol"><?= $esc($currentCurrency['symbol']) ?></span>
             <?php endif; ?>
             <?php if ($showCode): ?>
-                <span class="currency-code"><?= htmlspecialchars($currentCurrency['code']) ?></span>
+                <span class="currency-code"><?= $esc($currentCurrency['code']) ?></span>
             <?php endif; ?>
             <w:icon name="arrow-down" size="sm"></w:icon>
         </button>
-        
-        <ul class="currency-list">
+        <ul class="currency-list" role="listbox">
             <?php foreach ($currencies as $currency): ?>
                 <li class="<?= $currency['active'] ? 'active' : '' ?>">
-                    <a href="?currency=<?= htmlspecialchars($currency['code']) ?>">
-                        <span class="currency-symbol"><?= htmlspecialchars($currency['symbol']) ?></span>
+                    <a href="?currency=<?= $esc($currency['code']) ?>">
+                        <span class="currency-symbol"><?= $esc($currency['symbol']) ?></span>
                         <span class="currency-info">
-                            <span class="currency-code"><?= htmlspecialchars($currency['code']) ?></span>
-                            <span class="currency-name"><?= htmlspecialchars($currency['name']) ?></span>
+                            <span class="currency-code"><?= $esc($currency['code']) ?></span>
+                            <span class="currency-name"><?= $esc($currency['name']) ?></span>
                         </span>
                         <?php if ($currency['active']): ?>
                             <w:icon name="check" size="sm"></w:icon>
@@ -62,107 +70,139 @@ $currentCurrency = reset($currentCurrency) ?: $currencies[0];
             <?php endforeach; ?>
         </ul>
     </div>
-</div>
+</section>
 
 <style>
-.widget-currency-switcher {
+.<?= $wc ?> {
     position: relative;
 }
 
-.widget-currency-switcher .currency-dropdown {
+.<?= $wc ?> .currency-dropdown {
     position: relative;
 }
 
-.widget-currency-switcher .currency-current {
+.<?= $wc ?> .currency-current {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 8px 12px;
+    gap: var(--weline-space-1, 4px);
+    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
     background: none;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-sm, 6px);
     cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s;
+    font-size: var(--weline-font-size-sm, 14px);
+    color: var(--weline-theme-text);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-currency-switcher .currency-current:hover {
-    border-color: var(--primary-color, #007bff);
+.<?= $wc ?> .currency-current:hover {
+    border-color: var(--weline-theme-primary);
 }
 
-.widget-currency-switcher .currency-symbol {
+.<?= $wc ?> .currency-symbol {
     font-weight: 600;
 }
 
-.widget-currency-switcher .currency-code {
-    font-size: 13px;
+.<?= $wc ?> .currency-code {
+    font-size: var(--weline-font-size-sm, 13px);
 }
 
-.widget-currency-switcher .currency-list {
+.<?= $wc ?> .currency-list {
     position: absolute;
     top: 100%;
     right: 0;
     min-width: 180px;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-md, 8px);
+    box-shadow: var(--weline-theme-shadow-md);
     list-style: none;
-    margin: 5px 0 0;
-    padding: 8px 0;
+    margin: var(--weline-space-1, 5px) 0 0;
+    padding: var(--weline-space-2, 8px) 0;
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px);
-    transition: all 0.3s;
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
     z-index: 1000;
 }
 
-.widget-currency-switcher .currency-dropdown:hover .currency-list {
+.<?= $wc ?> .currency-dropdown:hover .currency-list,
+.<?= $wc ?> .currency-dropdown.is-open .currency-list {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
 }
 
-.widget-currency-switcher .currency-list li a {
+.<?= $wc ?> .currency-list li a {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 15px;
-    color: var(--text-color, #333);
+    gap: var(--weline-space-3, 10px);
+    padding: var(--weline-space-3, 10px) var(--weline-space-4, 15px);
+    color: var(--weline-theme-text);
     text-decoration: none;
-    transition: background-color 0.2s;
+    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-currency-switcher .currency-list li a:hover {
-    background-color: #f5f5f5;
+.<?= $wc ?> .currency-list li a:hover {
+    background-color: var(--weline-theme-surface-muted);
 }
 
-.widget-currency-switcher .currency-list li.active a {
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .currency-list li.active a {
+    color: var(--weline-theme-primary);
 }
 
-.widget-currency-switcher .currency-list .currency-symbol {
+.<?= $wc ?> .currency-list .currency-symbol {
     width: 20px;
     text-align: center;
-    font-size: 16px;
+    font-size: var(--weline-font-size-base, 16px);
 }
 
-.widget-currency-switcher .currency-list .currency-info {
+.<?= $wc ?> .currency-list .currency-info {
     flex: 1;
     display: flex;
     flex-direction: column;
 }
 
-.widget-currency-switcher .currency-list .currency-code {
+.<?= $wc ?> .currency-list .currency-code {
     font-weight: 600;
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm, 13px);
 }
 
-.widget-currency-switcher .currency-list .currency-name {
-    font-size: 11px;
-    color: #666;
+.<?= $wc ?> .currency-list .currency-name {
+    font-size: var(--weline-font-size-xs, 11px);
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-currency-switcher .currency-list li a i {
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .currency-list li a w-icon:last-child {
+    color: var(--weline-theme-primary);
+}
+
+.widget-preview-canvas .<?= $wc ?> .currency-list,
+.<?= $wc ?>.is-preview .currency-list {
+    position: static;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    box-shadow: none;
 }
 </style>
+
+<script>
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var dropdown = root.querySelector('.currency-dropdown');
+    var trigger = root.querySelector('.currency-current');
+    if (!dropdown || !trigger) return;
+
+    trigger.addEventListener('click', function () {
+        dropdown.classList.toggle('is-open');
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!root.contains(e.target)) {
+            dropdown.classList.remove('is-open');
+        }
+    });
+})();
+</script>

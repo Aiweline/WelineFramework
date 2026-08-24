@@ -1,9 +1,9 @@
 <?php
 /**
  * 搜索栏部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {search-bar}
  * @widget.name {搜索栏}
  * @widget.description {搜索栏部件，适用于头部和侧栏}
@@ -12,7 +12,7 @@
  * @widget.position {["header", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
+ *
  * @param placeholder {default="搜索...",type="string",label="占位符"}
  * @param action_url {default="/search",type="string",label="搜索地址"}
  * @param show_button {default=true,type="bool",label="显示按钮"}
@@ -20,119 +20,139 @@
  * @param style {default="default",type="select",label="样式",options={default:"默认",rounded:"圆角",minimal:"极简"}}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('search-bar');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $placeholder = $this->getData('placeholder') ?? __('搜索...');
 $actionUrl = $this->getData('action_url') ?? '/search';
 $showButton = (bool)($this->getData('show_button') ?? true);
 $buttonText = $this->getData('button_text') ?? '';
 $style = $this->getData('style') ?? 'default';
-
-$widgetId = 'search-bar-' . uniqid();
+if (!in_array($style, ['default', 'rounded', 'minimal'], true)) {
+    $style = 'default';
+}
 ?>
 
-<div class="widget-search-bar style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>">
+<section class="<?= $esc($wc) ?> style-<?= $esc((string)$style) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <w:form action="@var($actionUrl)" method="get" class="search-form">
         <div class="search-input-group">
-            <input type="search" 
-                   name="q" 
-                   class="search-input" 
-                   placeholder="<?= htmlspecialchars($placeholder ?? '') ?>"
-                   value="<?= htmlspecialchars((string)\w_env_get('q', '')) ?>"
+            <input type="search"
+                   name="q"
+                   class="search-input"
+                   placeholder="<?= $esc((string)$placeholder) ?>"
+                   value="<?= $esc((string)\w_env_get('q', '')) ?>"
                    autocomplete="off">
-            
             <?php if ($showButton): ?>
                 <button type="submit" class="search-button">
                     <w:icon name="search" size="sm"></w:icon>
-                    <?php if ($buttonText): ?>
-                        <span><?= htmlspecialchars($buttonText) ?></span>
+                    <?php if ($buttonText !== ''): ?>
+                        <span><?= $esc((string)$buttonText) ?></span>
                     <?php endif; ?>
                 </button>
             <?php endif; ?>
         </div>
     </w:form>
-</div>
+</section>
 
 <style>
-.widget-search-bar .search-form {
+.<?= $wc ?> .search-form {
     width: 100%;
 }
 
-.widget-search-bar .search-input-group {
+.<?= $wc ?> .search-input-group {
     display: flex;
     position: relative;
 }
 
-.widget-search-bar .search-input {
+.<?= $wc ?> .search-input {
     flex: 1;
-    padding: 12px 15px;
-    border: 2px solid #e0e0e0;
-    font-size: 14px;
+    padding: var(--weline-space-3, 12px) var(--weline-space-4, 15px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    font-size: var(--weline-font-size-sm, 14px);
     outline: none;
-    transition: border-color 0.3s;
+    transition: border-color var(--weline-theme-transition-base, 0.2s ease);
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
 }
 
-.widget-search-bar .search-input:focus {
-    border-color: var(--primary-color, #007bff);
+.<?= $wc ?> .search-input:focus {
+    border-color: var(--weline-theme-primary);
 }
 
-.widget-search-bar .search-button {
-    padding: 12px 20px;
-    background: var(--primary-color, #007bff);
-    color: #fff;
+.<?= $wc ?> .search-button {
+    padding: var(--weline-space-3, 12px) var(--weline-space-5, 20px);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    transition: background-color 0.3s;
+    gap: var(--weline-space-2, 6px);
+    font-size: var(--weline-font-size-sm, 14px);
+    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-search-bar .search-button:hover {
-    background: var(--primary-dark, #0056b3);
+.<?= $wc ?> .search-button:hover {
+    background: var(--weline-theme-primary-hover);
 }
 
-/* 默认样式 */
-.widget-search-bar.style-default .search-input {
-    border-radius: 6px 0 0 6px;
+.<?= $wc ?>.style-default .search-input {
+    border-radius: var(--weline-radius-md, 6px) 0 0 var(--weline-radius-md, 6px);
 }
 
-.widget-search-bar.style-default .search-button {
-    border-radius: 0 6px 6px 0;
+.<?= $wc ?>.style-default .search-button {
+    border-radius: 0 var(--weline-radius-md, 6px) var(--weline-radius-md, 6px) 0;
 }
 
-/* 圆角样式 */
-.widget-search-bar.style-rounded .search-input {
-    border-radius: 25px 0 0 25px;
-    padding-left: 20px;
+.<?= $wc ?>.style-rounded .search-input {
+    border-radius: var(--weline-radius-round, 999px) 0 0 var(--weline-radius-round, 999px);
+    padding-left: var(--weline-space-5, 20px);
 }
 
-.widget-search-bar.style-rounded .search-button {
-    border-radius: 0 25px 25px 0;
-    padding: 12px 25px;
+.<?= $wc ?>.style-rounded .search-button {
+    border-radius: 0 var(--weline-radius-round, 999px) var(--weline-radius-round, 999px) 0;
+    padding: var(--weline-space-3, 12px) var(--weline-space-6, 25px);
 }
 
-/* 极简样式 */
-.widget-search-bar.style-minimal .search-input-group {
-    border-bottom: 2px solid #e0e0e0;
-    transition: border-color 0.3s;
+.<?= $wc ?>.style-minimal .search-input-group {
+    border-bottom: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    transition: border-color var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-search-bar.style-minimal .search-input-group:focus-within {
-    border-color: var(--primary-color, #007bff);
+.<?= $wc ?>.style-minimal .search-input-group:focus-within {
+    border-color: var(--weline-theme-primary);
 }
 
-.widget-search-bar.style-minimal .search-input {
+.<?= $wc ?>.style-minimal .search-input {
     border: none;
     border-radius: 0;
     background: transparent;
 }
 
-.widget-search-bar.style-minimal .search-button {
+.<?= $wc ?>.style-minimal .search-button {
     background: transparent;
-    color: #666;
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-search-bar.style-minimal .search-button:hover {
-    color: var(--primary-color, #007bff);
+.<?= $wc ?>.style-minimal .search-button:hover {
+    color: var(--weline-theme-primary);
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    max-width: 100%;
+}
+
+.widget-preview-canvas .<?= $wc ?> .search-input,
+.<?= $wc ?>.is-preview .search-input {
+    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    font-size: var(--weline-font-size-xs, 12px);
 }
 </style>

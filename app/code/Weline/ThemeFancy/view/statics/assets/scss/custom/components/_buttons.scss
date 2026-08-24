@@ -1,0 +1,49 @@
+// 
+// _buttons.scss
+// 
+
+button,a {
+  outline: none !important;
+}
+
+.btn-light{
+  border: 1px solid darken($light, 2%);
+}
+
+// Rounded Buttons
+.btn-rounded {
+  border-radius: 30px;
+}
+
+.btn-dark, .btn-secondary{
+  color: $gray-200 !important;
+}
+
+.btn-outline-light{
+  color: $gray-900;
+}
+
+
+//
+// Soft Buttons
+// 
+
+@mixin button-variant-soft($bg) {
+  color: $bg;
+  background-color: rgba($bg, 0.1);
+  border-color: transparent;
+
+  &:hover,
+  &:focus,
+  &:active {
+      color: $white;
+      background-color: $bg;
+  }
+}
+
+@each $color,
+$value in $theme-colors {
+  .btn-soft-#{$color} {
+      @include button-variant-soft($value);
+  }
+}

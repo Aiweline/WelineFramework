@@ -1,9 +1,9 @@
 <?php
 /**
  * 页脚支付图标部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {footer-payment}
  * @widget.name {支付方式}
  * @widget.description {展示支持的支付方式图标}
@@ -14,86 +14,93 @@
  * @widget.slot {payment}
  * @widget.supports {["layout-footer-payment","layout-global-footer-payment"]}
  * @widget.exclusive {true}
- * 
+ *
  * @param title {default="支付方式",type="string",label="标题"}
  * @param payment_methods {default=["visa","mastercard","paypal","alipay","wechat"],type="array",label="支付方式"}
  * @param show_label {default=true,type="bool",label="显示标签"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('footer-payment');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = $this->getData('title') ?? __('支付方式');
 $paymentMethods = $this->getData('payment_methods') ?? ['visa', 'mastercard', 'paypal', 'alipay', 'wechat'];
 $showLabel = (bool)($this->getData('show_label') ?? true);
 
-// 支付方式图标映射
 $paymentIcons = [
-    'visa'      => ['icon' => 'circle', 'name' => 'Visa'],
-    'mastercard'=> ['icon' => 'circle', 'name' => 'Mastercard'],
-    'amex'      => ['icon' => 'circle', 'name' => 'American Express'],
-    'paypal'    => ['icon' => 'circle', 'name' => 'PayPal'],
-    'alipay'    => ['icon' => 'circle', 'name' => '支付宝'],
-    'wechat'    => ['icon' => 'circle', 'name' => '微信支付'],
-    'unionpay'  => ['icon' => 'circle', 'name' => '银联'],
-    'jcb'       => ['icon' => 'circle', 'name' => 'JCB'],
-    'discover'  => ['icon' => 'circle', 'name' => 'Discover'],
-    'applepay'  => ['icon' => 'circle', 'name' => 'Apple Pay'],
+    'visa' => ['icon' => 'circle', 'name' => 'Visa'],
+    'mastercard' => ['icon' => 'circle', 'name' => 'Mastercard'],
+    'amex' => ['icon' => 'circle', 'name' => 'American Express'],
+    'paypal' => ['icon' => 'circle', 'name' => 'PayPal'],
+    'alipay' => ['icon' => 'circle', 'name' => '支付宝'],
+    'wechat' => ['icon' => 'circle', 'name' => '微信支付'],
+    'unionpay' => ['icon' => 'circle', 'name' => '银联'],
+    'jcb' => ['icon' => 'circle', 'name' => 'JCB'],
+    'discover' => ['icon' => 'circle', 'name' => 'Discover'],
+    'applepay' => ['icon' => 'circle', 'name' => 'Apple Pay'],
     'googlepay' => ['icon' => 'circle', 'name' => 'Google Pay'],
 ];
-
-$widgetId = 'footer-payment-' . uniqid();
 ?>
 
-<div class="widget-footer-payment" id="<?= $widgetId ?>">
-    <?php if ($showLabel && $title): ?>
-        <span class="payment-label"><?= htmlspecialchars($title) ?>:</span>
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?php if ($showLabel && $title !== ''): ?>
+        <span class="payment-label"><?= $esc((string)$title) ?>:</span>
     <?php endif; ?>
-    
     <div class="payment-icons">
-        <?php foreach ($paymentMethods as $method): 
-            $payment = $paymentIcons[$method] ?? ['icon' => 'circle', 'name' => ucfirst($method)];
+        <?php foreach ($paymentMethods as $method):
+            $payment = $paymentIcons[$method] ?? ['icon' => 'circle', 'name' => ucfirst((string)$method)];
         ?>
-            <span class="payment-icon" title="<?= htmlspecialchars($payment['name']) ?>">
-                <i class="<?= htmlspecialchars($payment['icon']) ?>"></i>
+            <span class="payment-icon" title="<?= $esc($payment['name']) ?>">
+                <w:icon name="payment.icon|circle" size="sm"></w:icon>
             </span>
         <?php endforeach; ?>
     </div>
-</div>
+</section>
 
 <style>
-.widget-footer-payment {
+.<?= $wc ?> {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: var(--weline-space-4, 15px);
     flex-wrap: wrap;
 }
 
-.widget-footer-payment .payment-label {
-    font-size: 14px;
-    color: rgba(255,255,255,0.7);
+.<?= $wc ?> .payment-label {
+    font-size: var(--weline-font-size-sm, 14px);
+    color: color-mix(in srgb, var(--weline-theme-on-primary) 70%, transparent);
 }
 
-.widget-footer-payment .payment-icons {
+.<?= $wc ?> .payment-icons {
     display: flex;
-    gap: 10px;
+    gap: var(--weline-space-3, 10px);
     flex-wrap: wrap;
 }
 
-.widget-footer-payment .payment-icon {
+.<?= $wc ?> .payment-icon {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 45px;
     height: 30px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 4px;
-    transition: all 0.3s;
+    background: color-mix(in srgb, var(--weline-theme-on-primary) 10%, transparent);
+    border-radius: var(--weline-radius-sm, 4px);
+    transition: background var(--weline-theme-transition-base, 0.2s ease);
+    color: color-mix(in srgb, var(--weline-theme-on-primary) 80%, transparent);
 }
 
-.widget-footer-payment .payment-icon:hover {
-    background: rgba(255,255,255,0.2);
+.<?= $wc ?> .payment-icon:hover {
+    background: color-mix(in srgb, var(--weline-theme-on-primary) 20%, transparent);
 }
 
-.widget-footer-payment .payment-icon i {
-    font-size: 20px;
-    color: rgba(255,255,255,0.8);
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    gap: var(--weline-space-2, 8px);
 }
 </style>

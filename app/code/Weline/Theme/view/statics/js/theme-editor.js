@@ -77,6 +77,7 @@
         previewDropCommittedSessionId: '',
         previewDragCancelled: false,
         previewDropFallbackTimer: null,
+        lastPreviewInsertSortOrder: null,
         selectedSlot: null, // 当前选中的插槽
         originalWidgetOrder: new Map(), // 保存原始部件顺序
         originalGroupOrder: [], // 保存原始分组顺序
@@ -103,6 +104,7 @@
         layoutLock: { enabled: false },
         layoutIdentity: {},
         sidePanels: { configOpen: true, widgetOpen: true },
+        slotsPanelOpen: false,
         fullscreenSidePanelsSnapshot: null,
         editorFullscreenFallback: false,
         configLocale: '',
@@ -198,6 +200,7 @@
     // DOM 元素
     let elements = {};
     const SIDE_PANEL_STORAGE_KEY = 'weline.theme.editor.sidePanels.v1';
+    const SLOTS_PANEL_STORAGE_KEY = 'weline.theme.editor.slotsPanel.v1';
     const DASHBOARD_BASIC_WIDGET_CODES = new Set([
         'alert', 'badge', 'button', 'card', 'dropdown', 'form', 'field',
         'field-group', 'form-actions', 'form-group', 'grid', 'input',
@@ -386,6 +389,7 @@
 
         try {
             state.configLocale = locale;
+            syncThemeEditorLocaleDataset();
             state.scopeIdentity = nextScopeIdentity;
             state.layoutLock = {
                 ...state.layoutLock,
@@ -621,6 +625,67 @@
         }
         if (panel === 'widget' && shouldOpen) {
             scheduleFitWidgetPreviews();
+        }
+    }
+
+    function readSlotsPanelPreference() {
+        try {
+            const raw = window.localStorage ? window.localStorage.getItem(SLOTS_PANEL_STORAGE_KEY) : '';
+            if (!raw) {
+                return null;
+            }
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== 'object') {
+                return null;
+            }
+
+            return {
+                open: data.open === true,
+            };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function saveSlotsPanelPreference() {
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            window.localStorage.setItem(SLOTS_PANEL_STORAGE_KEY, JSON.stringify({
+                open: state.slotsPanelOpen === true,
+            }));
+        } catch (error) {
+        }
+    }
+
+    function applySlotsPanelState() {
+        const dock = elements.slotsInfoDock;
+        if (!dock) {
+            return;
+        }
+
+        const open = state.slotsPanelOpen === true;
+        dock.classList.toggle('slots-panel-open', open);
+        dock.classList.toggle('slots-panel-collapsed', !open);
+
+        const toggle = dock.querySelector('[data-theme-editor-action="toggle-slots-panel"]');
+        if (toggle instanceof HTMLElement) {
+            toggle.setAttribute('aria-expanded', String(open));
+        }
+    }
+
+    function initSlotsPanel() {
+        const preference = readSlotsPanelPreference();
+        state.slotsPanelOpen = preference ? preference.open === true : false;
+        applySlotsPanelState();
+    }
+
+    function setSlotsPanelOpen(open, persist = true) {
+        state.slotsPanelOpen = open === true;
+        applySlotsPanelState();
+        if (persist) {
+            saveSlotsPanelPreference();
         }
     }
 
@@ -1036,8 +1101,8 @@
         const cmsLock = String(state.layoutLock.lock_source || state.layoutLock.source || '').toLowerCase() === 'cms';
         return {
             scope: cmsLock ? (getCurrentWindowParam('scope') || state.layoutLock.scope || 'default') : (state.layoutLock.scope || 'default'),
-            locale: getPreviewLocaleForRequest(),
-            locale_code: getPreviewLocaleForRequest(),
+            locale: getLegacyLocaleCode(),
+            locale_code: getLegacyLocaleCode(),
             store_mode: getCurrentWindowParam('store_mode') || state.layoutLock.store_mode || 'normal',
             website_id: parseInt(getCurrentWindowParam('website_id') || state.layoutLock.website_id || 0, 10) || 0,
             website_code: getCurrentWindowParam('website_code') || state.layoutLock.website_code || '',
@@ -1811,7 +1876,7 @@
             theme_id: resourceType === 'theme_binding' ? 0 : (parseInt(overrides.theme_id || state.themeId, 10) || 0),
             layout_type: overrides.layout_type || getEffectiveLayoutType(),
             layout_option: overrides.layout_option || getEffectiveLayoutOption(),
-            locale: overrides.locale || getActiveConfigLocale() || 'default',
+            locale: overrides.locale || getScopedEditorLocale(),
             target_type: overrides.target_type || targetType,
             target_id: Object.prototype.hasOwnProperty.call(overrides, 'target_id') ? overrides.target_id : targetId,
         };
@@ -2809,6 +2874,7 @@
                 getCurrentWindowParam('locale') || container.dataset.configLocale || ''
             )
             : String(getCurrentWindowParam('locale') || container.dataset.configLocale || '').trim();
+        syncThemeEditorLocaleDataset();
         _installedLocalesCache = parseInstalledLocales(container.dataset.installedLocales || '[]');
 
         // 缓存 DOM 元素
@@ -2835,6 +2901,7 @@
             previewFrame: document.getElementById('previewFrame'),
             previewLoading: document.getElementById('previewLoading'),
             slotsInfoPanel: document.getElementById('slotsInfoPanel'),
+            slotsInfoDock: document.getElementById('slotsInfoDock'),
             slotsInfoList: document.getElementById('slotsInfoList'),
             btnPreview: document.getElementById('btnPreview'),
             btnSave: document.getElementById('btnSave'),
@@ -2846,6 +2913,7 @@
         };
 
         initSidePanels();
+        initSlotsPanel();
         initWidgetLibraryTabs();
 
         // 当前布局信息
@@ -2956,6 +3024,12 @@
             } else if (action === 'close-widget-panel') {
                 e.preventDefault();
                 setSidePanelOpen('widget', false);
+            } else if (action === 'toggle-slots-panel') {
+                e.preventDefault();
+                setSlotsPanelOpen(state.slotsPanelOpen !== true);
+            } else if (action === 'close-slots-panel') {
+                e.preventDefault();
+                setSlotsPanelOpen(false);
             } else if (action === 'save-new-version') {
                 e.preventDefault();
                 elements.btnSave?.click();
@@ -3206,12 +3280,7 @@
             });
         }
 
-        // 关闭插槽面板按钮
-        document.getElementById('closeSlotsPanel')?.addEventListener('click', function() {
-            if (elements.slotsInfoPanel) {
-                elements.slotsInfoPanel.classList.remove('active');
-            }
-        });
+        // 关闭插槽面板按钮已改为 data-theme-editor-action=close-slots-panel，由统一 action 处理器接管
 
         // 部件搜索：服务端关键词检索（在当前插槽过滤条件内），重置分页
         if (elements.widgetSearch) {
@@ -4055,7 +4124,7 @@
 
     function rememberPreviewDropCandidate(data) {
         const sessionId = String(data?.session_id || '');
-        const widgetData = state.draggingWidget;
+        const widgetData = state.draggingWidget || data?.widget;
         const slot = data?.slot;
         if (!sessionId
             || sessionId !== state.previewDragSessionId
@@ -4117,6 +4186,36 @@
         return previewFrameContainsDragEnd(event) !== false;
     }
 
+    async function commitPreviewDropFromMessage(data) {
+        if (data?.missing_data) {
+            showToast('无法获取部件数据，请重新拖拽', 'error');
+            return null;
+        }
+
+        const sessionId = String(data?.session_id || state.previewDragSessionId || '');
+        if (sessionId && state.previewDropCommittedSessionId === sessionId) {
+            return null;
+        }
+
+        const widgetData = state.draggingWidget || data?.widget;
+        const slot = data?.slot;
+        const sortOrder = Number.parseInt(data?.sort_order, 10);
+        if (!widgetData?.code || !slot?.id || !Number.isFinite(sortOrder) || sortOrder < 0) {
+            return null;
+        }
+        if (!isSlotDataAccepted(slot, widgetData) || !previewSlotHasCapacity(slot, widgetData)) {
+            if (data?.reason) {
+                showToast(data.reason, 'warning');
+            }
+            return null;
+        }
+
+        state.previewDropCommittedSessionId = sessionId;
+        state.previewDropCandidate = null;
+        state.lastPreviewInsertSortOrder = sortOrder;
+        return handleWidgetDropped(widgetData, slot, sortOrder);
+    }
+
     async function commitPreviewDropCandidate(sessionId) {
         if (!sessionId || state.previewDropCommittedSessionId === sessionId) {
             return null;
@@ -4135,6 +4234,7 @@
         // 先标记、后发请求，保证 iframe drop 与 dragend fallback 竞争时最多提交一次。
         state.previewDropCommittedSessionId = sessionId;
         state.previewDropCandidate = null;
+        state.lastPreviewInsertSortOrder = candidate.sortOrder;
         return handleWidgetDropped(widgetData, candidate.slot, candidate.sortOrder);
     }
 
@@ -4197,13 +4297,10 @@
                 clearPreviewDropCandidate(data.session_id);
                 break;
             case 'widget-dropped': {
-                // 正常 drop 和 dragend fallback 共用同一 session，最多提交一次。
-                const candidate = rememberPreviewDropCandidate(data);
-                if (candidate) {
-                    void commitPreviewDropCandidate(candidate.sessionId).catch((error) => {
-                        console.error('[ThemeEditor] Preview drop commit failed:', error);
-                    });
-                }
+                // iframe drop 消息自带 widget/slot/sort_order，不依赖 dragend 时尚未清空的 draggingWidget。
+                void commitPreviewDropFromMessage(data).catch((error) => {
+                    console.error('[ThemeEditor] Preview drop commit failed:', error);
+                });
                 break;
             }
             case 'widget-rejected':
@@ -8332,8 +8429,31 @@
      * @param {string} previewHtml 预览HTML内容
      * @param {boolean} isNewWidget 是否为新添加的部件（默认false）
      * @param {string|null} targetSlotId 目标插槽ID（新部件时必传，避免依赖全局 state 导致插入错误区域）
+     * @param {number|null} sortOrder 插入序号（与持久化 sort_order 对齐）
      */
-    function updateWidgetPreviewInIframe(layoutId, previewHtml, isNewWidget = false, targetSlotId = null) {
+    function getIframeSlotWidgetRoots(container) {
+        if (!container) return [];
+        const candidates = Array.from(container.querySelectorAll(
+            ':scope > .widget-wrapper[data-layout-id], :scope > [data-layout-id].widget-wrapper, :scope > .widget-wrapper[data-widget-code]'
+        ));
+        return candidates.filter((el, index) => !candidates.slice(0, index).some((parent) => parent.contains(el)));
+    }
+
+    function insertWidgetWrapperAtSortOrder(container, wrapper, sortOrder) {
+        if (!container || !wrapper) return;
+        container.querySelectorAll(':scope > .slot-placeholder').forEach((placeholder) => placeholder.remove());
+        const existing = getIframeSlotWidgetRoots(container);
+        const index = Number.isFinite(Number(sortOrder))
+            ? Math.max(0, Math.min(Number(sortOrder), existing.length))
+            : existing.length;
+        if (index >= existing.length) {
+            container.appendChild(wrapper);
+            return;
+        }
+        existing[index].before(wrapper);
+    }
+
+    function updateWidgetPreviewInIframe(layoutId, previewHtml, isNewWidget = false, targetSlotId = null, sortOrder = null) {
         const iframe = elements.previewFrame;
         const safePreviewHtml = sanitizeHtmlForEditorPreview(previewHtml);
         if (!iframe) {
@@ -8436,9 +8556,10 @@
                             slotEl.innerHTML = '';
                             slotEl.appendChild(wrapper);
                         } else {
-                            // 非独占 或 整块区域插槽：只追加，保留原内容
-                            widgetContainer.querySelectorAll('.slot-placeholder').forEach(p => p.remove());
-                            widgetContainer.appendChild(wrapper);
+                            const insertOrder = sortOrder != null
+                                ? sortOrder
+                                : state.lastPreviewInsertSortOrder;
+                            insertWidgetWrapperAtSortOrder(widgetContainer, wrapper, insertOrder);
                         }
 
                         // 绑定按钮事件（如果还没有绑定）
@@ -8933,6 +9054,8 @@
             layout_type: getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage'),
             layout_option: getEffectiveLayoutOption(state.layoutOption || 'default'),
             editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            editor_context: buildTypedEditorContext('layout'),
+            scope: { identity: state.scopeIdentity },
             ...getLayoutLockVirtualPayload(),
             area: area,
             slot_id: slotId || null,
@@ -8977,12 +9100,18 @@
 
                 if (result.preview_html && layoutId) {
                     // 结构视图拖入时 slotId 可能为 null，用 area 推导插槽 ID，避免找不到插槽而整页刷新导致 footer 变白
-                    const targetSlotId = slotId ?? (area === 'footer' ? 'footer' : area === 'header' ? 'header' : null);
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, targetSlotId);
+                    const targetSlotId = slotId ?? (
+                        area === 'footer' ? 'footer'
+                            : area === 'header' ? 'header'
+                                : area === 'content' ? 'content'
+                                    : null
+                    );
+                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, targetSlotId, sortOrder);
                 } else {
                     loadLayoutPreview();
                 }
 
+                state.lastPreviewInsertSortOrder = null;
                 return result;
             } else {
                 showToast(result.message || '添加失败', 'error');
@@ -11968,11 +12097,32 @@
         return String(state.configLocale || '').trim();
     }
 
-    function getPreviewLocaleForRequest(overrides = {}) {
+    function syncThemeEditorLocaleDataset() {
+        const container = document.getElementById('themeEditor');
+        if (!container) {
+            return;
+        }
+        const locale = getActiveConfigLocale();
+        container.dataset.configLocale = locale;
+        container.dataset.localeCode = locale;
+    }
+
+    /** Scoped layout / preview identity locale (matches buildTypedEditorContext). */
+    function getScopedEditorLocale(overrides = {}) {
         const locale = Object.prototype.hasOwnProperty.call(overrides, 'locale')
             ? String(overrides.locale || '').trim()
             : getActiveConfigLocale();
-        return locale || config.defaultLocale || '';
+        return locale || 'default';
+    }
+
+    /** Legacy theme_layout.locale_code: empty string means default/all locales. */
+    function getLegacyLocaleCode(overrides = {}) {
+        const locale = getScopedEditorLocale(overrides);
+        return locale === 'default' ? '' : locale;
+    }
+
+    function getPreviewLocaleForRequest(overrides = {}) {
+        return getScopedEditorLocale(overrides);
     }
 
     function getWidgetConfigSaveUrl() {
@@ -12109,6 +12259,7 @@
         }
 
         state.configLocale = nextLocale;
+        syncThemeEditorLocaleDataset();
         syncConfigLocaleSwitchers();
 
         if (options.reload === false) {
@@ -12575,6 +12726,7 @@
         const normalizedLocale = String(locale || '').trim();
         if (options.sync !== false) {
             state.configLocale = normalizedLocale;
+            syncThemeEditorLocaleDataset();
             syncConfigLocaleSwitchers();
         }
 
@@ -13830,7 +13982,7 @@
         if (normalized.startsWith('javascript:') || normalized.startsWith('vbscript:')) {
             return fallback;
         }
-        if (normalized.startsWith('data:') && !/^data:image\/(png|jpe?g|gif|webp);/i.test(raw)) {
+        if (normalized.startsWith('data:') && !/^data:image\/(png|jpe?g|gif|webp|svg\+xml)/i.test(raw)) {
             return fallback;
         }
 
@@ -14378,11 +14530,6 @@
                 state.slots = mergeSlotInfoMaps(result.slots, collectDomSlotsForInfo(result.slots));
                 state.missingSlotWarnings = Array.isArray(result.missing_slot_warnings) ? result.missing_slot_warnings : [];
                 renderSlotsInfo(state.slots, state.missingSlotWarnings);
-
-                // 显示插槽面板
-                if (elements.slotsInfoPanel) {
-                    elements.slotsInfoPanel.classList.add('active');
-                }
             }
         } catch (err) {
             console.error('获取插槽信息失败:', err);

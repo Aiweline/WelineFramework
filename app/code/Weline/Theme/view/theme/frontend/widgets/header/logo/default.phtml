@@ -1,9 +1,9 @@
 <?php
 /**
  * Header Logo 部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {logo}
  * @widget.name {Header Logo}
  * @widget.description {网站 Logo，支持图片或文字显示}
@@ -13,14 +13,22 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {logo}
  * @widget.supports {["layout-header-logo","layout-global-header-logo"]}
+ * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"logo","area":"header","sort_order":0}]}
  * @widget.exclusive {true}
- * 
+ *
  * @param logo_image {default="",type="image",label="Logo图片",description="Logo图片URL，留空使用文字"}
  * @param logo_text {default="WeShop",type="string",label="Logo文字"}
  * @param logo_link {default="/",type="string",label="Logo链接"}
  * @param logo_height {default=40,type="number",label="Logo高度(px)"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('logo');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $logoImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('logo_image') ?? '');
 $logoImageFileHtml = (string)($this->getData('logo_image_file_html') ?? '');
 $logoText = $this->getData('logo_text') ?? 'WeShop';
@@ -30,45 +38,65 @@ if ($logoLink === '') {
 }
 $logoHeight = max(16, min(400, (int)($this->getData('logo_height') ?? 40)));
 ?>
-<div class="widget-header-logo">
-    <a href="<?= htmlspecialchars($logoLink, ENT_QUOTES, 'UTF-8') ?>" class="logo-link" title="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>">
+
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="--wc-logo-height: <?= $logoHeight ?>px;">
+    <a href="<?= $esc($logoLink) ?>" class="logo-link" title="<?= $esc((string)$logoText) ?>">
         <?php if ($logoImageFileHtml !== ''): ?>
-            <span class="logo-image logo-image--asset" style="--logo-height: <?= $logoHeight ?>px;"><?= $logoImageFileHtml ?></span>
-        <?php elseif ($logoImage): ?>
-            <img src="<?= htmlspecialchars($logoImage) ?>" 
-                 alt="<?= htmlspecialchars($logoText) ?>" 
+            <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
+        <?php elseif ($logoImage !== ''): ?>
+            <img src="<?= $esc($logoImage) ?>"
+                 alt="<?= $esc((string)$logoText) ?>"
                  class="logo-image"
-                 style="height: <?= $logoHeight ?>px; width: auto;">
+                 style="height: var(--wc-logo-height); width: auto;">
         <?php else: ?>
-            <span class="logo-text"><?= htmlspecialchars($logoText) ?></span>
+            <span class="logo-text"><?= $esc((string)$logoText) ?></span>
         <?php endif; ?>
     </a>
-</div>
+</section>
 
 <style>
-.widget-header-logo {
+.<?= $wc ?> {
     display: flex;
     align-items: center;
 }
-.widget-header-logo .logo-link {
+
+.<?= $wc ?> .logo-link {
     display: flex;
     align-items: center;
     text-decoration: none;
+    color: inherit;
 }
-.widget-header-logo .logo-image {
+
+.<?= $wc ?> .logo-image {
     max-width: 200px;
     object-fit: contain;
 }
-.widget-header-logo .logo-image--asset img {
+
+.<?= $wc ?> .logo-image--asset img {
     display: block;
-    height: var(--logo-height);
+    height: var(--wc-logo-height, 40px);
     width: auto;
     max-width: 200px;
     object-fit: contain;
 }
-.widget-header-logo .logo-text {
-    font-size: 1.5rem;
+
+.<?= $wc ?> .logo-text {
+    font-size: var(--weline-font-size-xl, 1.5rem);
     font-weight: 700;
-    color: var(--primary-color, #333);
+    color: var(--weline-theme-text);
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    min-height: 36px;
+}
+
+.widget-preview-canvas .<?= $wc ?> .logo-text,
+.<?= $wc ?>.is-preview .logo-text {
+    font-size: var(--weline-font-size-base, 15px);
 }
 </style>

@@ -27,6 +27,15 @@
  * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
  * @param.code {default="theme.builder.section",name="区块 Code",description="事件溯源用 weline-code，建议 theme.{layout}.{role}"}
  */
+
+use Weline\Theme\Helper\LegacyMediaUrl;
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forComponent('section');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
 if (!function_exists('weline_builder_component_css_length')) {
     function weline_builder_component_css_length(mixed $value, string $fallback = ''): string
     {
@@ -43,22 +52,7 @@ if (!function_exists('weline_builder_component_css_length')) {
         return $fallback;
     }
 }
-if (!function_exists('weline_builder_component_css_color')) {
-    function weline_builder_component_css_color(mixed $value): string
-    {
-        $value = trim((string)$value);
-        if ($value === '') {
-            return '';
-        }
-        if (preg_match('/^#[0-9a-fA-F]{3,8}$/', $value)
-            || preg_match('/^(rgba?|hsla?)\([0-9.,%\s]+\)$/i', $value)
-            || preg_match('/^var\(--[a-zA-Z0-9_-]+\)$/', $value)
-            || in_array(strtolower($value), ['transparent', 'currentcolor', 'inherit'], true)) {
-            return $value;
-        }
-        return '';
-    }
-}
+
 $layoutId = (string)($this->getData('layout_id') ?? $this->getData('_layout_id') ?? 'preview');
 $title = (string)($this->getData('title') ?? $this->getData('meta.title') ?? __('区块标题'));
 $subtitle = (string)($this->getData('subtitle') ?? $this->getData('meta.subtitle') ?? '');
@@ -70,21 +64,24 @@ $padding = weline_builder_component_css_length($this->getData('padding') ?? $thi
 $minHeight = weline_builder_component_css_length($this->getData('minHeight') ?? $this->getData('meta.minHeight') ?? '');
 $maxWidth = weline_builder_component_css_length($this->getData('maxWidth') ?? $this->getData('meta.maxWidth') ?? '');
 $radius = weline_builder_component_css_length($this->getData('radius') ?? $this->getData('meta.radius') ?? '');
-$backgroundColor = weline_builder_component_css_color($this->getData('backgroundColor') ?? $this->getData('meta.backgroundColor') ?? '');
-$backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
+$backgroundColor = ThemeUiColor::sanitize(
+    $this->getData('backgroundColor') ?? $this->getData('meta.backgroundColor') ?? '',
+    'var(--weline-theme-surface)'
+);
+$backgroundImage = LegacyMediaUrl::sanitize(
     $this->getData('backgroundImage') ?? $this->getData('meta.backgroundImage') ?? '',
     true,
 );
 $backgroundImageFileHtml = (string)($this->getData('backgroundImage_file_html') ?? '');
 $backgroundPosition = strtolower(trim((string)($this->getData('backgroundPosition') ?? $this->getData('meta.backgroundPosition') ?? 'center')));
-$textColor = weline_builder_component_css_color($this->getData('textColor') ?? $this->getData('meta.textColor') ?? '');
+$textColor = ThemeUiColor::sanitize(
+    $this->getData('textColor') ?? $this->getData('meta.textColor') ?? '',
+    'var(--weline-theme-text)'
+);
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
-$code = trim((string)($this->getData('code') ?? $this->getData('meta.code') ?? ''));
-if ($code === '') {
-    $code = 'theme.builder.section';
-}
 $editorMode = (bool)($this->getData('editor_mode') ?? $this->getData('preview_mode') ?? false);
 $slotId = 'section-content:' . ($layoutId !== '' ? $layoutId : 'preview');
+
 $allowedVariants = ['default', 'hero', 'cta', 'subtle'];
 $allowedAlign = ['start', 'center', 'end'];
 $allowedVerticalAlign = ['top', 'center', 'bottom'];
@@ -101,45 +98,158 @@ if (!in_array($verticalAlign, $allowedVerticalAlign, true)) {
 if (!in_array($backgroundPosition, $allowedBackgroundPosition, true)) {
     $backgroundPosition = 'center';
 }
-$styles = [];
-if ($padding !== '') $styles[] = '--w-builder-padding:' . $padding;
-if ($minHeight !== '') $styles[] = '--w-builder-min-height:' . $minHeight;
-if ($maxWidth !== '') $styles[] = '--w-builder-max-width:' . $maxWidth;
-if ($radius !== '') $styles[] = '--w-builder-radius:' . $radius;
-if ($backgroundColor !== '') $styles[] = '--w-builder-bg:' . $backgroundColor;
-if ($backgroundImageFileHtml === '' && $backgroundImage !== '') $styles[] = '--w-builder-bg-image:url("' . $backgroundImage . '")';
-if ($backgroundPosition !== '') $styles[] = '--w-builder-bg-position:' . $backgroundPosition;
-if ($textColor !== '') $styles[] = '--w-builder-color:' . $textColor;
-$sectionClass = trim('w-builder-section w-builder-section--' . $variant . ' w-builder-align-' . $align . ' ' . $class);
+
+$rootStyle = '--wc-section-bg:' . $backgroundColor . ';'
+    . '--wc-section-color:' . $textColor . ';'
+    . '--wc-section-bg-position:' . $backgroundPosition . ';';
+if ($padding !== '') {
+    $rootStyle .= '--wc-section-padding:' . $padding . ';';
+}
+if ($minHeight !== '') {
+    $rootStyle .= '--wc-section-min-height:' . $minHeight . ';';
+}
+if ($maxWidth !== '') {
+    $rootStyle .= '--wc-section-max-width:' . $maxWidth . ';';
+}
+if ($radius !== '') {
+    $rootStyle .= '--wc-section-radius:' . $radius . ';';
+}
+if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
+    $rootStyle .= 'background-image:url("' . $esc($backgroundImage) . '");';
+}
+
+$rootClass = trim($wc . ' w-builder-section w-builder-section--' . $variant . ' w-builder-align-' . $align . ($class !== '' ? ' ' . $class : ''));
 ?>
-<section class="<?= htmlspecialchars($sectionClass, ENT_QUOTES, 'UTF-8') ?>"
-         weline-code="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"
-         data-vertical-align="<?= htmlspecialchars($verticalAlign, ENT_QUOTES, 'UTF-8') ?>"
-         style="<?= htmlspecialchars(implode(';', $styles), ENT_QUOTES, 'UTF-8') ?>">
+
+<section class="<?= $esc($rootClass) ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-variant="<?= $esc($variant) ?>"
+         data-vertical-align="<?= $esc($verticalAlign) ?>"
+         style="<?= $esc($rootStyle) ?>">
     <?php if ($backgroundImageFileHtml !== ''): ?>
-        <div class="w-builder-section__background-media"><?= $backgroundImageFileHtml ?></div>
+        <div class="w-builder-section__background-media section-background"><?= $backgroundImageFileHtml ?></div>
     <?php endif; ?>
-    <?php if ($title !== '' || $subtitle !== '' || $content !== ''): ?>
-        <header class="w-builder-section__header">
-            <?php if ($subtitle !== ''): ?>
-                <p class="w-builder-section__eyebrow"><?= htmlspecialchars($subtitle, ENT_QUOTES, 'UTF-8') ?></p>
-            <?php endif; ?>
-            <?php if ($title !== ''): ?>
-                <h2 class="w-builder-section__title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h2>
-            <?php endif; ?>
-            <?php if ($content !== ''): ?>
-                <p class="w-builder-section__description"><?= nl2br(htmlspecialchars($content, ENT_QUOTES, 'UTF-8')) ?></p>
-            <?php endif; ?>
-        </header>
-    <?php endif; ?>
-    <div class="w-builder-section__body"
-         data-wslot="<?= htmlspecialchars($slotId, ENT_QUOTES, 'UTF-8') ?>"
-         data-wslot-name="<?= htmlspecialchars(__('区块内容'), ENT_QUOTES, 'UTF-8') ?>"
-         data-wslot-accept="builder-component,builder-form,builder-display,builder-container"
-         data-wslot-position="content"
-         data-wslot-multiple="true">
-        <?php if ($editorMode): ?>
-            <div class="w-builder-slot-placeholder slot-placeholder"><?= __('拖入内容组件') ?></div>
+
+    <div class="section-inner">
+        <?php if ($title !== '' || $subtitle !== '' || $content !== ''): ?>
+            <header class="w-builder-section__header section-header">
+                <?php if ($subtitle !== ''): ?>
+                    <p class="w-builder-section__eyebrow section-eyebrow"><?= $esc($subtitle) ?></p>
+                <?php endif; ?>
+                <?php if ($title !== ''): ?>
+                    <h2 class="w-builder-section__title section-title"><?= $esc($title) ?></h2>
+                <?php endif; ?>
+                <?php if ($content !== ''): ?>
+                    <p class="w-builder-section__description section-description"><?= nl2br($esc($content)) ?></p>
+                <?php endif; ?>
+            </header>
         <?php endif; ?>
+
+        <div class="w-builder-section__body section-body"
+             data-wslot="<?= $esc($slotId) ?>"
+             data-wslot-name="<?= $esc((string)__('区块内容')) ?>"
+             data-wslot-accept="builder-component,builder-form,builder-display,builder-container"
+             data-wslot-position="content"
+             data-wslot-multiple="true">
+            <?php if ($editorMode): ?>
+                <div class="w-builder-slot-placeholder slot-placeholder"><?= __('拖入内容组件') ?></div>
+            <?php endif; ?>
+        </div>
     </div>
 </section>
+
+<style>
+.<?= $wc ?> {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: var(--wc-section-min-height, auto);
+    padding: var(--wc-section-padding, var(--weline-space-8, 32px));
+    border-radius: var(--wc-section-radius, 0);
+    background-color: var(--wc-section-bg, var(--weline-theme-surface));
+    background-size: cover;
+    background-position: var(--wc-section-bg-position, center);
+    color: var(--wc-section-color, var(--weline-theme-text));
+    overflow: hidden;
+}
+
+.<?= $wc ?>[data-vertical-align="center"] {
+    align-items: center;
+}
+
+.<?= $wc ?>[data-vertical-align="bottom"] {
+    align-items: flex-end;
+}
+
+.<?= $wc ?>.w-builder-align-center .section-inner {
+    text-align: center;
+}
+
+.<?= $wc ?>.w-builder-align-end .section-inner {
+    text-align: right;
+}
+
+.<?= $wc ?>.w-builder-section--hero {
+    min-height: var(--wc-section-min-height, 420px);
+    background-color: var(--wc-section-bg, var(--weline-theme-primary-surface));
+}
+
+.<?= $wc ?>.w-builder-section--cta {
+    background-color: var(--wc-section-bg, var(--weline-theme-primary));
+    color: var(--wc-section-color, var(--weline-theme-on-primary));
+}
+
+.<?= $wc ?>.w-builder-section--subtle {
+    background-color: var(--wc-section-bg, var(--weline-theme-surface-muted));
+}
+
+.<?= $wc ?> .section-background,
+.<?= $wc ?> .section-background figure,
+.<?= $wc ?> .section-background img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+.<?= $wc ?> .section-background img {
+    object-fit: cover;
+}
+
+.<?= $wc ?> .section-inner {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: var(--wc-section-max-width, 100%);
+}
+
+.<?= $wc ?> .section-eyebrow {
+    margin: 0 0 var(--weline-space-2, 8px);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm, 13px);
+    font-weight: var(--weline-font-weight-semibold, 600);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.<?= $wc ?> .section-title {
+    margin: 0;
+    font-size: clamp(1.5rem, 2vw, 2.25rem);
+    font-weight: var(--weline-font-weight-bold, 700);
+}
+
+.<?= $wc ?> .section-description {
+    margin: var(--weline-space-3, 12px) 0 0;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-base, 15px);
+    line-height: 1.6;
+}
+
+.<?= $wc ?> .section-body {
+    margin-top: var(--weline-space-6, 24px);
+}
+</style>

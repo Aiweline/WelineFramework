@@ -1,0 +1,174 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+use Weline\Async\Model\SyncHost;
+use Weline\Async\Model\SyncMapping;
+use Weline\Framework\App\Env;
+
+$host = $this->getData('host');
+$mapping = $this->getData('mapping');
+$isEdit = $mapping && $mapping->getId();
+
+$hostId = $host ? $host->getId() : '';
+$basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
+?>
+
+<?php if ($host): ?>
+    <div class="alert alert-info mb-3">
+        <strong><?= __('主机') ?>:</strong> <?= htmlspecialchars($host->getData(SyncHost::fields_NAME)) ?> 
+        (<?= htmlspecialchars($host->getData(SyncHost::fields_HOST)) ?>)
+    </div>
+<?php endif; ?>
+
+<form method="post" onsubmit="saveMappingForm(event)" id="mappingForm">
+    <?php if ($isEdit): ?>
+        <input type="hidden" name="id" value="<?= $mapping->getId() ?>">
+    <?php endif; ?>
+    <input type="hidden" name="host_id" value="<?= $hostId ?>">
+    
+    <!-- 本地路径 -->
+    <div class="mb-3">
+        <label class="form-label"><?= __('本地路径') ?> <span class="text-danger">*</span></label>
+        <div class="input-group">
+            <input type="text" name="local_path" id="local_path" class="form-control" 
+                   value="<?= htmlspecialchars($mapping ? $mapping->getData(SyncMapping::fields_LOCAL_PATH) : $basePath) ?>" 
+                   placeholder="<?= htmlspecialchars($basePath) ?>" required>
+            <button type="button" class="btn btn-outline-secondary" onclick="browseLocalDirectory()">
+                <i class="mdi mdi-folder-open"></i> <?= __('浏览') ?>
+            </button>
+        </div>
+        <small class="form-text text-muted"><?= __('选择本地项目根目录') ?></small>
+        <!-- 本地目录树 -->
+        <div id="local_directory_tree" class="mt-2 border rounded p-2" style="max-height: 200px; overflow-y: auto; display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted"><?= __('勾选要同步的目录') ?></small>
+                <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleAllLocalDirectories()">
+                    <small><?= __('全选/取消') ?></small>
+                </button>
+            </div>
+            <div id="local_tree_content"></div>
+        </div>
+    </div>
+
+    <!-- 远程路径 -->
+    <div class="mb-3">
+        <label class="form-label"><?= __('远程路径') ?> <span class="text-danger">*</span></label>
+        <div class="input-group">
+            <input type="text" name="remote_path" id="remote_path" class="form-control" 
+                   value="<?= htmlspecialchars($mapping ? $mapping->getData(SyncMapping::fields_REMOTE_PATH) : '') ?>" 
+                   placeholder="/var/www/html/project" required>
+            <button type="button" class="btn btn-outline-secondary" onclick="browseRemoteDirectory()">
+                <i class="mdi mdi-folder-open"></i> <?= __('浏览') ?>
+            </button>
+        </div>
+        <small class="form-text text-muted"><?= __('远程服务器上的目录路径') ?></small>
+        <!-- 远程目录树 -->
+        <div id="remote_directory_tree" class="mt-2 border rounded p-2" style="max-height: 200px; overflow-y: auto; display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted"><?= __('远程目录结构') ?></small>
+            </div>
+            <div id="remote_tree_content"></div>
+        </div>
+    </div>
+
+    <!-- 要同步的目录 -->
+    <div class="mb-3">
+        <label class="form-label"><?= __('要同步的目录') ?></label>
+        <ul class="nav nav-tabs mb-2" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" type="button" data-bs-toggle="tab" data-bs-target="#include_tree_tab">
+                    <i class="mdi mdi-folder-multiple"></i> <?= __('目录选择') ?>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" type="button" data-bs-toggle="tab" data-bs-target="#include_text_tab">
+                    <i class="mdi mdi-text"></i> <?= __('手动输入') ?>
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="include_tree_tab">
+                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted"><?= __('从本地目录树中勾选要同步的目录') ?></small>
+                        <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleAllIncludeDirectories()">
+                            <small><?= __('全选/取消') ?></small>
+                        </button>
+                    </div>
+                    <div id="include_tree_content">
+                        <small class="text-muted"><?= __('请先选择本地路径') ?></small>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="include_text_tab">
+                <textarea name="include_paths" id="include_paths" class="form-control" rows="3" 
+                          placeholder="app/code/Weline/Async&#10;view/templates"><?php
+                    if ($mapping) {
+                        $paths = $mapping->getIncludePathsArray();
+                        echo htmlspecialchars(implode("\n", $paths));
+                    }
+                ?></textarea>
+                <small class="form-text text-muted">
+                    <?= __('每行一个目录路径（相对于本地路径），如果指定了则只同步这些目录；如果未指定，则同步整个本地路径。') ?>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 排除模式 -->
+    <div class="mb-3">
+        <label class="form-label"><?= __('排除模式') ?></label>
+        <ul class="nav nav-tabs mb-2" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" type="button" data-bs-toggle="tab" data-bs-target="#exclude_tree_tab">
+                    <i class="mdi mdi-folder-multiple"></i> <?= __('目录选择') ?>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" type="button" data-bs-toggle="tab" data-bs-target="#exclude_text_tab">
+                    <i class="mdi mdi-text"></i> <?= __('匹配模式') ?>
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="exclude_tree_tab">
+                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted"><?= __('从本地目录树中勾选要排除的目录') ?></small>
+                        <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleAllExcludeDirectories()">
+                            <small><?= __('全选/取消') ?></small>
+                        </button>
+                    </div>
+                    <div id="exclude_tree_content">
+                        <small class="text-muted"><?= __('请先选择本地路径') ?></small>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="exclude_text_tab">
+                <textarea name="exclude_patterns" id="exclude_patterns" class="form-control" rows="5" 
+                          placeholder="node_modules&#10;.git&#10;*.log"><?php
+                    if ($mapping) {
+                        $patterns = $mapping->getExcludePatternsArray();
+                        echo htmlspecialchars(implode("\n", $patterns));
+                    }
+                ?></textarea>
+                <small class="form-text text-muted"><?= __('每行一个排除模式，支持通配符（如 *.log, node_modules）。这些模式会排除不需要同步的文件/目录。') ?></small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态 -->
+    <div class="mb-3">
+        <label class="form-label"><?= __('状态') ?></label>
+        <select name="status" class="form-select">
+            <option value="0" <?= ($mapping && (int)$mapping->getData(SyncMapping::fields_STATUS) === 0) ? 'selected' : '' ?>><?= __('关闭') ?></option>
+            <option value="1" <?= (!$mapping || (int)$mapping->getData(SyncMapping::fields_STATUS) === 1) ? 'selected' : '' ?>><?= __('开启') ?></option>
+        </select>
+        <small class="form-text text-muted"><?= __('开启后会自动启动文件监控和同步') ?></small>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas"><?= __('取消') ?></button>
+        <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
+    </div>
+</form>

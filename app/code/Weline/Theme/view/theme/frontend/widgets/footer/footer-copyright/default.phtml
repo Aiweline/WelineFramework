@@ -1,9 +1,9 @@
 <?php
 /**
  * 页脚版权部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {footer-copyright}
  * @widget.name {版权信息}
  * @widget.description {Footer 版权和备案信息}
@@ -13,98 +13,105 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {copyright}
  * @widget.supports {["layout-footer-copyright","layout-global-footer-copyright"]}
+ * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"footer-copyright","area":"footer","sort_order":0}]}
  * @widget.exclusive {true}
- * 
+ *
  * @param copyright_text {default="© {year} {site_name}. All Rights Reserved.",type="string",label="版权文字"}
  * @param icp_number {default="",type="string",label="ICP备案号"}
  * @param icp_link {default="https://beian.miit.gov.cn/",type="string",label="ICP备案链接"}
  * @param police_number {default="",type="string",label="公安备案号"}
  * @param police_link {default="",type="string",label="公安备案链接"}
+ * @param text_color {default="var(--weline-theme-on-primary)",type="color",label="文字颜色"}
  */
 
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('footer-copyright');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $copyrightText = $this->getData('copyright_text') ?? '© {year} {site_name}. All Rights Reserved.';
 $icpNumber = $this->getData('icp_number') ?? '';
 $icpLink = $this->getData('icp_link') ?? 'https://beian.miit.gov.cn/';
 $policeNumber = $this->getData('police_number') ?? '';
 $policeLink = $this->getData('police_link') ?? '';
 $additionalText = $this->getData('additional_text') ?? '';
+$textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--weline-theme-on-primary)');
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
-// 替换变量
-$siteName = 'WeShop'; // 应从系统配置获取
-$copyrightText = str_replace(
-    ['{year}', '{site_name}'],
-    [date('Y'), $siteName],
-    $copyrightText
-);
-
-$widgetId = 'footer-copyright-' . uniqid();
+$siteName = 'WeShop';
+$copyrightText = str_replace(['{year}', '{site_name}'], [date('Y'), $siteName], (string)$copyrightText);
 ?>
 
-<div class="widget-footer-copyright" id="<?= $widgetId ?>">
-    <div class="copyright-text">
-        <?= htmlspecialchars($copyrightText) ?>
-    </div>
-    
-    <?php if ($icpNumber || $policeNumber || $additionalText): ?>
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="--wc-copyright-text:<?= $esc($textColor) ?>;">
+    <div class="copyright-text"><?= $esc($copyrightText) ?></div>
+    <?php if ($icpNumber !== '' || $policeNumber !== '' || $additionalText !== ''): ?>
         <div class="copyright-links">
-            <?php if ($icpNumber): ?>
-                <a href="<?= htmlspecialchars($icpLink) ?>" target="_blank" rel="noopener noreferrer" class="icp-link">
-                    <?= htmlspecialchars($icpNumber) ?>
+            <?php if ($icpNumber !== ''): ?>
+                <a href="<?= $esc((string)$icpLink) ?>" target="_blank" rel="noopener noreferrer" class="icp-link"><?= $esc((string)$icpNumber) ?></a>
+            <?php endif; ?>
+            <?php if ($policeNumber !== ''): ?>
+                <a href="<?= $esc((string)$policeLink) ?>" target="_blank" rel="noopener noreferrer" class="police-link">
+                    <img src="<?= $esc($placeholder) ?>" alt="" class="police-icon">
+                    <?= $esc((string)$policeNumber) ?>
                 </a>
             <?php endif; ?>
-            
-            <?php if ($policeNumber): ?>
-                <a href="<?= htmlspecialchars($policeLink) ?>" target="_blank" rel="noopener noreferrer" class="police-link">
-                    <img src="<?= htmlspecialchars($placeholder ?? '') ?>" alt="" class="police-icon">
-                    <?= htmlspecialchars($policeNumber) ?>
-                </a>
-            <?php endif; ?>
-            
-            <?php if ($additionalText): ?>
-                <span class="additional-text"><?= htmlspecialchars($additionalText) ?></span>
+            <?php if ($additionalText !== ''): ?>
+                <span class="additional-text"><?= $esc((string)$additionalText) ?></span>
             <?php endif; ?>
         </div>
     <?php endif; ?>
-</div>
+</section>
 
 <style>
-.widget-footer-copyright {
+.<?= $wc ?> {
     text-align: center;
-    padding: 20px 0;
-    font-size: 13px;
-    color: rgba(255,255,255,0.6);
+    padding: var(--weline-space-5, 20px) 0;
+    font-size: var(--weline-font-size-sm, 13px);
+    color: color-mix(in srgb, var(--wc-copyright-text, var(--weline-theme-on-primary)) 60%, transparent);
 }
 
-.widget-footer-copyright .copyright-text {
-    margin-bottom: 10px;
+.<?= $wc ?> .copyright-text {
+    margin-bottom: var(--weline-space-3, 10px);
 }
 
-.widget-footer-copyright .copyright-links {
+.<?= $wc ?> .copyright-links {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 20px;
+    gap: var(--weline-space-5, 20px);
 }
 
-.widget-footer-copyright .copyright-links a {
-    color: rgba(255,255,255,0.6);
+.<?= $wc ?> .copyright-links a {
+    color: color-mix(in srgb, var(--wc-copyright-text, var(--weline-theme-on-primary)) 60%, transparent);
     text-decoration: none;
-    transition: color 0.2s;
+    transition: color var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-footer-copyright .copyright-links a:hover {
-    color: #fff;
+.<?= $wc ?> .copyright-links a:hover {
+    color: var(--wc-copyright-text, var(--weline-theme-on-primary));
 }
 
-.widget-footer-copyright .police-link {
+.<?= $wc ?> .police-link {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--weline-space-1, 5px);
 }
 
-.widget-footer-copyright .police-icon {
+.<?= $wc ?> .police-icon {
     width: 16px;
     height: 16px;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-3, 12px) 0;
+    font-size: var(--weline-font-size-xs, 11px);
 }
 </style>

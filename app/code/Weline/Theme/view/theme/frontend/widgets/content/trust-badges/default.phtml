@@ -1,9 +1,9 @@
 <?php
 /**
  * 信任徽章部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {trust-badges}
  * @widget.name {信任徽章}
  * @widget.description {展示安全支付、退款保障等信任标识}
@@ -12,8 +12,9 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-homepage-trust","layout-cart-trust","layout-checkout-trust","layout-contact-help","layout-contact-methods","layout-contact-content","layout-default-content"]}
+ * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-trust","area":"content","sort_order":0},{"layout_type":"checkout","layout_option":"default","slot":"checkout-trust","area":"content","sort_order":0}]}
  * @widget.compatible {true}
- * 
+ *
  * @param title {default="",type="string",label="标题"}
  * @param badges {default=[],type="array",label="自定义徽章"}
  * @param preset_badges {default=["secure-payment","money-back","free-shipping","24-7-support"],type="array",label="预设徽章"}
@@ -21,13 +22,26 @@
  * @param style {default="icon-text",type="select",label="样式",options={icon-text:"图标+文字",icon-only:"仅图标",card:"卡片"}}
  */
 
-$title = $this->getData('title') ?? '';
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('trust-badges');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$title = trim((string)($this->getData('title') ?? ''));
 $badges = $this->getData('badges') ?? [];
 $presetBadges = $this->getData('preset_badges') ?? ['secure-payment', 'money-back', 'free-shipping', '24-7-support'];
-$columns = $this->getData('columns') ?? '4';
-$style = $this->getData('style') ?? 'icon-text';
+$columns = (string)($this->getData('columns') ?? '4');
+$style = (string)($this->getData('style') ?? 'icon-text');
 
-// 预设徽章配置
+if (!in_array($columns, ['2', '3', '4'], true)) {
+    $columns = '4';
+}
+if (!in_array($style, ['icon-text', 'icon-only', 'card'], true)) {
+    $style = 'icon-text';
+}
+
 $presetConfig = [
     'secure-payment' => ['icon' => 'check', 'title' => __('安全支付'), 'description' => __('SSL加密保护')],
     'money-back'     => ['icon' => 'circle', 'title' => __('无忧退款'), 'description' => __('30天无理由退货')],
@@ -37,166 +51,166 @@ $presetConfig = [
     'verified-seller'=> ['icon' => 'circle', 'title' => __('认证商家'), 'description' => __('正品保证')],
 ];
 
-// 合并预设和自定义徽章
 $allBadges = [];
-foreach ($presetBadges as $preset) {
-    if (isset($presetConfig[$preset])) {
-        $allBadges[] = $presetConfig[$preset];
+if (is_array($presetBadges)) {
+    foreach ($presetBadges as $preset) {
+        if (isset($presetConfig[$preset])) {
+            $allBadges[] = $presetConfig[$preset];
+        }
     }
 }
-$allBadges = array_merge($allBadges, $badges);
-
-$widgetId = 'trust-badges-' . uniqid();
+if (is_array($badges)) {
+    $allBadges = array_merge($allBadges, $badges);
+}
 ?>
 
-<div class="widget-trust-badges style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>">
-    <?php if ($title): ?>
-        <h3 class="widget-title"><?= htmlspecialchars($title) ?></h3>
+<section class="<?= $esc($wc) ?> style-<?= $esc($style) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+
+    <?php if ($title !== ''): ?>
+        <h3 class="badges-heading"><?= $esc($title) ?></h3>
     <?php endif; ?>
-    
-    <div class="badges-grid columns-<?= htmlspecialchars($columns) ?>">
+
+    <div class="badges-grid columns-<?= $esc($columns) ?>">
         <?php foreach ($allBadges as $badge): ?>
             <div class="badge-item">
-                <div class="badge-icon">
-                    <i class="<?= htmlspecialchars($badge['icon'] ?? 'check') ?>"></i>
+                <div class="badge-icon" aria-hidden="true">
+                    <w:icon name="badge.icon|check" size="md"></w:icon>
                 </div>
-                
+
                 <?php if ($style !== 'icon-only'): ?>
                     <div class="badge-content">
-                        <h4 class="badge-title"><?= htmlspecialchars($badge['title'] ?? '') ?></h4>
+                        <h4 class="badge-title"><?= $esc((string)($badge['title'] ?? '')) ?></h4>
                         <?php if ($style === 'card' && !empty($badge['description'])): ?>
-                            <p class="badge-description"><?= htmlspecialchars($badge['description']) ?></p>
+                            <p class="badge-description"><?= $esc((string)$badge['description']) ?></p>
                         <?php endif; ?>
                     </div>
+                <?php else: ?>
+                    <span class="w-visually-hidden"><?= $esc((string)($badge['title'] ?? '')) ?></span>
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
-</div>
+</section>
 
 <style>
-.widget-trust-badges {
-    padding: 30px 0;
+.<?= $wc ?> {
+    padding: var(--weline-space-8, 30px) 0;
+    color: var(--weline-theme-text);
 }
 
-.widget-trust-badges .widget-title {
-    font-size: 18px;
+.<?= $wc ?> .badges-heading {
+    font-size: var(--weline-font-size-lg, 18px);
     font-weight: 600;
-    margin: 0 0 20px;
+    margin: 0 0 var(--weline-space-5, 20px);
     text-align: center;
+    color: var(--weline-theme-text);
 }
 
-.widget-trust-badges .badges-grid {
+.<?= $wc ?> .badges-grid {
     display: grid;
-    gap: 20px;
+    gap: var(--weline-space-5, 20px);
 }
 
-.widget-trust-badges .badges-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
-.widget-trust-badges .badges-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
-.widget-trust-badges .badges-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
-.widget-trust-badges .badges-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
+.<?= $wc ?> .badges-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.<?= $wc ?> .badges-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.<?= $wc ?> .badges-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
 
-/* 仅图标样式 */
-.widget-trust-badges.style-icon-only .badge-item {
+.<?= $wc ?>.style-icon-only .badge-item {
     display: flex;
     justify-content: center;
 }
 
-.widget-trust-badges.style-icon-only .badge-icon {
+.<?= $wc ?>.style-icon-only .badge-icon {
     width: 60px;
     height: 60px;
-    background: #f5f5f5;
+    background: var(--weline-theme-surface-muted);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--weline-theme-primary);
 }
 
-.widget-trust-badges.style-icon-only .badge-icon i {
-    font-size: 28px;
-    color: var(--primary-color, #007bff);
-}
-
-/* 图标+文字样式 */
-.widget-trust-badges.style-icon-text .badge-item {
+.<?= $wc ?>.style-icon-text .badge-item {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--weline-space-3, 12px);
 }
 
-.widget-trust-badges.style-icon-text .badge-icon {
+.<?= $wc ?>.style-icon-text .badge-icon {
     width: 50px;
     height: 50px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border-radius: 12px;
+    background: var(--weline-theme-primary);
+    border-radius: var(--weline-radius-lg, 12px);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    color: var(--weline-theme-on-primary);
 }
 
-.widget-trust-badges.style-icon-text .badge-icon i {
-    font-size: 24px;
-    color: #fff;
-}
-
-.widget-trust-badges.style-icon-text .badge-title {
+.<?= $wc ?>.style-icon-text .badge-title {
     margin: 0;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm, 14px);
     font-weight: 600;
+    color: var(--weline-theme-text);
 }
 
-/* 卡片样式 */
-.widget-trust-badges.style-card .badge-item {
-    background: #fff;
-    border-radius: 12px;
-    padding: 25px;
+.<?= $wc ?>.style-card .badge-item {
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-xl, 12px);
+    padding: var(--weline-space-6, 25px);
     text-align: center;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    transition: all 0.3s;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    box-shadow: var(--weline-theme-shadow-sm);
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
 }
 
-.widget-trust-badges.style-card .badge-item:hover {
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+.<?= $wc ?>.style-card .badge-item:hover {
+    box-shadow: var(--weline-theme-shadow-md);
     transform: translateY(-3px);
 }
 
-.widget-trust-badges.style-card .badge-icon {
+.<?= $wc ?>.style-card .badge-icon {
     width: 70px;
     height: 70px;
-    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    background: var(--weline-theme-primary-surface);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 15px;
+    margin: 0 auto var(--weline-space-4, 15px);
+    color: var(--weline-theme-primary);
 }
 
-.widget-trust-badges.style-card .badge-icon i {
-    font-size: 32px;
-    color: var(--primary-color, #007bff);
-}
-
-.widget-trust-badges.style-card .badge-title {
-    margin: 0 0 8px;
-    font-size: 16px;
+.<?= $wc ?>.style-card .badge-title {
+    margin: 0 0 var(--weline-space-2, 8px);
+    font-size: var(--weline-font-size-base, 16px);
     font-weight: 600;
 }
 
-.widget-trust-badges.style-card .badge-description {
+.<?= $wc ?>.style-card .badge-description {
     margin: 0;
-    font-size: 13px;
-    color: #666;
+    font-size: var(--weline-font-size-sm, 13px);
+    color: var(--weline-theme-text-muted);
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-4, 15px) 0;
 }
 
 @media (max-width: 768px) {
-    .widget-trust-badges .badges-grid {
+    .<?= $wc ?> .badges-grid {
         grid-template-columns: repeat(2, 1fr) !important;
     }
 }
 
 @media (max-width: 480px) {
-    .widget-trust-badges .badges-grid {
+    .<?= $wc ?> .badges-grid {
         grid-template-columns: 1fr !important;
     }
 }

@@ -10,125 +10,281 @@
  * @widget.position {["sidebar"]}
  * @widget.page_layouts {["category", "search"]}
  * @widget.supports {["layout-category-filters","layout-product-list-filters"]}
- * 
- * - 通过 Widget 引擎渲染：
- *   使用 w:widget type="sidebar" name="category-filters" 标签
- *   支持 params='{"html":"..."}' 参数传入业务渲染的筛选结构
- * - 支持通过参数 html 传入业务渲染的筛选结构；
- *   未传入 html 时：
- *   1. 尝试使用 WeShop_Filters 模块的 Hook 渲染真实筛选数据
- *   2. 如果 Hook 不可用，使用内置的亚马逊风格 Mock 内容，方便可视化编辑与设计预览。
  *
- * 样式类说明（由主题 layouts 提供样式）：
- * - .category-filter-mock
- * - .category-filter-header / .category-filter-title / .category-filter-clear
- * - .category-filter-applied / .filter-chip / .chip-remove
- * - .category-filter-group / .category-filter-group-title
- * - .category-filter-list / .category-filter-item / .label / .count / .stars
+ * @param html {default="",type="textarea",label="筛选 HTML",description="业务渲染的筛选结构，留空则使用 Hook 或 Mock"}
  */
 
-/** @var array $meta */
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('category-filters');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $meta = $this->getData('meta') ?? [];
-
-// 优先使用 Widget 参数 html，其次 meta.filters
 $filtersHtml = $this->getData('html') ?? ($meta['filters'] ?? '');
+$hasExternalHtml = is_string($filtersHtml) && trim($filtersHtml) !== '';
 
-if (!empty($filtersHtml) && is_string($filtersHtml)) {
-    // 如果传入了 html，直接输出
-    echo $filtersHtml;
-} else {
-    // 尝试使用 WeShop_Filters Hook 渲染真实筛选
-    $hookContent = $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar');
-    
-    if (!empty($hookContent)) {
-        // 使用 Hook 渲染的筛选内容
-        echo $hookContent;
-    } else {
-        // 否则输出默认 Mock 模板内容
+if ($hasExternalHtml) {
+    ?>
+<section class="<?= $esc($wc) ?> has-external<?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <div class="filters-body"><?= $filtersHtml ?></div>
+</section>
+<style>
+.<?= $wc ?> {
+    color: var(--weline-theme-text);
+}
+.<?= $wc ?> .filters-body {
+    width: 100%;
+}
+</style>
+    <?php
+    return;
+}
+
+$hookContent = $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar');
+
+if (is_string($hookContent) && trim($hookContent) !== '') {
+    ?>
+<section class="<?= $esc($wc) ?> has-hook<?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <div class="filters-body"><?= $hookContent ?></div>
+</section>
+<style>
+.<?= $wc ?> {
+    color: var(--weline-theme-text);
+}
+.<?= $wc ?> .filters-body {
+    width: 100%;
+}
+</style>
+    <?php
+    return;
+}
 ?>
-<div class="category-filter-mock">
-    <div class="category-filter-header">
-        <div class="category-filter-title"><lang>筛选条件</lang></div>
-        <a href="#" class="category-filter-clear"><lang>清除全部</lang></a>
-    </div>
 
-    <div class="category-filter-applied">
-        <span class="filter-chip is-active">
-            <lang>电子产品</lang>
-            <button type="button" class="chip-remove" aria-label="<lang>移除</lang>">×</button>
-        </span>
-        <span class="filter-chip">
-            <lang>100 - 299 元</lang>
-            <button type="button" class="chip-remove" aria-label="<lang>移除</lang>">×</button>
-        </span>
-    </div>
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
 
-    <div class="category-filter-group">
-        <div class="category-filter-group-title"><lang>价格区间</lang></div>
-        <ul class="category-filter-list">
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>0 - 99 元</lang></span><span class="count">128</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>100 - 299 元</lang></span><span class="count">86</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>300 元以上</lang></span><span class="count">42</span></a></li>
-        </ul>
-    </div>
+    <div class="filter-panel">
+        <div class="filter-header">
+            <div class="filter-title"><?= __('筛选条件') ?></div>
+            <button type="button" class="filter-clear"><?= __('清除全部') ?></button>
+        </div>
 
-    <div class="category-filter-group">
-        <div class="category-filter-group-title"><lang>配送方式</lang></div>
-        <ul class="category-filter-list">
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>Prime 极速达</lang></span><span class="count">64</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>免运费</lang></span><span class="count">97</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>当日/次日达</lang></span><span class="count">23</span></a></li>
-        </ul>
-    </div>
+        <div class="filter-applied">
+            <span class="filter-chip is-active">
+                <?= __('电子产品') ?>
+                <button type="button" class="chip-remove" aria-label="<?= __('移除') ?>">×</button>
+            </span>
+            <span class="filter-chip">
+                <?= __('100 - 299 元') ?>
+                <button type="button" class="chip-remove" aria-label="<?= __('移除') ?>">×</button>
+            </span>
+        </div>
 
-    <div class="category-filter-group">
-        <div class="category-filter-group-title"><lang>品牌</lang></div>
-        <ul class="category-filter-list">
-            <li><a href="#" class="category-filter-item"><span class="label">Brand A</span><span class="count">56</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label">Brand B</span><span class="count">34</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label">Brand C</span><span class="count">19</span></a></li>
-        </ul>
-    </div>
-    <div class="category-filter-group">
-        <div class="category-filter-group-title"><lang>颜色</lang></div>
-        <ul class="category-filter-list">
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>黑色</lang></span><span class="count">73</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>白色</lang></span><span class="count">41</span></a></li>
-            <li><a href="#" class="category-filter-item"><span class="label"><lang>蓝色</lang></span><span class="count">27</span></a></li>
-        </ul>
-    </div>
+        <div class="filter-group">
+            <div class="filter-group-title"><?= __('价格区间') ?></div>
+            <ul class="filter-list">
+                <li><a href="#" class="filter-item"><span class="label"><?= __('0 - 99 元') ?></span><span class="count">128</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label"><?= __('100 - 299 元') ?></span><span class="count">86</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label"><?= __('300 元以上') ?></span><span class="count">42</span></a></li>
+            </ul>
+        </div>
 
-    <div class="category-filter-group">
-        <div class="category-filter-group-title"><lang>用户评分</lang></div>
-        <ul class="category-filter-list">
-            <li><a href="#" class="category-filter-item">
-                <span class="label"><span class="stars">★★★★★</span> <lang>及以上</lang></span>
-                <span class="count">12</span>
-            </a></li>
-            <li><a href="#" class="category-filter-item">
-                <span class="label"><span class="stars">★★★★☆</span> <lang>及以上</lang></span>
-                <span class="count">48</span>
-            </a></li>
-            <li><a href="#" class="category-filter-item">
-                <span class="label"><span class="stars">★★★☆☆</span> <lang>及以上</lang></span>
-                <span class="count">96</span>
-            </a></li>
-        </ul>
+        <div class="filter-group">
+            <div class="filter-group-title"><?= __('配送方式') ?></div>
+            <ul class="filter-list">
+                <li><a href="#" class="filter-item"><span class="label"><?= __('Prime 极速达') ?></span><span class="count">64</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label"><?= __('免运费') ?></span><span class="count">97</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label"><?= __('当日/次日达') ?></span><span class="count">23</span></a></li>
+            </ul>
+        </div>
+
+        <div class="filter-group">
+            <div class="filter-group-title"><?= __('品牌') ?></div>
+            <ul class="filter-list">
+                <li><a href="#" class="filter-item"><span class="label">Brand A</span><span class="count">56</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label">Brand B</span><span class="count">34</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label">Brand C</span><span class="count">19</span></a></li>
+            </ul>
+        </div>
+
+        <div class="filter-group">
+            <div class="filter-group-title"><?= __('颜色') ?></div>
+            <ul class="filter-list">
+                <li><a href="#" class="filter-item"><span class="label"><?= __('黑色') ?></span><span class="count">73</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label"><?= __('白色') ?></span><span class="count">41</span></a></li>
+                <li><a href="#" class="filter-item"><span class="label"><?= __('蓝色') ?></span><span class="count">27</span></a></li>
+            </ul>
+        </div>
+
+        <div class="filter-group">
+            <div class="filter-group-title"><?= __('用户评分') ?></div>
+            <ul class="filter-list">
+                <li><a href="#" class="filter-item">
+                    <span class="label"><span class="stars">★★★★★</span> <?= __('及以上') ?></span>
+                    <span class="count">12</span>
+                </a></li>
+                <li><a href="#" class="filter-item">
+                    <span class="label"><span class="stars">★★★★☆</span> <?= __('及以上') ?></span>
+                    <span class="count">48</span>
+                </a></li>
+                <li><a href="#" class="filter-item">
+                    <span class="label"><span class="stars">★★★☆☆</span> <?= __('及以上') ?></span>
+                    <span class="count">96</span>
+                </a></li>
+            </ul>
+        </div>
     </div>
-</div>
+</section>
+
+<style>
+.<?= $wc ?> {
+    color: var(--weline-theme-text);
+}
+
+.<?= $wc ?> .filter-panel {
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-lg, 10px);
+    padding: var(--weline-space-5, 20px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+}
+
+.<?= $wc ?> .filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--weline-space-4, 15px);
+    padding-bottom: var(--weline-space-4, 15px);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+}
+
+.<?= $wc ?> .filter-title {
+    font-size: var(--weline-font-size-base, 16px);
+    font-weight: 600;
+    color: var(--weline-theme-text);
+}
+
+.<?= $wc ?> .filter-clear {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: var(--weline-font-size-sm, 13px);
+    color: var(--weline-theme-primary);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.<?= $wc ?> .filter-applied {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2, 8px);
+    margin-bottom: var(--weline-space-5, 20px);
+}
+
+.<?= $wc ?> .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1, 4px);
+    padding: var(--weline-space-1, 4px) var(--weline-space-3, 10px);
+    border-radius: var(--weline-radius-round, 999px);
+    background: var(--weline-theme-surface-muted);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    font-size: var(--weline-font-size-sm, 13px);
+    color: var(--weline-theme-text-muted);
+}
+
+.<?= $wc ?> .filter-chip.is-active {
+    background: var(--weline-theme-primary-surface);
+    border-color: var(--weline-theme-primary);
+    color: var(--weline-theme-primary);
+}
+
+.<?= $wc ?> .chip-remove {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    font-size: var(--weline-font-size-base, 16px);
+    line-height: 1;
+}
+
+.<?= $wc ?> .filter-group {
+    margin-bottom: var(--weline-space-5, 20px);
+}
+
+.<?= $wc ?> .filter-group:last-child {
+    margin-bottom: 0;
+}
+
+.<?= $wc ?> .filter-group-title {
+    font-size: var(--weline-font-size-sm, 14px);
+    font-weight: 600;
+    margin-bottom: var(--weline-space-3, 10px);
+    color: var(--weline-theme-text);
+}
+
+.<?= $wc ?> .filter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.<?= $wc ?> .filter-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3, 12px);
+    padding: var(--weline-space-2, 8px) 0;
+    color: var(--weline-theme-text-muted);
+    text-decoration: none;
+    font-size: var(--weline-font-size-sm, 13px);
+    transition: color var(--weline-theme-transition-base, 0.2s ease);
+}
+
+.<?= $wc ?> .filter-item:hover {
+    color: var(--weline-theme-primary);
+}
+
+.<?= $wc ?> .filter-item .count {
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs, 12px);
+}
+
+.<?= $wc ?> .stars {
+    color: var(--weline-theme-warning);
+    letter-spacing: 1px;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    min-height: 120px;
+}
+</style>
+
 <script>
 (function () {
-    document.addEventListener('click', function (event) {
-        const filterAction = event.target.closest('.category-filter-mock .category-filter-clear, .category-filter-mock .category-filter-item');
-        if (!filterAction) {
-            return;
-        }
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    root.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof Element)) return;
+
+        var action = target.closest('.filter-clear, .filter-item, .chip-remove');
+        if (!action || !root.contains(action)) return;
 
         event.preventDefault();
     });
 })();
 </script>
-<?php
-    }
-}
-?>

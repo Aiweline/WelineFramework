@@ -1,7 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
-       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
-       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
     <!-- EAV管理 - 归入开发者 > 模组管理 -->
     <menu source="Weline_Eav::eav" name="eav_menu" title="EAV数据管理"
@@ -13,5 +12,22 @@
         <menu source="Weline_Eav::eav_manager" name="eav_manager" title="EAV管理器" action="/eav/backend/manager"
               icon="settings"
               order="10"/>
+        
+        <!-- 遗留分拆入口（与统一管理器并存，保留双边能力） -->
+        <menu source="Weline_Eav::eav_entity" name="eav_entity" title="实体" action="/eav/backend/entity"
+              icon="box"
+              order="20"/>
+        
+        <menu source="Weline_Eav::eav_attribute" name="eav_attribute" title="属性" action="/eav/backend/attribute"
+              icon="list"
+              order="30"/>
+        
+        <menu source="Weline_Eav::eav_attribute_group" name="eav_attribute_group" title="属性组" action="/eav/backend/attribute/group"
+              icon="folder"
+              order="40"/>
+        
+        <menu source="Weline_Eav::eav_attribute_set" name="eav_attribute_set" title="属性集" action="/eav/backend/attribute/set"
+              icon="package"
+              order="50"/>
     </menu>
 </menus>

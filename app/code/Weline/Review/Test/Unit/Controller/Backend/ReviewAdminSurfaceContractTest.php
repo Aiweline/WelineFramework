@@ -39,8 +39,8 @@ final class ReviewAdminSurfaceContractTest extends TestCase
         self::assertStringContainsString('data-review-role="reject"', $template);
         self::assertStringContainsString('data-review-role="awaiting-ai"', $template);
         self::assertStringContainsString('data-w-sticky="end"', $template);
-        self::assertStringContainsString('<w:theme:table', $template);
-        self::assertStringContainsString('sticky-end="true"', $template);
+        self::assertStringContainsString('data-w-sticky-end', $template);
+        self::assertStringContainsString('data-review-role="table-scroll"', $template);
         self::assertStringNotContainsString('position:sticky;right:0', $template);
         self::assertStringContainsString('data-review-role="filters"', $template);
         self::assertFileExists($moduleRoot . '/Cron/AiModeration.php');

@@ -1,9 +1,9 @@
 <?php
 /**
  * 页脚链接部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {footer-links}
  * @widget.name {页脚链接}
  * @widget.description {Footer 区域的链接列表，支持多列分组}
@@ -13,128 +13,110 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {links}
  * @widget.supports {["layout-footer-links","layout-global-footer-links"]}
- * 
+ * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"footer-links","area":"footer","sort_order":0}]}
+ *
  * @param link_groups {default=[],type="array",label="链接分组",description="每组包含title和links数组"}
  * @param columns {default="4",type="select",label="列数",options={2:"2列",3:"3列",4:"4列"}}
+ * @param text_color {default="var(--weline-theme-on-primary)",type="color",label="文字颜色"}
  */
 
+use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('footer-links');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $linkGroups = $this->getData('link_groups') ?? [];
-$columns = $this->getData('columns') ?? '4';
-
-// 示例链接分组
-if (empty($linkGroups)) {
-    $linkGroups = [
-        [
-            'title' => __('关于我们'),
-            'links' => [
-                ['label' => __('公司简介'), 'url' => '/about'],
-                ['label' => __('联系我们'), 'url' => '/contact'],
-                ['label' => __('加入我们'), 'url' => '/careers'],
-                ['label' => __('新闻中心'), 'url' => '/news'],
-            ],
-        ],
-        [
-            'title' => __('客户服务'),
-            'links' => [
-                ['label' => __('帮助中心'), 'url' => '/help'],
-                ['label' => __('配送说明'), 'url' => '/shipping'],
-                ['label' => __('退换政策'), 'url' => '/returns'],
-                ['label' => __('常见问题'), 'url' => '/faq'],
-            ],
-        ],
-        [
-            'title' => __('购物指南'),
-            'links' => [
-                ['label' => __('如何购物'), 'url' => '/guide/shopping'],
-                ['label' => __('支付方式'), 'url' => '/guide/payment'],
-                ['label' => __('配送方式'), 'url' => '/guide/delivery'],
-                ['label' => __('售后服务'), 'url' => '/guide/service'],
-            ],
-        ],
-        [
-            'title' => __('法律条款'),
-            'links' => [
-                ['label' => __('隐私政策'), 'url' => '/privacy'],
-                ['label' => __('使用条款'), 'url' => '/terms'],
-                ['label' => __('Cookie政策'), 'url' => '/cookies'],
-                ['label' => __('免责声明'), 'url' => '/disclaimer'],
-            ],
-        ],
-    ];
+$columns = (string)($this->getData('columns') ?? '4');
+if (!in_array($columns, ['2', '3', '4'], true)) {
+    $columns = '4';
 }
+$textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--weline-theme-on-primary)');
 
-$widgetId = 'footer-links-' . uniqid();
+if (empty($linkGroups)) {
+    $linkGroups = FooterDefaultLinksHelper::widgetLinkGroups();
+}
 ?>
 
-<div class="widget-footer-links columns-<?= htmlspecialchars($columns) ?>" id="<?= $widgetId ?>">
+<section class="<?= $esc($wc) ?> columns-<?= $esc($columns) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="--wc-footer-text:<?= $esc($textColor) ?>;">
     <?php foreach ($linkGroups as $group): ?>
         <div class="link-group">
             <?php if (!empty($group['title'])): ?>
-                <h4 class="group-title"><?= htmlspecialchars($group['title']) ?></h4>
+                <h4 class="group-title"><?= $esc((string)__($group['title'])) ?></h4>
             <?php endif; ?>
-            
             <?php if (!empty($group['links'])): ?>
                 <ul class="group-links">
                     <?php foreach ($group['links'] as $link): ?>
                         <li>
-                            <a href="<?= htmlspecialchars($link['url'] ?? '#') ?>">
-                                <?= htmlspecialchars($link['label']) ?>
-                            </a>
+                            <a href="<?= $esc((string)($link['url'] ?? '#')) ?>"><?= $esc((string)__($link['label'])) ?></a>
                         </li>
                     <?php endforeach; ?>
                 </ul>
             <?php endif; ?>
         </div>
     <?php endforeach; ?>
-</div>
+</section>
 
 <style>
-.widget-footer-links {
+.<?= $wc ?> {
     display: grid;
-    gap: 30px;
+    gap: var(--weline-space-8, 30px);
+    color: var(--wc-footer-text, var(--weline-theme-on-primary));
 }
 
-.widget-footer-links.columns-2 { grid-template-columns: repeat(2, 1fr); }
-.widget-footer-links.columns-3 { grid-template-columns: repeat(3, 1fr); }
-.widget-footer-links.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.<?= $wc ?>.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.<?= $wc ?>.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.<?= $wc ?>.columns-4 { grid-template-columns: repeat(4, 1fr); }
 
-.widget-footer-links .group-title {
-    font-size: 16px;
+.<?= $wc ?> .group-title {
+    font-size: var(--weline-font-size-base, 16px);
     font-weight: 600;
-    margin: 0 0 20px;
-    color: #fff;
+    margin: 0 0 var(--weline-space-5, 20px);
 }
 
-.widget-footer-links .group-links {
+.<?= $wc ?> .group-links {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-.widget-footer-links .group-links li {
-    margin-bottom: 12px;
+.<?= $wc ?> .group-links li {
+    margin-bottom: var(--weline-space-3, 12px);
 }
 
-.widget-footer-links .group-links a {
-    color: rgba(255,255,255,0.7);
+.<?= $wc ?> .group-links a {
+    color: color-mix(in srgb, var(--wc-footer-text, var(--weline-theme-on-primary)) 70%, transparent);
     text-decoration: none;
-    font-size: 14px;
-    transition: all 0.2s;
+    font-size: var(--weline-font-size-sm, 14px);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-footer-links .group-links a:hover {
-    color: #fff;
-    padding-left: 5px;
+.<?= $wc ?> .group-links a:hover {
+    color: var(--wc-footer-text, var(--weline-theme-on-primary));
+    padding-left: var(--weline-space-1, 5px);
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: var(--weline-space-4, 15px);
 }
 
 @media (max-width: 992px) {
-    .widget-footer-links.columns-4 {
+    .<?= $wc ?>.columns-4 {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 
 @media (max-width: 576px) {
-    .widget-footer-links {
+    .<?= $wc ?> {
         grid-template-columns: 1fr !important;
     }
 }

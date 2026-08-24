@@ -1,0 +1,113 @@
+<?php
+/**
+ * w-auto-complete — bin-query 自动完成
+ *
+ * 必填：data-provider + data-operation（兼容窗后）
+ * 参数：term/q；废弃 w-url（remove_by=2026-08-08）
+ */
+?>
+<css>jquery-ui.min.css</css>
+<js>jquery-ui.min.js</js>
+<js:part name="debounce"/>
+<script defer>
+    $(function () {
+        let can_run = true
+        if (!window.debounce) {
+            console.error('@lang{w-auto-complete: debounce method is missing.}')
+            can_run = false;
+        }
+        if ($ && !$.fn.autocomplete) {
+            console.error('@lang{w-auto-complete: jQuery UI autocomplete is missing.}')
+            can_run = false;
+        }
+        if (!can_run) {
+            return
+        }
+
+        const callResource = function (provider, operation, params) {
+            if (!window.Weline) {
+                return Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+            const run = function (api) {
+                const resource = api.resource(provider);
+                if (!resource || typeof resource[operation] !== 'function') {
+                    throw new Error('Unknown operation: ' + provider + '.' + operation);
+                }
+                return resource[operation](params || {});
+            };
+            if (typeof window.Weline.load === 'function') {
+                return window.Weline.load('api').then(run);
+            }
+            return Promise.resolve(run(window.Weline.Api));
+        };
+
+        $('[w-auto-complete="true"]').each(function () {
+            let autocompleteInput = $(this)
+            let provider = String(autocompleteInput.attr('data-provider') || '').trim()
+            let operation = String(autocompleteInput.attr('data-operation') || '').trim()
+            let legacyUrl = autocompleteInput.attr('w-url')
+            let value = autocompleteInput.attr('w-value-field') ?? 'value';
+            let label = autocompleteInput.attr('w-label-field') ?? 'label';
+            let selected_field = autocompleteInput.attr('w-selected-field') ?? 'label';
+            let invalid_class = autocompleteInput.attr('w-invalid-class') ?? 'is-invalid';
+            let valid_class = autocompleteInput.attr('w-valid-class') ?? 'is-valid';
+            // Compat window: remove_by=2026-08-08
+            if ((!provider || !operation) && legacyUrl) {
+                console.warn('[w-auto-complete] deprecated w-url; use data-provider + data-operation. remove_by=2026-08-08', autocompleteInput.get(0))
+            }
+            if (!provider || !operation) {
+                console.error('w-auto-complete requires data-provider and data-operation.', autocompleteInput.get(0))
+                return
+            }
+            const requestSuggestions = function (term) {
+                return callResource(provider, operation, { q: term || '', term: term || '' }).then(function (payload) {
+                    if (Array.isArray(payload)) return payload;
+                    if (payload && Array.isArray(payload.data)) return payload.data;
+                    if (payload && Array.isArray(payload.items)) return payload.items;
+                    return [];
+                });
+            };
+
+            autocompleteInput.on('click', debounce(function () {
+                requestSuggestions(autocompleteInput.val()).then(function (data) {
+                    for (let i = 0; i < data.length; i++) {
+                        if (data[i][value] === autocompleteInput.val()) {
+                            autocompleteInput.removeClass(invalid_class).addClass(valid_class);
+                            return
+                        }
+                    }
+                    autocompleteInput.removeClass(valid_class).addClass(invalid_class);
+                }).catch(function () {
+                    autocompleteInput.removeClass(valid_class).addClass(invalid_class);
+                });
+            }, 500))
+
+            autocompleteInput.autocomplete({
+                minChars: 0,
+                source: debounce(function (request, response) {
+                    requestSuggestions(request.term).then(function (data) {
+                        response($.map(data, function (item) {
+                            return Object.assign({}, item, {
+                                label: item[label],
+                                value: item[value]
+                            });
+                        }));
+                    }).catch(function () {
+                        response([]);
+                        autocompleteInput.removeClass(valid_class).addClass(invalid_class);
+                    });
+                }, 500),
+                focus: function (event) {
+                    event.preventDefault();
+                },
+                select: function (event, ui) {
+                    autocompleteInput.val(ui.item[selected_field]).attr('value', ui.item[selected_field])
+                    autocompleteInput.removeClass(invalid_class).addClass(valid_class);
+                }
+            });
+            autocompleteInput.autocomplete("widget").addClass("ui-widget ui-widget-content ui-corner-all");
+            autocompleteInput.autocomplete("widget").find("li").addClass("ui-menu-item").addClass("ui-corner-all");
+            autocompleteInput.autocomplete("widget").find("li a").addClass("ui-state-default");
+        });
+    })
+</script>
