@@ -1,0 +1,35 @@
+# Cursor Rules for WelineFramework
+
+⚠️ **CRITICAL: Read AI-ENTRY.md first for architecture & token optimization**
+
+## Quick Start
+1. Read `AI-ENTRY.md` (universal AI entry, complete rules)
+2. Read `CLAUDE.md` (framework quick reference)
+3. Check `dev/ai/diagrams/00-INDEX.txt` (architecture diagrams)
+4. Load `dev/ai/skills/` on-demand
+
+## Core Protocols (MANDATORY)
+- **Multi-Agent Delivery**: `dev/ai/rules/multi-agent-protocol.md` (HIGHEST PRIORITY)
+- **Agent Supervisor**: `dev/ai/rules/agent-supervisor-protocol.md` (when you see @AgentID markers)
+- **Quality System**: `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md`
+- **Efficiency Rules**: `dev/ai/rules/efficiency_rules.md`
+
+## Critical Constraints
+- NEVER edit `generated/` directory
+- NEVER use `routes.xml` (routing is auto-discovered)
+- NEVER use JS `alert()/confirm()` (use BackendToast/BackendConfirm)
+- ALWAYS use i18n: `__('text')` or `<lang>text</lang>`
+- ALWAYS end ORM chains with `.fetch()` or `.fetchArray()`
+
+## Commands
+```bash
+php bin/w setup:upgrade              # 全量升级（Schema、路由、注册表等）
+php bin/w setup:upgrade --route      # 选填：仅刷新路由（新增/变更控制器后，跳过 Schema）
+php bin/w http:request / [-b|-api]   # Route test
+php bin/w server:reload|restart -r   # WLS lifecycle
+```
+
+## Skills Reference
+ORM→database-model-standards | Routing→weline-routing | Events→extension-points | WLS→runtime-and-process | Theme→theme-development | Components→frontend-components | I18n→i18n-internationalization | Query→unified-query-provider | ACL→acl-permission-system
+
+Full index: `dev/ai/skills/_index.md`

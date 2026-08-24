@@ -33,7 +33,7 @@
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：8
 - `Config`：配置读取、合并或 schema 支撑。涉及作用域配置时同时读 SystemConfig 文档。 文件数：1
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：37
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：12
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：12
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：2
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：12
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：15
@@ -41,7 +41,7 @@
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：38
 - `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：2
 - `Ui`：后台/编辑器 UI 参数、schema 或渲染支撑。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
+- `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：4
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：16
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：3

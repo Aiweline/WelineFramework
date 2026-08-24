@@ -27,7 +27,7 @@
 
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：2
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：8
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
+- `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：3
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：1
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：1
