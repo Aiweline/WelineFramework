@@ -15,9 +15,39 @@
 
     document.documentElement.dataset.wEditorPreview = 'true';
     document.documentElement.dataset.wEditorPreviewEngine = 'full';
+    document.documentElement.dataset.wEditorInteraction = 'edit';
 
     // 启用编辑模式
     document.body.classList.add('editor-mode');
+    let interactionMode = 'edit';
+
+    function isEditInteractionMode() {
+        return interactionMode !== 'preview';
+    }
+
+    function applyInteractionMode(mode) {
+        interactionMode = mode === 'preview' ? 'preview' : 'edit';
+        document.documentElement.dataset.wEditorInteraction = interactionMode;
+        document.body.classList.toggle('editor-mode', interactionMode === 'edit');
+        if (interactionMode === 'preview') {
+            document.querySelectorAll('.slot-active, [data-state="selected"]').forEach(function(el) {
+                el.classList.remove('slot-active');
+                if (el.getAttribute('data-state') === 'selected') {
+                    el.removeAttribute('data-state');
+                }
+            });
+            document.querySelectorAll('.slot-info-card').forEach(function(el) {
+                el.remove();
+            });
+            document.querySelectorAll('.widget-wrapper.show-actions, .widget-wrapper.selected').forEach(function(el) {
+                el.classList.remove('show-actions', 'selected');
+            });
+            clearIframeDropFeedback(null, false);
+            activeDragWidget = null;
+            activeDragSessionId = '';
+            activeDropCandidate = null;
+        }
+    }
 
     // 选择按钮的 SVG 图标
     const SELECT_ICON = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
@@ -35,7 +65,15 @@
     window.addEventListener('message', function(event) {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const data = event.data;
-        if (!data || data.source !== 'weline-theme-editor' || data.type !== 'drag-state') return;
+        if (!data || data.source !== 'weline-theme-editor') return;
+
+        if (data.type === 'interaction-mode') {
+            applyInteractionMode(data.mode);
+            return;
+        }
+
+        if (data.type !== 'drag-state') return;
+        if (!isEditInteractionMode()) return;
 
         const sessionId = String(data.session_id || '');
         if (data.phase === 'start' && sessionId && data.widget && data.widget.code) {
@@ -421,6 +459,9 @@
      * @param {HTMLElement} slot - 插槽元素
      */
     function selectSlot(slot) {
+        if (!isEditInteractionMode()) {
+            return;
+        }
         const currentWidgets = getSlotWidgetElements(slot);
         const maxWidgets = slot.dataset.wslotMax ? parseInt(slot.dataset.wslotMax, 10) : -1;
         // 构建插槽数据
@@ -736,6 +777,7 @@
 
         // 拖放事件 — 带插入位置指示器
         slot.addEventListener('dragover', function(e) {
+            if (!isEditInteractionMode()) return;
             const widgetData = readDragWidgetData(e);
             // iframe 内已有部件排序由父编辑器的 sortable 适配器处理。
             if (!widgetData) return;
@@ -794,6 +836,7 @@
         });
 
         slot.addEventListener('drop', function(e) {
+            if (!isEditInteractionMode()) return;
             const widgetData = readDragWidgetData(e);
             if (!widgetData) return;
 

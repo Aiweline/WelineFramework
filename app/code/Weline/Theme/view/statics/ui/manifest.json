@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "6f0f40821c8cca443e548d450019db3e50b88e405b629c71244c330fe2034e95",
+    "build_id": "e32faddf50ead5f748462e4396e3dfd5ec0da0e431ba952d46ea999a2611a5a4",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -406,24 +406,24 @@
             "type": "js"
         },
         "theme-editor-css": {
-            "bytes": 145154,
+            "bytes": 146434,
             "file": "pages/weline-theme-editor.css",
-            "gzip_bytes": 21075,
-            "sha256": "009ee80db78b2d9d052e636d1efd671d0d312f0d846a3b55df4ca1e5edcd27da",
+            "gzip_bytes": 21216,
+            "sha256": "b1cfeee6c371cc63c3af989108776e250ce6eab1ef29b9e3be08d1ef10596cdf",
             "type": "css"
         },
         "theme-editor-js": {
-            "bytes": 750511,
+            "bytes": 756461,
             "file": "pages/weline-theme-editor.js",
-            "gzip_bytes": 149646,
-            "sha256": "ceedfd29e5569708bfb929259a513aa110a3bae25eab7e7d02cb2eb9e86d6442",
+            "gzip_bytes": 150685,
+            "sha256": "27277f4e1db40780c7df7c03df963dca657a801b6072c55d68dd5a75b0cf5182",
             "type": "js"
         },
         "theme-editor-overlay-css": {
-            "bytes": 4502,
+            "bytes": 5410,
             "file": "pages/weline-theme-editor-overlay.css",
-            "gzip_bytes": 1070,
-            "sha256": "1d9d5058146d26bad768cd647508b570b371a2e755a94df090ea55bdb273780e",
+            "gzip_bytes": 1179,
+            "sha256": "e2f2022c22491d1aa6f0058a0994395827b1a37418b7875af1b032dd6d3f19f7",
             "type": "css"
         },
         "theme-editor-widget-config-css": {
@@ -462,10 +462,10 @@
             "type": "css"
         },
         "theme-preview-js": {
-            "bytes": 42890,
+            "bytes": 44574,
             "file": "pages/weline-theme-preview.js",
-            "gzip_bytes": 10626,
-            "sha256": "479b3a5668eff350af72915bd59be0679424e4bb9a61c4580231b65d9cd5ca1c",
+            "gzip_bytes": 10864,
+            "sha256": "bfb1d63a5fad7fa3fa869f65888290d40d482e98688acf8993ecba9a6109bf79",
             "type": "js"
         },
         "ui-advanced": {
