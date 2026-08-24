@@ -235,7 +235,7 @@ $contentStructureHtml = (string)($structureWidgetsHtml['content'] ?? '');
 $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 
 ?>
-<css>Weline_Theme::ui/pages/weline-theme-editor.css?v=20260823-appearance-fill</css>
+<css>Weline_Theme::ui/pages/weline-theme-editor.css?v=20260824-interaction-mode</css>
 <css>Weline_Theme::ui/pages/weline-theme-editor-widget-config.css</css>
 <css>Weline_Theme::ui/pages/weline-theme-editor-widget-param.css</css>
 
@@ -315,7 +315,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-disk-delete="<?= $apiDiskDeleteSafe ?>"
      data-api-scoped-workspace="<?= $apiScopedWorkspaceSafe ?>"
      data-api-publish-scoped-workspace="<?= $apiPublishScopedWorkspaceSafe ?>"
-     data-editor-overlay-css="@static(Weline_Theme::ui/pages/weline-theme-editor-overlay.css)?v=20260821-overlay-v1">
+     data-editor-overlay-css="@static(Weline_Theme::ui/pages/weline-theme-editor-overlay.css)?v=20260824-interaction-mode">
     <!-- 顶部工具栏 -->
     <div class="editor-toolbar">
         <div class="toolbar-left">
@@ -479,6 +479,20 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             <div class="preview-tabs">
                 <button type="button" class="preview-tab active" data-view="preview">@lang{实时预览}</button>
                 <button type="button" class="preview-tab" data-view="structure">@lang{结构视图}</button>
+            </div>
+            <div class="preview-interaction-mode" role="group" aria-label="@lang{交互模式}">
+                <button type="button"
+                        class="preview-interaction-tab"
+                        data-theme-editor-action="set-interaction-mode"
+                        data-interaction-mode="preview"
+                        aria-pressed="false"
+                        title="@lang{真预览：不显示插槽标记，并关闭编辑面板}">@lang{预览}</button>
+                <button type="button"
+                        class="preview-interaction-tab active"
+                        data-theme-editor-action="set-interaction-mode"
+                        data-interaction-mode="edit"
+                        aria-pressed="true"
+                        title="@lang{编辑：恢复插槽标记与配置面板}">@lang{编辑}</button>
             </div>
             <div class="preview-actions w-toolbar-overflow" data-w-component="toolbar-overflow" data-w-placement="bottom-end" data-state="closed">
                 <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
@@ -811,4 +825,4 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
     </div>
 </aside>
 
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260823-drop-save"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260824-interaction-mode"></script>

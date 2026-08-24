@@ -14,6 +14,14 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
     {
         $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
 
+        self::assertStringContainsString('function initSidePanels(', $editor);
+        self::assertStringContainsString('function setInteractionMode(', $editor);
+        self::assertStringContainsString("type: 'interaction-mode'", $editor);
+        self::assertStringContainsString('interaction-preview-mode', $editor);
+        self::assertStringContainsString("data-theme-editor-action=\"set-interaction-mode\"", $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml'));
+        self::assertStringContainsString('function applyInteractionMode(', $this->read('app/code/Weline/Theme/view/statics/js/editor-mode.js'));
+        self::assertStringContainsString('dataset.wEditorInteraction', $this->read('app/code/Weline/Theme/view/statics/js/editor-mode.js'));
+
         foreach ([
             'function initSidePanels(',
             'function switchPreviewView(',
@@ -221,7 +229,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('search-placeholder="@lang(搜索网站、店铺或渠道)"', $template);
         self::assertStringNotContainsString('<w:websites:', $template);
         self::assertStringNotContainsString('data-scope-catalog=', $template);
-        self::assertStringContainsString('Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260823-appearance-auto-edit', $template);
+        self::assertStringContainsString('Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260824-interaction-mode', $template);
         foreach ([
             "'/theme/backend/theme-editor/layout-preview'",
             "'/theme/backend/theme-editor/scoped-workspace'",

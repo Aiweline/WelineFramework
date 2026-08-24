@@ -1426,6 +1426,11 @@ body:has(.theme-editor-container) .footer {
     border-bottom: 1px solid var(--w-theme-editor-border);
 }
 
+.preview-toolbar-main .preview-interaction-mode {
+    margin-inline-start: auto;
+    margin-inline-end: 8px;
+}
+
 .preview-tabs {
     display: flex;
     gap: 2px;
@@ -1435,6 +1440,48 @@ body:has(.theme-editor-container) .footer {
     background: var(--w-theme-editor-bg-dark);
     padding: 2px;
     border-radius: 4px;
+}
+
+.preview-interaction-mode {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 2px;
+    min-width: 0;
+    padding: 2px;
+    border-radius: 4px;
+    background: var(--w-theme-editor-bg-dark);
+}
+
+.preview-interaction-tab {
+    padding: 3px 10px;
+    border: none;
+    background: transparent;
+    color: var(--w-theme-editor-text-secondary);
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.preview-interaction-tab:hover {
+    color: var(--w-theme-editor-text-primary);
+}
+
+.preview-interaction-tab.active {
+    background: var(--w-theme-editor-gradient-accent);
+    color: var(--w-theme-editor-on-accent);
+    box-shadow: var(--w-theme-editor-shadow-sm);
+}
+
+.theme-editor-container.interaction-preview-mode .editor-floating-panel-actions,
+.theme-editor-container.interaction-preview-mode .slots-info-dock,
+.theme-editor-container.interaction-preview-mode .editor-config-panel,
+.theme-editor-container.interaction-preview-mode .editor-widget-panel,
+.theme-editor-container.interaction-preview-mode #widgetPanel {
+    display: none !important;
 }
 
 .preview-tab {
