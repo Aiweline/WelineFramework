@@ -101,6 +101,7 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 
 .<?= $wc ?>.nav-style-horizontal .nav-menu {
     display: flex;
+    flex-wrap: nowrap;
     list-style: none;
     margin: 0;
     padding: 0;
@@ -109,18 +110,25 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 
 .<?= $wc ?>.nav-style-horizontal .nav-item {
     position: relative;
+    flex: 0 0 auto;
 }
 
 .<?= $wc ?> .nav-link {
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: var(--weline-space-2, 6px);
     padding: var(--weline-space-3, 10px) var(--weline-space-4, 15px);
     color: var(--weline-theme-text);
     text-decoration: none;
     font-weight: 500;
+    white-space: nowrap;
     transition: color var(--weline-theme-transition-base, 0.2s ease), background-color var(--weline-theme-transition-base, 0.2s ease);
     border-radius: var(--weline-radius-sm, 4px);
+}
+
+.<?= $wc ?> .nav-link span {
+    white-space: nowrap;
 }
 
 .<?= $wc ?> .nav-link:hover {
@@ -204,5 +212,35 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 .<?= $wc ?>.is-preview .nav-link {
     padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
     font-size: var(--weline-font-size-xs, 12px);
+}
+
+@media (max-width: 992px) {
+    .<?= $wc ?> .main-nav {
+        width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .<?= $wc ?> .main-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .<?= $wc ?>.nav-style-horizontal .nav-menu {
+        width: max-content;
+        min-width: 100%;
+        gap: 0;
+    }
+
+    .<?= $wc ?> .nav-link {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8125rem;
+    }
+
+    .<?= $wc ?>.nav-style-horizontal .dropdown-menu {
+        display: none;
+    }
 }
 </style>

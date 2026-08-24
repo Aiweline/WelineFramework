@@ -96,13 +96,13 @@ class Active extends AbstractConsole
                 '-h, --help' => '显示帮助信息',
             ],
             [
-                '<主题名>' => '要激活的主题名称（可选，例如：Weline_Default）',
+                '<主题名>' => '要激活的主题名称（可选，例如：WeShop_default）',
                 '<区域>' => '可选：frontend | backend | global（默认 global，对应 is_active）',
             ],
             [
                 '查看前台/后台激活主题' => 'php bin/w theme:active',
-                '激活指定主题（全局）' => 'php bin/w theme:active Weline_Default',
-                '仅激活前台' => 'php bin/w theme:active Weline_Default frontend',
+                '激活指定主题（全局）' => 'php bin/w theme:active WeShop_default',
+                '仅激活前台' => 'php bin/w theme:active WeShop_default frontend',
             ]
         );
     }

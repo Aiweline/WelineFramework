@@ -52,7 +52,7 @@ class Remove extends AbstractConsole
                 $this->printing->error(__('当前主题未安装：卸载失败！'), __('主题'));
             }
         } else {
-            $this->printing->error(__('请指定要删除的主题，示例：php bin/w theme:remove Weline_Default'), __('主题'));
+            $this->printing->error(__('请指定要删除的主题，示例：php bin/w theme:remove WeShop_default'), __('主题'));
         }
     }
 
@@ -73,10 +73,10 @@ class Remove extends AbstractConsole
                 '-h, --help' => '显示帮助信息',
             ],
             [
-                '<主题名>' => '要卸载的主题名称（例如：Weline_Default）',
+                '<主题名>' => '要卸载的主题名称（例如：WeShop_default）',
             ],
             [
-                '卸载指定主题' => 'php bin/w theme:remove Weline_Default',
+                '卸载指定主题' => 'php bin/w theme:remove WeShop_default',
             ]
         );
     }

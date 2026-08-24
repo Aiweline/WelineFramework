@@ -71,11 +71,11 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         $sourceFile = $sourceRoot . '/frontend/assets/css/theme.css';
 
         self::assertSame(
-            '/Users/example/project/pub/static/Weline/default/frontend/assets/css',
+            '/Users/example/project/pub/static/Weline/Theme/view/theme/frontend/assets/css',
             ThemeUpgradeCommand::buildDestinationDirectory(
                 $sourceRoot,
                 $sourceFile,
-                'Weline/default',
+                'Weline/Theme/view/theme',
                 '/Users/example/project/pub/static'
             )
         );

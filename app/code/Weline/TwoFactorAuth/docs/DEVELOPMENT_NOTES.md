@@ -1450,15 +1450,15 @@ foreach ($configs as $module_and_file => $config) {
 php bin/w deploy:upgrade
 
 # 2. 正确的URL格式
-/static/Weline/default/Weline/{ModuleName}/view/statics/{path}
+/static/Weline/Theme/view/theme/Weline/{ModuleName}/view/statics/{path}
 
 # 3. 更新控制器重定向
-return $this->redirect('/static/Weline/default/Weline/TwoFactorAuth/view/statics/twofa-app/index.html');
+return $this->redirect('/static/Weline/Theme/view/theme/Weline/TwoFactorAuth/view/statics/twofa-app/index.html');
 ```
 
 **学到的经验**：
 - ✅ 开发模式也需要运行deploy:upgrade部署静态资源
-- ✅ 静态资源路径格式：`/static/Weline/default/Weline/{模块名}/view/statics/`
+- ✅ 静态资源路径格式：`/static/Weline/Theme/view/theme/Weline/{模块名}/view/statics/`
 - ✅ 必须查看pub/static目录结构确认实际路径
 - ❌ 不能假设静态资源会自动部署
 

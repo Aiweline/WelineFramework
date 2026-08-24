@@ -67,7 +67,8 @@ class Env extends DataObject
     public const default_theme_DATA = [
         'id' => 0,
         'name' => 'default',
-        'path' => 'Weline' . DS . 'default',
+        'module_name' => 'Weline_Theme',
+        'path' => 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme',
         'parent_id' => null,
         'is_active' => 1,
         'create_time' => '2021-04-05 16:49:58',

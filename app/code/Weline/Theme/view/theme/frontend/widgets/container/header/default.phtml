@@ -204,5 +204,16 @@ if ($shadow) {
         flex: 0 0 100%;
         max-width: none;
     }
+
+    .<?= $wc ?> .slot-navigation {
+        min-width: 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .<?= $wc ?> .slot-navigation::-webkit-scrollbar {
+        display: none;
+    }
 }
 </style>

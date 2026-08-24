@@ -129,9 +129,11 @@
         position: absolute;
         bottom: 5rem;
         right: 0;
-        width: 23.75rem;
-        height: 37.5rem;
-        max-height: 80vh;
+        left: auto;
+        width: min(23.75rem, calc(100vw - 2.5rem));
+        height: min(37.5rem, calc(100dvh - 6.5rem));
+        max-width: calc(100vw - 2.5rem);
+        max-height: min(80vh, calc(100dvh - 6.5rem));
         background: var(--weline-theme-surface);
         color: var(--weline-theme-text);
         border: 1px solid var(--weline-theme-border);
@@ -666,19 +668,26 @@
         to { transform: rotate(360deg); }
     }
 
-    @media (max-width: 480px) {
+    .customer-service-widget.is-open .cs-chat-button {
+        display: none !important;
+    }
+
+    @media (max-width: 720px) {
         .customer-service-widget {
-            bottom: calc(var(--weline-space-3) + var(--weline-safe-area-bottom));
-            right: calc(var(--weline-space-3) + var(--weline-safe-area-right));
+            bottom: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+            right: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-right, env(safe-area-inset-right, 0px)));
         }
 
         .cs-chat-window {
-            width: calc(100vw - 1.25rem);
-            height: calc(100vh - 5rem);
-            max-height: calc(100vh - 5rem);
-            bottom: 4.5rem;
-            right: 0;
-            border-radius: var(--weline-radius-lg) var(--weline-radius-lg) 0 0;
+            position: fixed;
+            top: max(0.75rem, env(safe-area-inset-top, 0px));
+            right: max(0.75rem, env(safe-area-inset-right, 0px));
+            bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+            left: max(0.75rem, env(safe-area-inset-left, 0px));
+            width: auto;
+            height: auto;
+            max-width: none;
+            max-height: none;
         }
 
         .cs-chat-button {

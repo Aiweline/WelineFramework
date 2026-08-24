@@ -153,11 +153,11 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 
 ### 生产静态资源兜底
 
-`Weline_Theme/view/theme` 是核心默认主题源码目录，不是生产静态资源的公开命名空间。
+`Weline_Theme/view/theme` 是核心默认主题源码目录，也是生产静态资源的公开命名空间。
 无论它来自自动安装写入的绝对 `app/code` 路径，还是运行时模块默认主题，`ThemeStaticNamespaceService`
-都必须把它归一化到框架默认设计主题 `Weline/default`。因此核心主题资源 URL 应为
-`/static/Weline/default/Weline/Theme/view/theme/...`；禁止生成不存在的 `/static/Weline/Theme/view/theme/...`，
-否则颜色变量、暗色调色板和其他主题资源会返回 404。自定义 `app/design` 主题的命名空间保持不变。
+都直接使用 `Weline/Theme/view/theme`。因此核心主题资源 URL 应为
+`/static/Weline/Theme/view/theme/...`（或开发态 `/Weline/Theme/view/theme/...`）。
+自定义 `app/design` 主题的命名空间保持不变，例如 `/static/WeShop/motor/Weline/Theme/view/theme/...`。
 
 ## 常用文档地图
 
