@@ -1,0 +1,586 @@
+/**
+ * Weline Framework - 后台全局组件
+ * 包含 BackendToast、BackendConfirm 等全局工具
+ * 
+ * 使用方式：
+ *   BackendToast.success('保存成功');
+ *   BackendToast.error('操作失败');
+ *   BackendToast.warning('请注意');
+ *   BackendToast.info('提示信息');
+ *   
+ *   BackendConfirm.show('确定删除吗？').then(confirmed => { ... });
+ */
+(function(window, document) {
+    'use strict';
+
+    if (window.__WelineBackendComponentsRuntime) {
+        return;
+    }
+    window.__WelineBackendComponentsRuntime = true;
+
+    /**
+     * i18n 翻译：使用 __() 函数，系统会从模块 i18n/*.csv 收集词并注入
+     * 规范：JS 内不直接写词，词写到 CSV，详见 theme-development / i18n-internationalization 技能
+     */
+    const __ = (typeof window.__ === 'function') ? window.__ : function(text, params) {
+        if (
+            window.Weline
+            && window.Weline.i18n
+            && typeof window.Weline.i18n.translate === 'function'
+        ) {
+            return window.Weline.i18n.translate(text, params || {});
+        }
+        return text;
+    };
+
+    // ========================================
+    // BackendToast - 后台通知提示
+    // ========================================
+    const BackendToast = {
+        container: null,
+        
+        init() {
+            if (!this.container) {
+                this.container = document.createElement('div');
+                this.container.className = 'backend-toast-container';
+                // Toast 必须高于所有弹层（OffCanvas 200020、各模块模态框 10050+），否则会被遮住
+                this.container.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    right: 20px;
+                    z-index: 2147483001;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                    max-width: 360px;
+                `;
+                document.body.appendChild(this.container);
+                this.container.addEventListener('click', (event) => {
+                    const closeButton = event.target.closest('[data-backend-toast-dismiss]');
+                    if (!closeButton || !this.container.contains(closeButton)) {
+                        return;
+                    }
+
+                    const toast = closeButton.closest('.backend-toast');
+                    if (toast) {
+                        toast.remove();
+                    }
+                });
+            }
+        },
+        
+        defaultDuration: 10000,
+        
+        /**
+         * 显示 Toast 消息
+         * @param {string} message 消息内容
+         * @param {string} type 类型 (success, warning, danger, info)
+         * @param {number|Object} durationOrOptions 持续时间(ms)或配置对象
+         * @param {number} durationOrOptions.duration 持续时间(ms)，默认 10s
+         * @param {boolean} durationOrOptions.html 是否允许 HTML 内容，默认 false
+         */
+        show(message, type = 'info', durationOrOptions) {
+            this.init();
+            
+            let duration = this.defaultDuration;
+            let allowHtml = false;
+            
+            if (typeof durationOrOptions === 'object') {
+                duration = durationOrOptions.duration !== undefined ? durationOrOptions.duration : this.defaultDuration;
+                allowHtml = durationOrOptions.html === true;
+            } else if (typeof durationOrOptions === 'number') {
+                duration = durationOrOptions;
+            }
+            
+            const toast = document.createElement('div');
+            toast.className = `backend-toast backend-toast-${type}`;
+            toast.style.cssText = `
+                padding: 14px 18px;
+                border-radius: var(--backend-theme-radius-md);
+                background: var(--backend-component-surface);
+                border-left: 4px solid;
+                box-shadow: var(--backend-component-shadow-lg);
+                animation: backendSlideIn 0.3s ease;
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+            `;
+            
+            const colors = {
+                success: 'var(--backend-theme-success)',
+                warning: 'var(--backend-theme-warning)',
+                danger: 'var(--backend-theme-danger)',
+                info: 'var(--backend-theme-info)'
+            };
+            const icons = {
+                success: 'mdi-check-circle',
+                warning: 'mdi-alert',
+                danger: 'mdi-close-circle',
+                info: 'mdi-information'
+            };
+            
+            toast.style.borderLeftColor = colors[type] || colors.info;
+            
+            const messageContent = allowHtml ? message : this.escapeHtml(message);
+            
+            toast.innerHTML = `
+                <i class="mdi ${icons[type] || icons.info}" style="color: ${colors[type]}; font-size: 1.25rem; flex-shrink: 0;"></i>
+                <div style="flex: 1; color: var(--backend-component-text-primary); word-break: break-word;">${messageContent}</div>
+                <button type="button" data-backend-toast-dismiss style="background: none; border: none; cursor: pointer; color: var(--backend-component-text-muted); font-size: 1.25rem; padding: 0; line-height: 1; flex-shrink: 0;">
+                    <i class="mdi mdi-close"></i>
+                </button>
+            `;
+            
+            this.container.appendChild(toast);
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.style.animation = 'backendSlideOut 0.3s ease';
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+        },
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+        
+        /**
+         * 显示成功消息
+         * @param {string} message 消息内容
+         * @param {number|Object} durationOrOptions 持续时间(ms)或配置对象 {duration, html}
+         */
+        success(message, durationOrOptions) { this.show(message, 'success', durationOrOptions); },
+        
+        /**
+         * 显示警告消息
+         * @param {string} message 消息内容
+         * @param {number|Object} durationOrOptions 持续时间(ms)或配置对象 {duration, html}
+         */
+        warning(message, durationOrOptions) { this.show(message, 'warning', durationOrOptions); },
+        
+        /**
+         * 显示错误消息
+         * @param {string} message 消息内容
+         * @param {number|Object} durationOrOptions 持续时间(ms)或配置对象 {duration, html}
+         */
+        error(message, durationOrOptions) { this.show(message, 'danger', durationOrOptions); },
+        
+        /**
+         * 显示信息消息
+         * @param {string} message 消息内容
+         * @param {number|Object} durationOrOptions 持续时间(ms)或配置对象 {duration, html}
+         */
+        info(message, durationOrOptions) { this.show(message, 'info', durationOrOptions); }
+    };
+
+    // ========================================
+    // BackendConfirm - 后台确认对话框
+    // ========================================
+    const BackendConfirm = {
+        show(message, options = {}) {
+            return new Promise((resolve) => {
+                const {
+                    title = __('确认操作'),
+                    confirmText = __('确定'),
+                    cancelText = __('取消'),
+                    type = 'warning'
+                } = options;
+                
+                const overlay = document.createElement('div');
+                overlay.className = 'backend-confirm-overlay';
+                overlay.style.cssText = `
+                    position: fixed;
+                    inset: 0;
+                    background: var(--backend-component-overlay);
+                    z-index: 12050;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: backendFadeIn 0.2s ease;
+                `;
+                
+                const typeColors = {
+                    warning: 'var(--backend-theme-warning)',
+                    danger: 'var(--backend-theme-danger)',
+                    info: 'var(--backend-theme-info)',
+                    success: 'var(--backend-theme-success)'
+                };
+                
+                const borderColor = typeColors[type] || typeColors.warning;
+                
+                overlay.innerHTML = `
+                    <div class="backend-confirm-dialog" style="
+                        background: var(--backend-component-surface);
+                        border-radius: var(--backend-theme-radius-lg);
+                        padding: 24px;
+                        max-width: 400px;
+                        width: 90%;
+                        box-shadow: var(--backend-component-shadow-lg);
+                        border-top: 3px solid ${borderColor};
+                    ">
+                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-component-text-primary);">${this.escapeHtml(title)}</h4>
+                        <p style="margin: 0 0 20px; color: var(--backend-component-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>
+                        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                            <button class="backend-confirm-btn backend-confirm-btn-cancel" data-action="cancel" style="
+                                padding: 8px 16px;
+                                border: 1px solid var(--backend-component-border);
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-surface);
+                                color: var(--backend-component-text-secondary);
+                                cursor: pointer;
+                                font-size: 0.875rem;
+                                transition: all 0.2s ease;
+                            ">${this.escapeHtml(cancelText)}</button>
+                            <button class="backend-confirm-btn backend-confirm-btn-confirm" data-action="confirm" style="
+                                padding: 8px 16px;
+                                border: none;
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-primary);
+                                color: var(--backend-theme-on-primary);
+                                cursor: pointer;
+                                font-size: 0.875rem;
+                                transition: all 0.2s ease;
+                            ">${this.escapeHtml(confirmText)}</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(overlay);
+                document.body.style.overflow = 'hidden';
+                
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        close(false);
+                    }
+                };
+
+                const close = (result) => {
+                    document.removeEventListener('keydown', escHandler);
+                    overlay.style.animation = 'backendFadeOut 0.2s ease';
+                    setTimeout(() => {
+                        overlay.remove();
+                        document.body.style.overflow = '';
+                    }, 200);
+                    resolve(result);
+                };
+                
+                overlay.querySelector('[data-action="confirm"]').addEventListener('click', () => close(true));
+                overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => close(false));
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) close(false);
+                });
+                
+                document.addEventListener('keydown', escHandler);
+            });
+        },
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        /**
+         * 显示输入对话框（替代 prompt()）
+         * @param {Object} options 配置项
+         * @param {string} options.title 标题
+         * @param {string} options.message 提示信息
+         * @param {string} options.placeholder 输入框占位符
+         * @param {string} options.defaultValue 默认值
+         * @param {string} options.confirmText 确认按钮文本
+         * @param {string} options.cancelText 取消按钮文本
+         * @param {string} options.type 类型 (info, warning, success, danger)
+         * @returns {Promise<string|null>} 用户输入的值或 null（取消时）
+         */
+        showInput(options = {}) {
+            return new Promise((resolve) => {
+                const {
+                    title = __('输入'),
+                    message = '',
+                    placeholder = '',
+                    defaultValue = '',
+                    confirmText = __('确定'),
+                    cancelText = __('取消'),
+                    type = 'info'
+                } = options;
+
+                const overlay = document.createElement('div');
+                overlay.className = 'backend-confirm-overlay';
+                overlay.style.cssText = `
+                    position: fixed;
+                    inset: 0;
+                    background: var(--backend-component-overlay);
+                    z-index: 12050;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: backendFadeIn 0.2s ease;
+                `;
+
+                const typeColors = {
+                    warning: 'var(--backend-theme-warning)',
+                    danger: 'var(--backend-theme-danger)',
+                    info: 'var(--backend-theme-info)',
+                    success: 'var(--backend-theme-success)'
+                };
+
+                const borderColor = typeColors[type] || typeColors.info;
+
+                overlay.innerHTML = `
+                    <div class="backend-confirm-dialog" style="
+                        background: var(--backend-component-surface);
+                        border-radius: var(--backend-theme-radius-lg);
+                        padding: 24px;
+                        max-width: 480px;
+                        width: 90%;
+                        box-shadow: var(--backend-component-shadow-lg);
+                        border-top: 3px solid ${borderColor};
+                    ">
+                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-component-text-primary);">${this.escapeHtml(title)}</h4>
+                        ${message ? `<p style="margin: 0 0 12px; color: var(--backend-component-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>` : ''}
+                        <input type="text" class="backend-input-value" value="${this.escapeHtml(defaultValue)}" placeholder="${this.escapeHtml(placeholder)}" style="
+                            width: 100%;
+                            padding: 10px 14px;
+                            border: 1px solid var(--backend-component-border);
+                            border-radius: var(--backend-theme-radius-md);
+                            background: var(--backend-component-input-surface);
+                            color: var(--backend-component-text-primary);
+                            font-size: 0.9375rem;
+                            margin-bottom: 20px;
+                            box-sizing: border-box;
+                            transition: border-color 0.2s ease;
+                        ">
+                        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                            <button class="backend-confirm-btn backend-confirm-btn-cancel" data-action="cancel" style="
+                                padding: 8px 16px;
+                                border: 1px solid var(--backend-component-border);
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-surface);
+                                color: var(--backend-component-text-secondary);
+                                cursor: pointer;
+                                font-size: 0.875rem;
+                                transition: all 0.2s ease;
+                            ">${this.escapeHtml(cancelText)}</button>
+                            <button class="backend-confirm-btn backend-confirm-btn-confirm" data-action="confirm" style="
+                                padding: 8px 16px;
+                                border: none;
+                                border-radius: var(--backend-theme-radius-md);
+                                background: var(--backend-component-primary);
+                                color: var(--backend-theme-on-primary);
+                                cursor: pointer;
+                                font-size: 0.875rem;
+                                transition: all 0.2s ease;
+                            ">${this.escapeHtml(confirmText)}</button>
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(overlay);
+                document.body.style.overflow = 'hidden';
+
+                const inputEl = overlay.querySelector('.backend-input-value');
+                inputEl.focus();
+                inputEl.select();
+
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        close(null);
+                    }
+                };
+
+                const close = (value) => {
+                    document.removeEventListener('keydown', escHandler);
+                    overlay.style.animation = 'backendFadeOut 0.2s ease';
+                    setTimeout(() => {
+                        overlay.remove();
+                        document.body.style.overflow = '';
+                    }, 200);
+                    resolve(value);
+                };
+
+                overlay.querySelector('[data-action="confirm"]').addEventListener('click', () => close(inputEl.value));
+                overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => close(null));
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) close(null);
+                });
+
+                inputEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        close(inputEl.value);
+                    }
+                });
+
+                document.addEventListener('keydown', escHandler);
+
+                inputEl.addEventListener('focus', function() {
+                    this.style.borderColor = 'var(--backend-component-primary)';
+                    this.style.boxShadow = 'var(--backend-component-focus-ring)';
+                });
+                inputEl.addEventListener('blur', function() {
+                    this.style.borderColor = 'var(--backend-component-border)';
+                    this.style.boxShadow = 'none';
+                });
+            });
+        }
+    };
+
+    // ========================================
+    // BackendModal - 主题兼容弹窗（替代 Swal 等，统一使用主题变量）
+    // ========================================
+    const BackendModal = {
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        /**
+         * 单按钮提示弹窗（如加载失败、操作结果）
+         * @param {string} title 标题
+         * @param {string} message 正文
+         * @param {Object} options 可选 { confirmText, type, icon }
+         * @returns {Promise<void>}
+         */
+        alert(title, message = '', options = {}) {
+            return new Promise((resolve) => {
+                const {
+                    confirmText = __('确定'),
+                    type = 'danger',
+                    icon = 'mdi-close-circle'
+                } = options;
+
+                const typeColors = {
+                    danger: 'var(--backend-theme-danger)',
+                    warning: 'var(--backend-theme-warning)',
+                    success: 'var(--backend-theme-success)',
+                    info: 'var(--backend-theme-info)'
+                };
+                const borderColor = typeColors[type] || typeColors.danger;
+
+                const overlay = document.createElement('div');
+                overlay.className = 'backend-modal-overlay';
+                overlay.style.cssText = `
+                    position: fixed;
+                    inset: 0;
+                    background: var(--backend-component-overlay);
+                    z-index: 10001;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: backendFadeIn 0.2s ease;
+                `;
+
+                overlay.innerHTML = `
+                    <div class="backend-modal-dialog" style="
+                        background: var(--backend-component-surface);
+                        border-radius: var(--backend-theme-radius-lg);
+                        padding: 24px;
+                        max-width: 400px;
+                        width: 90%;
+                        box-shadow: var(--backend-component-shadow-lg);
+                        border-top: 4px solid ${borderColor};
+                        text-align: center;
+                    ">
+                        <div style="margin-bottom: 16px;">
+                            <i class="mdi ${icon}" style="font-size: 48px; color: ${borderColor};"></i>
+                        </div>
+                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-component-text-primary);">${this.escapeHtml(title)}</h4>
+                        ${message ? `<p style="margin: 0 0 20px; color: var(--backend-component-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>` : ''}
+                        <button class="backend-modal-btn" data-action="confirm" style="
+                            padding: 8px 24px;
+                            border: none;
+                            border-radius: var(--backend-theme-radius-md);
+                            background: var(--backend-component-primary);
+                            color: var(--backend-theme-on-primary);
+                            cursor: pointer;
+                            font-size: 0.9375rem;
+                            transition: all 0.2s ease;
+                        ">${this.escapeHtml(confirmText)}</button>
+                    </div>
+                `;
+
+                document.body.appendChild(overlay);
+                document.body.style.overflow = 'hidden';
+
+                const close = () => {
+                    overlay.style.animation = 'backendFadeOut 0.2s ease';
+                    setTimeout(() => {
+                        overlay.remove();
+                        document.body.style.overflow = '';
+                        resolve();
+                    }, 200);
+                };
+
+                overlay.querySelector('[data-action="confirm"]').addEventListener('click', close);
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) close();
+                });
+                document.addEventListener('keydown', function escHandler(e) {
+                    if (e.key === 'Escape') {
+                        document.removeEventListener('keydown', escHandler);
+                        close();
+                    }
+                });
+            });
+        }
+    };
+
+    // ========================================
+    // CSS 动画样式
+    // ========================================
+    (function injectStyles() {
+        if (document.getElementById('backend-components-styles')) {
+            return;
+        }
+        
+        const style = document.createElement('style');
+        style.id = 'backend-components-styles';
+        style.textContent = `
+            @keyframes backendSlideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes backendSlideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            @keyframes backendFadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes backendFadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+            
+            .backend-confirm-btn:hover {
+                filter: brightness(0.95);
+            }
+            .backend-confirm-btn-cancel:hover {
+                background: var(--backend-component-surface-subtle) !important;
+            }
+            .backend-confirm-btn-confirm:hover {
+                background: var(--backend-theme-primary-hover) !important;
+            }
+        `;
+        document.head.appendChild(style);
+    })();
+
+    // ========================================
+    // 挂载到全局
+    // ========================================
+    window.BackendToast = BackendToast;
+    window.BackendConfirm = BackendConfirm;
+    window.BackendModal = BackendModal;
+
+    // 向后兼容：保留 BackendToast 和 AdminConfirm 别名
+    window.BackendToast = BackendToast;
+    if (!window.AdminToast || typeof window.AdminToast.success !== 'function') {
+        window.AdminToast = BackendToast;
+    }
+    window.AdminConfirm = BackendConfirm;
+
+})(window, document);

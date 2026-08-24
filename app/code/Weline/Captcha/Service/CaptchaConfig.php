@@ -23,7 +23,7 @@ final class CaptchaConfig
 
     public function googleEnabled(): bool
     {
-        return $this->boolean('captcha/google/enabled', false);
+        return $this->boolean('captcha/google/enabled', true);
     }
 
     public function googleProjectId(): string
