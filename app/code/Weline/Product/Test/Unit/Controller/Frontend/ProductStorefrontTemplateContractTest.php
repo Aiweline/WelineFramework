@@ -59,7 +59,7 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         );
 
         self::assertStringContainsString(
-            "\$this->getUrl('product/' . \$productId)",
+            "\$this->getUrl('product/' . \$productSlug)",
             $template,
         );
         self::assertStringContainsString('class="product-storefront__media-link"', $template);

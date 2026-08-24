@@ -17,6 +17,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
         'search' => 'header',
         'header-search' => 'header',
         'navigation' => 'header',
+        'category-menu' => 'header',
         'user-area' => 'header',
         'account' => 'header',
         'cart' => 'header',

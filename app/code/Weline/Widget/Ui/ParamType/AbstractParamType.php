@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Ui\ParamType;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Widget\Api\Param\FileImagePreviewResolverInterface;
 use Weline\Widget\Api\Param\ParamDefinition;
 
 /**
@@ -82,6 +84,36 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
             ) ?: '';
         }
         return is_scalar($value) ? trim((string)$value) : '';
+    }
+
+    protected function imagePreviewUrl(mixed $value): string
+    {
+        $legacy = $this->legacyImagePreviewUrl($value);
+        if ($legacy !== '') {
+            return $legacy;
+        }
+
+        $node = $this->normalizeFileImageNode($value);
+        if ($node === null) {
+            return '';
+        }
+
+        try {
+            $resolver = ObjectManager::getInstance(FileImagePreviewResolverInterface::class);
+            return trim($resolver->resolvePreviewUrl($node));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    protected function buildImageHiddenInputExtraAttrs(mixed $currentValue): string
+    {
+        $previewUrl = $this->imagePreviewUrl($currentValue);
+        if ($previewUrl === '') {
+            return '';
+        }
+
+        return ' data-preview-url="' . htmlspecialchars($previewUrl) . '"';
     }
 
     protected function legacyImagePreviewUrl(mixed $value): string

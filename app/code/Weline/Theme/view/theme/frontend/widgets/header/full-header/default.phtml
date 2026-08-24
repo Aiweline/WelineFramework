@@ -1,13 +1,10 @@
 <?php
 /**
  * 完整头部部件模板 (独占部件)
- * 
- * 这是一个完整的、自包含的头部组件，可以整体替换默认的 header slot 内容。
- * 包含 Logo、搜索框、导航菜单、用户区域等所有头部功能。
- * 
+ *
  * @var array $config 部件配置
  * @var \Weline\Framework\View\Block $block 当前 Block 实例
- * 
+ *
  * @widget.code {full-header}
  * @widget.name {完整头部}
  * @widget.description {一个完整的、自包含的头部组件，包含Logo、搜索框、导航菜单、用户区域。独占头部区域，整体替换默认Header。}
@@ -16,14 +13,13 @@
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.exclusive {true}
- * @widget.preview {<div style="background:#fff;padding:15px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);"><div style="display:flex;align-items:center;justify-content:space-between;"><span style="font-weight:bold;font-size:24px;color:#333;">LOGO</span><div style="flex:1;max-width:400px;margin:0 30px;"><input type="text" placeholder="搜索..." style="width:100%;padding:10px 15px;border:1px solid #ddd;border-radius:20px;"></div><div style="display:flex;gap:15px;"><span>👤</span><span>❤️</span><span>🛒</span></div></div><div style="margin-top:15px;padding-top:10px;border-top:1px solid #eee;display:flex;gap:20px;font-size:14px;"><span>首页</span><span>商品分类</span><span>热卖</span><span>新品</span><span>关于我们</span></div></div>}
- * 
+ *
  * @param logo_text {default="WELINE",type="string",label="Logo文字"}
  * @param logo_image {default="",type="image",label="Logo图片",description="Logo图片URL，留空显示文字"}
  * @param sticky {default=true,type="bool",label="吸顶效果"}
- * @param bg_color {default="#ffffff",type="color",label="背景颜色"}
- * @param text_color {default="#333333",type="color",label="文字颜色"}
- * @param accent_color {default="#e74c3c",type="color",label="强调色"}
+ * @param bg_color {default="var(--weline-theme-surface)",type="color",label="背景颜色"}
+ * @param text_color {default="var(--weline-theme-text)",type="color",label="文字颜色"}
+ * @param accent_color {default="var(--weline-theme-primary)",type="color",label="强调色"}
  * @param search_placeholder {default="搜索商品...",type="string",label="搜索框占位符"}
  * @param show_search {default=true,type="bool",label="显示搜索框"}
  * @param show_account {default=true,type="bool",label="显示账户"}
@@ -34,44 +30,45 @@
  * @param shadow {default=true,type="bool",label="显示阴影"}
  */
 
-// 提取配置参数
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('full-header');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$config = $config ?? [];
+$isPreviewMode = (bool)($config['preview_mode'] ?? false);
 $logoText = $config['logo_text'] ?? 'WELINE';
 $logoImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($config['logo_image'] ?? '');
 $logoImageFileHtml = (string)($config['logo_image_file_html'] ?? '');
-$sticky = $config['sticky'] ?? true;
-$sanitizeColor = static function (mixed $value, string $fallback): string {
-    $value = trim((string)$value);
-    return preg_match('/^(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\\([0-9.,%\\s]+\\)|var\\(--[a-zA-Z0-9_-]+\\)|transparent|currentColor)$/D', $value) === 1
-        ? $value
-        : $fallback;
-};
-$bgColor = $sanitizeColor($config['bg_color'] ?? '#ffffff', '#ffffff');
-$textColor = $sanitizeColor($config['text_color'] ?? '#333333', '#333333');
-$accentColor = $sanitizeColor($config['accent_color'] ?? '#e74c3c', '#e74c3c');
+$sticky = (bool)($config['sticky'] ?? true);
+$bgColor = ThemeUiColor::sanitize($config['bg_color'] ?? '', 'var(--weline-theme-surface)');
+$textColor = ThemeUiColor::sanitize($config['text_color'] ?? '', 'var(--weline-theme-text)');
+$accentColor = ThemeUiColor::sanitize($config['accent_color'] ?? '', 'var(--weline-theme-primary)');
 $searchPlaceholder = $config['search_placeholder'] ?? __('搜索商品...');
-$showSearch = $config['show_search'] ?? true;
-$showAccount = $config['show_account'] ?? true;
-$showWishlist = $config['show_wishlist'] ?? true;
-$showCart = $config['show_cart'] ?? true;
-$showNav = $config['show_nav'] ?? true;
+$showSearch = (bool)($config['show_search'] ?? true);
+$showAccount = (bool)($config['show_account'] ?? true);
+$showWishlist = (bool)($config['show_wishlist'] ?? true);
+$showCart = (bool)($config['show_cart'] ?? true);
+$showNav = (bool)($config['show_nav'] ?? true);
 $navStyle = strtolower(trim((string)($config['nav_style'] ?? 'simple')));
 if (!in_array($navStyle, ['simple', 'expanded', 'mega'], true)) {
     $navStyle = 'simple';
 }
-$shadow = $config['shadow'] ?? true;
+$shadow = (bool)($config['shadow'] ?? true);
 
-// 生成唯一ID
-$widgetId = 'full-header-' . uniqid();
+$rootStyle = '--wc-header-bg:' . $bgColor . ';'
+    . '--wc-header-text:' . $textColor . ';'
+    . '--wc-header-accent:' . $accentColor . ';'
+    . ($shadow ? '' : '--wc-header-shadow:none;');
 ?>
 
-<header id="<?= $widgetId ?>" 
-        class="widget-full-header <?= $sticky ? 'is-sticky' : '' ?> nav-style-<?= htmlspecialchars($navStyle) ?>"
-        style="--header-bg: <?= htmlspecialchars($bgColor) ?>; 
-               --header-text: <?= htmlspecialchars($textColor) ?>; 
-               --header-accent: <?= htmlspecialchars($accentColor) ?>;
-               <?= $shadow ? '--header-shadow: 0 2px 15px rgba(0,0,0,0.08);' : '--header-shadow: none;' ?>">
-    
-    <!-- 顶部工具栏（可选） -->
+<section class="<?= $esc($wc) ?><?= $sticky ? ' is-sticky' : '' ?> nav-style-<?= $esc($navStyle) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="<?= $esc($rootStyle) ?>">
     <div class="header-topbar">
         <div class="w-container">
             <div class="topbar-left">
@@ -84,50 +81,35 @@ $widgetId = 'full-header-' . uniqid();
             </div>
         </div>
     </div>
-    
-    <!-- 头部主体区域 -->
+
     <div class="header-main">
         <div class="w-container">
-            
-            <!-- Logo 区域 -->
             <div class="header-logo">
-                <a href="<?= $block->getUrl('/') ?>" class="logo-link" title="<?= htmlspecialchars($logoText) ?>">
+                <a href="<?= $block->getUrl('/') ?>" class="logo-link" title="<?= $esc((string)$logoText) ?>">
                     <?php if ($logoImageFileHtml !== ''): ?>
                         <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
-                    <?php elseif ($logoImage): ?>
-                        <img src="<?= htmlspecialchars($logoImage) ?>" 
-                             alt="<?= htmlspecialchars($logoText) ?>" 
-                             class="logo-image">
+                    <?php elseif ($logoImage !== ''): ?>
+                        <img src="<?= $esc($logoImage) ?>" alt="<?= $esc((string)$logoText) ?>" class="logo-image">
                     <?php else: ?>
-                        <span class="logo-text"><?= htmlspecialchars($logoText) ?></span>
+                        <span class="logo-text"><?= $esc((string)$logoText) ?></span>
                     <?php endif; ?>
                 </a>
             </div>
-            
-            <!-- 搜索框区域 -->
+
             <?php if ($showSearch): ?>
             <div class="header-search">
                 <w:form action="@var($block->getUrl('search'))" method="get" class="search-form">
                     <div class="search-input-wrapper">
-                        <input type="text" 
-                               name="q" 
-                               class="search-input" 
-                               placeholder="<?= htmlspecialchars($searchPlaceholder) ?>"
-                               autocomplete="off">
+                        <input type="text" name="q" class="search-input" placeholder="<?= $esc((string)$searchPlaceholder) ?>" autocomplete="off">
                         <button type="submit" class="search-btn" aria-label="<?= __('搜索') ?>">
                             <w:icon name="search" size="sm"></w:icon>
                         </button>
                     </div>
-                    <div class="search-suggestions" style="display:none;">
-                        <!-- 搜索建议由JS动态填充 -->
-                    </div>
                 </w:form>
             </div>
             <?php endif; ?>
-            
-            <!-- 用户工具区域 -->
+
             <div class="header-tools">
-                
                 <?php if ($showAccount): ?>
                 <div class="tool-item tool-account">
                     <a href="<?= $block->getUrl('customer/account') ?>" class="tool-link">
@@ -136,17 +118,15 @@ $widgetId = 'full-header-' . uniqid();
                     </a>
                 </div>
                 <?php endif; ?>
-                
                 <?php if ($showWishlist): ?>
                 <div class="tool-item tool-wishlist">
                     <a href="<?= $block->getUrl('wishlist') ?>" class="tool-link">
                         <w:icon name="heart" size="sm"></w:icon>
                         <span class="tool-label"><?= __('收藏') ?></span>
-                        <span class="tool-badge wishlist-count" data-count="0" style="display:none;">0</span>
+                        <span class="tool-badge wishlist-count" data-count="0" hidden>0</span>
                     </a>
                 </div>
                 <?php endif; ?>
-                
                 <?php if ($showCart): ?>
                 <div class="tool-item tool-cart">
                     <a href="<?= $block->getUrl('checkout/cart') ?>" class="tool-link">
@@ -156,31 +136,25 @@ $widgetId = 'full-header-' . uniqid();
                     </a>
                 </div>
                 <?php endif; ?>
-                
-                <!-- 移动端菜单按钮 -->
-                <button class="mobile-menu-toggle" aria-label="<?= __('菜单') ?>">
+                <button class="mobile-menu-toggle" type="button" aria-label="<?= __('菜单') ?>" aria-expanded="false">
                     <w:icon name="menu" size="sm"></w:icon>
                 </button>
             </div>
-            
         </div>
     </div>
-    
-    <!-- 导航菜单区域 -->
+
     <?php if ($showNav): ?>
     <nav class="header-nav">
         <div class="w-container">
             <ul class="nav-list">
-                <li>
-                    <a href="<?= $block->getUrl('/') ?>" data-state="active">
-                        <w:icon name="home" size="sm"></w:icon>
-                        <span><?= __('首页') ?></span>
+                <li class="nav-item">
+                    <a href="<?= $block->getUrl('/') ?>" class="nav-link" data-state="active">
+                        <w:icon name="home" size="sm"></w:icon><span><?= __('首页') ?></span>
                     </a>
                 </li>
-                <li class="has-dropdown">
-                    <a href="<?= $block->getUrl('catalog/category') ?>">
-                        <w:icon name="grid" size="sm"></w:icon>
-                        <span><?= __('商品分类') ?></span>
+                <li class="nav-item has-dropdown">
+                    <a href="<?= $block->getUrl('catalog/category') ?>" class="nav-link">
+                        <w:icon name="grid" size="sm"></w:icon><span><?= __('商品分类') ?></span>
                         <w:icon name="arrow-down" size="sm"></w:icon>
                     </a>
                     <div class="nav-dropdown">
@@ -205,467 +179,347 @@ $widgetId = 'full-header-' . uniqid();
                         </div>
                     </div>
                 </li>
-                <li>
-                    <a href="<?= $block->getUrl('catalog/products', ['filter' => 'hot']) ?>">
-                        <w:icon name="fire" size="sm"></w:icon>
-                        <span><?= __('热卖') ?></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="<?= $block->getUrl('catalog/products', ['filter' => 'new']) ?>">
-                        <w:icon name="bolt" size="sm"></w:icon>
-                        <span><?= __('新品') ?></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="<?= $block->getUrl('promotions') ?>" class="highlight">
-                        <w:icon name="circle" size="sm"></w:icon>
-                        <span><?= __('促销活动') ?></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="<?= $block->getUrl('about') ?>">
-                        <w:icon name="info" size="sm"></w:icon>
-                        <span><?= __('关于我们') ?></span>
-                    </a>
-                </li>
+                <li class="nav-item"><a href="<?= $block->getUrl('catalog/products', ['filter' => 'hot']) ?>" class="nav-link"><w:icon name="fire" size="sm"></w:icon><span><?= __('热卖') ?></span></a></li>
+                <li class="nav-item"><a href="<?= $block->getUrl('catalog/products', ['filter' => 'new']) ?>" class="nav-link"><w:icon name="bolt" size="sm"></w:icon><span><?= __('新品') ?></span></a></li>
+                <li class="nav-item"><a href="<?= $block->getUrl('promotions') ?>" class="nav-link highlight"><w:icon name="circle" size="sm"></w:icon><span><?= __('促销活动') ?></span></a></li>
+                <li class="nav-item"><a href="<?= $block->getUrl('about') ?>" class="nav-link"><w:icon name="info" size="sm"></w:icon><span><?= __('关于我们') ?></span></a></li>
             </ul>
         </div>
     </nav>
     <?php endif; ?>
-    
-</header>
+</section>
 
-<!-- 头部占位符（吸顶时使用） -->
 <?php if ($sticky): ?>
-<div class="header-placeholder" style="display:none;"></div>
+<div class="header-placeholder" hidden></div>
 <?php endif; ?>
 
 <style>
-/* ========== 完整头部部件样式 ========== */
-
-#<?= $widgetId ?> {
-    background: var(--header-bg, #ffffff);
-    color: var(--header-text, #333333);
-    box-shadow: var(--header-shadow);
+.<?= $wc ?> {
+    background: var(--wc-header-bg, var(--weline-theme-surface));
+    color: var(--wc-header-text, var(--weline-theme-text));
+    box-shadow: var(--wc-header-shadow, var(--weline-theme-shadow-sm));
     width: 100%;
     z-index: 1000;
-    transition: all 0.3s ease;
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
 }
 
-#<?= $widgetId ?>.is-sticky {
+.<?= $wc ?>.is-sticky {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
 }
 
-#<?= $widgetId ?>.is-sticky + .header-placeholder {
+.<?= $wc ?>.is-sticky + .header-placeholder {
     display: block !important;
 }
 
-/* 容器 */
-#<?= $widgetId ?> .container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 20px;
+.<?= $wc ?> .header-topbar {
+    background: var(--wc-header-text, var(--weline-theme-text));
+    color: var(--wc-header-bg, var(--weline-theme-surface));
+    font-size: var(--weline-font-size-xs, 12px);
+    padding: var(--weline-space-2, 8px) 0;
 }
 
-/* ========== 顶部工具栏 ========== */
-#<?= $widgetId ?> .header-topbar {
-    background: var(--header-text, #333);
-    color: var(--header-bg, #fff);
-    font-size: 12px;
-    padding: 8px 0;
-}
-
-#<?= $widgetId ?> .header-topbar .container {
+.<?= $wc ?> .header-topbar .w-container {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-#<?= $widgetId ?> .topbar-link {
+.<?= $wc ?> .topbar-link {
     color: inherit;
     text-decoration: none;
     opacity: 0.9;
-    transition: opacity 0.2s;
 }
 
-#<?= $widgetId ?> .topbar-link:hover {
-    opacity: 1;
-}
-
-#<?= $widgetId ?> .topbar-divider {
-    margin: 0 10px;
+.<?= $wc ?> .topbar-divider {
+    margin: 0 var(--weline-space-3, 10px);
     opacity: 0.5;
 }
 
-/* ========== 头部主体 ========== */
-#<?= $widgetId ?> .header-main {
-    padding: 15px 0;
+.<?= $wc ?> .header-main {
+    padding: var(--weline-space-4, 15px) 0;
 }
 
-#<?= $widgetId ?> .header-main .container {
+.<?= $wc ?> .header-main .w-container {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 30px;
+    gap: var(--weline-space-8, 30px);
 }
 
-/* Logo */
-#<?= $widgetId ?> .header-logo {
-    flex-shrink: 0;
-}
-
-#<?= $widgetId ?> .logo-link {
-    text-decoration: none;
-    display: block;
-}
-
-#<?= $widgetId ?> .logo-text {
-    font-size: 28px;
+.<?= $wc ?> .logo-text {
+    font-size: var(--weline-font-size-2xl, 28px);
     font-weight: 700;
-    color: var(--header-accent, #e74c3c);
+    color: var(--wc-header-accent, var(--weline-theme-primary));
     letter-spacing: 2px;
 }
 
-#<?= $widgetId ?> .logo-image {
+.<?= $wc ?> .logo-image,
+.<?= $wc ?> .logo-image--asset img {
     max-height: 50px;
     width: auto;
 }
 
-#<?= $widgetId ?> .logo-image--asset img {
-    display: block;
-    max-height: 50px;
-    width: auto;
-}
-
-/* 搜索框 */
-#<?= $widgetId ?> .header-search {
+.<?= $wc ?> .header-search {
     flex: 1;
     max-width: 550px;
 }
 
-#<?= $widgetId ?> .search-form {
-    position: relative;
-}
-
-#<?= $widgetId ?> .search-input-wrapper {
+.<?= $wc ?> .search-input-wrapper {
     display: flex;
     align-items: center;
-    border: 2px solid #e0e0e0;
-    border-radius: 25px;
+    border: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-round, 999px);
     overflow: hidden;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color var(--weline-theme-transition-base, 0.2s ease);
 }
 
-#<?= $widgetId ?> .search-input-wrapper:focus-within {
-    border-color: var(--header-accent, #e74c3c);
-    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+.<?= $wc ?> .search-input-wrapper:focus-within {
+    border-color: var(--wc-header-accent, var(--weline-theme-primary));
 }
 
-#<?= $widgetId ?> .search-input {
+.<?= $wc ?> .search-input {
     flex: 1;
     border: none;
-    padding: 12px 20px;
-    font-size: 14px;
+    padding: var(--weline-space-3, 12px) var(--weline-space-5, 20px);
+    font-size: var(--weline-font-size-sm, 14px);
     background: transparent;
     outline: none;
-    color: var(--header-text, #333);
+    color: var(--wc-header-text, var(--weline-theme-text));
 }
 
-#<?= $widgetId ?> .search-input::placeholder {
-    color: #999;
-}
-
-#<?= $widgetId ?> .search-btn {
-    background: var(--header-accent, #e74c3c);
-    color: #fff;
+.<?= $wc ?> .search-btn {
+    background: var(--wc-header-accent, var(--weline-theme-primary));
+    color: var(--weline-theme-on-primary);
     border: none;
-    padding: 12px 20px;
+    padding: var(--weline-space-3, 12px) var(--weline-space-5, 20px);
     cursor: pointer;
-    transition: background 0.2s;
 }
 
-#<?= $widgetId ?> .search-btn:hover {
-    background: color-mix(in srgb, var(--header-accent, #e74c3c) 85%, black);
-}
-
-/* 工具区域 */
-#<?= $widgetId ?> .header-tools {
+.<?= $wc ?> .header-tools {
     display: flex;
     align-items: center;
-    gap: 20px;
-    flex-shrink: 0;
+    gap: var(--weline-space-5, 20px);
 }
 
-#<?= $widgetId ?> .tool-item {
-    position: relative;
-}
-
-#<?= $widgetId ?> .tool-link {
+.<?= $wc ?> .tool-link {
     display: flex;
     flex-direction: column;
     align-items: center;
     text-decoration: none;
-    color: var(--header-text, #333);
-    transition: color 0.2s;
+    color: var(--wc-header-text, var(--weline-theme-text));
+    transition: color var(--weline-theme-transition-base, 0.2s ease);
 }
 
-#<?= $widgetId ?> .tool-link:hover {
-    color: var(--header-accent, #e74c3c);
+.<?= $wc ?> .tool-link:hover {
+    color: var(--wc-header-accent, var(--weline-theme-primary));
 }
 
-#<?= $widgetId ?> .tool-icon {
-    font-size: 22px;
-    margin-bottom: 4px;
+.<?= $wc ?> .tool-label {
+    font-size: var(--weline-font-size-xs, 12px);
 }
 
-#<?= $widgetId ?> .tool-label {
-    font-size: 12px;
-}
-
-#<?= $widgetId ?> .tool-badge {
+.<?= $wc ?> .tool-badge {
     position: absolute;
     top: -5px;
     right: 0;
-    background: var(--header-accent, #e74c3c);
-    color: #fff;
-    font-size: 10px;
+    background: var(--wc-header-accent, var(--weline-theme-primary));
+    color: var(--weline-theme-on-primary);
+    font-size: var(--weline-font-size-xs, 10px);
     min-width: 18px;
     height: 18px;
     line-height: 18px;
     text-align: center;
-    border-radius: 9px;
-    padding: 0 5px;
+    border-radius: var(--weline-radius-round, 999px);
+    padding: 0 var(--weline-space-1, 5px);
 }
 
-#<?= $widgetId ?> .mobile-menu-toggle {
+.<?= $wc ?> .tool-item {
+    position: relative;
+}
+
+.<?= $wc ?> .mobile-menu-toggle {
     display: none;
     background: none;
     border: none;
-    font-size: 24px;
     cursor: pointer;
-    color: var(--header-text, #333);
+    color: var(--wc-header-text, var(--weline-theme-text));
 }
 
-/* ========== 导航菜单 ========== */
-#<?= $widgetId ?> .header-nav {
-    background: var(--frontend-color-bg-secondary, #f8f9fa);
-    border-top: 1px solid rgba(0,0,0,0.05);
+.<?= $wc ?> .header-nav {
+    background: var(--weline-theme-surface-muted);
+    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
 }
 
-#<?= $widgetId ?> .nav-list {
+.<?= $wc ?> .nav-list {
     display: flex;
     list-style: none;
     margin: 0;
     padding: 0;
-    gap: 5px;
+    gap: var(--weline-space-1, 5px);
 }
 
-#<?= $widgetId ?> .nav-item {
+.<?= $wc ?> .nav-item {
     position: relative;
 }
 
-#<?= $widgetId ?> .nav-link {
+.<?= $wc ?> .nav-link {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 12px 18px;
+    gap: var(--weline-space-2, 6px);
+    padding: var(--weline-space-3, 12px) var(--weline-space-5, 18px);
     text-decoration: none;
-    color: var(--header-text, #333);
-    font-size: 14px;
+    color: var(--wc-header-text, var(--weline-theme-text));
+    font-size: var(--weline-font-size-sm, 14px);
     font-weight: 500;
-    transition: all 0.2s;
-    border-radius: 4px;
+    border-radius: var(--weline-radius-sm, 4px);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-#<?= $widgetId ?> .nav-link:hover,
-#<?= $widgetId ?> .nav-link.active {
-    color: var(--header-accent, #e74c3c);
-    background: rgba(231, 76, 60, 0.08);
+.<?= $wc ?> .nav-link:hover,
+.<?= $wc ?> .nav-link[data-state="active"] {
+    color: var(--wc-header-accent, var(--weline-theme-primary));
+    background: var(--weline-theme-primary-surface);
 }
 
-#<?= $widgetId ?> .nav-link.highlight {
-    color: var(--header-accent, #e74c3c);
+.<?= $wc ?> .nav-link.highlight {
+    color: var(--wc-header-accent, var(--weline-theme-primary));
     font-weight: 600;
 }
 
-#<?= $widgetId ?> .nav-icon {
-    font-size: 16px;
-}
-
-#<?= $widgetId ?> .dropdown-arrow {
-    font-size: 14px;
-    transition: transform 0.2s;
-}
-
-#<?= $widgetId ?> .nav-item:hover .dropdown-arrow {
-    transform: rotate(180deg);
-}
-
-/* 下拉菜单 */
-#<?= $widgetId ?> .nav-dropdown {
+.<?= $wc ?> .nav-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     min-width: 400px;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-md, 8px);
+    box-shadow: var(--weline-theme-shadow-lg);
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px);
-    transition: all 0.2s;
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
     z-index: 100;
 }
 
-#<?= $widgetId ?> .nav-item:hover .nav-dropdown {
+.<?= $wc ?> .nav-item:hover .nav-dropdown {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
 }
 
-#<?= $widgetId ?> .dropdown-inner {
+.<?= $wc ?> .dropdown-inner {
     display: flex;
-    padding: 20px;
-    gap: 30px;
+    padding: var(--weline-space-5, 20px);
+    gap: var(--weline-space-8, 30px);
 }
 
-#<?= $widgetId ?> .dropdown-column {
-    min-width: 150px;
-}
-
-#<?= $widgetId ?> .dropdown-title {
-    font-size: 14px;
+.<?= $wc ?> .dropdown-title {
+    font-size: var(--weline-font-size-sm, 14px);
     font-weight: 600;
-    color: var(--header-text, #333);
-    margin: 0 0 12px 0;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--header-accent, #e74c3c);
+    margin: 0 0 var(--weline-space-3, 12px);
+    padding-bottom: var(--weline-space-2, 8px);
+    border-bottom: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) var(--wc-header-accent, var(--weline-theme-primary));
 }
 
-#<?= $widgetId ?> .dropdown-list {
+.<?= $wc ?> .dropdown-list {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-#<?= $widgetId ?> .dropdown-list li {
-    margin: 8px 0;
-}
-
-#<?= $widgetId ?> .dropdown-list a {
-    color: #666;
+.<?= $wc ?> .dropdown-list a {
+    color: var(--weline-theme-text-muted);
     text-decoration: none;
-    font-size: 13px;
-    transition: color 0.2s;
+    font-size: var(--weline-font-size-sm, 13px);
 }
 
-#<?= $widgetId ?> .dropdown-list a:hover {
-    color: var(--header-accent, #e74c3c);
+.<?= $wc ?> .dropdown-list a:hover {
+    color: var(--wc-header-accent, var(--weline-theme-primary));
 }
 
-/* ========== 响应式 ========== */
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    font-size: var(--weline-font-size-xs, 12px);
+}
+
+.widget-preview-canvas .<?= $wc ?> .header-topbar,
+.<?= $wc ?>.is-preview .header-topbar {
+    display: none;
+}
+
+.widget-preview-canvas .<?= $wc ?> .header-nav,
+.<?= $wc ?>.is-preview .header-nav {
+    display: none;
+}
+
 @media (max-width: 992px) {
-    #<?= $widgetId ?> .header-main .container {
+    .<?= $wc ?> .header-main .w-container {
         flex-wrap: wrap;
     }
-    
-    #<?= $widgetId ?> .header-search {
+
+    .<?= $wc ?> .header-search {
         order: 3;
         max-width: none;
         width: 100%;
-        margin-top: 15px;
+        margin-top: var(--weline-space-4, 15px);
     }
-    
-    #<?= $widgetId ?> .tool-label {
-        display: none;
-    }
-    
-    #<?= $widgetId ?> .mobile-menu-toggle {
-        display: block;
-    }
-    
-    #<?= $widgetId ?> .header-nav {
-        display: none;
-    }
-    
-    #<?= $widgetId ?> .header-nav.is-open {
-        display: block;
-    }
-    
-    #<?= $widgetId ?> .nav-list {
-        flex-direction: column;
-        padding: 10px 0;
-    }
-    
-    #<?= $widgetId ?> .nav-dropdown {
-        position: static;
-        opacity: 1;
-        visibility: visible;
-        transform: none;
-        box-shadow: none;
-        min-width: 0;
-    }
-}
 
-@media (max-width: 576px) {
-    #<?= $widgetId ?> .topbar-left {
+    .<?= $wc ?> .tool-label {
         display: none;
     }
-    
-    #<?= $widgetId ?> .header-tools {
-        gap: 12px;
+
+    .<?= $wc ?> .mobile-menu-toggle {
+        display: block;
     }
-    
-    #<?= $widgetId ?> .tool-icon {
-        font-size: 20px;
+
+    .<?= $wc ?> .header-nav {
+        display: none;
+    }
+
+    .<?= $wc ?> .header-nav.is-open {
+        display: block;
+    }
+
+    .<?= $wc ?> .nav-list {
+        flex-direction: column;
     }
 }
 </style>
 
 <script>
-(function() {
-    const header = document.getElementById('<?= $widgetId ?>');
-    const placeholder = header.nextElementSibling;
-    
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var placeholder = root.nextElementSibling;
+    var menuToggle = root.querySelector('.mobile-menu-toggle');
+    var nav = root.querySelector('.header-nav');
+
     <?php if ($sticky): ?>
-    // 吸顶效果
-    let headerHeight = header.offsetHeight;
-    
+    var headerHeight = root.offsetHeight;
+
     function updatePlaceholder() {
-        if (header.classList.contains('is-sticky')) {
+        if (placeholder && root.classList.contains('is-sticky')) {
             placeholder.style.height = headerHeight + 'px';
+            placeholder.hidden = false;
         }
     }
-    
-    window.addEventListener('resize', function() {
-        headerHeight = header.offsetHeight;
+
+    window.addEventListener('resize', function () {
+        headerHeight = root.offsetHeight;
         updatePlaceholder();
     });
-    
+
     updatePlaceholder();
     <?php endif; ?>
-    
-    // 移动端菜单切换
-    const menuToggle = header.querySelector('.mobile-menu-toggle');
-    const nav = header.querySelector('.header-nav');
-    
+
     if (menuToggle && nav) {
-        menuToggle.addEventListener('click', function() {
-            const open = nav.classList.toggle('is-open');
-            this.setAttribute('aria-expanded', open ? 'true' : 'false');
-            this.dataset.state = open ? 'open' : 'closed';
-        });
-    }
-    
-    // 搜索建议（示例）
-    const searchInput = header.querySelector('.search-input');
-    if (searchInput) {
-        searchInput.addEventListener('focus', function() {
-            // 可以在这里添加搜索建议逻辑
+        menuToggle.addEventListener('click', function () {
+            var open = nav.classList.toggle('is-open');
+            menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
     }
 })();

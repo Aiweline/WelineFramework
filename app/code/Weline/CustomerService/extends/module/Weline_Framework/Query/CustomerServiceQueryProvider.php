@@ -282,9 +282,12 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         }
 
         if (!$this->emailBindingService->sendVerificationEmail($email, $sessionToken)) {
+            $detail = trim($this->emailBindingService->getLastErrorMessage());
             return [
                 'success' => false,
-                'message' => (string)__('Unable to send verification email. Please try again later.'),
+                'message' => $detail !== ''
+                    ? $detail
+                    : (string)__('Unable to send verification email. Please try again later.'),
             ];
         }
 

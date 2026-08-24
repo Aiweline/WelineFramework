@@ -2365,6 +2365,15 @@ SH);
         ], JSON_THROW_ON_ERROR),
         json_encode(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/list', 'params' => []], JSON_THROW_ON_ERROR),
         json_encode(['jsonrpc' => '2.0', 'id' => 3, 'method' => 'resources/list', 'params' => []], JSON_THROW_ON_ERROR),
+        json_encode([
+            'jsonrpc' => '2.0',
+            'id' => 4,
+            'method' => 'tools/call',
+            'params' => [
+                'name' => 'health',
+                'arguments' => (object) [],
+            ],
+        ], JSON_THROW_ON_ERROR),
     ]) . "
 ";
     $protocol = $runner->run(
@@ -2387,6 +2396,16 @@ SH);
     check(in_array('get_run_trace', $protocolTools, true), 'protocol tools/list exposes run trace');
     $resourceUris = array_column($responses[3]['result']['resources'] ?? [], 'uri');
     check(in_array(ToolService::EXECUTION_RUN_RESOURCE_URI, $resourceUris, true), 'protocol resources/list exposes execution panel');
+    $healthContent = $responses[4]['result']['content'] ?? [];
+    $healthUsageLine = is_array($healthContent[0] ?? null) ? (string) ($healthContent[0]['text'] ?? '') : '';
+    $healthStructured = is_array($responses[4]['result']['structuredContent'] ?? null)
+        ? $responses[4]['result']['structuredContent']
+        : [];
+    check(
+        str_starts_with($healthUsageLine, 'Weline：已调用 health')
+            && (($healthStructured['_weline_mcp']['usage_line'] ?? '') === $healthUsageLine),
+        'tools/call emits Weline usage_line receipt in content[0]',
+    );
 
     if ($mode === 'full') {
         $acceptance = $runner->run(

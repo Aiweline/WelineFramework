@@ -12,54 +12,144 @@
  * @widget.slots {"panel":{"id":"tabs-panel:{layout_id}:{tab_key}","name":"标签页内容","accept":["builder-component","builder-form","builder-display","builder-container"],"multiple":true}}
  * @param.tabs {default=["概览","详情"],name="标签",description="标签数组或 key=>label 数组"}
  */
+
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forComponent('tabs');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
 $layoutId = (string)($this->getData('layout_id') ?? $this->getData('_layout_id') ?? 'preview');
-$tabs = $this->getData('tabs') ?? $this->getData('meta.tabs') ?? ['概览', '详情'];
+$tabs = $this->getData('tabs') ?? $this->getData('meta.tabs') ?? [__('概览'), __('详情')];
 $editorMode = (bool)($this->getData('editor_mode') ?? $this->getData('preview_mode') ?? false);
+
 if (!is_array($tabs) || $tabs === []) {
-    $tabs = ['概览', '详情'];
+    $tabs = [__('概览'), __('详情')];
 }
+
 $normalizedTabs = [];
 foreach ($tabs as $key => $label) {
     $tabKey = is_string($key) ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', $key) : 'tab-' . (count($normalizedTabs) + 1);
     $tabLabel = is_array($label) ? (string)($label['label'] ?? $label['name'] ?? $tabKey) : (string)$label;
-    $normalizedTabs[] = ['key' => trim($tabKey, '-') ?: 'tab-' . (count($normalizedTabs) + 1), 'label' => $tabLabel];
+    $normalizedTabs[] = [
+        'key' => trim($tabKey, '-') ?: 'tab-' . (count($normalizedTabs) + 1),
+        'label' => $tabLabel,
+    ];
 }
-$dragPlaceholder = __('拖入标签页内容');
+
+$dragPlaceholder = (string)__('拖入标签页内容');
 ?>
-<section class="w-builder-tabs" weline-code="theme.components.section_1">
-    <nav class="w-tabs w-tabs__list" role="tablist" data-w-component="tabs">
+
+<section class="<?= $esc($wc) ?> w-builder-tabs"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <nav class="w-tabs w-tabs__list tabs-nav" role="tablist" data-w-component="tabs">
         <?php foreach ($normalizedTabs as $index => $tab): ?>
-            <?php
-            $tabLabelEsc = htmlspecialchars($tab['label'], ENT_QUOTES, 'UTF-8');
-            $tabClass = 'w-tabs__tab w-tab' . ($index === 0 ? ' active' : '');
-            $selected = $index === 0 ? 'true' : 'false';
-            ?>
-            <button class="<?= $tabClass ?>" type="button" role="tab" aria-selected="<?= $selected ?>" data-state="<?= $index === 0 ? 'active' : 'inactive' ?>">
-                <?= $tabLabelEsc ?>
+            <button class="w-tabs__tab w-tab tabs-trigger<?= $index === 0 ? ' active is-active' : '' ?>"
+                    type="button"
+                    role="tab"
+                    aria-selected="<?= $index === 0 ? 'true' : 'false' ?>"
+                    data-state="<?= $index === 0 ? 'active' : 'inactive' ?>"
+                    data-tab-index="<?= $index ?>">
+                <?= $esc($tab['label']) ?>
             </button>
         <?php endforeach; ?>
     </nav>
-    <div class="w-tab-content w-tabs__content w-builder-tabs-content">
+    <div class="w-tab-content w-tabs__content w-builder-tabs-content tabs-panels">
         <?php foreach ($normalizedTabs as $index => $tab): ?>
-            <?php
-            $panelSlotId = 'tabs-panel:' . ($layoutId !== '' ? $layoutId : 'preview') . ':' . $tab['key'];
-            $panelSlotIdEsc = htmlspecialchars($panelSlotId, ENT_QUOTES, 'UTF-8');
-            $tabLabelEsc = htmlspecialchars($tab['label'], ENT_QUOTES, 'UTF-8');
-            $paneClass = 'w-tabs__panel w-tab-pane' . ($index === 0 ? ' is-active' : '');
-            $paneHidden = $index === 0 ? 'false' : 'true';
-            ?>
-            <section class="<?= $paneClass ?>"
-                     data-wslot="<?= $panelSlotIdEsc ?>"
-                     data-wslot-name="<?= $tabLabelEsc ?>"
-                     data-wslot-accept="builder-component,builder-form,builder-display,builder-container"
-                     data-wslot-multiple="true"
-                     role="tabpanel"
-                     aria-hidden="<?= $paneHidden ?>"
-                     weline-code="theme.components.section_2">
+            <?php $panelSlotId = 'tabs-panel:' . ($layoutId !== '' ? $layoutId : 'preview') . ':' . $tab['key']; ?>
+            <div class="w-tabs__panel w-tab-pane tabs-panel<?= $index === 0 ? ' is-active' : '' ?>"
+                 data-wslot="<?= $esc($panelSlotId) ?>"
+                 data-wslot-name="<?= $esc($tab['label']) ?>"
+                 data-wslot-accept="builder-component,builder-form,builder-display,builder-container"
+                 data-wslot-multiple="true"
+                 role="tabpanel"
+                 aria-hidden="<?= $index === 0 ? 'false' : 'true' ?>"
+                 data-tab-index="<?= $index ?>">
                 <?php if ($editorMode): ?>
-                    <div class="w-builder-slot-placeholder"><?= htmlspecialchars($dragPlaceholder, ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="w-builder-slot-placeholder"><?= $esc($dragPlaceholder) ?></div>
                 <?php endif; ?>
-            </section>
+            </div>
         <?php endforeach; ?>
     </div>
 </section>
+
+<style>
+.<?= $wc ?> {
+    display: block;
+    color: var(--weline-theme-text);
+}
+
+.<?= $wc ?> .tabs-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-1, 4px);
+    padding: var(--weline-space-1, 4px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md, 8px);
+    background: var(--weline-theme-surface-muted);
+}
+
+.<?= $wc ?> .tabs-trigger {
+    padding: var(--weline-space-2, 8px) var(--weline-space-4, 16px);
+    border: 0;
+    border-radius: var(--weline-radius-sm, 6px);
+    background: transparent;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm, 13px);
+    font-weight: var(--weline-font-weight-medium, 500);
+    cursor: pointer;
+}
+
+.<?= $wc ?> .tabs-trigger.is-active,
+.<?= $wc ?> .tabs-trigger.active {
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-primary);
+    box-shadow: var(--weline-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+}
+
+.<?= $wc ?> .tabs-panels {
+    margin-top: var(--weline-space-4, 16px);
+}
+
+.<?= $wc ?> .tabs-panel {
+    display: none;
+}
+
+.<?= $wc ?> .tabs-panel.is-active {
+    display: block;
+}
+</style>
+
+<script>
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var triggers = root.querySelectorAll('.tabs-trigger');
+    var panels = root.querySelectorAll('.tabs-panel');
+    if (!triggers.length || !panels.length) return;
+
+    function activate(index) {
+        triggers.forEach(function (trigger, i) {
+            var active = i === index;
+            trigger.classList.toggle('is-active', active);
+            trigger.classList.toggle('active', active);
+            trigger.setAttribute('aria-selected', active ? 'true' : 'false');
+            trigger.setAttribute('data-state', active ? 'active' : 'inactive');
+        });
+        panels.forEach(function (panel, i) {
+            var active = i === index;
+            panel.classList.toggle('is-active', active);
+            panel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
+    }
+
+    triggers.forEach(function (trigger, index) {
+        trigger.addEventListener('click', function () {
+            activate(index);
+        });
+    });
+})();
+</script>

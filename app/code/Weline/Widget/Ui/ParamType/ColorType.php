@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Ui\ParamType;
 
+use Weline\Theme\Helper\ThemeUiColor;
+
 /**
  * 颜色类型参数 UI 组件
  */
@@ -30,9 +32,12 @@ class ColorType extends AbstractParamType
             $inputHtml .= '<button type="button" class="' . $btnClass . '" data-tone="neutral" data-variant="outline" data-size="sm" data-state="' . ($isTransparent ? 'active' : 'idle') . '" data-target="' . htmlspecialchars($fieldId) . '" title="' . __('设为透明') . '">□</button>';
         }
         $inputHtml .= '</div>';
+        $presetSource = is_array($param['presets'] ?? null) && ($param['presets'] ?? []) !== []
+            ? $param['presets']
+            : ThemeUiColor::SEMANTIC_PRESETS;
         $presets = array_values(array_filter(array_map(
             fn (mixed $preset): ?string => $this->normalizeCssColorScalar($preset),
-            is_array($param['presets'] ?? null) ? $param['presets'] : []
+            $presetSource
         ), static fn (?string $preset): bool => $preset !== null));
         if ($presets !== []) {
             $inputHtml .= '<div class="w-param-color-presets">';
@@ -50,6 +55,9 @@ class ColorType extends AbstractParamType
         $color = strtolower(trim($color));
         if (in_array($color, ['transparent', 'inherit', 'initial'], true)) {
             return '#000000';
+        }
+        if (ThemeUiColor::isThemeVar($color)) {
+            return '#315ee7';
         }
         if (preg_match('/^#[0-9a-f]{6}$/i', $color)) {
             return $color;
@@ -79,7 +87,26 @@ class ColorType extends AbstractParamType
         if (preg_match('/^rgba?\s*\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+\s*)?\)$/i', $value)) {
             return true;
         }
+        if (ThemeUiColor::isValid((string)$value)) {
+            return true;
+        }
         return false;
+    }
+
+    protected function normalizeCssColorScalar(mixed $value): ?string
+    {
+        if (!is_scalar($value)) {
+            return null;
+        }
+        $color = trim((string)$value);
+        if ($color === '' || strlen($color) > 128 || preg_match('/[;"\'\\\\{}<>]/', $color)) {
+            return null;
+        }
+        if (ThemeUiColor::isValid($color)) {
+            return $color;
+        }
+
+        return null;
     }
 
     public function processValue(mixed $value, array $param): mixed

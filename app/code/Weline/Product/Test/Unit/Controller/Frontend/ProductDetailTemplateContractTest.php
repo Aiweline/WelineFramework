@@ -73,9 +73,9 @@ final class ProductDetailTemplateContractTest extends TestCase
             BP . 'app/code/Weline/Product/Controller/Frontend/Detail.php',
         );
 
-        self::assertStringContainsString("\$this->layoutType = 'product'", $controller);
-        self::assertStringContainsString("setGet('page_type', 'product')", $controller);
+        self::assertStringContainsString("\$this->layoutType = 'product_detail'", $controller);
         self::assertStringContainsString('publishedOffer($productId)', $controller);
+        self::assertStringContainsString('publishedOfferBySlug($slug)', $controller);
         self::assertStringContainsString("\$this->getUrl('products')", $controller);
         self::assertStringNotContainsString('WeShop\\Product', $controller);
         self::assertStringNotContainsString('PageBuilder', $controller);

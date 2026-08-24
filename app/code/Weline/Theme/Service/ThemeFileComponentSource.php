@@ -35,6 +35,9 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
             }
 
             $widgetMeta = $resource['widget_meta'] ?? [];
+            $defaultInjections = $this->normalizeDefaultInjections(
+                $widgetMeta['default_injections'] ?? ($resource['meta']['widget']['default_injections'] ?? [])
+            );
             $isLegacyWidget = ($resource['type'] ?? '') === 'widgets';
             $category = (string)($resource['category'] ?? 'basic');
             $componentCode = (string)($resource['code'] ?? '');
@@ -77,12 +80,14 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
                     'layer_type' => $resource['layer_type'] ?? '',
                     'theme_name' => $resource['theme_name'] ?? '',
                     'widget_meta' => $widgetMeta,
+                    'default_injections' => $defaultInjections,
                 ]),
                 params: $resource['params'] ?? [],
                 position: $this->normalizeArray($widgetMeta['position'] ?? [], $isLegacyWidget ? [] : ['content']),
                 pageLayouts: $this->normalizeArray($widgetMeta['page_layouts'] ?? ['*'], ['*']),
                 slots: $slots,
                 slot: !empty($widgetMeta['slot']) ? (string)$widgetMeta['slot'] : null,
+                defaultInjections: $defaultInjections,
                 supports: $this->normalizeArray($widgetMeta['supports'] ?? [], []),
                 exclusive: (bool)($widgetMeta['exclusive'] ?? false),
                 compatible: (bool)($widgetMeta['compatible'] ?? true),
@@ -235,5 +240,29 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
         }
 
         return sprintf('Weline_Theme::theme/%s/widgets/%s', $area, $relativePath);
+    }
+
+    private function normalizeDefaultInjections(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!is_array($value) || $value === []) {
+            return [];
+        }
+
+        $isList = array_keys($value) === range(0, count($value) - 1);
+        $items = $isList ? $value : [$value];
+        $result = [];
+
+        foreach ($items as $item) {
+            if (is_array($item) && $item !== []) {
+                $result[] = $item;
+            }
+        }
+
+        return $result;
     }
 }

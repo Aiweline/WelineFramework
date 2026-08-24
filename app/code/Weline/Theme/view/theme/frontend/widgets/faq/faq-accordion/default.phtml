@@ -1,9 +1,9 @@
 <?php
 /**
  * FAQ折叠面板部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {faq-accordion}
  * @widget.name {FAQ折叠}
  * @widget.description {常见问题折叠面板，支持展开收起交互}
@@ -13,7 +13,7 @@
  * @widget.page_layouts {["cms_page", "product"]}
  * @widget.supports {["layout-contact-faq","layout-contact-content","layout-cms-content","layout-default-content","faq"]}
  * @widget.compatible {true}
- * 
+ *
  * @param title {default="常见问题",type="string",label="标题"}
  * @param subtitle {default="",type="string",label="副标题"}
  * @param faqs {default=[],type="array",label="FAQ列表",description="每项包含question和answer"}
@@ -21,6 +21,14 @@
  * @param allow_multiple {default=false,type="bool",label="允许同时展开多个"}
  */
 
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('faq-accordion');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = $this->getData('title') ?? __('常见问题');
 $subtitle = $this->getData('subtitle') ?? '';
 $faqs = $this->getData('faqs') ?? [];
@@ -29,7 +37,6 @@ $expandFirst = (bool)($this->getData('expand_first') ?? true);
 $allowMultiple = (bool)($this->getData('allow_multiple') ?? false);
 $searchEnabled = (bool)($this->getData('search_enabled') ?? false);
 
-// 示例数据
 if (empty($faqs)) {
     $faqs = [
         ['question' => __('如何下单购买？'), 'answer' => __('您可以浏览商品，选择心仪的产品加入购物车，然后前往结算页面完成支付即可。')],
@@ -47,243 +54,244 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
     }
     $this->setData('faqs', array_values(array_merge($pageFaqs, $explicitFaqs)));
 }
-
-$widgetId = 'faq-accordion-' . uniqid();
 ?>
 
-<div class="widget-faq-accordion" 
-     id="<?= $widgetId ?>"
-     data-allow-multiple="<?= $allowMultiple ? 'true' : 'false' ?>">
-    
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-allow-multiple="<?= $allowMultiple ? 'true' : 'false' ?>">
+
     <?php if ($title || $subtitle): ?>
         <div class="widget-header">
             <?php if ($title): ?>
-                <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+                <h2 class="widget-title"><?= $esc((string)$title) ?></h2>
             <?php endif; ?>
             <?php if ($subtitle): ?>
-                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+                <p class="widget-subtitle"><?= $esc((string)$subtitle) ?></p>
             <?php endif; ?>
         </div>
     <?php endif; ?>
-    
+
     <?php if ($searchEnabled): ?>
         <div class="faq-search">
             <input type="text" class="faq-search-input" placeholder="<?= __('搜索问题...') ?>">
             <w:icon name="search" size="sm"></w:icon>
         </div>
     <?php endif; ?>
-    
+
     <div class="faq-list">
         <?php foreach ($faqs as $index => $faq): ?>
             <div class="faq-item <?= ($expandFirst && $index === 0) ? 'expanded' : '' ?>" data-index="<?= $index ?>">
                 <button class="faq-question" type="button">
-                    <span class="question-text"><?= htmlspecialchars($faq['question']) ?></span>
+                    <span class="question-text"><?= $esc((string)$faq['question']) ?></span>
                     <span class="question-icon">
                         <w:icon name="plus" size="sm"></w:icon>
                     </span>
                 </button>
-                <div class="faq-answer" <?= ($expandFirst && $index === 0) ? '' : 'style="display: none;"' ?>>
+                <div class="faq-answer">
                     <div class="answer-content">
-                        <?= nl2br(htmlspecialchars($faq['answer'])) ?>
+                        <?= nl2br($esc((string)$faq['answer'])) ?>
                     </div>
                 </div>
             </div>
         <?php endforeach; ?>
     </div>
-</div>
+</section>
 
 <style>
-.widget-faq-accordion {
+.<?= $wc ?> {
     max-width: 800px;
     margin: 0 auto;
-    padding: 40px 0;
+    padding: var(--weline-space-10, 40px) 0;
 }
 
-.widget-faq-accordion .widget-header {
+.<?= $wc ?> .widget-header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: var(--weline-space-8, 30px);
 }
 
-.widget-faq-accordion .widget-title {
-    font-size: 28px;
+.<?= $wc ?> .widget-title {
+    font-size: var(--weline-font-size-3xl, 28px);
     font-weight: 700;
-    margin: 0 0 10px;
+    margin: 0 0 var(--weline-space-2, 10px);
+    color: var(--weline-theme-text);
 }
 
-.widget-faq-accordion .widget-subtitle {
-    font-size: 16px;
-    color: #666;
+.<?= $wc ?> .widget-subtitle {
+    font-size: var(--weline-font-size-base, 16px);
+    color: var(--weline-theme-text-muted);
     margin: 0;
 }
 
-/* 搜索框 */
-.widget-faq-accordion .faq-search {
+.<?= $wc ?> .faq-search {
     position: relative;
-    margin-bottom: 30px;
+    margin-bottom: var(--weline-space-8, 30px);
 }
 
-.widget-faq-accordion .faq-search-input {
+.<?= $wc ?> .faq-search-input {
     width: 100%;
-    padding: 15px 20px 15px 50px;
-    border: 2px solid #eee;
-    border-radius: 10px;
-    font-size: 15px;
+    padding: var(--weline-space-4, 15px) var(--weline-space-5, 20px) var(--weline-space-4, 15px) 50px;
+    border: 2px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg, 10px);
+    font-size: var(--weline-font-size-base, 15px);
     outline: none;
-    transition: border-color 0.3s;
+    transition: border-color var(--weline-theme-transition-base, 0.3s);
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-text);
 }
 
-.widget-faq-accordion .faq-search-input:focus {
-    border-color: var(--primary-color, #007bff);
+.<?= $wc ?> .faq-search-input:focus {
+    border-color: var(--weline-theme-primary);
 }
 
-.widget-faq-accordion .faq-search i {
+.<?= $wc ?> .faq-search i {
     position: absolute;
     left: 18px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 20px;
-    color: #999;
+    font-size: var(--weline-font-size-xl, 20px);
+    color: var(--weline-theme-text-muted);
 }
 
-/* FAQ列表 */
-.widget-faq-accordion .faq-list {
-    border-radius: 12px;
+.<?= $wc ?> .faq-list {
+    border-radius: var(--weline-radius-lg, 12px);
     overflow: hidden;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+    box-shadow: var(--weline-theme-shadow-sm);
 }
 
-.widget-faq-accordion .faq-item {
-    background: #fff;
-    border-bottom: 1px solid #f0f0f0;
+.<?= $wc ?> .faq-item {
+    background: var(--weline-theme-surface-raised);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
 }
 
-.widget-faq-accordion .faq-item:last-child {
+.<?= $wc ?> .faq-item:last-child {
     border-bottom: none;
 }
 
-.widget-faq-accordion .faq-question {
+.<?= $wc ?> .faq-question {
     width: 100%;
-    padding: 20px 25px;
+    padding: var(--weline-space-5, 20px) var(--weline-space-6, 25px);
     border: none;
     background: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 15px;
+    gap: var(--weline-space-4, 15px);
     text-align: left;
-    transition: background-color 0.3s;
+    transition: background-color var(--weline-theme-transition-base, 0.3s);
 }
 
-.widget-faq-accordion .faq-question:hover {
-    background: #f9f9f9;
+.<?= $wc ?> .faq-question:hover {
+    background: var(--weline-theme-surface-muted);
 }
 
-.widget-faq-accordion .question-text {
-    font-size: 16px;
+.<?= $wc ?> .question-text {
+    font-size: var(--weline-font-size-base, 16px);
     font-weight: 600;
-    color: #333;
+    color: var(--weline-theme-text);
 }
 
-.widget-faq-accordion .question-icon {
+.<?= $wc ?> .question-icon {
     width: 28px;
     height: 28px;
-    background: var(--primary-color, #007bff);
-    color: #fff;
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: transform 0.3s;
+    transition: transform var(--weline-theme-transition-base, 0.3s);
 }
 
-.widget-faq-accordion .question-icon i {
-    font-size: 18px;
-    transition: transform 0.3s;
+.<?= $wc ?> .question-icon i {
+    font-size: var(--weline-font-size-lg, 18px);
+    transition: transform var(--weline-theme-transition-base, 0.3s);
 }
 
-.widget-faq-accordion .faq-item.expanded .question-icon i {
+.<?= $wc ?> .faq-item.expanded .question-icon i {
     transform: rotate(45deg);
 }
 
-.widget-faq-accordion .faq-answer {
-    overflow: hidden;
-}
-
-.widget-faq-accordion .answer-content {
-    padding: 0 25px 25px;
-    font-size: 15px;
-    line-height: 1.7;
-    color: #666;
-}
-
-/* 隐藏不匹配搜索的项 */
-.widget-faq-accordion .faq-item.hidden {
+.<?= $wc ?> .faq-item:not(.expanded) .faq-answer {
     display: none;
 }
 
+.<?= $wc ?> .faq-answer {
+    overflow: hidden;
+}
+
+.<?= $wc ?> .answer-content {
+    padding: 0 var(--weline-space-6, 25px) var(--weline-space-6, 25px);
+    font-size: var(--weline-font-size-base, 15px);
+    line-height: 1.7;
+    color: var(--weline-theme-text-muted);
+}
+
+.<?= $wc ?> .faq-item.hidden {
+    display: none;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-4, 16px) 0;
+}
+
 @media (max-width: 576px) {
-    .widget-faq-accordion .widget-title {
-        font-size: 22px;
+    .<?= $wc ?> .widget-title {
+        font-size: var(--weline-font-size-2xl, 22px);
     }
-    
-    .widget-faq-accordion .faq-question {
-        padding: 15px 20px;
+
+    .<?= $wc ?> .faq-question {
+        padding: var(--weline-space-4, 15px) var(--weline-space-5, 20px);
     }
-    
-    .widget-faq-accordion .question-text {
-        font-size: 14px;
+
+    .<?= $wc ?> .question-text {
+        font-size: var(--weline-font-size-sm, 14px);
     }
-    
-    .widget-faq-accordion .answer-content {
-        padding: 0 20px 20px;
-        font-size: 14px;
+
+    .<?= $wc ?> .answer-content {
+        padding: 0 var(--weline-space-5, 20px) var(--weline-space-5, 20px);
+        font-size: var(--weline-font-size-sm, 14px);
     }
 }
 </style>
 
 <script>
-(function() {
-    const widget = document.getElementById('<?= $widgetId ?>');
-    if (!widget) return;
-    
-    const allowMultiple = widget.dataset.allowMultiple === 'true';
-    const items = widget.querySelectorAll('.faq-item');
-    const searchInput = widget.querySelector('.faq-search-input');
-    
-    // 展开/折叠
-    items.forEach(function(item) {
-        const question = item.querySelector('.faq-question');
-        const answer = item.querySelector('.faq-answer');
-        
-        question.addEventListener('click', function() {
-            const isExpanded = item.classList.contains('expanded');
-            
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var allowMultiple = root.dataset.allowMultiple === 'true';
+    var items = root.querySelectorAll('.faq-item');
+    var searchInput = root.querySelector('.faq-search-input');
+
+    items.forEach(function (item) {
+        var question = item.querySelector('.faq-question');
+
+        question.addEventListener('click', function () {
             if (!allowMultiple) {
-                // 折叠其他项
-                items.forEach(function(other) {
+                items.forEach(function (other) {
                     if (other !== item) {
                         other.classList.remove('expanded');
-                        other.querySelector('.faq-answer').style.display = 'none';
                     }
                 });
             }
-            
+
             item.classList.toggle('expanded');
-            answer.style.display = isExpanded ? 'none' : 'block';
         });
     });
-    
-    // 搜索功能
+
     if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const keyword = this.value.toLowerCase().trim();
-            
-            items.forEach(function(item) {
-                const question = item.querySelector('.question-text').textContent.toLowerCase();
-                const answer = item.querySelector('.answer-content').textContent.toLowerCase();
-                
+        searchInput.addEventListener('input', function () {
+            var keyword = this.value.toLowerCase().trim();
+
+            items.forEach(function (item) {
+                var question = item.querySelector('.question-text').textContent.toLowerCase();
+                var answer = item.querySelector('.answer-content').textContent.toLowerCase();
+
                 if (keyword === '' || question.includes(keyword) || answer.includes(keyword)) {
                     item.classList.remove('hidden');
                 } else {

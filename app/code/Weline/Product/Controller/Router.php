@@ -28,17 +28,30 @@ final class Router implements RouterInterface
             return;
         }
 
-        if (preg_match('#^product/([1-9][0-9]*)$#D', $normalizedPath, $matches) !== 1) {
+        if (preg_match('#^product/([1-9][0-9]*)$#D', $normalizedPath, $matches) === 1) {
+            $productId = (int)$matches[1];
+            if ($productId <= 0) {
+                return;
+            }
+
+            $path = self::DETAIL_ROUTE;
+            $rule['module'] = 'Weline_Product';
+            \Weline\Framework\Context::current()->set('input.query.id', $productId);
+
             return;
         }
 
-        $productId = (int)$matches[1];
-        if ($productId <= 0) {
+        if (preg_match('#^product/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath, $matches) !== 1) {
+            return;
+        }
+
+        $slug = (string)$matches[1];
+        if ($slug === '') {
             return;
         }
 
         $path = self::DETAIL_ROUTE;
         $rule['module'] = 'Weline_Product';
-        \Weline\Framework\Context::current()->set('input.query.id', $productId);
+        \Weline\Framework\Context::current()->set('input.query.slug', $slug);
     }
 }

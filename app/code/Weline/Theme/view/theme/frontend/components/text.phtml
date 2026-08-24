@@ -10,7 +10,7 @@
  * @widget.compatible {true}
  * @param.eyebrow {default="",name="眉标题",description="用于展示标签或上方小标题"}
  * @param.title {default="清晰表达你的页面主张",name="标题",description="主标题"}
- * @param.body {default="在这里添加一段说明文字，介绍产品、服务、活动或页面内容。",name="正文",description="正文内容，支持换行"}
+ * @param.body {default="春季系列现已上架，精选面料与日常百搭款式，支持在线下单与门店自提。",name="正文",description="正文内容，支持换行"}
  * @param.align {default="start",name="对齐方式",description="start/center/end"}
  * @param.size {default="md",name="尺寸",description="sm/md/lg"}
  * @param.maxWidth {default="",name="最大宽度",description="例如 720px、80%"}
@@ -19,6 +19,14 @@
  * @param.lineHeight {default="",name="正文行高",description="例如 1.6、28px"}
  * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
  */
+
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forComponent('text');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
 if (!function_exists('weline_builder_component_css_length')) {
     function weline_builder_component_css_length(mixed $value, string $fallback = ''): string
     {
@@ -35,32 +43,21 @@ if (!function_exists('weline_builder_component_css_length')) {
         return $fallback;
     }
 }
-if (!function_exists('weline_builder_component_css_color')) {
-    function weline_builder_component_css_color(mixed $value): string
-    {
-        $value = trim((string)$value);
-        if ($value === '') {
-            return '';
-        }
-        if (preg_match('/^#[0-9a-fA-F]{3,8}$/', $value)
-            || preg_match('/^(rgba?|hsla?)\([0-9.,%\s]+\)$/i', $value)
-            || preg_match('/^var\(--[a-zA-Z0-9_-]+\)$/', $value)
-            || in_array(strtolower($value), ['transparent', 'currentcolor', 'inherit'], true)) {
-            return $value;
-        }
-        return '';
-    }
-}
+
 $eyebrow = (string)($this->getData('eyebrow') ?? $this->getData('meta.eyebrow') ?? '');
 $title = (string)($this->getData('title') ?? $this->getData('meta.title') ?? __('清晰表达你的页面主张'));
-$body = (string)($this->getData('body') ?? $this->getData('meta.body') ?? __('在这里添加一段说明文字，介绍产品、服务、活动或页面内容。'));
+$body = (string)($this->getData('body') ?? $this->getData('meta.body') ?? __('春季系列现已上架，精选面料与日常百搭款式，支持在线下单与门店自提。'));
 $align = strtolower(trim((string)($this->getData('align') ?? $this->getData('meta.align') ?? 'start')));
 $size = strtolower(trim((string)($this->getData('size') ?? $this->getData('meta.size') ?? 'md')));
 $maxWidth = weline_builder_component_css_length($this->getData('maxWidth') ?? $this->getData('meta.maxWidth') ?? '');
-$textColor = weline_builder_component_css_color($this->getData('textColor') ?? $this->getData('meta.textColor') ?? '');
+$textColor = ThemeUiColor::sanitize(
+    $this->getData('textColor') ?? $this->getData('meta.textColor') ?? '',
+    'var(--weline-theme-text)'
+);
 $titleWeight = trim((string)($this->getData('titleWeight') ?? $this->getData('meta.titleWeight') ?? '700'));
 $lineHeight = trim((string)($this->getData('lineHeight') ?? $this->getData('meta.lineHeight') ?? ''));
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+
 $allowedAlign = ['start', 'center', 'end'];
 $allowedSize = ['sm', 'md', 'lg'];
 if (!in_array($align, $allowedAlign, true)) {
@@ -75,22 +72,82 @@ if (!in_array($titleWeight, ['400', '500', '600', '700', '800'], true)) {
 if ($lineHeight !== '' && !preg_match('/^([0-9]+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?px)$/', $lineHeight)) {
     $lineHeight = '';
 }
-$styles = [];
-if ($maxWidth !== '') $styles[] = '--w-builder-text-max:' . $maxWidth;
-if ($textColor !== '') $styles[] = '--w-builder-color:' . $textColor;
-if ($titleWeight !== '') $styles[] = '--w-builder-title-weight:' . $titleWeight;
-if ($lineHeight !== '') $styles[] = '--w-builder-line-height:' . $lineHeight;
-$textClass = trim('w-builder-text w-builder-text--' . $size . ' w-builder-align-' . $align . ' ' . $class);
+
+$rootStyle = '--wc-text-color:' . $textColor . ';--wc-text-title-weight:' . $titleWeight . ';';
+if ($maxWidth !== '') {
+    $rootStyle .= '--wc-text-max:' . $maxWidth . ';';
+}
+if ($lineHeight !== '') {
+    $rootStyle .= '--wc-text-line-height:' . $lineHeight . ';';
+}
+
+$rootClass = trim($wc . ' w-builder-text w-builder-text--' . $size . ' w-builder-align-' . $align . ($class !== '' ? ' ' . $class : ''));
 ?>
-<div class="<?= htmlspecialchars($textClass, ENT_QUOTES, 'UTF-8') ?>"
-     style="<?= htmlspecialchars(implode(';', $styles), ENT_QUOTES, 'UTF-8') ?>">
+
+<section class="<?= $esc($rootClass) ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-size="<?= $esc($size) ?>"
+         style="<?= $esc($rootStyle) ?>">
     <?php if ($eyebrow !== ''): ?>
-        <p class="w-builder-text__eyebrow"><?= htmlspecialchars($eyebrow, ENT_QUOTES, 'UTF-8') ?></p>
+        <p class="w-builder-text__eyebrow text-eyebrow"><?= $esc($eyebrow) ?></p>
     <?php endif; ?>
     <?php if ($title !== ''): ?>
-        <h2 class="w-builder-text__title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h2>
+        <h2 class="w-builder-text__title text-title"><?= $esc($title) ?></h2>
     <?php endif; ?>
     <?php if ($body !== ''): ?>
-        <p class="w-builder-text__body"><?= nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8')) ?></p>
+        <p class="w-builder-text__body text-body"><?= nl2br($esc($body)) ?></p>
     <?php endif; ?>
-</div>
+</section>
+
+<style>
+.<?= $wc ?> {
+    display: block;
+    max-width: var(--wc-text-max, 100%);
+    color: var(--wc-text-color, var(--weline-theme-text));
+}
+
+.<?= $wc ?>.w-builder-align-center {
+    text-align: center;
+    margin-inline: auto;
+}
+
+.<?= $wc ?>.w-builder-align-end {
+    text-align: right;
+    margin-left: auto;
+}
+
+.<?= $wc ?> .text-eyebrow {
+    margin: 0 0 var(--weline-space-2, 8px);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm, 13px);
+    font-weight: var(--weline-font-weight-semibold, 600);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.<?= $wc ?> .text-title {
+    margin: 0;
+    font-weight: var(--wc-text-title-weight, 700);
+}
+
+.<?= $wc ?>[data-size="sm"] .text-title {
+    font-size: var(--weline-font-size-lg, 17px);
+}
+
+.<?= $wc ?>[data-size="md"] .text-title {
+    font-size: clamp(1.25rem, 2vw, 1.75rem);
+}
+
+.<?= $wc ?>[data-size="lg"] .text-title {
+    font-size: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.<?= $wc ?> .text-body {
+    margin: var(--weline-space-3, 12px) 0 0;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-base, 15px);
+    line-height: var(--wc-text-line-height, 1.6);
+}
+</style>

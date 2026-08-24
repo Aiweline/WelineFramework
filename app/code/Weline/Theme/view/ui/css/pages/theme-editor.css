@@ -1540,25 +1540,62 @@ body:has(.theme-editor-container) .footer {
     display: none;
 }
 
-/* 插槽信息面板 */
-.slots-info-panel {
+/* 插槽信息面板：覆盖预览区贴右上角，定位方式对齐部件库 toggle */
+.slots-info-dock {
+    --w-theme-editor-slots-panel-width: 280px;
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 280px;
-    max-height: calc(100% - 20px);
-    background: var(--w-theme-editor-bg-card);
-    border: 1px solid var(--w-theme-editor-border);
-    border-radius: 8px;
-    box-shadow: var(--w-theme-editor-shadow-lg);
+    inset: 0;
     z-index: 20;
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
+    pointer-events: none;
 }
 
-.slots-info-panel.active {
+.slots-info-dock .editor-panel-toggle-slots {
+    pointer-events: auto;
+    position: absolute;
+    display: inline-flex;
+    top: 10px;
+    right: 0;
+    left: auto;
+    transform: none;
+    border-right: 0;
+    border-radius: 8px 0 0 8px;
+    transition: right 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.slots-info-dock.slots-panel-open .editor-panel-toggle-slots {
+    right: var(--w-theme-editor-slots-panel-width);
+}
+
+.slots-info-dock.slots-panel-open .editor-panel-toggle-slots .w-theme-editor-panel-toggle-arrow {
+    transform: rotate(180deg);
+}
+
+.slots-info-panel {
+    pointer-events: auto;
+    position: absolute;
+    top: 10px;
+    right: 0;
+    left: auto;
+    width: var(--w-theme-editor-slots-panel-width);
+    max-height: min(60vh, calc(100% - 20px));
+    background: var(--w-theme-editor-bg-card);
+    border: 1px solid var(--w-theme-editor-border);
+    border-right: 0;
+    border-radius: 8px 0 0 8px;
+    box-shadow: var(--w-theme-editor-shadow-lg);
     display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.slots-info-dock.slots-panel-open .slots-info-panel {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 .slots-info-header {
@@ -4256,10 +4293,8 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
         max-width: 100%;
     }
 
-    .slots-info-panel {
-        left: 8px;
-        right: 8px;
-        width: auto;
+    .slots-info-dock {
+        --w-theme-editor-slots-panel-width: min(280px, calc(100vw - 56px));
     }
 }
 

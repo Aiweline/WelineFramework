@@ -180,13 +180,16 @@ class ArrayType extends AbstractParamType
                 $recommendH = $mediaOptions['recommend_height'] ?? $fieldDef['recommend_height'] ?? '';
                 $hasImage = !empty($fieldValue);
                 $storedValue = $this->serializeImageFormValue($fieldValue);
-                $previewUrl = $this->legacyImagePreviewUrl($fieldValue);
+                $previewUrl = $this->imagePreviewUrl($fieldValue);
+                $placeholderText = $previewUrl !== ''
+                    ? (string)__('从媒体库选择')
+                    : ($hasImage ? (string)__('缩略图加载中…') : (string)__('从媒体库选择'));
                 $html = '<div class="w-param-media-image">';
                 $html .= '<div class="w-param-image-preview' . ($hasImage ? ' w-param-has-image' : '') . '" id="' . htmlspecialchars($itemFieldId) . '_preview">';
                 if ($previewUrl !== '') {
                     $html .= '<img src="' . htmlspecialchars($previewUrl) . '" alt="' . __('预览') . '">';
                 }
-                $html .= '<div class="w-param-image-placeholder"' . ($hasImage ? ' hidden' : '') . '>' . htmlspecialchars(__('从媒体库选择')) . '</div>';
+                $html .= '<div class="w-param-image-placeholder"' . ($previewUrl !== '' ? ' hidden' : '') . '>' . htmlspecialchars($placeholderText) . '</div>';
                 $html .= '<div class="w-param-image-actions">';
                 $html .= '<button type="button" class="w-button w-param-media-image-select" data-tone="primary" data-variant="outline" data-size="sm" '
                     . 'data-target="' . htmlspecialchars($itemFieldId) . '" data-field="' . htmlspecialchars($fieldKey) . '" '
@@ -198,7 +201,7 @@ class ArrayType extends AbstractParamType
                     $html .= '<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="' . htmlspecialchars($itemFieldId) . '" aria-label="' . __('清除图片') . '">×</button>';
                 }
                 $html .= '</div></div>';
-                $html .= '<input type="hidden" class="w-param-array-item-input" value="' . htmlspecialchars($storedValue) . '" data-field="' . htmlspecialchars($fieldKey) . '" id="' . htmlspecialchars($itemFieldId) . '" data-preview="' . htmlspecialchars($itemFieldId) . '_preview" data-clear-label="' . __('清除图片') . '">';
+                $html .= '<input type="hidden" class="w-param-array-item-input" value="' . htmlspecialchars($storedValue) . '" data-field="' . htmlspecialchars($fieldKey) . '" id="' . htmlspecialchars($itemFieldId) . '" data-preview="' . htmlspecialchars($itemFieldId) . '_preview" data-clear-label="' . __('清除图片') . '"' . $this->buildImageHiddenInputExtraAttrs($fieldValue) . '>';
                 $html .= '</div>';
                 break;
             }

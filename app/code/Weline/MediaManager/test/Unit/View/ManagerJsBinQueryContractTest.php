@@ -370,10 +370,25 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('FILES[file.hash] = Object.assign({}, FILES[file.hash] || file, changed)', $script);
         self::assertStringContainsString('updatePreviewPanel();', $script);
         self::assertStringNotContainsString("showSuccess(t('assetMetadataSaved'));\n                openDir(CWD_HASH);", $script);
-        self::assertStringContainsString('data-mmf-preview-meta', $template);
+        self::assertStringContainsString('mmf-iframe-layout-critical', $template);
+        self::assertStringContainsString('fitIframeViewport', $template);
         self::assertStringContainsString('class="mmf-preview-info-scroll"', $template);
         self::assertStringContainsString('class="mmf-preview-actions"', $template);
         self::assertStringContainsString('.mmf-preview-info-scroll {', $style);
+        self::assertStringContainsString('.mmf-preview { width: 280px; min-width: 220px; min-block-size: 0; max-block-size: 100%;', $style);
+        self::assertStringContainsString('.mmf-preview-content.mmf-preview-content--with-image { grid-template-rows: auto minmax(0, 1fr);', $style);
+        self::assertStringContainsString('function syncPreviewDetailScroll()', $script);
+        self::assertStringContainsString("infoEl.style.display = 'grid'", $script);
+        self::assertStringContainsString('.mmf-preview-info { display: grid; grid-template-rows: minmax(0, 1fr) auto;', $style);
+        self::assertStringContainsString('html:has(.mmf-wrap.mmf-iframe-mode) body > main.w-backend-page', $style);
+        self::assertStringContainsString('.mmf-wrap.mmf-iframe-mode {', $style);
+        self::assertStringContainsString('.mmf-wrap.mmf-iframe-mode .mmf-select-bar {', $style);
+        self::assertStringContainsString('function syncIframeLayoutHeight()', $script);
+        self::assertStringContainsString("document.documentElement.classList.add('mmf-iframe-host')", $script);
+        self::assertStringContainsString('COMPACT_MQ && COMPACT_MQ.matches', $script);
+        self::assertStringNotContainsString('COMPACT_MQ && COMPACT_MQ.matches && !IFRAME_MODE', $script);
+        self::assertStringContainsString('.mmf-preview-title { display: none; }', $style);
+        self::assertStringContainsString('if (IFRAME_MODE && MULTI_SELECT) {', $script);
         self::assertStringContainsString('.mmf-preview-actions { flex: 0 0 auto;', $style);
         self::assertStringContainsString('data-mmf-details-list', $template);
         self::assertStringContainsString('role="dialog" aria-modal="true" aria-labelledby="mmf-details-title"', $template);
@@ -439,13 +454,15 @@ final class ManagerJsBinQueryContractTest extends TestCase
             $manager,
         );
         self::assertDoesNotMatchRegularExpression(
-            '/function typedAssetSelection\(f\)\s*\{(?:(?!\n\s*}\n).)*(?:object_key|disk_code|preview_url|\bpath:|\burl:|\bthumb:)/s',
+            '/function typedAssetSelection\(f\)\s*\{(?:(?!\n\s*}\n).)*(?:object_key|disk_code|\bpreview_url:|\bpath:|\burl:|\bthumb:)/s',
             $manager,
         );
+        self::assertStringContainsString('editor_preview_url:', $manager);
         self::assertStringContainsString("type: 'legacy-media-path'", $manager);
         foreach ([$theme, $widget] as $consumer) {
             self::assertStringContainsString('var typedValue = selectedFileImageValue(file)', $consumer);
             self::assertStringContainsString("file.type !== 'legacy-media-path'", $consumer);
+            self::assertStringContainsString('file.editor_preview_url || file.preview_url', $consumer);
             self::assertStringContainsString('delete input.dataset.previewUrl', $consumer);
             self::assertStringNotContainsString('(file.url || file.path || file.thumb)) || value', $consumer);
         }

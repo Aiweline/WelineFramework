@@ -1,12 +1,10 @@
 <?php
 /**
  * Footer 容器部件模板
- * 
- * 定义底部布局和内部插槽位置
- * 
+ *
  * @var array $config 部件配置
  * @var array $children 子部件（按插槽分组）
- * 
+ *
  * @widget.code {footer-container}
  * @widget.name {Footer 容器}
  * @widget.description {页面底部容器，包含链接、社交、订阅、版权等插槽。独占底部区域。}
@@ -17,173 +15,207 @@
  * @widget.is_container {true}
  * @widget.exclusive {true}
  * @widget.slots {"links":{"name":"链接区插槽","position":"top","accept":["footer-links"],"max":4},"newsletter":{"name":"订阅区插槽","position":"top-right","accept":["footer-newsletter"],"max":1},"social":{"name":"社交媒体插槽","position":"bottom-left","accept":["footer-social"],"max":1},"payment":{"name":"支付方式插槽","position":"bottom-center","accept":["footer-payment"],"max":1},"copyright":{"name":"版权信息插槽","position":"bottom-right","accept":["footer-copyright"],"max":1}}
- * 
- * @param bg_color {default="#1a1a2e",type="color",label="背景颜色"}
- * @param text_color {default="#ffffff",type="color",label="文字颜色"}
+ *
+ * @param bg_color {default="var(--weline-theme-canvas)",type="color",label="背景颜色"}
+ * @param text_color {default="var(--weline-theme-on-primary)",type="color",label="文字颜色"}
  */
 
-$bgColor = $config['bg_color'] ?? '#1a1a2e';
-$textColor = $config['text_color'] ?? '#ffffff';
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
 
-// 子部件数据（由渲染器注入）
+$scope = WidgetUiScope::forWidget('footer-container');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$config = $config ?? [];
 $children = $children ?? [];
+$isPreviewMode = (bool)($config['preview_mode'] ?? false);
+$bgColor = ThemeUiColor::sanitize(
+    $config['bg_color'] ?? '',
+    'var(--weline-theme-canvas)'
+);
+$textColor = ThemeUiColor::sanitize(
+    $config['text_color'] ?? '',
+    'var(--weline-theme-on-primary)'
+);
+
+$rootStyle = '--wc-footer-bg:' . $bgColor . ';--wc-footer-text:' . $textColor . ';';
 ?>
-<footer class="widget-footer-container" style="background-color: <?= htmlspecialchars($bgColor) ?>; color: <?= htmlspecialchars($textColor) ?>;">
-    
-    <!-- 顶部区域：链接和订阅 -->
+
+<footer class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+        weline-code="<?= $esc($scope->code) ?>"
+        data-uid="<?= $esc($scope->uid) ?>"
+        data-js-ns="<?= $esc($scope->jsNs) ?>"
+        style="<?= $esc($rootStyle) ?>">
+
     <div class="footer-top">
-        <div class="footer-container">
-            
-            <!-- 链接区插槽 -->
+        <div class="footer-inner">
             <div class="footer-links-area">
                 <div class="footer-slot slot-links" data-slot="links" data-accept="footer-links">
                     <?php if (!empty($children['links'])): ?>
                         <?php foreach ($children['links'] as $child): ?>
-                            <div class="slot-widget footer-link-group" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <div class="slot-widget footer-link-group" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                                 <?= $child['html'] ?? '' ?>
                             </div>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <div class="slot-placeholder">
                             <w:icon name="link" size="sm"></w:icon>
-                            <span>页脚链接</span>
+                            <span><?= __('页脚链接') ?></span>
                         </div>
                     <?php endif; ?>
                 </div>
             </div>
-            
-            <!-- 订阅区插槽 -->
+
             <div class="footer-slot slot-newsletter" data-slot="newsletter" data-accept="footer-newsletter">
                 <?php if (!empty($children['newsletter'])): ?>
                     <?php foreach ($children['newsletter'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="mail" size="sm"></w:icon>
-                        <span>邮件订阅</span>
+                        <span><?= __('邮件订阅') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
-            
         </div>
     </div>
-    
-    <!-- 底部区域：社交、支付、版权 -->
+
     <div class="footer-bottom">
-        <div class="footer-container">
-            
-            <!-- 社交媒体插槽 -->
+        <div class="footer-inner">
             <div class="footer-slot slot-social" data-slot="social" data-accept="footer-social">
                 <?php if (!empty($children['social'])): ?>
                     <?php foreach ($children['social'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="share" size="sm"></w:icon>
-                        <span>社交媒体</span>
+                        <span><?= __('社交媒体') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
-            
-            <!-- 支付方式插槽 -->
+
             <div class="footer-slot slot-payment" data-slot="payment" data-accept="footer-payment">
                 <?php if (!empty($children['payment'])): ?>
                     <?php foreach ($children['payment'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="circle" size="sm"></w:icon>
-                        <span>支付方式</span>
+                        <span><?= __('支付方式') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
-            
-            <!-- 版权信息插槽 -->
+
             <div class="footer-slot slot-copyright" data-slot="copyright" data-accept="footer-copyright">
                 <?php if (!empty($children['copyright'])): ?>
                     <?php foreach ($children['copyright'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="copy" size="sm"></w:icon>
-                        <span>版权信息</span>
+                        <span><?= __('版权信息') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
-            
         </div>
     </div>
-    
 </footer>
 
 <style>
-.widget-footer-container {
+.<?= $wc ?> {
     width: 100%;
+    background-color: var(--wc-footer-bg, var(--weline-theme-canvas));
+    color: var(--wc-footer-text, var(--weline-theme-on-primary));
 }
 
-.footer-container {
-    max-width: 1400px;
+.<?= $wc ?> .footer-inner {
+    max-width: var(--weline-theme-container-max, 1400px);
     margin: 0 auto;
-    padding: 0 20px;
+    padding: 0 var(--weline-space-5, 20px);
 }
 
-.footer-top {
-    padding: 50px 0 40px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+.<?= $wc ?> .footer-top {
+    padding: var(--weline-space-12, 50px) 0 var(--weline-space-10, 40px);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+        color-mix(in srgb, var(--wc-footer-text, var(--weline-theme-on-primary)) 12%, transparent);
 }
 
-.footer-top .footer-container {
+.<?= $wc ?> .footer-top .footer-inner {
     display: flex;
     justify-content: space-between;
-    gap: 40px;
+    gap: var(--weline-space-10, 40px);
 }
 
-.footer-links-area {
+.<?= $wc ?> .footer-links-area {
     flex: 1;
 }
 
-.slot-links {
+.<?= $wc ?> .slot-links {
     display: flex;
-    gap: 60px;
+    gap: var(--weline-space-15, 60px);
+    flex-wrap: wrap;
 }
 
-.footer-link-group {
+.<?= $wc ?> .footer-link-group {
     min-width: 150px;
 }
 
-.slot-newsletter {
+.<?= $wc ?> .slot-newsletter {
     width: 300px;
     flex-shrink: 0;
 }
 
-.footer-bottom {
-    padding: 30px 0;
+.<?= $wc ?> .footer-bottom {
+    padding: var(--weline-space-8, 30px) 0;
 }
 
-.footer-bottom .footer-container {
+.<?= $wc ?> .footer-bottom .footer-inner {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 20px;
+    gap: var(--weline-space-5, 20px);
+    flex-wrap: wrap;
 }
 
-/* 插槽样式 */
-.footer-slot {
+.<?= $wc ?> .footer-slot {
     position: relative;
     min-height: 40px;
 }
 
-/* 编辑模式样式由 editor-mode.css 统一管理 */
+.<?= $wc ?> .slot-widget {
+    position: relative;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    min-height: 80px;
+}
+
+@media (max-width: 992px) {
+    .<?= $wc ?> .footer-top .footer-inner {
+        flex-direction: column;
+    }
+
+    .<?= $wc ?> .slot-newsletter {
+        width: 100%;
+    }
+
+    .<?= $wc ?> .footer-bottom .footer-inner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
 </style>

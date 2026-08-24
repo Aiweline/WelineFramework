@@ -28,7 +28,15 @@ args = ["app/code/Weline/Ai/Mcp/bin/learning-mcp"]
 required = true
 ```
 
-Cursor uses the same command and args in `.cursor/mcp.json`. Client adapters must invoke `prepare_project`, stop on non-ready results, and retain the returned session-bound `readiness_id`.
+Cursor uses `.cursor/mcp.json` and `~/.cursor/mcp.json`. Step 0 for every agent task:
+
+```bash
+php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php
+```
+
+That script auto-repairs MCP registration/approval (via `ensure-cursor-mcp.php`), probes local STDIO health, and checks Git branch inputs. It only touches user `mcp.json` when registration changed or the host CLI is not ready (avoiding per-session approval resets). It does **not** write `~/.cursor/permissions.json`; non-empty `mcpAllowlist` there can lock Cursor away from **Run Everything**. Agents must not send operators to Settings first. Continue with `prepare_project` only when `project-guidance-bootstrap.v1.status=ready`.
+
+For IDE Agent chats, use the operator's chosen Cursor **Run Mode** (for example **Run Everything** or **Auto-review**). MCP approval is handled via `cursor-agent mcp enable weline_project_intelligence` and normal Cursor MCP approval flows, not by editing `permissions.json`.
 
 ## Verification
 

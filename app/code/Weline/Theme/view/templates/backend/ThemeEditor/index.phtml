@@ -548,14 +548,20 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                     <div class="preview-loading" id="previewLoading">
                         <span class="w-spinner" role="status"><span class="w-visually-hidden">@lang{加载中...}</span></span>
                     </div>
-                    <!-- 插槽信息面板 -->
-                    <div class="slots-info-panel" id="slotsInfoPanel">
-                        <div class="slots-info-header">
-                            <span>@lang{页面插槽}</span>
-                            <button type="button" class="w-button w-theme-editor-slots-close" data-tone="quiet" data-size="sm" data-icon-only="true" id="closeSlotsPanel" aria-label="@lang{关闭插槽面板}"><w:icon name="close" size="sm"></w:icon></button>
-                        </div>
-                        <div class="slots-info-list" id="slotsInfoList">
-                            <!-- 插槽列表由 JS 动态填充 -->
+                    <!-- 插槽信息面板：默认贴右上角收起，交互与部件库一致 -->
+                    <div class="slots-info-dock slots-panel-collapsed" id="slotsInfoDock">
+                        <button type="button" class="editor-panel-toggle editor-panel-toggle-slots" data-theme-editor-action="toggle-slots-panel" title="@lang{插槽}" aria-expanded="false" aria-controls="slotsInfoPanel">
+                            <span>@lang{插槽}</span>
+                            <w:icon name="chevron-left" size="sm" class="w-theme-editor-panel-toggle-arrow"></w:icon>
+                        </button>
+                        <div class="slots-info-panel" id="slotsInfoPanel">
+                            <div class="slots-info-header">
+                                <span>@lang{页面插槽}</span>
+                                <button type="button" class="w-button w-theme-editor-slots-close" data-tone="quiet" data-size="sm" data-icon-only="true" data-theme-editor-action="close-slots-panel" aria-label="@lang{收起插槽面板}"><w:icon name="close" size="sm"></w:icon></button>
+                            </div>
+                            <div class="slots-info-list" id="slotsInfoList">
+                                <!-- 插槽列表由 JS 动态填充 -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -751,7 +757,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 <!-- Weline UI 2.0 theme editor route style block 1 extracted -->
 
 <!-- Widget owns the source; the Theme Editor route owns the compiled loading boundary. -->
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260822-weline-ui"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260823-image-thumb"></script>
 
 <!-- 全局外观（整盘）：左右分栏，左侧选盘 / 右侧编辑 / 底栏保存 -->
 <aside id="themeDiskAppearanceModal" class="w-drawer w-theme-disk-appearance-panel" hidden
@@ -805,4 +811,4 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
     </div>
 </aside>
 
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260823-appearance-auto-edit"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260823-drop-save"></script>

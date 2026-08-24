@@ -1822,6 +1822,7 @@ JSON格式数组,"JSON format array"
 关闭配置,"Close configuration"
 点击预览区域中的部件进行配置,"Click widget in preview area to configure"
 页面插槽,"Page slot"
+插槽,Slot
 关闭插槽面板,"Close slot panel"
 拖入头部部件（Logo、导航、搜索等）,"Drag in header components (Logo, navigation, search, etc.)"
 Content,Content

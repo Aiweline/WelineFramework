@@ -21,6 +21,15 @@
  * @param.shadow {default="none",name="阴影",description="none/sm/md/lg"}
  * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
  */
+
+use Weline\Theme\Helper\LegacyMediaUrl;
+use Weline\Theme\Helper\ThemeDemoCatalog;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forComponent('image');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
 if (!function_exists('weline_builder_component_css_length')) {
     function weline_builder_component_css_length(mixed $value, string $fallback = ''): string
     {
@@ -38,19 +47,20 @@ if (!function_exists('weline_builder_component_css_length')) {
     }
 }
 
-$src = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('src') ?? $this->getData('meta.src') ?? '');
+$src = LegacyMediaUrl::sanitize($this->getData('src') ?? $this->getData('meta.src') ?? '');
 $srcFileHtml = (string)($this->getData('src_file_html') ?? '');
 $alt = (string)($this->getData('alt') ?? $this->getData('meta.alt') ?? __('图片'));
 $caption = (string)($this->getData('caption') ?? $this->getData('meta.caption') ?? '');
-$href = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('href') ?? $this->getData('meta.href') ?? '');
+$href = LegacyMediaUrl::sanitize($this->getData('href') ?? $this->getData('meta.href') ?? '');
 $ratio = strtolower(trim((string)($this->getData('ratio') ?? $this->getData('meta.ratio') ?? '16x9')));
 $objectFit = strtolower(trim((string)($this->getData('objectFit') ?? $this->getData('meta.objectFit') ?? 'cover')));
 $objectPosition = strtolower(trim((string)($this->getData('objectPosition') ?? $this->getData('meta.objectPosition') ?? 'center')));
 $align = strtolower(trim((string)($this->getData('align') ?? $this->getData('meta.align') ?? 'start')));
 $maxWidth = weline_builder_component_css_length($this->getData('maxWidth') ?? $this->getData('meta.maxWidth') ?? '');
-$radius = weline_builder_component_css_length($this->getData('radius') ?? $this->getData('meta.radius') ?? '');
+$radius = weline_builder_component_css_length($this->getData('radius') ?? $this->getData('meta.radius') ?? '', 'var(--weline-radius-md, 8px)');
 $shadow = strtolower(trim((string)($this->getData('shadow') ?? $this->getData('meta.shadow') ?? 'none')));
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+
 $allowedRatios = ['auto', '1x1', '4x3', '16x9', '21x9'];
 $allowedObjectFit = ['cover', 'contain'];
 $allowedPosition = ['center', 'top', 'bottom', 'left', 'right'];
@@ -71,36 +81,146 @@ if (!in_array($align, $allowedAlign, true)) {
 if (!in_array($shadow, $allowedShadow, true)) {
     $shadow = 'none';
 }
-$styles = [];
-if ($maxWidth !== '') $styles[] = '--w-builder-image-max:' . $maxWidth;
-if ($radius !== '') $styles[] = '--w-builder-radius:' . $radius;
-$styles[] = '--w-builder-object-position:' . $objectPosition;
-$imageClass = trim('w-builder-image w-builder-image--' . $ratio . ' w-builder-image--' . $objectFit . ' w-builder-align-' . $align . ' w-builder-shadow-' . $shadow . ' ' . $class);
+
+if ($src === '' && $srcFileHtml === '') {
+    $src = ThemeDemoCatalog::productImage(0);
+    if ($alt === __('图片')) {
+        $alt = __('春季系列展示');
+    }
+    if ($caption === '') {
+        $caption = __('可在属性面板替换为媒体库图片');
+    }
+}
+
+$ratioMap = [
+    'auto' => 'auto',
+    '1x1' => '1 / 1',
+    '4x3' => '4 / 3',
+    '16x9' => '16 / 9',
+    '21x9' => '21 / 9',
+];
+
+$rootStyle = '--wc-image-max:' . ($maxWidth !== '' ? $maxWidth : '100%') . ';'
+    . '--wc-image-radius:' . $radius . ';'
+    . '--wc-image-object-position:' . $objectPosition . ';'
+    . '--wc-image-ratio:' . ($ratioMap[$ratio] ?? '16 / 9') . ';';
+
+$rootClass = trim($wc . ' w-builder-image w-builder-image--' . $ratio . ' w-builder-image--' . $objectFit . ' w-builder-align-' . $align . ' w-builder-shadow-' . $shadow . ($class !== '' ? ' ' . $class : ''));
+
 $mediaHtml = $src !== ''
-    ? '<img src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '" alt="' . htmlspecialchars($alt, ENT_QUOTES, 'UTF-8') . '" loading="lazy">'
-    : '<div class="w-builder-image__placeholder">' . htmlspecialchars(__('添加图片地址'), ENT_QUOTES, 'UTF-8') . '</div>';
+    ? '<img src="' . $esc($src) . '" alt="' . $esc($alt) . '" loading="lazy" class="image-media">'
+    : '<div class="w-builder-image__placeholder image-placeholder">' . $esc(__('添加图片地址')) . '</div>';
 ?>
+
 <?php if ($srcFileHtml !== ''): ?>
-<div class="<?= htmlspecialchars($imageClass . ' w-builder-image__asset', ENT_QUOTES, 'UTF-8') ?>"
-     style="<?= htmlspecialchars(implode(';', $styles), ENT_QUOTES, 'UTF-8') ?>">
+<div class="<?= $esc($rootClass . ' w-builder-image__asset') ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-shadow="<?= $esc($shadow) ?>"
+     style="<?= $esc($rootStyle) ?>">
     <?php if ($href !== ''): ?>
-        <a class="w-builder-image__link" href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"><?= $srcFileHtml ?></a>
+        <a class="w-builder-image__link image-link" href="<?= $esc($href) ?>"><?= $srcFileHtml ?></a>
     <?php else: ?>
         <?= $srcFileHtml ?>
     <?php endif; ?>
+    <?php if ($caption !== ''): ?>
+        <figcaption class="w-builder-image__caption image-caption"><?= $esc($caption) ?></figcaption>
+    <?php endif; ?>
 </div>
 <?php else: ?>
-<figure class="<?= htmlspecialchars($imageClass, ENT_QUOTES, 'UTF-8') ?>"
-        style="<?= htmlspecialchars(implode(';', $styles), ENT_QUOTES, 'UTF-8') ?>">
-    <?php if ($href !== '' && $src !== ''): ?>
-        <a class="w-builder-image__link" href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>">
+<figure class="<?= $esc($rootClass) ?>"
+        weline-code="<?= $esc($scope->code) ?>"
+        data-uid="<?= $esc($scope->uid) ?>"
+        data-js-ns="<?= $esc($scope->jsNs) ?>"
+        data-shadow="<?= $esc($shadow) ?>"
+        style="<?= $esc($rootStyle) ?>">
+    <div class="image-frame">
+        <?php if ($href !== '' && $src !== ''): ?>
+            <a class="w-builder-image__link image-link" href="<?= $esc($href) ?>">
+                <?= $mediaHtml ?>
+            </a>
+        <?php else: ?>
             <?= $mediaHtml ?>
-        </a>
-    <?php else: ?>
-        <?= $mediaHtml ?>
-    <?php endif; ?>
+        <?php endif; ?>
+    </div>
     <?php if ($caption !== ''): ?>
-        <figcaption class="w-builder-image__caption"><?= htmlspecialchars($caption, ENT_QUOTES, 'UTF-8') ?></figcaption>
+        <figcaption class="w-builder-image__caption image-caption"><?= $esc($caption) ?></figcaption>
     <?php endif; ?>
 </figure>
 <?php endif; ?>
+
+<style>
+.<?= $wc ?> {
+    display: block;
+    max-width: var(--wc-image-max, 100%);
+    margin: 0;
+    color: var(--weline-theme-text-muted);
+}
+
+.<?= $wc ?>.w-builder-align-center {
+    margin-inline: auto;
+}
+
+.<?= $wc ?>.w-builder-align-end {
+    margin-left: auto;
+}
+
+.<?= $wc ?>[data-shadow="sm"] .image-frame {
+    box-shadow: var(--weline-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+}
+
+.<?= $wc ?>[data-shadow="md"] .image-frame {
+    box-shadow: var(--weline-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+}
+
+.<?= $wc ?>[data-shadow="lg"] .image-frame {
+    box-shadow: var(--weline-shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.16));
+}
+
+.<?= $wc ?> .image-frame {
+    overflow: hidden;
+    border-radius: var(--wc-image-radius, var(--weline-radius-md, 8px));
+    background: var(--weline-theme-surface-muted);
+    aspect-ratio: var(--wc-image-ratio, 16 / 9);
+}
+
+.<?= $wc ?>.w-builder-image--auto .image-frame {
+    aspect-ratio: auto;
+}
+
+.<?= $wc ?> .image-link,
+.<?= $wc ?> .image-media,
+.<?= $wc ?> img {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.<?= $wc ?>.w-builder-image--cover .image-media,
+.<?= $wc ?>.w-builder-image--cover img {
+    object-fit: cover;
+    object-position: var(--wc-image-object-position, center);
+}
+
+.<?= $wc ?>.w-builder-image--contain .image-media,
+.<?= $wc ?>.w-builder-image--contain img {
+    object-fit: contain;
+    object-position: var(--wc-image-object-position, center);
+}
+
+.<?= $wc ?> .image-placeholder {
+    display: grid;
+    place-items: center;
+    min-height: 12rem;
+    padding: var(--weline-space-4, 16px);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm, 13px);
+}
+
+.<?= $wc ?> .image-caption {
+    margin-top: var(--weline-space-2, 8px);
+    font-size: var(--weline-font-size-sm, 13px);
+    text-align: center;
+}
+</style>

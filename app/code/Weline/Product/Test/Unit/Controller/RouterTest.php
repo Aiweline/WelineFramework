@@ -47,6 +47,19 @@ final class RouterTest extends TestCase
         self::assertSame(17, Context::current()->query('id'));
     }
 
+    public function testSlugProductPathRoutesToNativeDetailController(): void
+    {
+        Context::enter(new Context());
+        $path = '/product/ztot-z7l-yb300h-gasoline-dirt-bike/';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('weline_product/frontend/detail', $path);
+        self::assertSame('Weline_Product', $rule['module'] ?? null);
+        self::assertSame('ztot-z7l-yb300h-gasoline-dirt-bike', Context::current()->query('slug'));
+    }
+
     /**
      * @dataProvider unrelatedPathProvider
      */
@@ -67,10 +80,10 @@ final class RouterTest extends TestCase
     public static function unrelatedPathProvider(): array
     {
         return [
-            'legacy product handle' => ['product/example'],
             'zero product id' => ['product/0'],
             'negative product id' => ['product/-2'],
             'nested product id' => ['product/17/extra'],
+            'invalid slug chars' => ['product/Bad_Slug'],
             'catalog controller' => ['weline_product/frontend/catalog'],
             'nested product path' => ['products/example'],
         ];

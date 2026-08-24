@@ -12,7 +12,8 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page"]}
  * @widget.supports {["layout-homepage-hero","layout-homepage-content","layout-cms-hero","layout-default-content"]}
- * 
+ * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-hero","area":"content","sort_order":0}]}
+ *
  * @param slides {default=[],type="array",label="轮播图片",description="图片数组，每项包含image、title、subtitle、link、button_text",schema=[
  *     "image": {
      *         "type": "image",
@@ -53,6 +54,12 @@
  * @param height {default="500px",type="string",label="轮播高度"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('hero-slider');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
 $slides = $this->getData('slides') ?? [];
 if (is_string($slides)) {
     $decoded = json_decode($slides, true);
@@ -83,9 +90,9 @@ $configTextPosition = trim((string)($this->getData('text_position') ?? 'left'));
 $configImage = trim((string)($this->getData('image') ?? ''));
 
 $defaultGradients = [
-    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    'linear-gradient(135deg, var(--weline-theme-primary) 0%, var(--weline-theme-primary-hover) 100%)',
+    'linear-gradient(135deg, var(--weline-theme-info) 0%, var(--weline-theme-primary) 100%)',
+    'linear-gradient(135deg, var(--weline-theme-success) 0%, var(--weline-theme-info) 100%)',
 ];
 
 $resolveSlideBackground = static function (array $slide, int $index) use ($defaultGradients, $placeholder): string {
@@ -150,10 +157,13 @@ if (empty($slides)) {
     }
 }
 
-$sliderId = 'hero-slider-' . uniqid();
 ?>
 
-<div class="widget-hero-slider<?= $isPreviewMode ? ' widget-hero-slider--preview' : '' ?>" id="<?= $sliderId ?>" style="height: <?= htmlspecialchars($height ?? '') ?>;">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="height: <?= $esc($height) ?>;">
     <div class="slider-container effect-<?= htmlspecialchars($effect ?? '') ?>">
         <div class="slider-wrapper">
             <?php foreach ($slides as $index => $slide): ?>
@@ -213,28 +223,28 @@ $sliderId = 'hero-slider-' . uniqid();
             </div>
         <?php endif; ?>
     </div>
-</div>
+</section>
 
 <style>
-.widget-hero-slider {
+.<?= $wc ?> {
     position: relative;
     width: 100%;
     overflow: hidden;
 }
 
-.widget-hero-slider .slider-container {
+.<?= $wc ?> .slider-container {
     position: relative;
     width: 100%;
     height: 100%;
 }
 
-.widget-hero-slider .slider-wrapper {
+.<?= $wc ?> .slider-wrapper {
     position: relative;
     width: 100%;
     height: 100%;
 }
 
-.widget-hero-slider .slide {
+.<?= $wc ?> .slide {
     position: absolute;
     top: 0;
     left: 0;
@@ -247,39 +257,39 @@ $sliderId = 'hero-slider-' . uniqid();
     z-index: 1;
 }
 
-.widget-hero-slider .slide.active {
+.<?= $wc ?> .slide.active {
     opacity: 1;
     z-index: 2;
 }
 
-.widget-hero-slider .slide-media,
-.widget-hero-slider .slide-media img {
+.<?= $wc ?> .slide-media,
+.<?= $wc ?> .slide-media img {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
 }
 
-.widget-hero-slider .slide-media img {
+.<?= $wc ?> .slide-media img {
     object-fit: cover;
 }
 
 /* Slide效果 */
-.widget-hero-slider .effect-slide .slide {
+.<?= $wc ?> .effect-slide .slide {
     transform: translateX(100%);
     transition: transform 0.6s ease, opacity 0.6s ease;
 }
 
-.widget-hero-slider .effect-slide .slide.active {
+.<?= $wc ?> .effect-slide .slide.active {
     transform: translateX(0);
 }
 
-.widget-hero-slider .effect-slide .slide.prev {
+.<?= $wc ?> .effect-slide .slide.prev {
     transform: translateX(-100%);
 }
 
 /* 遮罩 */
-.widget-hero-slider .slide-overlay {
+.<?= $wc ?> .slide-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -289,7 +299,7 @@ $sliderId = 'hero-slider-' . uniqid();
 }
 
 /* 内容 */
-.widget-hero-slider .slide-content {
+.<?= $wc ?> .slide-content {
     position: relative;
     z-index: 3;
     height: 100%;
@@ -298,65 +308,65 @@ $sliderId = 'hero-slider-' . uniqid();
     padding: 0 10%;
 }
 
-.widget-hero-slider .text-left .slide-text {
+.<?= $wc ?> .text-left .slide-text {
     text-align: left;
 }
 
-.widget-hero-slider .text-center {
+.<?= $wc ?> .text-center {
     justify-content: center;
 }
 
-.widget-hero-slider .text-center .slide-text {
+.<?= $wc ?> .text-center .slide-text {
     text-align: center;
 }
 
-.widget-hero-slider .text-right {
+.<?= $wc ?> .text-right {
     justify-content: flex-end;
 }
 
-.widget-hero-slider .text-right .slide-text {
+.<?= $wc ?> .text-right .slide-text {
     text-align: right;
 }
 
-.widget-hero-slider .slide-title {
+.<?= $wc ?> .slide-title {
     font-size: 3rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--weline-theme-on-primary, #fff);
     margin: 0 0 15px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    animation: slideUp 0.6s ease forwards;
+    text-shadow: 0 2px 8px color-mix(in srgb, var(--weline-theme-overlay) 40%, transparent);
+    animation: heroSlideUp 0.6s ease forwards;
 }
 
-.widget-hero-slider .slide-subtitle {
+.<?= $wc ?> .slide-subtitle {
     font-size: 1.25rem;
-    color: rgba(255,255,255,0.9);
+    color: color-mix(in srgb, var(--weline-theme-on-primary) 90%, transparent);
     margin: 0 0 30px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-    animation: slideUp 0.6s 0.2s ease forwards;
+    text-shadow: 0 1px 4px color-mix(in srgb, var(--weline-theme-overlay) 35%, transparent);
+    animation: heroSlideUp 0.6s 0.2s ease forwards;
     opacity: 0;
 }
 
-.widget-hero-slider .slide-button {
+.<?= $wc ?> .slide-button {
     display: inline-block;
     padding: 15px 40px;
-    background: var(--primary-color, #007bff);
-    color: #fff;
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
     text-decoration: none;
-    border-radius: 30px;
+    border-radius: var(--weline-radius-round, 999px);
     font-weight: 600;
     font-size: 1rem;
-    transition: all 0.3s;
-    animation: slideUp 0.6s 0.4s ease forwards;
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    animation: heroSlideUp 0.6s 0.4s ease forwards;
     opacity: 0;
 }
 
-.widget-hero-slider .slide-button:hover {
-    background: var(--primary-dark, #0056b3);
+.<?= $wc ?> .slide-button:hover {
+    background: var(--weline-theme-primary-hover);
     transform: translateY(-3px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    box-shadow: var(--weline-theme-shadow-md);
 }
 
-@keyframes slideUp {
+@keyframes heroSlideUp {
     from {
         opacity: 0;
         transform: translateY(30px);
@@ -368,13 +378,13 @@ $sliderId = 'hero-slider-' . uniqid();
 }
 
 /* 箭头 */
-.widget-hero-slider .slider-arrow {
+.<?= $wc ?> .slider-arrow {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
     width: 50px;
     height: 50px;
-    background: rgba(255,255,255,0.9);
+    background: color-mix(in srgb, var(--weline-theme-surface-raised) 92%, transparent);
     border: none;
     border-radius: 50%;
     cursor: pointer;
@@ -382,34 +392,30 @@ $sliderId = 'hero-slider-' . uniqid();
     align-items: center;
     justify-content: center;
     z-index: 10;
-    transition: all 0.3s;
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
     opacity: 0;
+    color: var(--weline-theme-text);
 }
 
-.widget-hero-slider:hover .slider-arrow {
+.<?= $wc ?>:hover .slider-arrow {
     opacity: 1;
 }
 
-.widget-hero-slider .slider-arrow:hover {
-    background: #fff;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+.<?= $wc ?> .slider-arrow:hover {
+    background: var(--weline-theme-surface-raised);
+    box-shadow: var(--weline-theme-shadow-md);
 }
 
-.widget-hero-slider .slider-arrow i {
-    font-size: 24px;
-    color: #333;
-}
-
-.widget-hero-slider .slider-prev {
+.<?= $wc ?> .slider-prev {
     left: 20px;
 }
 
-.widget-hero-slider .slider-next {
+.<?= $wc ?> .slider-next {
     right: 20px;
 }
 
 /* 指示点 */
-.widget-hero-slider .slider-dots {
+.<?= $wc ?> .slider-dots {
     position: absolute;
     bottom: 30px;
     left: 50%;
@@ -419,7 +425,7 @@ $sliderId = 'hero-slider-' . uniqid();
     z-index: 10;
 }
 
-.widget-hero-slider .dot {
+.<?= $wc ?> .dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
@@ -429,92 +435,92 @@ $sliderId = 'hero-slider-' . uniqid();
     transition: all 0.3s;
 }
 
-.widget-hero-slider .dot:hover,
-.widget-hero-slider .dot.active {
-    background: #fff;
+.<?= $wc ?> .dot:hover,
+.<?= $wc ?> .dot.active {
+    background: var(--weline-theme-on-primary);
     transform: scale(1.2);
 }
 
 /* 部件库 / 编辑器预览：压缩高度并缩小文案，避免灰块占位 */
-.widget-preview-canvas .widget-hero-slider,
-.widget-hero-slider--preview {
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
     min-height: 120px;
 }
 
-.widget-preview-canvas .widget-hero-slider .slide-overlay,
-.widget-hero-slider--preview .slide-overlay {
+.widget-preview-canvas .<?= $wc ?> .slide-overlay,
+.<?= $wc ?>.is-preview .slide-overlay {
     background: linear-gradient(to right, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 100%);
 }
 
-.widget-preview-canvas .widget-hero-slider .slide-content,
-.widget-hero-slider--preview .slide-content {
+.widget-preview-canvas .<?= $wc ?> .slide-content,
+.<?= $wc ?>.is-preview .slide-content {
     padding: 0 6%;
 }
 
-.widget-preview-canvas .widget-hero-slider .slide-title,
-.widget-hero-slider--preview .slide-title {
+.widget-preview-canvas .<?= $wc ?> .slide-title,
+.<?= $wc ?>.is-preview .slide-title {
     font-size: 1.1rem;
     margin-bottom: 4px;
     animation: none;
     opacity: 1;
 }
 
-.widget-preview-canvas .widget-hero-slider .slide-subtitle,
-.widget-hero-slider--preview .slide-subtitle {
+.widget-preview-canvas .<?= $wc ?> .slide-subtitle,
+.<?= $wc ?>.is-preview .slide-subtitle {
     font-size: 0.75rem;
     margin-bottom: 8px;
     animation: none;
     opacity: 1;
 }
 
-.widget-preview-canvas .widget-hero-slider .slide-button,
-.widget-hero-slider--preview .slide-button {
+.widget-preview-canvas .<?= $wc ?> .slide-button,
+.<?= $wc ?>.is-preview .slide-button {
     padding: 4px 12px;
     font-size: 0.7rem;
     animation: none;
     opacity: 1;
 }
 
-.widget-preview-canvas .widget-hero-slider .slider-arrow,
-.widget-hero-slider--preview .slider-arrow {
+.widget-preview-canvas .<?= $wc ?> .slider-arrow,
+.<?= $wc ?>.is-preview .slider-arrow {
     width: 24px;
     height: 24px;
     opacity: 0.85;
 }
 
-.widget-preview-canvas .widget-hero-slider .slider-arrow i,
-.widget-hero-slider--preview .slider-arrow i {
+.widget-preview-canvas .<?= $wc ?> .slider-arrow i,
+.<?= $wc ?>.is-preview .slider-arrow i {
     font-size: 14px;
 }
 
-.widget-preview-canvas .widget-hero-slider .slider-dots,
-.widget-hero-slider--preview .slider-dots {
+.widget-preview-canvas .<?= $wc ?> .slider-dots,
+.<?= $wc ?>.is-preview .slider-dots {
     bottom: 8px;
     gap: 4px;
 }
 
-.widget-preview-canvas .widget-hero-slider .dot,
-.widget-hero-slider--preview .dot {
+.widget-preview-canvas .<?= $wc ?> .dot,
+.<?= $wc ?>.is-preview .dot {
     width: 6px;
     height: 6px;
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
-    .widget-hero-slider .slide-title {
+    .<?= $wc ?> .slide-title {
         font-size: 2rem;
     }
     
-    .widget-hero-slider .slide-subtitle {
+    .<?= $wc ?> .slide-subtitle {
         font-size: 1rem;
     }
     
-    .widget-hero-slider .slide-button {
+    .<?= $wc ?> .slide-button {
         padding: 12px 30px;
         font-size: 0.9rem;
     }
     
-    .widget-hero-slider .slider-arrow {
+    .<?= $wc ?> .slider-arrow {
         width: 40px;
         height: 40px;
     }
@@ -523,7 +529,7 @@ $sliderId = 'hero-slider-' . uniqid();
 
 <script>
 (function() {
-    const slider = document.getElementById('<?= $sliderId ?>');
+    const slider = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
     if (!slider) return;
     
     const slides = slider.querySelectorAll('.slide');

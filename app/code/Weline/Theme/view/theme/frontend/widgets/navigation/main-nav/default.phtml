@@ -1,9 +1,9 @@
 <?php
 /**
  * Header 导航菜单部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {main-nav}
  * @widget.name {主导航菜单}
  * @widget.description {Header 主导航菜单，支持多级下拉和Mega菜单}
@@ -13,20 +13,30 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {navigation}
  * @widget.supports {["layout-header-navigation","layout-global-header-navigation"]}
+ * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"navigation","area":"header","sort_order":0}]}
  * @widget.exclusive {true}
- * 
+ *
  * @param menu_style {default="horizontal",type="select",label="菜单样式",options={horizontal:"水平",vertical:"垂直",mega:"Mega菜单"}}
  * @param show_icons {default=false,type="bool",label="显示图标"}
  * @param max_depth {default=3,type="number",label="最大层级"}
  * @param menu_items {default=[],type="array",label="菜单项",description="菜单项数组，每项包含label、url、icon、children"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('main-nav');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $menuStyle = $this->getData('menu_style') ?? 'horizontal';
+if (!in_array($menuStyle, ['horizontal', 'vertical', 'mega'], true)) {
+    $menuStyle = 'horizontal';
+}
 $showIcons = (bool)($this->getData('show_icons') ?? false);
 $maxDepth = (int)($this->getData('max_depth') ?? 3);
 $menuItems = $this->getData('menu_items') ?? [];
 
-// 示例菜单数据（实际使用时应从系统获取）
 if (empty($menuItems)) {
     $menuItems = [
         ['label' => __('首页'), 'url' => '/', 'icon' => 'home'],
@@ -45,23 +55,22 @@ if (empty($menuItems)) {
     ];
 }
 
-// 递归渲染菜单项（闭包，避免模板多次包含时重复声明）
-$renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false) use (&$renderMenuItem) {
+$renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false) use (&$renderMenuItem, $esc) {
     $hasChildren = !empty($item['children']) && $depth < $maxDepth;
     $icon = $item['icon'] ?? '';
     ?>
     <li class="nav-item<?= $hasChildren ? ' has-children' : '' ?>">
-        <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
-            <?php if ($showIcons && $icon): ?>
-                <i class="<?= htmlspecialchars($icon) ?>"></i>
+        <a href="<?= $esc((string)($item['url'] ?? '#')) ?>" class="nav-link">
+            <?php if ($showIcons && $icon !== ''): ?>
+                <i class="<?= $esc((string)$icon) ?>"></i>
             <?php endif; ?>
-            <span><?= htmlspecialchars($item['label'] ?? '') ?></span>
+            <span><?= $esc((string)($item['label'] ?? '')) ?></span>
             <?php if ($hasChildren): ?>
                 <w:icon name="arrow-down" size="sm"></w:icon>
             <?php endif; ?>
         </a>
         <?php if ($hasChildren): ?>
-            <ul class="w-menu" data-w-menu-panel role="menu" hidden>
+            <ul class="dropdown-menu" role="menu">
                 <?php foreach ($item['children'] as $child): ?>
                     <?php $renderMenuItem($child, $depth + 1, $maxDepth, $showIcons); ?>
                 <?php endforeach; ?>
@@ -72,133 +81,128 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 };
 ?>
 
-<nav class="widget-main-nav nav-style-<?= htmlspecialchars($menuStyle) ?>">
-    <ul class="nav-menu">
-        <?php foreach ($menuItems as $item): ?>
-            <?php $renderMenuItem($item, 0, $maxDepth, $showIcons); ?>
-        <?php endforeach; ?>
-    </ul>
-</nav>
+<section class="<?= $esc($wc) ?> nav-style-<?= $esc((string)$menuStyle) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <nav class="main-nav" aria-label="<?= __('主导航') ?>">
+        <ul class="nav-menu">
+            <?php foreach ($menuItems as $item): ?>
+                <?php $renderMenuItem($item, 0, $maxDepth, $showIcons); ?>
+            <?php endforeach; ?>
+        </ul>
+    </nav>
+</section>
 
 <style>
-.widget-main-nav {
+.<?= $wc ?> {
     position: relative;
 }
 
-/* 水平菜单样式 */
-.nav-style-horizontal .nav-menu {
+.<?= $wc ?>.nav-style-horizontal .nav-menu {
     display: flex;
     list-style: none;
     margin: 0;
     padding: 0;
-    gap: 5px;
+    gap: var(--weline-space-1, 5px);
 }
 
-.nav-style-horizontal .nav-item {
+.<?= $wc ?>.nav-style-horizontal .nav-item {
     position: relative;
 }
 
-.nav-style-horizontal .nav-link {
+.<?= $wc ?> .nav-link {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 10px 15px;
-    color: var(--nav-color, #333);
+    gap: var(--weline-space-2, 6px);
+    padding: var(--weline-space-3, 10px) var(--weline-space-4, 15px);
+    color: var(--weline-theme-text);
     text-decoration: none;
     font-weight: 500;
-    transition: color 0.3s, background-color 0.3s;
-    border-radius: 4px;
+    transition: color var(--weline-theme-transition-base, 0.2s ease), background-color var(--weline-theme-transition-base, 0.2s ease);
+    border-radius: var(--weline-radius-sm, 4px);
 }
 
-.nav-style-horizontal .nav-link:hover {
-    color: var(--primary-color, #007bff);
-    background-color: var(--nav-hover-bg, rgba(0,123,255,0.1));
+.<?= $wc ?> .nav-link:hover {
+    color: var(--weline-theme-primary);
+    background-color: var(--weline-theme-primary-surface);
 }
 
-.nav-style-horizontal .dropdown-icon {
-    font-size: 0.8em;
-    transition: transform 0.3s;
-}
-
-.nav-style-horizontal .has-children:hover .dropdown-icon {
+.<?= $wc ?>.nav-style-horizontal .has-children:hover > .nav-link w-icon {
     transform: rotate(180deg);
 }
 
-/* 下拉菜单 */
-.nav-style-horizontal .dropdown-menu {
+.<?= $wc ?>.nav-style-horizontal .dropdown-menu {
     position: absolute;
     top: 100%;
     left: 0;
     min-width: 200px;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-md, 8px);
+    box-shadow: var(--weline-theme-shadow-md);
     list-style: none;
-    padding: 8px 0;
+    padding: var(--weline-space-2, 8px) 0;
     margin: 0;
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px);
-    transition: all 0.3s;
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
     z-index: 1000;
 }
 
-.nav-style-horizontal .has-children:hover > .dropdown-menu {
+.<?= $wc ?>.nav-style-horizontal .has-children:hover > .dropdown-menu {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
 }
 
-.nav-style-horizontal .dropdown-menu .nav-link {
-    padding: 10px 20px;
+.<?= $wc ?>.nav-style-horizontal .dropdown-menu .nav-link {
+    padding: var(--weline-space-3, 10px) var(--weline-space-5, 20px);
     border-radius: 0;
 }
 
-.nav-style-horizontal .dropdown-menu .dropdown-menu {
+.<?= $wc ?>.nav-style-horizontal .dropdown-menu .dropdown-menu {
     top: 0;
     left: 100%;
 }
 
-/* 垂直菜单样式 */
-.nav-style-vertical .nav-menu {
+.<?= $wc ?>.nav-style-vertical .nav-menu {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-.nav-style-vertical .nav-link {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 15px;
-    color: var(--nav-color, #333);
-    text-decoration: none;
-    border-bottom: 1px solid #eee;
-    transition: all 0.3s;
+.<?= $wc ?>.nav-style-vertical .nav-link {
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
 }
 
-.nav-style-vertical .nav-link:hover {
-    background-color: var(--nav-hover-bg, #f5f5f5);
-    color: var(--primary-color, #007bff);
-}
-
-.nav-style-vertical .dropdown-menu {
+.<?= $wc ?>.nav-style-vertical .dropdown-menu {
     list-style: none;
-    padding-left: 20px;
+    padding-left: var(--weline-space-5, 20px);
     margin: 0;
 }
 
-/* Mega菜单样式 */
-.nav-style-mega .dropdown-menu {
+.<?= $wc ?>.nav-style-mega .dropdown-menu {
     min-width: 600px;
-    padding: 20px;
+    padding: var(--weline-space-5, 20px);
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
+    gap: var(--weline-space-5, 20px);
 }
 
-.nav-style-mega .dropdown-menu .nav-item {
+.<?= $wc ?>.nav-style-mega .dropdown-menu .nav-item {
     flex: 1;
     min-width: 150px;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    overflow-x: auto;
+}
+
+.widget-preview-canvas .<?= $wc ?> .nav-link,
+.<?= $wc ?>.is-preview .nav-link {
+    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    font-size: var(--weline-font-size-xs, 12px);
 }
 </style>

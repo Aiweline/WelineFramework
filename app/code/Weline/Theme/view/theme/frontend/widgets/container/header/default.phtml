@@ -1,13 +1,10 @@
 <?php
 /**
  * Header 容器部件模板
- * 
- * 定义头部布局和内部插槽位置
- * 子部件会自动渲染到对应的插槽中
- * 
+ *
  * @var array $config 部件配置
  * @var array $children 子部件（按插槽分组）
- * 
+ *
  * @widget.code {header-container}
  * @widget.name {Header 容器}
  * @widget.description {页面头部容器，包含 Logo、搜索框、导航、用户区域等插槽。独占头部区域。}
@@ -18,160 +15,194 @@
  * @widget.is_container {true}
  * @widget.exclusive {true}
  * @widget.slots {"logo":{"name":"Logo 插槽","position":"left","accept":["logo"],"max":1},"search":{"name":"搜索框插槽","position":"center","accept":["header-search"],"max":1},"navigation":{"name":"导航菜单插槽","position":"center-bottom","accept":["main-nav","category-menu"],"max":1},"user-area":{"name":"用户区域插槽","position":"right","accept":["account","mini-cart-icon","wishlist-icon","language-switcher","currency-switcher"],"max":5}}
- * 
+ *
  * @param sticky {default=true,type="bool",label="吸顶效果"}
- * @param bg_color {default="#ffffff",type="color",label="背景颜色"}
+ * @param bg_color {default="var(--weline-theme-surface)",type="color",label="背景颜色"}
  * @param shadow {default=true,type="bool",label="显示阴影"}
  */
 
-$sticky = $config['sticky'] ?? true;
-$bgColor = $config['bg_color'] ?? '#ffffff';
-$shadow = $config['shadow'] ?? true;
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
 
-// 子部件数据（由渲染器注入）
+$scope = WidgetUiScope::forWidget('header-container');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$config = $config ?? [];
 $children = $children ?? [];
+$isPreviewMode = (bool)($config['preview_mode'] ?? false);
+$sticky = (bool)($config['sticky'] ?? true);
+$bgColor = ThemeUiColor::sanitize(
+    $config['bg_color'] ?? '',
+    'var(--weline-theme-surface)'
+);
+$shadow = (bool)($config['shadow'] ?? true);
+
+$rootStyle = '--wc-header-bg:' . $bgColor . ';';
+if ($shadow) {
+    $rootStyle .= '--wc-header-shadow:var(--weline-theme-shadow-sm);';
+}
 ?>
-<header class="widget-header-container <?= $sticky ? 'sticky-top' : '' ?>" 
-        style="background-color: <?= htmlspecialchars($bgColor) ?>; <?= $shadow ? 'box-shadow: 0 2px 10px rgba(0,0,0,0.1);' : '' ?>">
-    
-    <!-- 头部主体区域 -->
+
+<header class="<?= $esc($wc) ?><?= $sticky ? ' is-sticky' : '' ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+        weline-code="<?= $esc($scope->code) ?>"
+        data-uid="<?= $esc($scope->uid) ?>"
+        data-js-ns="<?= $esc($scope->jsNs) ?>"
+        style="<?= $esc($rootStyle) ?>">
+
     <div class="header-main">
-        <div class="header-container">
-            
-            <!-- Logo 插槽 (左侧) -->
+        <div class="header-inner">
             <div class="header-slot slot-logo" data-slot="logo" data-accept="logo">
                 <?php if (!empty($children['logo'])): ?>
                     <?php foreach ($children['logo'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="image" size="sm"></w:icon>
-                        <span>Logo</span>
+                        <span><?= __('Logo') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
-            
-            <!-- 搜索框插槽 (中间) -->
+
             <div class="header-slot slot-search" data-slot="search" data-accept="header-search">
                 <?php if (!empty($children['search'])): ?>
                     <?php foreach ($children['search'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="search" size="sm"></w:icon>
-                        <span>搜索框</span>
+                        <span><?= __('搜索框') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
-            
-            <!-- 用户区域插槽 (右侧) -->
+
             <div class="header-slot slot-user-area" data-slot="user-area" data-accept="account,mini-cart-icon,wishlist-icon,language-switcher,currency-switcher">
                 <?php if (!empty($children['user-area'])): ?>
                     <?php foreach ($children['user-area'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="user" size="sm"></w:icon>
-                        <span>用户区域</span>
+                        <span><?= __('用户区域') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
-            
         </div>
     </div>
-    
-    <!-- 导航菜单插槽 (底部) -->
+
     <div class="header-nav">
-        <div class="header-container">
-            <div class="header-slot slot-navigation" data-slot="navigation" data-accept="main-nav">
+        <div class="header-inner">
+            <div class="header-slot slot-navigation" data-slot="navigation" data-accept="main-nav,category-menu">
                 <?php if (!empty($children['navigation'])): ?>
                     <?php foreach ($children['navigation'] as $child): ?>
-                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
                             <?= $child['html'] ?? '' ?>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <div class="slot-placeholder">
                         <w:icon name="menu" size="sm"></w:icon>
-                        <span>导航菜单</span>
+                        <span><?= __('导航菜单') ?></span>
                     </div>
                 <?php endif; ?>
             </div>
         </div>
     </div>
-    
 </header>
 
 <style>
-.widget-header-container {
+.<?= $wc ?> {
     width: 100%;
     z-index: 100;
+    background-color: var(--wc-header-bg, var(--weline-theme-surface));
+    color: var(--weline-theme-text);
+    box-shadow: var(--wc-header-shadow, none);
 }
 
-.header-container {
-    max-width: 1400px;
+.<?= $wc ?>.is-sticky {
+    position: sticky;
+    top: 0;
+}
+
+.<?= $wc ?> .header-inner {
+    max-width: var(--weline-theme-container-max, 1400px);
     margin: 0 auto;
-    padding: 0 20px;
+    padding: 0 var(--weline-space-5, 20px);
 }
 
-.header-main {
-    padding: 15px 0;
+.<?= $wc ?> .header-main {
+    padding: var(--weline-space-4, 15px) 0;
 }
 
-.header-main .header-container {
+.<?= $wc ?> .header-main .header-inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 30px;
+    gap: var(--weline-space-8, 30px);
 }
 
-.header-nav {
-    background: #f8f9fa;
-    border-top: 1px solid #e0e0e0;
-    padding: 10px 0;
+.<?= $wc ?> .header-nav {
+    background: var(--weline-theme-surface-muted);
+    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    padding: var(--weline-space-3, 10px) 0;
 }
 
-/* 插槽样式 */
-.header-slot {
+.<?= $wc ?> .header-slot {
     position: relative;
     min-height: 40px;
     display: flex;
     align-items: center;
 }
 
-.slot-logo {
+.<?= $wc ?> .slot-logo {
     flex-shrink: 0;
     min-width: 120px;
 }
 
-.slot-search {
+.<?= $wc ?> .slot-search {
     flex: 1;
     max-width: 500px;
 }
 
-.slot-user-area {
+.<?= $wc ?> .slot-user-area {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: var(--weline-space-4, 15px);
     flex-shrink: 0;
 }
 
-.slot-navigation {
+.<?= $wc ?> .slot-navigation {
     width: 100%;
 }
 
-/* 编辑模式样式由 editor-mode.css 统一管理 */
-
-.slot-widget {
+.<?= $wc ?> .slot-widget {
     position: relative;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    min-height: 56px;
+}
+
+@media (max-width: 768px) {
+    .<?= $wc ?> .header-main .header-inner {
+        flex-wrap: wrap;
+        gap: var(--weline-space-4, 15px);
+    }
+
+    .<?= $wc ?> .slot-search {
+        order: 3;
+        flex: 0 0 100%;
+        max-width: none;
+    }
 }
 </style>

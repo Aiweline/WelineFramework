@@ -37,195 +37,6 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
         .theme-layout-homepage .homepage-section--soft {
             background: var(--weline-theme-surface-subtle);
         }
-
-        .theme-layout-homepage .homepage-hero__surface {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(280px, .82fr);
-            gap: clamp(var(--weline-layout-spacing-lg), 5vw, var(--weline-layout-spacing-3xl));
-            align-items: center;
-            padding: clamp(var(--weline-layout-spacing-xl), 5vw, var(--weline-layout-spacing-3xl));
-            min-height: clamp(420px, 66vw, 620px);
-        }
-
-        .theme-layout-homepage .homepage-hero__eyebrow {
-            display: inline-flex;
-            align-items: center;
-            width: fit-content;
-            min-height: 30px;
-            padding: 0 var(--weline-layout-spacing-sm);
-            border-radius: var(--weline-layout-radius-full);
-            color: var(--weline-theme-primary-emphasis);
-            background: var(--weline-theme-primary-surface);
-            font-size: var(--weline-layout-font-size-sm);
-            font-weight: var(--weline-layout-font-weight-bold);
-        }
-
-        .theme-layout-homepage .homepage-hero__title {
-            margin: var(--weline-layout-spacing-md) 0 0;
-            font-size: clamp(var(--weline-layout-font-size-4xl), 6vw, calc(var(--weline-layout-font-size-4xl) * 2.25));
-            line-height: var(--weline-layout-line-height-tight);
-            letter-spacing: 0;
-        }
-
-        .theme-layout-homepage .homepage-hero__lead {
-            max-width: 650px;
-            margin: var(--weline-layout-spacing-lg) 0 0;
-            color: var(--weline-theme-text-muted);
-            font-size: var(--weline-layout-font-size-lg);
-        }
-
-        .theme-layout-homepage .homepage-hero__actions {
-            display: flex;
-            gap: var(--weline-layout-spacing-sm);
-            flex-wrap: wrap;
-            margin-top: var(--weline-layout-spacing-lg);
-        }
-
-        .theme-layout-homepage .homepage-hero__panel {
-            display: grid;
-            gap: var(--weline-layout-spacing-sm);
-        }
-
-        .theme-layout-homepage .homepage-hero__metric {
-            padding: var(--weline-layout-spacing-lg);
-        }
-
-        .theme-layout-homepage .homepage-hero__metric strong {
-            display: block;
-            color: var(--weline-theme-text);
-            font-size: var(--weline-layout-font-size-2xl);
-        }
-
-        .theme-layout-homepage .homepage-section__head {
-            display: flex;
-            align-items: end;
-            justify-content: space-between;
-            gap: var(--weline-layout-spacing-lg);
-            margin-bottom: var(--weline-layout-spacing-lg);
-        }
-
-        .theme-layout-homepage .homepage-section__title {
-            margin: 0;
-            font-size: clamp(var(--weline-layout-font-size-3xl), 4vw, calc(var(--weline-layout-font-size-4xl) * 1.25));
-            line-height: var(--weline-layout-line-height-tight);
-        }
-
-        .theme-layout-homepage .homepage-section__lead {
-            max-width: 620px;
-            margin: var(--weline-layout-spacing-sm) 0 0;
-            color: var(--weline-theme-text-muted);
-        }
-
-        .theme-layout-homepage .homepage-card-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: var(--weline-layout-spacing-lg);
-        }
-
-        .theme-layout-homepage .homepage-product-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: var(--weline-layout-spacing-lg);
-        }
-
-        .theme-layout-homepage .homepage-card,
-        .theme-layout-homepage .homepage-product {
-            padding: var(--weline-layout-spacing-lg);
-        }
-
-        .theme-layout-homepage .homepage-card__icon {
-            display: grid;
-            place-items: center;
-            width: 42px;
-            height: 42px;
-            margin-bottom: var(--weline-layout-spacing-sm);
-            border-radius: var(--weline-layout-radius-xl);
-            color: var(--weline-theme-on-primary);
-            background: var(--weline-theme-primary);
-        }
-
-        .theme-layout-homepage .homepage-card h3,
-        .theme-layout-homepage .homepage-product h3 {
-            margin: 0 0 8px;
-            font-size: var(--weline-layout-font-size-lg);
-        }
-
-        .theme-layout-homepage .homepage-card p,
-        .theme-layout-homepage .homepage-product p {
-            margin: 0;
-            color: var(--weline-theme-text-muted);
-        }
-
-        .theme-layout-homepage .homepage-product__image {
-            display: grid;
-            place-items: center;
-            aspect-ratio: 4 / 3;
-            margin-bottom: var(--weline-layout-spacing-sm);
-            border-radius: var(--weline-layout-radius-xl);
-            color: var(--weline-theme-primary);
-            background: var(--weline-theme-primary-surface);
-            font-size: var(--weline-layout-font-size-4xl);
-        }
-
-        .theme-layout-homepage .homepage-promo__surface {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: var(--weline-layout-spacing-lg);
-            align-items: center;
-            padding: clamp(var(--weline-layout-spacing-lg), 4vw, var(--weline-layout-spacing-3xl));
-            color: var(--weline-theme-text-inverse);
-            background: var(--weline-theme-primary);
-        }
-
-        .theme-layout-homepage .homepage-promo__surface h2 {
-            margin: 0;
-            font-size: clamp(var(--weline-layout-font-size-2xl), 4vw, calc(var(--weline-layout-font-size-4xl) * 1.25));
-        }
-
-        .theme-layout-homepage .homepage-promo__surface p {
-            margin: 8px 0 0;
-            color: var(--weline-theme-text-inverse);
-        }
-
-        .theme-layout-homepage .homepage-brand-row {
-            display: flex;
-            gap: var(--weline-layout-spacing-sm);
-            flex-wrap: wrap;
-        }
-
-        .theme-layout-homepage .homepage-brand {
-            display: inline-flex;
-            align-items: center;
-            min-height: 42px;
-            padding: 0 var(--weline-layout-spacing-md);
-            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-            border-radius: var(--weline-layout-radius-full);
-            background: var(--weline-theme-surface);
-            font-weight: var(--weline-layout-font-weight-bold);
-        }
-
-        @media (max-width: 980px) {
-            .theme-layout-homepage .homepage-hero__surface,
-            .theme-layout-homepage .homepage-promo__surface {
-                grid-template-columns: 1fr;
-            }
-
-            .theme-layout-homepage .homepage-card-grid,
-            .theme-layout-homepage .homepage-product-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-
-        @media (max-width: 620px) {
-            .theme-layout-homepage .homepage-section__head {
-                display: block;
-            }
-
-            .theme-layout-homepage .homepage-card-grid,
-            .theme-layout-homepage .homepage-product-grid {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
@@ -270,37 +81,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-hero" weline-code="theme.homepage.homepage_hero">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::hero
-                            <else/>
-                        <div class="weline-container">
-                            <div class="weline-layout-surface homepage-hero__surface">
-                                <div>
-                                    <span class="homepage-hero__eyebrow"><?= __('Weline 默认主题') ?></span>
-                                    <h1 class="homepage-hero__title"><?= htmlspecialchars((string)($meta['title'] ?? __('搭建清晰的店铺首页')), ENT_QUOTES, 'UTF-8') ?></h1>
-                                    <p class="homepage-hero__lead"><?= __('这是一个可直接浏览的默认首页，适用于店铺、内容站点和模块驱动页面。') ?></p>
-                                    <div class="homepage-hero__actions">
-                                        <a class="weline-button" href="/products"><?= __('浏览商品') ?></a>
-                                        <a class="weline-button weline-button--ghost" href="/contact"><?= __('联系我们') ?></a>
-                                    </div>
-                                </div>
-                                <div class="homepage-hero__panel">
-                                    <div class="weline-card homepage-hero__metric">
-                                        <strong><?= __('重点展示') ?></strong>
-                                        <span class="weline-muted"><?= __('首页首屏、促销和活动内容') ?></span>
-                                    </div>
-                                    <div class="weline-card homepage-hero__metric">
-                                        <strong><?= __('灵活组合') ?></strong>
-                                        <span class="weline-muted"><?= __('商品、文章、分类或服务内容') ?></span>
-                                    </div>
-                                    <div class="weline-card homepage-hero__metric">
-                                        <strong><?= __('默认可用') ?></strong>
-                                        <span class="weline-muted"><?= __('真实数据接入前仍保持完整展示') ?></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::hero<else/></w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-featured"
@@ -310,28 +91,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_featured">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::featured
-                            <else/>
-                        <div class="weline-container">
-                            <div class="homepage-section__head">
-                                <div>
-                                    <h2 class="homepage-section__title"><?= __('精选内容') ?></h2>
-                                    <p class="homepage-section__lead"><?= __('这里可以承载商品、文章、服务卡片或季节性优惠。') ?></p>
-                                </div>
-                                <a class="weline-button weline-button--ghost" href="/products"><?= __('查看全部') ?></a>
-                            </div>
-                            <div class="homepage-product-grid">
-                                <?php foreach ([__('入门套装'), __('现代组合'), __('增长礼包'), __('工作室套件')] as $label): ?>
-                                    <article class="weline-card homepage-product">
-                                        <div class="homepage-product__image"><w:icon name="box" size="sm"></w:icon></div>
-                                        <h3><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></h3>
-                                        <p><?= __('这里会在接入真实商品或内容数据后被替换。') ?></p>
-                                    </article>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::featured<else/></w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-categories"
@@ -341,35 +101,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_categories">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::categories
-                            <else/>
-                        <div class="weline-container">
-                            <div class="homepage-section__head">
-                                <div>
-                                    <h2 class="homepage-section__title"><?= __('浏览分区') ?></h2>
-                                    <p class="homepage-section__lead"><?= __('即使分类模块尚未接入，默认卡片也能保持页面可读。') ?></p>
-                                </div>
-                            </div>
-                            <div class="homepage-card-grid">
-                                <article class="weline-card homepage-card">
-                                    <span class="homepage-card__icon"><w:icon name="bolt" size="sm"></w:icon></span>
-                                    <h3><?= __('集合') ?></h3>
-                                    <p><?= __('用于商品、文章或落地页内容的精选分组。') ?></p>
-                                </article>
-                                <article class="weline-card homepage-card">
-                                    <span class="homepage-card__icon"><w:icon name="bolt" size="sm"></w:icon></span>
-                                    <h3><?= __('促销') ?></h3>
-                                    <p><?= __('用于季节横幅、优惠或公告内容。') ?></p>
-                                </article>
-                                <article class="weline-card homepage-card">
-                                    <span class="homepage-card__icon"><w:icon name="circle" size="sm"></w:icon></span>
-                                    <h3><?= __('服务') ?></h3>
-                                    <p><?= __('用于支持区块、指南和联系入口。') ?></p>
-                                </article>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/></w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-promo"
@@ -379,19 +111,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-promo" weline-code="theme.homepage.homepage_promo">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::promo
-                            <else/>
-                        <div class="weline-container">
-                            <div class="weline-layout-surface homepage-promo__surface">
-                                <div>
-                                    <h2><?= __('默认即可发布') ?></h2>
-                                    <p><?= __('先拥有一个干净页面，再让模块逐步用真实数据替换各个区域。') ?></p>
-                                </div>
-                                <a class="weline-button" href="/contact"><?= __('开始配置') ?></a>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::promo<else/></w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-new-arrivals"
@@ -401,32 +121,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_new_arrivals">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::new-arrivals
-                            <else/>
-                        <div class="weline-container">
-                            <div class="homepage-section__head">
-                                <div>
-                                    <h2 class="homepage-section__title"><?= __('最新动态') ?></h2>
-                                    <p class="homepage-section__lead"><?= __('这里适合展示新品、文章、发布内容或活动。') ?></p>
-                                </div>
-                            </div>
-                            <div class="homepage-card-grid">
-                                <article class="weline-card homepage-card">
-                                    <h3><?= __('新内容') ?></h3>
-                                    <p><?= __('模块输出可以替换这个默认占位。') ?></p>
-                                </article>
-                                <article class="weline-card homepage-card">
-                                    <h3><?= __('精选故事') ?></h3>
-                                    <p><?= __('适合 CMS、博客或落地页内容。') ?></p>
-                                </article>
-                                <article class="weline-card homepage-card">
-                                    <h3><?= __('活动中') ?></h3>
-                                    <p><?= __('可以拖入横幅或促销部件。') ?></p>
-                                </article>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::new-arrivals<else/></w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-bestsellers"
@@ -436,23 +131,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_bestsellers">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::bestsellers
-                            <else/>
-                        <div class="weline-container">
-                            <div class="homepage-section__head">
-                                <div>
-                                    <h2 class="homepage-section__title"><?= __('当前热门') ?></h2>
-                                    <p class="homepage-section__lead"><?= __('用于排行、推荐内容或重点亮点的中性区域。') ?></p>
-                                </div>
-                            </div>
-                            <div class="homepage-card-grid">
-                                <article class="weline-card homepage-card"><h3><?= __('榜首项目') ?></h3><p><?= __('可由排行部件接管。') ?></p></article>
-                                <article class="weline-card homepage-card"><h3><?= __('用户选择') ?></h3><p><?= __('可由评价或推荐模块接管。') ?></p></article>
-                                <article class="weline-card homepage-card"><h3><?= __('编辑精选') ?></h3><p><?= __('可由人工精选内容接管。') ?></p></article>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::bestsellers<else/></w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-brands"
@@ -462,24 +141,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_brands">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::brands
-                            <else/>
-                        <div class="weline-container">
-                            <div class="homepage-section__head">
-                                <div>
-                                    <h2 class="homepage-section__title"><?= __('可信生态') ?></h2>
-                                    <p class="homepage-section__lead"><?= __('品牌、合作伙伴、认证或渠道部件可以放在这里。') ?></p>
-                                </div>
-                            </div>
-                            <div class="homepage-brand-row">
-                                <span class="homepage-brand">Weline</span>
-                                <span class="homepage-brand">Theme</span>
-                                <span class="homepage-brand">Widget</span>
-                                <span class="homepage-brand">Frontend</span>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/></w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-trust"
@@ -489,29 +151,7 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_trust">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::homepage::trust
-                            <else/>
-                        <div class="weline-container">
-                            <div class="homepage-card-grid">
-                                <article class="weline-card homepage-card">
-                                    <span class="homepage-card__icon"><w:icon name="check" size="sm"></w:icon></span>
-                                    <h3><?= __('可靠') ?></h3>
-                                    <p><?= __('没有可选电商依赖时也能渲染默认页面。') ?></p>
-                                </article>
-                                <article class="weline-card homepage-card">
-                                    <span class="homepage-card__icon"><w:icon name="circle" size="sm"></w:icon></span>
-                                    <h3><?= __('可组合') ?></h3>
-                                    <p><?= __('关键区域都保留名称，便于替换和扩展。') ?></p>
-                                </article>
-                                <article class="weline-card homepage-card">
-                                    <span class="homepage-card__icon"><w:icon name="refresh" size="sm"></w:icon></span>
-                                    <h3><?= __('可替换') ?></h3>
-                                    <p><?= __('真实模块输出可以干净替换默认内容。') ?></p>
-                                </article>
-                            </div>
-                        </div>
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/></w:hook>
                     </w:slot>
                 <?php endif; ?>
                 </w:hook>

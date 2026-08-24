@@ -1,9 +1,9 @@
 <?php
 /**
  * 侧栏菜单部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {sidebar-menu}
  * @widget.name {侧栏菜单}
  * @widget.description {侧边栏导航菜单，支持多级折叠}
@@ -12,19 +12,25 @@
  * @widget.position {["sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
+ *
  * @param title {default="导航菜单",type="string",label="标题"}
  * @param menu_items {default=[],type="array",label="菜单项"}
  * @param collapsed_by_default {default=false,type="bool",label="默认折叠"}
  * @param show_icons {default=true,type="bool",label="显示图标"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('sidebar-menu');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = $this->getData('title') ?? __('导航菜单');
 $menuItems = $this->getData('menu_items') ?? [];
 $collapsedByDefault = (bool)($this->getData('collapsed_by_default') ?? false);
 $showIcons = (bool)($this->getData('show_icons') ?? true);
 
-// 示例菜单数据
 if (empty($menuItems)) {
     $menuItems = [
         ['label' => __('我的账户'), 'url' => '/account', 'icon' => 'user'],
@@ -35,38 +41,35 @@ if (empty($menuItems)) {
         ['label' => __('账户安全'), 'url' => '/account/security', 'icon' => 'shield'],
     ];
 }
-
-$widgetId = 'sidebar-menu-' . uniqid();
 ?>
 
-<div class="widget-sidebar-menu" id="<?= $widgetId ?>">
-    <?php if ($title): ?>
-        <h3 class="widget-title"><?= htmlspecialchars($title) ?></h3>
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?php if ($title !== ''): ?>
+        <h3 class="widget-title"><?= $esc((string)$title) ?></h3>
     <?php endif; ?>
-    
     <ul class="sidebar-menu-list">
         <?php foreach ($menuItems as $item): ?>
             <li class="menu-item <?= !empty($item['children']) ? 'has-children' : '' ?> <?= !empty($item['active']) ? 'active' : '' ?>">
-                <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="menu-link">
+                <a href="<?= $esc((string)($item['url'] ?? '#')) ?>" class="menu-link">
                     <?php if ($showIcons && !empty($item['icon'])): ?>
-                        <i class="<?= htmlspecialchars($item['icon']) ?>"></i>
+                        <i class="<?= $esc((string)$item['icon']) ?>"></i>
                     <?php endif; ?>
-                    <span><?= htmlspecialchars($item['label']) ?></span>
+                    <span><?= $esc((string)$item['label']) ?></span>
                     <?php if (!empty($item['badge'])): ?>
-                        <span class="menu-badge"><?= htmlspecialchars($item['badge']) ?></span>
+                        <span class="menu-badge"><?= $esc((string)$item['badge']) ?></span>
                     <?php endif; ?>
                     <?php if (!empty($item['children'])): ?>
                         <w:icon name="arrow-down" size="sm"></w:icon>
                     <?php endif; ?>
                 </a>
-                
                 <?php if (!empty($item['children'])): ?>
-                    <ul class="submenu" <?= $collapsedByDefault ? 'style="display:none;"' : '' ?>>
+                    <ul class="submenu" <?= $collapsedByDefault ? 'hidden' : '' ?>>
                         <?php foreach ($item['children'] as $child): ?>
                             <li class="submenu-item">
-                                <a href="<?= htmlspecialchars($child['url'] ?? '#') ?>">
-                                    <?= htmlspecialchars($child['label']) ?>
-                                </a>
+                                <a href="<?= $esc((string)($child['url'] ?? '#')) ?>"><?= $esc((string)$child['label']) ?></a>
                             </li>
                         <?php endforeach; ?>
                     </ul>
@@ -74,115 +77,96 @@ $widgetId = 'sidebar-menu-' . uniqid();
             </li>
         <?php endforeach; ?>
     </ul>
-</div>
+</section>
 
 <style>
-.widget-sidebar-menu {
-    background: #fff;
-    border-radius: 10px;
-    padding: 20px;
+.<?= $wc ?> {
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-lg, 10px);
+    padding: var(--weline-space-5, 20px);
 }
 
-.widget-sidebar-menu .widget-title {
-    font-size: 16px;
+.<?= $wc ?> .widget-title {
+    font-size: var(--weline-font-size-base, 16px);
     font-weight: 600;
-    margin: 0 0 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
+    margin: 0 0 var(--weline-space-4, 15px);
+    padding-bottom: var(--weline-space-4, 15px);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    color: var(--weline-theme-text);
 }
 
-.widget-sidebar-menu .sidebar-menu-list {
+.<?= $wc ?> .sidebar-menu-list {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-.widget-sidebar-menu .menu-item {
-    margin-bottom: 2px;
-}
-
-.widget-sidebar-menu .menu-link {
+.<?= $wc ?> .menu-link {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
-    color: var(--text-color, #333);
+    gap: var(--weline-space-3, 12px);
+    padding: var(--weline-space-3, 12px) var(--weline-space-4, 15px);
+    color: var(--weline-theme-text);
     text-decoration: none;
-    border-radius: 8px;
-    transition: all 0.2s;
+    border-radius: var(--weline-radius-md, 8px);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-sidebar-menu .menu-link:hover,
-.widget-sidebar-menu .menu-item.active .menu-link {
-    background: var(--primary-light, #e3f2fd);
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .menu-link:hover,
+.<?= $wc ?> .menu-item.active .menu-link {
+    background: var(--weline-theme-primary-surface);
+    color: var(--weline-theme-primary);
 }
 
-.widget-sidebar-menu .menu-link i:first-child {
-    font-size: 18px;
-    width: 20px;
-    text-align: center;
-}
-
-.widget-sidebar-menu .menu-link span {
-    flex: 1;
-    font-size: 14px;
-}
-
-.widget-sidebar-menu .menu-badge {
-    padding: 2px 8px;
-    background: var(--danger-color, #dc3545);
-    color: #fff;
-    font-size: 11px;
+.<?= $wc ?> .menu-badge {
+    padding: 2px var(--weline-space-2, 8px);
+    background: var(--weline-theme-danger);
+    color: var(--weline-theme-on-primary);
+    font-size: var(--weline-font-size-xs, 11px);
     font-weight: 600;
-    border-radius: 10px;
+    border-radius: var(--weline-radius-round, 999px);
+    margin-left: auto;
 }
 
-.widget-sidebar-menu .toggle-icon {
-    transition: transform 0.3s;
-}
-
-.widget-sidebar-menu .menu-item.expanded .toggle-icon {
-    transform: rotate(180deg);
-}
-
-.widget-sidebar-menu .submenu {
+.<?= $wc ?> .submenu {
     list-style: none;
-    margin: 5px 0 0;
-    padding: 0 0 0 47px;
+    margin: var(--weline-space-1, 5px) 0 0;
+    padding: 0 0 0 var(--weline-space-12, 47px);
 }
 
-.widget-sidebar-menu .submenu-item a {
+.<?= $wc ?> .submenu-item a {
     display: block;
-    padding: 8px 15px;
-    color: #666;
+    padding: var(--weline-space-2, 8px) var(--weline-space-4, 15px);
+    color: var(--weline-theme-text-muted);
     text-decoration: none;
-    font-size: 13px;
-    border-radius: 6px;
-    transition: all 0.2s;
+    font-size: var(--weline-font-size-sm, 13px);
+    border-radius: var(--weline-radius-sm, 6px);
 }
 
-.widget-sidebar-menu .submenu-item a:hover {
-    background: #f5f5f5;
-    color: var(--primary-color, #007bff);
+.<?= $wc ?> .submenu-item a:hover {
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-primary);
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-3, 12px);
 }
 </style>
 
 <script>
-(function() {
-    const widget = document.getElementById('<?= $widgetId ?>');
-    if (!widget) return;
-    
-    widget.querySelectorAll('.has-children > .menu-link').forEach(function(link) {
-        link.addEventListener('click', function(e) {
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    root.querySelectorAll('.has-children > .menu-link').forEach(function (link) {
+        link.addEventListener('click', function (e) {
             e.preventDefault();
-            const item = this.closest('.menu-item');
-            const submenu = item.querySelector('.submenu');
-            
-            if (submenu) {
-                item.classList.toggle('expanded');
-                submenu.style.display = submenu.style.display === 'none' ? '' : 'none';
-            }
+            var item = this.closest('.menu-item');
+            var submenu = item?.querySelector('.submenu');
+            if (!submenu) return;
+            item.classList.toggle('expanded');
+            submenu.hidden = !submenu.hidden;
         });
     });
 })();
