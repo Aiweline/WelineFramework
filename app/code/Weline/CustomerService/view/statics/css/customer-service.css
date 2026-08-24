@@ -668,6 +668,45 @@
         to { transform: rotate(360deg); }
     }
 
+    .cs-chat-header.w-panel-header {
+        padding: 1rem 1.25rem;
+    }
+
+    .cs-chat-body.w-panel-body {
+        padding: 1.25rem;
+    }
+
+    .cs-chat-footer.w-panel-footer {
+        padding: 1rem 1.25rem;
+    }
+
+    .cs-settings-panel.w-panel-body {
+        padding: 0.875rem 1.25rem;
+    }
+
+    .cs-modal.w-modal {
+        padding: clamp(1rem, 4vw, 2.5rem);
+        box-sizing: border-box;
+    }
+
+    .cs-modal.w-modal .w-modal-dialog {
+        width: min(100%, 26.25rem);
+        margin: auto;
+    }
+
+    .cs-modal-content.w-modal-content {
+        width: 100%;
+    }
+
+    .cs-modal-header.w-modal-header,
+    .cs-modal-footer.w-modal-footer {
+        padding: 1rem 1.25rem;
+    }
+
+    .cs-modal-body.w-modal-body {
+        padding: 1.25rem;
+    }
+
     .customer-service-widget.is-open .cs-chat-button {
         display: none !important;
     }
@@ -678,7 +717,8 @@
             right: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-right, env(safe-area-inset-right, 0px)));
         }
 
-        .cs-chat-window {
+        .cs-chat-window,
+        .cs-chat-window.w-panel {
             position: fixed;
             top: max(0.75rem, env(safe-area-inset-top, 0px));
             right: max(0.75rem, env(safe-area-inset-right, 0px));
@@ -690,9 +730,58 @@
             max-height: none;
         }
 
+        .cs-chat-header.w-panel-header,
+        .cs-chat-footer.w-panel-footer {
+            padding: 0.75rem 1rem;
+        }
+
+        .cs-chat-body.w-panel-body,
+        .cs-settings-panel.w-panel-body {
+            padding: 1rem;
+        }
+
+        .cs-chat-title {
+            min-width: 0;
+        }
+
+        .cs-settings-item {
+            flex-wrap: wrap;
+            align-items: stretch;
+        }
+
+        .cs-settings-item .w-select,
+        .cs-settings-item select {
+            max-width: 100%;
+            width: 100%;
+            min-width: 0;
+        }
+
         .cs-chat-button {
             width: 3.125rem;
             height: 3.125rem;
+        }
+
+        .cs-modal.w-modal {
+            padding: max(0.75rem, env(safe-area-inset-top, 0px))
+                max(0.75rem, env(safe-area-inset-right, 0px))
+                max(0.75rem, env(safe-area-inset-bottom, 0px))
+                max(0.75rem, env(safe-area-inset-left, 0px));
+            align-items: stretch;
+        }
+
+        .cs-modal.w-modal .w-modal-dialog {
+            width: 100%;
+            max-width: none;
+        }
+
+        .cs-modal-footer,
+        .cs-modal-footer.w-modal-footer {
+            flex-wrap: wrap;
+            justify-content: stretch;
+        }
+
+        .cs-modal-footer .cs-btn {
+            flex: 1 1 8rem;
         }
     }
 }

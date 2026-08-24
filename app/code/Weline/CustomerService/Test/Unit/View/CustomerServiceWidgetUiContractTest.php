@@ -18,6 +18,25 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('class="w-select"', $content);
         $this->assertStringContainsString('class="w-input cs-form-input"', $content);
         $this->assertStringContainsString('class="w-button cs-send-button"', $content);
+        $this->assertStringContainsString('class="cs-chat-window w-panel"', $content);
+        $this->assertStringContainsString('class="cs-chat-header w-panel-header"', $content);
+        $this->assertStringContainsString('class="cs-chat-body w-panel-body"', $content);
+        $this->assertStringContainsString('class="cs-chat-footer w-panel-footer"', $content);
+        $this->assertStringContainsString('class="cs-modal w-modal"', $content);
+        $this->assertStringContainsString('class="w-modal-dialog w-modal-sm"', $content);
+    }
+
+    public function testFrontendStylesUseThemePanelAndResponsiveChat(): void
+    {
+        $cssFile = dirname(__DIR__, 3) . '/view/statics/css/customer-service.css';
+        $this->assertFileExists($cssFile);
+        $content = (string) file_get_contents($cssFile);
+
+        $this->assertStringContainsString('.cs-chat-header.w-panel-header', $content);
+        $this->assertStringContainsString('.cs-modal.w-modal', $content);
+        $this->assertStringContainsString('@media (max-width: 720px)', $content);
+        $this->assertStringContainsString('position: fixed', $content);
+        $this->assertStringContainsString('.customer-service-widget.is-open .cs-chat-button', $content);
     }
 
     public function testFrontendStylesPinSurfaceBackgroundForMessageInput(): void
