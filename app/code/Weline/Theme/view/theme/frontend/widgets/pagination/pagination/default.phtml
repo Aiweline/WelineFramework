@@ -1,9 +1,9 @@
 <?php
 /**
  * 分页部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {pagination}
  * @widget.name {分页}
  * @widget.description {列表分页导航}
@@ -12,7 +12,7 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["category", "search", "cms_page"]}
  * @widget.supports {["layout-category-pagination","layout-product-list-pagination"]}
- * 
+ *
  * @param style {default="default",type="select",label="样式",options={default:"默认",simple:"简洁",minimal:"极简"}}
  * @param show_first_last {default=true,type="bool",label="显示首尾按钮"}
  * @param show_prev_next {default=true,type="bool",label="显示上下页按钮"}
@@ -21,205 +21,204 @@
  * @param next_text {default="下一页",type="string",label="下一页文字"}
  */
 
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('pagination');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $style = $this->getData('style') ?? 'default';
 $showFirstLast = (bool)($this->getData('show_first_last') ?? true);
 $showPrevNext = (bool)($this->getData('show_prev_next') ?? true);
 $pageRange = (int)($this->getData('page_range') ?? 5);
 $prevText = $this->getData('prev_text') ?? __('上一页');
 $nextText = $this->getData('next_text') ?? __('下一页');
-
-// 分页数据（应从系统获取）
 $currentPage = (int)($this->getData('current_page') ?? 1);
 $totalPages = (int)($this->getData('total_pages') ?? 10);
 $baseUrl = $this->getData('base_url') ?? '?page=';
 
-// 计算显示的页码范围
-$startPage = max(1, $currentPage - floor($pageRange / 2));
+$startPage = max(1, $currentPage - (int)floor($pageRange / 2));
 $endPage = min($totalPages, $startPage + $pageRange - 1);
 if ($endPage - $startPage + 1 < $pageRange) {
     $startPage = max(1, $endPage - $pageRange + 1);
 }
 
-$widgetId = 'pagination-' . uniqid();
-
-if ($totalPages <= 1) return; // 只有一页时不显示
+if ($totalPages <= 1) {
+    return;
+}
 ?>
 
-<nav class="widget-pagination style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>" aria-label="<?= __('分页导航') ?>">
-    <ul class="w-pagination-list">
-        <?php if ($showFirstLast && $currentPage > 1): ?>
-            <li class="w-page-item">
-                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="w-page-link page-first" title="<?= __('第一页') ?>">
-                    <w:icon name="circle" size="sm"></w:icon>
-                </a>
-            </li>
-        <?php endif; ?>
-        
-        <?php if ($showPrevNext): ?>
-            <li class="w-page-item <?= $currentPage <= 1 ? 'w-disabled' : '' ?>">
-                <?php if ($currentPage > 1): ?>
-                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage - 1)) ?>" class="w-page-link page-prev">
-                        <w:icon name="arrow-left" size="sm"></w:icon>
-                        <span><?= htmlspecialchars($prevText) ?></span>
+<section class="<?= $esc($wc) ?> style-<?= $esc((string)$style) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <nav class="pagination-nav" aria-label="<?= __('分页导航') ?>">
+        <ul class="pagination-list">
+            <?php if ($showFirstLast && $currentPage > 1): ?>
+                <li class="page-item">
+                    <a href="<?= $esc((string)$baseUrl . '1') ?>" class="page-link page-first" title="<?= __('第一页') ?>">
+                        <w:icon name="circle" size="sm"></w:icon>
                     </a>
-                <?php else: ?>
-                    <span class="w-page-link page-prev">
-                        <w:icon name="arrow-left" size="sm"></w:icon>
-                        <span><?= htmlspecialchars($prevText) ?></span>
-                    </span>
-                <?php endif; ?>
-            </li>
-        <?php endif; ?>
-        
-        <?php if ($startPage > 1): ?>
-            <li class="w-page-item">
-                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="w-page-link">1</a>
-            </li>
-            <?php if ($startPage > 2): ?>
-                <li class="w-page-item w-ellipsis"><span class="w-page-link">...</span></li>
+                </li>
             <?php endif; ?>
-        <?php endif; ?>
-        
-        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-            <li class="w-page-item <?= $i === $currentPage ? 'w-active' : '' ?>">
-                <?php if ($i === $currentPage): ?>
-                    <span class="w-page-link" aria-current="page"><?= $i ?></span>
-                <?php else: ?>
-                    <a href="<?= htmlspecialchars($baseUrl . $i) ?>" class="w-page-link"><?= $i ?></a>
-                <?php endif; ?>
-            </li>
-        <?php endfor; ?>
-        
-        <?php if ($endPage < $totalPages): ?>
-            <?php if ($endPage < $totalPages - 1): ?>
-                <li class="w-page-item w-ellipsis"><span class="w-page-link">...</span></li>
+            <?php if ($showPrevNext): ?>
+                <li class="page-item <?= $currentPage <= 1 ? 'is-disabled' : '' ?>">
+                    <?php if ($currentPage > 1): ?>
+                        <a href="<?= $esc((string)$baseUrl . ($currentPage - 1)) ?>" class="page-link page-prev">
+                            <w:icon name="arrow-left" size="sm"></w:icon>
+                            <span><?= $esc((string)$prevText) ?></span>
+                        </a>
+                    <?php else: ?>
+                        <span class="page-link page-prev">
+                            <w:icon name="arrow-left" size="sm"></w:icon>
+                            <span><?= $esc((string)$prevText) ?></span>
+                        </span>
+                    <?php endif; ?>
+                </li>
             <?php endif; ?>
-            <li class="w-page-item">
-                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="w-page-link"><?= $totalPages ?></a>
-            </li>
-        <?php endif; ?>
-        
-        <?php if ($showPrevNext): ?>
-            <li class="w-page-item <?= $currentPage >= $totalPages ? 'w-disabled' : '' ?>">
-                <?php if ($currentPage < $totalPages): ?>
-                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage + 1)) ?>" class="w-page-link page-next">
-                        <span><?= htmlspecialchars($nextText) ?></span>
-                        <w:icon name="arrow-right" size="sm"></w:icon>
+            <?php if ($startPage > 1): ?>
+                <li class="page-item"><a href="<?= $esc((string)$baseUrl . '1') ?>" class="page-link">1</a></li>
+                <?php if ($startPage > 2): ?>
+                    <li class="page-item is-ellipsis"><span class="page-link">...</span></li>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                <li class="page-item <?= $i === $currentPage ? 'is-active' : '' ?>">
+                    <?php if ($i === $currentPage): ?>
+                        <span class="page-link" aria-current="page"><?= $i ?></span>
+                    <?php else: ?>
+                        <a href="<?= $esc((string)$baseUrl . $i) ?>" class="page-link"><?= $i ?></a>
+                    <?php endif; ?>
+                </li>
+            <?php endfor; ?>
+            <?php if ($endPage < $totalPages): ?>
+                <?php if ($endPage < $totalPages - 1): ?>
+                    <li class="page-item is-ellipsis"><span class="page-link">...</span></li>
+                <?php endif; ?>
+                <li class="page-item"><a href="<?= $esc((string)$baseUrl . $totalPages) ?>" class="page-link"><?= $totalPages ?></a></li>
+            <?php endif; ?>
+            <?php if ($showPrevNext): ?>
+                <li class="page-item <?= $currentPage >= $totalPages ? 'is-disabled' : '' ?>">
+                    <?php if ($currentPage < $totalPages): ?>
+                        <a href="<?= $esc((string)$baseUrl . ($currentPage + 1)) ?>" class="page-link page-next">
+                            <span><?= $esc((string)$nextText) ?></span>
+                            <w:icon name="arrow-right" size="sm"></w:icon>
+                        </a>
+                    <?php else: ?>
+                        <span class="page-link page-next">
+                            <span><?= $esc((string)$nextText) ?></span>
+                            <w:icon name="arrow-right" size="sm"></w:icon>
+                        </span>
+                    <?php endif; ?>
+                </li>
+            <?php endif; ?>
+            <?php if ($showFirstLast && $currentPage < $totalPages): ?>
+                <li class="page-item">
+                    <a href="<?= $esc((string)$baseUrl . $totalPages) ?>" class="page-link page-last" title="<?= __('最后一页') ?>">
+                        <w:icon name="circle" size="sm"></w:icon>
                     </a>
-                <?php else: ?>
-                    <span class="w-page-link page-next">
-                        <span><?= htmlspecialchars($nextText) ?></span>
-                        <w:icon name="arrow-right" size="sm"></w:icon>
-                    </span>
-                <?php endif; ?>
-            </li>
-        <?php endif; ?>
-        
-        <?php if ($showFirstLast && $currentPage < $totalPages): ?>
-            <li class="w-page-item">
-                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="w-page-link page-last" title="<?= __('最后一页') ?>">
-                    <w:icon name="circle" size="sm"></w:icon>
-                </a>
-            </li>
-        <?php endif; ?>
-    </ul>
-</nav>
+                </li>
+            <?php endif; ?>
+        </ul>
+    </nav>
+</section>
 
 <style>
-.widget-pagination {
+.<?= $wc ?> {
     display: flex;
     justify-content: center;
-    padding: 20px 0;
+    padding: var(--weline-space-5, 20px) 0;
 }
 
-.widget-pagination .w-pagination-list {
+.<?= $wc ?> .pagination-list {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--weline-space-1, 5px);
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-.widget-pagination .w-page-link {
+.<?= $wc ?> .page-link {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: var(--weline-space-1, 5px);
     min-width: 40px;
     height: 40px;
-    padding: 0 12px;
+    padding: 0 var(--weline-space-3, 12px);
     color: var(--weline-theme-text-muted);
     text-decoration: none;
-    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
     background: var(--weline-theme-surface);
-    transition: all var(--weline-theme-transition-base);
+    transition: all var(--weline-theme-transition-base, 0.2s ease);
 }
 
-.widget-pagination .w-page-link:hover {
+.<?= $wc ?> .page-link:hover {
     border-color: var(--weline-theme-primary);
     color: var(--weline-theme-primary);
 }
 
-.widget-pagination .w-page-item.w-active .w-page-link {
+.<?= $wc ?> .page-item.is-active .page-link {
     background: var(--weline-theme-primary);
     border-color: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
 }
 
-.widget-pagination .w-page-item.w-disabled .w-page-link {
+.<?= $wc ?> .page-item.is-disabled .page-link {
     color: var(--weline-theme-text-muted);
     cursor: not-allowed;
 }
 
-.widget-pagination .w-page-item.w-disabled .w-page-link:hover {
+.<?= $wc ?> .page-item.is-disabled .page-link:hover {
     border-color: var(--weline-theme-border);
     color: var(--weline-theme-text-muted);
 }
 
-.widget-pagination .w-ellipsis .w-page-link {
+.<?= $wc ?> .page-item.is-ellipsis .page-link {
     border: none;
     background: none;
     min-width: 30px;
 }
 
-/* 默认样式 */
-.widget-pagination.style-default .w-page-link {
-    border-radius: 6px;
+.<?= $wc ?>.style-default .page-link {
+    border-radius: var(--weline-radius-sm, 6px);
 }
 
-/* 简洁样式 */
-.widget-pagination.style-simple .w-page-link {
+.<?= $wc ?>.style-simple .page-link {
     border: none;
     background: none;
 }
 
-.widget-pagination.style-simple .w-page-item.w-active .w-page-link {
+.<?= $wc ?>.style-simple .page-item.is-active .page-link {
     background: var(--weline-theme-primary);
-    border-radius: 6px;
+    border-radius: var(--weline-radius-sm, 6px);
 }
 
-/* 圆角样式 */
-.widget-pagination.style-rounded .w-page-link {
-    border-radius: 50%;
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-3, 12px) 0;
 }
 
-.widget-pagination.style-rounded .page-prev,
-.widget-pagination.style-rounded .page-next {
-    border-radius: 20px;
+.widget-preview-canvas .<?= $wc ?> .page-prev span,
+.<?= $wc ?>.is-preview .page-prev span,
+.widget-preview-canvas .<?= $wc ?> .page-next span,
+.<?= $wc ?>.is-preview .page-next span {
+    display: none;
 }
 
 @media (max-width: 576px) {
-    .widget-pagination .page-prev span,
-    .widget-pagination .page-next span {
+    .<?= $wc ?> .page-prev span,
+    .<?= $wc ?> .page-next span {
         display: none;
     }
-    
-    .widget-pagination .w-page-link {
+
+    .<?= $wc ?> .page-link {
         min-width: 36px;
         height: 36px;
-        padding: 0 8px;
-        font-size: 13px;
+        padding: 0 var(--weline-space-2, 8px);
+        font-size: var(--weline-font-size-sm, 13px);
     }
 }
 </style>

@@ -1,6 +1,96 @@
 <css>Weline_MediaManager::css/backend-theme-vars.css</css>
 <notempty name="is_iframe">
-<script>(function(){var d=document.documentElement,p='{{$theme_preference|default:"system"}}';if(['system','light','dark'].indexOf(p)<0)p='system';var q=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var applyFallback=function(){var m=p==='dark'||(p==='system'&&q&&q.matches)?'dark':'light';d.setAttribute('data-w-area','backend');d.setAttribute('data-theme-preference',p);d.setAttribute('data-theme',m);d.style.colorScheme=m;};applyFallback();document.addEventListener('DOMContentLoaded',function(){var runtime=window.__WelineBackendThemeRuntime;if(runtime&&typeof runtime.apply==='function'){runtime.apply(p);return;}if(p==='system'&&q){if(q.addEventListener)q.addEventListener('change',applyFallback);else if(q.addListener)q.addListener(applyFallback);}}, {once:true});})();</script>
+<script>(function(){var d=document.documentElement,b=document.body,p='{{$theme_preference|default:"system"}}';d.classList.add('mmf-iframe-host');if(['system','light','dark'].indexOf(p)<0)p='system';var q=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var applyFallback=function(){var m=p==='dark'||(p==='system'&&q&&q.matches)?'dark':'light';d.setAttribute('data-w-area','backend');d.setAttribute('data-theme-preference',p);d.setAttribute('data-theme',m);d.style.colorScheme=m;};applyFallback();function fitIframeViewport(){var h=window.innerHeight||d.clientHeight||0;if(h<=0)return;d.style.height=h+'px';d.style.maxHeight=h+'px';d.style.overflow='hidden';if(b){b.classList.add('mmf-iframe-host');b.style.height=h+'px';b.style.maxHeight=h+'px';b.style.overflow='hidden';b.style.margin='0';}var m=document.querySelector('main.w-backend-page,#main-content');if(m){m.style.height=h+'px';m.style.maxHeight=h+'px';m.style.minHeight='0';m.style.flex='1 1 auto';m.style.display='flex';m.style.flexDirection='column';m.style.overflow='hidden';m.style.padding='0';m.style.margin='0';}var w=document.querySelector('.mmf-wrap.mmf-iframe-mode');if(w){w.style.height=h+'px';w.style.maxHeight=h+'px';w.style.minHeight='0';}}fitIframeViewport();window.addEventListener('resize',fitIframeViewport,{passive:true});document.addEventListener('DOMContentLoaded',function(){if(b)b.classList.add('mmf-iframe-host');fitIframeViewport();var runtime=window.__WelineBackendThemeRuntime;if(runtime&&typeof runtime.apply==='function'){runtime.apply(p);return;}if(p==='system'&&q){if(q.addEventListener)q.addEventListener('change',applyFallback);else if(q.addListener)q.addListener(applyFallback);}fitIframeViewport();},{once:true});window.addEventListener('load',fitIframeViewport,{once:true});})();</script>
+<style id="mmf-iframe-layout-critical">
+html.mmf-iframe-host,
+html.mmf-iframe-host body,
+html:has(.mmf-wrap.mmf-iframe-mode),
+html:has(.mmf-wrap.mmf-iframe-mode) body {
+    block-size: 100% !important;
+    max-block-size: 100% !important;
+    min-block-size: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+}
+html.mmf-iframe-host body,
+html:has(.mmf-wrap.mmf-iframe-mode) body {
+    display: flex !important;
+    flex-direction: column !important;
+}
+html.mmf-iframe-host main.w-backend-page,
+html.mmf-iframe-host #main-content,
+html:has(.mmf-wrap.mmf-iframe-mode) main.w-backend-page,
+html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
+    flex: 1 1 auto !important;
+    block-size: 100% !important;
+    max-block-size: 100% !important;
+    min-block-size: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.mmf-wrap.mmf-iframe-mode {
+    flex: 1 1 auto !important;
+    block-size: 100% !important;
+    max-block-size: 100% !important;
+    min-block-size: 0 !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-main,
+.mmf-wrap.mmf-iframe-mode .mmf-sidebar,
+.mmf-wrap.mmf-iframe-mode .mmf-preview {
+    min-block-size: 0 !important;
+    max-block-size: 100% !important;
+    block-size: 100% !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-main {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-content {
+    flex: 1 1 auto !important;
+    min-block-size: 0 !important;
+    overflow-y: auto !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-preview {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    overflow: hidden !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-select-bar {
+    position: static !important;
+    flex: 0 0 auto !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-preview-title .mmf-chrome-close {
+    display: none !important;
+}
+@media (max-width: 768px) {
+    .mmf-wrap.mmf-iframe-mode {
+        display: block !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+    .mmf-wrap.mmf-iframe-mode .mmf-main {
+        block-size: 100% !important;
+        max-block-size: 100% !important;
+    }
+    .mmf-wrap.mmf-iframe-mode .mmf-sidebar,
+    .mmf-wrap.mmf-iframe-mode .mmf-preview {
+        block-size: auto !important;
+        display: flex !important;
+        position: absolute !important;
+    }
+}
+</style>
 </notempty>
 <css>Weline_MediaManager::css/manager.css</css>
 <js>Weline_MediaManager::js/manager.js</js>
@@ -96,7 +186,6 @@
     <div class="mmf-preview" id="mmf-preview" data-mmf-preview>
         <div class="mmf-preview-title">
             <span><lang>文件详情</lang></span>
-            <button type="button" class="mmf-chrome-close" data-mmf-close-preview aria-label="@lang{关闭}">&times;</button>
         </div>
         <div class="mmf-preview-content">
             <div class="mmf-preview-empty">

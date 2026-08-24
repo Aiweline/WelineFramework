@@ -65,12 +65,15 @@ class Bind extends FrontendController
                     'success' => true,
                     'message' => __('验证邮件已发送，请查收')
                 ]);
-            } else {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('发送验证邮件失败，请稍后重试')
-                ]);
             }
+
+            $detail = trim($this->emailBindingService->getLastErrorMessage());
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $detail !== ''
+                    ? $detail
+                    : __('发送验证邮件失败，请稍后重试')
+            ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'success' => false,

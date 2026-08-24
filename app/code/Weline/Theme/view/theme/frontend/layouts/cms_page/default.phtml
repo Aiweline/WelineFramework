@@ -26,6 +26,8 @@
 $meta = $this->getData('meta') ?? [];
 $colors = $this->getData('colors') ?? [];
 $rawContent = (string)$this->getData('content');
+$isEditorPreview = (bool)($this->getData('editor_mode') ?? false)
+    || (string)($this->getData('preview_mode') ?? '') !== '';
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
@@ -78,17 +80,9 @@ $rawContent = (string)$this->getData('content');
                         class="cms-page-content-slot">
                     <?php if (trim($rawContent) !== ''): ?>
                         <?= $rawContent ?>
-                    <?php else: ?>
+                    <?php elseif ($isEditorPreview): ?>
                         <w:hook name="Weline_Theme::frontend::layouts::cms_page::content">
-                            <div class="cms-page-default-content">
-                                <div class="w-container">
-                                    <div class="slot-placeholder" data-placeholder="content">
-                                        <span class="placeholder-icon" aria-hidden="true"></span>
-                                        <span class="placeholder-text"><?= __('拖拽部件或容器到此处') ?></span>
-                                        <span class="placeholder-hint"><?= __('支持富文本、Banner、图片、视频等部件') ?></span>
-                                    </div>
-                                </div>
-                            </div>
+                            <div class="slot-placeholder" data-placeholder="content" aria-hidden="true"></div>
                         </w:hook>
                     <?php endif; ?>
                 </w:slot>

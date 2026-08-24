@@ -80,6 +80,12 @@ class TaglibRegistry
                     $tagConfig['callback'] = $class::callback();
                 }
             }
+            if (!isset($tagConfig['runtime_callback']) && isset($tagConfig['class'])) {
+                $class = $tagConfig['class'];
+                if (class_exists($class) && method_exists($class, 'runtimeCallback')) {
+                    $tagConfig['runtime_callback'] = $class::runtimeCallback();
+                }
+            }
         }
         unset($tagConfig);
 

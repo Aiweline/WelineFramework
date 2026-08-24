@@ -1,0 +1,532 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Backend\Model\Config as BackendConfig;
+use Weline\FileManager\Api\Image as ImageHelper;
+
+// 获取后台配置
+/** @var BackendConfig $backendConfig */
+$backendConfig = ObjectManager::getInstance(BackendConfig::class);
+$logoDark = $backendConfig->getConfig('logo_dark', 'Weline_Backend');
+$logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend');
+$logoSm = $backendConfig->getConfig('logo_sm', 'Weline_Backend');
+
+// 设置默认值，自定义 logo 转为 media URL
+$logoDark = $logoDark ? ImageHelper::pathToMediaUrl($logoDark, 70, 70) : '@static(Weline_Admin::assets/images/logo-dark.png)';
+$logoLight = $logoLight ? ImageHelper::pathToMediaUrl($logoLight, 70, 70) : '@static(Weline_Admin::assets/images/logo-light.png)';
+$logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weline_Admin::assets/images/logo-sm.png)';
+?>
+<style data-no-extract="true" data-admin-topbar-dark-fix="true">
+    #page-topbar .navbar-header .header-item,
+    #page-topbar .navbar-header .dropdown .header-item,
+    #page-topbar .navbar-header .dropdown .show.header-item {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-width: 44px !important;
+        height: 44px !important;
+        margin: 0 3px !important;
+        padding: 0 14px !important;
+        border-radius: 12px !important;
+        line-height: 1 !important;
+    }
+
+    #page-topbar #vertical-menu-btn,
+    #page-topbar [data-weline-backend-theme-trigger],
+    #page-topbar .navbar-header .noti-icon,
+    #page-topbar .navbar-header .weline-notif-btn {
+        width: 44px !important;
+        min-width: 44px !important;
+        padding: 0 !important;
+    }
+
+    #page-topbar .navbar-header .header-item i {
+        line-height: 1 !important;
+    }
+
+    #page-topbar .navbar-brand-box .logo img {
+        object-fit: contain !important;
+        box-sizing: border-box !important;
+    }
+
+    body[data-theme-mode="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-layout-mode="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
+        padding: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+</style>
+<header id="page-topbar">
+    <div class="navbar-header">
+        <div class="d-flex">
+            <!-- LOGO -->
+            <div class="navbar-brand-box text-center">
+                <a href="@admin-url('admin')" class="logo logo-dark">
+                                <span class="logo-sm">
+                                    <img src="<?= $logoSm ?>" alt="logo-sm-dark"
+                                         height="50">
+                                </span>
+                    <span class="logo-lg">
+                                    <img src="<?= $logoDark ?>" alt="logo-dark"
+                                         height="70">
+                                </span>
+                </a>
+
+                <a href="@admin-url('admin')" class="logo logo-light">
+                                <span class="logo-sm">
+                                    <img src="<?= $logoSm ?>" alt="logo-sm-light"
+                                         height="50">
+                                </span>
+                    <span class="logo-lg">
+                                    <img src="<?= $logoLight ?>" alt="logo-light"
+                                         height="70">
+                                </span>
+                </a>
+            </div>
+
+            <button type="button" class="btn btn-sm px-3 font-size-24 header-item waves-effect" id="vertical-menu-btn">
+                <i class="ri-menu-2-line align-middle"></i>
+            </button>
+
+            <!-- App Search-->
+            <w:form class="app-search d-none d-lg-block" data-app-search-form="1">
+                <div class="position-relative">
+                    <input type="text" class="form-control" placeholder="<?= __('搜索 ...') ?>">
+                    <span class="ri-search-line"></span>
+                </div>
+            </w:form>
+        </div>
+
+        <div class="d-flex">
+
+            <div class="dropdown d-inline-block d-lg-none ms-2">
+                <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-search-dropdown"
+                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <i class="ri-search-line"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
+                     aria-labelledby="page-header-search-dropdown">
+
+                    <w:form class="p-3">
+                        <div class="mb-3 m-0">
+                            <div class="input-group">
+                                <input type="text" class="form-control" placeholder="<?= __('搜索 ...') ?>">
+                                <div class="input-group-append">
+                                    <button class="btn btn-primary" type="submit"><i class="ri-search-line"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </w:form>
+                </div>
+            </div>
+
+            <!-- 语言切换 -->
+            <w:i18n:language:switcher />
+            <div class="dropdown d-inline-block ms-1">
+                <button type="button" id="topbar-theme-mode" class="btn header-item noti-icon waves-effect"
+                        data-bs-toggle="dropdown" data-weline-backend-theme-trigger
+                        aria-haspopup="true" aria-expanded="false" aria-label="<?= __('主题模式') ?>">
+                    <i class="mdi mdi-laptop"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="topbar-theme-mode">
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="system" data-weline-theme-mode="system"><?= __('跟随系统') ?></button>
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="light" data-weline-theme-mode="light"><?= __('明亮模式') ?></button>
+                    <button type="button" class="dropdown-item" data-weline-backend-theme-mode="dark" data-weline-theme-mode="dark"><?= __('暗黑模式') ?></button>
+                </div>
+            </div>
+
+            <div class="dropdown d-none d-lg-inline-block ms-1">
+                <button type="button" class="btn header-item noti-icon waves-effect"
+                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <i class="ri-apps-2-line"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
+                    <div class="px-lg-2">
+                        <div class="row g-0">
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="#">
+                                    <img src="@static(Weline_Admin::assets/images/brands/github.png)" alt="Github">
+                                    <span>GitHub</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="#">
+                                    <img src="@static(Weline_Admin::assets/images/brands/bitbucket.png)"
+                                         alt="bitbucket">
+                                    <span>Bitbucket</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="#">
+                                    <img src="@static(Weline_Admin::assets/images/brands/dribbble.png)" alt="dribbble">
+                                    <span>Dribbble</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="row g-0">
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="#">
+                                    <img src="@static(Weline_Admin::assets/images/brands/dropbox.png)" alt="dropbox">
+                                    <span>Dropbox</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="#">
+                                    <img src="@static(Weline_Admin::assets/images/brands/mail_chimp.png)"
+                                         alt="mail_chimp">
+                                    <span>Mail Chimp</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="#">
+                                    <img src="@static(Weline_Admin::assets/images/brands/slack.png)" alt="slack">
+                                    <span>Slack</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dropdown d-none d-lg-inline-block ms-1">
+                <button type="button" class="btn header-item noti-icon waves-effect" data-toggle="fullscreen">
+                    <i class="ri-fullscreen-line"></i>
+                </button>
+            </div>
+            <!--通知 开始-->
+
+            <w:block class="Weline\Backend\Block\System\Notification"/>
+
+            <!--通知 结束-->
+
+            <div class="dropdown d-inline-block user-dropdown">
+                <button type="button" class="btn header-item waves-effect" id="page-header-user-dropdown"
+                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <img class="rounded-circle header-profile-user"
+                         src="<?= $this->getAvatar() ?>"
+                         alt="<?= __('头像') ?>">
+                    <span class="d-none d-xl-inline-block ms-1"><?= $this->getUser()->getUsername() ?></span>
+                    <i class="ri-arrow-down-s-line d-none d-xl-inline-block"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <!-- item-->
+                    <a class="dropdown-item" href="#"><i class="ri-user-line align-middle me-1"></i><?= __('资料') ?></a>
+                    <a class="dropdown-item" href="#"><i
+                                class="ri-wallet-2-line align-middle me-1"></i> <?= __('我的钱包') ?></a>
+                    <a class="dropdown-item d-block" href="#"><span class="badge bg-success float-end mt-1">11</span><i
+                                class="ri-settings-2-line align-middle me-1"></i> <?= __('设置') ?></a>
+                    <a class="dropdown-item" href="#"><i
+                                class="ri-lock-unlock-line align-middle me-1"></i> <?= __('锁定屏幕') ?></a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item text-danger" href="<?= $this->getAdminUrl('admin/login/logout') ?>"><i
+                                class="ri-shut-down-line align-middle me-1 text-danger"></i> <?= __('退出') ?></a>
+                </div>
+            </div>
+
+            <div class="dropdown d-inline-block">
+                <button type="button" class="btn header-item noti-icon right-bar-toggle waves-effect">
+                    <i class="ri-settings-3-line"></i>
+                </button>
+            </div>
+
+        </div>
+    </div>
+</header>
+<style>
+    #page-topbar {
+        z-index: 10050;
+    }
+
+    #page-topbar .dropdown-menu,
+    #page-topbar .weline-i18n-switcher-panel {
+        z-index: 10055;
+    }
+
+    .rightbar-overlay {
+        z-index: 10040;
+    }
+
+    .right-bar {
+        z-index: 10060;
+    }
+
+    @media (max-width: 575.98px) {
+        #page-topbar,
+        #page-topbar .navbar-header {
+            max-width: 100vw !important;
+            /* visible: language/user dropdowns must escape the 72px header box */
+            overflow: visible !important;
+        }
+
+        #page-topbar .navbar-header {
+            height: 64px !important;
+            padding: 0 8px !important;
+            gap: 6px !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex {
+            min-width: 0 !important;
+            align-items: center !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex:first-child {
+            flex: 0 0 auto !important;
+            gap: 4px !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex:last-child {
+            flex: 1 1 auto !important;
+            justify-content: flex-end !important;
+            gap: 3px !important;
+            overflow: hidden !important;
+        }
+
+        #page-topbar .navbar-brand-box {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: auto !important;
+            min-width: 52px !important;
+            padding: 0 2px !important;
+            flex: 0 0 auto !important;
+        }
+
+        #page-topbar .logo {
+            line-height: 64px !important;
+        }
+
+        #page-topbar .logo .logo-lg {
+            display: none !important;
+        }
+
+        #page-topbar .logo .logo-sm {
+            display: inline-flex !important;
+            align-items: center !important;
+        }
+
+        #page-topbar .navbar-brand-box .logo img {
+            width: 50px !important;
+            height: 50px !important;
+            max-width: 50px !important;
+            max-height: 50px !important;
+        }
+
+        #page-topbar .navbar-header .header-item,
+        #page-topbar .navbar-header .dropdown .header-item,
+        #page-topbar .navbar-header .dropdown .show.header-item {
+            width: 38px !important;
+            min-width: 38px !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            margin: 0 1px !important;
+            padding: 0 !important;
+            border-radius: 12px !important;
+        }
+
+        #page-topbar #vertical-menu-btn,
+        #page-topbar [data-weline-backend-theme-trigger],
+        #page-topbar .navbar-header .noti-icon,
+        #page-topbar .navbar-header .weline-notif-btn {
+            width: 38px !important;
+            min-width: 38px !important;
+        }
+
+        #page-topbar [data-i18n-switcher] {
+            min-width: 0 !important;
+            flex: 0 1 auto !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle {
+            width: 72px !important;
+            min-width: 72px !important;
+            max-width: 72px !important;
+            padding: 0 8px !important;
+            gap: 5px !important;
+            justify-content: flex-start !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle .align-middle {
+            display: inline-block !important;
+            max-width: 28px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        #page-topbar .user-dropdown .header-item {
+            width: 38px !important;
+            min-width: 38px !important;
+        }
+
+        #page-topbar .header-profile-user {
+            width: 32px !important;
+            height: 32px !important;
+            padding: 2px !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex:last-child > .dropdown:last-child,
+        #page-topbar .navbar-header .dropdown:has(> .right-bar-toggle),
+        #page-topbar .navbar-header .right-bar-toggle.header-item,
+        #page-topbar .navbar-header .noti-icon.right-bar-toggle,
+        #page-topbar .right-bar-toggle {
+            display: none !important;
+        }
+
+        #page-topbar .dropdown-menu.dropdown-menu-end,
+        #page-topbar .weline-i18n-switcher-panel,
+        #page-topbar .weline-notif-menu,
+        #page-topbar .weline-notification-menu {
+            left: auto !important;
+            right: 8px !important;
+            max-width: calc(100vw - 16px) !important;
+        }
+    }
+
+    @media (max-width: 390px) {
+        #page-topbar .navbar-header {
+            padding: 0 6px !important;
+            gap: 4px !important;
+        }
+
+        #page-topbar .navbar-brand-box {
+            min-width: 46px !important;
+        }
+
+        #page-topbar .navbar-brand-box .logo img {
+            width: 44px !important;
+            height: 44px !important;
+            max-width: 44px !important;
+            max-height: 44px !important;
+        }
+
+        #page-topbar .navbar-header .header-item,
+        #page-topbar .navbar-header .dropdown .header-item,
+        #page-topbar .navbar-header .dropdown .show.header-item,
+        #page-topbar #vertical-menu-btn,
+        #page-topbar [data-weline-backend-theme-trigger],
+        #page-topbar .navbar-header .noti-icon,
+        #page-topbar .navbar-header .weline-notif-btn,
+        #page-topbar .user-dropdown .header-item {
+            width: 36px !important;
+            min-width: 36px !important;
+            height: 38px !important;
+            min-height: 38px !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle {
+            width: 58px !important;
+            min-width: 58px !important;
+            max-width: 58px !important;
+            padding: 0 7px !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle .align-middle {
+            display: none !important;
+        }
+    }
+</style>
+<script>
+    (function () {
+        'use strict';
+
+        document.addEventListener('keydown', function (event) {
+            var target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            if (!target.closest('[data-app-search-form]')) {
+                return;
+            }
+
+            if (typeof window.appSearch === 'function') {
+                window.appSearch(event);
+            }
+        });
+    })();
+
+    (function () {
+        'use strict';
+
+        var sidebarToggle = document.getElementById('vertical-menu-btn');
+        if (!sidebarToggle || sidebarToggle.dataset.welineSidebarToggleBound === '1') {
+            return;
+        }
+
+        sidebarToggle.dataset.welineSidebarToggleBound = '1';
+        sidebarToggle.addEventListener('click', function (event) {
+            event.preventDefault();
+            // Capture-phase handler owns the toggle; stop jQuery duplicates from double-flipping.
+            event.stopImmediatePropagation();
+
+            document.body.classList.toggle('sidebar-enable');
+            if (window.innerWidth >= 992) {
+                document.body.classList.toggle('vertical-collpsed');
+                // Persist collapse/expand for the current backend user across refresh.
+                if (typeof window.setThemeConfig === 'function') {
+                    var collapsed = document.body.classList.contains('vertical-collpsed');
+                    if (collapsed) {
+                        document.body.setAttribute('data-keep-enlarged', 'true');
+                    } else {
+                        document.body.removeAttribute('data-keep-enlarged');
+                    }
+                    window.setThemeConfig({
+                        layouts: {
+                            'data-keep-enlarged': collapsed ? 'true' : '',
+                            'class': collapsed ? 'vertical-collpsed' : ''
+                        },
+                        'icon-sidebar': collapsed
+                    }, false);
+                }
+            } else {
+                document.body.classList.remove('vertical-collpsed');
+            }
+        }, true);
+    })();
+
+    (function () {
+        return;
+
+        var topbar = document.getElementById('page-topbar');
+        if (!topbar || typeof window.bootstrap === 'undefined' || !window.bootstrap.Dropdown) {
+            return;
+        }
+
+        var Dropdown = window.bootstrap.Dropdown;
+        // Bootstrap 新版会自动处理 data-bs-toggle="dropdown"，
+        // 仅在旧版缺失 getOrCreateInstance 时做兜底，避免双重 toggle 导致无法展开。
+        if (Dropdown && typeof Dropdown.getOrCreateInstance === 'function') {
+            return;
+        }
+
+        var triggers = topbar.querySelectorAll('[data-bs-toggle="dropdown"]');
+        triggers.forEach(function (trigger) {
+            if (trigger.dataset.welineDropdownBound === '1') {
+                return;
+            }
+            trigger.dataset.welineDropdownBound = '1';
+            trigger.addEventListener('click', function (event) {
+                event.preventDefault();
+                var config = {autoClose: true};
+                var instance = null;
+                if (Dropdown && typeof Dropdown.getInstance === 'function') {
+                    instance = Dropdown.getInstance(trigger);
+                    if (!instance) {
+                        instance = new Dropdown(trigger, config);
+                    }
+                } else {
+                    instance = new Dropdown(trigger, config);
+                }
+                instance.toggle();
+            });
+        });
+    })();
+</script>

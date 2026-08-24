@@ -1,9 +1,9 @@
 <?php
 /**
  * 倒计时部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {countdown}
  * @widget.name {倒计时}
  * @widget.description {活动倒计时显示，支持自定义结束时间}
@@ -12,7 +12,7 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
+ *
  * @param title {default="限时活动",type="string",label="标题"}
  * @param end_date {default="",type="string",label="结束时间",description="格式：2026-12-31 23:59:59"}
  * @param expired_text {default="活动已结束",type="string",label="结束后文字"}
@@ -22,6 +22,14 @@
  * @param show_seconds {default=true,type="bool",label="显示秒数"}
  */
 
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('countdown');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = $this->getData('title') ?? __('限时活动');
 $endDate = $this->getData('end_date') ?? date('Y-m-d 23:59:59', strtotime('+7 days'));
 $expiredText = $this->getData('expired_text') ?? __('活动已结束');
@@ -30,19 +38,19 @@ $showHours = (bool)($this->getData('show_hours') ?? true);
 $showMinutes = (bool)($this->getData('show_minutes') ?? true);
 $showSeconds = (bool)($this->getData('show_seconds') ?? true);
 $style = $this->getData('style') ?? 'boxes';
-
-$widgetId = 'countdown-' . uniqid();
 ?>
 
-<div class="widget-countdown style-<?= htmlspecialchars($style) ?>" 
-     id="<?= $widgetId ?>"
-     data-end="<?= htmlspecialchars($endDate) ?>"
-     data-expired-text="<?= htmlspecialchars($expiredText) ?>">
-    
+<section class="<?= $esc($wc) ?> style-<?= $esc((string)$style) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-end="<?= $esc((string)$endDate) ?>"
+         data-expired-text="<?= $esc((string)$expiredText) ?>">
+
     <?php if ($title): ?>
-        <h3 class="countdown-title"><?= htmlspecialchars($title) ?></h3>
+        <h3 class="countdown-title"><?= $esc((string)$title) ?></h3>
     <?php endif; ?>
-    
+
     <div class="countdown-timer">
         <?php if ($showDays): ?>
             <div class="time-unit">
@@ -51,7 +59,7 @@ $widgetId = 'countdown-' . uniqid();
             </div>
             <span class="time-separator">:</span>
         <?php endif; ?>
-        
+
         <?php if ($showHours): ?>
             <div class="time-unit">
                 <span class="time-value" data-unit="hours">00</span>
@@ -59,7 +67,7 @@ $widgetId = 'countdown-' . uniqid();
             </div>
             <span class="time-separator">:</span>
         <?php endif; ?>
-        
+
         <?php if ($showMinutes): ?>
             <div class="time-unit">
                 <span class="time-value" data-unit="minutes">00</span>
@@ -67,7 +75,7 @@ $widgetId = 'countdown-' . uniqid();
             </div>
             <span class="time-separator">:</span>
         <?php endif; ?>
-        
+
         <?php if ($showSeconds): ?>
             <div class="time-unit">
                 <span class="time-value" data-unit="seconds">00</span>
@@ -75,182 +83,189 @@ $widgetId = 'countdown-' . uniqid();
             </div>
         <?php endif; ?>
     </div>
-    
-    <div class="countdown-expired" style="display: none;">
-        <?= htmlspecialchars($expiredText) ?>
+
+    <div class="countdown-expired is-hidden">
+        <?= $esc((string)$expiredText) ?>
     </div>
-</div>
+</section>
 
 <style>
-.widget-countdown {
+.<?= $wc ?> {
     text-align: center;
-    padding: 30px;
+    padding: var(--weline-space-8, 30px);
 }
 
-.widget-countdown .countdown-title {
-    font-size: 20px;
+.<?= $wc ?> .countdown-title {
+    font-size: var(--weline-font-size-xl, 20px);
     font-weight: 600;
-    margin: 0 0 20px;
+    margin: 0 0 var(--weline-space-5, 20px);
+    color: var(--weline-theme-text);
 }
 
-.widget-countdown .countdown-timer {
+.<?= $wc ?> .countdown-timer {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: var(--weline-space-2, 10px);
 }
 
-/* 方框样式 */
-.widget-countdown.style-boxes .time-unit {
+.<?= $wc ?>.style-boxes .time-unit {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: var(--primary-color, #007bff);
-    color: #fff;
-    padding: 15px 20px;
-    border-radius: 10px;
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+    padding: var(--weline-space-4, 15px) var(--weline-space-5, 20px);
+    border-radius: var(--weline-radius-lg, 10px);
     min-width: 70px;
 }
 
-.widget-countdown.style-boxes .time-value {
-    font-size: 32px;
+.<?= $wc ?>.style-boxes .time-value {
+    font-size: var(--weline-font-size-3xl, 32px);
     font-weight: 700;
     line-height: 1;
-    font-family: monospace;
+    font-family: var(--weline-font-mono, monospace);
 }
 
-.widget-countdown.style-boxes .time-label {
-    font-size: 12px;
-    margin-top: 5px;
+.<?= $wc ?>.style-boxes .time-label {
+    font-size: var(--weline-font-size-sm, 12px);
+    margin-top: var(--weline-space-1, 5px);
     opacity: 0.9;
 }
 
-.widget-countdown.style-boxes .time-separator {
-    font-size: 28px;
+.<?= $wc ?>.style-boxes .time-separator {
+    font-size: var(--weline-font-size-2xl, 28px);
     font-weight: 700;
-    color: var(--primary-color, #007bff);
+    color: var(--weline-theme-primary);
 }
 
-/* 行内样式 */
-.widget-countdown.style-inline .time-unit {
+.<?= $wc ?>.style-inline .time-unit {
     display: inline-flex;
     align-items: baseline;
     gap: 3px;
 }
 
-.widget-countdown.style-inline .time-value {
-    font-size: 36px;
+.<?= $wc ?>.style-inline .time-value {
+    font-size: var(--weline-font-size-3xl, 36px);
     font-weight: 700;
-    color: var(--danger-color, #dc3545);
-    font-family: monospace;
+    color: var(--weline-theme-danger);
+    font-family: var(--weline-font-mono, monospace);
 }
 
-.widget-countdown.style-inline .time-label {
-    font-size: 14px;
-    color: #666;
+.<?= $wc ?>.style-inline .time-label {
+    font-size: var(--weline-font-size-base, 14px);
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-countdown.style-inline .time-separator {
-    font-size: 28px;
-    color: #ccc;
-    margin: 0 5px;
+.<?= $wc ?>.style-inline .time-separator {
+    font-size: var(--weline-font-size-2xl, 28px);
+    color: var(--weline-theme-border);
+    margin: 0 var(--weline-space-1, 5px);
 }
 
-/* 圆形样式 */
-.widget-countdown.style-circle .time-unit {
+.<?= $wc ?>.style-circle .time-unit {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     width: 80px;
     height: 80px;
-    background: #fff;
-    border: 3px solid var(--primary-color, #007bff);
+    background: var(--weline-theme-surface-raised);
+    border: 3px solid var(--weline-theme-primary);
     border-radius: 50%;
 }
 
-.widget-countdown.style-circle .time-value {
-    font-size: 28px;
+.<?= $wc ?>.style-circle .time-value {
+    font-size: var(--weline-font-size-2xl, 28px);
     font-weight: 700;
-    color: var(--primary-color, #007bff);
+    color: var(--weline-theme-primary);
     line-height: 1;
-    font-family: monospace;
+    font-family: var(--weline-font-mono, monospace);
 }
 
-.widget-countdown.style-circle .time-label {
-    font-size: 10px;
-    color: #666;
+.<?= $wc ?>.style-circle .time-label {
+    font-size: var(--weline-font-size-xs, 10px);
+    color: var(--weline-theme-text-muted);
     margin-top: 2px;
 }
 
-.widget-countdown.style-circle .time-separator {
-    font-size: 24px;
-    color: #ddd;
+.<?= $wc ?>.style-circle .time-separator {
+    font-size: var(--weline-font-size-xl, 24px);
+    color: var(--weline-theme-border);
 }
 
-/* 过期状态 */
-.widget-countdown .countdown-expired {
-    font-size: 18px;
-    color: #999;
-    padding: 20px;
+.<?= $wc ?> .countdown-expired {
+    font-size: var(--weline-font-size-lg, 18px);
+    color: var(--weline-theme-text-muted);
+    padding: var(--weline-space-5, 20px);
+}
+
+.<?= $wc ?> .countdown-expired.is-hidden {
+    display: none;
+}
+
+.<?= $wc ?> .countdown-timer.is-hidden {
+    display: none;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-4, 16px);
 }
 
 @media (max-width: 480px) {
-    .widget-countdown.style-boxes .time-unit {
-        padding: 10px 12px;
+    .<?= $wc ?>.style-boxes .time-unit {
+        padding: var(--weline-space-2, 10px) var(--weline-space-3, 12px);
         min-width: 50px;
     }
-    
-    .widget-countdown.style-boxes .time-value {
-        font-size: 24px;
+
+    .<?= $wc ?>.style-boxes .time-value {
+        font-size: var(--weline-font-size-2xl, 24px);
     }
-    
-    .widget-countdown.style-circle .time-unit {
+
+    .<?= $wc ?>.style-circle .time-unit {
         width: 60px;
         height: 60px;
     }
-    
-    .widget-countdown.style-circle .time-value {
-        font-size: 20px;
+
+    .<?= $wc ?>.style-circle .time-value {
+        font-size: var(--weline-font-size-xl, 20px);
     }
 }
 </style>
 
 <script>
-(function() {
-    const widget = document.getElementById('<?= $widgetId ?>');
-    if (!widget) return;
-    
-    const endDate = new Date(widget.dataset.end).getTime();
-    const timer = widget.querySelector('.countdown-timer');
-    const expiredEl = widget.querySelector('.countdown-expired');
-    
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var endDate = new Date(root.dataset.end).getTime();
+    if (!Number.isFinite(endDate)) return;
+
+    var timer = root.querySelector('.countdown-timer');
+    var expiredEl = root.querySelector('.countdown-expired');
+
     function updateCountdown() {
-        const now = Date.now();
-        const diff = endDate - now;
-        
+        var diff = endDate - Date.now();
+
         if (diff <= 0) {
-            timer.style.display = 'none';
-            expiredEl.style.display = 'block';
+            if (timer) timer.classList.add('is-hidden');
+            if (expiredEl) expiredEl.classList.remove('is-hidden');
             return;
         }
-        
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
-        const daysEl = widget.querySelector('[data-unit="days"]');
-        const hoursEl = widget.querySelector('[data-unit="hours"]');
-        const minutesEl = widget.querySelector('[data-unit="minutes"]');
-        const secondsEl = widget.querySelector('[data-unit="seconds"]');
-        
-        if (daysEl) daysEl.textContent = String(days).padStart(2, '0');
-        if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
-        if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
-        if (secondsEl) secondsEl.textContent = String(seconds).padStart(2, '0');
+
+        var days = Math.floor(diff / 86400000);
+        var hours = Math.floor((diff % 86400000) / 3600000);
+        var minutes = Math.floor((diff % 3600000) / 60000);
+        var seconds = Math.floor((diff % 60000) / 1000);
+
+        var map = { days: days, hours: hours, minutes: minutes, seconds: seconds };
+        Object.keys(map).forEach(function (unit) {
+            var el = root.querySelector('[data-unit="' + unit + '"]');
+            if (el) el.textContent = String(map[unit]).padStart(2, '0');
+        });
     }
-    
+
     updateCountdown();
     setInterval(updateCountdown, 1000);
 })();

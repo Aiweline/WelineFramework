@@ -1,9 +1,9 @@
 <?php
 /**
  * 品牌Logo部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {brand-logos}
  * @widget.name {品牌Logo}
  * @widget.description {展示合作品牌Logo，支持网格和轮播布局}
@@ -12,8 +12,9 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page"]}
  * @widget.supports {["layout-homepage-brands","layout-cms-content","layout-default-content"]}
+ * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-brands","area":"content","sort_order":0}]}
  * @widget.compatible {true}
- * 
+ *
  * @param title {default="合作品牌",type="string",label="标题"}
  * @param brands {default=[],type="brand_logo_items",label="品牌列表",description="每项包含名称、图片与链接"}
  * @param columns {default="6",type="select",label="每行列数",options={4:"4列",5:"5列",6:"6列",8:"8列"}}
@@ -21,15 +22,28 @@
  * @param grayscale {default=true,type="bool",label="灰度效果"}
  */
 
-$title = $this->getData('title') ?? __('合作品牌');
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('brand-logos');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$title = (string)($this->getData('title') ?? __('合作品牌'));
 $brands = $this->getData('brands') ?? [];
-$columns = $this->getData('columns') ?? '6';
-$layout = $this->getData('layout') ?? 'grid';
+$columns = (string)($this->getData('columns') ?? '6');
+$layout = (string)($this->getData('layout') ?? 'grid');
 $grayscale = (bool)($this->getData('grayscale') ?? true);
 $hoverColor = (bool)($this->getData('hover_color') ?? true);
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
-// 示例品牌数据
+if (!in_array($columns, ['4', '5', '6', '8'], true)) {
+    $columns = '6';
+}
+if (!in_array($layout, ['grid', 'carousel'], true)) {
+    $layout = 'grid';
+}
+
 if (empty($brands)) {
     $brands = [
         ['name' => 'Apple', 'image' => $placeholder, 'link' => '/brand/apple'],
@@ -42,28 +56,29 @@ if (empty($brands)) {
         ['name' => 'Xiaomi', 'image' => $placeholder, 'link' => '/brand/xiaomi'],
     ];
 }
-
-$widgetId = 'brand-logos-' . uniqid();
 ?>
 
-<div class="widget-brand-logos <?= $grayscale ? 'grayscale' : '' ?> <?= $hoverColor ? 'hover-color' : '' ?>" 
-     id="<?= $widgetId ?>">
-    
-    <?php if ($title): ?>
-        <div class="widget-header">
-            <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+<section class="<?= $esc($wc) ?><?= $grayscale ? ' is-grayscale' : '' ?><?= $hoverColor ? ' has-hover-color' : '' ?> layout-<?= $esc($layout) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-columns="<?= $esc($columns) ?>">
+
+    <?php if ($title !== ''): ?>
+        <div class="brands-header">
+            <h2 class="brands-title"><?= $esc($title) ?></h2>
         </div>
     <?php endif; ?>
-    
-    <div class="brands-container layout-<?= htmlspecialchars($layout) ?>">
+
+    <div class="brands-container">
         <?php if ($layout === 'carousel'): ?>
-            <button class="carousel-arrow carousel-prev" type="button">
+            <button class="carousel-arrow carousel-prev" type="button" aria-label="<?= __('上一组') ?>">
                 <w:icon name="arrow-left" size="sm"></w:icon>
             </button>
         <?php endif; ?>
-        
+
         <div class="brands-wrapper">
-            <div class="brands-grid columns-<?= htmlspecialchars($columns) ?>">
+            <div class="brands-grid columns-<?= $esc($columns) ?>">
                 <?php foreach ($brands as $brand): ?>
                     <?php
                     $brandLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($brand['link'] ?? '');
@@ -72,17 +87,17 @@ $widgetId = 'brand-logos-' . uniqid();
                     $brandName = trim((string)($brand['name'] ?? ''));
                     ?>
                     <?php if ($brandLink !== ''): ?>
-                        <a href="<?= htmlspecialchars($brandLink, ENT_QUOTES, 'UTF-8') ?>"
+                        <a href="<?= $esc($brandLink) ?>"
                            class="brand-item"
-                           title="<?= htmlspecialchars($brandName, ENT_QUOTES, 'UTF-8') ?>">
+                           title="<?= $esc($brandName) ?>">
                     <?php else: ?>
                         <div class="brand-item">
                     <?php endif; ?>
                         <?php if ($brandImageHtml !== ''): ?>
                             <div class="brand-logo-media"><?= $brandImageHtml ?></div>
                         <?php elseif ($brandImage !== ''): ?>
-                            <img src="<?= htmlspecialchars($brandImage, ENT_QUOTES, 'UTF-8') ?>"
-                                 alt="<?= htmlspecialchars($brandName, ENT_QUOTES, 'UTF-8') ?>"
+                            <img src="<?= $esc($brandImage) ?>"
+                                 alt="<?= $esc($brandName) ?>"
                                  class="brand-logo"
                                  loading="lazy">
                         <?php endif; ?>
@@ -90,145 +105,190 @@ $widgetId = 'brand-logos-' . uniqid();
                 <?php endforeach; ?>
             </div>
         </div>
-        
+
         <?php if ($layout === 'carousel'): ?>
-            <button class="carousel-arrow carousel-next" type="button">
+            <button class="carousel-arrow carousel-next" type="button" aria-label="<?= __('下一组') ?>">
                 <w:icon name="arrow-right" size="sm"></w:icon>
             </button>
         <?php endif; ?>
     </div>
-</div>
+</section>
 
 <style>
-.widget-brand-logos {
-    padding: 40px 0;
+.<?= $wc ?> {
+    padding: var(--weline-space-10, 40px) 0;
+    color: var(--weline-theme-text);
 }
 
-.widget-brand-logos .widget-header {
+.<?= $wc ?> .brands-header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: var(--weline-space-8, 30px);
 }
 
-.widget-brand-logos .widget-title {
-    font-size: 24px;
+.<?= $wc ?> .brands-title {
+    font-size: var(--weline-font-size-2xl, 24px);
     font-weight: 600;
     margin: 0;
-    color: var(--heading-color, #333);
+    color: var(--weline-theme-text);
 }
 
-.widget-brand-logos .brands-container {
+.<?= $wc ?> .brands-container {
     position: relative;
 }
 
-.widget-brand-logos .brands-grid {
+.<?= $wc ?> .brands-grid {
     display: grid;
-    gap: 20px;
+    gap: var(--weline-space-5, 20px);
     align-items: center;
 }
 
-.widget-brand-logos .brands-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
-.widget-brand-logos .brands-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
-.widget-brand-logos .brands-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
-.widget-brand-logos .brands-grid.columns-8 { grid-template-columns: repeat(8, 1fr); }
+.<?= $wc ?> .brands-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.<?= $wc ?> .brands-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
+.<?= $wc ?> .brands-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
+.<?= $wc ?> .brands-grid.columns-8 { grid-template-columns: repeat(8, 1fr); }
 
-.widget-brand-logos .brand-item {
+.<?= $wc ?> .brand-item {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
-    background: #fff;
-    border-radius: 10px;
-    transition: all 0.3s;
+    padding: var(--weline-space-5, 20px);
+    background: var(--weline-theme-surface-raised);
+    border-radius: var(--weline-radius-lg, 10px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    text-decoration: none;
+    color: inherit;
 }
 
-.widget-brand-logos .brand-item:hover {
-    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+.<?= $wc ?> .brand-item:hover {
+    box-shadow: var(--weline-theme-shadow-md);
 }
 
-.widget-brand-logos .brand-logo,
-.widget-brand-logos .brand-logo-media img {
+.<?= $wc ?> .brand-logo,
+.<?= $wc ?> .brand-logo-media img {
     max-width: 100%;
     max-height: 60px;
     object-fit: contain;
-    transition: filter 0.3s, transform 0.3s;
+    transition: filter var(--weline-theme-transition-base, 0.3s ease),
+                transform var(--weline-theme-transition-base, 0.3s ease);
 }
 
-/* 灰度效果 */
-.widget-brand-logos.grayscale .brand-logo,
-.widget-brand-logos.grayscale .brand-logo-media img {
+.<?= $wc ?>.is-grayscale .brand-logo,
+.<?= $wc ?>.is-grayscale .brand-logo-media img {
     filter: grayscale(100%);
     opacity: 0.7;
 }
 
-.widget-brand-logos.grayscale.hover-color .brand-item:hover .brand-logo,
-.widget-brand-logos.grayscale.hover-color .brand-item:hover .brand-logo-media img {
+.<?= $wc ?>.is-grayscale.has-hover-color .brand-item:hover .brand-logo,
+.<?= $wc ?>.is-grayscale.has-hover-color .brand-item:hover .brand-logo-media img {
     filter: grayscale(0%);
     opacity: 1;
     transform: scale(1.05);
 }
 
-/* 轮播布局 */
-.widget-brand-logos .layout-carousel .brands-wrapper {
+.<?= $wc ?>.layout-carousel .brands-wrapper {
     overflow: hidden;
 }
 
-.widget-brand-logos .layout-carousel .brands-grid {
+.<?= $wc ?>.layout-carousel .brands-grid {
     display: flex;
-    gap: 20px;
-    transition: transform 0.4s ease;
+    gap: var(--weline-space-5, 20px);
+    transition: transform var(--weline-theme-transition-base, 0.4s ease);
 }
 
-.widget-brand-logos .layout-carousel .brand-item {
+.<?= $wc ?>.layout-carousel .brand-item {
     flex: 0 0 auto;
     width: calc((100% - 100px) / 6);
 }
 
-.widget-brand-logos .carousel-arrow {
+.<?= $wc ?> .carousel-arrow {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
     width: 40px;
     height: 40px;
-    background: #fff;
-    border: 1px solid #eee;
+    background: var(--weline-theme-surface-raised);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
     border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 10;
-    transition: all 0.3s;
+    color: var(--weline-theme-text);
+    transition: all var(--weline-theme-transition-base, 0.3s ease);
 }
 
-.widget-brand-logos .carousel-arrow:hover {
-    background: var(--primary-color, #007bff);
-    color: #fff;
-    border-color: var(--primary-color, #007bff);
+.<?= $wc ?> .carousel-arrow:hover {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+    border-color: var(--weline-theme-primary);
 }
 
-.widget-brand-logos .carousel-prev { left: -20px; }
-.widget-brand-logos .carousel-next { right: -20px; }
+.<?= $wc ?> .carousel-prev { left: -20px; }
+.<?= $wc ?> .carousel-next { right: -20px; }
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-5, 20px) 0;
+}
 
 @media (max-width: 992px) {
-    .widget-brand-logos .brands-grid.columns-6,
-    .widget-brand-logos .brands-grid.columns-8 {
+    .<?= $wc ?> .brands-grid.columns-6,
+    .<?= $wc ?> .brands-grid.columns-8 {
         grid-template-columns: repeat(4, 1fr);
     }
 }
 
 @media (max-width: 768px) {
-    .widget-brand-logos .brands-grid {
+    .<?= $wc ?> .brands-grid {
         grid-template-columns: repeat(3, 1fr) !important;
     }
-    
-    .widget-brand-logos .brand-logo {
+
+    .<?= $wc ?> .brand-logo {
         max-height: 40px;
     }
 }
 
 @media (max-width: 480px) {
-    .widget-brand-logos .brands-grid {
+    .<?= $wc ?> .brands-grid {
         grid-template-columns: repeat(2, 1fr) !important;
     }
 }
 </style>
+
+<?php if ($layout === 'carousel'): ?>
+<script>
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+
+    var grid = root.querySelector('.brands-grid');
+    var prevBtn = root.querySelector('.carousel-prev');
+    var nextBtn = root.querySelector('.carousel-next');
+    if (!grid || !prevBtn || !nextBtn) return;
+
+    var offset = 0;
+    var step = 0;
+
+    function recalc() {
+        var item = grid.querySelector('.brand-item');
+        if (!item) return;
+        step = item.offsetWidth + 20;
+    }
+
+    function slide(direction) {
+        recalc();
+        if (!step) return;
+        var maxOffset = Math.max(0, grid.scrollWidth - grid.parentElement.offsetWidth);
+        offset = Math.max(0, Math.min(maxOffset, offset + direction * step));
+        grid.style.transform = 'translateX(-' + offset + 'px)';
+    }
+
+    prevBtn.addEventListener('click', function () { slide(-1); });
+    nextBtn.addEventListener('click', function () { slide(1); });
+    window.addEventListener('resize', recalc);
+    recalc();
+})();
+</script>
+<?php endif; ?>

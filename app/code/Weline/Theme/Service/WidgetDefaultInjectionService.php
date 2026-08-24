@@ -30,6 +30,7 @@ class WidgetDefaultInjectionService
         'logo',
         'search',
         'navigation',
+        'category-menu',
         'footer',
         'footer-social',
         'footer-copyright',
@@ -245,11 +246,34 @@ class WidgetDefaultInjectionService
         $applied = 0;
 
         foreach ($this->collectDeclarations($theme, $componentArea, $pageType, $identity) as $item) {
-            if ($this->widgetExists($themeId, $item['page_type'], $item['identity'], $status, $item)) {
+            if (!$this->injectionTargetNeedsFill($themeId, $pageType, $identity, $status, $item)) {
                 continue;
             }
             $this->saveInjection($themeId, $item, $status);
             $applied++;
+        }
+
+        return $applied;
+    }
+
+    /**
+     * 为所有已注册页面类型补齐缺失的默认部件（仅填空 slot，不覆盖已有配置）。
+     */
+    public function applyMissingForAllPageTypes(
+        int $themeId,
+        array $identity = [],
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        string $status = ThemeLayout::STATUS_DRAFT
+    ): int {
+        $applied = 0;
+        foreach (array_keys(ThemeLayout::getPageTypes()) as $pageType) {
+            $applied += $this->applyMissingForLayout(
+                $themeId,
+                (string)$pageType,
+                $identity,
+                $componentArea,
+                $status
+            );
         }
 
         return $applied;
@@ -1007,6 +1031,107 @@ class WidgetDefaultInjectionService
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    private function slotHasWidget(
+        int $themeId,
+        string $pageType,
+        array $identity,
+        string $status,
+        string $slotId,
+        string $area
+    ): bool {
+        if ($slotId === '') {
+            return false;
+        }
+
+        try {
+            $query = (clone $this->themeLayout)->reset()
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+                ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
+                ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
+                ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
+                ->where(ThemeLayout::schema_fields_STATUS, $status)
+                ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId)
+                ->where(ThemeLayout::schema_fields_AREA, $area)
+                ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1);
+
+            $rows = $query->select()->fetchArray();
+            return is_array($rows) && count($rows) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function widgetExistsInSlot(
+        int $themeId,
+        string $pageType,
+        array $identity,
+        string $status,
+        array $item
+    ): bool {
+        $slotId = trim((string)($item['slot_id'] ?? ''));
+        if ($slotId === '') {
+            return $this->widgetExists($themeId, $pageType, $identity, $status, $item);
+        }
+
+        $area = trim((string)($item['area'] ?? ThemeLayout::AREA_CONTENT));
+        try {
+            $query = (clone $this->themeLayout)->reset()
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+                ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
+                ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
+                ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
+                ->where(ThemeLayout::schema_fields_STATUS, $status)
+                ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId)
+                ->where(ThemeLayout::schema_fields_AREA, $area)
+                ->where(ThemeLayout::schema_fields_WIDGET_MODULE, $item['module'])
+                ->where(ThemeLayout::schema_fields_WIDGET_TYPE, $item['type'])
+                ->where(ThemeLayout::schema_fields_WIDGET_CODE, $item['code'])
+                ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1);
+
+            $rows = $query->select()->fetchArray();
+            return is_array($rows) && count($rows) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function injectionTargetNeedsFill(
+        int $themeId,
+        string $pageType,
+        array $identity,
+        string $status,
+        array $item
+    ): bool {
+        if ($this->hasUserDeletedDecision($themeId, $item)) {
+            return false;
+        }
+
+        $slotId = trim((string)($item['slot_id'] ?? ''));
+        $exclusive = (bool)($item['exclusive'] ?? false);
+        if ($slotId !== '') {
+            if ($exclusive || in_array($slotId, self::EXCLUSIVE_SLOTS, true)) {
+                return !$this->slotHasWidget(
+                    $themeId,
+                    $pageType,
+                    $identity,
+                    $status,
+                    $slotId,
+                    trim((string)($item['area'] ?? ThemeLayout::AREA_CONTENT))
+                );
+            }
+
+            return !$this->widgetExistsInSlot($themeId, $pageType, $identity, $status, $item);
+        }
+
+        return !$this->widgetExists($themeId, $pageType, $identity, $status, $item);
     }
 
     private function resolveLayoutArea(array $injection, ThemeComponentDefinition $definition, string $slotId): string

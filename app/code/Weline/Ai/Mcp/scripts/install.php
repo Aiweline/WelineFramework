@@ -199,7 +199,7 @@ function welineMcpWriteMarketplace(string $root, string $config, string $marketp
             'category' => 'Productivity',
             'capabilities' => ['MCP', 'MCP App', 'Hooks', 'Code Intelligence', 'Local Learning'],
             'defaultPrompt' => [
-                'Call prepare_project first; continue only with ready and pass its readiness_id to every later Weline tool.',
+                'Call prepare_project on branch dev first; master and other branches are blocked. Continue only with ready and pass its readiness_id to every later Weline tool.',
                 'Use resolve_task_context for bounded framework guidance; static development Skills are not authoritative.',
                 'Use get_edit_bundle and one guarded apply; review all returned diffs before delivery.',
             ],

@@ -1,0 +1,1437 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Server\Service\Runtime;
+
+use Weline\Framework\App\Env;
+use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
+use Weline\Server\Service\MasterProcess;
+
+/**
+ * Filesystem, port and immutable configuration helpers for the WLS-owned
+ * public HTTP protocol edge. L7 policy remains exclusively in WorkerPolicyKernel.
+ */
+final class ProtocolEdgeRuntime
+{
+    public const ROLE = 'protocol_edge';
+    public const PROCESS_NAME_PREFIX = 'weline-wls-protocol-edge';
+    public const AUTH_HEADER = 'X-WLS-Edge-Token';
+    public const CLIENT_PROTOCOL_HEADER = 'X-WLS-Client-Protocol';
+    public const DIRECT_RELOAD_SURGE_MIN_CANONICAL_ID = 100;
+    public const DIRECT_RELOAD_SURGE_ID_GAP = 1000;
+    private const TOKEN_MAX_BYTES = 128;
+    private const CONFIG_MAX_BYTES = 4_194_304;
+    private const ACTIVE_STATE_MAX_BYTES = 65_536;
+    private const STATE_LOCK_FILE = '.state.lock';
+
+    public static function selection(ServiceContext $context): HttpProtocolSelection
+    {
+        $http = $context->getConfig('wls.http', []);
+
+        return HttpProtocolSelection::fromConfig(
+            ['http' => \is_array($http) ? $http : []],
+            $context->sslEnabled,
+        );
+    }
+
+    public static function isEnabled(ServiceContext $context): bool
+    {
+        return self::selection($context)->isCaddyProtocolEdge();
+    }
+
+    public static function runtimeDirectory(string $instanceName): string
+    {
+        $instanceName = self::normalizeInstanceName($instanceName);
+
+        return Env::VAR_DIR . 'server' . DS . 'protocol-edge' . DS . $instanceName;
+    }
+
+    public static function tokenFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'edge.token';
+    }
+
+    public static function configFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'edge.conf';
+    }
+
+    public static function nativeConfigFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'caddy.json';
+    }
+
+    public static function sessionTicketStorageDirectory(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'stek';
+    }
+
+    public static function sessionTicketKeyFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'session-ticket-keys.json';
+    }
+
+    public static function pidFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'edge-child.pid';
+    }
+
+    public static function activeStateFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'active.json';
+    }
+
+    public static function ensureTokenFile(string $instanceName): string
+    {
+        $instanceName = self::normalizeInstanceName($instanceName);
+        $directory = self::runtimeDirectory($instanceName);
+        self::ensurePrivateDirectory($directory);
+        $path = self::tokenFile($instanceName);
+        return self::withStateLock(
+            $instanceName,
+            static function () use ($instanceName, $path): string {
+                self::cleanupRuntimeStateRecoveryBackups($instanceName, $path);
+                $contents = GatewayProjectStateFilesystem::readOptional(
+                    $path,
+                    self::TOKEN_MAX_BYTES,
+                    'WLS protocol-edge token',
+                );
+                if ($contents !== null) {
+                    self::validateRuntimeStateContents($instanceName, $path, $contents);
+                    return $path;
+                }
+
+                self::writeAtomicallyLocked(
+                    $path,
+                    \bin2hex(\random_bytes(32)) . PHP_EOL,
+                    0600,
+                );
+                return $path;
+            },
+        );
+    }
+
+    /**
+     * Persist the adapted Caddy JSON with an instance-isolated distributed
+     * session-ticket key source. Caddy reloads provision a new TLS app even
+     * for route-only changes; storing the STEK outside that app keeps TLS 1.3
+     * resumable without sharing ticket keys between WLS instances.
+     *
+     * @param object $adaptedConfig Native JSON object; keeping object identity
+     *        is required because Caddy distinguishes `{}` from `[]`.
+     */
+    public static function writeNativeConfig(
+        string $instanceName,
+        object $adaptedConfig,
+        bool $tlsSessionResumption = true,
+    ): string
+    {
+        $apps = $adaptedConfig->apps ?? null;
+        $tls = \is_object($apps) ? ($apps->tls ?? null) : null;
+        if (!\is_object($apps) || !\is_object($tls)) {
+            throw new \RuntimeException('Adapted protocol-edge config does not contain the Caddy TLS app.');
+        }
+
+        self::ensurePrivateDirectory(self::runtimeDirectory($instanceName));
+        if ($tlsSessionResumption) {
+            $storageDirectory = self::sessionTicketStorageDirectory($instanceName);
+            self::ensurePrivateDirectory($storageDirectory);
+            $tls->session_tickets = (object)[
+                'key_source' => (object)[
+                    'provider' => 'distributed',
+                    'storage' => (object)[
+                        'module' => 'file_system',
+                        'root' => $storageDirectory,
+                    ],
+                ],
+                'rotation_interval' => '12h',
+                'max_keys' => 4,
+            ];
+        } else {
+            $tls->session_tickets = (object)['disabled' => true];
+        }
+
+        $payload = \json_encode(
+            $adaptedConfig,
+            \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT | \JSON_THROW_ON_ERROR,
+        );
+        $path = self::nativeConfigFile($instanceName);
+        self::writeAtomically($instanceName, $path, $payload . PHP_EOL, 0600);
+
+        return $path;
+    }
+
+    public static function readToken(string $instanceName): string
+    {
+        $path = self::ensureTokenFile($instanceName);
+        $token = \strtolower(\trim(GatewayProjectStateFilesystem::read(
+            $path,
+            self::TOKEN_MAX_BYTES,
+            'WLS protocol-edge token',
+        )));
+        if (\preg_match('/^[a-f0-9]{64}$/D', $token) !== 1) {
+            throw new \RuntimeException('WLS protocol-edge token file is invalid.');
+        }
+
+        return $token;
+    }
+
+    /**
+     * Canonical Worker ports behind the protocol edge.
+     *
+     * @return list<int>
+     */
+    public static function workerPorts(ServiceContext $context): array
+    {
+        $count = $context->getWorkerCount();
+        $count = $count === 'auto' ? 1 : \max(1, (int)$count);
+        $start = $context->getWorkerPort();
+        if ($start <= 0) {
+            throw new \RuntimeException('Protocol-edge Worker port range is unavailable.');
+        }
+
+        return \range($start, $start + $count - 1);
+    }
+
+    public static function workerPort(ServiceContext $context, int $instanceId): int
+    {
+        $start = $context->getWorkerPort();
+        if ($start <= 0) {
+            throw new \RuntimeException('Protocol-edge Worker port range is unavailable.');
+        }
+        if ($instanceId > 100) {
+            return $start + $instanceId - 1;
+        }
+
+        return $start + \max(0, $instanceId - 1);
+    }
+
+    public static function directReloadSurgeStartInstanceId(int $maxExistingWorkerId): int
+    {
+        return \max(self::DIRECT_RELOAD_SURGE_MIN_CANONICAL_ID, $maxExistingWorkerId)
+            + self::DIRECT_RELOAD_SURGE_ID_GAP;
+    }
+
+    /**
+     * Reserve the same deterministic private port range used by the first
+     * direct new-first reload generation. Canonical Worker IDs are 1..count.
+     *
+     * @return list<int>
+     */
+    public static function directReloadSurgePortsFromWorkerRange(int $workerPort, int $workerCount): array
+    {
+        if ($workerPort <= 0) {
+            return [];
+        }
+
+        $workerCount = \max(1, $workerCount);
+        $firstSurgeId = self::directReloadSurgeStartInstanceId($workerCount);
+        $firstSurgePort = $workerPort + $firstSurgeId - 1;
+
+        return \range($firstSurgePort, $firstSurgePort + $workerCount - 1);
+    }
+
+    public static function dispatcherPort(ServiceContext $context): int
+    {
+        $count = $context->getWorkerCount();
+        return self::dispatcherPortFromWorkerRange(
+            $context->getWorkerPort(),
+            $count === 'auto' ? 1 : (int)$count,
+        );
+    }
+
+    public static function dispatcherPortFromWorkerRange(int $workerPort, int $workerCount): int
+    {
+        $port = $workerPort + \max(1, $workerCount) - 1 + 64;
+        if ($port <= 0 || $port > 65535) {
+            throw new \RuntimeException('Protocol-edge internal Dispatcher port is outside the valid range.');
+        }
+
+        return $port;
+    }
+
+    public static function adminPort(ServiceContext $context): int
+    {
+        return self::adminPortForInstance($context->instanceName, $context->mainPort);
+    }
+
+    public static function adminPortForInstance(string $instanceName, int $mainPort): int
+    {
+        $offset = MasterProcess::getProjectPortOffset();
+        // Keep Caddy's loopback-only control socket below the default dynamic
+        // client-port ranges used by Linux (32768+), macOS and Windows
+        // (49152+). The previous 30k-50k formula intermittently collided with
+        // a short-lived local connection and made an otherwise healthy WLS
+        // cold start fail with EADDRINUSE. Instance, public port and project
+        // offset keep the mapping deterministic across config generation,
+        // process launch and reload.
+        $hash = (int)\sprintf('%u', \crc32($instanceName . ':' . $mainPort . ':' . $offset));
+        $candidate = 10000 + ($hash % 7000);
+        if ($candidate === $mainPort) {
+            $candidate = 10000 + (($candidate - 9999) % 7000);
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function upstreams(ServiceContext $context): array
+    {
+        if ($context->isDispatcher()) {
+            return ['127.0.0.1:' . self::dispatcherPort($context)];
+        }
+
+        return \array_map(
+            static fn (int $port): string => '127.0.0.1:' . $port,
+            self::workerPorts($context),
+        );
+    }
+
+    /**
+     * Build an immutable, private Caddyfile and return its path.
+     */
+    public static function writeConfig(ServiceContext $context, ?array $publishedUpstreams = null): string
+    {
+        $selection = self::selection($context);
+        if (!$selection->isProtocolEdgeEnabled()) {
+            throw new \RuntimeException('Protocol-edge config requested for a disabled instance.');
+        }
+        if (!$context->sslEnabled || !\is_file($context->sslCert) || !\is_file($context->sslKey)) {
+            throw new \RuntimeException('HTTP/2 and HTTP/3 protocol edge requires readable TLS certificate and key files.');
+        }
+
+        $directory = self::runtimeDirectory($context->instanceName);
+        self::ensurePrivateDirectory($directory);
+        if ($selection->isNativeProtocolEdge()) {
+            return self::writeWlsNativeConfig($context, $selection, $publishedUpstreams);
+        }
+        $token = self::readToken($context->instanceName);
+        $serverName = self::normalizeServerName($context->publicHost ?: $context->host);
+        $authority = self::formatAuthority($serverName, $context->mainPort);
+        $protocols = \implode(' ', $selection->caddyProtocols());
+        $resolvedUpstreams = self::normalizePublishedUpstreams($context, $publishedUpstreams);
+        $upstreams = \implode(' ', $resolvedUpstreams);
+        $adminAddress = '127.0.0.1:' . self::adminPort($context);
+        $healthHost = self::formatAuthority($serverName, $context->mainPort);
+        $idlePerHost = \max(64, \count($resolvedUpstreams) * 64);
+        $maxPerHost = \max(256, \count($resolvedUpstreams) * 128);
+        $sslConfig = $context->getConfig('wls.ssl', []);
+        $tlsSelection = (new TlsProcessProfileConfigurator())->resolveConfiguration([
+            'ssl' => \is_array($sslConfig) ? $sslConfig : [],
+        ]);
+        $tlsProtocols = $tlsSelection['protocols'];
+        $tlsMinimum = \in_array('tls1.2', $tlsProtocols, true) ? 'tls1.2' : 'tls1.3';
+        $tlsMaximum = \in_array('tls1.3', $tlsProtocols, true) ? 'tls1.3' : 'tls1.2';
+        $tlsPolicyLines = [
+            '    tls ' . self::quote($context->sslCert) . ' ' . self::quote($context->sslKey) . ' {',
+            '        protocols ' . $tlsMinimum . ' ' . $tlsMaximum,
+        ];
+        if ($tlsSelection['requested'] === TlsProcessProfileConfigurator::PROFILE_PERFORMANCE) {
+            // Caddy terminates public TLS when h2/h3 is enabled, so the PHP
+            // OPENSSL_CONF alone cannot enforce the WLS performance profile.
+            $tlsPolicyLines[] = '        curves x25519 secp256r1';
+        }
+        $tlsPolicyLines[] = '    }';
+
+        $lines = [
+            '{',
+            '    admin ' . $adminAddress,
+            '    auto_https disable_redirects',
+            '    servers {',
+            '        protocols ' . $protocols,
+            '        max_header_size 64KB',
+            '        timeouts {',
+            '            read_header 5s',
+            '            read_body 30s',
+            '            write 30s',
+            '            idle 2m',
+            '        }',
+            '        keepalive_interval 30s',
+            '    }',
+            '    grace_period 10s',
+            '}',
+            '',
+            'https://' . $authority . ' {',
+            ...$tlsPolicyLines,
+            '',
+            '    reverse_proxy ' . $upstreams . ' {',
+            '        lb_policy least_conn',
+            '        lb_try_duration 500ms',
+            '        lb_try_interval 10ms',
+            '        health_uri /_wls/health',
+            '        health_interval 2s',
+            '        health_timeout 500ms',
+            '        health_status 2xx',
+            '        health_headers {',
+            '            Host ' . self::quote($healthHost),
+            '            ' . self::AUTH_HEADER . ' ' . self::quote($token),
+            '            ' . self::CLIENT_PROTOCOL_HEADER . ' HTTP/1.1',
+            '        }',
+            '        fail_duration 5s',
+            '        max_fails 1',
+            // Preserve the original authority, including non-default ports. The
+            // Worker FPC/warmup key is authority-sensitive; stripping the port
+            // here forces every edge request through the slower full pipeline.
+            '        header_up Host {http.request.hostport}',
+            '        header_up ' . self::AUTH_HEADER . ' ' . self::quote($token),
+            '        header_up ' . self::CLIENT_PROTOCOL_HEADER . ' {http.request.proto}',
+            '        header_up X-Forwarded-For {http.request.remote.host}',
+            '        header_up X-Forwarded-Proto {http.request.scheme}',
+            '        transport http {',
+            '            versions 1.1',
+            // Do not synthesize Accept-Encoding:gzip for clients which did not
+            // request it. Otherwise the Worker misses its identity Process-FPC
+            // warmup and Caddy immediately decompresses the response again.
+            '            compression off',
+            '            dial_timeout 250ms',
+            '            response_header_timeout 30s',
+            '            keepalive 2m',
+            '            keepalive_idle_conns 1024',
+            '            keepalive_idle_conns_per_host ' . $idlePerHost,
+            '            max_conns_per_host ' . $maxPerHost,
+            '        }',
+            '    }',
+            '}',
+            '',
+        ];
+
+        $path = self::configFile($context->instanceName);
+        self::writeAtomically(
+            $context->instanceName,
+            $path,
+            \implode(PHP_EOL, $lines),
+            0600,
+        );
+
+        return $path;
+    }
+
+    /**
+     * Resolve validated immutable TLS material from the project generation store.
+     *
+     * @param list<string> $certificateRoots
+     * @param null|callable(string,string,string,string,list<string>):array<string,mixed> $activate
+     * @return array{cert_path:string,key_path:string}
+     */
+    private static function activateImmutableCertificateMaterial(
+        string $domain,
+        string $certificate,
+        string $privateKey,
+        array $certificateRoots,
+        ?callable $activate = null,
+    ): array {
+        $activate ??= static fn(
+            string $activeDomain,
+            string $activeCertificate,
+            string $activePrivateKey,
+            string $chain,
+            array $roots,
+        ): array => (new ProjectCertificateGenerationStore())->activate(
+            $activeDomain,
+            $activeCertificate,
+            $activePrivateKey,
+            $chain,
+            $roots,
+        );
+        $active = $activate($domain, $certificate, $privateKey, '', $certificateRoots);
+        $activeCertificate = \trim((string)($active['cert_path'] ?? ''));
+        $activePrivateKey = \trim((string)($active['key_path'] ?? ''));
+        if ($activeCertificate === ''
+            || $activePrivateKey === ''
+            || !\is_file($activeCertificate)
+            || !\is_file($activePrivateKey)
+            || \is_link($activeCertificate)
+            || \is_link($activePrivateKey)
+        ) {
+            throw new \RuntimeException(
+                'WLS-native TLS requires validated immutable certificate generation files.'
+            );
+        }
+
+        return [
+            'cert_path' => $activeCertificate,
+            'key_path' => $activePrivateKey,
+        ];
+    }
+
+    /**
+     * Compile the WLS-owned protocol engine's immutable listener, TLS and
+     * upstream contract. The engine only terminates protocols and reuses
+     * connections; WorkerPolicyKernel remains authoritative for every L7 rule.
+     *
+     * @param list<int|string>|null $publishedUpstreams
+     */
+    private static function writeWlsNativeConfig(
+        ServiceContext $context,
+        HttpProtocolSelection $selection,
+        ?array $publishedUpstreams,
+    ): string {
+        $resolvedUpstreams = self::normalizePublishedUpstreams($context, $publishedUpstreams);
+        $serverName = self::normalizeServerName($context->publicHost ?: $context->host);
+        $listenHost = self::normalizeListenHost($context->host);
+        $healthHost = self::formatAuthority($serverName, $context->mainPort);
+        $sslConfig = $context->getConfig('wls.ssl', []);
+        $tlsSelection = (new TlsProcessProfileConfigurator())->resolveConfiguration([
+            'ssl' => \is_array($sslConfig) ? $sslConfig : [],
+        ]);
+        $tlsProtocols = $tlsSelection['protocols'];
+        $tlsMinimum = \in_array('tls1.2', $tlsProtocols, true) ? 'tls1.2' : 'tls1.3';
+        $tlsMaximum = \in_array('tls1.3', $tlsProtocols, true) ? 'tls1.3' : 'tls1.2';
+        $upstreamCount = \count($resolvedUpstreams);
+        $certificateRoots = $context->getConfig('wls.gateway.certificate_roots', []);
+        $certificateRoots = \is_array($certificateRoots)
+            ? \array_values(\array_filter(
+                \array_map(
+                    static fn(mixed $root): string => \is_string($root) ? \trim($root) : '',
+                    $certificateRoots,
+                ),
+                static fn(string $root): bool => $root !== '',
+            ))
+            : [];
+        $activeCertificate = self::activateImmutableCertificateMaterial(
+            $serverName,
+            $context->sslCert,
+            $context->sslKey,
+            $certificateRoots,
+        );
+
+        $payload = \json_encode([
+            'schema_version' => 1,
+            'instance' => $context->instanceName,
+            'public' => [
+                'address' => self::formatAuthority($listenHost, $context->mainPort, true),
+                'host' => $serverName,
+                'port' => $context->mainPort,
+            ],
+            'admin_address' => '127.0.0.1:' . self::adminPort($context),
+            'protocols' => $selection->protocols,
+            'preferred' => $selection->preferred,
+            'alt_svc' => $selection->altSvc,
+            'tls' => [
+                'certificate_file' => $activeCertificate['cert_path'],
+                'private_key_file' => $activeCertificate['key_path'],
+                'minimum_version' => $tlsMinimum,
+                'maximum_version' => $tlsMaximum,
+                'key_exchange_profile' => $tlsSelection['requested'],
+                'session_resumption' => $selection->tlsSessionResumption,
+                'session_ticket_key_file' => self::sessionTicketKeyFile($context->instanceName),
+                'session_ticket_rotation' => '12h',
+                'session_ticket_max_keys' => 4,
+            ],
+            'proxy' => [
+                'upstreams' => $resolvedUpstreams,
+                'token_file' => self::ensureTokenFile($context->instanceName),
+                'health_host' => $healthHost,
+                'health_path' => '/_wls/health',
+                'health_interval' => '2s',
+                'health_timeout' => '500ms',
+                'dial_timeout' => '250ms',
+                'response_header_timeout' => '30s',
+                'idle_connection_timeout' => '2m',
+                'max_idle_connections' => \max(1024, $upstreamCount * 256),
+                'max_idle_per_upstream' => \max(128, $upstreamCount * 64),
+                'max_connections_per_upstream' => \max(512, $upstreamCount * 128),
+            ],
+            'timeouts' => [
+                'read_header' => '5s',
+                'read_body' => '30s',
+                'write' => '30s',
+                'idle' => '2m',
+            ],
+            'limits' => [
+                'max_header_bytes' => 65536,
+            ],
+            'keep_alive' => [
+                'tcp_interval' => '30s',
+                'quic_idle' => '2m',
+            ],
+        ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT | \JSON_THROW_ON_ERROR);
+        $path = self::configFile($context->instanceName);
+        self::writeAtomically(
+            $context->instanceName,
+            $path,
+            $payload . PHP_EOL,
+            0600,
+        );
+
+        return $path;
+    }
+
+    public static function configDigest(string $instanceName): string
+    {
+        $path = self::configFile($instanceName);
+        self::assertSafeRuntimeTarget($path, false);
+        $contents = GatewayProjectStateFilesystem::readOptional(
+            $path,
+            self::CONFIG_MAX_BYTES,
+            'WLS protocol-edge configuration',
+        );
+        if ($contents === null) {
+            return '';
+        }
+
+        $digest = \hash('sha256', $contents);
+
+        return \is_string($digest) && \preg_match('/^[a-f0-9]{64}$/D', $digest) === 1
+            ? $digest
+            : '';
+    }
+
+    /**
+     * Publish the exact Caddy configuration digest that is active in the data
+     * plane. Master waits for this acknowledgement before draining an old
+     * Worker generation, so a filesystem write alone can never remove capacity.
+     *
+     * @param list<string> $upstreams
+     */
+    public static function markConfigActive(string $instanceName, string $digest, array $upstreams): void
+    {
+        $digest = \strtolower(\trim($digest));
+        if (\preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1) {
+            throw new \InvalidArgumentException('Protocol-edge active config digest is invalid.');
+        }
+        if (!\array_is_list($upstreams) || \count($upstreams) > 2048) {
+            throw new \InvalidArgumentException(
+                'Protocol-edge active upstream closure is invalid.'
+            );
+        }
+        $normalizedUpstreams = [];
+        foreach ($upstreams as $upstream) {
+            if (!\is_string($upstream)
+                || \preg_match('/\A127\.0\.0\.1:([1-9][0-9]{0,4})\z/D', $upstream, $match) !== 1
+                || (int)$match[1] > 65535
+                || isset($normalizedUpstreams[$upstream])
+            ) {
+                throw new \InvalidArgumentException(
+                    'Protocol-edge active upstream identity is invalid.'
+                );
+            }
+            $normalizedUpstreams[$upstream] = true;
+        }
+        if ($normalizedUpstreams === []) {
+            throw new \InvalidArgumentException(
+                'Protocol-edge active upstream closure cannot be empty.'
+            );
+        }
+
+        $directory = self::runtimeDirectory($instanceName);
+        self::ensurePrivateDirectory($directory);
+        $processIdentity = (new MasterLeaseRuntimeIdentity())->captureProcessIdentity(
+            (int)\getmypid(),
+        );
+        $payload = \json_encode([
+            'schema_version' => 2,
+            'config_digest' => $digest,
+            'upstreams' => \array_keys($normalizedUpstreams),
+            'pid' => (int)\getmypid(),
+            'process_birth' => $processIdentity['birth'],
+            'pid_namespace_id' => $processIdentity['pid_namespace_id'],
+            'host_boot_id' => GatewayHostBootIdentity::current(),
+            'activated_at' => \date('c'),
+            'activated_monotonic' => \hrtime(true) / 1_000_000_000,
+        ], \JSON_UNESCAPED_SLASHES
+            | \JSON_UNESCAPED_UNICODE
+            | \JSON_PRETTY_PRINT
+            | \JSON_THROW_ON_ERROR);
+        self::writeAtomically(
+            $instanceName,
+            self::activeStateFile($instanceName),
+            $payload . PHP_EOL,
+            0600,
+        );
+    }
+
+    public static function clearActiveState(string $instanceName, ?int $expectedPid = null): void
+    {
+        $instanceName = self::normalizeInstanceName($instanceName);
+        $directory = self::runtimeDirectory($instanceName);
+        self::assertSafeRuntimeTarget($directory, true);
+        if (!\is_dir($directory)) {
+            return;
+        }
+        $path = self::activeStateFile($instanceName);
+        self::withStateLock(
+            $instanceName,
+            static function () use ($instanceName, $path, $expectedPid): void {
+                self::cleanupRuntimeStateRecoveryBackups($instanceName, $path);
+                $contents = GatewayProjectStateFilesystem::readOptional(
+                    $path,
+                    self::ACTIVE_STATE_MAX_BYTES,
+                    'WLS protocol-edge active state',
+                );
+                if ($contents === null) {
+                    return;
+                }
+                if ($expectedPid !== null && $expectedPid > 0) {
+                    try {
+                        $state = \json_decode($contents, true, 32, \JSON_THROW_ON_ERROR);
+                    } catch (\Throwable) {
+                        return;
+                    }
+                    if (!\is_array($state)
+                        || ($state['schema_version'] ?? null) !== 2
+                        || (int)($state['pid'] ?? 0) !== $expectedPid
+                        || (new MasterLeaseRuntimeIdentity())->observeProcessIdentity(
+                            $expectedPid,
+                            (string)($state['process_birth'] ?? ''),
+                            (string)($state['pid_namespace_id'] ?? ''),
+                        ) !== MasterLeaseRuntimeIdentity::OWNER_MATCH
+                    ) {
+                        return;
+                    }
+                }
+                GatewayProjectStateFilesystem::removeRegular(
+                    $path,
+                    'WLS protocol-edge active state',
+                );
+            },
+        );
+    }
+
+    public static function isConfigActive(string $instanceName, string $expectedDigest): bool
+    {
+        $expectedDigest = \strtolower(\trim($expectedDigest));
+        if (\preg_match('/^[a-f0-9]{64}$/D', $expectedDigest) !== 1) {
+            return false;
+        }
+        $path = self::activeStateFile($instanceName);
+        self::assertSafeRuntimeTarget($path, false);
+        $contents = GatewayProjectStateFilesystem::readOptional(
+            $path,
+            self::ACTIVE_STATE_MAX_BYTES,
+            'WLS protocol-edge active state',
+        );
+        if ($contents === null) {
+            return false;
+        }
+        try {
+            $state = \json_decode($contents, true, 32, \JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return false;
+        }
+        if (!\is_array($state)
+            || ($state['schema_version'] ?? null) !== 2
+            || !\hash_equals(
+                GatewayHostBootIdentity::current(),
+                (string)($state['host_boot_id'] ?? ''),
+            )
+        ) {
+            return false;
+        }
+        $pid = (int)($state['pid'] ?? 0);
+        if ((new MasterLeaseRuntimeIdentity())->observeProcessIdentity(
+            $pid,
+            (string)($state['process_birth'] ?? ''),
+            (string)($state['pid_namespace_id'] ?? ''),
+        ) !== MasterLeaseRuntimeIdentity::OWNER_MATCH) {
+            return false;
+        }
+        $activeDigest = \strtolower(\trim((string)($state['config_digest'] ?? '')));
+
+        return \preg_match('/^[a-f0-9]{64}$/D', $activeDigest) === 1
+            && \hash_equals($expectedDigest, $activeDigest);
+    }
+
+    public static function resolveBinary(ServiceContext|array|null $source = null): string
+    {
+        $configured = '';
+        $edge = HttpProtocolSelection::EDGE_NATIVE;
+        if ($source instanceof ServiceContext) {
+            $configured = \trim((string)$source->getConfig('wls.http.protocol_edge_binary', ''));
+            $edge = self::selection($source)->edge;
+        } elseif (\is_array($source)) {
+            $http = \is_array($source['http'] ?? null) ? $source['http'] : [];
+            $configured = \trim((string)($http['protocol_edge_binary'] ?? ''));
+            $protocols = $http['protocols'] ?? HttpProtocolSelection::DEFAULT_PROTOCOLS;
+            $edge = HttpProtocolSelection::fromArray([
+                'protocols' => $protocols,
+                'preferred' => $http['preferred'] ?? HttpProtocolSelection::HTTP_3,
+                'edge' => $http['protocol_edge'] ?? $http['edge'] ?? HttpProtocolSelection::EDGE_NATIVE,
+            ])->edge;
+        }
+        $native = $edge === HttpProtocolSelection::EDGE_NATIVE;
+        $environment = \trim((string)(\getenv($native ? 'WLS_PROTOCOL_EDGE_BINARY' : 'WLS_CADDY_BINARY') ?: ''));
+        foreach ([$configured, $environment] as $candidate) {
+            if (self::isRunnableBinary($candidate)) {
+                return $candidate;
+            }
+        }
+
+        $binaryName = $native
+            ? (PHP_OS_FAMILY === 'Windows' ? 'wls-protocol-edge.exe' : 'wls-protocol-edge')
+            : (PHP_OS_FAMILY === 'Windows' ? 'caddy.exe' : 'caddy');
+        $path = (string)(\getenv('PATH') ?: '');
+        foreach (\array_filter(\explode(PATH_SEPARATOR, $path), 'strlen') as $directory) {
+            $candidate = \rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $binaryName;
+            if (self::isRunnableBinary($candidate)) {
+                return $candidate;
+            }
+        }
+        foreach (self::commonBinaryPaths($binaryName, $native) as $candidate) {
+            if (self::isRunnableBinary($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * PHP running under Windows x64 emulation reports native ARM64 PE files as
+     * non-executable even though CreateProcess can launch them. Capability
+     * probes remain the final authority on Windows; POSIX still requires the
+     * executable permission bit.
+     */
+    public static function isRunnableBinary(string $candidate): bool
+    {
+        return $candidate !== ''
+            && \is_file($candidate)
+            && (PHP_OS_FAMILY === 'Windows' || \is_executable($candidate));
+    }
+
+    /**
+     * Project-local dependency path used by the verified Windows installer.
+     * Keeping the binary under var avoids administrator-only Program Files
+     * writes and makes the selected version stable across service accounts.
+     */
+    public static function managedBinaryPath(): string
+    {
+        $binaryName = PHP_OS_FAMILY === 'Windows' ? 'caddy.exe' : 'caddy';
+
+        return Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'caddy' . DS . $binaryName;
+    }
+
+    /**
+     * Project-local WLS-native protocol engine. It is built or installed
+     * before Master creates any child process and is never resolved through a
+     * third-party web-server package.
+     */
+    public static function managedNativeBinaryPath(): string
+    {
+        $binaryName = PHP_OS_FAMILY === 'Windows' ? 'wls-protocol-edge.exe' : 'wls-protocol-edge';
+
+        return Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'protocol-edge' . DS . $binaryName;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function commonBinaryPaths(string $binaryName, bool $native): array
+    {
+        if ($native) {
+            return [self::managedNativeBinaryPath()];
+        }
+        if (PHP_OS_FAMILY === 'Windows') {
+            $programFiles = \rtrim((string)(\getenv('ProgramFiles') ?: 'C:\\Program Files'), '/\\');
+            $localAppData = \rtrim((string)(\getenv('LOCALAPPDATA') ?: ''), '/\\');
+
+            return \array_values(\array_filter([
+                self::managedBinaryPath(),
+                $programFiles . '\\Caddy\\' . $binaryName,
+                $localAppData !== '' ? $localAppData . '\\Microsoft\\WinGet\\Links\\' . $binaryName : '',
+            ]));
+        }
+
+        return [
+            '/opt/homebrew/bin/' . $binaryName,
+            '/usr/local/bin/' . $binaryName,
+            '/usr/bin/' . $binaryName,
+            '/snap/bin/' . $binaryName,
+        ];
+    }
+
+    /**
+     * @param list<int|string>|null $publishedUpstreams
+     * @return list<string>
+     */
+    private static function normalizePublishedUpstreams(
+        ServiceContext $context,
+        ?array $publishedUpstreams,
+    ): array {
+        if ($context->isDispatcher() || $publishedUpstreams === null) {
+            return self::upstreams($context);
+        }
+
+        $normalized = [];
+        foreach ($publishedUpstreams as $upstream) {
+            if (\is_int($upstream) || (\is_string($upstream) && \ctype_digit($upstream))) {
+                $port = (int)$upstream;
+                if ($port > 0 && $port <= 65535) {
+                    $normalized['127.0.0.1:' . $port] = true;
+                }
+                continue;
+            }
+            $upstream = \trim((string)$upstream);
+            if (\preg_match('/^127\.0\.0\.1:([1-9][0-9]{0,4})$/D', $upstream, $matches) !== 1) {
+                continue;
+            }
+            $port = (int)$matches[1];
+            if ($port > 0 && $port <= 65535) {
+                $normalized[$upstream] = true;
+            }
+        }
+        if ($normalized === []) {
+            throw new \RuntimeException('Protocol-edge cannot publish an empty Worker upstream set.');
+        }
+        $upstreams = \array_keys($normalized);
+        \sort($upstreams, \SORT_NATURAL);
+
+        return $upstreams;
+    }
+
+    private static function normalizeInstanceName(string $instanceName): string
+    {
+        $instanceName = \trim($instanceName);
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $instanceName) !== 1) {
+            throw new \InvalidArgumentException(
+                'WLS protocol-edge instance identity is invalid.'
+            );
+        }
+
+        return $instanceName;
+    }
+
+    private static function normalizeServerName(string $host): string
+    {
+        $host = \trim($host);
+        if (\str_contains($host, '://')) {
+            $parsed = \parse_url($host, PHP_URL_HOST);
+            $host = \is_string($parsed) ? $parsed : '';
+        } elseif ($host !== '' && $host[0] === '[') {
+            $end = \strpos($host, ']');
+            $host = $end === false ? $host : \substr($host, 1, $end - 1);
+        } elseif (\substr_count($host, ':') === 1) {
+            [$host] = \explode(':', $host, 2);
+        }
+        $host = \trim($host, '[]');
+        if ($host === '' || $host === '0.0.0.0' || $host === '::' || $host === '*') {
+            return 'localhost';
+        }
+
+        return \strtolower($host);
+    }
+
+    private static function normalizeListenHost(string $host): string
+    {
+        $host = \trim($host);
+        if (\str_contains($host, '://')) {
+            $parsed = \parse_url($host, PHP_URL_HOST);
+            $host = \is_string($parsed) ? $parsed : '';
+        } elseif ($host !== '' && $host[0] === '[') {
+            $end = \strpos($host, ']');
+            $host = $end === false ? \trim($host, '[]') : \substr($host, 1, $end - 1);
+        } elseif (\substr_count($host, ':') === 1) {
+            [$host] = \explode(':', $host, 2);
+        }
+        $host = \trim($host, '[]');
+        if ($host === '' || $host === '*') {
+            return '0.0.0.0';
+        }
+
+        return $host;
+    }
+
+    private static function formatAuthority(string $host, int $port, bool $alwaysPort = false): string
+    {
+        $authority = \filter_var($host, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)
+            ? '[' . $host . ']'
+            : $host;
+        if ($alwaysPort || $port !== 443) {
+            $authority .= ':' . $port;
+        }
+
+        return $authority;
+    }
+
+    private static function quote(string $value): string
+    {
+        return '"' . \str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
+    }
+
+    private static function ensurePrivateDirectory(string $directory): void
+    {
+        self::assertSafeRuntimeTarget($directory, true);
+        if (!\is_dir($directory) && !@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
+            throw new \RuntimeException('Unable to create WLS protocol-edge runtime directory.');
+        }
+        self::preserveProjectRuntimeOwnership($directory, true);
+        @\chmod($directory, 0700);
+        if (!\is_writable($directory)) {
+            throw new \RuntimeException(
+                'WLS protocol-edge runtime directory is not writable by the project runtime.'
+            );
+        }
+    }
+
+    private static function writeAtomically(
+        string $instanceName,
+        string $path,
+        string $contents,
+        int $mode,
+    ): void {
+        $instanceName = self::normalizeInstanceName($instanceName);
+        self::ensurePrivateDirectory(self::runtimeDirectory($instanceName));
+        self::assertRuntimeStateTarget($instanceName, $path);
+        self::withStateLock(
+            $instanceName,
+            static function () use ($instanceName, $path, $contents, $mode): void {
+                self::cleanupRuntimeStateRecoveryBackups($instanceName, $path);
+                self::writeAtomicallyLocked($path, $contents, $mode);
+            },
+        );
+    }
+
+    private static function writeAtomicallyLocked(
+        string $path,
+        string $contents,
+        int $mode,
+    ): void
+    {
+        self::assertSafeRuntimeTarget($path, false);
+        if ($contents === '' || \strlen($contents) > self::CONFIG_MAX_BYTES) {
+            throw new \RuntimeException(
+                'WLS protocol-edge runtime state exceeds its fixed size contract.'
+            );
+        }
+        GatewayProjectStateFilesystem::atomicWrite(
+            $path,
+            $contents,
+            $mode,
+            self::projectRuntimeOwnershipSeal(),
+        );
+    }
+
+    /**
+     * All reusable protocol-edge facts for one instance share this lock. It
+     * closes token first-create races, config replacement versus cleanup, and
+     * active-state publication versus PID-bound removal on every platform.
+     *
+     * @template TResult
+     * @param \Closure():TResult $operation
+     * @return TResult
+     */
+    private static function withStateLock(
+        string $instanceName,
+        \Closure $operation,
+    ): mixed {
+        $instanceName = self::normalizeInstanceName($instanceName);
+        $directory = self::runtimeDirectory($instanceName);
+        self::ensurePrivateDirectory($directory);
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $directory . DIRECTORY_SEPARATOR . self::STATE_LOCK_FILE,
+            $operation,
+            self::projectRuntimeOwnershipSeal(),
+        );
+    }
+
+    private static function cleanupRuntimeStateRecoveryBackups(
+        string $instanceName,
+        string $path,
+    ): void {
+        self::assertRuntimeStateTarget($instanceName, $path);
+        $leaf = \basename(\str_replace('\\', '/', $path));
+        [$maximum, $label] = match ($leaf) {
+            'edge.token' => [self::TOKEN_MAX_BYTES, 'WLS protocol-edge token'],
+            'active.json' => [self::ACTIVE_STATE_MAX_BYTES, 'WLS protocol-edge active state'],
+            'edge.conf' => [self::CONFIG_MAX_BYTES, 'WLS protocol-edge configuration'],
+            'caddy.json' => [self::CONFIG_MAX_BYTES, 'WLS protocol-edge native configuration'],
+            default => throw new \RuntimeException(
+                'WLS protocol-edge recovery target is unsupported.',
+            ),
+        };
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $path,
+            $maximum,
+            $label,
+            static function (string $contents) use ($instanceName, $path): void {
+                self::validateRuntimeStateContents($instanceName, $path, $contents);
+            },
+        );
+    }
+
+    private static function validateRuntimeStateContents(
+        string $instanceName,
+        string $path,
+        string $contents,
+    ): void {
+        $leaf = \basename(\str_replace('\\', '/', $path));
+        if ($leaf === 'edge.token') {
+            if (\preg_match('/\A[a-f0-9]{64}(?:\r?\n)?\z/D', $contents) !== 1) {
+                throw new \RuntimeException(
+                    'WLS protocol-edge token recovery target is corrupt.',
+                );
+            }
+            return;
+        }
+        if ($leaf === 'caddy.json') {
+            try {
+                $decoded = \json_decode($contents, false, 128, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $exception) {
+                throw new \RuntimeException(
+                    'WLS protocol-edge native recovery target is invalid JSON.',
+                    0,
+                    $exception,
+                );
+            }
+            if (!\is_object($decoded)
+                || !\is_object($decoded->apps ?? null)
+                || !\is_object($decoded->apps->tls ?? null)
+            ) {
+                throw new \RuntimeException(
+                    'WLS protocol-edge native recovery target lacks the TLS app.',
+                );
+            }
+            return;
+        }
+        if ($leaf === 'active.json') {
+            self::validateActiveStateContents($contents);
+            return;
+        }
+        if ($leaf !== 'edge.conf') {
+            throw new \RuntimeException(
+                'WLS protocol-edge recovery target is unsupported.',
+            );
+        }
+
+        $decoded = null;
+        try {
+            $decoded = \json_decode($contents, true, 128, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+        }
+        if (\is_array($decoded)) {
+            self::validateWlsNativeConfigContents($instanceName, $decoded);
+            return;
+        }
+        if (!\str_contains($contents, 'https://')
+            || !\str_contains($contents, 'reverse_proxy ')
+            || !\str_contains($contents, 'max_header_size 64KB')
+            || \preg_match(
+                '/\bheader_up\s+X-WLS-Edge-Token\s+"?[a-f0-9]{64}"?/D',
+                $contents,
+            ) !== 1
+        ) {
+            throw new \RuntimeException(
+                'WLS protocol-edge Caddyfile recovery target is invalid.',
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $config */
+    private static function validateWlsNativeConfigContents(
+        string $instanceName,
+        array $config,
+    ): void {
+        $expected = [
+            'schema_version',
+            'instance',
+            'public',
+            'admin_address',
+            'protocols',
+            'preferred',
+            'alt_svc',
+            'tls',
+            'proxy',
+            'timeouts',
+            'limits',
+            'keep_alive',
+        ];
+        $actual = \array_keys($config);
+        \sort($expected, SORT_STRING);
+        \sort($actual, SORT_STRING);
+        $protocols = $config['protocols'] ?? null;
+        $proxy = $config['proxy'] ?? null;
+        $tls = $config['tls'] ?? null;
+        if ($actual !== $expected
+            || ($config['schema_version'] ?? null) !== 1
+            || !\is_string($config['instance'] ?? null)
+            || !\hash_equals($instanceName, (string)$config['instance'])
+            || !\is_array($config['public'] ?? null)
+            || !\is_array($protocols)
+            || !\array_is_list($protocols)
+            || $protocols === []
+            || \count($protocols) > 3
+            || !\is_string($config['preferred'] ?? null)
+            || !\in_array((string)$config['preferred'], $protocols, true)
+            || !\is_bool($config['alt_svc'] ?? null)
+            || !\is_array($tls)
+            || !\is_array($proxy)
+            || !\hash_equals(
+                self::tokenFile($instanceName),
+                (string)($proxy['token_file'] ?? ''),
+            )
+            || !self::validLoopbackUpstreams($proxy['upstreams'] ?? null)
+            || !\is_string($tls['certificate_file'] ?? null)
+            || \trim((string)$tls['certificate_file']) === ''
+            || !\is_string($tls['private_key_file'] ?? null)
+            || \trim((string)$tls['private_key_file']) === ''
+        ) {
+            throw new \RuntimeException(
+                'WLS-native protocol-edge recovery target is malformed.',
+            );
+        }
+        foreach ($protocols as $protocol) {
+            if (!\is_string($protocol)
+                || !\in_array($protocol, ['h1', 'h2', 'h3'], true)
+            ) {
+                throw new \RuntimeException(
+                    'WLS-native protocol-edge recovery protocol is invalid.',
+                );
+            }
+        }
+    }
+
+    private static function validateActiveStateContents(string $contents): void
+    {
+        try {
+            $state = \json_decode($contents, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new \RuntimeException(
+                'WLS protocol-edge active recovery target is invalid JSON.',
+                0,
+                $exception,
+            );
+        }
+        $expected = [
+            'schema_version',
+            'config_digest',
+            'upstreams',
+            'pid',
+            'process_birth',
+            'pid_namespace_id',
+            'host_boot_id',
+            'activated_at',
+            'activated_monotonic',
+        ];
+        $actual = \is_array($state) ? \array_keys($state) : [];
+        \sort($expected, SORT_STRING);
+        \sort($actual, SORT_STRING);
+        $namespace = \is_array($state) ? ($state['pid_namespace_id'] ?? null) : null;
+        if (!\is_array($state)
+            || $actual !== $expected
+            || ($state['schema_version'] ?? null) !== 2
+            || \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($state['config_digest'] ?? ''),
+            ) !== 1
+            || !self::validLoopbackUpstreams($state['upstreams'] ?? null)
+            || !\is_int($state['pid'] ?? null)
+            || (int)$state['pid'] < 1
+            || \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($state['process_birth'] ?? ''),
+            ) !== 1
+            || !\is_string($namespace)
+            || (PHP_OS_FAMILY === 'Linux'
+                ? \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $namespace) !== 1
+                : $namespace !== '')
+            || \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($state['host_boot_id'] ?? ''),
+            ) !== 1
+            || !\is_string($state['activated_at'] ?? null)
+            || \strlen((string)$state['activated_at']) > 128
+            || \strtotime((string)$state['activated_at']) === false
+            || (!\is_int($state['activated_monotonic'] ?? null)
+                && !\is_float($state['activated_monotonic'] ?? null))
+            || !\is_finite((float)$state['activated_monotonic'])
+            || (float)$state['activated_monotonic'] <= 0.0
+        ) {
+            throw new \RuntimeException(
+                'WLS protocol-edge active recovery target is malformed.',
+            );
+        }
+    }
+
+    private static function validLoopbackUpstreams(mixed $upstreams): bool
+    {
+        if (!\is_array($upstreams)
+            || !\array_is_list($upstreams)
+            || $upstreams === []
+            || \count($upstreams) > 2048
+        ) {
+            return false;
+        }
+        $seen = [];
+        foreach ($upstreams as $upstream) {
+            if (!\is_string($upstream)
+                || \preg_match(
+                    '/\A127\.0\.0\.1:([1-9][0-9]{0,4})\z/D',
+                    $upstream,
+                    $match,
+                ) !== 1
+                || (int)$match[1] > 65535
+                || isset($seen[$upstream])
+            ) {
+                return false;
+            }
+            $seen[$upstream] = true;
+        }
+        return true;
+    }
+
+    private static function assertRuntimeStateTarget(
+        string $instanceName,
+        string $path,
+    ): void {
+        $instanceName = self::normalizeInstanceName($instanceName);
+        self::assertSafeRuntimeTarget($path, false);
+        $directory = \str_replace(
+            '\\',
+            '/',
+            \rtrim(self::runtimeDirectory($instanceName), '/\\'),
+        );
+        $candidateDirectory = \str_replace(
+            '\\',
+            '/',
+            \rtrim(\dirname($path), '/\\'),
+        );
+        if (PHP_OS_FAMILY === 'Windows') {
+            $directory = \strtolower($directory);
+            $candidateDirectory = \strtolower($candidateDirectory);
+        }
+        $leaf = \basename(\str_replace('\\', '/', $path));
+        if (!\hash_equals($directory, $candidateDirectory)
+            || !\in_array($leaf, [
+                'edge.token',
+                'edge.conf',
+                'caddy.json',
+                'active.json',
+            ], true)
+        ) {
+            throw new \RuntimeException(
+                'WLS protocol-edge state target is outside its exact instance namespace.',
+            );
+        }
+    }
+
+    /** @return (\Closure(resource,string):void)|null */
+    private static function projectRuntimeOwnershipSeal(): ?\Closure
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_geteuid')
+            || (int)\posix_geteuid() !== 0
+        ) {
+            return null;
+        }
+        $projectOwner = @\lstat((string)BP);
+        if (!\is_array($projectOwner)
+            || !\is_int($projectOwner['uid'] ?? null)
+            || !\is_int($projectOwner['gid'] ?? null)
+        ) {
+            throw new \RuntimeException(
+                'Unable to resolve the project owner for protocol-edge state.',
+            );
+        }
+        $uid = (int)$projectOwner['uid'];
+        $gid = (int)$projectOwner['gid'];
+        return static function ($handle, string $stagingPath) use ($uid, $gid): void {
+            if (!\function_exists('fchown')
+                || !\function_exists('fchgrp')
+                || !@\fchown($handle, $uid)
+                || !@\fchgrp($handle, $gid)
+            ) {
+                throw new \RuntimeException(
+                    'Unable to preserve the project owner on protocol-edge state: '
+                        . $stagingPath,
+                );
+            }
+        };
+    }
+
+    private static function assertSafeRuntimeTarget(string $path, bool $directory): void
+    {
+        $path = \rtrim($path, '/\\');
+        $projectRoot = \realpath((string)BP);
+        if (!\is_string($projectRoot) || $projectRoot === '' || \is_link((string)BP)) {
+            throw new \RuntimeException('WLS protocol-edge project root is unsafe.');
+        }
+        $projectRoot = \rtrim($projectRoot, '/\\');
+        $candidate = \str_replace('\\', '/', $path);
+        $project = \str_replace('\\', '/', $projectRoot);
+        $compareCandidate = \PHP_OS_FAMILY === 'Windows' ? \strtolower($candidate) : $candidate;
+        $compareProject = \PHP_OS_FAMILY === 'Windows' ? \strtolower($project) : $project;
+        $runtimeRoot = \str_replace('\\', '/', \rtrim(
+            Env::VAR_DIR . 'server' . DS . 'protocol-edge',
+            '/\\',
+        ));
+        $compareRuntimeRoot = \PHP_OS_FAMILY === 'Windows'
+            ? \strtolower($runtimeRoot)
+            : $runtimeRoot;
+        if (!\str_starts_with($compareCandidate, $compareProject . '/')
+            || !\str_starts_with($compareCandidate, $compareRuntimeRoot . '/')
+        ) {
+            throw new \RuntimeException('WLS protocol-edge runtime target escapes its project runtime root.');
+        }
+        $relative = \substr($candidate, \strlen($project) + 1);
+        $segments = \explode('/', $relative);
+        $cursor = $projectRoot;
+        foreach ($segments as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..' || \str_contains($segment, "\0")) {
+                throw new \RuntimeException('WLS protocol-edge runtime target contains traversal.');
+            }
+            $cursor .= DIRECTORY_SEPARATOR . $segment;
+            if (\is_link($cursor)) {
+                throw new \RuntimeException(
+                    'WLS protocol-edge runtime target must not contain a symbolic link.'
+                );
+            }
+        }
+        if (\file_exists($path)
+            && ($directory ? !\is_dir($path) : !\is_file($path))
+        ) {
+            throw new \RuntimeException(
+                'WLS protocol-edge runtime target has an unexpected filesystem type.'
+            );
+        }
+    }
+
+    private static function preserveProjectRuntimeOwnership(string $path, bool $directory): void
+    {
+        self::assertSafeRuntimeTarget($path, $directory);
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_geteuid')
+            || \posix_geteuid() !== 0
+        ) {
+            return;
+        }
+        $projectOwner = @\lstat((string)BP);
+        $target = @\lstat($path);
+        if (!\is_array($projectOwner)
+            || !\is_int($projectOwner['uid'] ?? null)
+            || !\is_int($projectOwner['gid'] ?? null)
+            || !\is_array($target)
+            || \is_link($path)
+            || ($directory ? !\is_dir($path) : !\is_file($path))
+        ) {
+            throw new \RuntimeException(
+                'Unable to establish safe WLS protocol-edge runtime ownership.'
+            );
+        }
+        $uid = (int)$projectOwner['uid'];
+        $gid = (int)$projectOwner['gid'];
+        $ownerApplied = \function_exists('lchown')
+            ? @\lchown($path, $uid)
+            : @\chown($path, $uid);
+        $groupApplied = \function_exists('lchgrp')
+            ? @\lchgrp($path, $gid)
+            : @\chgrp($path, $gid);
+        $actual = @\lstat($path);
+        if (!$ownerApplied
+            || !$groupApplied
+            || !\is_array($actual)
+            || (int)($actual['uid'] ?? -1) !== $uid
+            || (int)($actual['gid'] ?? -1) !== $gid
+        ) {
+            throw new \RuntimeException(
+                'Unable to preserve the project owner on WLS protocol-edge runtime facts.'
+            );
+        }
+    }
+}

@@ -10,6 +10,8 @@
 
 #### 核心开发
 - [模块开发完整指南](./3-开发/模块开发完整指南.md) - 模块开发全流程
+- [扩展点选型](./3-开发/扩展点选型.md) - Event/Query/Hook/Interface 机制选择
+- [事件索引](./event/README.md) - Framework 事件文档树
 - [BinQuery 文档目录](./BinQuery/) - 站外二进制 Query 网关、SDK 与 Provider 开发指南
 - [SSE 可恢复后台任务架构](./3-开发/SSE可恢复后台任务架构.md) - 站内 Worker 查询、一次性 stream ticket 与可恢复任务边界
 - [性能与稳定性预算](./architecture/04-performance-budget.md) - 请求 deadline、严格连接池与 SQLite busy 重试约束

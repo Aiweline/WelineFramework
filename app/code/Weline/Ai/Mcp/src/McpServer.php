@@ -485,6 +485,9 @@ final class McpServer
             'host_only_events_observable' => false,
         ];
 
+        $usageLine = $this->toolUsageReceiptLine($tool, $result, $isError, $receiptId);
+        $resultDigest = Ids::hash(Json::canonical($result));
+
         $result['_weline_mcp'] = [
             'used' => true,
             'server' => self::SERVER_NAME,
@@ -492,7 +495,7 @@ final class McpServer
             'tool' => $tool,
             'called_at' => Clock::now(),
             'receipt_id' => $receiptId,
-            'result_digest' => Ids::hash(Json::canonical($result)),
+            'result_digest' => $resultDigest,
             'is_error' => $isError,
             'response_format' => 'structuredContent',
             'legacy_content' => $mirrorFullResultInContent
@@ -500,21 +503,96 @@ final class McpServer
                     ? 'full_error_mirror'
                     : ($tool === 'get_edit_bundle' ? 'full_bundle_mirror' : 'full_result_mirror'))
                 : 'summary_only',
+            'usage_line' => $usageLine,
             'response_prefix' => self::RESPONSE_PREFIX,
-            'report_contract' => 'Begin every subsequent user-visible progress update and the final report in this turn with the exact response_prefix.',
+            'report_contract' => 'Begin every subsequent user-visible progress update and the final report in this turn with the exact response_prefix. content[0].text repeats usage_line as runtime proof.',
         ];
         $contentPayload = $mirrorFullResultInContent
             ? $result
             : $this->legacyToolSummary($tool, $result, $isError, $receiptId);
 
         return [
-            'content' => [[
-                'type' => 'text',
-                'text' => Json::encode($contentPayload),
-            ]],
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => $usageLine,
+                ],
+                [
+                    'type' => 'text',
+                    'text' => Json::encode($contentPayload),
+                ],
+            ],
             'structuredContent' => $result,
             'isError' => $isError,
         ];
+    }
+
+    /** @param array<string, mixed> $result */
+    private function toolUsageReceiptLine(string $tool, array $result, bool $isError, string $receiptId): string
+    {
+        $segments = [self::RESPONSE_PREFIX . '已调用 ' . $tool];
+        if ($isError) {
+            $error = is_array($result['error'] ?? null) ? $result['error'] : $result;
+            $code = trim((string) ($error['code'] ?? ''));
+            $message = Text::truncate(trim((string) ($error['message'] ?? 'Tool call failed')), 120);
+            $segments[] = '失败';
+            if ($code !== '') {
+                $segments[] = $code;
+            }
+            if ($message !== '' && $message !== $code) {
+                $segments[] = $message;
+            }
+        } else {
+            $segments[] = $this->toolUsageHighlight($tool, $result);
+        }
+        $segments[] = 'receipt=' . $receiptId;
+
+        return implode('，', array_values(array_filter(
+            $segments,
+            static fn (string $part): bool => $part !== '',
+        )));
+    }
+
+    /** @param array<string, mixed> $result */
+    private function toolUsageHighlight(string $tool, array $result): string
+    {
+        $status = trim((string) ($result['status'] ?? ''));
+
+        return match ($tool) {
+            'prepare_project' => $this->joinUsageHighlightParts([
+                $status !== '' ? 'status=' . $status : '',
+                isset($result['readiness_id'])
+                    ? 'readiness_id=' . Text::truncate((string) $result['readiness_id'], 48)
+                    : '',
+                isset($result['git_branch']) ? 'branch=' . (string) $result['git_branch'] : '',
+            ]),
+            'resolve_task_context' => $this->joinUsageHighlightParts([
+                $status !== '' ? 'status=' . $status : '',
+                is_array($result['guidance_bundle'] ?? null)
+                    ? 'fragments=' . count($result['guidance_bundle']['fragments'] ?? [])
+                    : '',
+            ]),
+            'get_edit_bundle' => $this->joinUsageHighlightParts([
+                array_key_exists('ready_for_edit', $result)
+                    ? 'ready_for_edit=' . (($result['ready_for_edit'] ?? false) ? 'true' : 'false')
+                    : '',
+                isset($result['state']) ? 'state=' . (string) $result['state'] : '',
+            ]),
+            'apply_compact_edit' => $this->joinUsageHighlightParts([
+                isset($result['state']) ? 'state=' . (string) $result['state'] : '',
+                !empty($result['rolled_back']) ? 'rolled_back=true' : '',
+            ]),
+            'health' => $status !== '' ? 'status=' . $status : 'ok',
+            default => $status !== '' ? 'status=' . $status : 'ok',
+        };
+    }
+
+    /** @param list<string> $parts */
+    private function joinUsageHighlightParts(array $parts): string
+    {
+        $filtered = array_values(array_filter($parts, static fn (string $part): bool => $part !== ''));
+
+        return $filtered !== [] ? implode('，', $filtered) : 'ok';
     }
 
     /** @param array<string,mixed> $result

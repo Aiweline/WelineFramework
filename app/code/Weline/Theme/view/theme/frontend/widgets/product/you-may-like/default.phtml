@@ -21,33 +21,32 @@
  * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
+
+use Weline\Theme\Helper\ThemeDemoCatalog;
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('you-may-like');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = (string)($this->getData('title') ?? __('猜你喜欢'));
 $subtitle = (string)($this->getData('subtitle') ?? __('根据您的浏览记录推荐'));
 $limit = (int)($this->getData('limit') ?? 8);
 $columns = (string)($this->getData('columns') ?? '4');
 $layout = (string)($this->getData('layout') ?? 'grid');
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
-// 示例产品数据（实际应从推荐引擎获取）
 $products = [];
-for ($i = 1; $i <= $limit; $i++) {
-    $products[] = [
-        'id' => $i,
-        'name' => __('推荐产品 %d', $i),
-        'url' => '/product/recommend-' . $i,
-        'image' => $placeholder,
-        'price' => rand(50, 500),
-        'original_price' => rand(50, 500) * 1.2,
-        'rating' => rand(35, 50) / 10,
-        'review_count' => rand(10, 500),
-        'match_score' => rand(80, 99), // 匹配度
-    ];
+foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
+    $products[] = $demo + ['match_score' => 92 - ($index % 8)];
 }
 
-$widgetId = 'you-may-like-' . uniqid();
 ?>
 
-<div class="widget-you-may-like widget-products" id="<?= $widgetId ?>">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="widget-header">
         <?php if ($title): ?>
             <h2 class="widget-title">
@@ -139,37 +138,37 @@ $widgetId = 'you-may-like-' . uniqid();
             </button>
         <?php endif; ?>
     </div>
-</div>
+</section>
 
 <style>
 /* ========== 猜你喜欢 - 完整样式 ========== */
 
 /* -- 部件容器 -- */
-.widget-you-may-like {
+.<?= $wc ?> {
     padding: 40px 0;
 }
 
 /* -- 头部区域 -- */
-.widget-you-may-like .widget-header {
+.<?= $wc ?> .widget-header {
     text-align: center;
     margin-bottom: 32px;
     position: relative;
 }
 
-.widget-you-may-like .widget-header::after {
+.<?= $wc ?> .widget-header::after {
     content: '';
     display: block;
     width: 60px;
     height: 3px;
     margin: 16px auto 0;
-    background: linear-gradient(90deg, #9b59b6, #8e44ad, #c39bd3);
+    background: linear-gradient(90deg, var(--weline-theme-primary), var(--weline-theme-primary-hover), var(--weline-theme-info));
     border-radius: 3px;
 }
 
-.widget-you-may-like .widget-title {
+.<?= $wc ?> .widget-title {
     font-size: 28px;
     font-weight: 700;
-    color: var(--color-text-primary, #111);
+    color: var(--weline-theme-text);
     margin: 0 0 8px 0;
     display: flex;
     align-items: center;
@@ -177,78 +176,78 @@ $widgetId = 'you-may-like-' . uniqid();
     gap: 10px;
 }
 
-.widget-you-may-like .widget-title i {
+.<?= $wc ?> .widget-title i {
     font-size: 26px;
-    background: linear-gradient(135deg, #9b59b6, #c39bd3);
+    background: linear-gradient(135deg, var(--weline-theme-primary), var(--weline-theme-info));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
-.widget-you-may-like .widget-subtitle {
+.<?= $wc ?> .widget-subtitle {
     font-size: 14px;
-    color: var(--color-text-secondary, #767676);
+    color: var(--weline-theme-text-muted);
     margin: 0;
 }
 
 /* -- 产品网格 -- */
-.widget-you-may-like .products-grid {
+.<?= $wc ?> .products-grid {
     display: grid;
     gap: 20px;
 }
 
-.widget-you-may-like .products-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
-.widget-you-may-like .products-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
-.widget-you-may-like .products-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
-.widget-you-may-like .products-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
+.<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.<?= $wc ?> .products-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.<?= $wc ?> .products-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
 
 /* -- 产品卡片 -- */
-.widget-you-may-like .product-card {
-    background: var(--color-bg-primary, #fff);
-    border: 1px solid var(--color-border-light, #e5e7eb);
+.<?= $wc ?> .product-card {
+    background: var(--weline-theme-surface-raised);
+    border: 1px solid var(--weline-theme-border);
     border-radius: 12px;
     overflow: hidden;
     transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
-.widget-you-may-like .product-card:hover {
+.<?= $wc ?> .product-card:hover {
     transform: translateY(-6px);
-    box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.12));
-    border-color: rgba(155, 89, 182, 0.3);
+    box-shadow: var(--weline-theme-shadow-lg);
+    border-color: color-mix(in srgb, var(--weline-theme-primary) 30%, transparent);
 }
 
 /* -- 图片区域 -- */
-.widget-you-may-like .product-image-wrapper {
+.<?= $wc ?> .product-image-wrapper {
     position: relative;
     overflow: hidden;
-    background: var(--color-bg-secondary, #f8f9fa);
+    background: var(--weline-theme-surface-muted);
     aspect-ratio: 1 / 1;
 }
 
-.widget-you-may-like .product-image-link {
+.<?= $wc ?> .product-image-link {
     display: block;
     width: 100%;
     height: 100%;
 }
 
-.widget-you-may-like .product-image {
+.<?= $wc ?> .product-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.4s ease;
 }
 
-.widget-you-may-like .product-card:hover .product-image {
+.<?= $wc ?> .product-card:hover .product-image {
     transform: scale(1.08);
 }
 
 /* -- 匹配度徽章 -- */
-.widget-you-may-like .match-badge {
+.<?= $wc ?> .match-badge {
     position: absolute;
     bottom: 12px;
     left: 12px;
-    background: linear-gradient(135deg, rgba(155, 89, 182, 0.92), rgba(142, 68, 173, 0.92));
-    color: #fff;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--weline-theme-primary) 92%, transparent), color-mix(in srgb, var(--weline-theme-primary-hover) 92%, transparent));
+    color: var(--weline-theme-on-primary);
     padding: 5px 12px;
     border-radius: 20px;
     font-size: 12px;
@@ -258,21 +257,21 @@ $widgetId = 'you-may-like-' . uniqid();
     gap: 5px;
     z-index: 2;
     backdrop-filter: blur(4px);
-    box-shadow: 0 2px 8px rgba(155, 89, 182, 0.25);
+    box-shadow: var(--weline-theme-shadow-sm);
     animation: matchPulse 3s ease-in-out infinite;
 }
 
 @keyframes matchPulse {
-    0%, 100% { box-shadow: 0 2px 8px rgba(155, 89, 182, 0.25); }
-    50% { box-shadow: 0 2px 16px rgba(155, 89, 182, 0.45); }
+    0%, 100% { box-shadow: var(--weline-theme-shadow-sm); }
+    50% { box-shadow: var(--weline-theme-shadow-md); }
 }
 
-.widget-you-may-like .match-badge i {
+.<?= $wc ?> .match-badge i {
     font-size: 13px;
 }
 
 /* -- 产品操作按钮 -- */
-.widget-you-may-like .product-actions {
+.<?= $wc ?> .product-actions {
     position: absolute;
     top: 12px;
     right: 12px;
@@ -285,57 +284,57 @@ $widgetId = 'you-may-like-' . uniqid();
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-.widget-you-may-like .product-card:hover .product-actions {
+.<?= $wc ?> .product-card:hover .product-actions {
     opacity: 1;
     transform: translateX(0);
 }
 
-.widget-you-may-like .action-btn {
+.<?= $wc ?> .action-btn {
     width: 36px;
     height: 36px;
     border-radius: 50%;
     border: none;
-    background: var(--color-bg-primary, #fff);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    background: var(--weline-theme-surface-raised);
+    box-shadow: var(--weline-theme-shadow-sm);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    color: var(--color-text-secondary, #767676);
+    color: var(--weline-theme-text-muted);
     transition: all 0.25s ease;
 }
 
-.widget-you-may-like .action-btn:hover {
+.<?= $wc ?> .action-btn:hover {
     transform: scale(1.12);
 }
 
-.widget-you-may-like .btn-wishlist:hover {
-    background: #ff4757;
-    color: #fff;
-    box-shadow: 0 4px 12px rgba(255, 71, 87, 0.35);
+.<?= $wc ?> .btn-wishlist:hover {
+    background: var(--weline-theme-danger);
+    color: var(--weline-theme-on-primary);
+    box-shadow: var(--weline-theme-shadow-md);
 }
 
-.widget-you-may-like .btn-quickview:hover {
-    background: #9b59b6;
-    color: #fff;
-    box-shadow: 0 4px 12px rgba(155, 89, 182, 0.35);
+.<?= $wc ?> .btn-quickview:hover {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+    box-shadow: var(--weline-theme-shadow-md);
 }
 
 /* -- 产品信息区域 -- */
-.widget-you-may-like .product-info {
+.<?= $wc ?> .product-info {
     padding: 16px;
 }
 
-.widget-you-may-like .product-name {
+.<?= $wc ?> .product-name {
     margin: 0 0 10px 0;
     font-size: 14px;
     font-weight: 500;
     line-height: 1.4;
 }
 
-.widget-you-may-like .product-name a {
-    color: var(--color-text-primary, #111);
+.<?= $wc ?> .product-name a {
+    color: var(--weline-theme-text);
     text-decoration: none;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -344,70 +343,70 @@ $widgetId = 'you-may-like-' . uniqid();
     transition: color 0.2s ease;
 }
 
-.widget-you-may-like .product-name a:hover {
-    color: #9b59b6;
+.<?= $wc ?> .product-name a:hover {
+    color: var(--weline-theme-primary);
 }
 
 /* -- 评分 -- */
-.widget-you-may-like .product-rating {
+.<?= $wc ?> .product-rating {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
 }
 
-.widget-you-may-like .product-rating .stars {
+.<?= $wc ?> .product-rating .stars {
     display: flex;
     gap: 2px;
 }
 
-.widget-you-may-like .product-rating .stars i {
+.<?= $wc ?> .product-rating .stars i {
     font-size: 13px;
-    color: #ffc107;
+    color: var(--weline-theme-warning);
 }
 
-.widget-you-may-like .product-rating .stars .w-rating-star[data-state="empty"] {
-    color: #ddd;
+.<?= $wc ?> .product-rating .stars .w-rating-star[data-state="empty"] {
+    color: var(--weline-theme-border);
 }
 
-.widget-you-may-like .review-count {
+.<?= $wc ?> .review-count {
     font-size: 12px;
-    color: var(--color-text-tertiary, #a6a6a6);
+    color: var(--weline-theme-text-muted);
 }
 
 /* -- 价格 -- */
-.widget-you-may-like .product-price {
+.<?= $wc ?> .product-price {
     display: flex;
     align-items: baseline;
     gap: 8px;
     margin-bottom: 14px;
 }
 
-.widget-you-may-like .price-original {
+.<?= $wc ?> .price-original {
     font-size: 13px;
-    color: var(--color-text-tertiary, #a6a6a6);
+    color: var(--weline-theme-text-muted);
     text-decoration: line-through;
 }
 
-.widget-you-may-like .price-current {
+.<?= $wc ?> .price-current {
     font-size: 20px;
     font-weight: 700;
-    color: #e74c3c;
+    color: var(--weline-theme-danger);
 }
 
-.widget-you-may-like .price-current::first-letter {
+.<?= $wc ?> .price-current::first-letter {
     font-size: 14px;
     font-weight: 600;
 }
 
 /* -- 加入购物车按钮 -- */
-.widget-you-may-like .btn-add-to-cart {
+.<?= $wc ?> .btn-add-to-cart {
     width: 100%;
     padding: 10px 0;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(135deg, #9b59b6, #8e44ad);
-    color: #fff;
+    background: linear-gradient(135deg, var(--weline-theme-primary), var(--weline-theme-primary-hover));
+    color: var(--weline-theme-on-primary);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -416,63 +415,63 @@ $widgetId = 'you-may-like-' . uniqid();
     justify-content: center;
     gap: 6px;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(155, 89, 182, 0.2);
+    box-shadow: var(--weline-theme-shadow-sm);
 }
 
-.widget-you-may-like .btn-add-to-cart:hover {
-    background: linear-gradient(135deg, #8e44ad, #7d3c98);
-    box-shadow: 0 4px 16px rgba(155, 89, 182, 0.35);
+.<?= $wc ?> .btn-add-to-cart:hover {
+    background: linear-gradient(135deg, var(--weline-theme-primary-hover), var(--weline-theme-primary));
+    box-shadow: var(--weline-theme-shadow-md);
     transform: translateY(-1px);
 }
 
-.widget-you-may-like .btn-add-to-cart:active {
+.<?= $wc ?> .btn-add-to-cart:active {
     transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(155, 89, 182, 0.2);
+    box-shadow: var(--weline-theme-shadow-sm);
 }
 
-.widget-you-may-like .btn-add-to-cart i {
+.<?= $wc ?> .btn-add-to-cart i {
     font-size: 17px;
 }
 
 /* -- 响应式 -- */
 @media (max-width: 1024px) {
-    .widget-you-may-like .products-grid.columns-4,
-    .widget-you-may-like .products-grid.columns-5 {
+    .<?= $wc ?> .products-grid.columns-4,
+    .<?= $wc ?> .products-grid.columns-5 {
         grid-template-columns: repeat(3, 1fr);
     }
 }
 
 @media (max-width: 768px) {
-    .widget-you-may-like .products-grid.columns-3,
-    .widget-you-may-like .products-grid.columns-4,
-    .widget-you-may-like .products-grid.columns-5 {
+    .<?= $wc ?> .products-grid.columns-3,
+    .<?= $wc ?> .products-grid.columns-4,
+    .<?= $wc ?> .products-grid.columns-5 {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    .widget-you-may-like .widget-title {
+    .<?= $wc ?> .widget-title {
         font-size: 22px;
     }
 
-    .widget-you-may-like .product-info {
+    .<?= $wc ?> .product-info {
         padding: 12px;
     }
 
-    .widget-you-may-like .products-grid {
+    .<?= $wc ?> .products-grid {
         gap: 12px;
     }
 }
 
 @media (max-width: 480px) {
-    .widget-you-may-like .products-grid {
+    .<?= $wc ?> .products-grid {
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 10px;
     }
 
-    .widget-you-may-like .price-current {
+    .<?= $wc ?> .price-current {
         font-size: 16px;
     }
 
-    .widget-you-may-like .btn-add-to-cart {
+    .<?= $wc ?> .btn-add-to-cart {
         font-size: 12px;
         padding: 8px 0;
     }

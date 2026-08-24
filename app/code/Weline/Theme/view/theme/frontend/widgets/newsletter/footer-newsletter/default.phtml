@@ -1,9 +1,9 @@
 <?php
 /**
  * 页脚邮件订阅部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {footer-newsletter}
  * @widget.name {页脚订阅}
  * @widget.description {Footer 区域的邮件订阅表单}
@@ -14,7 +14,7 @@
  * @widget.slot {newsletter}
  * @widget.supports {["layout-footer-newsletter","layout-global-footer-newsletter"]}
  * @widget.exclusive {true}
- * 
+ *
  * @param title {default="订阅我们的邮件",type="string",label="标题"}
  * @param description {default="获取最新的优惠信息和新品资讯",type="string",label="描述"}
  * @param placeholder {default="请输入您的邮箱地址",type="string",label="占位符"}
@@ -22,131 +22,145 @@
  * @param layout {default="horizontal",type="select",label="布局",options={horizontal:"横向",vertical:"纵向"}}
  */
 
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('footer-newsletter');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = __((string)($this->getData('title') ?: '订阅我们的邮件'));
 $description = __((string)($this->getData('description') ?: '获取最新的优惠信息和新品资讯'));
 $placeholder = __((string)($this->getData('placeholder') ?: '请输入您的邮箱地址'));
 $buttonText = __((string)($this->getData('button_text') ?: '订阅'));
 $layout = $this->getData('layout') ?? 'horizontal';
-
-$widgetId = 'footer-newsletter-' . uniqid();
 ?>
 
-<div class="widget-footer-newsletter layout-<?= htmlspecialchars($layout) ?>" id="<?= $widgetId ?>">
+<section class="<?= $esc($wc) ?> layout-<?= $esc((string)$layout) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="newsletter-content">
         <?php if ($title): ?>
-            <h3 class="newsletter-title"><?= htmlspecialchars($title) ?></h3>
+            <h3 class="newsletter-title"><?= $esc($title) ?></h3>
         <?php endif; ?>
-        
+
         <?php if ($description): ?>
-            <p class="newsletter-description"><?= htmlspecialchars($description) ?></p>
+            <p class="newsletter-description"><?= $esc($description) ?></p>
         <?php endif; ?>
     </div>
-    
+
     <w:form class="newsletter-form" action="/newsletter/subscribe" method="post">
         <div class="w-form-group">
-            <input type="email" 
-                   name="email" 
-                   class="newsletter-input" 
-                   placeholder="<?= htmlspecialchars($placeholder ?? '') ?>"
+            <input type="email"
+                   name="email"
+                   class="newsletter-input"
+                   placeholder="<?= $esc($placeholder) ?>"
                    required>
             <button type="submit" class="newsletter-button">
-                <?= htmlspecialchars($buttonText) ?>
+                <?= $esc($buttonText) ?>
             </button>
         </div>
     </w:form>
-</div>
+</section>
 
 <style>
-.widget-footer-newsletter {
-    padding: 30px 0;
+.<?= $wc ?> {
+    padding: var(--weline-space-8, 30px) 0;
 }
 
-/* 水平布局 */
-.widget-footer-newsletter.layout-horizontal {
+.<?= $wc ?>.layout-horizontal {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 40px;
+    gap: var(--weline-space-10, 40px);
 }
 
-.widget-footer-newsletter.layout-horizontal .newsletter-content {
+.<?= $wc ?>.layout-horizontal .newsletter-content {
     flex: 1;
 }
 
-.widget-footer-newsletter.layout-horizontal .newsletter-form {
+.<?= $wc ?>.layout-horizontal .newsletter-form {
     flex: 0 0 450px;
 }
 
-/* 垂直布局 */
-.widget-footer-newsletter.layout-vertical {
+.<?= $wc ?>.layout-vertical {
     text-align: center;
     max-width: 500px;
     margin: 0 auto;
 }
 
-.widget-footer-newsletter.layout-vertical .newsletter-content {
-    margin-bottom: 20px;
+.<?= $wc ?>.layout-vertical .newsletter-content {
+    margin-bottom: var(--weline-space-5, 20px);
 }
 
-.widget-footer-newsletter .newsletter-title {
-    font-size: 20px;
+.<?= $wc ?> .newsletter-title {
+    font-size: var(--weline-font-size-xl, 20px);
     font-weight: 600;
-    margin: 0 0 10px;
-    color: #fff;
+    margin: 0 0 var(--weline-space-2, 10px);
+    color: var(--weline-theme-on-primary);
 }
 
-.widget-footer-newsletter .newsletter-description {
-    font-size: 14px;
-    color: rgba(255,255,255,0.7);
+.<?= $wc ?> .newsletter-description {
+    font-size: var(--weline-font-size-sm, 14px);
+    color: color-mix(in srgb, var(--weline-theme-on-primary) 70%, transparent);
     margin: 0;
 }
 
-.widget-footer-newsletter .w-form-group {
+.<?= $wc ?> .w-form-group {
     display: flex;
-    gap: 10px;
+    gap: var(--weline-space-2, 10px);
 }
 
-.widget-footer-newsletter.layout-vertical .w-form-group {
+.<?= $wc ?>.layout-vertical .w-form-group {
     flex-direction: column;
 }
 
-.widget-footer-newsletter .newsletter-input {
+.<?= $wc ?> .newsletter-input {
     flex: 1;
-    padding: 14px 20px;
+    padding: var(--weline-space-3, 14px) var(--weline-space-5, 20px);
     border: none;
-    border-radius: 8px;
-    font-size: 14px;
+    border-radius: var(--weline-radius-md, 8px);
+    font-size: var(--weline-font-size-sm, 14px);
     outline: none;
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-text);
 }
 
-.widget-footer-newsletter .newsletter-button {
-    padding: 14px 30px;
-    background: var(--primary-color, #007bff);
-    color: #fff;
+.<?= $wc ?> .newsletter-button {
+    padding: var(--weline-space-3, 14px) var(--weline-space-8, 30px);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--weline-radius-md, 8px);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all var(--weline-theme-transition-base, 0.3s);
     white-space: nowrap;
 }
 
-.widget-footer-newsletter .newsletter-button:hover {
-    background: var(--primary-dark, #0056b3);
+.<?= $wc ?> .newsletter-button:hover {
+    background: var(--weline-theme-primary-hover);
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    padding: var(--weline-space-4, 16px) 0;
 }
 
 @media (max-width: 768px) {
-    .widget-footer-newsletter.layout-horizontal {
+    .<?= $wc ?>.layout-horizontal {
         flex-direction: column;
         text-align: center;
     }
-    
-    .widget-footer-newsletter.layout-horizontal .newsletter-form {
+
+    .<?= $wc ?>.layout-horizontal .newsletter-form {
         flex: none;
         width: 100%;
     }
-    
-    .widget-footer-newsletter .w-form-group {
+
+    .<?= $wc ?> .w-form-group {
         flex-direction: column;
     }
 }

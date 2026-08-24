@@ -103,6 +103,7 @@ class ParamTypeRenderer implements ParamFormRendererInterface
 
     public function renderForm(int|string $layoutId, array $params, array $config = [], array $options = []): string
     {
+        $config = $this->materializeConfigPaths($config);
         if (empty($params)) {
             return $this->renderEmptyState((string)($options['empty_message'] ?? ''));
         }
@@ -310,5 +311,41 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         }
 
         return $value;
+    }
+
+    /** @param array<string|int,mixed> $configData @return array<string|int,mixed> */
+    private function materializeConfigPaths(array $configData, array $base = []): array
+    {
+        foreach ($configData as $key => $value) {
+            $key = (string)$key;
+            if ($key === '' || !str_contains($key, '.')) {
+                if ($key !== '') {
+                    $base[$key] = $value;
+                }
+                continue;
+            }
+            $segments = explode('.', $key);
+            if (in_array('', $segments, true)) {
+                continue;
+            }
+            $cursor =& $base;
+            $last = array_pop($segments);
+            foreach ($segments as $segment) {
+                $segment = preg_match('/^(?:0|[1-9][0-9]*)$/D', $segment) === 1
+                    ? (int)$segment
+                    : $segment;
+                if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+                    $cursor[$segment] = [];
+                }
+                $cursor =& $cursor[$segment];
+            }
+            $last = preg_match('/^(?:0|[1-9][0-9]*)$/D', (string)$last) === 1
+                ? (int)$last
+                : (string)$last;
+            $cursor[$last] = $value;
+            unset($cursor);
+        }
+
+        return $base;
     }
 }

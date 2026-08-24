@@ -65,7 +65,9 @@ PHP;
         }
         foreach ($keys as $key) {
             $expr = (string)$attributes[$key];
-            $snippets[] = '$' . self::targetName($key) . ' = Weline_Taglib_resolve(' . var_export($expr, true) . ', get_defined_vars());';
+            $target = '$' . self::targetName($key);
+            $compiledExpr = self::compileAttributeValueExpression($expr);
+            $snippets[] = $target . ' = ' . $compiledExpr . ';';
         }
 
         $pairs = [];
@@ -82,6 +84,39 @@ PHP;
         }
 
         return implode("\n", $snippets);
+    }
+
+    /**
+     * Compile one tag attribute to a PHP expression.
+     *
+     * Declarative paths (foo.bar|default) go through Weline_Taglib_resolve.
+     * Short echo / inline PHP in attributes must execute in the current template scope.
+     */
+    private static function compileAttributeValueExpression(string $expr): string
+    {
+        $trimmed = trim($expr);
+        if ($trimmed === '') {
+            return 'Weline_Taglib_resolve(' . var_export($expr, true) . ', get_defined_vars())';
+        }
+
+        if (preg_match('/^<\?=\s*(.+?)\s*\?>$/s', $trimmed, $matches) === 1) {
+            return '(string)(' . trim($matches[1]) . ')';
+        }
+
+        if (preg_match('/^<\?php\s+(.+?)\s*\?>$/s', $trimmed, $matches) === 1) {
+            $inner = trim($matches[1]);
+            if (str_starts_with($inner, 'echo ')) {
+                return '(string)(' . trim(substr($inner, 5)) . ')';
+            }
+
+            return '(' . $inner . ')';
+        }
+
+        if (preg_match('/^<\?\s+(.+?)\s*\?>$/s', $trimmed, $matches) === 1) {
+            return '(' . trim($matches[1]) . ')';
+        }
+
+        return 'Weline_Taglib_resolve(' . var_export($expr, true) . ', get_defined_vars())';
     }
 
     private static function targetName(string $attr): string

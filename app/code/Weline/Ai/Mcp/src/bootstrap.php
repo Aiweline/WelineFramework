@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Support.php';
+require_once __DIR__ . '/GuidanceWorkflowCatalog.php';
 require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/SessionIdentity.php';
 require_once __DIR__ . '/ProjectResolver.php';
@@ -17,6 +18,7 @@ require_once __DIR__ . '/PhpSymbolParser.php';
 require_once __DIR__ . '/PhpParserResultDecoder.php';
 require_once __DIR__ . '/ProjectIndexer.php';
 require_once __DIR__ . '/ProjectRetriever.php';
+require_once __DIR__ . '/FrameworkBranchGuard.php';
 require_once __DIR__ . '/ProjectReadinessService.php';
 require_once __DIR__ . '/CodexInvoker.php';
 require_once __DIR__ . '/LearningNoveltyService.php';

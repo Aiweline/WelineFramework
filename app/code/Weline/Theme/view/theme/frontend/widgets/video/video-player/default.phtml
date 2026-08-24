@@ -1,9 +1,9 @@
 <?php
 /**
  * 视频播放器部件
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * 
+ *
  * @widget.code {video-player}
  * @widget.name {视频播放器}
  * @widget.description {视频播放器，支持YouTube、Vimeo和自托管视频}
@@ -12,7 +12,7 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["*"]}
  * @widget.compatible {true}
- * 
+ *
  * @param video_type {default="youtube",type="select",label="视频类型",options={youtube:"YouTube",vimeo:"Vimeo",self:"自托管",embed:"嵌入代码"}}
  * @param video_url {default="",type="string",label="视频URL"}
  * @param embed_code {default="",type="textarea",label="嵌入代码"}
@@ -21,6 +21,14 @@
  * @param muted {default=false,type="bool",label="静音播放"}
  */
 
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('video-player');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $videoType = $this->getData('video_type') ?? 'youtube';
 $videoUrl = $this->getData('video_url') ?? '';
 $embedCode = $this->getData('embed_code') ?? '';
@@ -30,7 +38,6 @@ $muted = (bool)($this->getData('muted') ?? false);
 $loop = (bool)($this->getData('loop') ?? false);
 $aspectRatio = $this->getData('aspect_ratio') ?? '16:9';
 
-// 计算宽高比
 $ratioMap = [
     '16:9' => '56.25%',
     '4:3'  => '75%',
@@ -177,7 +184,6 @@ $videoUrl = $safeVideoUrl($videoUrl);
 $poster = $safeVideoUrl($poster);
 $embedCode = $sanitizeEmbedCode($embedCode);
 
-// 提取YouTube/Vimeo视频ID
 $videoId = '';
 if ($videoType === 'youtube' && $videoUrl) {
     preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\?\/]+)/', $videoUrl, $matches);
@@ -186,14 +192,15 @@ if ($videoType === 'youtube' && $videoUrl) {
     preg_match('/vimeo\.com\/(\d+)/', $videoUrl, $matches);
     $videoId = $matches[1] ?? '';
 }
-
-$widgetId = 'video-player-' . uniqid();
 ?>
 
-<div class="widget-video-player" id="<?= $widgetId ?>">
-    <div class="video-container" style="padding-top: <?= $paddingTop ?>;">
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <div class="video-container" style="--wc-aspect-padding: <?= $esc($paddingTop) ?>">
         <?php if ($videoType === 'youtube' && $videoId): ?>
-            <iframe src="https://www.youtube.com/embed/<?= htmlspecialchars($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $muted ? 'mute=1&' : '' ?><?= $loop ? 'loop=1&playlist=' . htmlspecialchars($videoId) : '' ?>"
+            <iframe src="https://www.youtube.com/embed/<?= $esc($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $muted ? 'mute=1&' : '' ?><?= $loop ? 'loop=1&playlist=' . $esc($videoId) : '' ?>"
                     class="video-iframe"
                     frameborder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -201,9 +208,9 @@ $widgetId = 'video-player-' . uniqid();
                     referrerpolicy="strict-origin-when-cross-origin"
                     loading="lazy"
                     allowfullscreen></iframe>
-        
+
         <?php elseif ($videoType === 'vimeo' && $videoId): ?>
-            <iframe src="https://player.vimeo.com/video/<?= htmlspecialchars($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $muted ? 'muted=1&' : '' ?><?= $loop ? 'loop=1' : '' ?>"
+            <iframe src="https://player.vimeo.com/video/<?= $esc($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $muted ? 'muted=1&' : '' ?><?= $loop ? 'loop=1' : '' ?>"
                     class="video-iframe"
                     frameborder="0"
                     allow="autoplay; fullscreen; picture-in-picture"
@@ -211,21 +218,21 @@ $widgetId = 'video-player-' . uniqid();
                     referrerpolicy="strict-origin-when-cross-origin"
                     loading="lazy"
                     allowfullscreen></iframe>
-        
+
         <?php elseif ($videoType === 'local' && $videoUrl): ?>
             <video class="video-native"
                    <?= $autoplay ? 'autoplay' : '' ?>
                    <?= $muted ? 'muted' : '' ?>
                    <?= $loop ? 'loop' : '' ?>
-                   <?= $poster ? 'poster="' . htmlspecialchars($poster) . '"' : '' ?>
+                   <?= $poster ? 'poster="' . $esc($poster) . '"' : '' ?>
                    controls>
-                <source src="<?= htmlspecialchars($videoUrl) ?>" type="video/mp4">
+                <source src="<?= $esc($videoUrl) ?>" type="video/mp4">
                 <?= __('您的浏览器不支持视频标签。') ?>
             </video>
-        
+
         <?php elseif ($videoType === 'embed' && $embedCode): ?>
             <?= $embedCode ?>
-        
+
         <?php else: ?>
             <div class="video-placeholder">
                 <w:icon name="play" size="sm"></w:icon>
@@ -233,23 +240,24 @@ $widgetId = 'video-player-' . uniqid();
             </div>
         <?php endif; ?>
     </div>
-</div>
+</section>
 
 <style>
-.widget-video-player {
-    margin: 20px 0;
+.<?= $wc ?> {
+    margin: var(--weline-space-5, 20px) 0;
 }
 
-.widget-video-player .video-container {
+.<?= $wc ?> .video-container {
     position: relative;
     width: 100%;
-    background: #000;
-    border-radius: 12px;
+    padding-top: var(--wc-aspect-padding, 56.25%);
+    background: var(--weline-theme-overlay);
+    border-radius: var(--weline-radius-lg, 12px);
     overflow: hidden;
 }
 
-.widget-video-player .video-iframe,
-.widget-video-player .video-native {
+.<?= $wc ?> .video-iframe,
+.<?= $wc ?> .video-native {
     position: absolute;
     top: 0;
     left: 0;
@@ -257,7 +265,7 @@ $widgetId = 'video-player-' . uniqid();
     height: 100%;
 }
 
-.widget-video-player .video-placeholder {
+.<?= $wc ?> .video-placeholder {
     position: absolute;
     top: 0;
     left: 0;
@@ -267,16 +275,21 @@ $widgetId = 'video-player-' . uniqid();
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--weline-theme-on-primary);
 }
 
-.widget-video-player .video-placeholder i {
+.<?= $wc ?> .video-placeholder i {
     font-size: 60px;
     opacity: 0.8;
 }
 
-.widget-video-player .video-placeholder p {
-    margin: 10px 0 0;
+.<?= $wc ?> .video-placeholder p {
+    margin: var(--weline-space-2, 10px) 0 0;
     opacity: 0.6;
+}
+
+.widget-preview-canvas .<?= $wc ?>,
+.<?= $wc ?>.is-preview {
+    margin: var(--weline-space-3, 12px) 0;
 }
 </style>

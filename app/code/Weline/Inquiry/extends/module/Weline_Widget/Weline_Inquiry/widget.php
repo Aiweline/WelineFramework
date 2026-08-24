@@ -9,7 +9,7 @@ return [
         'type' => 'content',
         'code' => 'inquiry_form',
         'area' => 'frontend',
-        'template' => 'Weline_Inquiry::widgets/inquiry-form.phtml',
+        'template' => 'Weline_Inquiry::templates/widgets/inquiry-form.phtml',
         'params' => [
             'inquiry_code' => ['label' => 'Inquiry form', 'type' => 'query_select', 'query_provider' => 'inquiry', 'query_operation' => 'searchPublished', 'value_key' => 'code', 'label_key' => 'name', 'required' => true, 'group' => 'basic'],
             'mode' => ['label' => 'Display mode', 'type' => 'select', 'options' => [['value' => 'inline', 'label' => 'Inline'], ['value' => 'modal', 'label' => 'Modal'], ['value' => 'trigger', 'label' => 'Trigger']], 'default' => 'inline', 'group' => 'basic'],
