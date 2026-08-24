@@ -740,6 +740,8 @@
         layoutIdentity: {},
         sidePanels: { configOpen: true, widgetOpen: true },
         slotsPanelOpen: false,
+        interactionMode: 'edit', // edit：插槽 hover/面板；preview：真预览
+        interactionModePanelsSnapshot: null,
         fullscreenSidePanelsSnapshot: null,
         editorFullscreenFallback: false,
         configLocale: '',
@@ -1324,7 +1326,110 @@
         }
     }
 
+    function isEditInteractionMode() {
+        return state.interactionMode !== 'preview';
+    }
+
+    function isPreviewInteractionMode() {
+        return state.interactionMode === 'preview';
+    }
+
+    function normalizeInteractionMode(mode) {
+        return mode === 'preview' ? 'preview' : 'edit';
+    }
+
+    function notifyPreviewInteractionMode(mode = state.interactionMode) {
+        const previewWindow = elements.previewFrame?.contentWindow;
+        if (!previewWindow) {
+            return;
+        }
+        previewWindow.postMessage({
+            source: 'weline-theme-editor',
+            type: 'interaction-mode',
+            mode: normalizeInteractionMode(mode),
+        }, window.location.origin);
+    }
+
+    function clearPreviewEditChrome() {
+        try {
+            const iframeDoc = elements.previewFrame?.contentDocument
+                || elements.previewFrame?.contentWindow?.document
+                || null;
+            if (!iframeDoc) {
+                return;
+            }
+            iframeDoc.querySelectorAll('.widget-wrapper.show-actions, .widget-wrapper.selected').forEach((el) => {
+                el.classList.remove('show-actions', 'selected');
+            });
+            iframeDoc.querySelectorAll('.slot-active, [data-state="selected"]').forEach((el) => {
+                el.classList.remove('slot-active');
+                if (el.getAttribute('data-state') === 'selected') {
+                    el.removeAttribute('data-state');
+                }
+            });
+            iframeDoc.querySelectorAll('.slot-info-card').forEach((el) => el.remove());
+        } catch (error) {
+            // Cross-origin or unloaded iframe: ignore.
+        }
+    }
+
+    function applyInteractionModeUi() {
+        if (!elements.container) {
+            return;
+        }
+        const preview = isPreviewInteractionMode();
+        elements.container.classList.toggle('interaction-preview-mode', preview);
+        elements.container.setAttribute('data-interaction-mode', state.interactionMode || 'edit');
+        document.querySelectorAll('[data-theme-editor-action="set-interaction-mode"]').forEach((btn) => {
+            const mode = normalizeInteractionMode(btn.getAttribute('data-interaction-mode'));
+            const active = mode === normalizeInteractionMode(state.interactionMode);
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', String(active));
+        });
+    }
+
+    function setInteractionMode(mode, options = {}) {
+        const next = normalizeInteractionMode(mode);
+        const prev = normalizeInteractionMode(state.interactionMode);
+        const force = options.force === true;
+
+        if (next === prev && !force) {
+            applyInteractionModeUi();
+            notifyPreviewInteractionMode(next);
+            return;
+        }
+
+        if (next === 'preview') {
+            cancelPreviewDragSession();
+            state.interactionModePanelsSnapshot = {
+                configOpen: state.sidePanels.configOpen === true,
+                widgetOpen: state.sidePanels.widgetOpen === true,
+                slotsPanelOpen: state.slotsPanelOpen === true,
+            };
+            setSidePanelOpen('config', false, false);
+            setSidePanelOpen('widget', false, false);
+            setSlotsPanelOpen(false, false);
+            if (options.skipViewSwitch !== true) {
+                switchPreviewView('preview');
+            }
+            clearPreviewEditChrome();
+        } else if (prev === 'preview' && state.interactionModePanelsSnapshot && options.restorePanels !== false) {
+            const snap = state.interactionModePanelsSnapshot;
+            state.interactionModePanelsSnapshot = null;
+            setSidePanelOpen('config', snap.configOpen === true, false);
+            setSidePanelOpen('widget', snap.widgetOpen === true, false);
+            setSlotsPanelOpen(snap.slotsPanelOpen === true, false);
+        }
+
+        state.interactionMode = next;
+        applyInteractionModeUi();
+        notifyPreviewInteractionMode(next);
+    }
+
     function openWidgetPanelForSlotSelection(slot) {
+        if (isPreviewInteractionMode()) {
+            setInteractionMode('edit');
+        }
         setSidePanelOpen('widget', true);
 
         loadWidgetListIfEmpty().then(function() {
@@ -1339,6 +1444,9 @@
     }
 
     function openConfigPanelForWidgetSelection() {
+        if (isPreviewInteractionMode()) {
+            setInteractionMode('edit');
+        }
         setSidePanelOpen('config', true);
     }
 
@@ -3549,6 +3657,7 @@
 
         initSidePanels();
         initSlotsPanel();
+        applyInteractionModeUi();
         initWidgetLibraryTabs();
 
         // 当前布局信息
@@ -3647,20 +3756,32 @@
                 return;
             }
             const action = actionButton.getAttribute('data-theme-editor-action') || '';
-            if (action === 'open-config-panel') {
+            if (action === 'set-interaction-mode') {
                 e.preventDefault();
+                setInteractionMode(actionButton.getAttribute('data-interaction-mode') || 'edit');
+            } else if (action === 'open-config-panel') {
+                e.preventDefault();
+                if (isPreviewInteractionMode()) {
+                    return;
+                }
                 setSidePanelOpen('config', state.sidePanels.configOpen !== true);
             } else if (action === 'close-config-panel') {
                 e.preventDefault();
                 setSidePanelOpen('config', false);
             } else if (action === 'open-widget-panel') {
                 e.preventDefault();
+                if (isPreviewInteractionMode()) {
+                    return;
+                }
                 setSidePanelOpen('widget', state.sidePanels.widgetOpen !== true);
             } else if (action === 'close-widget-panel') {
                 e.preventDefault();
                 setSidePanelOpen('widget', false);
             } else if (action === 'toggle-slots-panel') {
                 e.preventDefault();
+                if (isPreviewInteractionMode()) {
+                    return;
+                }
                 setSlotsPanelOpen(state.slotsPanelOpen !== true);
             } else if (action === 'close-slots-panel') {
                 e.preventDefault();
@@ -4293,6 +4414,7 @@
                 setTimeout(() => initWidgetHoverActions(), 100);
                 setTimeout(() => initWidgetHoverActions(), 400);
                 setTimeout(() => initWidgetHoverActions(), 1200);
+                setTimeout(() => setInteractionMode(state.interactionMode || 'edit', { force: true, skipViewSwitch: true, restorePanels: false }), 50);
             });
 
             // 添加超时机制：如果 5 秒后仍未加载完成，强制隐藏加载状态
@@ -4910,6 +5032,18 @@
         if (!data || data.source !== 'weline-theme-preview' || !data.type) return;
 
         console.log('收到 iframe 消息:', data);
+
+        if (isPreviewInteractionMode() && [
+            'widget-selected',
+            'slot-clicked',
+            'slot-selected',
+            'drop-candidate',
+            'drop-candidate-clear',
+            'widget-dropped',
+            'widget-rejected',
+        ].includes(data.type)) {
+            return;
+        }
 
         switch (data.type) {
             case 'widget-selected':
@@ -9266,6 +9400,9 @@
      */
     function switchPreviewView(viewType) {
         cancelPreviewDragSession();
+        if (viewType === 'structure' && isPreviewInteractionMode()) {
+            setInteractionMode('edit', { skipViewSwitch: true });
+        }
         if (viewType === 'structure' && state.previewStatus !== 'draft') {
             showToast('已发布预览下仅支持实时预览视图', 'info');
             viewType = 'preview';
@@ -9779,6 +9916,11 @@
     }
 
     function handleDragStart(e) {
+        if (isPreviewInteractionMode()) {
+            e.preventDefault();
+            showToast(translateUiText('当前为预览模式，请先切换到编辑'), 'info');
+            return;
+        }
         if (!isWidgetLibraryItemActive(this)) {
             showToast(translateUiText('请先切换到对应部件分类'), 'warning');
             e.preventDefault();
@@ -10917,6 +11059,9 @@
         doc.body._penetrateStateBound = true;
 
         doc.body.addEventListener('mousemove', function(e) {
+            if (isPreviewInteractionMode()) {
+                return;
+            }
             state.lastHoverPoint = { x: e.clientX, y: e.clientY };
             const stack = getWidgetStackAtPoint(doc, e.clientX, e.clientY);
             const prevTop = state.nestStack[0];
@@ -10949,6 +11094,9 @@
 
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
+            if (isPreviewInteractionMode()) {
+                return;
+            }
             const button = e.target.closest('.widget-hover-actions button');
 
             // 立即阻止事件传播（在检查之前）
@@ -11282,6 +11430,9 @@
 
         // 使用事件委托，监听所有 slot 的点击
         doc.body.addEventListener('click', function(e) {
+            if (isPreviewInteractionMode()) {
+                return;
+            }
             // 操作按钮点击始终跳过
             if (e.target.closest('.widget-hover-actions')) {
                 return;
