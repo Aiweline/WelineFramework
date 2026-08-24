@@ -54,8 +54,9 @@ View/
 
 ## 生产静态资源命名空间
 
-`TraitTemplate` 在生产模式生成模块 `view/statics` URL 和发布目录时，只能使用公开设计主题命名空间，
-例如 `Weline/default`。自动安装可能把主题源码记录成 `app/code/Weline/Theme/view/theme` 的绝对路径；
-该绝对路径、`Weline_Theme::view/theme` 等模块源码标识都必须回退到框架默认公开命名空间，禁止直接拼入
-`/static/`。位于 `app/design` 下的绝对主题路径应转成相对 `Vendor/theme`，已有相对自定义主题路径保持不变。
+`TraitTemplate` 在生产模式生成模块 `view/statics` URL 和发布目录时使用公开主题命名空间。
+框架内置默认主题直接使用 `Weline/Theme/view/theme`；自动安装可能把主题源码记录成
+`app/code/Weline/Theme/view/theme` 的绝对路径，该绝对路径与 `Weline_Theme::view/theme` 等模块标识
+都会归一化到 `Weline/Theme/view/theme`。位于 `app/design` 下的绝对主题路径应转成相对 `Vendor/theme`，
+已有相对自定义主题路径保持不变。
 模块静态目录缓存键必须同时包含归一化后的公开主题命名空间，避免部署配置或主题切换后继续复用旧目录。

@@ -15,17 +15,15 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
     {
         $root = dirname(__DIR__, 6);
 
-        $welineThemeCss = $root . '/app/design/Weline/default/frontend/assets/css/theme.css';
+        $frameworkThemeCss = $root . '/app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css';
         $weshopSpacingCss = $root . '/app/design/WeShop/default/frontend/variables/_spacing.css';
         $frameworkSpacingCss = $root . '/app/code/Weline/Theme/view/theme/frontend/variables/_spacing.css';
-        $frameworkThemeCss = $root . '/app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css';
 
-        self::assertFileExists($welineThemeCss);
+        self::assertFileExists($frameworkThemeCss);
         self::assertFileExists($weshopSpacingCss);
         self::assertFileExists($frameworkSpacingCss);
-        self::assertFileExists($frameworkThemeCss);
 
-        self::assertStringContainsString('--theme-container-max-width: 1440px;', (string)file_get_contents($welineThemeCss));
+        self::assertStringContainsString('--theme-container-max-width: 1440px;', (string)file_get_contents($frameworkThemeCss));
         self::assertStringContainsString('--weshop-container-max-width: 1440px;', (string)file_get_contents($weshopSpacingCss));
         self::assertStringContainsString('--spacing-container-max-width: 1440px;', (string)file_get_contents($frameworkSpacingCss));
         self::assertStringContainsString('var(--weshop-container-max-width, 1440px)', (string)file_get_contents($frameworkThemeCss));
@@ -36,7 +34,6 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
         $root = dirname(__DIR__, 6);
 
         foreach ([
-            $root . '/app/design/Weline/default/frontend',
             $root . '/app/design/WeShop/default/frontend',
         ] as $directory) {
             self::assertDirectoryExists($directory);

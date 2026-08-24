@@ -3235,21 +3235,70 @@ textarea::-webkit-scrollbar-thumb:hover,
     }
     
     .header-main-nav {
-        flex-wrap: nowrap; /* 移动端也保持一行，靠滑动解决 */
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.5rem;
+        scrollbar-width: none;
+    }
+
+    .header-main-nav::-webkit-scrollbar {
+        display: none;
     }
     
+    .header-nav-left {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .header-categories {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+    }
+
     .header-nav-fill {
-        display: flex; /* 移动端也显示，以展示“更多”按钮 */
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        justify-content: flex-start;
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: auto;
+        min-height: 40px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .header-nav-fill .nav-menu,
+    .header-nav-fill .nav-links-list {
+        flex-wrap: nowrap;
+        width: max-content;
+    }
+
+    .header-nav-fill .nav-item,
+    .header-nav-fill .nav-links-list li {
+        flex: 0 0 auto;
+    }
+
+    .header-nav-fill .nav-link,
+    .header-nav-fill .nav-links-list a {
+        white-space: nowrap;
     }
     
     .categories-nav {
         overflow-x: auto;
-        overflow-y: visible; /* 允许子菜单垂直溢出显示 */
+        overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
     }
     
     .categories-list {
         flex-wrap: nowrap;
+        width: max-content;
+    }
+
+    .category-item {
+        flex: 0 0 auto;
     }
     
     /* 在小屏幕上，megamenu 调整为单列或双列布局 */

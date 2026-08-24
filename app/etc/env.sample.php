@@ -643,9 +643,9 @@ return [
     // ==================== 主题配置 ====================
     'theme' => [
         'id' => 1,
-        'module_name' => 'Weline_Default',
+        'module_name' => 'Weline_Theme',
         'name' => 'default',
-        'path' => 'Weline\\default',
+        'path' => 'Weline/Theme/view/theme',
         'parent_id' => 0,
         'is_active' => 1,
         'create_time' => null,
