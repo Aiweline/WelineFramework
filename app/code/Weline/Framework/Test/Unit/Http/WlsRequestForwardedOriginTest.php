@@ -142,6 +142,38 @@ final class WlsRequestForwardedOriginTest extends TestCase
         );
     }
 
+    public function testGlobalsEmulatorKeepsDispatcherPublicAuthoritySnapshot(): void
+    {
+        $request = $this->createRequest(
+            "Host: app.example.com:23922\r\n"
+            . "Weline-Via-Dispatcher: 1\r\n"
+            . "Weline-Original-Host: app.example.com\r\n"
+            . "Weline-Original-Scheme: https\r\n"
+            . "Weline-Original-Port: 443\r\n"
+            . "Weline-Original-Ssl: on\r\n",
+            [
+                'WLS_PORT' => 23922,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        $snapshot = $request->getParsedServerSnapshot();
+        self::assertSame('app.example.com', $snapshot['HTTP_HOST'] ?? null);
+        self::assertSame('443', $snapshot['SERVER_PORT'] ?? null);
+
+        $emulator = new \Weline\Framework\Runtime\GlobalsEmulator();
+        try {
+            $emulator->emulate($request);
+            self::assertSame('app.example.com', $_SERVER['HTTP_HOST'] ?? null);
+            self::assertSame('app.example.com', $_SERVER['SERVER_NAME'] ?? null);
+            self::assertSame('443', $_SERVER['SERVER_PORT'] ?? null);
+            self::assertSame('https', $_SERVER['REQUEST_SCHEME'] ?? null);
+            self::assertSame('https://app.example.com/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
+        } finally {
+            $emulator->reset();
+        }
+    }
+
     public function testTrustedLocalClientWithoutForwardedHeadersUsesListenPort(): void
     {
         $request = $this->createRequest(

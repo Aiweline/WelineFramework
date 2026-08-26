@@ -127,7 +127,12 @@ class GlobalsEmulator
         $server['REQUEST_METHOD'] = $request->getMethod() ?? 'GET';
         $server['REQUEST_URI'] = $request->getUri() ?? '/';
         $server['QUERY_STRING'] = $request->getQueryString() ?? '';
-        $server['HTTP_HOST'] = $request->getHeader('Host') ?? 'localhost';
+        // WlsRequest already normalized the public authority after the transport
+        // authenticated Dispatcher metadata. Never replace that immutable result
+        // with the raw wire Host, which may contain an internal Worker port.
+        $server['HTTP_HOST'] = $parsedServer['HTTP_HOST']
+            ?? $request->getHeader('Host')
+            ?? 'localhost';
         $server['HTTP_USER_AGENT'] = $request->getHeader('User-Agent') ?? '';
         $server['HTTP_ACCEPT'] = $request->getHeader('Accept') ?? '*/*';
         $server['HTTP_ACCEPT_LANGUAGE'] = $request->getHeader('Accept-Language') ?? '';
@@ -139,21 +144,27 @@ class GlobalsEmulator
         $uriParts = \parse_url($server['REQUEST_URI']);
         $server['PATH_INFO'] = $uriParts['path'] ?? '/';
 
-        $server['HTTPS'] = $request->isSecure() ? 'on' : '';
-        $server['REQUEST_SCHEME'] = $request->isSecure() ? 'https' : 'http';
+        $server['HTTPS'] = $parsedServer['HTTPS']
+            ?? ($request->isSecure() ? 'on' : '');
+        $server['REQUEST_SCHEME'] = $parsedServer['REQUEST_SCHEME']
+            ?? ($request->isSecure() ? 'https' : 'http');
 
         $hostParts = \explode(':', (string)$server['HTTP_HOST']);
-        $server['SERVER_NAME'] = $hostParts[0];
-        $server['SERVER_PORT'] = $hostParts[1] ?? ($request->isSecure() ? '443' : '80');
+        $server['SERVER_NAME'] = $parsedServer['SERVER_NAME'] ?? $hostParts[0];
+        $server['SERVER_PORT'] = $parsedServer['SERVER_PORT']
+            ?? $hostParts[1]
+            ?? ($request->isSecure() ? '443' : '80');
 
         $server['REQUEST_TIME'] = \time();
         $server['REQUEST_TIME_FLOAT'] = \microtime(true);
-        $server['WELINE_ORIGIN_REQUEST_URI'] = $server['REQUEST_URI'];
-        $server['WELINE_FULL_REQUEST_URI'] = $server['REQUEST_SCHEME'] . '://' . $server['HTTP_HOST'] . $server['REQUEST_URI'];
-        $server['WELINE_AREA'] = 'frontend';
-        $server['WELINE_AREA_ROUTE'] = '';
-        $server['WELINE_WEBSITE_URL'] = '';
-        $server['WELINE_URL_PARSED'] = false;
+        $server['WELINE_ORIGIN_REQUEST_URI'] = $parsedServer['WELINE_ORIGIN_REQUEST_URI']
+            ?? $server['REQUEST_URI'];
+        $server['WELINE_FULL_REQUEST_URI'] = $parsedServer['WELINE_FULL_REQUEST_URI']
+            ?? ($server['REQUEST_SCHEME'] . '://' . $server['HTTP_HOST'] . $server['REQUEST_URI']);
+        $server['WELINE_AREA'] = $parsedServer['WELINE_AREA'] ?? 'frontend';
+        $server['WELINE_AREA_ROUTE'] = $parsedServer['WELINE_AREA_ROUTE'] ?? '';
+        $server['WELINE_WEBSITE_URL'] = $parsedServer['WELINE_WEBSITE_URL'] ?? '';
+        $server['WELINE_URL_PARSED'] = $parsedServer['WELINE_URL_PARSED'] ?? false;
         $this->applyCookieRouteVariant($server);
 
         foreach ($request->getHeaders() as $name => $value) {
