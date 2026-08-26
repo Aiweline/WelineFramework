@@ -11,6 +11,7 @@
 "Language updated.","Language updated."
 "Please enter a valid email address.","Please enter a valid email address."
 "Session token is required.","Session token is required."
+"Captcha verification failed or expired. Please try again.","Captcha verification failed or expired. Please try again."
 "Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
 "Verification email has been sent.","Verification email has been sent."
 "Customer Service Query","Customer Service Query"
@@ -24,9 +25,11 @@
 语言代码不能为空,"Mã ngôn ngữ không thể để trống"
 语言设置成功,"Đặt ngôn ngữ thành công"
 设置语言失败：%{1},"Đặt ngôn ngữ thất bại: %{1}"
+人机验证加载失败，请稍后重试,人机验证加载失败，请稍后重试
 邮箱地址不能为空,"Địa chỉ email không thể để trống"
 邮箱格式不正确,"Định dạng email không đúng"
 会话令牌不能为空,"Token phiên không thể để trống"
+人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
 验证邮件已发送，请查收,"Email xác minh đã được gửi"
 发送验证邮件失败，请稍后重试,"Không thể gửi email xác minh"
 发送验证邮件失败：%{1},"Không thể gửi email xác minh: %{1}"
@@ -122,6 +125,10 @@ settings,settings
 分钟,phút
 最长,"Dài nhất"
 秒,giây
+提示,提示
+请注意,请注意
+操作失败,操作失败
+知道了,知道了
 客服服务,"Dịch vụ khách hàng"
 我的语言,"Ngôn ngữ của tôi"
 显示模式,"Chế độ hiển thị"
@@ -203,7 +210,6 @@ ID,ID
 激活状态,"Trạng thái kích hoạt"
 保存,Lưu
 编辑客服,"Chỉnh sửa đại lý"
-提示,提示
 确认,确认
 确定要删除此客服吗？,"Bạn có chắc chắn muốn xóa đại lý này không?"
 删除确认,删除确认
@@ -246,6 +252,7 @@ ID,ID
 聊天记录,"Lịch sử chat"
 翻译：,Dịch:
 "客服服务 - 邮箱绑定验证","Dịch vụ khách hàng - Xác minh liên kết email"
+"邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。","邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。"
 客服系统,"Hệ thống dịch vụ khách hàng"
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠

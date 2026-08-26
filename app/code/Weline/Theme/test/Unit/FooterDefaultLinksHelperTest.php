@@ -25,8 +25,19 @@ final class FooterDefaultLinksHelperTest extends TestCase
         $groups = FooterDefaultLinksHelper::widgetLinkGroups();
 
         $this->assertNotEmpty($groups);
+        $this->assertCount(4, $groups);
+        $this->assertSame('了解我们', $groups[0]['title']);
         $this->assertArrayHasKey('links', $groups[0]);
         $this->assertArrayHasKey('label', $groups[0]['links'][0]);
         $this->assertArrayHasKey('url', $groups[0]['links'][0]);
+    }
+
+    public function testLegalLinksPresent(): void
+    {
+        $links = FooterDefaultLinksHelper::legalLinks();
+
+        $this->assertNotEmpty($links);
+        $this->assertArrayHasKey('text', $links[0]);
+        $this->assertArrayHasKey('url', $links[0]);
     }
 }

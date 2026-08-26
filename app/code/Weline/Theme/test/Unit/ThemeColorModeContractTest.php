@@ -26,6 +26,13 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertStringContainsString("localStorage.getItem('weline_theme_preference')", $prepaint);
         self::assertStringContainsString("['system', 'light', 'dark'].includes(preference)", $prepaint);
         self::assertStringContainsString('root.dataset.theme = theme;', $prepaint);
+        // Storefront must not follow OS dark into near-black body canvas (#020617).
+        self::assertStringContainsString("const area = root.dataset.wArea || 'frontend';", $prepaint);
+        self::assertStringContainsString("if (area !== 'backend' && preference === 'system') preference = 'light';", $prepaint);
+        self::assertStringContainsString("(preference === 'dark' ? 'dark' : 'light')", $prepaint);
+
+        $dark = $this->read('app/code/Weline/Theme/view/theme/frontend/colors/_dark.css');
+        self::assertStringContainsString(':root[data-theme-preference="system"]:not([data-theme="light"])', $dark);
     }
 
     public function testFoundationIsLayeredTokenOwnedAndHasNoFrameworkAdapter(): void
@@ -33,6 +40,9 @@ final class ThemeColorModeContractTest extends TestCase
         $foundation = $this->read('app/code/Weline/Theme/view/ui/css/foundation.css');
         self::assertStringContainsString('@layer reset, tokens, base, layout, components, utilities, page;', $foundation);
         self::assertStringContainsString('--weline-theme-canvas:', $foundation);
+        self::assertStringContainsString('--weline-theme-body-bg:', $foundation);
+        self::assertStringContainsString('--weline-chrome-body-bg:', $foundation);
+        self::assertStringContainsString('var(--color-bg-canvas', $foundation);
         self::assertStringContainsString('--weline-theme-surface:', $foundation);
         self::assertStringContainsString('--weline-theme-text:', $foundation);
         self::assertStringContainsString('@media (prefers-reduced-motion: reduce)', $foundation);
@@ -120,16 +130,21 @@ final class ThemeColorModeContractTest extends TestCase
         $header = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml');
         foreach ([
             'data-w-component="popover"',
+            'data-w-open-on="hover"',
             'data-w-placement="bottom-end"',
-            'data-w-anchor-mode="element"',
-            'data-w-popover-trigger aria-expanded="false"',
-            'data-w-popover-panel data-w-viewport-padding="12" data-state="closed"',
-            'aria-hidden="true" hidden',
-            'data-w-popover-close',
+            'data-w-popover-trigger',
+            'data-w-popover-panel',
+            'header-category-panel',
+            'data-w-component="menu"',
+            'data-w-menu-trigger',
+            'data-w-menu-panel',
+            'aria-hidden="true"',
+            'hidden',
         ] as $contract) {
             self::assertStringContainsString($contract, $header);
         }
         self::assertStringNotContainsString('<details class="w-frontend-mobile-nav"', $header);
+        self::assertStringNotContainsString('display: grid !important; /* 显示子菜单', $header);
 
         $frontend = $this->read('app/code/Weline/Theme/view/ui/css/frontend.css');
         self::assertStringContainsString('inline-size: min(22rem, var(--w-floating-max-inline-size', $frontend);
@@ -167,7 +182,13 @@ final class ThemeColorModeContractTest extends TestCase
             self::assertStringContainsString('Weline_Theme::ui/weline-frontend.css', $frontend);
             self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $frontend);
             self::assertSame(1, substr_count($frontend, 'colors/_light.css'));
+            self::assertSame(1, substr_count($frontend, 'colors/_default.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_dark.css'));
+            self::assertLessThan(
+                strpos($frontend, 'colors/_dark.css'),
+                strpos($frontend, 'colors/_default.css'),
+                'Brand palette must load before dark mode so dark tokens can override.',
+            );
             self::assertDoesNotMatchRegularExpression('/<script(?:\s[^>]*)?>\s*\(function/s', $frontend);
             self::assertStringNotContainsString('assets/js/theme.js', $frontend);
             self::assertStringNotContainsString('assets/css/theme.css', $frontend);

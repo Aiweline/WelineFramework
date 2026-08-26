@@ -13,7 +13,6 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {user-area}
  * @widget.supports {["layout-header-actions","layout-global-header-actions"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"user-area","area":"header","sort_order":0}]}
  *
  * @param show_avatar {default=true,type="bool",label="显示头像"}
  * @param show_name {default=false,type="bool",label="显示用户名"}
@@ -36,14 +35,7 @@ $userName = '用户名';
 $userAvatar = '';
 
 if (empty($dropdownItems)) {
-    $dropdownItems = [
-        ['label' => __('我的账户'), 'url' => '/account', 'icon' => 'user'],
-        ['label' => __('我的订单'), 'url' => '/customer/account/index#orders', 'icon' => 'list'],
-        ['label' => __('我的收藏'), 'url' => '/account/wishlist', 'icon' => 'heart'],
-        ['label' => __('地址管理'), 'url' => '/account/addresses', 'icon' => 'pin'],
-        ['type' => 'divider'],
-        ['label' => __('退出登录'), 'url' => '/account/logout', 'icon' => 'box'],
-    ];
+    $dropdownItems = null;
 }
 ?>
 
@@ -53,7 +45,7 @@ if (empty($dropdownItems)) {
          data-js-ns="<?= $esc($scope->jsNs) ?>">
     <?php if ($isLoggedIn): ?>
         <div class="account-logged-in">
-            <a href="/account" class="account-link">
+            <a href="@url{'customer/account/index'}" class="account-link">
                 <?php if ($showAvatar): ?>
                     <span class="account-avatar">
                         <?php if ($userAvatar !== ''): ?>
@@ -74,6 +66,39 @@ if (empty($dropdownItems)) {
                     <span class="user-name"><?= $esc($userName) ?></span>
                 </div>
                 <ul class="dropdown-menu" role="menu">
+                    <?php if ($dropdownItems === null): ?>
+                        <li>
+                            <a href="@url{'customer/account/index'}">
+                                <i class="user"></i>
+                                <?= $esc((string)__('我的账户')) ?>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="@url{'customer/account/index'}#orders">
+                                <i class="list"></i>
+                                <?= $esc((string)__('我的订单')) ?>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="@url{'customer/account/index'}#wishlist">
+                                <i class="heart"></i>
+                                <?= $esc((string)__('我的收藏')) ?>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="@url{'customer/account/index'}#addresses">
+                                <i class="pin"></i>
+                                <?= $esc((string)__('地址管理')) ?>
+                            </a>
+                        </li>
+                        <li class="divider" role="separator"></li>
+                        <li>
+                            <a href="@url{'customer/account/logout'}">
+                                <i class="box"></i>
+                                <?= $esc((string)__('退出登录')) ?>
+                            </a>
+                        </li>
+                    <?php else: ?>
                     <?php foreach ($dropdownItems as $item): ?>
                         <?php if (($item['type'] ?? '') === 'divider'): ?>
                             <li class="divider" role="separator"></li>
@@ -88,12 +113,13 @@ if (empty($dropdownItems)) {
                             </li>
                         <?php endif; ?>
                     <?php endforeach; ?>
+                    <?php endif; ?>
                 </ul>
             </div>
         </div>
     <?php else: ?>
         <div class="account-guest">
-            <a href="/account/login" class="account-link">
+            <a href="@url{'customer/account/login'}" class="account-link">
                 <span class="account-avatar">
                     <w:icon name="user" size="sm"></w:icon>
                 </span>
@@ -114,23 +140,26 @@ if (empty($dropdownItems)) {
 .<?= $wc ?> .account-link {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
     text-decoration: none;
-    color: var(--weline-theme-text);
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
-    border-radius: var(--weline-radius-md, 8px);
-    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
+    color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, inherit));
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border-radius: var(--weline-radius-md);
+    border: var(--border-width-thin, 1px) solid transparent;
+    transition: background-color var(--weline-theme-transition-base), border-color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .account-link:hover {
-    background-color: var(--weline-theme-surface-muted);
+    background-color: var(--color-on-dark-soft, var(--weline-theme-surface-muted));
+    border-color: var(--weline-chrome-text-light, transparent);
 }
 
 .<?= $wc ?> .account-avatar {
-    width: 36px;
-    height: 36px;
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
     border-radius: 50%;
-    background: var(--weline-theme-surface-muted);
+    background: transparent;
+    color: inherit;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,7 +174,7 @@ if (empty($dropdownItems)) {
 
 .<?= $wc ?> .account-name {
     font-weight: 500;
-    max-width: 100px;
+    max-width: var(--token-size-100px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -154,33 +183,36 @@ if (empty($dropdownItems)) {
 .<?= $wc ?> .account-text {
     display: flex;
     flex-direction: column;
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     line-height: 1.3;
 }
 
 .<?= $wc ?> .login-text {
-    font-weight: 600;
+    font-weight: 400;
+    font-size: var(--weline-font-size-xs);
+    color: var(--weline-chrome-text-light-secondary, var(--weline-theme-text-muted));
 }
 
 .<?= $wc ?> .register-text {
-    color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-xs, 12px);
+    color: var(--weline-chrome-text-light, var(--weline-theme-text));
+    font-size: var(--weline-font-size-sm);
+    font-weight: 700;
 }
 
 .<?= $wc ?> .account-dropdown {
     position: absolute;
     top: 100%;
     right: 0;
-    min-width: 220px;
+    min-width: var(--size-panel-220);
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg, 12px);
+    border-radius: var(--weline-radius-lg);
     box-shadow: var(--weline-theme-shadow-lg);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(10px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transform: translateY(var(--spacing-2_5));
+    transition: all var(--weline-theme-transition-base);
     z-index: 1000;
-    margin-top: var(--weline-space-3, 10px);
+    margin-top: var(--weline-space-3);
 }
 
 .<?= $wc ?> .account-logged-in:hover .account-dropdown {
@@ -190,38 +222,38 @@ if (empty($dropdownItems)) {
 }
 
 .<?= $wc ?> .dropdown-header {
-    padding: var(--weline-space-4, 15px) var(--weline-space-5, 20px);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    padding: var(--weline-space-4) var(--weline-space-5);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     background: var(--weline-theme-surface-muted);
-    border-radius: var(--weline-radius-lg, 12px) var(--weline-radius-lg, 12px) 0 0;
+    border-radius: var(--weline-radius-lg) var(--weline-radius-lg) 0 0;
 }
 
 .<?= $wc ?> .welcome-text {
     display: block;
-    font-size: var(--weline-font-size-xs, 12px);
+    font-size: var(--weline-font-size-xs);
     color: var(--weline-theme-text-muted);
 }
 
 .<?= $wc ?> .user-name {
     display: block;
     font-weight: 600;
-    font-size: var(--weline-font-size-base, 15px);
+    font-size: var(--weline-font-size-base);
 }
 
 .<?= $wc ?> .dropdown-menu {
     list-style: none;
     margin: 0;
-    padding: var(--weline-space-2, 8px) 0;
+    padding: var(--weline-space-2) 0;
 }
 
 .<?= $wc ?> .dropdown-menu li a {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
-    padding: var(--weline-space-3, 10px) var(--weline-space-5, 20px);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-5);
     color: var(--weline-theme-text);
     text-decoration: none;
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .dropdown-menu li a:hover {
@@ -230,13 +262,48 @@ if (empty($dropdownItems)) {
 }
 
 .<?= $wc ?> .dropdown-menu .divider {
-    height: 1px;
+    height: var(--spacing-px);
     background: var(--weline-theme-border);
-    margin: var(--weline-space-2, 8px) 0;
+    margin: var(--weline-space-2) 0;
 }
 
 .widget-preview-canvas .<?= $wc ?> .account-dropdown,
 .<?= $wc ?>.is-preview .account-dropdown {
     display: none;
+}
+
+@media (max-width: 768px) {
+    .<?= $wc ?> .account-link {
+        color: inherit;
+        padding: var(--spacing-1_5) var(--spacing-0_4);
+        min-height: var(--size-control-lg);
+        gap: var(--spacing-0_4);
+    }
+
+    .<?= $wc ?> .account-avatar {
+        width: var(--size-control-xs);
+        height: var(--size-control-xs);
+        background: transparent;
+        color: inherit;
+    }
+
+    .<?= $wc ?> .account-text {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--token-size-0-15rem);
+    }
+
+    .<?= $wc ?> .register-text {
+        display: none;
+    }
+
+    .<?= $wc ?> .login-text::after {
+        content: " ›";
+        font-weight: 700;
+    }
+
+    .<?= $wc ?> .account-dropdown {
+        display: none;
+    }
 }
 </style>

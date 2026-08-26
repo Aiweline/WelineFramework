@@ -35,4 +35,5 @@ return [
     ],
     'sortable' => true,
     'max_items' => 10,
+    'add_label' => '添加轮播项',
 ];

@@ -69,6 +69,10 @@ final class ProductCopyOperationRepository
         $draft->entry = (string)($data['entry'] ?? CopyDraft::ENTRY_BLANK);
         $draft->targetWebsiteId = (int)($data['target_website_id'] ?? 0);
         $draft->targetStoreId = (int)($data['target_store_id'] ?? 0);
+        $draft->targetStoreIds = $this->intList($data['target_store_ids'] ?? []);
+        if ($draft->targetStoreIds === [] && $draft->targetStoreId > 0) {
+            $draft->targetStoreIds = [$draft->targetStoreId];
+        }
         $draft->sourceWebsiteId = array_key_exists('source_website_id', $data)
             && $data['source_website_id'] !== null
             ? (int)$data['source_website_id']

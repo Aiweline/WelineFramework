@@ -56,6 +56,12 @@ class State extends DataObject
     private const LANG_LOCAL_CONTEXT_CACHE = 'state.lang_local_cache';
 
     /**
+     * Request-scoped language override (e.g. theme editor preview locale).
+     * Takes priority over Cookie for this request only; never writes cookies.
+     */
+    private const REQUEST_LANGUAGE_OVERRIDE = 'state.request_language_override';
+
+    /**
      * State 初始函数...
      *
      * @param Request $request
@@ -107,6 +113,13 @@ class State extends DataObject
             return self::normalizeLanguageSegment($pathLang);
         }
 
+        // Theme preview / controlled shells may force a locale for this request only.
+        // Must not write WELINE_USER_LANG — external language switchers keep owning cookies.
+        $forced = self::getRequestLanguageOverride();
+        if ($forced !== '' && self::isLanguageSegmentCandidate($forced)) {
+            return self::normalizeLanguageSegment($forced);
+        }
+
         // 无路径语言段时：Cookie 优先于 w_env，避免常驻进程残留 user.lang 压过用户偏好。
         $lang = Cookie::get('WELINE_USER_LANG');
         if (empty($lang)) {
@@ -120,6 +133,36 @@ class State extends DataObject
         }
 
         return self::resolveWebsiteDefaultLanguage();
+    }
+
+    /**
+     * Force language for the current request only (no cookie write).
+     * Pass empty string to clear the override.
+     * Locale shape is validated; allow-list is not required so theme preview can
+     * force an installed editor locale even when Cookie preference differs.
+     */
+    public static function setRequestLanguageOverride(string $locale): void
+    {
+        $locale = self::normalizeLanguageSegment(\trim($locale));
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return;
+        }
+        if ($locale === '' || !self::isLanguageSegmentCandidate($locale)) {
+            $context->set(self::REQUEST_LANGUAGE_OVERRIDE, null);
+        } else {
+            $context->set(self::REQUEST_LANGUAGE_OVERRIDE, $locale);
+        }
+        self::resetLangLocalCache();
+    }
+
+    public static function getRequestLanguageOverride(): string
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return '';
+        }
+        return \trim((string)$context->get(self::REQUEST_LANGUAGE_OVERRIDE, ''));
     }
 
     /**

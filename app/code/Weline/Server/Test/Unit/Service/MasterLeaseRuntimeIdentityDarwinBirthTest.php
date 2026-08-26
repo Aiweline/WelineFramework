@@ -46,4 +46,29 @@ final class MasterLeaseRuntimeIdentityDarwinBirthTest extends TestCase
         $this->expectExceptionMessage('WLS process is not running.');
         $identity->captureProcessIdentity(9_999_991);
     }
+
+    public function testInspectProcessTreatsMissingPidAsAbsentWithoutSlowPsProbe(): void
+    {
+        if (\PHP_OS_FAMILY !== 'Darwin') {
+            self::markTestSkipped('Darwin missing-PID fast path is macOS-only.');
+        }
+
+        MasterLeaseRuntimeIdentity::clearDarwinProcFfiCacheForTests();
+        $identity = new MasterLeaseRuntimeIdentity();
+        $missingPid = 9_999_992;
+        while (@\posix_kill($missingPid, 0)) {
+            ++$missingPid;
+        }
+
+        $startedAt = \hrtime(true);
+        $info = $identity->inspectProcess($missingPid);
+        $elapsedMs = (\hrtime(true) - $startedAt) / 1_000_000;
+
+        self::assertSame(['exists' => false], $info);
+        self::assertLessThan(
+            250.0,
+            $elapsedMs,
+            'Missing PID inspection must not fall back to the multi-second ps probe.',
+        );
+    }
 }

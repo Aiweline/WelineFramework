@@ -252,12 +252,14 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         $html = '<div class="' . $p . 'i18n-panel" id="' . htmlspecialchars($panelId) . '" ' . $dataAttrs . ' data-state="closed" aria-hidden="true" hidden>';
         $html .= '<div class="' . $p . 'i18n-header">';
         $html .= '<span>' . __('多语言配置') . '</span>';
+        $html .= '<div class="' . $p . 'i18n-header-actions">';
+        $html .= '<button type="button" class="w-button w-param-btn-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n ' . $dataAttrs . '>' . __('AI翻译') . '</button>';
         $html .= '<button type="button" class="w-button" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n data-field="' . htmlspecialchars($key) . '" aria-label="' . htmlspecialchars((string)__('关闭多语言配置'), ENT_QUOTES, 'UTF-8') . '"><w-icon name="close" size="sm"></w-icon></button>';
+        $html .= '</div>';
         $html .= '</div>';
         // 空 body，由前端 fetchInstalledLocales() 后动态填充
         $html .= '<div class="' . $p . 'i18n-body"></div>';
         $html .= '<div class="' . $p . 'i18n-footer">';
-        $html .= '<button type="button" class="w-button w-param-btn-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n ' . $dataAttrs . '>' . __('AI翻译') . '</button>';
         $html .= '<button type="button" class="w-button" data-tone="primary" data-size="sm" data-save-i18n ' . $dataAttrs . '>' . __('保存多语言') . '</button>';
         $html .= '</div></div>';
         return $html;

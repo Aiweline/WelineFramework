@@ -200,6 +200,21 @@ class ThemeData
         return $state->requestedScopes[$area] = $themeContext->resolveCurrentScope($area);
     }
 
+    /**
+     * Seed the per-request translation/storage scope without requiring a frozen
+     * storefront ScopeIdentity (Theme Editor backend theme.editorRequest path).
+     */
+    public static function seedRequestedScope(string $area, string $scope): void
+    {
+        $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
+        $scope = trim($scope);
+        if ($scope === '') {
+            return;
+        }
+
+        self::state()->requestedScopes[$area] = $scope;
+    }
+
     private static function resolveEffectiveScope(string $scope = 'default', ?string $area = null): string
     {
         self::ensureInitialized();

@@ -1520,12 +1520,13 @@ class Template extends DataObject
 
         return 'template.output.header.default.' . KeyBuilder::environmentHash([
             'scope' => 'frontend-header-default',
-            'cache_version' => '20260528-template-manifest-tempfile',
+            'cache_version' => '20260825-header-search-scope',
             'file' => $path,
             'file_mtime' => (int)$stat['mtime'],
             'file_size' => (int)$stat['size'],
             'auth' => $authContext,
             'dictionary' => $this->reusableHeaderDictionaryScopeHash($dictionary),
+            'request_scope' => $this->reusableHeaderRequestScope(),
         ]);
     }
 
@@ -1542,6 +1543,62 @@ class Template extends DataObject
         $encoded = \json_encode($scope, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE);
 
         return \sha1(\is_string($encoded) ? $encoded : \serialize($scope));
+    }
+
+    /**
+     * Header search facade reflects live request selection (type / category / q).
+     * Process reusable header HTML must vary on these params or sticky selections
+     * leak across sequential /search navigations in WLS workers.
+     *
+     * @return array{path:string,q:string,type:string,category_id:int,blog_category_id:int}
+     */
+    private function reusableHeaderRequestScope(): array
+    {
+        try {
+            $request = $this->request;
+            $path = '';
+            if (\is_object($request) && \method_exists($request, 'getUrlPath')) {
+                $path = \strtolower(\trim((string)$request->getUrlPath(), '/'));
+            } else {
+                $uri = (string)(\w_env('request.uri', '') ?? '');
+                $path = \strtolower(\trim((string)(\parse_url($uri, \PHP_URL_PATH) ?: ''), '/'));
+            }
+            $first = \explode('/', $path)[0] ?? '';
+
+            // Prefer raw query for cache identity so Request data-bag leftovers cannot collapse keys.
+            $q = \trim((string)($_GET['q'] ?? ''));
+            $type = \trim((string)($_GET['type'] ?? ''));
+            $categoryId = (int)($_GET['category_id'] ?? 0);
+            $blogCategoryId = (int)($_GET['blog_category_id'] ?? 0);
+            if ($q === '' && \is_object($request)) {
+                $q = \trim((string)($request->getParam('q') ?? ''));
+            }
+            if ($type === '' && \is_object($request)) {
+                $type = \trim((string)($request->getParam('type') ?? ''));
+            }
+            if ($categoryId <= 0 && \is_object($request)) {
+                $categoryId = (int)($request->getParam('category_id') ?? 0);
+            }
+            if ($blogCategoryId <= 0 && \is_object($request)) {
+                $blogCategoryId = (int)($request->getParam('blog_category_id') ?? 0);
+            }
+
+            return [
+                'path' => $first,
+                'q' => $q,
+                'type' => $type,
+                'category_id' => $categoryId,
+                'blog_category_id' => $blogCategoryId,
+            ];
+        } catch (\Throwable) {
+            return [
+                'path' => '',
+                'q' => '',
+                'type' => '',
+                'category_id' => 0,
+                'blog_category_id' => 0,
+            ];
+        }
     }
 
     /**

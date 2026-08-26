@@ -63,9 +63,9 @@ $rootStyle = '--wc-text-bg:' . $backgroundColor . ';--wc-text-padding:' . $paddi
 
 <style>
 .<?= $wc ?> {
-    border-radius: var(--weline-radius-lg, 8px);
-    background-color: var(--wc-text-bg, transparent);
-    padding: var(--wc-text-padding, var(--weline-space-5, 20px));
+    border-radius: var(--weline-radius-lg);
+    background-color: var(--wc-text-bg);
+    padding: var(--wc-text-padding);
     color: var(--weline-theme-text);
 }
 
@@ -74,20 +74,20 @@ $rootStyle = '--wc-text-bg:' . $backgroundColor . ';--wc-text-padding:' . $paddi
 .<?= $wc ?>.align-right { text-align: right; }
 
 .<?= $wc ?> .block-title {
-    font-size: var(--weline-font-size-2xl, 24px);
+    font-size: var(--weline-font-size-2xl);
     font-weight: 700;
-    margin: 0 0 var(--weline-space-4, 15px);
+    margin: 0 0 var(--weline-space-4);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .block-content {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     line-height: 1.7;
     color: var(--weline-theme-text-muted);
 }
 
 .<?= $wc ?> .block-content p {
-    margin: 0 0 var(--weline-space-4, 15px);
+    margin: 0 0 var(--weline-space-4);
 }
 
 .<?= $wc ?> .block-content p:last-child {
@@ -97,7 +97,7 @@ $rootStyle = '--wc-text-bg:' . $backgroundColor . ';--wc-text-padding:' . $paddi
 .<?= $wc ?> .block-content a {
     color: var(--weline-theme-primary);
     text-decoration: underline;
-    text-underline-offset: 2px;
+    text-underline-offset: var(--spacing-0_5);
 }
 
 .<?= $wc ?> .block-content a:hover {
@@ -106,12 +106,12 @@ $rootStyle = '--wc-text-bg:' . $backgroundColor . ';--wc-text-padding:' . $paddi
 
 .<?= $wc ?> .block-content ul,
 .<?= $wc ?> .block-content ol {
-    margin: var(--weline-space-4, 15px) 0;
-    padding-left: var(--weline-space-6, 25px);
+    margin: var(--weline-space-4) 0;
+    padding-left: var(--weline-space-6);
 }
 
 .<?= $wc ?> .block-content li {
-    margin-bottom: var(--weline-space-2, 8px);
+    margin-bottom: var(--weline-space-2);
 }
 
 .<?= $wc ?> .block-content--placeholder {
@@ -121,12 +121,12 @@ $rootStyle = '--wc-text-bg:' . $backgroundColor . ';--wc-text-padding:' . $paddi
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 48px;
+    min-height: var(--size-control-xl);
 }
 
 @media (max-width: 768px) {
     .<?= $wc ?> .block-title {
-        font-size: var(--weline-font-size-xl, 20px);
+        font-size: var(--weline-font-size-xl);
     }
 }
 </style>

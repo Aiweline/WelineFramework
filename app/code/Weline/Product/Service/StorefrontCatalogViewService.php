@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Cart\Api\Data\OfferIdentity;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCatalogCartItemSnapshotResolver;
@@ -25,6 +26,15 @@ use Weline\Product\Repository\ProductRepository;
  */
 final class StorefrontCatalogViewService
 {
+    private const CACHE_POOL = 'product';
+    private const OFFERS_FRESH_TTL_SECONDS = 300;
+    private const OFFERS_STALE_TTL_SECONDS = 1800;
+
+    public static function cachePool(): string
+    {
+        return self::CACHE_POOL;
+    }
+
     public function __construct(
         private readonly ProductRepository $products,
         private readonly OfferRepository $offers,
@@ -32,18 +42,70 @@ final class StorefrontCatalogViewService
         private readonly AttributeValueRepository $attributeValues,
         private readonly MediaRepository $media,
         private readonly StorefrontProductDetailProjector $detailProjector,
+        private readonly StorefrontScopeHotCache $hotCache,
+        private readonly StorefrontCatalogCacheCoordinator $catalogCache,
     ) {
     }
 
     /** @return list<array<string, mixed>> */
     public function publishedOffers(int $limit = 100): array
     {
+        return $this->publishedOffersForProductIds([], $limit);
+    }
+
+    /**
+     * @param list<int> $productIds Empty list returns all published offers.
+     * @return list<array<string, mixed>>
+     */
+    public function publishedOffersForProductIds(array $productIds, int $limit = 100): array
+    {
+        $limit = max(1, min(200, $limit));
+        $filterIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        $rows = $this->rememberPublishedOffers();
+        if ($filterIds !== []) {
+            $allowed = \array_fill_keys($filterIds, true);
+            $rows = \array_values(\array_filter(
+                $rows,
+                static fn(array $row): bool => isset($allowed[(int)($row['product_id'] ?? 0)]),
+            ));
+        }
+
+        return \array_slice($rows, 0, $limit);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function rememberPublishedOffers(): array
+    {
         $scope = $this->currentScope();
-        $websiteId = (int)$scope->websiteId;
+        $websiteId = max(0, (int)$scope->websiteId);
+        $logicalKey = $this->catalogCache->catalogOffersLogicalKey($websiteId);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $this->hotCache->remember(
+            self::CACHE_POOL,
+            $logicalKey,
+            self::OFFERS_FRESH_TTL_SECONDS,
+            fn(): array => $this->buildPublishedOffers($websiteId, $scope),
+            ['website' => true, 'lang' => true, 'currency' => true],
+            self::OFFERS_STALE_TTL_SECONDS,
+        );
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildPublishedOffers(int $websiteId, ScopeIdentity $scope): array
+    {
         $products = $this->products->listAll($websiteId);
         $publishedProductIds = [];
+
         foreach ($products as $product) {
-            if (strtolower(trim((string)($product[Product::schema_fields_STATUS] ?? '')))
+            if (\strtolower(\trim((string)($product[Product::schema_fields_STATUS] ?? '')))
                 !== Product::STATUS_PUBLISHED
             ) {
                 continue;
@@ -58,14 +120,14 @@ final class StorefrontCatalogViewService
         }
 
         $rows = [];
-        foreach ($this->offers->listByProductIds($websiteId, array_keys($publishedProductIds)) as $offer) {
-            if (count($rows) >= max(1, min(200, $limit))) {
+        foreach ($this->offers->listByProductIds($websiteId, \array_keys($publishedProductIds)) as $offer) {
+            if (\count($rows) >= 200) {
                 break;
             }
-            if (strtolower(trim((string)($offer[Offer::schema_fields_STATUS] ?? ''))) !== 'published') {
+            if (\strtolower(\trim((string)($offer[Offer::schema_fields_STATUS] ?? ''))) !== 'published') {
                 continue;
             }
-            $offerUuid = trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
+            $offerUuid = \trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
             $productId = (int)($offer[Offer::schema_fields_PRODUCT_ID] ?? 0);
             if ($offerUuid === '' || $productId <= 0) {
                 continue;
@@ -85,6 +147,9 @@ final class StorefrontCatalogViewService
                 'global_offer_uuid' => $snapshot->offer->globalOfferUuid,
                 'name' => $snapshot->name,
                 'sku' => $snapshot->sku,
+                'combination_key' => \trim((string)($offer[Offer::schema_fields_COMBINATION_KEY] ?? '')),
+                'is_default' => (bool)($offer[Offer::schema_fields_IS_DEFAULT] ?? false),
+                'requires_shipping' => (bool)($offer[Offer::schema_fields_REQUIRES_SHIPPING] ?? true),
                 'image' => $snapshot->image,
                 'currency' => $snapshot->currency,
                 'unit_price_minor' => $snapshot->unitPriceMinor,
@@ -99,12 +164,12 @@ final class StorefrontCatalogViewService
         }
 
         $storeId = max(0, RequestContext::getWelineStoreId());
-        $storeIds = array_values(array_unique([0, $storeId]));
+        $storeIds = \array_values(\array_unique([0, $storeId]));
         $attributeRowsByProduct = [];
         foreach ($this->attributeValues->listExplicitRows(
             $websiteId,
             'product',
-            array_values(array_unique(array_map(
+            \array_values(\array_unique(\array_map(
                 static fn(array $row): int => (int)($row['product_id'] ?? 0),
                 $rows,
             ))),
@@ -113,7 +178,7 @@ final class StorefrontCatalogViewService
             $attributeRowsByProduct[(int)($attributeRow[AttributeValue::schema_fields_ENTITY_ID] ?? 0)][] = $attributeRow;
         }
 
-        $locale = trim((string)RequestContext::getWelineUserLang());
+        $locale = \trim((string)RequestContext::getWelineUserLang());
         foreach ($rows as $index => $row) {
             $productId = (int)($row['product_id'] ?? 0);
             $rows[$index] = $this->detailProjector->project(
@@ -131,34 +196,49 @@ final class StorefrontCatalogViewService
     /** @return array<string, mixed>|null */
     public function publishedOffer(int $productId): ?array
     {
+        return $this->publishedOffersForProduct($productId)[0] ?? null;
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function publishedOffersForProduct(int $productId): array
+    {
         if ($productId <= 0) {
-            return null;
+            return [];
         }
 
-        foreach ($this->publishedOffers(200) as $offer) {
-            if ((int)($offer['product_id'] ?? 0) === $productId) {
-                return $this->hydrateDetailOffer($offer);
+        $result = [];
+        foreach ($this->publishedOffersForProductIds([$productId], 200) as $offer) {
+            if ((int)($offer['product_id'] ?? 0) !== $productId) {
+                continue;
             }
+            $result[] = $this->hydrateDetailOffer($offer);
         }
 
-        return null;
+        return $result;
     }
 
     /** @return array<string, mixed>|null */
     public function publishedOfferBySlug(string $slug): ?array
     {
-        $slug = strtolower(trim($slug));
-        if ($slug === '' || preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
-            return null;
+        return $this->publishedOffersBySlug($slug)[0] ?? null;
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function publishedOffersBySlug(string $slug): array
+    {
+        $slug = \strtolower(\trim($slug));
+        if ($slug === '' || \preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return [];
         }
 
         foreach ($this->publishedOffers(200) as $offer) {
-            if (strtolower(trim((string)($offer['slug'] ?? ''))) === $slug) {
-                return $this->hydrateDetailOffer($offer);
+            if (\strtolower(\trim((string)($offer['slug'] ?? ''))) !== $slug) {
+                continue;
             }
+            return $this->publishedOffersForProduct((int)($offer['product_id'] ?? 0));
         }
 
-        return null;
+        return [];
     }
 
     /**
@@ -171,7 +251,7 @@ final class StorefrontCatalogViewService
         $scope = $this->currentScope();
         $websiteId = (int)$scope->websiteId;
         $storeId = max(0, RequestContext::getWelineStoreId());
-        $storeIds = array_values(array_unique([0, $storeId]));
+        $storeIds = \array_values(\array_unique([0, $storeId]));
 
         return $this->detailProjector->project(
             $offer,
@@ -183,7 +263,7 @@ final class StorefrontCatalogViewService
             ),
             $this->media->listByProductIds($websiteId, [$productId]),
             $storeId,
-            trim((string)RequestContext::getWelineUserLang()),
+            \trim((string)RequestContext::getWelineUserLang()),
         );
     }
 
@@ -195,7 +275,7 @@ final class StorefrontCatalogViewService
         }
 
         $websiteId = max(0, RequestContext::getWelineWebsiteId());
-        $websiteCode = trim(RequestContext::getWelineWebsiteCode());
+        $websiteCode = \trim(RequestContext::getWelineWebsiteCode());
 
         return ScopeIdentity::website($websiteId, $websiteCode !== '' ? $websiteCode : 'default');
     }

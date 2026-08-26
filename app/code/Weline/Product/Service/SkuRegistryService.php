@@ -9,6 +9,7 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\ProductIdentity;
+use Weline\Product\Api\ProductIdentityCutoverPolicyInterface;
 use Weline\Product\Api\ProductIdentityResolverInterface;
 use Weline\Product\Model\SkuAlias;
 use Weline\Product\Model\SkuRegistry;
@@ -40,6 +41,7 @@ final class SkuRegistryService implements ProductIdentityResolverInterface
     public function __construct(
         private readonly ConnectionFactory $connectionFactory,
         private readonly DatabaseTransactionRunnerInterface $transactions,
+        private readonly ProductIdentityCutoverPolicyInterface $cutoverPolicy,
         ?callable $registryFactory = null,
         ?callable $aliasFactory = null,
         ?callable $casTokenFactory = null,
@@ -55,6 +57,7 @@ final class SkuRegistryService implements ProductIdentityResolverInterface
      */
     public function claimLocked(string $sku, string $requestHash): ProductIdentity
     {
+        $this->assertLegacyWritesAllowed();
         $sku = $this->normalizeSku($sku);
         $requestHash = $this->normalizeRequestHash($requestHash);
 
@@ -110,6 +113,7 @@ final class SkuRegistryService implements ProductIdentityResolverInterface
      */
     public function renameSku(string $fromSku, string $toSku): ProductIdentity
     {
+        $this->assertLegacyWritesAllowed();
         $fromSku = $this->normalizeSku($fromSku);
         $toSku = $this->normalizeSku($toSku);
         if ($fromSku === $toSku) {
@@ -240,6 +244,7 @@ final class SkuRegistryService implements ProductIdentityResolverInterface
      */
     public function cleanupOrphanBySku(string $sku): bool
     {
+        $this->assertLegacyWritesAllowed();
         $sku = $this->normalizeSku($sku);
 
         return (bool)$this->transactions->run(
@@ -313,6 +318,18 @@ final class SkuRegistryService implements ProductIdentityResolverInterface
         return $sku;
     }
 
+    private function assertLegacyWritesAllowed(): void
+    {
+        if ($this->cutoverPolicy->legacyWritesAllowed()) {
+            return;
+        }
+        throw new SkuIdentityConflictException(
+            'legacy_identity_writes_disabled',
+            __('V2 身份已成为权威源，旧 SKU 注册表仅允许兼容读取'),
+            ['mode' => $this->cutoverPolicy->mode()],
+        );
+    }
+
     private function normalizeRequestHash(string $requestHash): string
     {
         $requestHash = strtolower(trim($requestHash));
@@ -340,6 +357,7 @@ final class SkuRegistryService implements ProductIdentityResolverInterface
 
     private function adjustRefCount(int $registryId, int $delta): int
     {
+        $this->assertLegacyWritesAllowed();
         if ($registryId <= 0) {
             throw new \InvalidArgumentException(__('registry_id 无效'));
         }

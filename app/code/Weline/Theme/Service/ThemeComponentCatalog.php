@@ -82,6 +82,13 @@ class ThemeComponentCatalog
     {
         $identity = $definition->getIdentity();
         if (isset($seen[$identity])) {
+            $existing = $definitions[$identity] ?? null;
+            if ($existing instanceof ThemeComponentDefinition
+                && ($definition->layerKey ?? '') === 'widget_registry'
+                && ($existing->layerKey ?? '') !== 'widget_registry'
+            ) {
+                $definitions[$identity] = $definition;
+            }
             return;
         }
 

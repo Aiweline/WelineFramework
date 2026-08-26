@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Resumable;
 
-use Weline\Ai\Api\AiRuntimeInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\Resumable\ResumableTaskContextInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskStartHandlerInterface;
@@ -30,10 +30,6 @@ final class ThemeConfigTranslationTaskHandler implements ResumableTaskStartHandl
     private const MAX_SOURCE_BYTES = 65_536;
     private const MAX_RESPONSE_BYTES = 262_144;
     private const MAX_TARGET_LOCALES = 30;
-
-    public function __construct(private readonly AiRuntimeInterface $aiRuntime)
-    {
-    }
 
     public function typeCode(): string
     {
@@ -154,35 +150,38 @@ final class ThemeConfigTranslationTaskHandler implements ResumableTaskStartHandl
     /** @param array<string,mixed> $input @return array<string,string> */
     private function generateTranslations(array $input, string $idempotencyKey, int $actorId): array
     {
-        $response = $this->aiRuntime->generate(
-            $this->prompt($input),
-            $input['model_code'] !== '' ? $input['model_code'] : null,
-            'theme',
-            null,
-            [
-                'operation' => 'config_i18n_translate',
-                'source_locale' => $input['source_locale'],
-                'target_locales' => $input['target_locales'],
-                'field_key' => $input['field_key'],
-                'layout_id' => $input['layout_id'],
-                'layout_type' => $input['layout_type'],
-                'layout_option' => $input['layout_option'],
-                'context' => $input['context'],
-                'disable_conversation_history' => true,
-                'disable_conversation_persist' => true,
-                'is_backend' => true,
-                'idempotency_key' => $idempotencyKey,
-                'resumable_idempotency_key' => $idempotencyKey,
-            ],
-            $actorId > 0 ? $actorId : null,
-            true,
-        );
-        if (strlen($response) > self::MAX_RESPONSE_BYTES) {
+        if (!class_exists(\Weline\Ai\Api\TranslationService::class)) {
+            throw new \RuntimeException('AI translation service is unavailable.');
+        }
+
+        /** @var \Weline\Ai\Api\TranslationService $translationService */
+        $translationService = ObjectManager::getInstance(\Weline\Ai\Api\TranslationService::class);
+        $sourceText = (string)$input['source_text'];
+        $sourceLocale = (string)$input['source_locale'];
+        $translations = [];
+
+        foreach ($input['target_locales'] as $locale) {
+            $locale = (string)$locale;
+            $text = trim((string)$translationService->translate(
+                $sourceText,
+                $locale,
+                $sourceLocale !== '' ? $sourceLocale : 'auto',
+                \Weline\Ai\Api\TranslationService::STRATEGY_LIGHT
+            ));
+            if ($text === '') {
+                throw new \RuntimeException('Theme translation AI response is empty for locale: ' . $locale);
+            }
+            $translations[$locale] = $text;
+        }
+
+        $encoded = json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (is_string($encoded) && strlen($encoded) > self::MAX_RESPONSE_BYTES) {
             throw new \RuntimeException('Theme translation AI response is too large.');
         }
 
-        return $this->parseTranslations($response, $input['target_locales']);
+        return $translations;
     }
+
 
     /** @param array<string,mixed> $input @param array<string,string> $translations @return array<string,mixed> */
     private function state(array $input, array $translations = [], ?string $effectKey = null): array

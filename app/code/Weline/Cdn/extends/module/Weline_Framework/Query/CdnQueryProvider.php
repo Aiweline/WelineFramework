@@ -72,6 +72,7 @@ class CdnQueryProvider implements QueryProviderInterface
             'restoreScopeInheritance' => $this->restoreScopeInheritance($params),
             'resolveCowMediaUrl' => $this->resolveCowMediaUrl($params),
             'resolveAuthorizedAccount' => $this->resolveAuthorizedAccountOp($params),
+            'reconcileMailDns' => $this->reconcileMailDnsOp($params),
             default => throw new \InvalidArgumentException(
                 (string)__('CDN 查询器不支持的操作：%{1}', $operation)
             ),
@@ -459,6 +460,23 @@ class CdnQueryProvider implements QueryProviderInterface
                         'channel_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'store_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                     ],
+                ],
+                [
+                    'name'        => 'reconcileMailDns',
+                    'description' => __('预览或同步当前企业邮箱域名的 Cloudflare DNS'),
+                    'frontend'    => false,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::cdn_account_manager'],
+                    'mode'        => 'write',
+                    'graph'       => false,
+                    'params'      => [
+                        'domain' => ['type' => 'string', 'required' => true, 'max_length' => 255],
+                        'desired_records' => ['type' => 'array', 'required' => true],
+                        'dns_only_hosts' => ['type' => 'array', 'required' => true],
+                        'apply' => ['type' => 'bool', 'required' => false],
+                    ],
+                    'returns'     => ['type' => 'array'],
                 ],
             ],
         ];
@@ -885,6 +903,43 @@ class CdnQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
+    /**
+     * Provider-owned write command; credentials never cross the module boundary.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function reconcileMailDnsOp(array $params): array
+    {
+        try {
+            $desired = $params['desired_records'] ?? [];
+            $dnsOnlyHosts = $params['dns_only_hosts'] ?? [];
+            if (!is_array($desired) || !is_array($dnsOnlyHosts)) {
+                throw new \InvalidArgumentException((string)__('邮箱 DNS 参数格式无效。'));
+            }
+
+            $manager = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Cdn\Api\MailDnsManagerInterface::class
+            );
+
+            return $manager->reconcile(
+                (string)($params['domain'] ?? ''),
+                $desired,
+                $dnsOnlyHosts,
+                (bool)($params['apply'] ?? false),
+            );
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'operation_count' => 0,
+                'operations' => [],
+                'residual_changes' => [],
+            ];
+        }
+    }
+
     private function resolveAuthorizedAccountOp(array $params): array
     {
         try {

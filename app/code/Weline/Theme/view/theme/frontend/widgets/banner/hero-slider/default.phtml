@@ -12,40 +12,8 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page"]}
  * @widget.supports {["layout-homepage-hero","layout-homepage-content","layout-cms-hero","layout-default-content"]}
- * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-hero","area":"content","sort_order":0}]}
  *
- * @param slides {default=[],type="array",label="轮播图片",description="图片数组，每项包含image、title、subtitle、link、button_text",schema=[
- *     "image": {
-     *         "type": "image",
- *         "label": "图片",
- *         "description": "图片",
- *     },
- *     "title": {
- *         "type": "string",
- *         "label": "标题",
- *         "description": "标题",
- *     },
- *     "subtitle": {
- *         "type": "string",
- *         "label": "副标题",
- *         "description": "副标题",
- *     },
- *     "link": {
- *         "type": "string",
- *         "label": "链接",
- *         "description": "链接",
- *     },
- *     "button_text": {
- *         "type": "string",
- *         "label": "按钮文字",
- *         "description": "按钮文字",
- *     },
- *     "text_position": {
- *         "type": "string",
- *         "label": "文字位置",
- *         "description": "文字位置",
- *     },
- * ]}
+ * @param slides {default=[],type="banner_items",label="轮播图片",description="图片数组，每项包含 image、title、subtitle、link、button_text"}
  * @param autoplay {default=true,type="bool",label="自动播放"}
  * @param autoplay_speed {default=5000,type="number",label="播放间隔",description="自动播放间隔（毫秒）"}
  * @param show_dots {default=true,type="bool",label="显示指示点"}
@@ -295,7 +263,7 @@ if (empty($slides)) {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to right, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 100%);
+    background: linear-gradient(to right, var(--color-overlay-50) 0%, var(--color-overlay-light) 100%);
 }
 
 /* 内容 */
@@ -329,47 +297,47 @@ if (empty($slides)) {
 }
 
 .<?= $wc ?> .slide-title {
-    font-size: 3rem;
+    font-size: var(--spacing-2xl);
     font-weight: 700;
-    color: var(--weline-theme-on-primary, #fff);
-    margin: 0 0 15px;
-    text-shadow: 0 2px 8px color-mix(in srgb, var(--weline-theme-overlay) 40%, transparent);
+    color: var(--weline-theme-on-primary);
+    margin: 0 0 var(--spacing-3_5);
+    text-shadow: 0 var(--spacing-0_5) var(--spacing-sm) color-mix(in srgb, var(--weline-theme-overlay) 40%, transparent);
     animation: heroSlideUp 0.6s ease forwards;
 }
 
 .<?= $wc ?> .slide-subtitle {
-    font-size: 1.25rem;
+    font-size: var(--font-size-xl);
     color: color-mix(in srgb, var(--weline-theme-on-primary) 90%, transparent);
-    margin: 0 0 30px;
-    text-shadow: 0 1px 4px color-mix(in srgb, var(--weline-theme-overlay) 35%, transparent);
+    margin: 0 0 var(--weline-space-8);
+    text-shadow: 0 var(--spacing-px) var(--spacing-xs) color-mix(in srgb, var(--weline-theme-overlay) 35%, transparent);
     animation: heroSlideUp 0.6s 0.2s ease forwards;
     opacity: 0;
 }
 
 .<?= $wc ?> .slide-button {
     display: inline-block;
-    padding: 15px 40px;
+    padding: var(--spacing-3_5) var(--size-control-md);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     text-decoration: none;
-    border-radius: var(--weline-radius-round, 999px);
+    border-radius: var(--weline-radius-round);
     font-weight: 600;
-    font-size: 1rem;
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    font-size: var(--font-size-base);
+    transition: all var(--weline-theme-transition-base);
     animation: heroSlideUp 0.6s 0.4s ease forwards;
     opacity: 0;
 }
 
 .<?= $wc ?> .slide-button:hover {
     background: var(--weline-theme-primary-hover);
-    transform: translateY(-3px);
+    transform: translateY(var(--spacing-neg-1_5));
     box-shadow: var(--weline-theme-shadow-md);
 }
 
 @keyframes heroSlideUp {
     from {
         opacity: 0;
-        transform: translateY(30px);
+        transform: translateY(var(--weline-space-8));
     }
     to {
         opacity: 1;
@@ -382,8 +350,8 @@ if (empty($slides)) {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 50px;
-    height: 50px;
+    width: var(--size-control-50);
+    height: var(--size-control-50);
     background: color-mix(in srgb, var(--weline-theme-surface-raised) 92%, transparent);
     border: none;
     border-radius: 50%;
@@ -392,7 +360,7 @@ if (empty($slides)) {
     align-items: center;
     justify-content: center;
     z-index: 10;
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
     opacity: 0;
     color: var(--weline-theme-text);
 }
@@ -407,29 +375,29 @@ if (empty($slides)) {
 }
 
 .<?= $wc ?> .slider-prev {
-    left: 20px;
+    left: var(--weline-space-5);
 }
 
 .<?= $wc ?> .slider-next {
-    right: 20px;
+    right: var(--weline-space-5);
 }
 
 /* 指示点 */
 .<?= $wc ?> .slider-dots {
     position: absolute;
-    bottom: 30px;
+    bottom: var(--weline-space-8);
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 10px;
+    gap: var(--spacing-2_5);
     z-index: 10;
 }
 
 .<?= $wc ?> .dot {
-    width: 12px;
-    height: 12px;
+    width: var(--font-size-xs);
+    height: var(--font-size-xs);
     border-radius: 50%;
-    background: rgba(255,255,255,0.5);
+    background: var(--token-color-rgba-255-255-255-0-5);
     border: none;
     cursor: pointer;
     transition: all 0.3s;
@@ -444,12 +412,12 @@ if (empty($slides)) {
 /* 部件库 / 编辑器预览：压缩高度并缩小文案，避免灰块占位 */
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 120px;
+    min-height: var(--size-panel-120);
 }
 
 .widget-preview-canvas .<?= $wc ?> .slide-overlay,
 .<?= $wc ?>.is-preview .slide-overlay {
-    background: linear-gradient(to right, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 100%);
+    background: linear-gradient(to right, var(--token-color-rgba-0-0-0-0-35) 0%, var(--color-overlay-05) 100%);
 }
 
 .widget-preview-canvas .<?= $wc ?> .slide-content,
@@ -459,70 +427,70 @@ if (empty($slides)) {
 
 .widget-preview-canvas .<?= $wc ?> .slide-title,
 .<?= $wc ?>.is-preview .slide-title {
-    font-size: 1.1rem;
-    margin-bottom: 4px;
+    font-size: var(--token-size-1-1rem);
+    margin-bottom: var(--spacing-xs);
     animation: none;
     opacity: 1;
 }
 
 .widget-preview-canvas .<?= $wc ?> .slide-subtitle,
 .<?= $wc ?>.is-preview .slide-subtitle {
-    font-size: 0.75rem;
-    margin-bottom: 8px;
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--spacing-sm);
     animation: none;
     opacity: 1;
 }
 
 .widget-preview-canvas .<?= $wc ?> .slide-button,
 .<?= $wc ?>.is-preview .slide-button {
-    padding: 4px 12px;
-    font-size: 0.7rem;
+    padding: var(--spacing-xs) var(--weline-space-3);
+    font-size: var(--spacing-0_7);
     animation: none;
     opacity: 1;
 }
 
 .widget-preview-canvas .<?= $wc ?> .slider-arrow,
 .<?= $wc ?>.is-preview .slider-arrow {
-    width: 24px;
-    height: 24px;
+    width: var(--spacing-lg);
+    height: var(--spacing-lg);
     opacity: 0.85;
 }
 
 .widget-preview-canvas .<?= $wc ?> .slider-arrow i,
 .<?= $wc ?>.is-preview .slider-arrow i {
-    font-size: 14px;
+    font-size: var(--font-size-sm);
 }
 
 .widget-preview-canvas .<?= $wc ?> .slider-dots,
 .<?= $wc ?>.is-preview .slider-dots {
-    bottom: 8px;
-    gap: 4px;
+    bottom: var(--spacing-sm);
+    gap: var(--spacing-xs);
 }
 
 .widget-preview-canvas .<?= $wc ?> .dot,
 .<?= $wc ?>.is-preview .dot {
-    width: 6px;
-    height: 6px;
+    width: var(--size-scrollbar);
+    height: var(--size-scrollbar);
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
     .<?= $wc ?> .slide-title {
-        font-size: 2rem;
+        font-size: var(--font-size-4xl);
     }
     
     .<?= $wc ?> .slide-subtitle {
-        font-size: 1rem;
+        font-size: var(--font-size-base);
     }
     
     .<?= $wc ?> .slide-button {
-        padding: 12px 30px;
-        font-size: 0.9rem;
+        padding: var(--weline-space-3) var(--weline-space-8);
+        font-size: var(--spacing-0_9);
     }
     
     .<?= $wc ?> .slider-arrow {
-        width: 40px;
-        height: 40px;
+        width: var(--size-control-md);
+        height: var(--size-control-md);
     }
 }
 </style>

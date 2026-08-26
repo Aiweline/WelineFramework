@@ -20,6 +20,11 @@ circle,circle
 list,list
 标签文档,"Tag documentation"
 查看标签文档,"View label documentation"
+好的,"The boundary is destroyed"
+算了,"Ru Chun Jian"
+失败,fail
+成功,success
+操作成功!,"Operation successful!"
 开发>标签管理,"Development > Tag Management"
 开发,Development
 列表,List
@@ -64,11 +69,6 @@ json数据,"json data"
 收集所有模块的标签库,"Collect Tag Libraries for All Modules"
 收集指定模块的标签库,"Collect Tag Library for Specified Module"
 """所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>""","""The specified name cannot find the corresponding js template file! name cannot be empty; if it is inline JS, please use the paired tag <js:part>code</js:part>"""
-好的,"The boundary is destroyed"
-算了,"Ru Chun Jian"
-失败,fail
-成功,success
-操作成功!,"Operation successful!"
 "fa fa-tags","fa fa-tags"
 "fa fa-list","fa fa-list"
 标签库,"Tag library"

@@ -16,6 +16,7 @@ final class ViewWarmupContributionProvider implements ViewWarmupContributionProv
                 'hooks' => [
                     'Weline_Shipping::hooks/account.sidebar.phtml',
                     'Weline_Shipping::hooks/account.sidebar.content.phtml',
+                    'Weline_Shipping::hooks/Weline_Checkout/frontend/widgets/checkout-delivery-context/quick-add.phtml',
                 ],
             ],
         );

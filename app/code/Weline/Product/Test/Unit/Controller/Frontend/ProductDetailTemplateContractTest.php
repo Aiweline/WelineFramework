@@ -10,7 +10,7 @@ final class ProductDetailTemplateContractTest extends TestCase
 {
     public function testDetailTemplateRendersPublishedDescriptionAndSpecifications(): void
     {
-        $template = BP . 'app/code/Weline/Product/view/templates/frontend/catalog/detail.phtml';
+        $template = BP . 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml';
         $view = new class([
             'storefront_offer' => [
                 'product_id' => 9,
@@ -73,18 +73,22 @@ final class ProductDetailTemplateContractTest extends TestCase
             BP . 'app/code/Weline/Product/Controller/Frontend/Detail.php',
         );
 
-        self::assertStringContainsString("\$this->layoutType = 'product_detail'", $controller);
-        self::assertStringContainsString('publishedOffer($productId)', $controller);
-        self::assertStringContainsString('publishedOfferBySlug($slug)', $controller);
+        self::assertStringContainsString("\$this->layoutType = 'product'", $controller);
+        self::assertStringContainsString("setGet('page_type', 'product')", $controller);
+        self::assertStringContainsString('publishedOffersForProduct($productId)', $controller);
+        self::assertStringContainsString('publishedOffersBySlug($slug)', $controller);
         self::assertStringContainsString("\$this->getUrl('products')", $controller);
+        self::assertStringContainsString('detail-shell.phtml', $controller);
+        self::assertStringNotContainsString('product_detail', $controller);
         self::assertStringNotContainsString('WeShop\\Product', $controller);
         self::assertStringNotContainsString('PageBuilder', $controller);
     }
 
+
     public function testDetailTemplateUsesPublishedOfferIdentityThroughCartQueryBin(): void
     {
         $template = (string)file_get_contents(
-            BP . 'app/code/Weline/Product/view/templates/frontend/catalog/detail.phtml',
+            BP . 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml',
         );
 
         self::assertStringContainsString('data-testid="storefront-product-detail"', $template);
@@ -93,9 +97,35 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('addV2', $template);
         self::assertStringContainsString("\$this->getUrl('products')", $template);
         self::assertStringContainsString('<strong>', $template);
+        self::assertStringContainsString('@widget.code {product-info}', $template);
+        self::assertStringContainsString('product-main', $template);
         self::assertStringNotContainsString('scope:', $template);
         self::assertStringNotContainsString('website_id:', $template);
         self::assertStringNotContainsString('store_code:', $template);
+        self::assertStringNotContainsString('fetch(', $template);
+        self::assertStringNotContainsString('axios', $template);
+    }
+
+    public function testConfigurableDetailRequiresAnExplicitOfferIdentity(): void
+    {
+        $template = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml',
+        );
+        $controller = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Controller/Frontend/Detail.php',
+        );
+        $service = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Service/StorefrontCatalogViewService.php',
+        );
+
+        self::assertStringContainsString('data-testid="product-offer-selector"', $template);
+        self::assertStringContainsString('name="offer"', $template);
+        self::assertStringContainsString('请选择规格', $template);
+        self::assertStringContainsString("getParam('offer', '')", $controller);
+        self::assertStringContainsString("assign('storefront_offers', \$offers)", $controller);
+        self::assertStringContainsString("\$displayOffer['global_offer_uuid'] = '';", $controller);
+        self::assertStringContainsString('publishedOffersForProduct', $service);
+        self::assertStringContainsString('publishedOffersBySlug', $service);
         self::assertStringNotContainsString('fetch(', $template);
         self::assertStringNotContainsString('axios', $template);
     }

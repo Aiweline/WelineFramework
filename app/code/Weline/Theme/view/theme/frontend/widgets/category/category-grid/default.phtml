@@ -12,7 +12,6 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page"]}
  * @widget.supports {["layout-homepage-categories","layout-homepage-content","layout-category-children","layout-category-recommendations","layout-cms-content","layout-default-content"]}
- * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-categories","area":"content","sort_order":0},{"layout_type":"category","layout_option":"default","slot":"category-recommendations","area":"content","sort_order":0}]}
  *
  * @param title {default="热门分类",type="string",label="标题"}
  * @param subtitle {default="浏览我们的商品分类",type="string",label="副标题"}
@@ -111,31 +110,31 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
 
 <style>
 .<?= $wc ?> {
-    padding: var(--weline-space-10, 40px) 0;
+    padding: var(--weline-space-10) 0;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .grid-header {
     text-align: center;
-    margin-bottom: var(--weline-space-8, 30px);
+    margin-bottom: var(--weline-space-8);
 }
 
 .<?= $wc ?> .grid-title {
-    font-size: var(--weline-font-size-3xl, 28px);
+    font-size: var(--weline-font-size-3xl);
     font-weight: 700;
-    margin: 0 0 var(--weline-space-3, 10px);
+    margin: 0 0 var(--weline-space-3);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .grid-subtitle {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     color: var(--weline-theme-text-muted);
     margin: 0;
 }
 
 .<?= $wc ?> .category-grid {
     display: grid;
-    gap: var(--weline-space-5, 20px);
+    gap: var(--weline-space-5);
 }
 
 .<?= $wc ?> .category-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
@@ -147,24 +146,24 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
 .<?= $wc ?> .category-card {
     display: block;
     text-decoration: none;
-    border-radius: var(--weline-radius-xl, 12px);
+    border-radius: var(--weline-radius-xl);
     overflow: hidden;
     background: var(--weline-theme-surface-raised);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     box-shadow: var(--weline-theme-shadow-sm);
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
     color: inherit;
 }
 
 .<?= $wc ?> .category-card:hover {
     box-shadow: var(--weline-theme-shadow-md);
-    transform: translateY(-5px);
+    transform: translateY(var(--token-size-5px));
 }
 
 .<?= $wc ?> .category-image-wrapper {
     position: relative;
     overflow: hidden;
-    padding-top: var(--wc-category-ratio, 100%);
+    padding-top: var(--wc-category-ratio);
 }
 
 .<?= $wc ?> .category-image {
@@ -173,7 +172,7 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform var(--weline-theme-transition-slow, 0.5s ease);
+    transition: transform var(--weline-theme-transition-slow);
 }
 
 .<?= $wc ?> .category-card:hover .category-image {
@@ -189,7 +188,7 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
         color-mix(in srgb, var(--weline-theme-overlay) 40%, transparent) 100%
     );
     opacity: 0;
-    transition: opacity var(--weline-theme-transition-base, 0.3s ease);
+    transition: opacity var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .category-card:hover .category-overlay {
@@ -197,25 +196,25 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
 }
 
 .<?= $wc ?> .category-info {
-    padding: var(--weline-space-4, 15px);
+    padding: var(--weline-space-4);
     text-align: center;
 }
 
 .<?= $wc ?> .category-name {
-    margin: 0 0 var(--weline-space-1, 5px);
-    font-size: var(--weline-font-size-base, 16px);
+    margin: 0 0 var(--weline-space-1);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .category-count {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-5, 20px) 0;
+    padding: var(--weline-space-5) 0;
 }
 
 @media (max-width: 992px) {
@@ -231,7 +230,7 @@ $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';
     }
 
     .<?= $wc ?> .grid-title {
-        font-size: var(--weline-font-size-xl, 22px);
+        font-size: var(--weline-font-size-xl);
     }
 }
 </style>

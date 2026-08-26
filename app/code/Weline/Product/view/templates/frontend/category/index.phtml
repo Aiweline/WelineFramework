@@ -1,0 +1,466 @@
+<?php
+
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
+/**
+ * Amazon-style category results: breadcrumb, results bar, compact product grid.
+ *
+ * @var array<string,mixed> $storefront_category
+ * @var list<array<string,mixed>> $storefront_category_children
+ * @var list<array<string,mixed>> $storefront_offers
+ * @var list<array{label:string,url:string}> $storefront_category_breadcrumbs
+ */
+
+$category = $this->getData('storefront_category') ?? [];
+$category = is_array($category) ? $category : [];
+$offers = $this->getData('storefront_offers') ?? [];
+$offers = is_array($offers) ? $offers : [];
+$breadcrumbs = $this->getData('storefront_category_breadcrumbs') ?? [];
+$breadcrumbs = is_array($breadcrumbs) ? $breadcrumbs : [];
+$cartGuestToken = trim((string)($this->getData('cart_guest_token') ?? ''));
+$categoryName = trim((string)($category['name'] ?? __('分类')));
+$activePrice = trim((string)($this->getData('storefront_listing_price') ?? ''));
+$totalCount = max(0, (int)($this->getData('storefront_listing_total') ?? count($offers)));
+$visibleCount = max(0, (int)($this->getData('storefront_listing_count') ?? count($offers)));
+$sortOptions = $this->getData('storefront_listing_sort_options') ?? [];
+$sortOptions = is_array($sortOptions) ? $sortOptions : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$from = $visibleCount > 0 ? 1 : 0;
+$to = $visibleCount;
+?>
+<section class="amz-plp"
+         data-testid="storefront-category-catalog"
+         weline-code="product.frontend.category.section_1">
+
+    <?php if ($breadcrumbs !== []): ?>
+        <nav class="amz-plp__crumb" aria-label="<?= $escape(__('面包屑')) ?>">
+            <a href="<?= $escape((string)$this->getUrl('')) ?>"><?= __('首页') ?></a>
+            <?php foreach ($breadcrumbs as $i => $crumb): ?>
+                <?php
+                if (!is_array($crumb)) {
+                    continue;
+                }
+                $label = trim((string)($crumb['label'] ?? ''));
+                $url = trim((string)($crumb['url'] ?? ''));
+                $isLast = $i === array_key_last($breadcrumbs);
+                ?>
+                <span class="amz-plp__crumb-sep" aria-hidden="true">›</span>
+                <?php if ($isLast || $url === ''): ?>
+                    <span aria-current="page"><?= $escape($label) ?></span>
+                <?php else: ?>
+                    <a href="<?= $escape($url) ?>"><?= $escape($label) ?></a>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </nav>
+    <?php endif; ?>
+
+    <div class="amz-plp__results-bar" data-testid="storefront-category-toolbar">
+        <h1 class="amz-plp__results-text">
+            <?php if ($visibleCount > 0): ?>
+                <?= __('第 %{1}–%{2} 件，共 %{3} 件结果', [$from, $to, $visibleCount]) ?>
+            <?php else: ?>
+                <?= __('0 件结果') ?>
+            <?php endif; ?>
+            <span class="amz-plp__results-query">
+                <?= __('“%{1}”', [$categoryName]) ?>
+            </span>
+            <?php if ($activePrice !== '' && $visibleCount !== $totalCount): ?>
+                <span class="amz-plp__results-hint"><?= __('（筛选自 %{1} 件）', [$totalCount]) ?></span>
+            <?php endif; ?>
+        </h1>
+        <?php if ($sortOptions !== []): ?>
+            <label class="amz-plp__sort">
+                <span><?= __('排序') ?>:</span>
+                <select class="amz-plp__sort-select"
+                        data-testid="storefront-category-sort"
+                        onchange="if (this.value) { window.location.href = this.value; }">
+                    <?php foreach ($sortOptions as $option): ?>
+                        <?php
+                        if (!is_array($option)) {
+                            continue;
+                        }
+                        $href = trim((string)($option['url'] ?? ''));
+                        if ($href === '') {
+                            continue;
+                        }
+                        ?>
+                        <option value="<?= $escape($href) ?>"<?= !empty($option['selected']) ? ' selected' : '' ?>>
+                            <?= $escape($option['label'] ?? '') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        <?php endif; ?>
+    </div>
+
+    <div class="amz-plp__notice" data-testid="category-message" aria-live="polite"></div>
+
+    <?php if ($offers === []): ?>
+        <div class="amz-plp__empty" data-testid="storefront-category-empty">
+            <?php if ($activePrice !== ''): ?>
+                <?= __('当前筛选条件下暂无商品，请调整筛选。') ?>
+            <?php else: ?>
+                <?= __('该分类下暂无已发布商品。') ?>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <div class="amz-plp__grid" data-testid="storefront-category-grid">
+            <?php foreach ($offers as $offer): ?>
+                <?php
+                $minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
+                $sellable = !empty($offer['sellable']);
+                $quoteOnly = !empty($offer['quote_only']);
+                $uuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+                $productId = max(0, (int)($offer['product_id'] ?? 0));
+                $productName = trim((string)($offer['name'] ?? ''));
+                $productSlug = trim((string)($offer['slug'] ?? ''));
+                $productUrl = '';
+                if ($productSlug !== '') {
+                    $productUrl = (string)$this->getUrl('product/' . $productSlug);
+                } elseif ($productId > 0) {
+                    $productUrl = (string)$this->getUrl('product/' . $productId);
+                }
+                $imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ?? ''), $productId);
+                $image = $imageResolved['src'];
+                $imageFallback = $imageResolved['fallback'];
+                ?>
+                <article class="amz-card product-card<?= $productUrl !== '' ? ' is-clickable' : '' ?>"
+                         data-testid="storefront-category-product-card"
+                         data-product-id="<?= $productId ?>"
+                         data-global-offer-uuid="<?= $escape($uuid) ?>">
+                    <?php if ($productUrl !== ''): ?>
+                        <a class="amz-card__hit"
+                           href="<?= $escape($productUrl) ?>"
+                           aria-label="<?= $escape($productName) ?>"
+                           data-testid="storefront-category-product-card-link"></a>
+                    <?php endif; ?>
+                    <div class="amz-card__media-wrap">
+                        <div class="amz-card__media"<?= $productUrl === '' ? ' aria-hidden="true"' : '' ?>>
+                            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                                'product_id' => $productId,
+                                'show_wishlist' => true,
+                                'show_compare' => true,
+                                'show_quickview' => true,
+                            ]) ?>
+                            <img src="<?= $escape($image) ?>"
+                                 alt=""
+                                 data-storefront-img="1"
+                                 data-fallback="<?= $escape($imageFallback) ?>"
+                                 loading="lazy"
+                                 decoding="async">
+                        </div>
+                    </div>
+                    <div class="amz-card__body">
+                        <h2 class="amz-card__title"><?= $escape($productName) ?></h2>
+                        <p class="amz-card__price">
+                            <?php if ($quoteOnly): ?>
+                                <?= __('联系询价') ?>
+                            <?php else: ?>
+                                <span class="amz-card__currency"><?= $escape($offer['currency'] ?? 'CNY') ?></span>
+                                <span class="amz-card__amount"><?= number_format($minor / 100, 2) ?></span>
+                            <?php endif; ?>
+                        </p>
+                        <button type="button"
+                                class="amz-card__add"
+                                data-action="add-v2"
+                                data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+                                data-product-id="<?= $productId ?>"
+                                data-global-offer-uuid="<?= $escape($uuid) ?>"
+                                <?= $sellable ? '' : 'disabled' ?>>
+                            <?= $quoteOnly ? __('仅询价') : ($sellable ? __('加入购物车') : __('暂不可售')) ?>
+                        </button>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</section>
+
+<style>
+.amz-plp { width: 100%; min-width: 0; color: #0f1111; }
+.amz-plp__crumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: #565959;
+}
+.amz-plp__crumb a {
+    color: #2162a1;
+    text-decoration: none;
+}
+.amz-plp__crumb a:hover { color: #c45500; text-decoration: underline; }
+.amz-plp__crumb-sep { opacity: .55; }
+.amz-plp__results-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin: 0 0 14px;
+    padding: 8px 0 10px;
+    border: 0;
+    border-bottom: 1px solid #e3e6e6;
+    border-radius: 0;
+    background: transparent;
+}
+.amz-plp__results-text {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+}
+.amz-plp__results-query { font-weight: 700; }
+.amz-plp__results-hint {
+    margin-left: 6px;
+    color: #565959;
+    font-weight: 400;
+}
+.amz-plp__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 0 auto;
+    font-size: 13px;
+    color: #565959;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+.amz-plp__sort-select {
+    min-height: 32px;
+    padding: 4px 28px 4px 10px;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
+    background: #f0f2f2;
+    color: inherit;
+    font: inherit;
+    box-shadow: 0 2px 5px rgba(15, 17, 17, .05);
+}
+.amz-plp__notice { min-height: 0; margin: 0 0 10px; color: #067d62; font-size: 13px; }
+.amz-plp__notice.is-error { color: #b12704; }
+.amz-plp__grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    align-items: stretch;
+}
+.amz-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+}
+.amz-card.is-clickable { cursor: pointer; }
+.amz-card.is-clickable:hover { border-color: #bbb; box-shadow: 0 2px 8px rgba(15, 17, 17, .08); }
+.amz-card__hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    color: inherit;
+    text-decoration: none;
+}
+.amz-card__media-wrap { background: #fff; overflow: hidden; }
+.amz-card__media {
+    position: relative;
+    display: block;
+    height: 160px;
+    max-height: 160px;
+    overflow: hidden;
+    background: #fff;
+}
+.amz-card__media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    box-sizing: border-box;
+}
+.amz-card__media .product-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity .2s ease;
+}
+.amz-card:hover .product-actions,
+.amz-card:focus-within .product-actions {
+    opacity: 1;
+}
+.amz-card__media .action-btn {
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .96);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 17, 17, .12);
+}
+.amz-card__placeholder {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: #bbb;
+    font-size: 36px;
+    font-weight: 800;
+    line-height: 1;
+}
+.amz-card__body {
+    display: grid;
+    gap: 4px;
+    padding: 8px 10px 10px;
+    flex: 1;
+    align-content: start;
+    position: relative;
+    z-index: 1;
+    background: #fff;
+}
+.amz-card__title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #0f1111;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.5em;
+}
+.amz-card.is-clickable:hover .amz-card__title { color: #c45500; }
+.amz-card__sku {
+    margin: 0;
+    color: #565959;
+    font-size: 11px;
+}
+.amz-card__price {
+    margin: 2px 0 0;
+    color: #0f1111;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.amz-card__currency {
+    margin-right: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    vertical-align: super;
+}
+.amz-card__add {
+    position: relative;
+    z-index: 2;
+    margin-top: 6px;
+    min-height: 30px;
+    border: 1px solid #fcd200;
+    border-radius: 20px;
+    background: #ffd814;
+    color: #0f1111;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.amz-card__add:hover { background: #f7ca00; }
+.amz-card__add:disabled {
+    border-color: #d5d9d9;
+    background: #f0f2f2;
+    color: #9a9a9a;
+    cursor: not-allowed;
+}
+.amz-plp__empty {
+    padding: 28px 16px;
+    border: 1px dashed #d5d9d9;
+    border-radius: 8px;
+    color: #565959;
+    text-align: center;
+    background: #fff;
+}
+@media (max-width: 1200px) {
+    .amz-plp__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+    .amz-plp__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+    .amz-plp__results-bar { align-items: stretch; }
+    .amz-plp__sort { width: 100%; justify-content: space-between; }
+    .amz-plp__sort-select { flex: 1; }
+}
+</style>
+
+<script>
+(function () {
+    'use strict';
+    const root = document.querySelector('[data-testid="storefront-category-catalog"]');
+    if (!root) return;
+    const message = root.querySelector('[data-testid="category-message"]');
+    const guestTokenStorageKey = 'weline.cart.guest_token';
+    let cartApi = null;
+    let guestToken = <?= json_encode($cartGuestToken, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    try {
+        guestToken = guestToken || String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
+    } catch (error) {}
+
+    async function api() {
+        if (cartApi) return cartApi;
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            throw new Error('Weline.Api unavailable');
+        }
+        cartApi = await window.Weline.Api.resource('cart');
+        return cartApi;
+    }
+
+    async function ensureGuestToken() {
+        if (guestToken) return guestToken;
+        const result = await (await api()).issueGuestToken({});
+        const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
+        guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
+        if (!guestToken) throw new Error('<?= $escape(__('无法创建游客购物车会话')) ?>');
+        try { window.sessionStorage.setItem(guestTokenStorageKey, guestToken); } catch (error) {}
+        return guestToken;
+    }
+
+    root.addEventListener('click', async function (event) {
+        const button = event.target.closest('[data-action="add-v2"]');
+        if (!button || button.disabled) return;
+        button.disabled = true;
+        message.classList.remove('is-error');
+        message.textContent = '<?= $escape(__('正在加入购物车...')) ?>';
+        try {
+            const result = await (await api()).addV2({
+                provider_code: button.dataset.providerCode || 'product',
+                global_offer_uuid: button.dataset.globalOfferUuid || '',
+                legacy_product_id: Number(button.dataset.productId || 0),
+                guest_token: await ensureGuestToken(),
+                qty: 1
+            });
+            if (!result || result.success === false) {
+                throw new Error(result && result.message ? result.message : '<?= $escape(__('加入购物车失败')) ?>');
+            }
+            message.textContent = '<?= $escape(__('商品已加入购物车。')) ?>';
+            button.textContent = '<?= $escape(__('已加入')) ?>';
+        } catch (error) {
+            message.classList.add('is-error');
+            message.textContent = error && error.message ? error.message : '<?= $escape(__('加入购物车失败')) ?>';
+            button.disabled = false;
+        }
+    });
+})();
+</script>

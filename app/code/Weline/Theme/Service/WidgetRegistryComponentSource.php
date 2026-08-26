@@ -9,11 +9,13 @@ use Weline\Theme\Dto\ThemeRenderable;
 use Weline\Theme\Interface\ThemeComponentSourceInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Widget\Api\WidgetRegistryInterface;
+use Weline\Widget\Service\ParamSchemaRegistry;
 
 class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
 {
     private const SLOT_TO_POSITION_MAP = [
         'logo' => 'header',
+        'delivery' => 'header',
         'search' => 'header',
         'header-search' => 'header',
         'navigation' => 'header',
@@ -41,6 +43,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
 
     public function __construct(
         private readonly WidgetRegistryInterface $widgetRegistry,
+        private readonly ParamSchemaRegistry $paramSchemaRegistry,
     ) {
     }
 
@@ -84,6 +87,9 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                 $templatePath = !empty($widget['template']) ? (string)$widget['template'] : null;
 
                 $defaultInjections = $this->normalizeDefaultInjections($widget['default_injections'] ?? ($widget['config']['default_injections'] ?? []));
+                $params = is_array($widget['params'] ?? null)
+                    ? $this->paramSchemaRegistry->expandParams($widget['params'])
+                    : [];
 
                 $definitions[] = new ThemeComponentDefinition(
                     module: $module,
@@ -95,14 +101,14 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                     sourceType: 'widget',
                     category: $widgetType,
                     renderMode: $templateContent !== null ? ThemeRenderable::MODE_TEMPLATE_CONTENT : ThemeRenderable::MODE_TEMPLATE_PATH,
-                    configSchema: $this->buildConfigSchema($widget['params'] ?? []),
-                    defaultConfig: $this->buildDefaultConfig($widget['params'] ?? []),
+                    configSchema: $this->buildConfigSchema($params),
+                    defaultConfig: $this->buildDefaultConfig($params),
                     meta: array_merge($widget['meta'] ?? [], [
                         'default_injections' => $defaultInjections,
                         'registry_group' => $type,
                         'template' => $widget['template'] ?? null,
                     ]),
-                    params: is_array($widget['params'] ?? null) ? $widget['params'] : [],
+                    params: $params,
                     position: $this->resolvePositions($widget, $widgetType, $code),
                     pageLayouts: $this->normalizeArray($widget['page_layouts'] ?? ['*'], ['*']),
                     slots: is_array($widget['slots'] ?? null) ? $widget['slots'] : [],

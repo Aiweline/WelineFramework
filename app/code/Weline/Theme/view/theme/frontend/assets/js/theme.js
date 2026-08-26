@@ -3097,31 +3097,27 @@
 
                 // 汉堡菜单按钮点击 - 使用防误触机制
                 if (this.hamburgerBtn) {
-                    // 检查是否已经有其他监听器（避免与 default.phtml 中的实现冲突）
-                    // 如果按钮已经有 data-hamburger-handler 标记，说明已经有其他处理器
-                    if (this.hamburgerBtn.dataset.hamburgerHandler) {
+                    if (window.__welineHeaderDrawerBound || this.hamburgerBtn.dataset.hamburgerHandler) {
                         return; // 不重复添加监听器
                     }
 
+                    window.__welineHeaderDrawerBound = true;
                     // 标记已处理
                     this.hamburgerBtn.dataset.hamburgerHandler = 'true';
 
                     let isProcessing = false;
                     let lastClickTime = 0;
                     let mouseDownPos = null;
-                    let mouseDownTime = 0;
 
                     // 记录鼠标按下位置和时间
                     this.hamburgerBtn.addEventListener('mousedown', (e) => {
                         mouseDownPos = { x: e.clientX, y: e.clientY };
-                        mouseDownTime = Date.now();
                     }, true);
 
                     // 触摸设备支持
                     this.hamburgerBtn.addEventListener('touchstart', (e) => {
                         const touch = e.touches[0];
                         mouseDownPos = { x: touch.clientX, y: touch.clientY };
-                        mouseDownTime = Date.now();
                     }, true);
 
                     this.hamburgerBtn.addEventListener('touchend', (e) => {
@@ -3136,7 +3132,6 @@
                         // 触摸移动距离超过 10px，认为是滑动
                         if (moveDistance > 10) {
                             mouseDownPos = null;
-                            mouseDownTime = 0;
                             return;
                         }
 
@@ -3177,15 +3172,6 @@
                             }
                         }
 
-                        // 检测点击持续时间：如果按下时间过短（< 50ms），可能是误触
-                        if (mouseDownTime && (now - mouseDownTime < 50)) {
-                            mouseDownPos = null;
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-                            return;
-                        }
-
                         e.preventDefault();
                         e.stopPropagation();
                         e.stopImmediatePropagation();
@@ -3193,7 +3179,6 @@
                         isProcessing = true;
                         lastClickTime = now;
                         mouseDownPos = null;
-                        mouseDownTime = 0;
 
                         this.toggle();
 
@@ -3552,6 +3537,56 @@
         /**
          * 切换语言
          */
+        function resolveThemeLanguageHref(lang) {
+            const locale = String(lang || '').trim();
+            if (!locale) {
+                return '';
+            }
+            const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
+            let hrefFromUrlWithLang = '';
+            if (typeof window.urlWithLang === 'function') {
+                hrefFromUrlWithLang = String(window.urlWithLang(currentPath, locale) || '').trim();
+            }
+            const localePattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
+            const pathLocale = String(window.location.pathname || '/')
+                .split('/')
+                .filter(Boolean)
+                .find((part) => localePattern.test(part)) || '';
+            const localeChanging = pathLocale !== ''
+                && pathLocale.replace(/-/g, '_').toLowerCase() !== locale.replace(/-/g, '_').toLowerCase();
+            if (localeChanging && hrefFromUrlWithLang) {
+                try {
+                    const parts = String(window.location.pathname || '/').split('/').filter(Boolean);
+                    const currencyPattern = /^[A-Z]{3}$/;
+                    const remain = [];
+                    let currency = '';
+                    for (const part of parts) {
+                        if (localePattern.test(part)) {
+                            continue;
+                        }
+                        if (currencyPattern.test(part) && currency === '') {
+                            currency = part.toUpperCase();
+                            continue;
+                        }
+                        remain.push(part);
+                    }
+                    const rebuiltParts = [];
+                    if (currency) {
+                        rebuiltParts.push(currency);
+                    }
+                    rebuiltParts.push(locale, ...remain);
+                    const rebuilt = `/${rebuiltParts.join('/')}${window.location.search || ''}`;
+                    const omittedPath = new URL(hrefFromUrlWithLang, window.location.href).pathname;
+                    const explicitPath = new URL(rebuilt, window.location.href).pathname;
+                    if (omittedPath !== explicitPath) {
+                        return rebuilt;
+                    }
+                } catch (_error) {
+                }
+            }
+            return hrefFromUrlWithLang;
+        }
+
         function switchLang(lang) {
             if (!lang) {
                 return;
@@ -3565,8 +3600,10 @@
 
             // 次优先使用 urlWithLang 函数
             if (typeof window.urlWithLang === 'function') {
-                const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
-                const langUrl = window.urlWithLang(currentPath, lang);
+                const langUrl = resolveThemeLanguageHref(lang);
+                // #region agent log
+                fetch('http://127.0.0.1:7803/ingest/6514f9de-23ec-4b43-be58-46df67f9b538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cf1e19'},body:JSON.stringify({sessionId:'cf1e19',runId:'pre-fix',hypothesisId:'H1',location:'theme.js:switchLang',message:'theme fallback language switch',data:{lang,langUrl,pathname:window.location.pathname},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
                 writeLanguagePreference(lang);
                 window.location.href = langUrl;
                 return;
@@ -3638,9 +3675,10 @@
             if (languageSwitcher.getAttribute('data-weline-choice-switcher') === 'language') {
                 return;
             }
-            // Taglib LanguageSwitcher marks itself after binding; do not race it.
+            // Native Weline UI language-switcher owns cookie + navigation.
             if (languageSwitcher.getAttribute('data-weline-i18n-native') === '1'
                 || languageSwitcher.dataset.welineI18nNative === '1'
+                || String(languageSwitcher.dataset.wComponent || '').includes('language-switcher')
                 || window.__WelineI18nNavigating
             ) {
                 return;

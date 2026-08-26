@@ -29,6 +29,8 @@ class EavAttributeSchema extends AbstractSchema
     public const FIELD_FRONTEND_IS_FILTERABLE = 'frontend_is_filterable';
     public const FIELD_FRONTEND_IS_SEARCHABLE = 'frontend_is_searchable';
 
+    public const FIELD_COMPARE_MODE = 'compare_mode';
+
     public const FIELD_DATA_IS_MULTIPLE = 'data_is_multiple';
     public const FIELD_DATA_HAS_OPTION = 'data_has_option';
 
@@ -73,6 +75,7 @@ class EavAttributeSchema extends AbstractSchema
             self::FIELD_FRONTEND_IS_VISIBLE => $this->boolean('Is Visible On Frontend', false),
             self::FIELD_FRONTEND_IS_FILTERABLE => $this->boolean('Is Filterable', false),
             self::FIELD_FRONTEND_IS_SEARCHABLE => $this->boolean('Is Searchable', false),
+            self::FIELD_COMPARE_MODE => $this->varchar('Compare Mode', 32, "not null default 'none'"),
             self::FIELD_DATA_IS_MULTIPLE => $this->boolean('Is Multiple', false),
             self::FIELD_DATA_HAS_OPTION => $this->boolean('Has Option', false),
         ];

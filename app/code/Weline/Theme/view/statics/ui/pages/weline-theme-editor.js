@@ -537,7 +537,9 @@
 
             if (usedWidth(element, more) > limit + 1) {
                 more.hidden = false;
-                const movable = [...itemsHost.children].filter((item) => item instanceof HTMLElement);
+                const movable = [...itemsHost.children].filter((item) => (
+                    item instanceof HTMLElement && !item.hasAttribute('data-w-toolbar-overflow-pin')
+                ));
                 let guard = 0;
                 while (usedWidth(element, more) > limit + 1 && movable.length > 0 && guard < 64) {
                     guard += 1;
@@ -654,6 +656,7 @@
         apiWidgets: '',
         apiDefaultInjections: '',
         apiApplyDefaultInjection: '',
+        apiInitSlotDefaults: '',
         apiPublish: '',
         apiPreview: '',
         apiCompileLayout: '',
@@ -677,6 +680,7 @@
         apiSaveVersion: '',
         apiSwitchVersion: '',
         apiRestoreOriginal: '',
+        apiResetDraftResources: '',
         apiPublishVersion: '',
         apiDeleteVersion: '',
         apiRenameVersion: '',
@@ -742,6 +746,8 @@
         slotsPanelOpen: false,
         interactionMode: 'edit', // edit：插槽 hover/面板；preview：真预览
         interactionModePanelsSnapshot: null,
+        selectionTarget: 'default', // default | slot | widget
+        linkBlockEnabled: false, // 独立：阻止 a 跳转，可与选中目标叠加
         fullscreenSidePanelsSnapshot: null,
         editorFullscreenFallback: false,
         configLocale: '',
@@ -838,6 +844,9 @@
     let elements = {};
     const SIDE_PANEL_STORAGE_KEY = 'weline.theme.editor.sidePanels.v1';
     const SLOTS_PANEL_STORAGE_KEY = 'weline.theme.editor.slotsPanel.v1';
+    const INTERACTION_MODE_STORAGE_KEY = 'weline.theme.editor.interactionMode.v1';
+    const SELECTION_TARGET_STORAGE_KEY = 'weline.theme.editor.selectionTarget.v1';
+    const LINK_BLOCK_STORAGE_KEY = 'weline.theme.editor.linkBlock.v1';
     const DASHBOARD_BASIC_WIDGET_CODES = new Set([
         'alert', 'badge', 'button', 'card', 'dropdown', 'form', 'field',
         'field-group', 'form-actions', 'form-group', 'grid', 'input',
@@ -1217,7 +1226,7 @@
             return;
         }
         const compact = isCompactEditorViewport();
-        // 紧凑视口使用覆盖式 drawer，同一时刻只允许一个面板接管操作焦点。
+        // 紧凑视口预览空间有限：同一时刻只允许一个侧栏打开；布局仍为网格推挤，不覆盖预览。
         if (compact && state.sidePanels.configOpen === true && state.sidePanels.widgetOpen === true) {
             state.sidePanels.configOpen = false;
         }
@@ -1338,6 +1347,38 @@
         return mode === 'preview' ? 'preview' : 'edit';
     }
 
+    function readStoredInteractionMode() {
+        try {
+            if (!window.sessionStorage) {
+                return '';
+            }
+            return normalizeInteractionMode(window.sessionStorage.getItem(INTERACTION_MODE_STORAGE_KEY) || '');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function persistInteractionMode(mode) {
+        const next = normalizeInteractionMode(mode);
+        try {
+            if (window.sessionStorage) {
+                window.sessionStorage.setItem(INTERACTION_MODE_STORAGE_KEY, next);
+            }
+        } catch (error) {
+            // Ignore quota / private-mode failures; in-memory state still works.
+        }
+        return next;
+    }
+
+    function resolveInitialInteractionMode() {
+        const fromUrl = normalizeInteractionMode(getCurrentWindowParam('interaction_mode'));
+        if (getCurrentWindowParam('interaction_mode')) {
+            return fromUrl;
+        }
+        const fromStore = readStoredInteractionMode();
+        return fromStore || 'edit';
+    }
+
     function notifyPreviewInteractionMode(mode = state.interactionMode) {
         const previewWindow = elements.previewFrame?.contentWindow;
         if (!previewWindow) {
@@ -1347,7 +1388,183 @@
             source: 'weline-theme-editor',
             type: 'interaction-mode',
             mode: normalizeInteractionMode(mode),
+            selection_target: normalizeSelectionTarget(state.selectionTarget),
+            link_block: state.linkBlockEnabled === true,
         }, window.location.origin);
+    }
+
+    function normalizeSelectionTarget(mode) {
+        const value = String(mode || '').trim().toLowerCase();
+        if (value === 'slot' || value === 'widget') {
+            return value;
+        }
+        return 'default';
+    }
+
+    function normalizeLinkBlockEnabled(value) {
+        if (value === true || value === 1 || value === '1' || value === 'true' || value === 'on') {
+            return true;
+        }
+        return false;
+    }
+
+    function readStoredSelectionTarget() {
+        try {
+            if (!window.sessionStorage) {
+                return '';
+            }
+            return normalizeSelectionTarget(window.sessionStorage.getItem(SELECTION_TARGET_STORAGE_KEY) || '');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function persistSelectionTarget(mode) {
+        const next = normalizeSelectionTarget(mode);
+        try {
+            if (window.sessionStorage) {
+                window.sessionStorage.setItem(SELECTION_TARGET_STORAGE_KEY, next);
+            }
+        } catch (error) {
+            // Ignore quota / private-mode failures.
+        }
+        return next;
+    }
+
+    function resolveInitialSelectionTarget() {
+        const fromUrl = getCurrentWindowParam('selection_target');
+        if (fromUrl) {
+            return normalizeSelectionTarget(fromUrl);
+        }
+        return readStoredSelectionTarget() || 'default';
+    }
+
+    function readStoredLinkBlockEnabled() {
+        try {
+            if (!window.sessionStorage) {
+                return null;
+            }
+            const raw = window.sessionStorage.getItem(LINK_BLOCK_STORAGE_KEY);
+            if (raw == null || raw === '') {
+                return null;
+            }
+            return normalizeLinkBlockEnabled(raw);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function persistLinkBlockEnabled(enabled) {
+        const next = normalizeLinkBlockEnabled(enabled);
+        try {
+            if (window.sessionStorage) {
+                window.sessionStorage.setItem(LINK_BLOCK_STORAGE_KEY, next ? '1' : '0');
+            }
+        } catch (error) {
+            // Ignore quota / private-mode failures.
+        }
+        return next;
+    }
+
+    function resolveInitialLinkBlockEnabled() {
+        const fromUrl = getCurrentWindowParam('link_block');
+        if (fromUrl != null && fromUrl !== '') {
+            return normalizeLinkBlockEnabled(fromUrl);
+        }
+        const fromStore = readStoredLinkBlockEnabled();
+        return fromStore == null ? false : fromStore;
+    }
+
+    function notifyPreviewSelectionTarget(mode = state.selectionTarget) {
+        const previewWindow = elements.previewFrame?.contentWindow;
+        if (!previewWindow) {
+            return;
+        }
+        previewWindow.postMessage({
+            source: 'weline-theme-editor',
+            type: 'selection-target',
+            mode: normalizeSelectionTarget(mode),
+        }, window.location.origin);
+    }
+
+    function notifyPreviewLinkBlock(enabled = state.linkBlockEnabled) {
+        const previewWindow = elements.previewFrame?.contentWindow;
+        if (!previewWindow) {
+            return;
+        }
+        previewWindow.postMessage({
+            source: 'weline-theme-editor',
+            type: 'link-block',
+            enabled: normalizeLinkBlockEnabled(enabled),
+        }, window.location.origin);
+    }
+
+    function applySelectionTargetUi() {
+        if (!elements.container) {
+            return;
+        }
+        const target = normalizeSelectionTarget(state.selectionTarget);
+        elements.container.setAttribute('data-selection-target', target);
+        document.querySelectorAll('[data-theme-editor-action="set-selection-target"]').forEach((btn) => {
+            const mode = normalizeSelectionTarget(btn.getAttribute('data-selection-target'));
+            const active = mode === target;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', String(active));
+            btn.disabled = isPreviewInteractionMode();
+        });
+    }
+
+    function applyLinkBlockUi() {
+        if (!elements.container) {
+            return;
+        }
+        const enabled = state.linkBlockEnabled === true;
+        elements.container.setAttribute('data-link-block', enabled ? '1' : '0');
+        document.querySelectorAll('[data-theme-editor-action="toggle-link-block"]').forEach((btn) => {
+            btn.classList.toggle('active', enabled);
+            btn.setAttribute('aria-pressed', String(enabled));
+            btn.disabled = isPreviewInteractionMode();
+        });
+    }
+
+    function setSelectionTarget(mode, options = {}) {
+        const next = normalizeSelectionTarget(mode);
+        const prev = normalizeSelectionTarget(state.selectionTarget);
+        const force = options.force === true;
+        if (next === prev && !force) {
+            applySelectionTargetUi();
+            notifyPreviewSelectionTarget(next);
+            return;
+        }
+        state.selectionTarget = next;
+        persistSelectionTarget(next);
+        if (options.syncUrl !== false) {
+            syncEditorUrlState({
+                selection_target: next === 'default' ? null : next,
+            });
+        }
+        applySelectionTargetUi();
+        notifyPreviewSelectionTarget(next);
+    }
+
+    function setLinkBlockEnabled(enabled, options = {}) {
+        const next = normalizeLinkBlockEnabled(enabled);
+        const prev = state.linkBlockEnabled === true;
+        const force = options.force === true;
+        if (next === prev && !force) {
+            applyLinkBlockUi();
+            notifyPreviewLinkBlock(next);
+            return;
+        }
+        state.linkBlockEnabled = next;
+        persistLinkBlockEnabled(next);
+        if (options.syncUrl !== false) {
+            syncEditorUrlState({
+                link_block: next ? '1' : null,
+            });
+        }
+        applyLinkBlockUi();
+        notifyPreviewLinkBlock(next);
     }
 
     function clearPreviewEditChrome() {
@@ -1396,16 +1613,23 @@
         if (next === prev && !force) {
             applyInteractionModeUi();
             notifyPreviewInteractionMode(next);
+            applySelectionTargetUi();
+            notifyPreviewSelectionTarget(state.selectionTarget);
+            applyLinkBlockUi();
+            notifyPreviewLinkBlock(state.linkBlockEnabled);
             return;
         }
 
         if (next === 'preview') {
             cancelPreviewDragSession();
-            state.interactionModePanelsSnapshot = {
-                configOpen: state.sidePanels.configOpen === true,
-                widgetOpen: state.sidePanels.widgetOpen === true,
-                slotsPanelOpen: state.slotsPanelOpen === true,
-            };
+            // iframe 重载 force 重应用时不得覆盖进入预览前的面板快照
+            if (prev !== 'preview' || !state.interactionModePanelsSnapshot) {
+                state.interactionModePanelsSnapshot = {
+                    configOpen: state.sidePanels.configOpen === true,
+                    widgetOpen: state.sidePanels.widgetOpen === true,
+                    slotsPanelOpen: state.slotsPanelOpen === true,
+                };
+            }
             setSidePanelOpen('config', false, false);
             setSidePanelOpen('widget', false, false);
             setSlotsPanelOpen(false, false);
@@ -1422,8 +1646,18 @@
         }
 
         state.interactionMode = next;
+        persistInteractionMode(next);
+        if (options.syncUrl !== false) {
+            syncEditorUrlState({
+                interaction_mode: next,
+            });
+        }
         applyInteractionModeUi();
+        applySelectionTargetUi();
+        applyLinkBlockUi();
         notifyPreviewInteractionMode(next);
+        notifyPreviewSelectionTarget(state.selectionTarget);
+        notifyPreviewLinkBlock(state.linkBlockEnabled);
     }
 
     function openWidgetPanelForSlotSelection(slot) {
@@ -3240,14 +3474,150 @@
         }], { summary: 'layout_node_added' });
     }
 
-    async function queueRemovedLayoutNode(response) {
-        const nodeUid = validNodeUid(response?.node_uid || response?.data?.node_uid);
-        if (!nodeUid) throw new Error(translateUiText('布局节点缺少稳定 UID，未写入删除墓碑'));
+    async function queueRemovedLayoutNode(response, hints = {}) {
+        const nodeUid = resolveRemovedLayoutNodeUid(response, hints);
+        if (!nodeUid) {
+            console.warn('[ThemeEditor] Skip scoped remove_node tombstone: missing node_uid', hints);
+            return;
+        }
         await queueScopedChanges('layout', [{
             op: 'remove_node',
             path: `/nodes/${nodeUid}`,
             node_uid: nodeUid,
         }], { summary: 'layout_node_removed' });
+    }
+
+    function resolveRemovedLayoutNodeUid(response, hints = {}) {
+        const direct = validNodeUid(
+            response?.node_uid
+            || response?.data?.node_uid
+            || hints.nodeUid
+        );
+        if (direct) {
+            return direct;
+        }
+        const layoutId = String(hints.layoutId || response?.layout_id || '').trim();
+        if (!layoutId) {
+            return '';
+        }
+        const workspace = getScopedWorkspaceState('layout');
+        const nodes = workspace?.draft_payload?.nodes;
+        if (!nodes || typeof nodes !== 'object') {
+            return '';
+        }
+        for (const uid of Object.keys(nodes)) {
+            const node = nodes[uid];
+            if (!node || typeof node !== 'object') {
+                continue;
+            }
+            if (String(node.layout_id || '') === layoutId) {
+                const resolved = validNodeUid(node.node_uid || uid);
+                if (resolved) {
+                    return resolved;
+                }
+            }
+        }
+        return '';
+    }
+
+    function resolveWidgetContextFromIframe(identityInput) {
+        const context = {
+            nodeUid: '',
+            widgetModule: '',
+            widgetType: '',
+            widgetCode: '',
+            slotId: '',
+            area: '',
+            templateRef: '',
+        };
+        const layoutId = typeof identityInput === 'object'
+            ? String(identityInput?.layoutId || '').trim()
+            : String(identityInput || '').trim();
+        const templateRef = typeof identityInput === 'object'
+            ? String(identityInput?.templateRef || '').trim()
+            : '';
+        context.templateRef = templateRef;
+        const iframe = elements.previewFrame;
+        if (!iframe || !iframe.contentDocument || (!layoutId && !templateRef)) {
+            return context;
+        }
+        try {
+            const selector = layoutId
+                ? dataLayoutIdSelector(layoutId)
+                : dataTemplateRefSelector(templateRef);
+            const widgetEl = iframe.contentDocument.querySelector(selector);
+            if (!widgetEl) {
+                return context;
+            }
+            context.nodeUid = validNodeUid(widgetEl.getAttribute('data-node-uid') || widgetEl.dataset.nodeUid || '');
+            context.widgetModule = String(widgetEl.getAttribute('data-widget-module') || widgetEl.dataset.widgetModule || '').trim();
+            context.widgetType = String(widgetEl.getAttribute('data-widget-type') || widgetEl.dataset.widgetType || '').trim();
+            context.widgetCode = String(widgetEl.getAttribute('data-widget-code') || widgetEl.dataset.widgetCode || '').trim();
+            context.templateRef = String(widgetEl.getAttribute('data-template-ref') || widgetEl.dataset.templateRef || templateRef || '').trim();
+            context.slotId = String(widgetEl.getAttribute('data-slot-id') || widgetEl.dataset.slotId || '').trim();
+            if (widgetEl.closest('header, [data-wslot-position="header"], .site-header')) {
+                context.area = 'header';
+            } else if (widgetEl.closest('footer, [data-wslot-position="footer"], .site-footer')) {
+                context.area = 'footer';
+            } else {
+                context.area = 'content';
+            }
+        } catch (error) {
+            console.warn('[ThemeEditor] resolveWidgetContextFromIframe failed:', error);
+        }
+        return context;
+    }
+
+    function resolveWidgetDeleteTarget(button, bar) {
+        const layoutId = String(bar?.dataset?.layoutId || button?.dataset?.layoutId || '').trim();
+        const templateRef = String(bar?.dataset?.templateRef || button?.dataset?.templateRef || '').trim();
+        const stackTop = (state.nestStack && state.nestStack.length) ? String(state.nestStack[0]).trim() : '';
+        const identity = stackTop || layoutId || templateRef;
+        const isTemplate = identity.startsWith('tpl:') || (!layoutId && templateRef !== '');
+        return {
+            layoutId: isTemplate ? '' : (layoutId || (/^\d+$/.test(identity) ? identity : '')),
+            templateRef: isTemplate ? (templateRef || identity) : templateRef,
+            slotId: String(button?.dataset?.slotId || bar?.dataset?.slotId || '').trim(),
+        };
+    }
+
+    function buildWidgetDeletePayload(identityInput, slotId, area, widgetContext = {}) {
+        const layoutId = typeof identityInput === 'object'
+            ? String(identityInput?.layoutId || '').trim()
+            : String(identityInput || '').trim();
+        const templateRef = typeof identityInput === 'object'
+            ? String(identityInput?.templateRef || '').trim()
+            : '';
+        return {
+            layout_id: layoutId || 0,
+            template_ref: templateRef || widgetContext.templateRef || '',
+            theme_id: state.themeId,
+            slot_id: slotId || widgetContext.slotId || '',
+            area: area || widgetContext.area || 'content',
+            layout_type: state.layoutType || 'homepage',
+            layout_option: state.layoutOption || 'default',
+            editor_area: state.editorArea || 'frontend',
+            widget_module: widgetContext.widgetModule || '',
+            widget_type: widgetContext.widgetType || '',
+            widget_code: widgetContext.widgetCode || '',
+            ...getLayoutLockVirtualPayload(),
+        };
+    }
+
+    function resolveWidgetElementSelector(identityInput) {
+        const layoutId = typeof identityInput === 'object'
+            ? String(identityInput?.layoutId || '').trim()
+            : String(identityInput || '').trim();
+        const templateRef = typeof identityInput === 'object'
+            ? String(identityInput?.templateRef || '').trim()
+            : '';
+        if (layoutId) {
+            return dataLayoutIdSelector(layoutId);
+        }
+        if (templateRef) {
+            return dataTemplateRefSelector(templateRef);
+        }
+        return '';
     }
 
     async function queueLayoutNodePlacementOwnership(nodes, summary = 'layout_node_placement_changed') {
@@ -3340,9 +3710,22 @@
             page_type: getCurrentPageType(),
             layout_option: state.layoutOption || 'default',
             status: state.previewStatus || 'draft',
+            interaction_mode: normalizeInteractionMode(state.interactionMode || 'edit'),
+            selection_target: normalizeSelectionTarget(state.selectionTarget || 'default'),
+            link_block: state.linkBlockEnabled === true ? '1' : null,
         }, overrides || {});
         params.editor_area = previewArea;
         params.preview_area = previewArea;
+        if (Object.prototype.hasOwnProperty.call(params, 'interaction_mode')) {
+            params.interaction_mode = normalizeInteractionMode(params.interaction_mode);
+        }
+        if (Object.prototype.hasOwnProperty.call(params, 'selection_target')) {
+            const target = normalizeSelectionTarget(params.selection_target);
+            params.selection_target = target === 'default' ? null : target;
+        }
+        if (Object.prototype.hasOwnProperty.call(params, 'link_block')) {
+            params.link_block = normalizeLinkBlockEnabled(params.link_block) ? '1' : null;
+        }
 
         Object.entries(params).forEach(([key, value]) => {
             if (value === null || value === undefined || value === '') {
@@ -3391,6 +3774,14 @@
         url.searchParams.set('layout_option', layoutOption);
         url.searchParams.set('editor_mode', String(overrides.editor_mode || '1'));
         url.searchParams.set('preview_mode', String(overrides.preview_mode || 'live'));
+        url.searchParams.set(
+            'interaction_mode',
+            normalizeInteractionMode(
+                Object.prototype.hasOwnProperty.call(overrides, 'interaction_mode')
+                    ? overrides.interaction_mode
+                    : (state.interactionMode || 'edit')
+            )
+        );
         url.searchParams.set('status', previewStatus);
         url.searchParams.set('editor_area', previewArea);
         url.searchParams.set('preview_area', previewArea);
@@ -3399,7 +3790,7 @@
             url.searchParams.set('locale', previewLocale);
         }
 
-        ['frontend_theme_id', 'backend_theme_id', 'version_id'].forEach((key) => {
+        ['frontend_theme_id', 'backend_theme_id', 'version_id', 'theme_public_route'].forEach((key) => {
             const overrideValue = Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : currentUrl.searchParams.get(key);
             if (overrideValue !== null && overrideValue !== undefined && overrideValue !== '') {
                 url.searchParams.set(key, String(overrideValue));
@@ -3440,7 +3831,8 @@
         const themeId = parseInt(url.searchParams.get('theme_id') || '0', 10) || 0;
         const layoutType = url.searchParams.get('layout_type') || getEffectiveLayoutType();
         const layoutOption = url.searchParams.get('layout_option') || getEffectiveLayoutOption();
-        const locale = url.searchParams.get('locale') || '';
+        const rawLocale = url.searchParams.get('locale') || '';
+        const locale = rawLocale === 'default' ? '' : rawLocale;
         let editorContext = buildTypedEditorContext('layout', {
             area: 'frontend',
             theme_id: themeId,
@@ -3548,6 +3940,7 @@
         config.apiWidgets = container.dataset.apiWidgets || `${config.apiBase}/widgets`;
         config.apiDefaultInjections = container.dataset.apiDefaultInjections || `${config.apiBase}/default-injections`;
         config.apiApplyDefaultInjection = container.dataset.apiApplyDefaultInjection || `${config.apiBase}/apply-default-injection`;
+        config.apiInitSlotDefaults = container.dataset.apiInitSlotDefaults || `${config.apiBase}/init-slot-defaults`;
         config.apiPublish = container.dataset.apiPublish || `${config.apiBase}/publish`;
         config.apiPreview = container.dataset.apiPreview || `${config.apiBase}/preview`;
         config.apiRenderWidget = container.dataset.apiRenderWidget || `${config.apiBase}/render-widget`;
@@ -3575,6 +3968,7 @@
         config.apiSaveVersion = container.dataset.apiSaveVersion || `${config.apiBase}/save-version`;
         config.apiSwitchVersion = container.dataset.apiSwitchVersion || `${config.apiBase}/switch-version`;
         config.apiRestoreOriginal = container.dataset.apiRestoreOriginal || `${config.apiBase}/restore-original`;
+        config.apiResetDraftResources = container.dataset.apiResetDraftResources || `${config.apiBase}/reset-draft-resources`;
         config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
         config.apiRenameVersion = container.dataset.apiRenameVersion || `${config.apiBase}/rename-version`;
@@ -3651,13 +4045,30 @@
             btnPublish: document.getElementById('btnPublish'),
             btnFrontendPreview: document.getElementById('btnFrontendPreview'),
             btnRestoreLayout: document.getElementById('btnRestoreLayout'),
+            btnResetDraftResources: document.getElementById('btnResetDraftResources'),
+            resetDraftModal: document.getElementById('themeEditorResetDraftModal'),
+            btnResetDraftConfirm: document.getElementById('btnResetDraftConfirm'),
+            btnResetDraftCancel: document.getElementById('btnResetDraftCancel'),
+            btnResetDraftAllResources: document.getElementById('btnResetDraftAllResources'),
             btnRefreshPreview: document.getElementById('btnRefreshPreview'),
             btnFullscreenPreview: document.getElementById('btnFullscreenPreview'),
         };
 
         initSidePanels();
         initSlotsPanel();
-        applyInteractionModeUi();
+        setInteractionMode(resolveInitialInteractionMode(), {
+            force: true,
+            skipViewSwitch: true,
+            restorePanels: false,
+        });
+        setSelectionTarget(resolveInitialSelectionTarget(), {
+            force: true,
+            syncUrl: false,
+        });
+        setLinkBlockEnabled(resolveInitialLinkBlockEnabled(), {
+            force: true,
+            syncUrl: false,
+        });
         initWidgetLibraryTabs();
 
         // 当前布局信息
@@ -3688,6 +4099,8 @@
         // 绑定事件
         bindEvents();
         initCmsContextBridge();
+        // 部件库与预览并行：优先发起部件列表请求，不再等待 iframe load
+        deferWidgetLibraryLoad();
         if (state.themeId) {
             loadLayoutPreview();
         }
@@ -3707,9 +4120,6 @@
         if (state.themeId) {
             loadVersions();
         }
-
-        // 部件库延迟加载：首屏不阻塞，等主预览开始加载、浏览器空闲后再异步拉取并渲染右侧部件库
-        deferWidgetLibraryLoad();
         if (state.themeId) {
             refreshDefaultInjectionApplications({ render: false, silent: true });
         }
@@ -3759,6 +4169,21 @@
             if (action === 'set-interaction-mode') {
                 e.preventDefault();
                 setInteractionMode(actionButton.getAttribute('data-interaction-mode') || 'edit');
+            } else if (action === 'set-selection-target') {
+                e.preventDefault();
+                if (isPreviewInteractionMode()) {
+                    return;
+                }
+                setSelectionTarget(actionButton.getAttribute('data-selection-target') || 'default');
+            } else if (action === 'toggle-link-block') {
+                e.preventDefault();
+                if (isPreviewInteractionMode()) {
+                    return;
+                }
+                setLinkBlockEnabled(!(state.linkBlockEnabled === true));
+            } else if (action === 'open-reset-draft-modal') {
+                e.preventDefault();
+                openResetDraftModal();
             } else if (action === 'open-config-panel') {
                 e.preventDefault();
                 if (isPreviewInteractionMode()) {
@@ -4242,13 +4667,37 @@
         // 前端预览按钮
         elements.btnFrontendPreview?.addEventListener('click', openFrontendPreview);
 
-        // 配置表单提交（左侧面板，无提交按钮时仅防误触）
-        document.addEventListener('submit', function(e) {
-            if (e.target.id === 'widgetConfigForm' || (e.target.classList && e.target.classList.contains('w-param-form'))) {
+        // FormRenderer 默认 GET：取消 prepare-submit，避免未拦截时整页导航
+        document.addEventListener('weline:form:prepare-submit', function(e) {
+            const form = e.detail?.form || e.target;
+            if (!(form instanceof HTMLFormElement)) {
+                return;
+            }
+            const isWidgetConfigForm = form.id === 'widgetConfigForm'
+                || form.classList.contains('w-param-form')
+                || form.classList.contains('widget-accordion-config-form')
+                || form.classList.contains('config-form');
+            if (isWidgetConfigForm) {
                 e.preventDefault();
-                if (e.target.id === 'widgetConfigForm') {
-                    Promise.resolve(saveWidgetConfig(e.target)).catch(() => undefined);
-                }
+            }
+        });
+
+        // 配置表单提交（左侧面板显式「保存配置」）
+        document.addEventListener('submit', function(e) {
+            const form = e.target;
+            if (!(form instanceof HTMLFormElement)) {
+                return;
+            }
+            const isWidgetConfigForm = form.id === 'widgetConfigForm'
+                || form.classList.contains('w-param-form')
+                || form.classList.contains('widget-accordion-config-form')
+                || form.classList.contains('config-form');
+            if (!isWidgetConfigForm) {
+                return;
+            }
+            e.preventDefault();
+            if (form.id === 'widgetConfigForm' || form.dataset.layoutId || form.dataset.templateRef) {
+                Promise.resolve(saveWidgetConfig(form)).catch(() => undefined);
             }
         });
 
@@ -4290,9 +4739,12 @@
                     e.stopImmediatePropagation();
                     const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                     const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
-                    const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
-                    if (panel && fieldKey && layoutId) {
+                    // TE-CAP-020: template widgets may have empty layout_id; AI translate only needs source text.
+                    const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId || '';
+                    if (panel && fieldKey) {
                         await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
+                    } else {
+                        showToast(translateUiText('无法定位多语言字段'), 'warning');
                     }
                     return;
                 }
@@ -4404,7 +4856,7 @@
                     elements.previewLoading.classList.add('hidden');
                 }
 
-                // 主预览加载完成后，再初始化右侧部件库（仅一次），避免阻塞首屏与主预览
+                // 预览 load 时若部件库尚未就绪则兜底初始化（正常路径已在 deferWidgetLibraryLoad 并行发起）
                 initWidgetLibraryOnce();
 
                 // 设置 iframe 内链接拦截，使链接跳转到预览模式
@@ -4414,7 +4866,12 @@
                 setTimeout(() => initWidgetHoverActions(), 100);
                 setTimeout(() => initWidgetHoverActions(), 400);
                 setTimeout(() => initWidgetHoverActions(), 1200);
-                setTimeout(() => setInteractionMode(state.interactionMode || 'edit', { force: true, skipViewSwitch: true, restorePanels: false }), 50);
+                setTimeout(() => setInteractionMode(state.interactionMode || 'edit', {
+                    force: true,
+                    skipViewSwitch: true,
+                    restorePanels: false,
+                    syncUrl: false,
+                }), 50);
             });
 
             // 添加超时机制：如果 5 秒后仍未加载完成，强制隐藏加载状态
@@ -4430,6 +4887,26 @@
         // 恢复原始布局按钮
         if (elements.btnRestoreLayout) {
             elements.btnRestoreLayout.addEventListener('click', handleRestoreLayout);
+        }
+
+        if (elements.btnResetDraftConfirm) {
+            elements.btnResetDraftConfirm.addEventListener('click', () => {
+                executeResetDraftResources(false).catch((error) => {
+                    console.error('[ThemeEditor] Reset draft error:', error);
+                    showToast(translateUiText('重置失败：') + (error?.message || ''), 'error');
+                });
+            });
+        }
+        if (elements.btnResetDraftAllResources) {
+            elements.btnResetDraftAllResources.addEventListener('click', () => {
+                executeResetDraftResources(true).catch((error) => {
+                    console.error('[ThemeEditor] Reset all draft error:', error);
+                    showToast(translateUiText('重置失败：') + (error?.message || ''), 'error');
+                });
+            });
+        }
+        if (elements.btnResetDraftCancel && elements.resetDraftModal) {
+            elements.btnResetDraftCancel.addEventListener('click', () => closeResetDraftModal());
         }
 
         // 刷新预览按钮
@@ -4466,7 +4943,20 @@
             editor_area: state.editorArea || 'frontend',
             preview_area: state.editorArea || 'frontend',
             status: state.previewStatus || 'draft',
+            interaction_mode: normalizeInteractionMode(state.interactionMode || 'edit'),
+            selection_target: normalizeSelectionTarget(state.selectionTarget || 'default'),
+            link_block: state.linkBlockEnabled === true ? '1' : null,
         }, overrides || {});
+        if (Object.prototype.hasOwnProperty.call(params, 'interaction_mode')) {
+            params.interaction_mode = normalizeInteractionMode(params.interaction_mode);
+        }
+        if (Object.prototype.hasOwnProperty.call(params, 'selection_target')) {
+            const target = normalizeSelectionTarget(params.selection_target);
+            params.selection_target = target === 'default' ? null : target;
+        }
+        if (Object.prototype.hasOwnProperty.call(params, 'link_block')) {
+            params.link_block = normalizeLinkBlockEnabled(params.link_block) ? '1' : null;
+        }
 
         Object.entries(params).forEach(([key, value]) => {
             if (value === null || value === undefined || value === '') {
@@ -5033,10 +5523,27 @@
 
         console.log('收到 iframe 消息:', data);
 
+        if (data.type === 'slot-selected') {
+            if (isPreviewInteractionMode()) {
+                setInteractionMode('edit');
+            }
+            handleSlotSelected(data.slot);
+            return;
+        }
+        if (data.type === 'slot-init-defaults') {
+            if (isPreviewInteractionMode()) {
+                setInteractionMode('edit');
+            }
+            void initSlotDefaultsFromPreview(data).catch((error) => {
+                console.error('[ThemeEditor] Slot init defaults failed:', error);
+                showToast(error?.message || translateUiText('初始化失败'), 'error');
+            });
+            return;
+        }
+
         if (isPreviewInteractionMode() && [
             'widget-selected',
             'slot-clicked',
-            'slot-selected',
             'drop-candidate',
             'drop-candidate-clear',
             'widget-dropped',
@@ -5053,10 +5560,6 @@
             case 'slot-clicked':
                 // 预览页面中点击了插槽（旧版）
                 handlePreviewSlotClicked(data);
-                break;
-            case 'slot-selected':
-                // 预览页面中选中了插槽（新版）
-                handleSlotSelected(data.slot);
                 break;
             case 'drop-candidate':
                 // iframe 只报告当前指针候选；最终接纳、容量与保存由父编辑器统一处理。
@@ -5076,6 +5579,49 @@
                 clearPreviewDropCandidate(data.session_id || state.previewDragSessionId);
                 showToast(data.reason || '部件被拒绝', 'error');
                 break;
+            case 'locale-change': {
+                const nextLocale = String(data.locale || '').trim();
+                void Promise.resolve(setActiveConfigLocale(nextLocale, { toast: true, forceReload: true }))
+                    .catch((error) => {
+                        console.error('[ThemeEditor] Preview locale change failed:', error);
+                        showToast(error?.message || translateUiText('语言切换失败，已恢复原语言'), 'error');
+                    });
+                break;
+            }
+            case 'slot-hover-sync':
+                // 预览引擎切换 hover 目标后，父页再 sync 一次 anchored-float（对齐部件 show-actions）
+                syncActiveSlotToolbarFloat();
+                break;
+        }
+    }
+
+    async function initSlotDefaultsFromPreview(data) {
+        const slotId = String(data?.slot_id || '').trim();
+        if (!slotId) {
+            showToast(translateUiText('缺少插槽标识'), 'warning');
+            return;
+        }
+
+        const payload = buildLayoutVersionIdentityPayload({
+            slot_id: slotId,
+            area: data?.area || '',
+            editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+        });
+        const result = await apiJson(config.apiInitSlotDefaults || `${config.apiBase}/init-slot-defaults`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!result || !result.success) {
+            showToast(result?.message || translateUiText('初始化失败'), 'error');
+            return;
+        }
+
+        await loadScopedWorkspace('layout');
+        loadLayoutPreview();
+        showToast(result.message || translateUiText('已初始化插槽默认部件'), 'success');
+        if (state.widgetLibraryTab === 'applications') {
+            await refreshDefaultInjectionApplications({ render: true, silent: true });
         }
     }
 
@@ -5298,7 +5844,8 @@
         // 1. 查找 widget-wrapper 容器内的部件（SlotRendererService 渲染的）
         // 2. 查找原有标记的部件元素
         const selectors = [
-            `${dataAttributeSelector('data-wslot', slotId)} .widget-wrapper`,
+            `${dataAttributeSelector('data-wslot', slotId)} .weline-template-widget[data-template-ref]`,
+            `${dataAttributeSelector('data-wslot', slotId)} .widget-wrapper[data-layout-id]`,
             `${dataAttributeSelector('data-wslot', slotId)} [data-layout-id]`,
             `.area-widgets${dataAttributeSelector('data-area', slotId)} .preview-widget-item`,
             `.area-widgets${dataAttributeSelector('data-area', slotId)} [data-layout-id]`,
@@ -5328,10 +5875,17 @@
                 if (slotContainer) {
                     console.log(`findWidgetsInSlot: 找到 slot 容器，检查内部内容...`);
                     // 检查容器内是否有任何带 data-layout-id 或 widget 相关类名的元素
-                    const innerWidgets = slotContainer.querySelectorAll('[data-layout-id], .widget-wrapper, .widget-content');
+                    const innerWidgets = slotContainer.querySelectorAll(
+                        '[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"], .widget-wrapper, .widget-content'
+                    );
 
                     if (innerWidgets.length > 0) {
-                        innerWidgets.forEach(el => widgets.push(el));
+                        innerWidgets.forEach(el => {
+                            const identity = readWidgetIdentityFromElement(el);
+                            if (identity.identity) {
+                                widgets.push(identity.wrapper || el);
+                            }
+                        });
                     }
                 }
             } catch (e) {
@@ -5353,32 +5907,21 @@
         // 收集部件信息（从 iframe 内的元素读取 data 属性）
         const widgetsData = [];
         for (const el of widgetElements) {
-            // 尝试从元素本身或其 .widget-wrapper 父元素读取数据
-            let dataSource = el;
-            if (!el.dataset.layoutId && el.closest) {
-                const wrapper = el.closest('.widget-wrapper');
-                if (wrapper) {
-                    dataSource = wrapper;
-                }
+            const identity = readWidgetIdentityFromElement(el);
+            if (!identity.identity) {
+                continue;
             }
 
-            const layoutId = dataSource.dataset?.layoutId || dataSource.getAttribute?.('data-layout-id');
-            const widgetCode = dataSource.dataset?.widgetCode || dataSource.getAttribute?.('data-widget-code');
-            const widgetModule = dataSource.dataset?.widgetModule || dataSource.getAttribute?.('data-widget-module');
-            const widgetType = dataSource.dataset?.widgetType || dataSource.getAttribute?.('data-widget-type');
-            const widgetName = dataSource.dataset?.widgetName || dataSource.getAttribute?.('data-widget-name') || widgetCode || '未知部件';
-
-            // 只添加有 layoutId 的部件
-            if (layoutId) {
-                widgetsData.push({
-                    element: el,
-                    layoutId,
-                    widgetCode,
-                    widgetModule,
-                    widgetType,
-                    widgetName
-                });
-            }
+            const widgetName = identity.widgetName || identity.widgetCode || '未知部件';
+            widgetsData.push({
+                element: identity.wrapper || el,
+                layoutId: identity.layoutId,
+                templateRef: identity.templateRef,
+                widgetCode: identity.widgetCode,
+                widgetModule: identity.widgetModule,
+                widgetType: identity.widgetType,
+                widgetName,
+            });
         }
 
         // 如果没有可识别的部件，显示空状态
@@ -5393,27 +5936,33 @@
         for (let i = 0; i < widgetsData.length; i++) {
             const widget = widgetsData[i];
             const isFirst = i === 0;
-            const collapseId = `widgetConfig_${widget.layoutId || i}`;
+            const collapseId = `widgetConfig_${String(widget.layoutId || widget.templateRef || i).replace(/[^\w:-]/g, '_')}`;
+            const identityAttr = widget.layoutId
+                ? `data-layout-id="${escapeHtml(widget.layoutId)}"`
+                : `data-template-ref="${escapeHtml(widget.templateRef)}"`;
+            const bodyIdentityAttr = widget.layoutId
+                ? `data-layout-id="${escapeHtml(widget.layoutId)}"`
+                : `data-template-ref="${escapeHtml(widget.templateRef)}"`;
 
             const icon = widgetTypeIconName(widget.widgetType);
 
             accordionHtml += `
-                <div class="slot-widget-accordion-item" data-layout-id="${widget.layoutId}"
+                <div class="slot-widget-accordion-item ${widget.templateRef ? 'is-template-widget' : ''}" ${identityAttr}
                      data-w-component="disclosure" data-state="${isFirst ? 'open' : 'closed'}">
                     <button type="button" class="slot-widget-header"
                             data-w-disclosure-trigger aria-controls="${collapseId}"
                             aria-expanded="${isFirst ? 'true' : 'false'}">
                         <div class="widget-header-left">
                             ${iconSvg(icon)}
-                            <span class="widget-name">${widget.widgetName}</span>
+                            <span class="widget-name">${escapeHtml(widget.widgetName)}</span>
+                            ${widget.templateRef ? '<span class="widget-template-badge">模板</span>' : ''}
                         </div>
                         <div class="widget-header-right">
                             <span class="widget-type-badge">${widget.widgetType || 'widget'}</span>
                             ${iconSvg('arrowDown')}
                         </div>
                     </button>
-                    <div id="${collapseId}" class="slot-widget-body" data-w-disclosure-panel
-                         data-layout-id="${widget.layoutId}" ${isFirst ? '' : 'hidden'}>
+                    <div id="${collapseId}" class="slot-widget-body" ${bodyIdentityAttr} ${isFirst ? '' : 'hidden'}>
                         <div class="widget-config-loading w-theme-editor-loading-state">
                             <span class="w-spinner" role="status"><span class="w-visually-hidden">加载中...</span></span>
                         </div>
@@ -5453,6 +6002,8 @@
         for (const widget of widgetsData) {
             if (widget.layoutId) {
                 loadWidgetConfigForAccordion(widget.layoutId);
+            } else if (widget.templateRef) {
+                loadWidgetConfigForAccordion(widget.templateRef, widget.element);
             }
         }
 
@@ -5461,8 +6012,13 @@
             header.addEventListener('click', function() {
                 const body = this.nextElementSibling;
                 const layoutId = body?.dataset.layoutId;
-                if (layoutId && body.querySelector('.widget-config-loading')) {
-                    loadWidgetConfigForAccordion(layoutId);
+                const templateRef = body?.dataset.templateRef;
+                if (body?.querySelector('.widget-config-loading')) {
+                    if (layoutId) {
+                        loadWidgetConfigForAccordion(layoutId);
+                    } else if (templateRef) {
+                        loadWidgetConfigForAccordion(templateRef);
+                    }
                 }
             });
         });
@@ -5734,16 +6290,87 @@
         }
     }
 
-    async function loadWidgetConfigForAccordion(layoutId) {
-        const configBody = document.querySelector(`.slot-widget-body${dataLayoutIdSelector(layoutId)}`);
+    async function loadWidgetConfigForAccordion(identity, widgetElement = null) {
+        const identityValue = String(identity || '').trim();
+        const isTemplate = identityValue.startsWith('tpl:');
+        const selector = isTemplate
+            ? dataTemplateRefSelector(identityValue)
+            : dataLayoutIdSelector(identityValue);
+        const configBody = document.querySelector(`.slot-widget-body${selector}`);
         if (!configBody) return;
 
         // 如果已加载，跳过
         if (!configBody.querySelector('.widget-config-loading')) return;
 
+        if (isTemplate) {
+            let resolvedElement = widgetElement;
+            if (!resolvedElement) {
+                try {
+                    const iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
+                    resolvedElement = iframeDoc?.querySelector(selector) || null;
+                } catch (err) {
+                    console.warn('[ThemeEditor] Unable to resolve template widget for accordion:', err);
+                }
+            }
+            if (!resolvedElement) {
+                configBody.innerHTML = `<div class="w-theme-editor-empty-copy"><small>未找到模板内嵌部件</small></div>`;
+                return;
+            }
+
+            state.selectedWidget = resolvedElement;
+            try {
+                const widgetIdentity = readWidgetIdentityFromElement(resolvedElement);
+                let widgetConfig = {};
+                try {
+                    widgetConfig = JSON.parse(widgetIdentity.config || '{}') || {};
+                } catch (e) {
+                    widgetConfig = {};
+                }
+
+                const result = await fetchWidgetsData();
+                if (!result.success) {
+                    throw new Error('widget library unavailable');
+                }
+
+                let widgetMeta = null;
+                for (const type in result.data) {
+                    const widgets = result.data[type].widgets || [];
+                    for (const w of widgets) {
+                        if (w.module === widgetIdentity.widgetModule && w.code === widgetIdentity.widgetCode) {
+                            widgetMeta = w;
+                            break;
+                        }
+                    }
+                    if (widgetMeta) break;
+                }
+
+                if (!widgetMeta) {
+                    configBody.innerHTML = `<div class="w-theme-editor-empty-copy"><small>未找到部件配置信息</small></div>`;
+                    return;
+                }
+
+                const formHtml = await generateWidgetConfigForm('', widgetMeta.params || {}, widgetConfig);
+                const searchPlaceholder = (typeof __ !== 'undefined' ? __('搜索配置项') : '搜索配置项');
+                configBody.innerHTML = `
+                    <div class="w-param-search-wrap">
+                        <input type="text" class="w-param-search w-input w-theme-editor-control-sm" placeholder="${searchPlaceholder}" autocomplete="off">
+                    </div>
+                    <form class="widget-accordion-config-form w-param-form" data-template-ref="${escapeHtml(identityValue)}">
+                        ${formHtml}
+                    </form>
+                `;
+                bindAccordionFormEvents(configBody);
+                bindParamSearch(configBody);
+            } catch (err) {
+                console.error('Load template widget config error:', err);
+                configBody.innerHTML = `<div class="w-theme-editor-empty-copy" data-tone="danger"><small>加载配置失败</small></div>`;
+            }
+            return;
+        }
+
         try {
             const locale = getActiveConfigLocale();
-            const apiUrl = buildSavedWidgetConfigUrl(layoutId, locale);
+            const apiUrl = buildSavedWidgetConfigUrl(identityValue, locale);
             const result = await apiJson(apiUrl);
 
             if (result.success && result.data) {
@@ -5752,7 +6379,7 @@
                 const widgetConfig = widgetData.config || {};
 
                 // 生成配置表单
-                const formHtml = await generateWidgetConfigForm(layoutId, params, widgetConfig);
+                const formHtml = await generateWidgetConfigForm(identityValue, params, widgetConfig);
                 const searchPlaceholder = (typeof __ !== 'undefined' ? __('搜索配置项') : '搜索配置项');
                 const searchWrap = '<div class="w-param-search-wrap"><input type="text" class="w-param-search w-input w-theme-editor-control-sm" placeholder="' + searchPlaceholder + '" autocomplete="off"></div>';
                 configBody.innerHTML = searchWrap + formHtml;
@@ -5994,17 +6621,70 @@
             return html;
         };
 
+        const renderFallbackNavTreeField = (fieldId, key, value, param, layoutId) => {
+            const maxDepth = param.max_depth || 3;
+            const items = normalizeArrayFieldValue(value, param.default);
+            const safeFieldId = escapeHtml(fieldId);
+            const safeKey = escapeHtml(key);
+            const boot = {
+                tree: items,
+                page_candidates: [],
+                category_candidates: [],
+                max_depth: maxDepth,
+                labels: {
+                    title: '导航树',
+                    pages: '页面',
+                    categories: '分类',
+                    add_custom: '添加自定义',
+                    detail: '详情',
+                    remove: '删除',
+                    empty: '暂无节点，可从左侧拖入或添加自定义',
+                    name: '名称',
+                    url: '链接',
+                    tag_page: '页面',
+                    tag_category: '分类',
+                    tag_custom: '自定义',
+                    description: '描述',
+                    image: '图片',
+                    ref: '引用',
+                    save_detail: '保存',
+                    cancel: '取消',
+                    indent_hint: '拖拽调整顺序与层级（最多三级）',
+                    i18n: '多语言',
+                    i18n_name: '名称翻译',
+                    i18n_description: '描述翻译',
+                    image_pick: '从媒体库选择',
+                    has_description: '描述',
+                    has_image: '已设图片',
+                },
+                item_schema: param.item_schema || {},
+                locales: [],
+            };
+            const payloadJson = escapeHtml(JSON.stringify(boot));
+            const hiddenValue = escapeHtml(JSON.stringify(items));
+            return `<div class="w-param-nav-tree" data-w-component="nav-tree" data-field-id="${safeFieldId}" data-key="${safeKey}" data-max-depth="${maxDepth}">
+                <div class="w-nav-tree-editor" id="${safeFieldId}_editor"></div>
+                <input type="hidden" id="${safeFieldId}" name="${safeKey}" value='${hiddenValue}'>
+                <textarea class="w-nav-tree-boot-data" id="${safeFieldId}_nav_tree_boot" hidden readonly aria-hidden="true">${payloadJson}</textarea>
+            </div>`;
+        };
+
+        const isNavTreeParam = (param, type) => type === 'nav_tree'
+            || type === 'all_menu_tree'
+            || param?.schema_type === 'all_menu_tree';
+
         const renderField = (key, param, layoutId, config) => {
             const label = param.label || key;
             const type = getParamUiType(param);
             const semanticType = param.type || type;
             const value = config[key] ?? param.default ?? '';
-            const isArrayField = type === 'array'
+            const isNavTreeField = isNavTreeParam(param, type);
+            const isArrayField = !isNavTreeField && (type === 'array'
                 || type === 'list'
                 || Array.isArray(value)
                 || Array.isArray(param.default)
                 || (param.item_schema && typeof param.item_schema === 'object')
-                || (typeof type === 'string' && type.endsWith('_items'));
+                || (typeof type === 'string' && type.endsWith('_items')));
             const scalarValue = (value === null || value === undefined || typeof value === 'object') ? '' : value;
             const arrayValue = normalizeArrayFieldValue(value, param.default);
             const arrayItemSchema = normalizeArrayItemSchema(param);
@@ -6096,6 +6776,8 @@
                     <template>${templateHtml}</template>
                     <input type="hidden" id="${safeFieldId}" name="${safeKey}" value='${escapeHtml(JSON.stringify(arrayValue))}'>
                 </div>`;
+            } else if (isNavTreeField) {
+                fieldHtml += renderFallbackNavTreeField(fieldId, key, value, param, layoutId);
             } else if (type === 'icon') {
                 const iconValue = normalizeSemanticIconName(value);
                 const iconPanelId = `${safeFieldId}_panel`;
@@ -6331,6 +7013,10 @@
     function bindAccordionFormEvents(container) {
         if (!container) return;
 
+        if (typeof Weline?.Widget?.Params?.mount === 'function') {
+            Weline.Widget.Params.mount(container);
+        }
+
         // 统一多语言事件委托（覆盖顶级字段 + 后续动态添加的数组子字段）。
         // 模态框容器会重复填充，委托只能安装一次，避免一次点击开关两次。
         if (container.dataset.wParamI18nDelegateBound !== '1') {
@@ -6376,9 +7062,12 @@
                 e.stopImmediatePropagation();
                 const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                 const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
-                const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
-                if (panel && fieldKey && layoutId) {
+                // TE-CAP-020: template widgets may have empty layout_id; AI translate only needs source text.
+                const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId || '';
+                if (panel && fieldKey) {
                     await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
+                } else {
+                    showToast(translateUiText('无法定位多语言字段'), 'warning');
                 }
                 return;
             }
@@ -6787,22 +7476,18 @@
                 } catch (e) {}
 
                 try {
+                    const widgetContext = resolveWidgetContextFromIframe(layoutId);
                     const result = await apiJson(config.apiDeleteWidget, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            layout_id: layoutId,
-                            theme_id: state.themeId,
-                            slot_id: slotIdFb,
-                            area: areaFb,
-                            layout_type: state.layoutType || 'homepage',
-                            layout_option: state.layoutOption || 'default',
-                            ...getLayoutLockVirtualPayload()
-                        })
+                        body: JSON.stringify(buildWidgetDeletePayload(layoutId, slotIdFb, areaFb, widgetContext))
                     });
 
                     if (result.success) {
-                        await queueRemovedLayoutNode(result);
+                        await queueRemovedLayoutNode(result, {
+                            layoutId,
+                            nodeUid: widgetContext.nodeUid,
+                        });
                         showToast('部件已删除', 'success');
 
                         // 恢复iframe预览区的原始内容
@@ -7385,6 +8070,49 @@
         return dataAttributeSelector('data-layout-id', layoutId);
     }
 
+    function dataTemplateRefSelector(templateRef) {
+        return dataAttributeSelector('data-template-ref', templateRef);
+    }
+
+    function dataWidgetIdentitySelector(identity) {
+        const value = String(identity || '').trim();
+        if (!value) {
+            return '';
+        }
+        if (value.startsWith('tpl:')) {
+            return dataTemplateRefSelector(value);
+        }
+        return dataLayoutIdSelector(value);
+    }
+
+    function resolveWidgetWrapper(element) {
+        if (!element || element.nodeType !== 1) {
+            return null;
+        }
+        if (element.matches('.weline-template-widget[data-template-ref], .widget-wrapper[data-layout-id], .widget-wrapper[data-weline-template-widget="1"]')) {
+            return element;
+        }
+        return element.closest('.weline-template-widget[data-template-ref], .widget-wrapper[data-layout-id], .widget-wrapper[data-weline-template-widget="1"]');
+    }
+
+    function readWidgetIdentityFromElement(element) {
+        const wrapper = resolveWidgetWrapper(element) || element;
+        const layoutId = String(wrapper?.dataset?.layoutId || wrapper?.getAttribute?.('data-layout-id') || '').trim();
+        const templateRef = String(wrapper?.dataset?.templateRef || wrapper?.getAttribute?.('data-template-ref') || '').trim();
+        return {
+            wrapper,
+            layoutId,
+            templateRef,
+            identity: layoutId || templateRef,
+            isTemplate: layoutId === '' && templateRef !== '',
+            widgetCode: String(wrapper?.dataset?.widgetCode || wrapper?.getAttribute?.('data-widget-code') || '').trim(),
+            widgetModule: String(wrapper?.dataset?.widgetModule || wrapper?.getAttribute?.('data-widget-module') || '').trim(),
+            widgetType: String(wrapper?.dataset?.widgetType || wrapper?.getAttribute?.('data-widget-type') || '').trim(),
+            widgetName: String(wrapper?.dataset?.widgetName || wrapper?.getAttribute?.('data-widget-name') || '').trim(),
+            config: String(wrapper?.dataset?.config || wrapper?.getAttribute?.('data-config') || '{}'),
+        };
+    }
+
     function cssIdentifier(value) {
         const stringValue = String(value || '');
         if (window.CSS && typeof window.CSS.escape === 'function') {
@@ -7469,6 +8197,7 @@
 
     function resolvePreviewWidgetElement(data) {
         const layoutId = data.layoutId || '';
+        const templateRef = data.templateRef || '';
         let widgetElement = null;
 
         if (layoutId) {
@@ -7484,16 +8213,33 @@
             }
         }
 
+        if (!widgetElement && templateRef) {
+            try {
+                const iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
+                widgetElement = iframeDoc?.querySelector(dataAttributeSelector('data-template-ref', templateRef)) || null;
+            } catch (err) {
+                console.warn('[ThemeEditor] Unable to read template widget:', err);
+            }
+        }
+
         if (!widgetElement) {
             widgetElement = document.createElement('div');
         }
 
-        widgetElement.dataset.layoutId = layoutId;
+        if (layoutId) {
+            widgetElement.dataset.layoutId = layoutId;
+        }
+        if (templateRef) {
+            widgetElement.dataset.templateRef = templateRef;
+        }
         widgetElement.dataset.widgetCode = data.widgetCode || widgetElement.dataset.widgetCode || '';
         widgetElement.dataset.widgetName = data.widgetName || widgetElement.dataset.widgetName || '';
         widgetElement.dataset.widgetModule = data.widgetModule || widgetElement.dataset.widgetModule || '';
         widgetElement.dataset.widgetType = data.widgetType || widgetElement.dataset.widgetType || '';
         widgetElement.dataset.config = data.config || widgetElement.dataset.config || '{}';
+        if (data.slotId) {
+            widgetElement.dataset.slotId = data.slotId;
+        }
 
         return widgetElement;
     }
@@ -7503,7 +8249,9 @@
             return;
         }
 
-        const selector = dataLayoutIdSelector(layoutId);
+        const selector = String(layoutId).startsWith('tpl:')
+            ? dataAttributeSelector('data-template-ref', layoutId)
+            : dataLayoutIdSelector(layoutId);
         document.querySelectorAll('.preview-widget-item.selected').forEach(el => {
             el.classList.remove('selected');
         });
@@ -7511,34 +8259,44 @@
 
         try {
             const iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
-            iframeDoc?.querySelectorAll('.preview-widget.selected, .widget-wrapper.selected').forEach(el => {
+            iframeDoc?.querySelectorAll('.preview-widget.selected, .widget-wrapper.selected, .weline-template-widget.selected').forEach(el => {
                 el.classList.remove('selected');
             });
-            iframeDoc?.querySelector(`.preview-widget${selector}, .widget-wrapper${selector}, [data-widget-code]${selector}`)?.classList.add('selected');
+            iframeDoc?.querySelector(`.preview-widget${selector}, .widget-wrapper${selector}, [data-widget-code]${selector}, .weline-template-widget${selector}`)?.classList.add('selected');
         } catch (err) {
             console.warn('[ThemeEditor] Unable to mark selected preview widget:', err);
         }
     }
 
     function handleIframeWidgetElementClick(target) {
-        const widgetWrapper = target?.closest?.('.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id]');
+        const widgetWrapper = target?.closest?.(
+            '.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id], '
+            + '.weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
+        );
         if (!widgetWrapper) {
             return false;
         }
 
         const nestedSlot = target.closest('[data-wslot], [data-slot], .content-slot');
-        if (nestedSlot && nestedSlot.closest('.widget-wrapper[data-layout-id]') === widgetWrapper) {
-            return false;
+        if (nestedSlot && nestedSlot.closest('.widget-wrapper[data-layout-id], .weline-template-widget') === widgetWrapper) {
+            // 点在子槽上时交给 slot 选择；点在模板部件本体上继续
+            if (target.closest('[data-wslot], [data-slot]') !== widgetWrapper && nestedSlot.contains(widgetWrapper) === false) {
+                return false;
+            }
         }
 
         handlePreviewWidgetSelected({
             type: 'widget-selected',
             layoutId: widgetWrapper.dataset.layoutId || widgetWrapper.getAttribute('data-layout-id') || '',
+            templateRef: widgetWrapper.dataset.templateRef || widgetWrapper.getAttribute('data-template-ref') || '',
             widgetCode: widgetWrapper.dataset.widgetCode || widgetWrapper.getAttribute('data-widget-code') || '',
             widgetModule: widgetWrapper.dataset.widgetModule || widgetWrapper.getAttribute('data-widget-module') || '',
             widgetType: widgetWrapper.dataset.widgetType || widgetWrapper.getAttribute('data-widget-type') || '',
             widgetName: widgetWrapper.dataset.widgetName || widgetWrapper.getAttribute('data-widget-name') || '',
-            config: widgetWrapper.dataset.config || widgetWrapper.getAttribute('data-config') || '{}'
+            config: widgetWrapper.dataset.config || widgetWrapper.getAttribute('data-config') || '{}',
+            slotId: widgetWrapper.closest('[data-wslot], [data-slot]')?.getAttribute('data-wslot')
+                || widgetWrapper.closest('[data-wslot], [data-slot]')?.getAttribute('data-slot')
+                || ''
         });
         return true;
     }
@@ -7548,12 +8306,68 @@
      */
     function handlePreviewWidgetSelected(data) {
         const widgetElement = resolvePreviewWidgetElement(data);
+        if (data.templateRef && widgetElement && !widgetElement.dataset.layoutId) {
+            widgetElement.dataset.templateRef = data.templateRef;
+            if (data.slotId) {
+                widgetElement.dataset.slotId = data.slotId;
+            }
+        }
         state.selectedWidget = widgetElement;
         state.selectedSlot = null;
         openConfigPanelForWidgetSelection();
         setConfigMode('widget');
-        markPreviewWidgetSelected(widgetElement.dataset.layoutId);
+        markPreviewWidgetSelected(widgetElement.dataset.layoutId || widgetElement.dataset.templateRef || '');
         loadWidgetConfig(widgetElement);
+    }
+
+    /**
+     * 模板内嵌部件首次改参时物化到布局（copy-on-write）。
+     * @returns {Promise<string|null>} layout_id
+     */
+    async function materializeTemplateWidgetIfNeeded(widgetElement, configData) {
+        if (!widgetElement) return null;
+        const existingLayoutId = widgetElement.dataset.layoutId || widgetElement.getAttribute('data-layout-id') || '';
+        if (existingLayoutId) return existingLayoutId;
+
+        const templateRef = widgetElement.dataset.templateRef || widgetElement.getAttribute('data-template-ref') || '';
+        if (!templateRef) return null;
+
+        const slotEl = widgetElement.closest('[data-wslot], [data-slot]');
+        const slotId = widgetElement.dataset.slotId
+            || slotEl?.getAttribute('data-wslot')
+            || slotEl?.getAttribute('data-slot')
+            || '';
+        const area = slotEl?.getAttribute('data-wslot-position')
+            || (slotEl?.closest('header') ? 'header' : (slotEl?.closest('footer') ? 'footer' : 'content'));
+
+        let baseConfig = {};
+        try {
+            baseConfig = JSON.parse(widgetElement.dataset.config || widgetElement.getAttribute('data-config') || '{}') || {};
+        } catch (e) {
+            baseConfig = {};
+        }
+        const mergedConfig = Object.assign({}, baseConfig, configData || {}, { template_ref: templateRef });
+
+        const result = await saveWidget({
+            area,
+            slotId,
+            widgetData: {
+                code: widgetElement.dataset.widgetCode || widgetElement.getAttribute('data-widget-code') || '',
+                module: widgetElement.dataset.widgetModule || widgetElement.getAttribute('data-widget-module') || '',
+                type: widgetElement.dataset.widgetType || widgetElement.getAttribute('data-widget-type') || '',
+                name: widgetElement.dataset.widgetName || widgetElement.getAttribute('data-widget-name') || '',
+                config: mergedConfig,
+            },
+            sortOrder: 0,
+            exclusive: false,
+            switchToPreview: false,
+        });
+        const layoutId = result?.data?.layout_id || null;
+        if (layoutId) {
+            widgetElement.dataset.layoutId = String(layoutId);
+            widgetElement.setAttribute('data-layout-id', String(layoutId));
+        }
+        return layoutId ? String(layoutId) : null;
     }
 
     /**
@@ -7830,23 +8644,51 @@
         return url.toString();
     }
 
+    function invalidateWidgetsCatalogCache() {
+        state.widgetsCatalogCache = null;
+        state.widgetsCatalogPrefetch = null;
+    }
+
     /** 通过 Theme Editor 的 Weline.Api 业务接口获取当前主题、区域和插槽过滤后的部件列表。 */
     async function fetchWidgetsData() {
-        try {
-            const result = await apiJson(getWidgetsApiUrl());
-            if (result && result.success && result.data && typeof result.data === 'object') {
-                const hasWidgets = Object.keys(result.data).some(function (type) {
-                    const group = result.data[type];
-                    return group && Array.isArray(group.widgets) && group.widgets.length > 0;
-                });
-                if (hasWidgets) {
-                    return result;
-                }
-            }
-        } catch (err) {
-            console.warn('[ThemeEditor] editor widgets query bridge failed:', err);
+        if (state.widgetsCatalogCache) {
+            return state.widgetsCatalogCache;
         }
-        return { success: false, data: {} };
+        if (state.widgetsCatalogPrefetch) {
+            return state.widgetsCatalogPrefetch;
+        }
+        state.widgetsCatalogPrefetch = (async function () {
+            try {
+                const result = await apiJson(getWidgetsApiUrl());
+                if (result && result.success && result.data && typeof result.data === 'object') {
+                    const hasWidgets = Object.keys(result.data).some(function (type) {
+                        const group = result.data[type];
+                        return group && Array.isArray(group.widgets) && group.widgets.length > 0;
+                    });
+                    if (hasWidgets) {
+                        state.widgetsCatalogCache = result;
+                        return result;
+                    }
+                }
+            } catch (err) {
+                console.warn('[ThemeEditor] editor widgets query bridge failed:', err);
+            }
+            return { success: false, data: {} };
+        })();
+        try {
+            return await state.widgetsCatalogPrefetch;
+        } finally {
+            state.widgetsCatalogPrefetch = null;
+        }
+    }
+
+    function prefetchWidgetsCatalog() {
+        if (!state.themeId || state.widgetsCatalogCache || state.widgetsCatalogPrefetch) {
+            return;
+        }
+        fetchWidgetsData().catch(function () {
+            return { success: false, data: {} };
+        });
     }
 
     /**
@@ -8103,15 +8945,18 @@
     }
 
     /**
-     * 延迟加载部件库：不再首屏立即拉取，而是等待主预览 iframe 加载完成后再触发；
-     * 同时设置兜底定时器，避免 iframe 长时间不触发 load 时部件库永远不出现。
+     * 预加载部件库：编辑器初始化后立即与预览 iframe 并行拉取，打开右侧面板时列表通常已就绪。
+     * iframe load 与短兜底定时器仅作二次保障。
      */
     function deferWidgetLibraryLoad() {
         if (!state.themeId) {
             return;
         }
-        // 兜底：iframe 6 秒内未触发 load 时，强制初始化部件库
-        setTimeout(function () { initWidgetLibraryOnce(); }, 6000);
+        queueMicrotask(function () {
+            initWidgetLibraryOnce();
+            prefetchWidgetsCatalog();
+        });
+        setTimeout(function () { initWidgetLibraryOnce(); }, 3000);
     }
 
     /**
@@ -8246,7 +9091,7 @@
         listEl.querySelector('.widget-load-more-hint')?.remove();
         if (!Array.isArray(items) || items.length === 0) {
             listEl.innerHTML = '<div class="widget-list-loading"><span class="widget-list-loading-text">'
-                + escapeHtml(translateUiText('当前布局没有待应用的默认部件')) + '</span></div>';
+                + escapeHtml(translateUiText('当前布局没有声明默认应用部件')) + '</span></div>';
             updateWidgetLibraryTabCounts();
             return;
         }
@@ -8261,13 +9106,27 @@
         updateWidgetLibraryTabCounts();
     }
 
+    function isDefaultInjectionApplied(item) {
+        if (!item || typeof item !== 'object') {
+            return false;
+        }
+        if (item.injection_status === 'missing') {
+            return false;
+        }
+        return item.injection_status === 'applied'
+            || item.applied === true
+            || item.applied === 1;
+    }
+
     function createDefaultInjectionItem(item) {
         if (!item || typeof item !== 'object') {
             return null;
         }
+        const applied = isDefaultInjectionApplied(item);
         const el = document.createElement('div');
-        el.className = 'widget-default-injection-item';
+        el.className = 'widget-default-injection-item' + (applied ? ' is-applied' : '');
         el.dataset.injectionKey = item.injection_key || '';
+        el.dataset.injectionStatus = applied ? 'applied' : 'missing';
         const name = item.name || item.code || translateUiText('未命名部件');
         const moduleText = [item.module, item.type, item.code].filter(Boolean).join(' / ');
         const targetParts = [
@@ -8277,26 +9136,32 @@
             item.area ? `${translateUiText('区域')}: ${item.area}` : '',
         ].filter(Boolean);
         const reason = item.reason || item.description || '';
-        const requiredBadge = item.required
-            ? '<span class="widget-default-injection-badge">' + iconSvg('warning') + escapeHtml(translateUiText('强烈推荐')) + '</span>'
-            : '';
-        const scopePrompt = translateUiText('恢复范围：仅当前布局身份');
+        const statusBadge = applied
+            ? '<span class="widget-default-injection-badge is-applied">' + iconSvg('check') + escapeHtml(translateUiText('已应用')) + '</span>'
+            : (item.required
+                ? '<span class="widget-default-injection-badge">' + iconSvg('warning') + escapeHtml(translateUiText('强烈推荐')) + '</span>'
+                : '');
+        const scopePrompt = applied
+            ? translateUiText('已在当前布局身份中')
+            : translateUiText('恢复范围：仅当前布局身份');
 
         el.innerHTML = '<div class="widget-default-injection-header">'
             + '<div class="widget-default-injection-title">'
             + '<div class="widget-default-injection-name">' + escapeHtml(name) + '</div>'
             + '<div class="widget-default-injection-module">' + escapeHtml(moduleText) + '</div>'
             + '</div>'
-            + requiredBadge
+            + statusBadge
             + '</div>'
             + '<div class="widget-default-injection-target">' + escapeHtml(targetParts.join(' · ')) + '</div>'
             + (reason ? '<div class="widget-default-injection-reason">' + escapeHtml(reason) + '</div>' : '')
             + '<div class="widget-default-injection-scope">' + iconSvg('info') + '<span>' + escapeHtml(scopePrompt) + '</span></div>'
-            + '<div class="widget-default-injection-actions">'
-            + '<button type="button" class="btn-apply-default-injection w-theme-editor-apply-default-injection w-theme-editor-apply-default-injection-current" data-apply-scope="current" data-injection-key="' + escapeHtml(item.injection_key || '') + '" title="' + escapeHtml(translateUiText('只恢复当前布局身份')) + '">'
-            + iconSvg('cursor') + '<span>' + escapeHtml(translateUiText('应用当前身份')) + '</span>'
-            + '</button>'
-            + '</div>';
+            + (applied
+                ? ''
+                : ('<div class="widget-default-injection-actions">'
+                    + '<button type="button" class="btn-apply-default-injection w-theme-editor-apply-default-injection w-theme-editor-apply-default-injection-current" data-apply-scope="current" data-injection-key="' + escapeHtml(item.injection_key || '') + '" title="' + escapeHtml(translateUiText('只恢复当前布局身份')) + '">'
+                    + iconSvg('cursor') + '<span>' + escapeHtml(translateUiText('应用当前身份')) + '</span>'
+                    + '</button>'
+                    + '</div>'));
 
         return el;
     }
@@ -8456,6 +9321,7 @@
      * 兼容旧调用：主题/区域/页面类型变化时重新加载部件库（重置分页，保留插槽/关键词过滤）
      */
     async function reloadWidgetLibrary(options = {}) {
+        invalidateWidgetsCatalogCache();
         const lib = getWidgetLibState();
         lib.initialized = true;
         initWidgetInfiniteScroll();
@@ -9226,8 +10092,10 @@
         const iframe = elements.previewFrame;
         const safePreviewHtml = sanitizeHtmlForEditorPreview(previewHtml);
         if (!iframe) {
-            console.warn('[ThemeEditor] iframe not found, triggering full refresh');
-            loadLayoutPreview();
+            console.warn('[ThemeEditor] iframe not found; skip local preview update');
+            if (isNewWidget) {
+                loadLayoutPreview();
+            }
             return;
         }
 
@@ -9246,9 +10114,10 @@
                         setTimeout(tryUpdate, retryDelay);
                         return;
                     }
-                    // 重试超限，使用完整刷新
-                    console.warn('[ThemeEditor] iframe not accessible after retries, triggering full refresh');
-                    loadLayoutPreview();
+                    console.warn('[ThemeEditor] iframe not accessible after retries; skip full preview reload');
+                    if (isNewWidget) {
+                        loadLayoutPreview();
+                    }
                     return;
                 }
 
@@ -9356,9 +10225,8 @@
                         loadLayoutPreview();
                     }
                 } else {
-                    // 非新部件但找不到 - 可能是slot结构问题，刷新预览
-                    console.warn(`[ThemeEditor] Existing widget ${layoutId} not found, triggering full refresh`);
-                    loadLayoutPreview();
+                    // Existing widget config save must stay local; full iframe reload flashes the whole page.
+                    console.warn(`[ThemeEditor] Existing widget ${layoutId} not found; skip full preview reload`);
                 }
             } catch (err) {
                 // iframe 跨域或其他错误
@@ -9370,9 +10238,10 @@
                     return;
                 }
 
-                // 重试超限，触发完整刷新
-                console.warn('[ThemeEditor] iframe update failed after retries, triggering full refresh');
-                loadLayoutPreview();
+                console.warn('[ThemeEditor] iframe update failed after retries; skip full preview reload');
+                if (isNewWidget) {
+                    loadLayoutPreview();
+                }
             }
         }
 
@@ -9836,7 +10705,8 @@
             widget_type: widgetData.type || '',
             config: widgetData.config || {},
             sort_order: sortOrder,
-            exclusive: exclusive,
+            // 模板内嵌 CoW：带 template_ref 的物化不得独占清空同槽其它实例
+            exclusive: (widgetData.config && widgetData.config.template_ref) ? false : exclusive,
         };
 
         try {
@@ -10370,12 +11240,13 @@
      * @param {number|string} layoutId 布局ID
      * @param {boolean} exclusive 是否独占（替换现有部件）
      */
-    function addWidgetToStructureView(area, slotId, widgetData, layoutId, exclusive = false) {
+    function addWidgetToStructureView(area, slotId, widgetData, layoutId, exclusive = false, templateRef = '') {
         // 部件类型图标映射
         const icon = widgetTypeIconName(widgetData.type);
         const widgetName = widgetData.name || widgetData.code;
-        const widgetDomId = `widget_${String(layoutId || '').replace(/[^\w:-]/g, '_')}`;
+        const widgetDomId = `widget_${String(layoutId || templateRef || '').replace(/[^\w:-]/g, '_')}`;
         const safeLayoutId = escapeHtml(layoutId || '');
+        const safeTemplateRef = escapeHtml(templateRef || '');
         const safeSlotId = escapeHtml(slotId || '');
         const safeWidgetCode = escapeHtml(widgetData.code || '');
         const safeWidgetModule = escapeHtml(widgetData.module || '');
@@ -10383,18 +11254,20 @@
 
         // 创建部件项 HTML
         const widgetHtml = `
-            <div class="preview-widget-item widget-new"
+            <div class="preview-widget-item widget-new${safeTemplateRef ? ' is-template-widget' : ''}"
                  id="${escapeHtml(widgetDomId)}"
-                 data-layout-id="${safeLayoutId}"
+                 ${safeLayoutId ? `data-layout-id="${safeLayoutId}"` : ''}
+                 ${safeTemplateRef ? `data-template-ref="${safeTemplateRef}"` : ''}
                  data-slot-id="${safeSlotId}"
                  data-widget-code="${safeWidgetCode}"
                  data-widget-module="${safeWidgetModule}"
                  data-widget-type="${safeWidgetType}"
-                 data-config='{}'>
+                 data-config='${escapeHtml(JSON.stringify(widgetData.config || {}))}'>
                 <div class="widget-header">
                     <span class="widget-name">
                         ${iconSvg(icon)}
                         ${escapeHtml(widgetName)}
+                        ${safeTemplateRef ? '<span class="widget-template-badge">模板</span>' : ''}
                     </span>
                     <div class="widget-actions">
                         <button type="button" class="w-button w-theme-editor-edit-widget" data-tone="primary" data-variant="outline" data-size="sm" title="编辑">
@@ -10831,7 +11704,8 @@
         info: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z"/></svg>`,
         penetrateUp: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 10.828L7.05 15.778 5.636 14.364 12 8l6.364 6.364L16.95 15.778 12 10.828z"/></svg>`,
         penetrateDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.172l4.95-4.95 1.414 1.414L12 16l-6.364-6.364L7.05 10.222 12 13.172z"/></svg>`,
-        aiEdit: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 5.5L18.5 8.5L8.75 18.25H5.75V15.25L15.5 5.5ZM17 4L20 7L21.06 5.94C21.65 5.35 21.65 4.4 21.06 3.81L20.19 2.94C19.6 2.35 18.65 2.35 18.06 2.94L17 4ZM3 20H21V22H3V20Z"></path></svg>`,
+        aiEdit: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2zM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8zM19 13l.8 2.2L22 16l-2.2.8L19 19l-.8-2.2L16 16l2.2-.8z"></path></svg>`,
+        config: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 5.5L18.5 8.5L8.75 18.25H5.75V15.25L15.5 5.5ZM17 4L20 7L21.06 5.94C21.65 5.35 21.65 4.4 21.06 3.81L20.19 2.94C19.6 2.35 18.65 2.35 18.06 2.94L17 4ZM3 20H21V22H3V20Z"></path></svg>`,
         aiRebuild: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L13.09 8.26L19 6L15.74 11.35L21 15L14.73 15.9L15 22L12 16.5L9 22L9.27 15.9L3 15L8.26 11.35L5 6L10.91 8.26L12 2Z"></path></svg>`,
         aiImage: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 3H19C20.1 3 21 3.9 21 5V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3ZM5 5V14.5L8.5 11L12.5 15L15 12L19 16.5V5H5ZM7.5 10C8.33 10 9 9.33 9 8.5S8.33 7 7.5 7S6 7.67 6 8.5S6.67 10 7.5 10Z"></path></svg>`
     };
@@ -10845,13 +11719,29 @@
      * @param {boolean} isLast - 是否是最后一个部件
      * @returns {string} 操作按钮 HTML
      */
-    function generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, isFirst = true, isLast = true) {
+    function generateWidgetHoverActionsHtml(identityOrLayoutId, slotId, isExclusive, isFirst = true, isLast = true) {
+        let layoutId = '';
+        let templateRef = '';
+        if (identityOrLayoutId && typeof identityOrLayoutId === 'object') {
+            layoutId = String(identityOrLayoutId.layoutId || '').trim();
+            templateRef = String(identityOrLayoutId.templateRef || '').trim();
+        } else {
+            layoutId = String(identityOrLayoutId || '').trim();
+        }
         const safeLayoutId = escapeHtml(layoutId || '');
+        const safeTemplateRef = escapeHtml(templateRef || '');
         const safeSlotId = escapeHtml(slotId || '');
-        let html = `<div class="widget-hover-actions" data-layout-id="${safeLayoutId}">`;
+        let html = `<div class="widget-hover-actions"`
+            + ` data-w-component="anchored-float"`
+            + ` data-w-float-self="1"`
+            + ` data-w-placement="top-end"`
+            + ` data-w-portal="0"`
+            + (safeLayoutId ? ` data-layout-id="${safeLayoutId}"` : '')
+            + (safeTemplateRef ? ` data-template-ref="${safeTemplateRef}"` : '')
+            + '>';
 
         // 嵌套距离：信息、上级、下级（仅这三者按栈下标；替换/删除/移动仍用最外层）
-        html += `<button class="w-theme-editor-widget-info" title="信息" data-action="info" data-layout-id="${safeLayoutId}">
+        html += `<button class="w-theme-editor-widget-info" title="信息" data-action="info" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}">
                     ${WIDGET_ACTION_ICONS.info}
                  </button>`;
         html += `<button class="w-theme-editor-penetrate-up" title="上级" data-action="penetrate-up" hidden>
@@ -10860,38 +11750,46 @@
         html += `<button class="w-theme-editor-penetrate-down" title="下穿" data-action="penetrate-down" hidden>
                     ${WIDGET_ACTION_ICONS.penetrateDown}
                  </button>`;
-        html += `<button class="w-theme-editor-widget-ai-edit" title="AI编辑" data-action="ai-edit" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-config" title="配置" data-action="config" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
+                    ${WIDGET_ACTION_ICONS.config}
+                 </button>`;
+        html += `<button class="w-theme-editor-widget-ai-edit" title="AI编辑" data-action="ai-edit" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiEdit}
                  </button>`;
-        html += `<button class="w-theme-editor-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiRebuild}
                  </button>`;
-        html += `<button class="w-theme-editor-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiImage}
                  </button>`;
 
         // 替换按钮 - 所有部件都有
-        html += `<button class="w-theme-editor-widget-replace" title="替换部件" data-action="replace" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-replace" title="替换部件" data-action="replace" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.replace}
                  </button>`;
 
         // 删除按钮 - 所有部件都有
-        html += `<button class="w-theme-editor-widget-delete" title="删除部件" data-action="delete" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-delete" title="删除部件" data-action="delete" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.delete}
                  </button>`;
 
         // 非独占部件显示上下移动按钮
         if (!isExclusive) {
-            html += `<button class="w-theme-editor-widget-move-up" title="上移" data-action="move-up" data-layout-id="${safeLayoutId}" ${isFirst ? 'disabled' : ''}>
+            html += `<button class="w-theme-editor-widget-move-up" title="上移" data-action="move-up" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" ${isFirst ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveUp}
                      </button>`;
-            html += `<button class="w-theme-editor-widget-move-down" title="下移" data-action="move-down" data-layout-id="${safeLayoutId}" ${isLast ? 'disabled' : ''}>
+            html += `<button class="w-theme-editor-widget-move-down" title="下移" data-action="move-down" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" ${isLast ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveDown}
                      </button>`;
         }
 
         html += '</div>';
         return html;
+    }
+
+    function getWidgetSiblingIdentity(wrapper) {
+        const identity = readWidgetIdentityFromElement(wrapper);
+        return identity.identity;
     }
 
     /**
@@ -10907,9 +11805,11 @@
         const seen = new Set();
         const stack = [];
         for (const el of list) {
-            const wrapper = el.closest && el.closest('.widget-wrapper[data-layout-id]');
+            const wrapper = el.closest && el.closest(
+                '.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
+            );
             if (!wrapper) continue;
-            const id = wrapper.getAttribute('data-layout-id');
+            const id = getWidgetSiblingIdentity(wrapper);
             if (id && !seen.has(id)) {
                 seen.add(id);
                 stack.push(id);
@@ -10929,11 +11829,17 @@
         const stack = state.nestStack;
         const idx = state.nestIndex;
         if (!stack.length || idx < 0 || idx >= stack.length) return;
-        const layoutId = stack[idx];
-        const wrapper = doc.querySelector(`.widget-wrapper${dataLayoutIdSelector(layoutId)}`) ||
-            doc.querySelector(dataLayoutIdSelector(layoutId));
+        const identity = stack[idx];
+        const wrapper = doc.querySelector(`.widget-wrapper${dataWidgetIdentitySelector(identity)}`) ||
+            doc.querySelector(`.weline-template-widget${dataWidgetIdentitySelector(identity)}`) ||
+            doc.querySelector(dataWidgetIdentitySelector(identity));
         if (wrapper) {
             wrapper.classList.add('show-actions');
+            const bar = wrapper.querySelector(':scope > .widget-hover-actions');
+            const floatApi = bar && window.Weline?.UI?.get?.(bar, 'anchored-float');
+            if (floatApi?.sync) floatApi.sync();
+            else if (floatApi?.place) floatApi.place();
+            else if (bar) bar.dispatchEvent(new CustomEvent('weline:anchored-float:place'));
         }
         updateNestButtons();
     }
@@ -10984,6 +11890,272 @@
         console.log("[ThemeEditor] Overlay stylesheet mounted in iframe");
     }
 
+    function syncSlotToolbarFloatFromParent(toolbar) {
+        if (!(toolbar instanceof HTMLElement)) {
+            return;
+        }
+        const floatApi = window.Weline?.UI?.get?.(toolbar, 'anchored-float');
+        if (floatApi?.sync) {
+            floatApi.sync();
+            return;
+        }
+        if (floatApi?.place) {
+            floatApi.place();
+            return;
+        }
+        toolbar.dispatchEvent(new CustomEvent('weline:anchored-float:place'));
+    }
+
+    function hideSlotToolbarFloatFromParent(toolbar) {
+        if (!(toolbar instanceof HTMLElement)) {
+            return;
+        }
+        const floatApi = window.Weline?.UI?.get?.(toolbar, 'anchored-float');
+        if (floatApi?.hide) {
+            floatApi.hide();
+            return;
+        }
+        toolbar.dispatchEvent(new CustomEvent('weline:anchored-float:hide'));
+    }
+
+    function resolveSlotElementForToolbar(bar, doc) {
+        if (!(bar instanceof HTMLElement) || !doc) {
+            return null;
+        }
+
+        const fromDom = bar.closest('[data-wslot], [data-slot], .content-slot');
+        if (fromDom instanceof HTMLElement) {
+            return fromDom;
+        }
+
+        const slotId = String(
+            bar.dataset.slotId
+            || bar.dataset.wslot
+            || bar.getAttribute('data-slot-id')
+            || ''
+        ).trim();
+        if (slotId) {
+            const byId = doc.querySelector(dataAttributeSelector('data-wslot', slotId))
+                || doc.querySelector(dataAttributeSelector('data-slot', slotId));
+            if (byId instanceof HTMLElement) {
+                return byId;
+            }
+        }
+
+        const hovered = doc.querySelector('[data-wslot][data-w-slot-hover-target="true"], [data-slot][data-w-slot-hover-target="true"], .content-slot[data-w-slot-hover-target="true"], .content-slot.slot-hover-target');
+        if (hovered instanceof HTMLElement) {
+            return hovered;
+        }
+
+        return null;
+    }
+
+    function syncSlotToolbarOwnerMeta(toolbar, owner) {
+        if (!(toolbar instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
+            return;
+        }
+        const slotId = owner.getAttribute('data-wslot') || owner.getAttribute('data-slot') || '';
+        if (!slotId) {
+            return;
+        }
+        toolbar.dataset.slotId = slotId;
+        const area = owner.getAttribute('data-wslot-position') || owner.getAttribute('data-position') || '';
+        const name = owner.getAttribute('data-wslot-name') || owner.getAttribute('data-name') || '';
+        if (area) {
+            toolbar.dataset.wslotPosition = area;
+        }
+        if (name) {
+            toolbar.dataset.wslotName = name;
+        }
+    }
+
+    /**
+     * 父页挂载插槽选择条 anchored-float（对齐 initWidgetHoverActions 对部件操作条的处理）。
+     */
+    function highlightPreviewSlotSelection(doc, slotEl) {
+        if (!doc || !(slotEl instanceof HTMLElement)) {
+            return;
+        }
+        doc.querySelectorAll('[data-wslot].slot-active').forEach(function(el) {
+            el.classList.remove('slot-active');
+        });
+        slotEl.classList.add('slot-active');
+    }
+
+    /**
+     * 插槽工具条点击由父页捕获阶段委托（对齐部件 bindWidgetActionEvents，避免 .widget-hover-actions 吞掉无 data-action 的按钮）。
+     */
+    function bindSlotToolbarActionEvents(doc) {
+        if (!doc || !doc.body || doc.body._slotToolbarActionEventsBound) {
+            return;
+        }
+        doc.body._slotToolbarActionEventsBound = true;
+
+        doc.body.addEventListener('click', function(e) {
+            const bar = e.target.closest('.widget-hover-actions[data-slot-hover-actions="1"]');
+            if (!bar) {
+                return;
+            }
+            const button = e.target.closest('button');
+            if (!button || !bar.contains(button)) {
+                return;
+            }
+
+            const action = String(button.dataset.action || '').trim();
+            const isSelect = action === 'slot-select' || button.classList.contains('slot-select-btn');
+            const isInit = action === 'slot-init-defaults' || button.classList.contains('slot-init-btn');
+            if (!isSelect && !isInit) {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            const slotEl = resolveSlotElementForToolbar(bar, doc);
+            if (!(slotEl instanceof HTMLElement)) {
+                showToast(translateUiText('缺少插槽标识'), 'warning');
+                return;
+            }
+
+            if (isPreviewInteractionMode()) {
+                setInteractionMode('edit');
+            }
+
+            syncSlotToolbarOwnerMeta(bar, slotEl);
+
+            const slotId = String(
+                slotEl.getAttribute('data-wslot')
+                || slotEl.getAttribute('data-slot')
+                || bar.dataset.slotId
+                || ''
+            ).trim();
+            if (!slotId) {
+                showToast(translateUiText('缺少插槽标识'), 'warning');
+                return;
+            }
+            if (isSelect) {
+                handleSlotSelected(buildSlotInfoFromElement(slotId, slotEl));
+                highlightPreviewSlotSelection(doc, slotEl);
+                return;
+            }
+
+            void initSlotDefaultsFromPreview({
+                slot_id: slotId,
+                area: slotEl.getAttribute('data-wslot-position')
+                    || slotEl.getAttribute('data-position')
+                    || bar.dataset.wslotPosition
+                    || '',
+                name: slotEl.getAttribute('data-wslot-name')
+                    || slotEl.getAttribute('data-name')
+                    || bar.dataset.wslotName
+                    || '',
+            }).catch(function(error) {
+                console.error('[ThemeEditor] Slot init defaults failed:', error);
+                showToast(error?.message || translateUiText('初始化失败'), 'error');
+            });
+        }, true);
+
+        console.log('[ThemeEditor] Slot toolbar action events bound in iframe (capture)');
+    }
+
+    function initSlotToolbarFloats(iframeDoc) {
+        if (!iframeDoc) {
+            return;
+        }
+        let attached = 0;
+        iframeDoc.querySelectorAll('[data-wslot] > .widget-hover-actions, [data-wslot] > .slot-toolbar').forEach((toolbar) => {
+            if (!(toolbar instanceof HTMLElement)) {
+                return;
+            }
+            if (!toolbar.classList.contains('widget-hover-actions')) {
+                toolbar.classList.add('widget-hover-actions');
+            }
+            toolbar.setAttribute('data-slot-hover-actions', '1');
+            toolbar.setAttribute('data-w-component', 'anchored-float');
+            toolbar.setAttribute('data-w-float-self', '1');
+            toolbar.setAttribute('data-w-placement', 'top-end');
+            toolbar.setAttribute('data-w-portal', '0');
+            const ownerSlot = toolbar.parentElement?.matches?.('[data-wslot], [data-slot], .content-slot')
+                ? toolbar.parentElement
+                : toolbar.closest('[data-wslot], [data-slot], .content-slot');
+            syncSlotToolbarOwnerMeta(toolbar, ownerSlot);
+            if (window.Weline?.UI?.floating?.attach) {
+                window.Weline.UI.floating.attach(toolbar, {
+                    placement: 'top-end',
+                    portal: false,
+                    self: true,
+                });
+                toolbar.dataset.wThemeSlotFloatAttached = '1';
+                hideSlotToolbarFloatFromParent(toolbar);
+                attached += 1;
+            } else if (window.Weline?.UI?.mount) {
+                window.Weline.UI.mount(toolbar);
+                toolbar.dataset.wThemeSlotFloatAttached = '1';
+                hideSlotToolbarFloatFromParent(toolbar);
+                attached += 1;
+            }
+        });
+        bindSlotToolbarFloatSync(iframeDoc);
+        bindSlotToolbarActionEvents(iframeDoc);
+        if (attached) {
+            console.log('[ThemeEditor] Slot toolbars anchored-float attached,', attached);
+        }
+    }
+
+    function bindSlotToolbarFloatSync(doc) {
+        if (!doc || !doc.body || doc.body._slotToolbarFloatSyncBound) {
+            return;
+        }
+        doc.body._slotToolbarFloatSyncBound = true;
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+                if (m.type !== 'attributes' || !(m.target instanceof Element)) {
+                    return;
+                }
+                if (!m.target.hasAttribute('data-wslot')) {
+                    return;
+                }
+                const toolbar = m.target.querySelector(':scope > .widget-hover-actions, :scope > .slot-toolbar');
+                if (!toolbar) {
+                    return;
+                }
+                const hovered = m.target.getAttribute('data-w-slot-hover-target') === 'true'
+                    || m.target.classList.contains('slot-hover-target');
+                if (!hovered) {
+                    hideSlotToolbarFloatFromParent(toolbar);
+                    return;
+                }
+                if (toolbar.dataset.wThemeSlotFloatAttached !== '1' && window.Weline?.UI?.floating?.attach) {
+                    window.Weline.UI.floating.attach(toolbar, {
+                        placement: 'top-end',
+                        portal: false,
+                        self: true,
+                    });
+                    toolbar.dataset.wThemeSlotFloatAttached = '1';
+                }
+                syncSlotToolbarFloatFromParent(toolbar);
+            });
+        });
+        observer.observe(doc.body, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['data-w-slot-hover-target', 'class'],
+        });
+    }
+
+    function syncActiveSlotToolbarFloat() {
+        const iframeDoc = elements.previewFrame?.contentDocument;
+        if (!iframeDoc) {
+            return;
+        }
+        const target = iframeDoc.querySelector('[data-wslot][data-w-slot-hover-target="true"]');
+        const toolbar = target && target.querySelector(':scope > .widget-hover-actions, :scope > .slot-toolbar');
+        if (toolbar) {
+            syncSlotToolbarFloatFromParent(toolbar);
+        }
+    }
+
     /**
      * 初始化 iframe 内的部件 hover 操作按钮
      */
@@ -10998,17 +12170,27 @@
 
         const iframeDoc = iframe.contentDocument;
 
-        // 查找所有部件包装器（服务端输出 .widget-wrapper[data-layout-id]；无 class 时用 [data-layout-id] 且无父级同属性避免重复）
-        let widgetWrappers = Array.from(iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id]'));
+        // 查找所有部件包装器（布局行 + 模板内嵌 w:widget）
+        let widgetWrappers = Array.from(iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref]'));
         if (widgetWrappers.length === 0) {
-            widgetWrappers = Array.from(iframeDoc.querySelectorAll('[data-layout-id]')).filter(function (el) {
+            widgetWrappers = Array.from(iframeDoc.querySelectorAll('[data-layout-id], [data-weline-template-widget="1"][data-template-ref]')).filter(function (el) {
                 var parent = el.parentElement;
-                return !parent || !parent.closest('[data-layout-id]');
+                while (parent) {
+                    if (parent.matches('[data-layout-id], [data-weline-template-widget="1"][data-template-ref]')) {
+                        return false;
+                    }
+                    parent = parent.parentElement;
+                }
+                return true;
             });
         }
 
         widgetWrappers.forEach((wrapper) => {
-            const layoutId = wrapper.getAttribute('data-layout-id');
+            const identity = readWidgetIdentityFromElement(wrapper);
+            if (!identity.identity) {
+                return;
+            }
+            const layoutId = identity.layoutId;
             const slotId = wrapper.getAttribute('data-slot-id') ||
                            wrapper.closest('[data-wslot]')?.getAttribute('data-wslot') ||
                            wrapper.closest('[data-slot]')?.getAttribute('data-slot') || '';
@@ -11024,15 +12206,27 @@
             wrapper.classList.add('widget-wrapper');
 
             // 计算同层部件位置
-            const siblings = wrapper.parentElement?.querySelectorAll('[data-layout-id]') || [];
-            const siblingArray = Array.from(siblings);
+            const siblings = wrapper.parentElement?.querySelectorAll(
+                '[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
+            ) || [];
+            const siblingArray = Array.from(siblings).filter(el => readWidgetIdentityFromElement(el).identity);
             const currentIndex = siblingArray.indexOf(wrapper);
             const isFirst = currentIndex === 0;
             const isLast = currentIndex === siblingArray.length - 1;
 
             // 添加操作按钮
-            const actionsHtml = generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, isFirst, isLast);
+            const actionsHtml = generateWidgetHoverActionsHtml(identity, slotId, isExclusive, isFirst, isLast);
             wrapper.insertAdjacentHTML('afterbegin', actionsHtml);
+            const actionsEl = wrapper.querySelector(':scope > .widget-hover-actions');
+            if (actionsEl && window.Weline?.UI?.floating?.attach) {
+                window.Weline.UI.floating.attach(actionsEl, {
+                    placement: 'top-end',
+                    portal: false,
+                    self: true,
+                });
+            } else if (actionsEl && window.Weline?.UI?.mount) {
+                window.Weline.UI.mount(actionsEl);
+            }
         });
 
         // 绑定按钮事件
@@ -11044,26 +12238,193 @@
         // 绑定 slot 点击事件（选中 slot 后过滤部件并滚动）
         bindSlotClickEvents(iframeDoc);
 
+        // 插槽选择条：与部件同源，由父页 Weline.UI.floating.attach 贴边（不依赖 iframe 内是否已加载 UI）
+        initSlotToolbarFloats(iframeDoc);
+
         // 初始化拖拽排序
         initWidgetSortable();
 
         console.log('[ThemeEditor] Widget hover actions initialized,', widgetWrappers.length, 'widgets processed');
+        syncTemplateWidgetsToStructureView();
+    }
+
+    function syncTemplateWidgetsToStructureView() {
+        let iframeDoc = null;
+        try {
+            iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
+        } catch (err) {
+            console.warn('[ThemeEditor] Unable to sync template widgets to structure view:', err);
+            return;
+        }
+        if (!iframeDoc) {
+            return;
+        }
+
+        iframeDoc.querySelectorAll('.weline-template-widget[data-template-ref]:not([data-layout-id])').forEach((wrapper) => {
+            const identity = readWidgetIdentityFromElement(wrapper);
+            if (!identity.templateRef) {
+                return;
+            }
+            if (document.querySelector(`.preview-widget-item${dataTemplateRefSelector(identity.templateRef)}`)) {
+                return;
+            }
+
+            const slotEl = wrapper.closest('[data-wslot], [data-slot]');
+            const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || '';
+            const area = slotEl?.getAttribute('data-wslot-position')
+                || (slotEl?.closest('header') ? 'header' : (slotEl?.closest('footer') ? 'footer' : 'content'));
+
+            let widgetConfig = {};
+            try {
+                widgetConfig = JSON.parse(identity.config || '{}') || {};
+            } catch (e) {
+                widgetConfig = {};
+            }
+
+            addWidgetToStructureView(area, slotId, {
+                code: identity.widgetCode,
+                module: identity.widgetModule,
+                type: identity.widgetType,
+                name: identity.widgetName || identity.widgetCode,
+                config: widgetConfig,
+            }, '', false, identity.templateRef);
+        });
     }
 
     /**
-     * 绑定嵌套距离：mousemove 用 elementsFromPoint 更新栈，按 nestIndex 决定在哪一层显示操作条
+     * 绑定嵌套距离：mousemove 用 elementsFromPoint 更新栈，按 nestIndex 决定在哪一层显示操作条。
+     * 类似 tooltip sticky hover：移到操作条保持显示，离开后短延迟再切换/关闭，便于穿过 gap。
      */
     function bindPenetrateStateEvents(doc) {
         if (!doc || !doc.body) return;
         if (doc.body._penetrateStateBound) return;
         doc.body._penetrateStateBound = true;
 
+        let nestHoverClearTimer = 0;
+        let nestHoverPendingKey = '';
+        const NEST_HOVER_STICKY_MS = 180;
+
+        function nestStackKey(stack) {
+            return (Array.isArray(stack) ? stack : []).map(function(id) {
+                return String(id || '');
+            }).join('|');
+        }
+
+        function clearNestHoverClearTimer() {
+            if (nestHoverClearTimer) {
+                window.clearTimeout(nestHoverClearTimer);
+                nestHoverClearTimer = 0;
+            }
+            nestHoverPendingKey = '';
+        }
+
+        function clearNestHoverActions() {
+            state.nestStack = [];
+            state.nestIndex = 0;
+            state.lastHoverPoint = null;
+            doc.querySelectorAll('.widget-wrapper.show-actions').forEach(w => w.classList.remove('show-actions'));
+        }
+
+        function scheduleNestHoverTransition(nextStack) {
+            const pending = Array.isArray(nextStack) ? nextStack.slice() : [];
+            const pendingKey = nestStackKey(pending);
+            if (nestHoverClearTimer && nestHoverPendingKey === pendingKey) {
+                return;
+            }
+            clearNestHoverClearTimer();
+            nestHoverPendingKey = pendingKey;
+            nestHoverClearTimer = window.setTimeout(function() {
+                nestHoverClearTimer = 0;
+                nestHoverPendingKey = '';
+                if (!pending.length) {
+                    clearNestHoverActions();
+                    return;
+                }
+                state.nestStack = pending;
+                state.nestIndex = 0;
+                setShowActionsByNest();
+            }, NEST_HOVER_STICKY_MS);
+        }
+
+        function keepNestHoverFromActionsBar(target) {
+            const bar = target && target.closest ? target.closest('.widget-hover-actions') : null;
+            if (!bar) {
+                return false;
+            }
+            clearNestHoverClearTimer();
+            const wrapper = bar.closest(
+                '.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
+            );
+            if (wrapper) {
+                const identity = getWidgetSiblingIdentity(wrapper);
+                if (identity) {
+                    if (!state.nestStack.length || state.nestStack.indexOf(identity) < 0) {
+                        // 从操作条所属 wrapper 重建外→内栈（仅含自身祖先链上的部件）。
+                        const chain = [];
+                        let node = wrapper;
+                        while (node && node !== doc.body) {
+                            if (node.matches && node.matches(
+                                '.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
+                            )) {
+                                const id = getWidgetSiblingIdentity(node);
+                                if (id) chain.unshift(id);
+                            }
+                            node = node.parentElement;
+                        }
+                        state.nestStack = chain.length ? chain : [identity];
+                    }
+                    const idx = state.nestStack.indexOf(identity);
+                    state.nestIndex = idx >= 0 ? idx : 0;
+                }
+            }
+            setShowActionsByNest();
+            return true;
+        }
+
         doc.body.addEventListener('mousemove', function(e) {
             if (isPreviewInteractionMode()) {
                 return;
             }
+            // 插槽模式：部件操作条不参与命中，避免挡住大槽/空槽选择。
+            if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+                clearNestHoverClearTimer();
+                clearNestHoverActions();
+                return;
+            }
             state.lastHoverPoint = { x: e.clientX, y: e.clientY };
+
+            if (keepNestHoverFromActionsBar(e.target)) {
+                return;
+            }
+
             const stack = getWidgetStackAtPoint(doc, e.clientX, e.clientY);
+            const currentIdentity = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
+                ? state.nestStack[state.nestIndex]
+                : null;
+
+            if (currentIdentity) {
+                const currentWrapper = doc.querySelector(`.widget-wrapper${dataWidgetIdentitySelector(currentIdentity)}`) ||
+                    doc.querySelector(`.weline-template-widget${dataWidgetIdentitySelector(currentIdentity)}`) ||
+                    doc.querySelector(dataWidgetIdentitySelector(currentIdentity));
+                if (currentWrapper && currentWrapper.contains(e.target)) {
+                    clearNestHoverClearTimer();
+                    const prevTop = state.nestStack[0];
+                    state.nestStack = stack.length ? stack : state.nestStack;
+                    if (stack.length && stack[0] !== prevTop) {
+                        const keepIdx = stack.indexOf(currentIdentity);
+                        state.nestIndex = keepIdx >= 0 ? keepIdx : 0;
+                    }
+                    setShowActionsByNest();
+                    return;
+                }
+
+                // 离开部件本体（含浮到外侧操作条的空隙）：保持当前条，延迟切换。
+                setShowActionsByNest();
+                scheduleNestHoverTransition(stack);
+                return;
+            }
+
+            clearNestHoverClearTimer();
             const prevTop = state.nestStack[0];
             state.nestStack = stack;
             if (stack[0] !== prevTop) {
@@ -11077,10 +12438,7 @@
         });
 
         doc.body.addEventListener('mouseleave', function() {
-            state.nestStack = [];
-            state.nestIndex = 0;
-            state.lastHoverPoint = null;
-            doc.querySelectorAll('.widget-wrapper.show-actions').forEach(w => w.classList.remove('show-actions'));
+            scheduleNestHoverTransition([]);
         });
     }
 
@@ -11095,6 +12453,9 @@
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             if (isPreviewInteractionMode()) {
+                return;
+            }
+            if (e.target.closest('.widget-hover-actions[data-slot-hover-actions="1"]')) {
                 return;
             }
             const button = e.target.closest('.widget-hover-actions button');
@@ -11123,16 +12484,25 @@
             const slotId = button.dataset.slotId;
 
             switch (action) {
-                case 'info': {
-                    const effectiveLayoutId = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
+                case 'info':
+                case 'config': {
+                    const effectiveIdentity = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
                         ? state.nestStack[state.nestIndex]
-                        : layoutId;
-                    const item = document.querySelector(`.preview-widget-item[data-layout-id="${effectiveLayoutId}"]`);
+                        : (bar?.dataset?.layoutId || bar?.dataset?.templateRef || layoutId);
+                    const item = document.querySelector(`.preview-widget-item${dataWidgetIdentitySelector(effectiveIdentity)}`);
                     if (item) {
                         selectWidget(item);
+                    } else if (String(effectiveIdentity || '').startsWith('tpl:')) {
+                        handlePreviewWidgetSelected({
+                            type: 'widget-selected',
+                            templateRef: effectiveIdentity,
+                            slotId: slotId || '',
+                        });
                     } else {
-                        loadWidgetConfigForAccordion(effectiveLayoutId);
-                        const accordionBody = document.querySelector(`.slot-widget-body[data-layout-id="${effectiveLayoutId}"]`);
+                        openConfigPanelForWidgetSelection();
+                        setConfigMode('widget');
+                        loadWidgetConfigForAccordion(effectiveIdentity);
+                        const accordionBody = document.querySelector(`.slot-widget-body${dataWidgetIdentitySelector(effectiveIdentity)}`);
                             if (accordionBody) {
                                 const disclosure = accordionBody.closest('[data-w-component~="disclosure"]');
                                 if (disclosure) {
@@ -11178,19 +12548,21 @@
                 case 'delete':
                 case 'move-up':
                 case 'move-down': {
-                    const topmostLayoutId = (state.nestStack && state.nestStack[0]) ? state.nestStack[0] : layoutId;
-                    let topmostSlotId = slotId;
+                    const deleteTarget = resolveWidgetDeleteTarget(button, bar);
+                    const topmostLayoutId = deleteTarget.layoutId || deleteTarget.templateRef;
+                    let topmostSlotId = deleteTarget.slotId || slotId;
                     const iframe = elements.previewFrame;
-                    if (iframe && iframe.contentDocument) {
-                        const topW = iframe.contentDocument.querySelector(`[data-layout-id="${topmostLayoutId}"]`);
+                    const widgetSelector = resolveWidgetElementSelector(deleteTarget);
+                    if (iframe && iframe.contentDocument && widgetSelector) {
+                        const topW = iframe.contentDocument.querySelector(widgetSelector);
                         if (topW) {
                             topmostSlotId = topW.getAttribute('data-slot-id') ||
                                 topW.closest('[data-wslot]')?.getAttribute('data-wslot') ||
-                                topW.closest('[data-slot]')?.getAttribute('data-slot') || slotId;
+                                topW.closest('[data-slot]')?.getAttribute('data-slot') || topmostSlotId;
                         }
                     }
                     if (action === 'replace') handleWidgetReplace(topmostLayoutId, topmostSlotId);
-                    else if (action === 'delete') handleWidgetDelete(topmostLayoutId, topmostSlotId);
+                    else if (action === 'delete') handleWidgetDelete(deleteTarget, topmostSlotId);
                     else if (action === 'move-up') handleWidgetMoveUp(topmostLayoutId);
                     else if (action === 'move-down') handleWidgetMoveDown(topmostLayoutId);
                     break;
@@ -11575,8 +12947,20 @@
     /**
      * 处理部件删除
      */
-    async function handleWidgetDelete(layoutId, slotId) {
-        console.log('[ThemeEditor] Delete widget:', layoutId, 'in slot:', slotId);
+    async function handleWidgetDelete(identityInput, slotId) {
+        const deleteTarget = typeof identityInput === 'object' && identityInput !== null
+            ? identityInput
+            : {
+                layoutId: String(identityInput || '').trim(),
+                templateRef: String(identityInput || '').startsWith('tpl:') ? String(identityInput || '').trim() : '',
+                slotId: String(slotId || '').trim(),
+            };
+        console.log('[ThemeEditor] Delete widget:', deleteTarget, 'in slot:', slotId);
+
+        if (!deleteTarget.layoutId && !deleteTarget.templateRef) {
+            showToast('缺少部件标识，无法删除', 'error');
+            return;
+        }
 
         // 确认删除 - 使用自定义对话框
         const confirmed = await showCustomConfirm(
@@ -11590,12 +12974,12 @@
             return;
         }
 
-        // 从 iframe DOM 推断 area（header/footer/content）
         let area = 'content';
         try {
             const iframe = elements.previewFrame;
-            if (iframe && iframe.contentDocument) {
-                const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
+            const widgetSelector = resolveWidgetElementSelector(deleteTarget);
+            if (iframe && iframe.contentDocument && widgetSelector) {
+                const widgetEl = iframe.contentDocument.querySelector(widgetSelector);
                 if (widgetEl) {
                     // 检查是否在 header/footer 区域
                     if (widgetEl.closest('header, [data-wslot-position="header"], .site-header')) {
@@ -11607,6 +12991,9 @@
             }
         } catch (e) { /* iframe access error */ }
 
+        const widgetContext = resolveWidgetContextFromIframe(deleteTarget);
+        const effectiveSlotId = slotId || deleteTarget.slotId || widgetContext.slotId || '';
+
         try {
             // 调用删除 API - 传递 slot_id 和 area 作为后端 fallback
             const result = await apiJson(config.apiDeleteWidget, {
@@ -11614,23 +13001,19 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    layout_id: layoutId,
-                    theme_id: state.themeId,
-                    slot_id: slotId,
-                    area: area,
-                    layout_type: state.layoutType || 'homepage',
-                    layout_option: state.layoutOption || 'default',
-                    ...getLayoutLockVirtualPayload()
-                })
+                body: JSON.stringify(buildWidgetDeletePayload(deleteTarget, effectiveSlotId, area, widgetContext))
             });
 
             if (result.success) {
-                await queueRemovedLayoutNode(result);
+                await queueRemovedLayoutNode(result, {
+                    layoutId: deleteTarget.layoutId || result.layout_id,
+                    nodeUid: widgetContext.nodeUid,
+                });
                 // 从 iframe 中移除部件并恢复原始内容
                 const iframe = elements.previewFrame;
-                if (iframe && iframe.contentDocument) {
-                    const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
+                const widgetSelector = resolveWidgetElementSelector(deleteTarget);
+                if (iframe && iframe.contentDocument && widgetSelector) {
+                    const widgetEl = iframe.contentDocument.querySelector(widgetSelector);
                     if (widgetEl) {
                         const slot = widgetEl.closest('[data-wslot], [data-slot]');
                         const actualSlotId = slot?.getAttribute('data-wslot') || slot?.getAttribute('data-slot');
@@ -11660,28 +13043,33 @@
                 }
 
                 // 从结构视图中移除
-                const structureItem = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
+                const structureSelector = deleteTarget.layoutId
+                    ? dataLayoutIdSelector(deleteTarget.layoutId)
+                    : dataTemplateRefSelector(deleteTarget.templateRef);
+                const structureItem = document.querySelector(`.preview-widget-item${structureSelector}`);
                 if (structureItem) {
                     structureItem.remove();
                 }
 
                 showToast('部件已删除', 'success');
                 notifyDashboardLayoutMutated('widget-deleted', {
-                    layoutId: layoutId || null,
-                    slotId: slotId || null,
+                    layoutId: deleteTarget.layoutId || result.layout_id || null,
+                    templateRef: deleteTarget.templateRef || null,
+                    slotId: effectiveSlotId || slotId || null,
                 });
                 await refreshDefaultInjectionApplications({ render: state.widgetLibraryTab === 'applications', silent: true });
 
                 // 更新同层部件的移动按钮状态（如果有的话）
-                if (slotId) {
-                    updateSiblingMoveButtons(slotId);
+                const refreshSlotId = effectiveSlotId || slotId;
+                if (refreshSlotId) {
+                    updateSiblingMoveButtons(refreshSlotId);
                 }
             } else {
                 showToast(result.message || '删除失败', 'error');
             }
         } catch (err) {
             console.error('[ThemeEditor] Delete widget error:', err);
-            showToast('删除部件时发生错误', 'error');
+            showToast(err?.message || '删除部件时发生错误', 'error');
         }
     }
 
@@ -12093,6 +13481,22 @@
 
         // 选中当前
         widgetElement.classList.add('selected');
+
+        const identity = readWidgetIdentityFromElement(widgetElement);
+        if (identity.isTemplate) {
+            handlePreviewWidgetSelected({
+                type: 'widget-selected',
+                templateRef: identity.templateRef,
+                widgetCode: identity.widgetCode || widgetElement.dataset.widgetCode || '',
+                widgetModule: identity.widgetModule || widgetElement.dataset.widgetModule || '',
+                widgetType: identity.widgetType || widgetElement.dataset.widgetType || '',
+                widgetName: identity.widgetName || widgetElement.dataset.widgetName || '',
+                config: identity.config || widgetElement.dataset.config || '{}',
+                slotId: widgetElement.dataset.slotId || widgetElement.getAttribute('data-slot-id') || '',
+            });
+            return;
+        }
+
         state.selectedWidget = widgetElement;
         state.selectedSlot = null;
 
@@ -12100,6 +13504,7 @@
         openConfigPanelForWidgetSelection();
         setConfigMode('widget');
         loadWidgetConfig(widgetElement);
+        markPreviewWidgetSelected(identity.layoutId || '');
     }
 
     /**
@@ -13029,8 +14434,25 @@
     async function setActiveConfigLocale(locale, options = {}) {
         const previousLocale = getActiveConfigLocale();
         const nextLocale = String(locale || '').trim();
-        if (nextLocale === previousLocale) {
+        const sameLocale = nextLocale === previousLocale;
+        if (sameLocale && !options.forceReload) {
             syncConfigLocaleSwitchers();
+            return;
+        }
+
+        if (sameLocale && options.forceReload) {
+            syncThemeEditorLocaleDataset();
+            syncConfigLocaleSwitchers();
+            if (options.reload === false) {
+                return;
+            }
+            loadLayoutPreview({ locale: nextLocale || getActiveConfigLocale() });
+            if (options.toast !== false) {
+                showToast(
+                    nextLocale ? `${translateUiText('已切换到')} ${nextLocale}` : translateUiText('已切换到默认语言'),
+                    'success',
+                );
+            }
             return;
         }
 
@@ -13719,11 +15141,24 @@
      * @param {boolean} silent - 为 true 时不显示“配置已保存”提示（用于实时保存）
      */
     async function saveWidgetConfig(form, silent) {
-        const layoutId = form.dataset.layoutId;
-        if (!layoutId) return;
-
+        let layoutId = form.dataset.layoutId;
         const configData = collectWidgetConfigData(form);
         const locale = getActiveConfigLocale();
+
+        if (!layoutId && state.selectedWidget) {
+            layoutId = await materializeTemplateWidgetIfNeeded(state.selectedWidget, configData);
+            if (layoutId) {
+                form.dataset.layoutId = layoutId;
+            }
+        }
+        if (!layoutId && form.dataset.templateRef && state.selectedWidget) {
+            layoutId = await materializeTemplateWidgetIfNeeded(state.selectedWidget, configData);
+            if (layoutId) {
+                form.dataset.layoutId = layoutId;
+                delete form.dataset.templateRef;
+            }
+        }
+        if (!layoutId) return;
 
         try {
             const result = await apiJson(getWidgetConfigSaveUrl(), {
@@ -13733,7 +15168,9 @@
                 },
                 body: JSON.stringify({
                     layout_id: layoutId,
-                    config: configData,
+                    config: Object.assign({}, configData, state.selectedWidget?.dataset?.templateRef
+                        ? { template_ref: state.selectedWidget.dataset.templateRef }
+                        : {}),
                     locale: locale || null,
                 }),
             });
@@ -13749,7 +15186,8 @@
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
                     fetchLayoutSlots();
                 } else if (locale) {
-                    loadLayoutPreview();
+                    // TE-CAP-017: never full-reload the preview iframe on config save.
+                    console.warn('[ThemeEditor] save-widget-config missing preview_html for locale; skip full preview reload', locale);
                 }
             } else {
                 throw new Error(result.message || translateUiText('保存失败'));
@@ -13825,25 +15263,22 @@
             }
         } catch (e) { /* iframe access error */ }
 
+        const widgetContext = resolveWidgetContextFromIframe(layoutId);
+
         try {
             const result = await apiJson(config.apiDeleteWidget, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    layout_id: layoutId,
-                    theme_id: state.themeId,
-                    slot_id: slotIdFromEl,
-                    area: areaFromEl,
-                    layout_type: state.layoutType || 'homepage',
-                    layout_option: state.layoutOption || 'default',
-                    ...getLayoutLockVirtualPayload()
-                }),
+                body: JSON.stringify(buildWidgetDeletePayload(layoutId, slotIdFromEl, areaFromEl, widgetContext)),
             });
 
             if (result.success) {
-                await queueRemovedLayoutNode(result);
+                await queueRemovedLayoutNode(result, {
+                    layoutId,
+                    nodeUid: widgetContext.nodeUid,
+                });
                 // 从 iframe 中移除部件并恢复原始内容
                 const iframe = elements.previewFrame;
                 if (iframe && iframe.contentDocument) {
@@ -15039,6 +16474,124 @@
         }
     }
 
+    function openResetDraftModal() {
+        const modal = elements.resetDraftModal || document.getElementById('themeEditorResetDraftModal');
+        if (!(modal instanceof HTMLElement)) {
+            return;
+        }
+        resetDraftModalDefaults(modal);
+        showEditorModal(modal);
+    }
+
+    function closeResetDraftModal() {
+        const modal = elements.resetDraftModal || document.getElementById('themeEditorResetDraftModal');
+        if (!(modal instanceof HTMLElement)) {
+            return;
+        }
+        hideEditorModal(modal);
+    }
+
+    function resetDraftModalDefaults(modal) {
+        const defaultChecked = new Set(['layout', 'meta', 'appearance']);
+        modal.querySelectorAll('input[name="reset_resource"]').forEach((input) => {
+            input.checked = defaultChecked.has(String(input.value || ''));
+        });
+        const currentScope = modal.querySelector('input[name="reset_layout_scope"][value="current_layout"]');
+        if (currentScope instanceof HTMLInputElement) {
+            currentScope.checked = true;
+        }
+        const danger = modal.querySelector('.w-theme-editor-reset-draft__danger');
+        if (danger instanceof HTMLDetailsElement) {
+            danger.open = false;
+        }
+    }
+
+    function collectResetDraftSelections(selectAll = false) {
+        const modal = elements.resetDraftModal || document.getElementById('themeEditorResetDraftModal');
+        const resources = [];
+        if (selectAll) {
+            ['layout', 'meta', 'appearance', 'theme_binding', 'i18n'].forEach((resource) => resources.push(resource));
+            if (modal instanceof HTMLElement) {
+                modal.querySelectorAll('input[name="reset_resource"]').forEach((input) => {
+                    input.checked = true;
+                });
+            }
+        } else if (modal instanceof HTMLElement) {
+            modal.querySelectorAll('input[name="reset_resource"]:checked').forEach((input) => {
+                const value = String(input.value || '').trim();
+                if (value) {
+                    resources.push(value);
+                }
+            });
+        }
+        let layoutScope = 'current_layout';
+        if (modal instanceof HTMLElement) {
+            const checkedScope = modal.querySelector('input[name="reset_layout_scope"]:checked');
+            if (checkedScope instanceof HTMLInputElement && checkedScope.value) {
+                layoutScope = checkedScope.value;
+            }
+        }
+        return { resources, layout_scope: layoutScope };
+    }
+
+    async function executeResetDraftResources(selectAll = false) {
+        const selection = collectResetDraftSelections(selectAll);
+        if (!selection.resources.length) {
+            showToast(translateUiText('请至少选择一种资源类型'), 'warning');
+            return;
+        }
+
+        const confirmed = await showCustomConfirm(
+            translateUiText(selectAll ? '确认重置所有草稿资源？' : '确认重置选中草稿资源？'),
+            translateUiText('仅清理当前编辑草稿物化，不会删除版本历史或已发布内容。'),
+            translateUiText('确认重置'),
+            translateUiText('取消'),
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        showToast(translateUiText('正在重置当前编辑草稿...'), 'info');
+        const result = await apiJson(config.apiResetDraftResources, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(buildLayoutVersionIdentityPayload({
+                resources: selection.resources,
+                layout_scope: selection.layout_scope,
+            })),
+        });
+
+        if (!result?.success) {
+            showToast(result?.message || translateUiText('重置失败'), 'error');
+            return;
+        }
+
+        closeResetDraftModal();
+        for (const resourceType of selection.resources) {
+            try {
+                await loadScopedWorkspace(resourceType);
+            } catch (error) {
+                console.warn('[ThemeEditor] reload scoped workspace after reset failed:', resourceType, error);
+            }
+        }
+        if (selection.resources.includes('layout')) {
+            await refreshDefaultInjectionApplications({
+                render: state.widgetLibraryTab === 'applications',
+                silent: true,
+            });
+        }
+        clearSlotSelection();
+        deselectArea();
+        deselectWidget();
+        await fetchLayoutSlots();
+        showToast(result.message || translateUiText('当前编辑草稿已重置'), 'success');
+        setTimeout(() => {
+            refreshPreview();
+        }, 300);
+    }
+
     /**
      * 刷新预览（仅用于手动刷新按钮）
      *
@@ -15143,6 +16696,16 @@
                 const link = e.target.closest('a');
                 if (!link) return;
 
+                // 禁链开关：彻底阻止跳转，不切换预览页、不新开标签。
+                if (state.linkBlockEnabled === true) {
+                    if (link.closest('.slot-toolbar, .widget-hover-actions')) {
+                        return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
                 const href = link.getAttribute('href');
                 if (!href) return;
 
@@ -15175,6 +16738,11 @@
                 const pathname = targetUrl.pathname;
                 let pageType = 'homepage';
                 let layoutType = 'homepage';
+                let themePublicRoute = '';
+
+                const pathSegments = pathname.split('/').filter(Boolean);
+                const productIdx = pathSegments.findIndex((seg) => seg.toLowerCase() === 'product');
+                const categoryIdx = pathSegments.findIndex((seg) => seg.toLowerCase() === 'category');
 
                 // 路径到页面类型的映射（使用布局目录名）
                 if (pathname === '/' || pathname === '' || pathname.endsWith('/index')) {
@@ -15183,9 +16751,15 @@
                 } else if (pathname.includes('/category/') || pathname.includes('/catalog/')) {
                     pageType = 'category';
                     layoutType = 'category';
+                    if (categoryIdx >= 0 && pathSegments[categoryIdx + 1]) {
+                        themePublicRoute = 'category/' + pathSegments.slice(categoryIdx + 1).join('/').toLowerCase();
+                    }
                 } else if (pathname.includes('/product/')) {
                     pageType = 'product';
                     layoutType = 'product';
+                    if (productIdx >= 0 && pathSegments[productIdx + 1]) {
+                        themePublicRoute = 'product/' + String(pathSegments[productIdx + 1]).toLowerCase();
+                    }
                 } else if (pathname.includes('/cart')) {
                     pageType = 'cart';
                     layoutType = 'cart';
@@ -15204,13 +16778,19 @@
                     layoutType = 'cms_page';
                 }
 
-                // 构建预览 URL
+                // 构建预览 URL：选中布局，并携带具体产品/分类 public route
                 showToast(`已切换到 ${pageType} 布局`, 'info');
-                console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType);
-                navigateEditorShell({
+                console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType, themePublicRoute || '');
+                const shellOverrides = {
                     page_type: pageType,
                     layout_option: resolveLayoutOptionForType(pageType, ''),
-                });
+                };
+                if (themePublicRoute) {
+                    shellOverrides.theme_public_route = themePublicRoute;
+                } else {
+                    shellOverrides.theme_public_route = null;
+                }
+                navigateEditorShell(shellOverrides);
                 return;
 
                 const previewUrl = new URL(config.apiLayoutPreview, currentOrigin);
@@ -15218,6 +16798,18 @@
                 previewUrl.searchParams.set('layout_type', layoutType);
                 previewUrl.searchParams.set('layout_option', 'default');
                 previewUrl.searchParams.set('editor_mode', '1');
+                previewUrl.searchParams.set('interaction_mode', normalizeInteractionMode(state.interactionMode || 'edit'));
+                const selectionTarget = normalizeSelectionTarget(state.selectionTarget || 'default');
+                if (selectionTarget === 'default') {
+                    previewUrl.searchParams.delete('selection_target');
+                } else {
+                    previewUrl.searchParams.set('selection_target', selectionTarget);
+                }
+                if (state.linkBlockEnabled === true) {
+                    previewUrl.searchParams.set('link_block', '1');
+                } else {
+                    previewUrl.searchParams.delete('link_block');
+                }
                 previewUrl.searchParams.set('status', state.previewStatus || 'draft');
                 previewUrl.searchParams.set('_t', Date.now());
 
@@ -15237,8 +16829,15 @@
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Preview:', previewUrl.toString());
             }, true); // 使用捕获阶段
 
-            // 添加编辑器模式的视觉提示
-            iframeDoc.body?.classList.add('editor-mode');
+            // 同步交互模式（预览态不强制 editor-mode）
+            notifyPreviewInteractionMode(state.interactionMode || 'edit');
+            notifyPreviewSelectionTarget(state.selectionTarget || 'default');
+            notifyPreviewLinkBlock(state.linkBlockEnabled === true);
+            if (isEditInteractionMode()) {
+                iframeDoc.body?.classList.add('editor-mode');
+            } else {
+                iframeDoc.body?.classList.remove('editor-mode');
+            }
 
             console.log('[ThemeEditor] Link interception setup complete');
         } catch (err) {
@@ -15696,11 +17295,12 @@
             if (!element) {
                 return;
             }
-            const layoutId = element.dataset.layoutId || element.getAttribute('data-layout-id') || '';
-            if (!layoutId || seen.has(layoutId)) {
+            const identity = readWidgetIdentityFromElement(element);
+            const anchorId = identity.identity;
+            if (!anchorId || seen.has(anchorId)) {
                 return;
             }
-            seen.add(layoutId);
+            seen.add(anchorId);
             const slotEl = element.closest('[data-wslot], [data-slot], [data-slot-id]');
             const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
             const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
@@ -15722,11 +17322,13 @@
                 }
             });
             anchors.push({
-                layout_id: layoutId,
-                widget_code: element.dataset.widgetCode || element.getAttribute('data-widget-code') || '',
-                widget_module: element.dataset.widgetModule || element.getAttribute('data-widget-module') || '',
-                widget_type: element.dataset.widgetType || element.getAttribute('data-widget-type') || '',
-                widget_name: element.dataset.widgetName || element.getAttribute('data-widget-name') || '',
+                layout_id: identity.layoutId || anchorId,
+                template_ref: identity.templateRef || '',
+                is_template: identity.isTemplate,
+                widget_code: identity.widgetCode || element.dataset.widgetCode || element.getAttribute('data-widget-code') || '',
+                widget_module: identity.widgetModule || element.dataset.widgetModule || element.getAttribute('data-widget-module') || '',
+                widget_type: identity.widgetType || element.dataset.widgetType || element.getAttribute('data-widget-type') || '',
+                widget_name: identity.widgetName || element.dataset.widgetName || element.getAttribute('data-widget-name') || '',
                 slot_id: slotId,
                 area,
                 source,
@@ -15735,9 +17337,11 @@
         };
 
         if (iframeDoc) {
-            iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id]').forEach(el => collectFromElement(el, 'preview'));
+            iframeDoc.querySelectorAll(
+                '.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id], .weline-template-widget[data-template-ref]'
+            ).forEach(el => collectFromElement(el, 'preview'));
         }
-        document.querySelectorAll('.preview-widget-item[data-layout-id]').forEach(el => collectFromElement(el, 'structure'));
+        document.querySelectorAll('.preview-widget-item[data-layout-id], .preview-widget-item[data-template-ref]').forEach(el => collectFromElement(el, 'structure'));
 
         return anchors;
     }
@@ -15756,8 +17360,9 @@
             }
         }
         if (state.selectedWidget) {
-            const layoutId = state.selectedWidget.dataset?.layoutId || state.selectedWidget.getAttribute?.('data-layout-id') || '';
-            const anchor = anchors.find(item => String(item.layout_id) === String(layoutId));
+            const identity = readWidgetIdentityFromElement(state.selectedWidget);
+            const anchor = anchors.find(item => String(item.layout_id) === String(identity.identity)
+                || (identity.templateRef && String(item.template_ref) === String(identity.templateRef)));
             if (anchor) {
                 return {
                     type: 'widget',
@@ -15921,21 +17526,22 @@
         if (!layoutId) {
             return true;
         }
+        const widgetContext = resolveWidgetContextFromIframe(layoutId);
         const result = await apiJson(config.apiDeleteWidget, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                layout_id: layoutId,
-                theme_id: state.themeId,
-                slot_id: slotId || '',
-                area: area || inferAreaFromSlotId(slotId),
-                layout_type: state.layoutType || state.pageType || 'homepage',
-                layout_option: state.layoutOption || 'default',
-                ...getLayoutLockVirtualPayload()
-            })
+            body: JSON.stringify(buildWidgetDeletePayload(
+                layoutId,
+                slotId || widgetContext.slotId,
+                area || widgetContext.area,
+                widgetContext
+            ))
         });
         if (result?.success) {
-            await queueRemovedLayoutNode(result);
+            await queueRemovedLayoutNode(result, {
+                layoutId,
+                nodeUid: widgetContext.nodeUid,
+            });
         }
         return !!result?.success;
     }
@@ -16012,6 +17618,7 @@
         buildTypedEditorContext,
         loadScopedWorkspace,
         queueScopedChanges,
+        refreshPreview,
         getScopeIdentity: () => state.scopeIdentity ? { ...state.scopeIdentity } : null,
         getLegacyScope: () => legacyStorageScopeForIdentity(state.scopeIdentity),
         deselectArea,
@@ -16345,12 +17952,24 @@
             return;
         }
 
+        const host = elements.container.querySelector('.editor-main')
+            || elements.container.querySelector('.editor-preview-area')
+            || elements.container;
+        if (host instanceof HTMLElement) {
+            const hostStyle = window.getComputedStyle(host);
+            if (hostStyle.position === 'static') {
+                host.style.position = 'relative';
+            }
+        }
+
         let overlay = document.getElementById('themeEditorLockOverlay');
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'themeEditorLockOverlay';
             overlay.className = 'w-theme-editor-lock';
-            elements.container.appendChild(overlay);
+            host.appendChild(overlay);
+        } else if (overlay.parentElement !== host) {
+            host.appendChild(overlay);
         }
 
         const unavailable = mode === 'unavailable';
@@ -16362,7 +17981,7 @@
         const message = pending
             ? translateUiText('正在获取当前页面的编辑锁，请稍候。')
             : (unavailable
-                ? translateUiText('编辑锁服务暂时不可用，为避免覆盖其他管理员的修改，当前页面保持只读。')
+                ? translateUiText('编辑锁服务暂时不可用，为避免覆盖其他管理员的修改，当前页面保持只读。工具栏仍可切换语言预览。')
                 : `${escapeHtml(userName)} ${escapeHtml(translateUiText('正在编辑当前主题页面。为了避免互相覆盖，当前会话已被锁定为只读等待状态。'))}`);
         overlay.innerHTML = `
             <section class="w-card w-theme-editor-lock__card" role="status" aria-live="polite">
@@ -16503,14 +18122,13 @@
         }
 
         try {
-            const url = new URL(config.apiCheckLock, window.location.origin);
-            Object.entries(payload).forEach(([key, value]) => {
-                if (value !== undefined && value !== null && String(value) !== '') {
-                    url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
-                }
+            return await apiJson(config.apiCheckLock, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
             });
-
-            return await apiJson(url.toString());
         } catch (error) {
             console.warn('[ThemeEditor] Failed to acquire editor lock:', error);
             return {
@@ -16526,7 +18144,13 @@
             return false;
         }
         renderEditorLockOverlay(null, 'pending');
-        const result = await acquireEditorLockPayload(buildLayoutVersionIdentityPayload());
+        let result = await acquireEditorLockPayload(buildLayoutVersionIdentityPayload());
+        if (!(result && result.success) && result?.unavailable) {
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            if (state.scopeIdentity) {
+                result = await acquireEditorLockPayload(buildLayoutVersionIdentityPayload());
+            }
+        }
 
         if (result && result.success) {
             state.lockHeld = true;
@@ -16683,6 +18307,8 @@
         const editorTitleEl = modalEl.querySelector('[data-w-appearance-editor-title]');
         const nameInput = modalEl.querySelector('[data-w-appearance-name]');
         const tokensEl = modalEl.querySelector('[data-w-appearance-tokens]');
+        const tokenSearchEl = modalEl.querySelector('[data-w-appearance-token-search]');
+        const tokenCountEl = modalEl.querySelector('[data-w-appearance-token-count]');
 
         const openPanel = () => {
             return ui().drawer.open(modalEl);
@@ -16700,6 +18326,59 @@
         let appearanceState = null;
         let scopedWorkspace = null;
         const draft = { panel: 'color', base_file: '', disk_key: '', tokens: {}, mode: '' };
+        let previewTokenTimer = 0;
+
+        const getPreviewDocument = () => {
+            const frame = document.getElementById('previewFrame');
+            if (!(frame instanceof HTMLIFrameElement)) return null;
+            try {
+                return frame.contentDocument || frame.contentWindow?.document || null;
+            } catch (_error) {
+                return null;
+            }
+        };
+
+        /** 编辑中即时把 Token 写进预览 iframe，不等待保存/整页刷新。 */
+        const applyAppearancePreviewTokens = (tokens) => {
+            const doc = getPreviewDocument();
+            if (!doc || !doc.documentElement) return false;
+            const map = tokens && typeof tokens === 'object' ? tokens : {};
+            const root = doc.documentElement;
+            const lines = [];
+            Object.entries(map).forEach(([name, value]) => {
+                const token = String(name || '').trim();
+                const cssValue = String(value ?? '').trim();
+                if (!token.startsWith('--') || !cssValue) return;
+                root.style.setProperty(token, cssValue);
+                lines.push(`  ${token}: ${cssValue};`);
+            });
+            let styleEl = doc.querySelector('style[data-theme-scoped-preview-appearance]');
+            if (!(styleEl instanceof HTMLStyleElement)) {
+                styleEl = doc.createElement('style');
+                styleEl.setAttribute('data-theme-scoped-preview-appearance', '1');
+                (doc.head || doc.documentElement).appendChild(styleEl);
+            }
+            styleEl.textContent = lines.length
+                ? `:root {\n${lines.join('\n')}\n}`
+                : '';
+            return true;
+        };
+
+        const scheduleAppearancePreviewTokens = () => {
+            window.clearTimeout(previewTokenTimer);
+            previewTokenTimer = window.setTimeout(() => {
+                applyAppearancePreviewTokens(draft.tokens);
+            }, 80);
+        };
+
+        const refreshLayoutPreview = () => {
+            const editor = window.Weline?.Theme?.Editor;
+            if (typeof editor?.refreshPreview === 'function') {
+                editor.refreshPreview();
+                return;
+            }
+            applyAppearancePreviewTokens(draft.tokens);
+        };
 
         const identity = () => {
             const themeSelect = document.getElementById('themeSelect');
@@ -16756,10 +18435,43 @@
             return disks.find((item) => String(item.key || '').replace(/^_+/, '') === needle) || null;
         };
 
+        const loadDiskTokens = async (panel, disk) => {
+            if (!disk || typeof disk !== 'object') {
+                return {};
+            }
+            if (Array.isArray(disk.tokens) && disk.tokens.length > 0) {
+                return collectInheritTokens(panel, disk);
+            }
+            const ref = String(disk.ref || '').trim();
+            if (!ref) {
+                return {};
+            }
+            const url = apiUrl('apiThemeDiskTokens', {
+                ...identity(),
+                panel,
+                ref,
+            });
+            const loaded = await requestJson(url, { method: 'GET' });
+            const tokensJson = loaded?.data?.tokens_json;
+            if (typeof tokensJson === 'string' && tokensJson.trim() !== '') {
+                try {
+                    const parsed = JSON.parse(tokensJson);
+                    if (Array.isArray(parsed)) {
+                        disk.tokens = parsed;
+                    }
+                } catch (_error) {
+                    // ignore malformed token payload
+                }
+            } else if (Array.isArray(loaded?.data?.tokens)) {
+                disk.tokens = loaded.data.tokens;
+            }
+            return collectInheritTokens(panel, disk);
+        };
+
         /** Meta 只存 delta：编辑时用「原生可继承基线 + 已存 delta」合成完整可编辑表。 */
-        const resolveEditableTokens = (panel, baseFile, deltaTokens) => {
+        const resolveEditableTokens = async (panel, baseFile, deltaTokens) => {
             const baseDisk = findCatalogDisk(panel, baseFile);
-            const base = baseDisk ? collectInheritTokens(panel, baseDisk) : {};
+            const base = baseDisk ? await loadDiskTokens(panel, baseDisk) : {};
             const delta = deltaTokens && typeof deltaTokens === 'object' ? deltaTokens : {};
             return { ...base, ...delta };
         };
@@ -16775,9 +18487,34 @@
             return btn;
         };
 
+        const tokenSearchQuery = () => {
+            if (!(tokenSearchEl instanceof HTMLInputElement)) return '';
+            return String(tokenSearchEl.value || '').trim().toLowerCase();
+        };
+
+        const matchesTokenSearch = (name, value, query) => {
+            if (!query) return true;
+            return String(name || '').toLowerCase().includes(query)
+                || String(value || '').toLowerCase().includes(query);
+        };
+
+        const updateTokenCount = (shown, total, filtered) => {
+            if (!(tokenCountEl instanceof HTMLElement)) return;
+            if (!total) {
+                tokenCountEl.hidden = true;
+                tokenCountEl.textContent = '';
+                return;
+            }
+            tokenCountEl.hidden = false;
+            tokenCountEl.textContent = filtered
+                ? `显示 ${shown} / ${total}`
+                : `${total} 个变量`;
+        };
+
         const renderTokenEditor = () => {
             if (!(tokensEl instanceof HTMLElement)) return;
             tokensEl.replaceChildren();
+            const query = tokenSearchQuery();
             const entries = Object.entries(draft.tokens);
             if (!entries.length) {
                 const empty = document.createElement('p');
@@ -16788,11 +18525,24 @@
                         ? '该原生盘没有可继承的品牌/功能色 Token'
                         : '该原生盘没有可继承的变量 Token');
                 tokensEl.append(empty);
+                updateTokenCount(0, 0, false);
                 return;
             }
-            entries.forEach(([name, value]) => {
+            const matched = query
+                ? entries.filter(([name, value]) => matchesTokenSearch(name, value, query))
+                : entries;
+            if (!matched.length) {
+                const empty = document.createElement('p');
+                empty.className = 'w-theme-disk-empty';
+                empty.textContent = '没有匹配的变量';
+                tokensEl.append(empty);
+                updateTokenCount(0, entries.length, true);
+                return;
+            }
+            matched.forEach(([name, value]) => {
                 const card = document.createElement('div');
                 card.className = 'w-theme-disk-token';
+                card.dataset.tokenName = name;
                 const label = document.createElement('div');
                 label.className = 'w-theme-disk-token__label';
                 label.textContent = name;
@@ -16809,6 +18559,7 @@
                     if (colorInput && looksLikeColorValue(textInput.value)) {
                         colorInput.value = toColorInputValue(textInput.value);
                     }
+                    scheduleAppearancePreviewTokens();
                 });
                 let colorInput = null;
                 if (looksLikeColorValue(text) || draft.panel === 'color') {
@@ -16820,6 +18571,7 @@
                     colorInput.addEventListener('input', () => {
                         draft.tokens[name] = colorInput.value;
                         textInput.value = colorInput.value;
+                        scheduleAppearancePreviewTokens();
                     });
                     controls.append(colorInput);
                 }
@@ -16827,9 +18579,11 @@
                 card.append(label, controls);
                 tokensEl.append(card);
             });
+            updateTokenCount(matched.length, entries.length, !!query);
+            scheduleAppearancePreviewTokens();
         };
 
-        const startInheritEdit = (disk) => {
+        const startInheritEdit = async (disk) => {
             const panel = panelSelect instanceof HTMLSelectElement && panelSelect.value
                 ? panelSelect.value
                 : draft.panel;
@@ -16837,7 +18591,7 @@
             draft.mode = 'inherit';
             draft.base_file = String(disk.key || '');
             draft.disk_key = '';
-            draft.tokens = collectInheritTokens(panel, disk);
+            draft.tokens = await loadDiskTokens(panel, disk);
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = `${disk.name || disk.key}-自定义`;
             }
@@ -16846,7 +18600,7 @@
             renderAppearance();
         };
 
-        const startCustomEdit = (disk) => {
+        const startCustomEdit = async (disk) => {
             const panel = panelSelect instanceof HTMLSelectElement && panelSelect.value
                 ? panelSelect.value
                 : draft.panel;
@@ -16854,7 +18608,7 @@
             draft.mode = 'custom';
             draft.base_file = String(disk.base_file || '');
             draft.disk_key = String(disk.disk_key || '');
-            draft.tokens = resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
+            draft.tokens = await resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = String(disk.name || disk.disk_key || '');
             }
@@ -16867,7 +18621,7 @@
         };
 
         /** 当前已选用的盘直接展开右侧编辑，无需再点「编辑 / 继承编辑」。 */
-        const openActiveEditor = () => {
+        const openActiveEditor = async () => {
             if (!appearanceState) {
                 setEditorVisible(false);
                 return;
@@ -16885,7 +18639,7 @@
                     String(item.ref || '') === active
                     || `custom:${String(item.disk_key || '')}` === active);
                 if (current) {
-                    startCustomEdit(current);
+                    await startCustomEdit(current);
                     return;
                 }
                 setEditorVisible(false);
@@ -16894,7 +18648,7 @@
             const panelCatalog = appearanceState.catalog?.panels?.[draft.panel] || { disks: [] };
             const native = (panelCatalog.disks || []).find((item) => String(item.ref || '') === active);
             if (native && native.palette_role !== 'mode') {
-                startInheritEdit(native);
+                await startInheritEdit(native);
                 return;
             }
             setEditorVisible(false);
@@ -17022,6 +18776,7 @@
                         }], 'appearance_disk_selected');
                         toast('色盘选择已保存', 'success');
                         await loadAppearance();
+                        refreshLayoutPreview();
                     } catch (error) {
                         toast(error instanceof Error ? error.message : String(error), 'error');
                     }
@@ -17077,6 +18832,7 @@
                         }], 'appearance_disk_selected');
                         toast('色盘选择已保存', 'success');
                         await loadAppearance();
+                        refreshLayoutPreview();
                     } catch (error) {
                         toast(error instanceof Error ? error.message : String(error), 'error');
                     }
@@ -17151,7 +18907,7 @@
             draft.tokens = {};
             setEditorVisible(false);
             renderAppearance();
-            openActiveEditor();
+            await openActiveEditor();
         };
 
         const saveAppearance = async (asNew) => {
@@ -17173,9 +18929,8 @@
             });
             draft.disk_key = String(result?.data?.disk_key || draft.disk_key || '');
             const savedKey = draft.disk_key;
-            const baseTokens = draft.base_file
-                ? collectInheritTokens(draft.panel, findCatalogDisk(draft.panel, draft.base_file) || {})
-                : {};
+            const baseDisk = draft.base_file ? findCatalogDisk(draft.panel, draft.base_file) : null;
+            const baseTokens = baseDisk ? await loadDiskTokens(draft.panel, baseDisk) : {};
             const deltaTokens = Object.fromEntries(Object.entries(draft.tokens).filter(([token, value]) =>
                 !Object.prototype.hasOwnProperty.call(baseTokens, token)
                     || String(baseTokens[token]) !== String(value)));
@@ -17199,6 +18954,7 @@
             toast(String(result?.message || '主题盘已保存'), 'success');
             // loadAppearance → openActiveEditor：保存后继续展开当前已选用盘
             await loadAppearance();
+            refreshLayoutPreview();
         };
 
         const openAndLoad = async () => {
@@ -17231,6 +18987,12 @@
                 });
         });
 
+        if (tokenSearchEl instanceof HTMLInputElement) {
+            tokenSearchEl.addEventListener('input', () => {
+                renderTokenEditor();
+            });
+        }
+
         if (panelSelect instanceof HTMLSelectElement) {
             panelSelect.addEventListener('change', () => {
                 draft.panel = panelSelect.value || 'color';
@@ -17238,6 +19000,9 @@
                 draft.disk_key = '';
                 draft.tokens = {};
                 draft.mode = '';
+                if (tokenSearchEl instanceof HTMLInputElement) {
+                    tokenSearchEl.value = '';
+                }
                 setEditorVisible(false);
                 renderAppearance();
                 openActiveEditor();

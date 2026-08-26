@@ -12,21 +12,25 @@
 
 ## Weline 推荐组合（直接照抄）
 
-Weline CDN 一键授权是 **服务端机密客户端**：后台保存 Client Secret，用 Authorization Code 换 Access Token。
+Weline CDN 一键授权是 **服务端机密客户端**：Client Secret 仅保存为服务器环境变量，用户令牌密封在 Cdn Account 的 secret_ref 中。授权码只交换一次，Access Token 到期后使用 Refresh Token 自动续期。
 
 | Cloudflare 表单字段 | 应选 / 应填 | 说明 |
 | --- | --- | --- |
-| 客户端名称 | 任意，如 `Weline` | 仅展示名 |
-| **响应类型** | **Code** | 禁止选 `Token` |
-| **授权类型** | **Authorization Code** | 需要长期会话时可再加 **Refresh Token** |
-| **令牌身份验证方法** | **Client Secret Post** 或 **Client Secret Basic** | 禁止选 `None` |
-| **重定向（回调）URL** | `https://{站点域名}/{后台key}/cdn/backend/oauth/callback` | 必须与真实后台 URL 完全一致 |
-| 客户端 URL | 可选，站点首页 | 公开客户端时可能必填 |
+| 客户端名称 | 任意，如 Weline | 仅展示名 |
+| **响应类型** | **Code** | 不选 Token |
+| **授权类型** | **Authorization Code** | 同时启用 Refresh Token |
+| **令牌身份验证方法** | **Client Secret Post** 或 **Client Secret Basic** | 与服务器环境变量保持一致 |
+| **重定向（回调）URL** | https://{站点域名}/{后台key}/cdn/backend/oauth/callback | 必须与后台生成 URL 完全一致 |
+| **Scopes** | zone.read、dns.write、offline_access | 邮箱 DNS 的最小权限组合 |
 
-创建成功后：
+平台管理员只配置一次：
 
-1. 复制 **Client ID**、**Client Secret** 填回本站「Cloudflare OAuth」配置。
-2. 勾选的 Scopes 与配置项 `cdn/cloudflare/oauth_scopes` 保持一致（默认建议 `account.read zone.read`，按 CDN 能力再补 Cache Purge / Cache Rules 等）。
+1. WELINE_CLOUDFLARE_OAUTH_CLIENT_ID
+2. WELINE_CLOUDFLARE_OAUTH_CLIENT_SECRET
+3. 可选 WELINE_CLOUDFLARE_OAUTH_TOKEN_AUTH_METHOD（client_secret_post 或 client_secret_basic）
+4. 可选 WELINE_CLOUDFLARE_OAUTH_SCOPES；邮箱 DNS 必须包含 zone.read、dns.write、offline_access
+
+之后企业邮箱用户在域名面板点击“连接或重新授权 Cloudflare”即可，不再复制 API Token。Client Secret、Access Token、Refresh Token 禁止写入源码、模板、日志或沟通记录。
 
 ---
 

@@ -93,7 +93,7 @@ $rootClass = trim($wc . ' w-pagination' . ($class !== '' ? ' ' . $class : ''));
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--weline-space-1, 4px);
+    gap: var(--weline-space-1);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -103,15 +103,15 @@ $rootClass = trim($wc . ' w-pagination' . ($class !== '' ? ' ' . $class : ''));
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.25rem;
-    padding: var(--weline-space-1, 4px) var(--weline-space-2, 8px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md, 8px);
+    min-width: var(--spacing-2_25);
+    padding: var(--weline-space-1) var(--weline-space-2);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
     color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     text-decoration: none;
-    transition: background var(--weline-theme-transition-base, 0.2s ease), color var(--weline-theme-transition-base, 0.2s ease);
+    transition: background var(--weline-theme-transition-base), color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> a.page-link:hover {

@@ -49,18 +49,35 @@ class Mail extends FrontendController
             return $this->redirect('customer/account/login');
         }
 
-        /** @var MailFakeMailboxService $mailboxService */
-        $mailboxService = ObjectManager::getInstance(MailFakeMailboxService::class);
-        $result = $mailboxService->send(
-            $this->currentCustomerId(),
-            (int)$this->postValue('account_id', '0'),
+        $customerId = $this->currentCustomerId();
+        $accountId = (int)$this->postValue('account_id', '0');
+        /** @var MailCustomerAccountService $accountService */
+        $accountService = ObjectManager::getInstance(MailCustomerAccountService::class);
+        $owned = false;
+        foreach ($accountService->getActiveAccountsForCustomer($customerId) as $account) {
+            if ((int)$account->getId() === $accountId) {
+                $owned = true;
+                break;
+            }
+        }
+        if (!$owned) {
+            $this->getMessageManager()->addError(__('只能使用本人已启用的企业邮箱账号'));
+            return $this->redirect('customer/account/index#mail');
+        }
+
+        /** @var \Weline\Mail\Service\MailSmtpAccountService $smtpService */
+        $smtpService = ObjectManager::getInstance(\Weline\Mail\Service\MailSmtpAccountService::class);
+        $result = $smtpService->sendViaAuthorizedAccount(
+            $accountId,
             $this->postValue('to_email'),
             $this->postValue('subject'),
             $this->postValue('body')
         );
 
         $this->addResultMessage($result);
-        return $this->redirect('customer/account/index#mail');
+        return $this->redirect(
+            'customer/account/index?mail_account=' . $accountId . '&mail_folder=sent#mail'
+        );
     }
 
     public function postReceiveTest(): string

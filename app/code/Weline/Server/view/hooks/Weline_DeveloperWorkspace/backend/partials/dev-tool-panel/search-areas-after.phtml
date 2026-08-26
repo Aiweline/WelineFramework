@@ -50,10 +50,33 @@ try {
 } catch (\Throwable) {
     $wlsCurrentRequestId = '';
 }
+// WLS 每个请求都会写入 WELINE_AREA；开发面板前后端共用，必须以该所在位置区分鉴权桥接。
+$wlsPanelArea = '';
+try {
+    if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+        $wlsPanelArea = (string)\Weline\Framework\Runtime\RequestContext::getWelineArea();
+    }
+} catch (\Throwable) {
+    $wlsPanelArea = '';
+}
+if ($wlsPanelArea === '') {
+    $wlsPanelArea = (string)($_SERVER['WELINE_AREA'] ?? '');
+}
+if ($wlsPanelArea === '' && \function_exists('w_env')) {
+    $wlsPanelArea = (string)w_env('area', '');
+}
+if ($wlsPanelArea === '') {
+    $wlsPanelArea = 'frontend';
+}
+$wlsPanelIsBackend = \in_array($wlsPanelArea, ['backend', 'rest_backend'], true);
+$wlsPanelLocation = $wlsPanelIsBackend ? 'backend' : 'frontend';
 $wlsPanelRuntimeConfig = [
     'runtimeMode' => $wlsRuntimeMode,
     'isWls' => $wlsRuntimeIsWls,
     'requestId' => $wlsCurrentRequestId,
+    'area' => $wlsPanelArea,
+    'location' => $wlsPanelLocation,
+    'isBackend' => $wlsPanelIsBackend,
     'endpointUrl' => $wlsPerformanceEndpointUrl,
     'performanceEndpointUrl' => $wlsPerformanceEndpointUrl,
     'healthUrl' => '/_wls/health?detail=1',
@@ -179,6 +202,36 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
     font-weight: 800;
 }
 .wls-section-title i { color: #2563eb !important; }
+.wls-section-title__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.wls-section-title__actions {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.wls-section-refresh {
+    min-height: 28px;
+    padding: 4px 10px;
+    border: 1px solid #d6e0ec;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.wls-section-refresh:hover {
+    border-color: #9bb7da;
+    background: #f8fafc;
+}
 .wls-worker-card {
     margin: 0;
     padding: 12px;
@@ -446,6 +499,44 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
     function getWlsRuntimeConfig() {
         return Object.assign({}, wlsPanelRuntimeConfig || {}, window.__WELINE_PANEL_WLS_CONFIG__ || {});
     }
+    function resolveWlsPanelLocation() {
+        var cfg = getWlsRuntimeConfig();
+        if (cfg.isBackend === true) {
+            return 'backend';
+        }
+        var raw = String(cfg.location || cfg.area || '').toLowerCase();
+        if (raw === 'backend' || raw === 'rest_backend') {
+            return 'backend';
+        }
+        return 'frontend';
+    }
+    function isWlsPanelBackendLocation() {
+        return resolveWlsPanelLocation() === 'backend';
+    }
+    function isWlsNativePanelUrl(url) {
+        var urlStr = String(url || '');
+        return /\/_wls\//i.test(urlStr) || /\/server\/test\//i.test(urlStr);
+    }
+    // Location-aware transport: WLS WELINE_AREA distinguishes frontend/backend panels.
+    // /_wls/* and /server/test/* always use native fetch (adminRequest mis-parses /_wls).
+    // Other /server/* paths on backend may use the backend-auth adminRequest bridge.
+    function resolveWlsPanelTransport(url) {
+        if (isWlsNativePanelUrl(url)) {
+            if (window.Weline && typeof window.Weline.serverAdminRequest === 'function') {
+                return window.Weline.serverAdminRequest;
+            }
+            return function(requestUrl, requestOptions) { return fetch(requestUrl, requestOptions || {}); };
+        }
+        if (isWlsPanelBackendLocation() && window.Weline && typeof window.Weline.adminRequest === 'function') {
+            return function(requestUrl, requestOptions) {
+                return window.Weline.adminRequest('server', requestUrl, requestOptions);
+            };
+        }
+        if (window.Weline && typeof window.Weline.serverAdminRequest === 'function') {
+            return window.Weline.serverAdminRequest;
+        }
+        return function(requestUrl, requestOptions) { return fetch(requestUrl, requestOptions || {}); };
+    }
     function hasWlsRuntimeHint() {
         var cfg = getWlsRuntimeConfig();
         return cfg.isWls === true || String(cfg.runtimeMode || '').toLowerCase() === 'wls';
@@ -459,7 +550,8 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
     function requestWlsHealth() {
         var healthUrl = getWlsRuntimeConfig().healthUrl || '/_wls/health?detail=1';
         if (typeof fetch === 'function') {
-            return Weline.adminRequest('server', healthUrl, {
+            var healthRequest = resolveWlsPanelTransport(healthUrl);
+            return healthRequest(healthUrl, {
                 method: 'GET',
                 cache: 'no-store',
                 credentials: 'same-origin',
@@ -622,7 +714,7 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
             activateWlsSectionTab(trigger.getAttribute('data-wls-section-tab') || 'runtime');
             return;
         }
-        if (action === 'load-attack-stats') {
+        if (action === 'refresh-attack-stats' || action === 'load-attack-stats') {
             window.loadWlsAttackStats();
             return;
         }
@@ -725,6 +817,9 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
                 panel.setAttribute('hidden', 'hidden');
             }
         });
+        if (active === 'security' && typeof window.loadWlsAttackStats === 'function') {
+            window.loadWlsAttackStats();
+        }
     }
 
     function ensureWlsPerformanceConfig() {
@@ -971,12 +1066,16 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
                     html += '<p style="font-size: 12px; color: #999;">刷新页面或点击「刷新」多次，即可看到各 Worker 被分配的次数。</p>';
                 }
                 html += '</div>';
-                // 攻击监控区域
-                html += '<div class="wls-section wls-section--security wls-tab-pane"' + wlsPaneAttrs('security', activeWlsSectionTab) + '><div class="wls-section-title"><w:icon name="shield" size="sm"></w:icon> 安全监控</div>';
+                // 攻击监控区域：点开即加载；刷新在标题右侧
+                html += '<div class="wls-section wls-section--security wls-tab-pane"' + wlsPaneAttrs('security', activeWlsSectionTab) + '>';
+                html += '<div class="wls-section-title">';
+                html += '<span class="wls-section-title__label"><w:icon name="shield" size="sm"></w:icon> 安全监控</span>';
+                html += '<span class="wls-section-title__actions">';
+                html += '<button type="button" data-wls-action="refresh-attack-stats" class="wls-section-refresh" title="刷新攻击统计" aria-label="刷新攻击统计"><w:icon name="refresh" size="sm"></w:icon> 刷新</button>';
+                html += '</span></div>';
                 html += '<div id="wls-attack-stats" class="wls-attack-stats">';
-                html += '<p style="font-size: 12px; color: #999;">点击刷新查看攻击统计...</p>';
+                html += '<p style="font-size: 12px; color: #999;">加载中...</p>';
                 html += '</div>';
-                html += '<button type="button" data-wls-action="load-attack-stats" class="wls-doc-link" style="margin-top: 8px; border: none; cursor: pointer;"><w:icon name="refresh" size="sm"></w:icon> 加载攻击统计</button>';
                 html += '</div>';
                 
                 html += '<div class="wls-section wls-section--links wls-tab-pane"' + wlsPaneAttrs('links', activeWlsSectionTab) + '><div class="wls-section-title"><w:icon name="link" size="sm"></w:icon> 快速链接</div><div class="wls-doc-links">';
@@ -992,6 +1091,9 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
             content.innerHTML = html;
             loadWlsPerformanceSummary(content, false);
             mountWlsPerformanceDiagnostics(content).catch(function() {});
+            if (activeWlsSectionTab === 'security' && typeof window.loadWlsAttackStats === 'function') {
+                window.loadWlsAttackStats();
+            }
         }).catch(function() {
             content.innerHTML = '<div class="dev-tool-empty">检测 WLS 服务时发生错误</div>';
         });
@@ -1101,7 +1203,10 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
             request.headers['Content-Type'] = 'application/json';
             request.body = JSON.stringify(params || {});
         }
-        return Weline.adminRequest('server', url, request).then(function(response) {
+        // Transport follows WLS location (frontend|backend). Attack-stats hits /server/test/*
+        // so both areas use native fetch; frontend must never use the backend-auth bridge.
+        var panelRequest = resolveWlsPanelTransport(url);
+        return panelRequest(url, request).then(function(response) {
             return response.text().then(function(text) {
                 var payload = {};
                 if (text) {

@@ -12,6 +12,7 @@
 
 :root {
     /* ========== 基础阴影 ========== */
+    --shadow-xs: 0 1px 1px rgb(15 23 42 / 0.05);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
@@ -22,11 +23,26 @@
     --shadow-focus: 0 0 3px 2px rgba(228, 121, 17, 0.5);
     --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.06);
     --shadow-none: none;
+    --focus-ring-width: 3px;
+    --focus-ring-color: rgb(37 99 235 / 0.35);
+    --focus-ring: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
+    --danger-focus-ring: 0 0 0 var(--focus-ring-width) rgba(185, 28, 28, 0.32);
+    --success-focus-ring: 0 0 0 var(--focus-ring-width) rgba(21, 128, 61, 0.32);
     
     /* ========== 组件阴影 ========== */
     --shadow-card: var(--shadow-md);
     --shadow-button: var(--shadow-sm);
     --shadow-modal: var(--shadow-xl);
     --shadow-dropdown: var(--shadow-lg);
+
+    /* ========== foundation / 组件别名 ========== */
+    --weline-shadow-sm: var(--shadow-sm);
+    --weline-shadow-md: var(--shadow-md);
+    --weline-shadow-lg: var(--shadow-lg);
+    --weshop-shadow-sm: var(--shadow-sm);
+    --weshop-shadow-md: var(--shadow-md);
+    --weshop-shadow-lg: var(--shadow-lg);
+    --theme-input-shadow: var(--shadow-sm);
+    --wc-header-shadow: var(--shadow-md);
 }
 

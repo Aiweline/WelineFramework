@@ -477,7 +477,7 @@ return [
 function isExclusiveSlot(slotId, widgetCode) {
     const exclusiveSlots = [
         'logo', 'search', 'main-nav', 'user-area', 'cart',
-        'language', 'currency', 'copyright', 'top-bar',
+        'language', 'currency', 'copyright',
         'footer-links', 'footer-social', 'footer-newsletter',
         'header-container', 'footer-container'
     ];
@@ -544,7 +544,7 @@ private function inferAreaFromSlot(string $slotOrArea): string
 ```php
 $exclusiveSlots = [
     'logo', 'search', 'main-nav', 'user-area', 'cart',
-    'language', 'currency', 'copyright', 'top-bar',
+    'language', 'currency', 'copyright',
     'footer-links', 'footer-social', 'footer-newsletter',
     'header-container', 'footer-container'
 ];

@@ -31,10 +31,42 @@
         display: none;
         gap: 3px;
         padding: var(--weline-space-1);
+        border: 1px solid rgba(15, 23, 42, 0.14);
         border-radius: var(--weline-radius-sm);
-        background: color-mix(in srgb, var(--weline-theme-text) 92%, transparent);
-        box-shadow: var(--weline-theme-shadow-sm);
-        backdrop-filter: blur(4px);
+        /* 编辑器 chrome：固定浅底深字，避免跟随店铺暗色主题变成黑底不可读 */
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow:
+            0 10px 28px rgba(15, 23, 42, 0.32),
+            0 0 0 1px rgba(255, 255, 255, 0.72);
+        backdrop-filter: none;
+        max-inline-size: calc(100vw - (var(--weline-space-2) * 2));
+        flex-wrap: nowrap;
+        pointer-events: auto;
+    }
+
+    .widget-hover-actions[data-w-floating-positioned],
+    .widget-hover-actions[data-w-floating-positioned="true"] {
+        position: fixed;
+        inset: auto;
+        inset-block-start: auto;
+        inset-inline-end: auto;
+        top: max(var(--w-floating-top, 0px), var(--w-floating-viewport-top, .5rem));
+        left: max(var(--w-floating-left, 0px), var(--w-floating-viewport-left, .5rem));
+        margin: 0;
+        translate: none;
+        max-inline-size: min(
+            var(--w-floating-max-inline-size, calc(100dvw - 1rem)),
+            calc(
+                var(--w-floating-viewport-right, calc(100dvw - .5rem))
+                - max(var(--w-floating-left, 0px), var(--w-floating-viewport-left, .5rem))
+            )
+        );
+        transform-origin: var(--w-floating-transform-origin, bottom);
+    }
+
+    .widget-hover-actions[data-w-floating-positioned="pending"] {
+        visibility: hidden;
     }
 
     html[data-w-editor-interaction="edit"] .widget-wrapper.show-actions .widget-hover-actions,
@@ -56,7 +88,7 @@
         display: none !important;
     }
 
-    .widget-hover-actions button {
+    .widget-hover-actions:not([data-slot-hover-actions="1"]) button {
         display: flex;
         width: 26px;
         height: 26px;
@@ -65,31 +97,51 @@
         padding: 0;
         border: 0;
         border-radius: var(--weline-radius-sm);
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 8%, transparent);
-        color: var(--weline-theme-on-primary);
+        background: rgba(15, 23, 42, 0.06);
+        color: #0f172a;
         cursor: pointer;
-        transition: background-color var(--weline-motion-fast), transform var(--weline-motion-fast);
+        transition: background-color var(--weline-motion-fast), transform var(--weline-motion-fast), color var(--weline-motion-fast);
     }
 
-    .widget-hover-actions button svg {
+    .widget-hover-actions:not([data-slot-hover-actions="1"]) button svg {
         width: 16px;
         height: 16px;
         fill: currentColor;
     }
 
-    .widget-hover-actions button:hover {
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 20%, transparent);
+    .widget-hover-actions:not([data-slot-hover-actions="1"]) button:hover {
+        background: rgba(15, 23, 42, 0.12);
+        color: #0f172a;
         transform: scale(1.08);
     }
 
-    .widget-hover-actions button:active { transform: scale(0.95); }
-    .widget-hover-actions .btn-widget-delete:hover { background: var(--weline-theme-danger); }
-    .widget-hover-actions .btn-widget-replace:hover { background: var(--weline-theme-primary); }
+    .widget-hover-actions:not([data-slot-hover-actions="1"]) button:active { transform: scale(0.95); }
+    .widget-hover-actions .btn-widget-delete:hover,
+    .widget-hover-actions .w-theme-editor-widget-delete:hover {
+        background: var(--weline-theme-danger, #ef4444);
+        color: #ffffff;
+    }
+    .widget-hover-actions .btn-widget-replace:hover,
+    .widget-hover-actions .w-theme-editor-widget-replace:hover {
+        background: var(--weline-theme-primary, #2563eb);
+        color: #ffffff;
+    }
     .widget-hover-actions .btn-widget-ai-edit:hover,
     .widget-hover-actions .btn-widget-ai-rebuild:hover,
-    .widget-hover-actions .btn-widget-ai-image:hover { background: var(--weline-theme-info); }
+    .widget-hover-actions .btn-widget-ai-image:hover,
+    .widget-hover-actions .w-theme-editor-widget-ai-edit:hover,
+    .widget-hover-actions .w-theme-editor-widget-ai-rebuild:hover,
+    .widget-hover-actions .w-theme-editor-widget-ai-image:hover {
+        background: var(--weline-theme-info, #0ea5e9);
+        color: #ffffff;
+    }
     .widget-hover-actions .btn-widget-move-up:hover,
-    .widget-hover-actions .btn-widget-move-down:hover { background: var(--weline-theme-success); }
+    .widget-hover-actions .btn-widget-move-down:hover,
+    .widget-hover-actions .w-theme-editor-widget-move-up:hover,
+    .widget-hover-actions .w-theme-editor-widget-move-down:hover {
+        background: var(--weline-theme-success, #22c55e);
+        color: #ffffff;
+    }
 
     .widget-hover-actions button:disabled {
         opacity: 0.3;
@@ -98,7 +150,8 @@
     }
 
     .widget-hover-actions button:disabled:hover {
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 8%, transparent);
+        background: rgba(15, 23, 42, 0.06);
+        color: #0f172a;
     }
 
     .widget-wrapper.dragging {

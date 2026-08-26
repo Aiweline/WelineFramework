@@ -162,6 +162,9 @@ grid,grid
 街道、门牌号、仓库或收件说明,"Street, House Number, Warehouse, or Delivery Instructions"
 联系人,Contact
 收货人,Recipient
+快速添加地址,快速添加地址
+电话,Phone
+保存并使用,保存并使用
 确认操作,"Confirm action"
 确定,Confirm
 操作失败,"Operation failed"
@@ -169,7 +172,6 @@ grid,grid
 确定要删除此地址吗？,"Are you sure you want to delete this address?"
 新增地址,"Add Address"
 暂无地址，请添加发货地址,"No address. Please add a shipping address."
-电话,Phone
 地址,Address
 邮编,"Postal Code"
 发货地址详情,"Shipping address details"

@@ -19,11 +19,23 @@ return [
     // --- 页头 (header / navigation / search) ---
     'Weline_Theme::theme/frontend/widgets/header/logo/default.phtml',
     'Weline_Theme::theme/frontend/widgets/navigation/main-nav/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/navigation/all-menu/default.phtml' => [
+        'params' => [
+            'menu_tree' => [
+                'type' => 'all_menu_tree',
+                'label' => '导航树',
+            ],
+        ],
+    ],
     'Weline_Theme::theme/frontend/widgets/search/header-search/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/mini-cart-icon/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/account/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/language-switcher/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/currency-switcher/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/header/help-center-link/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/header/order-tracking-link/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/header/notice-right-link/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/header/top-bar/default.phtml',
 
     // --- 横幅 (banner) ---
     [
@@ -32,21 +44,31 @@ return [
             'slides' => [
                 'type' => 'banner_items',
                 'label' => '轮播图片',
+                'description' => '图片数组，每项包含 image、title、subtitle、link、button_text',
             ],
         ],
     ],
     'Weline_Theme::theme/frontend/widgets/banner/promo-banner/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/banner/ad-banner/default.phtml',
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/banner/ad-banner/default.phtml',
+        'params' => [
+            'image' => [
+                'type' => 'media_image',
+                'label' => '广告图片',
+                'media_options' => [
+                    'default_directory' => 'banner',
+                ],
+            ],
+        ],
+    ],
 
     // --- 商品 (product) ---
     'Weline_Theme::theme/frontend/widgets/product/featured-products/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/new-arrivals/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/bestsellers/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/deals-of-day/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/product/related-products/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/recently-viewed/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/you-may-like/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/product/cross-sell/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/up-sell/default.phtml',
 
     // --- 轮播 (carousel) ---

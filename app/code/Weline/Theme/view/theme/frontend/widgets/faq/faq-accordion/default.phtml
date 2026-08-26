@@ -101,42 +101,42 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
 
 <style>
 .<?= $wc ?> {
-    max-width: 800px;
+    max-width: var(--token-size-800px);
     margin: 0 auto;
-    padding: var(--weline-space-10, 40px) 0;
+    padding: var(--weline-space-10) 0;
 }
 
 .<?= $wc ?> .widget-header {
     text-align: center;
-    margin-bottom: var(--weline-space-8, 30px);
+    margin-bottom: var(--weline-space-8);
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-3xl, 28px);
+    font-size: var(--weline-font-size-3xl);
     font-weight: 700;
-    margin: 0 0 var(--weline-space-2, 10px);
+    margin: 0 0 var(--weline-space-2);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .widget-subtitle {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     color: var(--weline-theme-text-muted);
     margin: 0;
 }
 
 .<?= $wc ?> .faq-search {
     position: relative;
-    margin-bottom: var(--weline-space-8, 30px);
+    margin-bottom: var(--weline-space-8);
 }
 
 .<?= $wc ?> .faq-search-input {
     width: 100%;
-    padding: var(--weline-space-4, 15px) var(--weline-space-5, 20px) var(--weline-space-4, 15px) 50px;
-    border: 2px solid var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg, 10px);
-    font-size: var(--weline-font-size-base, 15px);
+    padding: var(--weline-space-4) var(--weline-space-5) var(--weline-space-4) var(--size-control-50);
+    border: var(--border-width-medium) solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    font-size: var(--weline-font-size-base);
     outline: none;
-    transition: border-color var(--weline-theme-transition-base, 0.3s);
+    transition: border-color var(--weline-theme-transition-base);
     background: var(--weline-theme-surface-raised);
     color: var(--weline-theme-text);
 }
@@ -147,22 +147,22 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
 
 .<?= $wc ?> .faq-search i {
     position: absolute;
-    left: 18px;
+    left: var(--spacing-4_5);
     top: 50%;
     transform: translateY(-50%);
-    font-size: var(--weline-font-size-xl, 20px);
+    font-size: var(--weline-font-size-xl);
     color: var(--weline-theme-text-muted);
 }
 
 .<?= $wc ?> .faq-list {
-    border-radius: var(--weline-radius-lg, 12px);
+    border-radius: var(--weline-radius-lg);
     overflow: hidden;
     box-shadow: var(--weline-theme-shadow-sm);
 }
 
 .<?= $wc ?> .faq-item {
     background: var(--weline-theme-surface-raised);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .faq-item:last-child {
@@ -171,16 +171,16 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
 
 .<?= $wc ?> .faq-question {
     width: 100%;
-    padding: var(--weline-space-5, 20px) var(--weline-space-6, 25px);
+    padding: var(--weline-space-5) var(--weline-space-6);
     border: none;
     background: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--weline-space-4, 15px);
+    gap: var(--weline-space-4);
     text-align: left;
-    transition: background-color var(--weline-theme-transition-base, 0.3s);
+    transition: background-color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .faq-question:hover {
@@ -188,14 +188,14 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
 }
 
 .<?= $wc ?> .question-text {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .question-icon {
-    width: 28px;
-    height: 28px;
+    width: var(--size-control-xs);
+    height: var(--size-control-xs);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     border-radius: 50%;
@@ -203,12 +203,12 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: transform var(--weline-theme-transition-base, 0.3s);
+    transition: transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .question-icon i {
-    font-size: var(--weline-font-size-lg, 18px);
-    transition: transform var(--weline-theme-transition-base, 0.3s);
+    font-size: var(--weline-font-size-lg);
+    transition: transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .faq-item.expanded .question-icon i {
@@ -224,8 +224,8 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
 }
 
 .<?= $wc ?> .answer-content {
-    padding: 0 var(--weline-space-6, 25px) var(--weline-space-6, 25px);
-    font-size: var(--weline-font-size-base, 15px);
+    padding: 0 var(--weline-space-6) var(--weline-space-6);
+    font-size: var(--weline-font-size-base);
     line-height: 1.7;
     color: var(--weline-theme-text-muted);
 }
@@ -236,25 +236,25 @@ if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-4, 16px) 0;
+    padding: var(--weline-space-4) 0;
 }
 
 @media (max-width: 576px) {
     .<?= $wc ?> .widget-title {
-        font-size: var(--weline-font-size-2xl, 22px);
+        font-size: var(--weline-font-size-2xl);
     }
 
     .<?= $wc ?> .faq-question {
-        padding: var(--weline-space-4, 15px) var(--weline-space-5, 20px);
+        padding: var(--weline-space-4) var(--weline-space-5);
     }
 
     .<?= $wc ?> .question-text {
-        font-size: var(--weline-font-size-sm, 14px);
+        font-size: var(--weline-font-size-sm);
     }
 
     .<?= $wc ?> .answer-content {
-        padding: 0 var(--weline-space-5, 20px) var(--weline-space-5, 20px);
-        font-size: var(--weline-font-size-sm, 14px);
+        padding: 0 var(--weline-space-5) var(--weline-space-5);
+        font-size: var(--weline-font-size-sm);
     }
 }
 </style>

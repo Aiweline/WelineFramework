@@ -66,7 +66,10 @@ final class StoreProductRepository extends AbstractWebsiteShardRepository
         $this->assertStoreOverlayId($storeId, 'store_product');
         $existing = $this->find($websiteId, $storeId, $productId);
         if ($existing !== null) {
-            $existing->setData(StoreProduct::schema_fields_SELECTED, $selected ? 1 : 0)->save();
+            $existing->setData(StoreProduct::schema_fields_SELECTED, $selected ? 1 : 0);
+            $existing->setData('inheritance_mode', 'explicit');
+            $existing->setData('version', (int)$existing->getData('version') + 1);
+            $existing->save();
             return $existing;
         }
         $model = $this->newModel($websiteId);
@@ -74,6 +77,8 @@ final class StoreProductRepository extends AbstractWebsiteShardRepository
             StoreProduct::schema_fields_STORE_ID => $storeId,
             StoreProduct::schema_fields_PRODUCT_ID => $productId,
             StoreProduct::schema_fields_SELECTED => $selected ? 1 : 0,
+            'inheritance_mode' => 'explicit',
+            'version' => 1,
         ])->save();
         $loaded = $this->find($websiteId, $storeId, $productId);
         if ($loaded === null) {

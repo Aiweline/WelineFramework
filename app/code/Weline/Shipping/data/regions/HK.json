@@ -1,0 +1,45 @@
+{
+  "country_code": "HK",
+  "country_name": "中国香港特别行政区",
+  "regions": [
+    {
+      "code": "HK-HKI",
+      "name": "香港岛",
+      "type": "province",
+      "children": [
+        {"code": "HK-CW", "name": "中西区", "type": "city"},
+        {"code": "HK-E", "name": "东区", "type": "city"},
+        {"code": "HK-S", "name": "南区", "type": "city"},
+        {"code": "HK-WCH", "name": "湾仔区", "type": "city"}
+      ]
+    },
+    {
+      "code": "HK-KLN",
+      "name": "九龙",
+      "type": "province",
+      "children": [
+        {"code": "HK-KC", "name": "九龙城区", "type": "city"},
+        {"code": "HK-KT", "name": "观塘区", "type": "city"},
+        {"code": "HK-SSP", "name": "深水埗区", "type": "city"},
+        {"code": "HK-WTS", "name": "黄大仙区", "type": "city"},
+        {"code": "HK-YTM", "name": "油尖旺区", "type": "city"}
+      ]
+    },
+    {
+      "code": "HK-NT",
+      "name": "新界",
+      "type": "province",
+      "children": [
+        {"code": "HK-N", "name": "北区", "type": "city"},
+        {"code": "HK-SK", "name": "西贡区", "type": "city"},
+        {"code": "HK-ST", "name": "沙田区", "type": "city"},
+        {"code": "HK-TP", "name": "大埔区", "type": "city"},
+        {"code": "HK-TW", "name": "荃湾区", "type": "city"},
+        {"code": "HK-TM", "name": "屯门区", "type": "city"},
+        {"code": "HK-YL", "name": "元朗区", "type": "city"},
+        {"code": "HK-KWT", "name": "葵青区", "type": "city"},
+        {"code": "HK-I", "name": "离岛区", "type": "city"}
+      ]
+    }
+  ]
+}

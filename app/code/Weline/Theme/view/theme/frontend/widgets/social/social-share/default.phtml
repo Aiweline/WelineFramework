@@ -82,7 +82,7 @@ $platformConfig = [
 .<?= $wc ?> {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
+    gap: var(--weline-space-3);
 }
 
 .<?= $wc ?>.layout-vertical {
@@ -91,7 +91,7 @@ $platformConfig = [
 }
 
 .<?= $wc ?> .share-title {
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
     white-space: nowrap;
 }
@@ -99,7 +99,7 @@ $platformConfig = [
 .<?= $wc ?> .share-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
 }
 
 .<?= $wc ?>.layout-vertical .share-buttons {
@@ -110,34 +110,34 @@ $platformConfig = [
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-2, 6px);
+    gap: var(--weline-space-2);
     border: none;
     cursor: pointer;
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transition: all var(--weline-theme-transition-base);
     background: var(--btn-color);
     color: var(--weline-theme-on-primary);
 }
 
 .<?= $wc ?>.style-icon .share-btn {
-    width: 36px;
-    height: 36px;
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
     border-radius: 50%;
     padding: 0;
 }
 
 .<?= $wc ?>.style-icon-text .share-btn,
 .<?= $wc ?>.style-button .share-btn {
-    padding: var(--weline-space-2, 8px) var(--weline-space-4, 15px);
-    border-radius: var(--weline-radius-sm, 6px);
+    padding: var(--weline-space-2) var(--weline-space-4);
+    border-radius: var(--weline-radius-sm);
 }
 
 .<?= $wc ?> .share-btn:hover {
-    transform: translateY(-2px);
+    transform: translateY(var(--spacing-neg-0_5));
     box-shadow: var(--weline-theme-shadow-md);
 }
 
 .<?= $wc ?> .share-status {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
 }
 

@@ -181,7 +181,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'Weline_Theme::theme/frontend/partials/header/default.phtml',
             'Weline_Theme::theme/frontend/partials/breadcrumb/default.phtml',
             'Weline_Theme::theme/frontend/partials/footer/default.phtml',
-            'Weline_Theme::theme/frontend/widgets/product/related-products/default.phtml',
+            'Weline_Product::templates/frontend/widgets/related-products.phtml',
             'Weline_Theme::theme/frontend/widgets/product/bestsellers/default.phtml',
             'Weline_Theme::theme/frontend/layouts/account/default.phtml',
             'Weline_Theme::theme/frontend/layouts/account/dashboard.phtml',

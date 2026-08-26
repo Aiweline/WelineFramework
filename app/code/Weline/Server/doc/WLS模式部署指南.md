@@ -343,7 +343,7 @@ READY 时序是硬门禁：
 
 这意味着 `server:status` 中的 READY 不是“子进程自报启动完成”，而是 Master 已验收当前精确 lease 的结果。旧连接、旧 generation 或不匹配 ACK 都不能改变新槽位状态。
 
-`php bin/w server:status <instance>` 会为每个业务 Worker 分开显示两项证据：`首页预热` 使用 `warmup_state + homepage_fpc` 展示 Process FPC 的 hit/source/status/reason；`动态首渲染测量` 展示 ready、elapsed/target、HTTP status、body、attempts、FPC 和实际 host/path，尚未采集时明确显示“未记录”。两项不能混为一谈：Worker READY 的首页缓存门禁以 `homepage_fpc.hit=true + source=process` 为准，动态首渲染则是独立发布性能证据。业务 Worker 缺少协议能力、首页 Process FPC、动态回执、HTTP 成功或正文证明时不会 READY；`elapsed >= target` 默认记为 `ready:slow` 供发布门禁和观测使用，不作为 Worker 存活失败。若 Master IPC 在查询窗口内繁忙，CLI 只读回退会把持久化 `worker_ready` 事件裁剪到当前 canonical `1..count`，历史 replacement/扩缩容 Worker 不会让健康的 4/4 实例误报为 4/5。
+`php bin/w server:status <instance>` 会为每个业务 Worker 分开显示两项证据：`首页预热` 使用 `warmup_state + homepage_fpc` 展示 Process FPC 的 hit/source/status/reason；`动态首渲染测量` 展示 ready、elapsed/target、HTTP status、body、attempts、FPC 和实际 host/path，尚未采集时明确显示“未记录”。两项不能混为一谈。默认 `wls.worker.ready_gate_homepage_fail_open=1`：首页 Process FPC 为 best-effort，未 hot 仍可 READY，不得因此 `WLS_STARTUP_FAIL_FAST`；仅当显式关闭 fail-open 时，Worker READY 才以 `homepage_fpc.hit=true + source=process` 为硬门禁。动态首渲染默认仍是独立发布性能证据（`dynamic_ready_gate_required` 关闭时不挡 READY）。若 Master IPC 在查询窗口内繁忙，CLI 只读回退会把持久化 `worker_ready` 事件裁剪到当前 canonical `1..count`，历史 replacement/扩缩容 Worker 不会让健康的 4/4 实例误报为 4/5。
 
 控制面是有界的：HELLO 必须在5秒内完成，已注册会话60秒无活动会被关闭，子进程每5秒发送心跳。心跳在事件循环每轮构造控制 socket 写集合前调度，不依赖 Master 先发来可读消息；当前不可写时只进入有界缓冲，不同步等待。单会话读写缓冲各2 MiB；Hybrid 转发队列最多1024条/2 MiB，单条最大512 KiB。生命周期、策略 ACK 和路由 ACK 等关键消息遇到背压会关闭源会话并交由 Master 收敛；普通 log/telemetry 采用可损、批量上报，不得因输出洪峰拖断生命周期通道。
 

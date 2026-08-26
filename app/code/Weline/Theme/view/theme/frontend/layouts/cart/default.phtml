@@ -67,6 +67,7 @@ $meta = $this->getData('meta') ?? [];
                     position="content"
                     wrapper="section"
                     class="cart-main__recommendations" weline-code="theme.cart.cart_recommendations">
+                <!-- Product cross-sell 经 default_injections 注入；禁止内嵌非 Theme <w:widget> -->
                 <w:hook>Weline_Theme::frontend::layouts::cart::recommendations</w:hook>
             </w:slot>
             </w:slot>

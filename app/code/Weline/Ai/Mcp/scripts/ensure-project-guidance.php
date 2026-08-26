@@ -119,7 +119,9 @@ welineGuidanceEmit([
     ],
     'repairs' => array_values(array_unique($repairs)),
     'blocker' => $blocker,
-    'agent_next_action' => $nextAction . ' If MCP tools in this chat still report Not connected after host_repair_needed, call mcp_auth once or start a new Agent turn, then prepare_project.',
+    // Local STDIO MCP has no OAuth. Never tell agents to call Cursor mcp_auth —
+    // that only opens the host auth toast. Missing tools => new Agent turn or HOST_MCP_NOT_ATTACHED.
+    'agent_next_action' => $nextAction,
 ], $status === 'ready' ? 0 : 1);
 
 /** @param array<string,mixed> $payload */

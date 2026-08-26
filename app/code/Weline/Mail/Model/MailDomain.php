@@ -34,6 +34,15 @@ class MailDomain extends Model
     #[Col('int', default: 1024, comment: '默认邮箱容量MB')]
     public const schema_fields_DEFAULT_QUOTA_MB = 'default_quota_mb';
 
+    #[Col('varchar', 45, nullable: true, comment: '邮件公网源站IP')]
+    public const schema_fields_ORIGIN_IP = 'origin_ip';
+
+    #[Col('varchar', 63, nullable: true, comment: '实际DKIM选择器')]
+    public const schema_fields_DKIM_SELECTOR = 'dkim_selector';
+
+    #[Col('text', nullable: true, comment: '实际DKIM公钥（公开DNS值）')]
+    public const schema_fields_DKIM_PUBLIC_KEY = 'dkim_public_key';
+
     #[Col('text', nullable: true, comment: 'DNS 检测结果JSON')]
     public const schema_fields_DNS_STATUS_JSON = 'dns_status_json';
 

@@ -107,10 +107,15 @@ final class PreviewContextService
             $context = \array_replace($context, $this->extractContextFromRequest());
         }
         // A valid preview token is the immutable server-side authority for
-        // Theme/Scope/Store/Locale/target identity. URL fields remain useful
-        // for a logged-in tokenless editor, but cannot override a token.
+        // Theme/Scope/Store/target identity. URL theme/scope fields cannot override
+        // a token. Locale is the exception: theme-editor language switching only
+        // changes Phrase/chrome via State::setRequestLanguageOverride and must not
+        // be trapped by a sticky token locale (still never writes WELINE_USER_LANG).
         if (\is_array($tokenContext)) {
             $context = \array_replace($context, $tokenContext);
+        }
+        if ($mergeRequest && $authorized) {
+            $context = $this->applyExplicitLocaleOverride($context);
         }
 
         return $this->normalizeContext($context);
@@ -484,10 +489,9 @@ final class PreviewContextService
             $context['preview_token'] = $rawPreviewToken;
         }
 
-        $rawLocale = $this->normalizeLocale($this->getRawQueryString('locale', '') ?? '');
-        if ($rawLocale !== '') {
-            $context['locale'] = $rawLocale;
-        }
+        // Explicit locale query is authoritative — including locale=default / empty,
+        // which must clear a sticky session locale from a prior editor language switch.
+        $context = $this->applyExplicitLocaleOverride($context);
 
         $hasRawPreviewSelection = $this->isRawPreviewContentRequest()
             || $rawFrontendThemeId > 0
@@ -697,6 +701,53 @@ final class PreviewContextService
         $this->session->setData('preview_backend_theme_id', (int)$context['backend_theme_id']);
         $this->session->setData('preview_editor_area', (string)$context['editor_area']);
         $this->session->setData('preview_shell', (string)$context['shell']);
+    }
+
+    /**
+     * Prefer an explicitly requested preview language over a sticky token locale.
+     * Raw REQUEST_URI query wins when present; otherwise the request parameter bag
+     * (WLS may strip the query string from REQUEST_URI after routing).
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function applyExplicitLocaleOverride(array $context): array
+    {
+        if ($this->hasAnyRawQueryKey(['locale', 'locale_code'])) {
+            return $this->applyLocaleParamToContext($context, (string)($this->getRawQueryString('locale', null)
+                ?? $this->getRawQueryString('locale_code', '')
+                ?? ''));
+        }
+
+        $param = $this->request->getParam('locale');
+        if ($param === null || $param === '') {
+            $param = $this->request->getParam('locale_code');
+        }
+        if ($param === null) {
+            return $context;
+        }
+
+        return $this->applyLocaleParamToContext($context, (string)$param);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function applyLocaleParamToContext(array $context, string $rawLocaleParam): array
+    {
+        $rawLocaleParam = \trim($rawLocaleParam);
+        if ($rawLocaleParam === '' || \strcasecmp($rawLocaleParam, 'default') === 0) {
+            $context['locale'] = '';
+            return $context;
+        }
+
+        $rawLocale = $this->normalizeLocale($rawLocaleParam);
+        if ($rawLocale !== '') {
+            $context['locale'] = $rawLocale;
+        }
+
+        return $context;
     }
 
     private function normalizeLocale(string $locale): string

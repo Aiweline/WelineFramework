@@ -15,6 +15,134 @@ use Weline\Mail\Model\MailDomain;
 use Weline\Mail\Model\MailMessage;
 use Weline\Mail\Service\MailCustomerAccountService;
 use Weline\Mail\Service\MailFakeMailboxService;
+use Weline\Mail\Service\StalwartEngineAdapter;
+
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+/** @var MailCustomerAccountService $mailService */
+$mailService = ObjectManager::getInstance(MailCustomerAccountService::class);
+$customerId = $mailService->resolveFrontendCustomerId($user ?? $this->getData('user'));
+$activeAccounts = $mailService->getActiveAccountsForCustomer($customerId);
+if ($activeAccounts === []) {
+    return;
+}
+
+$selectedMailbox = strtolower(trim((string)($this->request->getGet('mail_account', '') ?? ($_GET['mail_account'] ?? ''))));
+$allowedMailbox = false;
+foreach ($activeAccounts as $activeAccount) {
+    if (strtolower((string)$activeAccount->getData('email')) === $selectedMailbox) {
+        $allowedMailbox = true;
+        break;
+    }
+}
+if (!$allowedMailbox) {
+    $selectedMailbox = strtolower((string)$activeAccounts[0]->getData('email'));
+}
+
+$inboxMessages = [];
+$selectedMessage = null;
+$inboxError = null;
+/** @var StalwartEngineAdapter $mailEngine */
+$mailEngine = ObjectManager::getInstance(StalwartEngineAdapter::class);
+try {
+    $inboxMessages = $mailEngine->listInboxMessages($selectedMailbox, 50);
+    $messageId = trim((string)($this->request->getGet('mail_message', '') ?? ($_GET['mail_message'] ?? '')));
+    if ($messageId !== '') {
+        $selectedMessage = $mailEngine->getInboxMessage($selectedMailbox, $messageId);
+    }
+} catch (\Throwable $throwable) {
+    $inboxError = $throwable->getMessage();
+}
+
+$accountPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
+if (!is_string($accountPath) || $accountPath === '') {
+    $accountPath = '/customer/account/index';
+}
+$accountPath = rtrim($accountPath, '/');
+?>
+<style data-no-extract="true">
+.weline-real-mail{display:grid;gap:1rem}.weline-real-mail__header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.weline-real-mail__header h2{margin:0 0 .3rem}.weline-real-mail__header p{margin:0;color:#667085}.weline-real-mail__header form{min-width:min(100%,21rem)}
+.weline-real-mail__layout{display:grid;grid-template-columns:minmax(16rem,2fr) minmax(20rem,3fr);gap:1rem}
+.weline-real-mail__list,.weline-real-mail__reader{border:1px solid #e4e7ec;border-radius:.9rem;background:#fff;overflow:hidden}
+.weline-real-mail__row{display:block;padding:1rem;border-bottom:1px solid #eaecf0;color:inherit;text-decoration:none}
+.weline-real-mail__row:hover,.weline-real-mail__row.is-active{background:#f4f7ff}.weline-real-mail__row.is-unread strong{font-weight:750}
+.weline-real-mail__meta{display:flex;justify-content:space-between;gap:.75rem;font-size:.8rem;color:#667085}.weline-real-mail__preview{margin:.35rem 0 0;color:#667085;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.weline-real-mail__reader{padding:1.1rem}.weline-real-mail__addresses{display:grid;gap:.25rem;color:#667085;font-size:.85rem}.weline-real-mail__body{margin-top:1rem;padding-top:1rem;border-top:1px solid #eaecf0;white-space:pre-wrap;word-break:break-word;line-height:1.65}
+.weline-real-mail__empty{display:grid;place-items:center;min-height:14rem;padding:1.5rem;text-align:center;color:#667085}
+@media(max-width:800px){.weline-real-mail__layout{grid-template-columns:1fr}}
+</style>
+<div class="weline-real-mail">
+    <header class="weline-real-mail__header">
+        <div>
+            <h2><?= __('我的企业邮箱') ?></h2>
+            <p><?= __('这里只显示与你当前账号绑定且已启用的邮箱。') ?></p>
+        </div>
+        <form method="get" action="<?= $escape($accountPath) ?>#mail">
+            <label class="w-field">
+                <span class="w-field__label"><?= __('当前邮箱') ?></span>
+                <select class="w-select" name="mail_account" onchange="this.form.submit()">
+                    <?php foreach ($activeAccounts as $activeAccount): ?>
+                        <?php $accountEmail = strtolower((string)$activeAccount->getData('email')); ?>
+                        <option value="<?= $escape($accountEmail) ?>" <?= $accountEmail === $selectedMailbox ? 'selected' : '' ?>>
+                            <?= $escape($accountEmail) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        </form>
+    </header>
+
+    <?php if ($inboxError): ?>
+        <div class="w-alert" data-tone="danger"><?= $escape($inboxError) ?></div>
+    <?php else: ?>
+        <div class="weline-real-mail__layout">
+            <section class="weline-real-mail__list" aria-label="<?= $escape(__('邮件列表')) ?>" weline-code="mail.legacy_real_mail.message_list">
+                <?php if ($inboxMessages === []): ?>
+                    <div class="weline-real-mail__empty"><?= __('收件箱暂无邮件。') ?></div>
+                <?php else: ?>
+                    <?php foreach ($inboxMessages as $mailItem): ?>
+                        <?php
+                        $isActive = is_array($selectedMessage)
+                            && (string)($selectedMessage['id'] ?? '') === (string)($mailItem['id'] ?? '');
+                        $messageUrl = $accountPath . '?' . http_build_query([
+                            'mail_account' => $selectedMailbox,
+                            'mail_message' => (string)($mailItem['id'] ?? ''),
+                        ]) . '#mail';
+                        ?>
+                        <a class="weline-real-mail__row <?= !empty($mailItem['unread']) ? 'is-unread' : '' ?> <?= $isActive ? 'is-active' : '' ?>"
+                           href="<?= $escape($messageUrl) ?>">
+                            <div class="weline-real-mail__meta">
+                                <span><?= $escape((string)($mailItem['from'] ?? '')) ?></span>
+                                <time><?= $escape((string)($mailItem['received_at'] ?? '')) ?></time>
+                            </div>
+                            <strong><?= $escape((string)($mailItem['subject'] ?? '')) ?></strong>
+                            <p class="weline-real-mail__preview"><?= $escape((string)($mailItem['preview'] ?? '')) ?></p>
+                        </a>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </section>
+            <article class="weline-real-mail__reader">
+                <?php if (is_array($selectedMessage)): ?>
+                    <h3><?= $escape((string)($selectedMessage['subject'] ?? '')) ?></h3>
+                    <div class="weline-real-mail__addresses">
+                        <span><?= __('发件人') ?>：<?= $escape((string)($selectedMessage['from'] ?? '')) ?></span>
+                        <span><?= __('收件人') ?>：<?= $escape((string)($selectedMessage['to'] ?? '')) ?></span>
+                        <time><?= $escape((string)($selectedMessage['received_at'] ?? '')) ?></time>
+                    </div>
+                    <?php if (!empty($selectedMessage['has_attachment'])): ?>
+                        <div class="w-badge" style="margin-top:.75rem;"><?= __('含附件') ?></div>
+                    <?php endif; ?>
+                    <div class="weline-real-mail__body"><?= $escape((string)($selectedMessage['body'] ?? '')) ?></div>
+                <?php else: ?>
+                    <div class="weline-real-mail__empty"><?= __('选择一封邮件查看正文。') ?></div>
+                <?php endif; ?>
+            </article>
+        </div>
+    <?php endif; ?>
+</div>
+<?php
+return;
+
 
 $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $user = $user ?? $this->getData('user');

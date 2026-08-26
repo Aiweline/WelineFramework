@@ -127,13 +127,13 @@ if ($endPage - $startPage < $maxVisible - 1) {
 .pagination-partial {
     display: flex;
     justify-content: center;
-    padding: var(--spacing-4, 1rem) 0;
+    padding: var(--spacing-4) 0;
 }
 
 .pagination-partial__list {
     display: flex;
     align-items: center;
-    gap: var(--spacing-1, 0.25rem);
+    gap: var(--spacing-1);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -144,16 +144,16 @@ if ($endPage - $startPage < $maxVisible - 1) {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--pagination-item-size, 40px);
-    height: var(--pagination-item-size, 40px);
-    padding: 0 var(--pagination-item-padding, 0.75rem);
+    min-width: var(--pagination-item-size);
+    height: var(--pagination-item-size);
+    padding: 0 var(--pagination-item-padding);
     color: var(--color-text-primary);
     text-decoration: none;
-    border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-md, 8px);
+    border: var(--border-width-thin) solid var(--color-border-light);
+    border-radius: var(--radius-md);
     background-color: var(--color-bg-primary);
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: var(--font-weight-medium, 500);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     transition: all 0.2s ease;
 }
 
@@ -173,7 +173,7 @@ if ($endPage - $startPage < $maxVisible - 1) {
 
 .pagination-partial__link--prev,
 .pagination-partial__link--next {
-    gap: var(--spacing-1, 0.25rem);
+    gap: var(--spacing-1);
 }
 
 .pagination-partial__link-text {
@@ -184,10 +184,10 @@ if ($endPage - $startPage < $maxVisible - 1) {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--pagination-item-size, 40px);
-    height: var(--pagination-item-size, 40px);
+    min-width: var(--pagination-item-size);
+    height: var(--pagination-item-size);
     color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
 }
 
 .pagination-partial__link--first,
@@ -207,10 +207,10 @@ if ($endPage - $startPage < $maxVisible - 1) {
 
     .pagination-partial__link,
     .pagination-partial__current {
-        min-width: var(--pagination-item-size-mobile, 36px);
-        height: var(--pagination-item-size-mobile, 36px);
-        padding: 0 var(--spacing-2, 0.5rem);
-        font-size: var(--font-size-xs, 0.8rem);
+        min-width: var(--pagination-item-size-mobile);
+        height: var(--pagination-item-size-mobile);
+        padding: 0 var(--spacing-2);
+        font-size: var(--font-size-xs);
     }
 }
 </style>

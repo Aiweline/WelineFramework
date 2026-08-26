@@ -11,6 +11,7 @@
 "Language updated.","Language updated."
 "Please enter a valid email address.","Please enter a valid email address."
 "Session token is required.","Session token is required."
+"Captcha verification failed or expired. Please try again.","Captcha verification failed or expired. Please try again."
 "Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
 "Verification email has been sent.","Verification email has been sent."
 "Customer Service Query","Customer Service Query"
@@ -24,9 +25,11 @@
 语言代码不能为空,"Код языка не может быть пустым"
 语言设置成功,"Язык установлен успешно"
 设置语言失败：%{1},"Не удалось установить язык: %{1}"
+人机验证加载失败，请稍后重试,人机验证加载失败，请稍后重试
 邮箱地址不能为空,"Адрес электронной почты не может быть пустым"
 邮箱格式不正确,"Неверный формат электронной почты"
 会话令牌不能为空,"Токен сессии не может быть пустым"
+人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
 验证邮件已发送，请查收,"Письмо с подтверждением отправлено"
 发送验证邮件失败，请稍后重试,"Не удалось отправить письмо с подтверждением"
 发送验证邮件失败：%{1},"Не удалось отправить письмо с подтверждением: %{1}"
@@ -122,6 +125,10 @@ settings,settings
 分钟,минут
 最长,"Самый длинный"
 秒,секунд
+提示,提示
+请注意,请注意
+操作失败,操作失败
+知道了,知道了
 客服服务,"Служба поддержки"
 我的语言,"Мой язык"
 显示模式,"Режим отображения"
@@ -203,7 +210,6 @@ ID,ID
 激活状态,"Статус активации"
 保存,Сохранить
 编辑客服,"Редактировать агента"
-提示,提示
 确认,确认
 确定要删除此客服吗？,确定要删除此客服吗？
 删除确认,删除确认
@@ -246,6 +252,7 @@ ID,ID
 聊天记录,"История чата"
 翻译：,Перевод:
 "客服服务 - 邮箱绑定验证","Служба поддержки - Подтверждение привязки электронной почты"
+"邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。","邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。"
 客服系统,"Система службы поддержки"
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠

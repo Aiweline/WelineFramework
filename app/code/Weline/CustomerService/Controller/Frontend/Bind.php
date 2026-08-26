@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Controller\Frontend;
 
+use Weline\CustomerService\Service\BindCaptchaGuard;
 use Weline\CustomerService\Service\EmailBindingService;
 use Weline\Framework\App\Controller\FrontendController;
 
@@ -19,12 +20,34 @@ use Weline\Framework\App\Controller\FrontendController;
  */
 class Bind extends FrontendController
 {
-    private EmailBindingService $emailBindingService;
-
     public function __construct(
-        EmailBindingService $emailBindingService
+        private readonly EmailBindingService $emailBindingService,
+        private readonly BindCaptchaGuard $bindCaptchaGuard,
     ) {
-        $this->emailBindingService = $emailBindingService;
+    }
+
+    /**
+     * 刷新绑定邮箱人机验证挑战（AJAX）
+     * GET /customerservice/frontend/bind/captcha-challenge
+     */
+    public function getCaptchaChallenge(): string
+    {
+        if (!$this->bindCaptchaGuard->isEnabled()) {
+            return $this->fetchJson([
+                'success' => true,
+                'enabled' => false,
+                'html' => '',
+            ]);
+        }
+
+        $html = $this->bindCaptchaGuard->renderChallenge();
+
+        return $this->fetchJson([
+            'success' => $html !== '',
+            'enabled' => true,
+            'html' => $html,
+            'message' => $html === '' ? __('人机验证加载失败，请稍后重试') : '',
+        ]);
     }
 
     /**
@@ -55,6 +78,18 @@ class Bind extends FrontendController
                 return $this->fetchJson([
                     'success' => false,
                     'message' => __('会话令牌不能为空')
+                ]);
+            }
+
+            $submission = $this->request->getParams();
+            if (!\is_array($submission)) {
+                $submission = [];
+            }
+            if (!$this->bindCaptchaGuard->verify($submission, $this->request)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('人机验证失败或已过期，请重试'),
+                    'captcha_error' => true,
                 ]);
             }
 

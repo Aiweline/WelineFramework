@@ -60,6 +60,9 @@ $config = [
         'search' => (string)__('搜索接口'),
         'searchPlaceholder' => (string)__('搜索名称、路径、方法、参数或说明…'),
         'chooseApi' => (string)__('从左侧选择一个接口查看详情并发起测试'),
+        'toc' => (string)__('目录'),
+        'tocShow' => (string)__('显示目录'),
+        'tocHide' => (string)__('隐藏目录'),
         'empty' => (string)__('没有匹配的 API 接口'),
         'interfaceDescription' => (string)__('接口说明'),
         'parameters' => (string)__('请求参数'),
@@ -164,20 +167,12 @@ $config = [
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
     | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
-<!doctype html>
-<html lang="<?= $escape(str_replace('_', '-', $currentLanguage)) ?>" data-w-area="frontend" data-theme-preference="system" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $escape(__('API 文档管理')) ?></title>
-    <w:block class="Weline\Frontend\Block\Header\Base" template="Weline_Frontend::header/base.phtml"/>
-    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)?v=<?= $escape($uiAssetVersion('weline-foundation.css')) ?>">
-    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)?v=<?= $escape($uiAssetVersion('weline-backend.css')) ?>">
-    <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-api.css)?v=<?= $escape($uiAssetVersion('pages/weline-developer-api.css')) ?>">
-    <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)?v=<?= $escape($uiAssetVersion('weline-ui.js')) ?>-lang-portal-fix"></script>
-    <script type="module" src="@static(Weline_Theme::ui/pages/weline-developer-api.js)?v=<?= $escape($uiAssetVersion('pages/weline-developer-api.js')) ?>"></script>
-</head>
-<body>
+<?php /* Content fragment for frontend theme layout blank.full; document shell + Frontend Header come from Theme. */ ?>
+<style>
+.blank-full-layout { overflow: auto !important; }
+</style>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-api.css)?v=<?= $escape($uiAssetVersion('pages/weline-developer-api.css')) ?>">
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-developer-api.js)?v=<?= $escape($uiAssetVersion('pages/weline-developer-api.js')) ?>"></script>
 <div class="w-api-docs" data-api-root data-sidebar-collapsed="false">
     <div class="w-api-docs__context w-cluster" data-justify="between" data-align="center">
         <div class="w-cluster" aria-label="<?= $escape(__('当前文档上下文')) ?>">
@@ -239,13 +234,13 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
 
         <div class="w-api-docs__resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="<?= $escape(__('调整接口列表宽度')) ?>" data-api-resizer="sidebar"></div>
 
-        <main class="w-card w-api-docs__content">
+        <section class="w-card w-api-docs__content">
             <div class="w-api-docs__workspace" data-api-workspace>
                 <section class="w-api-docs__detail" data-api-detail aria-live="polite"></section>
                 <div class="w-api-docs__resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="<?= $escape(__('调整文档与测试面板宽度')) ?>" data-api-resizer="panels"></div>
                 <aside class="w-api-docs__tester" data-api-test aria-live="polite"></aside>
             </div>
-        </main>
+        </section>
     </div>
 
     <p class="w-visually-hidden" aria-live="polite" data-api-live-status></p>
@@ -291,5 +286,3 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
 </dialog>
 
 <script type="application/json" id="weline-api-docs-config" data-api-docs-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
-</body>
-</html>

@@ -1,0 +1,123 @@
+/**
+ * 自动收编的业务字面量 Token（REQ-THEME-0007）
+ * 叶子值允许出现在 variables/；业务 CSS/PHTML 只引用 var(--token-*)。
+ * @meta.name {default="自动字面量Token",name="自动字面量Token",description="自动字面量Token"}
+ * @meta.category {default="variables",name="分类",description="分类"}
+ * @meta.panel {default="spacing",name="panel",description="panel"}
+ * @meta.disk_kind {default="variables",name="disk_kind",description="disk_kind"}
+ */
+
+:root {
+
+    /* sizes */
+    --token-size-0-02em: -0.02em;
+    --token-size-0-02em: 0.02em;
+    --token-size-0-03em: -0.03em;
+    --token-size-0-04em: 0.04em;
+    --token-size-0-05em: 0.05em;
+    --token-size-0-08em: 0.08em;
+    --token-size-0-15rem: 0.15rem;
+    --token-size-0-1em: -0.1em;
+    --token-size-0-1rem: 0.1rem;
+    --token-size-0-24rem: 0.24rem;
+    --token-size-0-375rem: 0.375rem;
+    --token-size-0-3rem: 0.3rem;
+    --token-size-0-5px: 0.5px;
+    --token-size-0-6rem: 0.6rem;
+    --token-size-0-76rem: 0.76rem;
+    --token-size-0-77rem: 0.77rem;
+    --token-size-0-78rem: 0.78rem;
+    --token-size-0-8rem: 0.8rem;
+    --token-size-0-92rem: 0.92rem;
+    --token-size-1-15rem: 1.15rem;
+    --token-size-1-1rem: 1.1rem;
+    --token-size-1-35rem: 1.35rem;
+    --token-size-1-4rem: 1.4rem;
+    --token-size-1-55rem: 1.55rem;
+    --token-size-1-5em: 1.5em;
+    --token-size-1-65rem: 1.65rem;
+    --token-size-1-6rem: 1.6rem;
+    --token-size-1000px: 1000px;
+    --token-size-100px: 100px;
+    --token-size-10px: 10px;
+    --token-size-1100px: 1100px;
+    --token-size-1120px: 1120px;
+    --token-size-11px: 11px;
+    --token-size-1200px: 1200px;
+    --token-size-12rem: 12rem;
+    --token-size-132px: 132px;
+    --token-size-14px: 14px;
+    --token-size-15px: 15px;
+    --token-size-160px: 160px;
+    --token-size-168px: 168px;
+    --token-size-17px: 17px;
+    --token-size-19px: 19px;
+    --token-size-2-35rem: 2.35rem;
+    --token-size-2-4rem: 2.4rem;
+    --token-size-2-5rem: 2.5rem;
+    --token-size-2-85rem: 2.85rem;
+    --token-size-20px: -20px;
+    --token-size-20px: 20px;
+    --token-size-22-5rem: 22.5rem;
+    --token-size-22px: -22px;
+    --token-size-240px: 240px;
+    --token-size-250px: 250px;
+    --token-size-25px: 25px;
+    --token-size-260px: 260px;
+    --token-size-26px: 26px;
+    --token-size-280px: 280px;
+    --token-size-3-5rem: 3.5rem;
+    --token-size-30px: 30px;
+    --token-size-34px: 34px;
+    --token-size-38px: 38px;
+    --token-size-420px: 420px;
+    --token-size-440px: 440px;
+    --token-size-450px: 450px;
+    --token-size-45px: 45px;
+    --token-size-46px: 46px;
+    --token-size-46rem: 46rem;
+    --token-size-4px: -4px;
+    --token-size-4rem: 4rem;
+    --token-size-500px: 500px;
+    --token-size-520px: 520px;
+    --token-size-550px: 550px;
+    --token-size-560px: 560px;
+    --token-size-56rem: 56rem;
+    --token-size-5px: -5px;
+    --token-size-600px: 600px;
+    --token-size-620px: 620px;
+    --token-size-64px: 64px;
+    --token-size-6px: -6px;
+    --token-size-6px: 6px;
+    --token-size-6rem: 0.6rem;
+    --token-size-6rem: 6rem;
+    --token-size-700px: 700px;
+    --token-size-72px: 72px;
+    --token-size-760px: 760px;
+    --token-size-800px: 800px;
+    --token-size-80px: -80px;
+    --token-size-860px: 860px;
+    --token-size-8px: -8px;
+    --token-size-90px: -90px;
+    --token-size-92px: 92px;
+    --token-size-9999px: -9999px;
+    --token-size-9px: 9px;
+    /* breakpoints */
+    --token-bp-1024px: 1024px;
+    --token-bp-1100px: 1100px;
+    --token-bp-520px: 520px;
+    --token-bp-560px: 560px;
+    --token-bp-575-98px: 575.98px;
+    --token-bp-620px: 620px;
+    --token-bp-720px: 720px;
+    --token-bp-760px: 760px;
+    --token-bp-767px: 767px;
+    --token-bp-769px: 769px;
+    --token-bp-820px: 820px;
+    --token-bp-860px: 860px;
+    --token-bp-880px: 880px;
+    --token-bp-900px: 900px;
+    --token-bp-980px: 980px;
+    --token-bp-991-98px: 991.98px;
+    --token-bp-992px: 992px;
+}

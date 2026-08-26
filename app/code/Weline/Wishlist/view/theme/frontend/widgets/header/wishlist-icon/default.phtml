@@ -1,0 +1,110 @@
+<?php
+/**
+ * Header 收藏夹图标部件
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {wishlist-icon}
+ * @widget.name {Header 收藏夹}
+ * @widget.description {收藏夹图标，展示收藏数量并跳转至心愿单列表页}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {user-area}
+ * @widget.supports {["layout-header-actions","layout-global-header-actions","wishlist-icon"]}
+ *
+ * @param show_count {default=true,type="bool",label="显示数量"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Wishlist\Service\WishlistService;
+
+$scope = WidgetUiScope::forWidget('wishlist-icon');
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$showCount = (bool)($this->getData('show_count') ?? true);
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+
+/** @var WishlistService $wishlistService */
+$wishlistService = ObjectManager::getInstance(WishlistService::class);
+$wishlistCount = (int)($wishlistService->count()['wishlist_count'] ?? 0);
+if ($isPreviewMode && $wishlistCount <= 0) {
+    $wishlistCount = 2;
+}
+
+$wishlistPath = parse_url($this->getFrontendUrl('wishlist/frontend/index'), PHP_URL_PATH);
+if (!is_string($wishlistPath) || $wishlistPath === '') {
+    $wishlistPath = '/wishlist';
+}
+$wishlistPath = rtrim($wishlistPath, '/');
+?>
+
+<section class="header-wishlist header-action-item <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?><?= $wishlistCount <= 0 ? ' is-empty' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-w-wishlist-icon="1"
+         data-wishlist-count="<?= $wishlistCount ?>">
+    <a href="<?= $esc($wishlistPath) ?>" class="wishlist-link" title="<?= __('我的收藏') ?>">
+        <span class="wishlist-icon-wrapper">
+            <span class="header-wishlist-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M12 20.5s-7.2-4.6-9.2-8.8C1.2 8.4 3.4 5 6.8 5c1.8 0 3.4.9 4.3 2.3C12 5.9 13.6 5 15.4 5 18.8 5 21 8.4 21.2 11.7 19.2 15.9 12 20.5 12 20.5z"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.6"
+                          stroke-linejoin="round"/>
+                </svg>
+            </span>
+            <?php if ($showCount): ?>
+                <span class="wishlist-count" data-wishlist-count <?= $wishlistCount > 0 ? '' : 'hidden' ?>>
+                    <?= $wishlistCount > 99 ? '99+' : $wishlistCount ?>
+                </span>
+            <?php endif; ?>
+        </span>
+        <span class="wishlist-info">
+            <span class="wishlist-label"><?= __('收藏') ?></span>
+        </span>
+    </a>
+</section>
+
+<style>
+.<?= $wc ?> .wishlist-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    color: inherit;
+    text-decoration: none;
+}
+.<?= $wc ?> .wishlist-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+}
+.<?= $wc ?> .header-wishlist-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.<?= $wc ?> .wishlist-count {
+    position: absolute;
+    top: -.45rem;
+    right: -.55rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 .25rem;
+    border-radius: 999px;
+    background: #e11d48;
+    color: #fff;
+    font-size: .6875rem;
+    line-height: 1.1rem;
+    text-align: center;
+    font-weight: 700;
+}
+.<?= $wc ?> .wishlist-count[hidden] { display: none !important; }
+.<?= $wc ?> .wishlist-label { font-size: .8125rem; font-weight: 600; }
+@media (max-width: 767px) {
+    .<?= $wc ?> .wishlist-info { display: none; }
+}
+</style>

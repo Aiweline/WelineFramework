@@ -344,6 +344,10 @@ Outbox,发件箱
 "行 %{1} 名称、数量或单价非法","行 %{1} 名称、数量或单价非法"
 "行 %{1} SKU 非法","行 %{1} SKU 非法"
 "行 %{1} split_key 非法","行 %{1} split_key 非法"
+"行 %{1} provider_code 非法","行 %{1} provider_code 非法"
+"行 %{1} global_offer_uuid 非法","行 %{1} global_offer_uuid 非法"
+"行 %{1} fulfillment_metadata 必须为数组","行 %{1} fulfillment_metadata 必须为数组"
+"行 %{1} fulfillment_metadata 非法","行 %{1} fulfillment_metadata 非法"
 税额不能为负数,税额不能为负数
 "Tax 快照总额与订单命令不一致","Tax 快照总额与订单命令不一致"
 "Tax 引擎快照的规则或 Scope 元数据无效","Tax 引擎快照的规则或 Scope 元数据无效"

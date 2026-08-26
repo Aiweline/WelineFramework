@@ -120,15 +120,15 @@ if (empty($socials)) {
 <style>
 .<?= $wc ?> {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg, 10px);
-    padding: var(--weline-space-5, 20px);
+    border-radius: var(--weline-radius-lg);
+    padding: var(--weline-space-5);
     box-sizing: border-box;
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-4, 15px);
+    margin: 0 0 var(--weline-space-4);
     text-align: center;
     color: var(--weline-theme-text);
 }
@@ -137,18 +137,18 @@ if (empty($socials)) {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: var(--wc-social-gap, var(--weline-space-3, 10px));
+    gap: var(--wc-social-gap);
 }
 
 .<?= $wc ?> .social-link {
-    width: 44px;
-    height: 44px;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
     text-decoration: none;
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>[data-style="colored"] .social-link {
@@ -157,7 +157,7 @@ if (empty($socials)) {
 }
 
 .<?= $wc ?>[data-style="colored"] .social-link:hover {
-    transform: translateY(-3px);
+    transform: translateY(var(--spacing-neg-1_5));
     box-shadow: var(--weline-theme-shadow-md);
 }
 
@@ -173,7 +173,7 @@ if (empty($socials)) {
 
 .<?= $wc ?>[data-style="outline"] .social-link {
     background: transparent;
-    border: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     color: var(--weline-theme-text-muted);
 }
 
@@ -183,31 +183,31 @@ if (empty($socials)) {
 }
 
 .<?= $wc ?> .wechat-qr {
-    margin-top: var(--weline-space-5, 20px);
-    padding-top: var(--weline-space-5, 20px);
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin-top: var(--weline-space-5);
+    padding-top: var(--weline-space-5);
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     text-align: center;
 }
 
 .<?= $wc ?> .qr-label {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-success);
-    margin: 0 0 var(--weline-space-3, 10px);
+    margin: 0 0 var(--weline-space-3);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
 }
 
 .<?= $wc ?> .qr-image {
-    max-width: 150px;
-    border-radius: var(--weline-radius-md, 8px);
+    max-width: var(--size-panel-150);
+    border-radius: var(--weline-radius-md);
     display: block;
     margin: 0 auto;
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3, 12px);
+    padding: var(--weline-space-3);
 }
 </style>

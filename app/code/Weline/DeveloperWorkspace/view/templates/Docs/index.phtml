@@ -38,31 +38,28 @@ $config = [
         'copy' => (string)__('复制'),
         'copied' => (string)__('已复制'),
         'copyFailed' => (string)__('复制失败'),
+        'fullscreen' => (string)__('全屏'),
+        'fullscreenClose' => (string)__('关闭'),
         'i18nPlaceholder' => (string)__('翻译占位变量'),
+        'toc' => (string)__('目录'),
+        'tocShow' => (string)__('显示目录'),
+        'tocHide' => (string)__('隐藏目录'),
     ],
 ];
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
     | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
-<!doctype html>
-<html lang="<?= $escape(str_replace('_', '-', $currentLanguage)) ?>" data-w-area="frontend" data-theme-preference="system" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $escape(__('WelineFramework 开发文档')) ?></title>
-    <w:block class="Weline\Frontend\Block\Header\Base" template="Weline_Frontend::header/base.phtml"/>
-    <script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)?v=<?= $escape($uiAssetVersion('weline-theme-prepaint.js')) ?>"></script>
-    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)?v=<?= $escape($uiAssetVersion('weline-foundation.css')) ?>">
-    <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)?v=<?= $escape($uiAssetVersion('weline-backend.css')) ?>">
-    <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-docs.css)?v=<?= $escape($uiAssetVersion('pages/weline-developer-docs.css')) ?>">
-    <link rel="stylesheet" href="@static(Weline_DeveloperWorkspace::libs/highlight/11.9.0/styles/github.min.css)" data-docs-hljs-theme="light" disabled>
-    <link rel="stylesheet" href="@static(Weline_DeveloperWorkspace::libs/highlight/11.9.0/styles/github-dark.min.css)" data-docs-hljs-theme="dark" disabled>
-    <script src="@static(Weline_DeveloperWorkspace::libs/marked/11.1.1/marked.min.js)" defer data-w-engine="marked"></script>
-    <script src="@static(Weline_DeveloperWorkspace::libs/highlight/11.9.0/highlight.min.js)" defer data-w-engine="highlight"></script>
-    <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)?v=<?= $escape($uiAssetVersion('weline-ui.js')) ?>-lang-portal-fix"></script>
-    <script type="module" src="@static(Weline_Theme::ui/pages/weline-developer-docs.js)?v=<?= $escape($uiAssetVersion('pages/weline-developer-docs.js')) ?>"></script>
-</head>
-<body>
+<?php /* Content fragment for frontend theme layout blank.full; document shell + Frontend Header come from Theme. */ ?>
+<style>
+/* Keep fixed overlay hooks (DevTool/Consent) usable inside blank.full */
+.blank-full-layout { overflow: auto !important; }
+</style>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-docs.css)?v=<?= $escape($uiAssetVersion('pages/weline-developer-docs.css')) ?>">
+<link rel="stylesheet" href="@static(Weline_DeveloperWorkspace::libs/highlight/11.9.0/styles/github.min.css)" data-docs-hljs-theme="light" disabled>
+<link rel="stylesheet" href="@static(Weline_DeveloperWorkspace::libs/highlight/11.9.0/styles/github-dark.min.css)" data-docs-hljs-theme="dark" disabled>
+<script src="@static(Weline_DeveloperWorkspace::libs/marked/11.1.1/marked.min.js)" defer data-w-engine="marked"></script>
+<script src="@static(Weline_DeveloperWorkspace::libs/highlight/11.9.0/highlight.min.js)" defer data-w-engine="highlight"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-developer-docs.js)?v=<?= $escape($uiAssetVersion('pages/weline-developer-docs.js')) ?>"></script>
 <div class="w-docs-browser">
     <header class="w-docs-browser__header w-cluster" data-justify="between" data-align="center">
         <div class="w-stack">
@@ -114,15 +111,13 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
             </div>
         </aside>
 
-        <main class="w-card w-docs-browser__content">
+        <section class="w-card w-docs-browser__content">
             <header class="w-card__header w-cluster" data-justify="between" data-align="center">
                 <button class="w-button" type="button" data-tone="quiet" data-docs-back hidden><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回列表')) ?></button>
                 <span class="w-badge" data-tone="neutral" data-docs-context><?= $escape(__('文档')) ?></span>
             </header>
             <div class="w-card__body w-docs-browser__body" data-docs-content aria-live="polite"></div>
-        </main>
+        </section>
     </div>
 </div>
 <script type="application/json" id="weline-docs-browser-config" data-docs-browser-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
-</body>
-</html>

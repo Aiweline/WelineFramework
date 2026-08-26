@@ -1,0 +1,213 @@
+<?php
+/**
+ * Search type / category tree filter (sidebar).
+ *
+ * @var string $search_query
+ * @var string $search_type
+ * @var int $search_category_id
+ * @var list<array<string,mixed>> $search_types
+ */
+$q = trim((string)($search_query ?? ''));
+$type = trim((string)($search_type ?? 'all')) ?: 'all';
+$categoryId = (int)($search_category_id ?? 0);
+$types = $search_types ?? [];
+$types = is_array($types) ? $types : [];
+$esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+if ($types === []) {
+    return;
+}
+
+$containsCategory = static function (array $nodes, int $targetId) use (&$containsCategory): bool {
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $params = is_array($node['params'] ?? null) ? $node['params'] : [];
+        if ((int)($params['category_id'] ?? 0) === $targetId) {
+            return true;
+        }
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+        if ($children !== [] && $containsCategory($children, $targetId)) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+$onChange = "var f=this.form;var c=f.category_id;if(c){c.value=this.getAttribute('data-category-id')||'';}f.submit();";
+
+/**
+ * @param list<array<string,mixed>> $nodes
+ */
+$renderTree = static function (
+    array $nodes,
+    string $typeCode,
+    int $selectedCategoryId,
+    int $depth,
+    callable $esc,
+    string $onChange,
+    callable $containsCategory,
+) use (&$renderTree): void {
+    if ($nodes === []) {
+        return;
+    }
+    ?>
+    <ul class="storefront-search__type-tree<?= $depth > 0 ? ' storefront-search__type-tree--nested' : '' ?>"
+        role="group"
+        data-depth="<?= (int)$depth ?>">
+        <?php foreach ($nodes as $node): ?>
+            <?php
+            if (!is_array($node)) {
+                continue;
+            }
+            $nodeLabel = trim((string)($node['label'] ?? ''));
+            if ($nodeLabel === '') {
+                continue;
+            }
+            $params = is_array($node['params'] ?? null) ? $node['params'] : [];
+            $nodeCategoryId = (int)($params['category_id'] ?? 0);
+            $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+            $hasChildren = $children !== [];
+            $isActive = $nodeCategoryId > 0
+                && $nodeCategoryId === $selectedCategoryId
+                && $typeCode !== '';
+            $isAncestor = $hasChildren
+                && $selectedCategoryId > 0
+                && $containsCategory($children, $selectedCategoryId);
+            $isOpen = $isActive || $isAncestor;
+            $itemId = 'search-type-node-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $typeCode . '-' . ($node['code'] ?? $nodeCategoryId));
+            ?>
+            <li class="storefront-search__type-node<?= $hasChildren ? ' has-children' : '' ?><?= $isOpen ? ' is-open' : '' ?>"
+                data-search-filter-node
+                data-state="<?= $isOpen ? 'open' : 'closed' ?>">
+                <div class="storefront-search__type-row">
+                    <?php if ($hasChildren): ?>
+                        <button type="button"
+                                class="storefront-search__type-toggle"
+                                data-search-filter-toggle
+                                aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
+                                aria-controls="<?= $esc($itemId) ?>"
+                                title="<?= $esc((string)__('展开/收起')) ?>">
+                            <span class="storefront-search__type-toggle-icon" aria-hidden="true"></span>
+                        </button>
+                    <?php else: ?>
+                        <span class="storefront-search__type-toggle-spacer" aria-hidden="true"></span>
+                    <?php endif; ?>
+                    <label class="storefront-search__type-option<?= $isActive ? ' is-active' : '' ?>">
+                        <input type="radio"
+                               name="type"
+                               value="<?= $esc($typeCode) ?>"
+                               data-category-id="<?= $nodeCategoryId > 0 ? $esc((string)$nodeCategoryId) : '' ?>"
+                               <?= $isActive ? 'checked' : '' ?>
+                               onchange="<?= $esc($onChange) ?>">
+                        <span class="storefront-search__type-option-text"><?= $esc($nodeLabel) ?></span>
+                    </label>
+                </div>
+                <?php if ($hasChildren): ?>
+                    <div class="storefront-search__type-children"
+                         id="<?= $esc($itemId) ?>"
+                         data-search-filter-children
+                         <?= $isOpen ? '' : 'hidden' ?>>
+                        <?php $renderTree($children, $typeCode, $selectedCategoryId, $depth + 1, $esc, $onChange, $containsCategory); ?>
+                    </div>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php
+};
+?>
+<div class="storefront-search__filter-panel storefront-search__filter-group storefront-search__filter-panel--tree"
+     data-testid="storefront-search-type-filter"
+     data-search-type-filter>
+    <h2 class="storefront-search__filter-title"><?= __('搜索类型') ?></h2>
+    <form method="get" action="/search" class="storefront-search__type-form">
+        <input type="hidden" name="q" value="<?= $esc($q) ?>">
+        <input type="hidden" name="category_id" value="<?= $categoryId > 0 ? $esc((string)$categoryId) : '' ?>">
+        <ul class="storefront-search__type-tree storefront-search__type-tree--root" role="list">
+            <?php foreach ($types as $row): ?>
+                <?php
+                if (!is_array($row)) {
+                    continue;
+                }
+                $code = trim((string)($row['code'] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+                $label = (string)($row['label'] ?? $code);
+                $children = is_array($row['children'] ?? null) ? $row['children'] : [];
+                $hasChildren = $children !== [];
+                $isTypeActive = $code === $type && $categoryId <= 0;
+                $isTypeAncestor = $code === $type && $categoryId > 0 && $hasChildren
+                    && $containsCategory($children, $categoryId);
+                $isOpen = $isTypeActive || $isTypeAncestor || ($code === $type && $hasChildren);
+                $itemId = 'search-type-root-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $code);
+                ?>
+                <li class="storefront-search__type-node<?= $hasChildren ? ' has-children' : '' ?><?= $isOpen ? ' is-open' : '' ?>"
+                    data-search-filter-node
+                    data-state="<?= $isOpen ? 'open' : 'closed' ?>">
+                    <div class="storefront-search__type-row">
+                        <?php if ($hasChildren): ?>
+                            <button type="button"
+                                    class="storefront-search__type-toggle"
+                                    data-search-filter-toggle
+                                    aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
+                                    aria-controls="<?= $esc($itemId) ?>"
+                                    title="<?= $esc((string)__('展开/收起')) ?>">
+                                <span class="storefront-search__type-toggle-icon" aria-hidden="true"></span>
+                            </button>
+                        <?php else: ?>
+                            <span class="storefront-search__type-toggle-spacer" aria-hidden="true"></span>
+                        <?php endif; ?>
+                        <label class="storefront-search__type-option<?= $isTypeActive ? ' is-active' : '' ?>">
+                            <input type="radio"
+                                   name="type"
+                                   value="<?= $esc($code) ?>"
+                                   data-category-id=""
+                                   <?= $isTypeActive ? 'checked' : '' ?>
+                                   onchange="<?= $esc($onChange) ?>">
+                            <span class="storefront-search__type-option-text"><?= $esc($label) ?></span>
+                        </label>
+                    </div>
+                    <?php if ($hasChildren): ?>
+                        <div class="storefront-search__type-children"
+                             id="<?= $esc($itemId) ?>"
+                             data-search-filter-children
+                             <?= $isOpen ? '' : 'hidden' ?>>
+                            <?php $renderTree($children, $code, $categoryId, 1, $esc, $onChange, $containsCategory); ?>
+                        </div>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </form>
+</div>
+<script>
+(function () {
+    var root = document.currentScript && document.currentScript.previousElementSibling;
+    if (!root || !root.getAttribute || root.getAttribute('data-search-type-filter') === null) {
+        root = document.querySelector('[data-search-type-filter]');
+    }
+    if (!root || root.getAttribute('data-filter-tree-init') === '1') {
+        return;
+    }
+    root.setAttribute('data-filter-tree-init', '1');
+    root.querySelectorAll('[data-search-filter-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            var node = btn.closest('[data-search-filter-node]');
+            if (!node) return;
+            var children = node.querySelector(':scope > [data-search-filter-children]');
+            var open = node.getAttribute('data-state') !== 'open';
+            node.classList.toggle('is-open', open);
+            node.setAttribute('data-state', open ? 'open' : 'closed');
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (children) {
+                children.hidden = !open;
+            }
+        });
+    });
+})();
+</script>

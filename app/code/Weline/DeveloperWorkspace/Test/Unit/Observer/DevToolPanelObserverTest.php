@@ -117,6 +117,21 @@ final class DevToolPanelObserverTest extends TestCase
         ));
     }
 
+    public function testOversizedHtmlStillInjectsLazyBootstrapPath(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/Observer/DevToolPanelObserver.php');
+
+        self::assertIsString($source);
+        self::assertStringContainsString('$skipFullPanelForSize = $this->shouldSkipForResponseSize($result);', $source);
+        self::assertStringContainsString('} elseif (!$skipFullPanelForSize) {', $source);
+        self::assertStringNotContainsString(
+            "if (\$this->shouldSkipForResponseSize(\$result)) {\n                return;",
+            $source
+        );
+        self::assertStringContainsString("if (\$this->shouldUseLazyPanel()) {", $source);
+        self::assertStringContainsString('renderLazyPanelLoader($requestId)', $source);
+    }
+
     public function testPerformancePanelRejectsTimingFromAnotherDocument(): void
     {
         $template = file_get_contents(dirname(__DIR__, 3) . '/view/hooks/dev-tool-panel.phtml');

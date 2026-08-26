@@ -88,19 +88,21 @@ final class ProductReviewTypeProviderTest extends TestCase
 
     public function testDefaultTemplateBuildsRatingFieldsFromProviderSchemaAsNativeStars(): void
     {
-        $template = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/hooks/Weline_Review/frontend/layouts/product-reviews/content.phtml'
+        $js = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-reviews.js'
         );
 
-        self::assertStringContainsString('schemaFields.map(fieldInput)', $template);
-        self::assertStringContainsString("if(field.type==='rating')", $template);
-        self::assertStringContainsString("input.type='radio'", $template);
-        self::assertStringContainsString('input.name=field.key', $template);
-        self::assertStringContainsString("role','radiogroup'", $template);
-        self::assertStringContainsString("choice.addEventListener('keydown'", $template);
-        self::assertStringContainsString('请选择所有必填评分。', $template);
-        self::assertStringContainsString("field.type==='rating'&&field.key!=='rating'", $template);
-        self::assertStringNotContainsString("field.type==='rating'){input=make('select')", $template);
+        self::assertStringContainsString('schemaFields.map(fieldInput)', $js);
+        self::assertStringContainsString("field.type === 'rating'", $js);
+        self::assertStringContainsString("radio.type = 'radio'", $js);
+        self::assertStringContainsString('radio.name = field.key', $js);
+        self::assertStringContainsString('radiogroup', $js);
+        self::assertStringContainsString('keydown', $js);
+        self::assertStringContainsString('请选择所有必填评分。', (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-reviews.phtml'
+        ));
+        self::assertStringContainsString("field.key !== 'rating'", $js);
+        self::assertStringNotContainsString("field.type === 'rating'){input=make('select')", $js);
     }
 
     public function testServerValidationRejectsShortContent(): void

@@ -1614,7 +1614,8 @@ abstract class AbstractModel extends DataObject
         $this->pagination['uri'] = $request->getUri();
 
         # 页码缓存（区分样式与是否强制后台 URL，避免 WLS 下区域判断偶发偏差时命中错误缓存）
-        $cache_key = md5(json_encode($this->pagination) . '|' . $pagination_style . '|' . ($use_backend_url ? '1' : '0'));
+        # markup_version=w-pagination.v1：后台已不再加载 Bootstrap pagination CSS
+        $cache_key = md5(json_encode($this->pagination) . '|' . $pagination_style . '|' . ($use_backend_url ? '1' : '0') . '|w-pagination.v1');
         if ($data = $this->_cache->get($cache_key)) {
             $this->pagination = $data;
             return $data;
@@ -1630,7 +1631,7 @@ abstract class AbstractModel extends DataObject
             : $urlBuilder->getUrl($url_path, $params);
         $prePageName = __('上一页');
         unset($params);
-        $prePageClassStatus = $hasPrePage ? '' : 'disabled';
+        $prePageDisabledAttrs = $hasPrePage ? '' : " aria-disabled='true' tabindex='-1'";
         $params['page'] = $this->pagination['prePage'];
         $params['pageSize'] = $this->pagination['pageSize'];
         $query = http_build_query($params);
@@ -1645,27 +1646,29 @@ abstract class AbstractModel extends DataObject
         for ($i = 1; $i <= $lastPage; $i++) {
             if ($i < $page - 3) {
                 if (!$have_pre_more) {
-                    $page_list_html .= "<li class='page-item'><a class='page-link' href='#' >...</a> </li>";
+                    $page_list_html .= "<li class='w-pagination__item'><span class='w-pagination__link' aria-hidden='true'>...</span></li>";
                     $have_pre_more = true;
                 }
                 continue;
             }
-            $pageActiveStatus = ($page === $i) ? 'active' : '';
+            $isActivePage = ($page === $i);
+            $pageActiveAttr = $isActivePage ? " data-state='active'" : '';
+            $pageAriaCurrent = $isActivePage ? " aria-current='page'" : '';
             $params['page'] = $i;
             $params['pageSize'] = $this->pagination['pageSize'];
             $query = http_build_query($params);
             $pageUrl = $queryUrl . $query_flag . $query;
             if ($i > $page + 3) {
                 if (!$have_after_more) {
-                    $page_list_html .= "<li class='page-item'><a class='page-link' href='#' >...</a> </li>";
+                    $page_list_html .= "<li class='w-pagination__item'><span class='w-pagination__link' aria-hidden='true'>...</span></li>";
                     $have_after_more = true;
                 }
                 continue;
             }
             $page_list_html .= <<<PAGELISTHTML
-<li class='page-item {$pageActiveStatus}'><a
-                    class='page-link'
-                    href='{$pageUrl}'>{$i}</a>
+<li class='w-pagination__item'{$pageActiveAttr}><a
+                    class='w-pagination__link'
+                    href='{$pageUrl}'{$pageAriaCurrent}>{$i}</a>
             </li>
 PAGELISTHTML;
         }
@@ -1676,7 +1679,7 @@ PAGELISTHTML;
         $query = http_build_query($params);
         $firstPageUrl = $queryUrl . $query_flag . $query;
         $firstPageName = __('首页');
-        $nextPageClassStatus = $hasNextPage ? '' : 'disabled';
+        $nextPageDisabledAttrs = $hasNextPage ? '' : " aria-disabled='true' tabindex='-1'";
         $params['page'] = $this->pagination['nextPage'];
         $params['pageSize'] = $this->pagination['pageSize'];
         $query = http_build_query($params);
@@ -1696,40 +1699,38 @@ PAGELISTHTML;
         $paginationJumpFormOpen = FormRenderer::open([
             'action' => $form_url,
             'method' => 'get',
-            'class' => 'btn-group',
+            'class' => 'w-cluster',
             'intent' => 'pagination.jump',
         ]);
         $paginationJumpFormClose = FormRenderer::close();
 
         $this->pagination['html'] = <<<PAGINATION
-<nav aria-label='...'>
-                            <ul class='pagination {$pagination_style}'>
-                                <li class='page-item'>
-                                    <a class='page-link'
+<nav aria-label='Page navigation'>
+                            <ul class='w-pagination' data-justify='center'>
+                                <li class='w-pagination__item'>
+                                    <a class='w-pagination__link'
                                        href='{$firstPageUrl}'>{$firstPageName}</a>
                                 </li>
-                                <li class='page-item {$prePageClassStatus}'>
-                                    <a class='page-link'
-                                       href='{$prePageUrl}'
-                                       tabindex='-1'>{$prePageName}</a>
+                                <li class='w-pagination__item'>
+                                    <a class='w-pagination__link'
+                                       href='{$prePageUrl}'{$prePageDisabledAttrs}>{$prePageName}</a>
                                 </li>
                                 {$page_list_html}
-                                <li class='page-item {$nextPageClassStatus}'>
-                                    <a class='page-link'
-                                       href='{$nextPageUrl}'>{$nextPageName}</a>
+                                <li class='w-pagination__item'>
+                                    <a class='w-pagination__link'
+                                       href='{$nextPageUrl}'{$nextPageDisabledAttrs}>{$nextPageName}</a>
                                 </li>
-                                <li class='page-item'>
-                                    <a class='page-link'
+                                <li class='w-pagination__item'>
+                                    <a class='w-pagination__link'
                                        href='{$lastPageUrl}'>{$lastPageName}</a>
                                 </li>
-                                <li class='page-item disabled'>
-                                    <a class='page-link'
-                                       href='#'>{$total_page}</a>
+                                <li class='w-pagination__item'>
+                                    <span class='w-pagination__link' aria-disabled='true'>{$total_page}</span>
                                 </li>
-                                <li class='page-item'>
+                                <li class='w-pagination__item'>
                                       {$paginationJumpFormOpen}
-                                        <input type="text" class="page-link" name="page" placeholder="{$please_input_page_number}">
-                                        <button type="submit" class="btn btn-primary page-link">{$turn_to_page}</button>
+                                        <input type="text" class="w-input" name="page" placeholder="{$please_input_page_number}" inputmode="numeric" autocomplete="off">
+                                        <button type="submit" class="w-button" data-tone="primary">{$turn_to_page}</button>
                                       {$paginationJumpFormClose}
                                 </li>
                             </ul>

@@ -1,4 +1,19 @@
-﻿前台账户订阅分区,"Frontend account subscription section"
+﻿订阅商品,"Subscription product"
+订阅方案,"Subscription plans"
+"计费 Provider","Billing provider"
+方案代码,"Scheme code"
+"订阅商品至少需要一个 Offer","A subscription product requires at least one Offer."
+订阅商品名称不能为空,"Subscription product name is required."
+"订阅方案 Offer 映射无效","The subscription plan Offer mapping is invalid."
+"订阅 Offer 必须有 SKU","Every subscription Offer requires a SKU."
+订阅商品不能要求配送,"A subscription product cannot require shipping."
+"订阅商品必须配置 Website/Store 基础价；显式零价有效","A Website/Store base price is required; an explicit zero price is valid."
+"每个订阅 Offer 必须绑定一个计费方案","Every subscription Offer must map to a billing plan."
+"订阅计费 Provider 或方案代码无效","The subscription billing provider or plan code is invalid."
+"订阅计费 Provider 不可用：%{1}","Subscription billing provider is unavailable: %{1}"
+"同一订阅计费方案不能绑定多个 Offer","The same subscription billing plan cannot be assigned to multiple Offers."
+"订阅方案引用了不存在的 Offer","The subscription plan references an unknown Offer."
+前台账户订阅分区,"Frontend account subscription section"
 在顾客账户首页注入周期性订阅列表与管理入口。,"Adds recurring subscription status and management links to the customer account home page."
 "仅允许 POST 请求。","Only POST requests are allowed."
 操作失败，请稍后重试。参考编号：%{1},"The operation failed. Please try again later. Reference: %{1}"
@@ -58,7 +73,6 @@ plus,plus
 网站,website
 "店铺 ID","Store ID"
 Provider,Provider
-方案代码,"Scheme code"
 幂等键,"idempotent keys"
 环境,environment
 "Worker ID","Worker ID"

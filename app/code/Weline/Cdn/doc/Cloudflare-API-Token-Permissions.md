@@ -113,12 +113,16 @@ Cloudflare 也提供了一些预设模板，但为了安全起见，建议使用
 
 ## 在 Weline_Cdn 中配置
 
+企业邮箱 DNS 推荐使用后台 Cloudflare OAuth 一键授权，最终用户无需复制 API Token。平台管理员先按 Cloudflare-OAuth-Client-Setup.md 配置一次 OAuth Client。
+
+若必须使用 API Token 兼容模式：
+
 1. 进入后台：**CDN管理 > 账户管理**
-2. 点击"添加账户"或编辑现有账户
-3. 选择适配器：**Cloudflare**
-4. 在"API Token"字段中粘贴您创建的 API Token
-5. 点击"生成"按钮可以生成一个随机 Token（仅用于测试，实际使用需要从 Cloudflare 获取）
-6. 保存账户
+2. 添加或编辑 Cloudflare 账户
+3. 仅粘贴 Cloudflare 实际签发、且权限最小化的 API Token
+4. 保存账户
+
+随机字符串不是 Cloudflare API Token，不能用于真实连接。不要把 Token 写入源码、模板、日志或沟通记录。
 
 ## 验证 Token 权限
 

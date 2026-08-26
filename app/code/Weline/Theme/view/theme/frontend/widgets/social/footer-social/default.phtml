@@ -11,7 +11,6 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {social}
  * @widget.supports {["layout-footer-social","layout-global-footer-social"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"footer-social","area":"footer","sort_order":0}]}
  * @widget.exclusive {true}
  *
  * @param title {default="",name="标题",description="部件标题，可选",type=string}
@@ -133,16 +132,16 @@ if (empty($socials)) {
 
 <style>
 .<?= $wc ?> .social-title {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-4, 15px);
-    color: var(--weline-theme-on-primary);
+    margin: 0 0 var(--weline-space-4);
+    color: var(--weline-theme-text-on-dark);
 }
 
 .<?= $wc ?> .social-links {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--wc-social-gap, var(--weline-space-3, 10px));
+    gap: var(--wc-social-gap);
 }
 
 .<?= $wc ?>[data-align="left"] .social-links { justify-content: flex-start; }
@@ -154,49 +153,51 @@ if (empty($socials)) {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
     text-decoration: none;
 }
 
 .<?= $wc ?>[data-style="colored"] .social-link {
     background: var(--brand-color);
-    color: var(--weline-theme-on-primary);
+    color: var(--color-bg-primary);
 }
 
 .<?= $wc ?>[data-style="colored"] .social-link:hover {
-    transform: translateY(-3px);
+    transform: translateY(var(--spacing-neg-1_5));
     box-shadow: var(--weline-theme-shadow-md);
 }
 
 .<?= $wc ?>[data-style="mono"] .social-link {
-    background: color-mix(in srgb, var(--weline-theme-on-primary) 10%, transparent);
-    color: var(--weline-theme-on-primary);
+    background: color-mix(in srgb, var(--weline-theme-text-on-dark) 12%, transparent);
+    color: var(--weline-theme-text-on-dark);
 }
 
 .<?= $wc ?>[data-style="mono"] .social-link:hover {
     background: var(--brand-color);
+    color: var(--color-bg-primary);
 }
 
 .<?= $wc ?>[data-style="outline"] .social-link {
     background: transparent;
-    border: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) color-mix(in srgb, var(--weline-theme-on-primary) 30%, transparent);
-    color: var(--weline-theme-on-primary);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) color-mix(in srgb, var(--weline-theme-text-on-dark) 35%, transparent);
+    color: var(--weline-theme-text-on-dark);
 }
 
 .<?= $wc ?>[data-style="outline"] .social-link:hover {
     border-color: var(--brand-color);
     background: var(--brand-color);
+    color: var(--color-bg-primary);
 }
 
-.<?= $wc ?>[data-size="small"] .social-link { width: 32px; height: 32px; }
-.<?= $wc ?>[data-size="small"] .social-icon { width: 16px; height: 16px; }
-.<?= $wc ?>[data-size="medium"] .social-link { width: 40px; height: 40px; }
-.<?= $wc ?>[data-size="medium"] .social-icon { width: 20px; height: 20px; }
-.<?= $wc ?>[data-size="large"] .social-link { width: 48px; height: 48px; }
-.<?= $wc ?>[data-size="large"] .social-icon { width: 24px; height: 24px; }
+.<?= $wc ?>[data-size="small"] .social-link { width: var(--spacing-xl); height: var(--spacing-xl); }
+.<?= $wc ?>[data-size="small"] .social-icon { width: var(--spacing-md); height: var(--spacing-md); }
+.<?= $wc ?>[data-size="medium"] .social-link { width: var(--size-control-md); height: var(--size-control-md); }
+.<?= $wc ?>[data-size="medium"] .social-icon { width: var(--font-size-xl); height: var(--font-size-xl); }
+.<?= $wc ?>[data-size="large"] .social-link { width: var(--size-control-xl); height: var(--size-control-xl); }
+.<?= $wc ?>[data-size="large"] .social-icon { width: var(--spacing-lg); height: var(--spacing-lg); }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-2, 8px) 0;
+    padding: var(--weline-space-2) 0;
 }
 </style>

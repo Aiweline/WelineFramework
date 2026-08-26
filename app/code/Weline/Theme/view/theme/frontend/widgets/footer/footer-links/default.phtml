@@ -13,11 +13,11 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {links}
  * @widget.supports {["layout-footer-links","layout-global-footer-links"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"footer-links","area":"footer","sort_order":0}]}
+ * @widget.exclusive {true}
  *
  * @param link_groups {default=[],type="array",label="链接分组",description="每组包含title和links数组"}
  * @param columns {default="4",type="select",label="列数",options={2:"2列",3:"3列",4:"4列"}}
- * @param text_color {default="var(--weline-theme-on-primary)",type="color",label="文字颜色"}
+ * @param text_color {default="var(--weline-theme-text-on-dark, #f8fafc)",type="color",label="文字颜色"}
  */
 
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
@@ -34,7 +34,10 @@ $columns = (string)($this->getData('columns') ?? '4');
 if (!in_array($columns, ['2', '3', '4'], true)) {
     $columns = '4';
 }
-$textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--weline-theme-on-primary)');
+$textColor = ThemeUiColor::sanitize(
+    $this->getData('text_color') ?? '',
+    'var(--weline-theme-text-on-dark, #f8fafc)'
+);
 
 if (empty($linkGroups)) {
     $linkGroups = FooterDefaultLinksHelper::widgetLinkGroups();
@@ -45,7 +48,7 @@ if (empty($linkGroups)) {
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="--wc-footer-text:<?= $esc($textColor) ?>;">
+         style="--wc-footer-text: <?= $esc($textColor) ?>;">
     <?php foreach ($linkGroups as $group): ?>
         <div class="link-group">
             <?php if (!empty($group['title'])): ?>
@@ -67,8 +70,8 @@ if (empty($linkGroups)) {
 <style>
 .<?= $wc ?> {
     display: grid;
-    gap: var(--weline-space-8, 30px);
-    color: var(--wc-footer-text, var(--weline-theme-on-primary));
+    gap: var(--weline-space-8);
+    color: var(--wc-footer-text);
 }
 
 .<?= $wc ?>.columns-2 { grid-template-columns: repeat(2, 1fr); }
@@ -76,37 +79,41 @@ if (empty($linkGroups)) {
 .<?= $wc ?>.columns-4 { grid-template-columns: repeat(4, 1fr); }
 
 .<?= $wc ?> .group-title {
-    font-size: var(--weline-font-size-base, 16px);
-    font-weight: 600;
-    margin: 0 0 var(--weline-space-5, 20px);
+    font-family: inherit;
+    font-size: var(--font-size-base, 1rem);
+    font-weight: 700;
+    line-height: 1.25;
+    margin: 0 0 var(--spacing-3_5, 0.875rem);
+    color: var(--wc-footer-text);
 }
 
 .<?= $wc ?> .group-links {
     list-style: none;
     margin: 0;
     padding: 0;
-}
-
-.<?= $wc ?> .group-links li {
-    margin-bottom: var(--weline-space-3, 12px);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2_5, 0.625rem);
 }
 
 .<?= $wc ?> .group-links a {
-    color: color-mix(in srgb, var(--wc-footer-text, var(--weline-theme-on-primary)) 70%, transparent);
+    color: var(--weline-theme-footer-link, #dddddd);
     text-decoration: none;
-    font-size: var(--weline-font-size-sm, 14px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.3;
+    transition: color 0.2s ease;
 }
 
-.<?= $wc ?> .group-links a:hover {
-    color: var(--wc-footer-text, var(--weline-theme-on-primary));
-    padding-left: var(--weline-space-1, 5px);
+.<?= $wc ?> .group-links a:hover,
+.<?= $wc ?> .group-links a:focus-visible {
+    color: var(--wc-footer-text);
+    text-decoration: underline;
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: var(--weline-space-4, 15px);
+    gap: var(--weline-space-4);
 }
 
 @media (max-width: 992px) {

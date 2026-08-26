@@ -296,11 +296,12 @@ body .weline-language-select-dropdown[id^="dictionary_"] {
     color: var(--i18n-text-muted) !important;
 }
 
-.i18n-admin-page .pagination {
+.i18n-admin-page .w-pagination {
     gap: 0.35rem;
+    flex-wrap: wrap;
 }
 
-.i18n-admin-page .pagination .page-link {
+.i18n-admin-page .w-pagination .w-pagination__link {
     border-radius: 0.7rem;
     border-color: var(--i18n-border);
     background: var(--i18n-surface-strong);

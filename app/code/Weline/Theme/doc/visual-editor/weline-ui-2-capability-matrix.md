@@ -19,12 +19,12 @@
 | `TE-CAP-001` | 编辑身份选择 | 模板 `themeSelect/pageTypeSelect/layoutOptionSelect/editorAreaSelect/editorLangSwitcher`；JS `setCurrentLayoutSelection()`、`navigateEditorShell()` | Weline Select/Combobox + 布局身份状态 | 主题、layout type/option、frontend/backend、locale、scope/target 切换后身份和 URL 一致 |
 | `TE-CAP-002` | 布局锁定与虚拟布局 | `parseLayoutLock()`、`enforceLayoutLock()`、`load/saveLockedVirtualLayoutSource()`、`publishLatestLockedVirtualLayoutVersion()` | Weline Alert/Badge/disabled 状态，保留虚拟布局 API | 锁定时不能突破身份；草稿加载、源码保存、版本发布可用 |
 | `TE-CAP-003` | 响应式工作区 | `initSidePanels()`、`setSidePanelOpen()`、`toggleEditorFullscreen()` | Weline Drawer/Toolbar，原生 Fullscreen | 左配置、中预览、右部件库在 375/768/1024/1440 可达；面板偏好与全屏还原 |
-| `TE-CAP-004` | 实时预览与结构视图 | `switchPreviewView()`、`loadLayoutPreview()`、`resetStructureViewToEmptySlots()` | Weline Tabs + 路由懒加载预览 | 实时/结构视图双向切换，loading/error/empty 状态不丢 |
+| `TE-CAP-004` | 实时预览与结构视图 | `switchPreviewView()`、`kickoffLayoutPreview()`/`loadLayoutPreview()`、`resetStructureViewToEmptySlots()`；模板早期 `modulepreload` + 主脚本先于 async `widget-param` | Weline Tabs + 路由懒加载预览 | 实时/结构视图双向切换，loading/error/empty 状态不丢；backend 已注入预览 URL 时不二次整页导航 |
 | `TE-CAP-005` | 草稿、已发布与真实前端预览 | `switchPreviewStatus()`、`openPreview()`、`openFrontendPreview()`、`openPublishedPreview()` | Weline Menu/Button/Badge | draft/published 状态明确；后台 iframe 与真实前端预览都可达 |
 | `TE-CAP-006` | iframe 通信和链接拦截 | `handleIframeMessage()`、`setupIframeLinkInterception()`、`initCmsContextBridge()` | 保留同源预览 bridge，UI 事件纳入 `Weline.Theme.Editor` | slot/widget 选择、局部更新、CMS 上下文和嵌入式保存消息不丢 |
 | `TE-CAP-007` | Slot 发现与诊断 | `fetchLayoutSlots()`、`collectDomSlotsFromDocument()`、`renderSlotsInfo()`、`renderMissingSlotWarnings()` | Weline Tree/Alert/Empty State | 合并 catalog/DOM slot，过滤 synthetic container，缺失警告和定位可用 |
 | `TE-CAP-008` | 布局配置 | `loadLayoutConfig()`、`saveLayoutConfig()`、`saveLayoutSelection()`、`refreshLayoutOptions()` | Weline Form/Field/Disclosure + 自动保存状态 | layout option 与配置加载/保存/自动保存、locale 和预览刷新一致 |
-| `TE-CAP-009` | 部件库加载 | `deferWidgetLibraryLoad()`、`load/reloadWidgetLibrary()`、`initWidgetInfiniteScroll()` | Weline Card/Skeleton/Tabs/Search | 首屏延迟、分页/无限滚动、服务端搜索、加载/空/错误状态完整 |
+| `TE-CAP-009` | 部件库加载 | `scheduleSecondaryEditorBootstrap()` → `deferWidgetLibraryLoad()`、`load/reloadWidgetLibrary()`、`initWidgetInfiniteScroll()` | Weline Card/Skeleton/Tabs/Search | 次于预览 kickoff；分页/无限滚动、服务端搜索、加载/空/错误状态完整 |
 | `TE-CAP-010` | 部件库分类与推荐 | `setWidgetLibraryTab()`、`applyWidgetLibraryTabVisibility()`、`applySlotWidgetFilter()`、`highlightAcceptableWidgets()` | Weline Tabs/Badge/Toolbar | general/basic/applications 分类、slot 筛选、接受/拒绝规则、计数与推荐滚动不丢 |
 | `TE-CAP-011` | 默认注入应用 | `loadDefaultInjectionLibrary()`、`refreshDefaultInjectionApplications()`、`applyDefaultInjection()` | Weline Card/Dialog/Progress | 当前身份/全部身份作用域、强推荐、已应用状态与确认流不丢 |
 | `TE-CAP-012` | 点击或拖拽添加部件 | `addWidgetFromLibraryItem()`、`handleDragStart/Over/Drop()`、`saveWidget()`、`addWidgetToSlot()` | 保留当前可靠拖拽能力；Weline 只统一插入指示器、状态和主题外壳 | 区域、真实 slot、sort order、exclusive 和 page-layout 兼容校验不得绕过 |
@@ -35,7 +35,7 @@
 | `TE-CAP-017` | 配置实时保存与预览 | `saveWidgetConfig*()`、`scheduleWidgetConfigAutoSave()`、`updateWidgetPreviewInIframe()` | Weline 字段状态/Toast/Spinner | 400ms 合并保存、静默/显式反馈、服务端归一化配置和局部预览更新不丢 |
 | `TE-CAP-018` | 部件独立多尺寸预览 | `openComponentPreviewModal()` 与 `componentPreview*` 面板 | Weline Dialog/Tabs/Range | PC 1200、iPad 768、Mobile 375 和 320–1200 响应式拖动宽度完整 |
 | `TE-CAP-019` | 多语言配置 | `fetchInstalledLocales()`、`setActiveConfigLocale()`、`reloadWidgetConfigWithLocale()`、`saveWidgetConfigWithLocale()` | Weline Language Select + Form | 已安装 locale、国旗/标签、主配置和指定 locale 读写不丢 |
-| `TE-CAP-020` | 字段 i18n 与 AI 翻译 | `loadI18nValues()`、`saveI18nValues()`、`translateI18nValues()` | Weline Disclosure/Dialog/Progress | 原文、各 locale 值、AI 批量翻译、保存和错误保留不丢 |
+| `TE-CAP-020` | 字段 i18n 与 AI 翻译 | `loadI18nValues()`（优先 scoped i18n 草稿，再 field-i18n/widget-config）、`saveI18nValues()`、`translateI18nValues()` | Weline Disclosure/Dialog/Progress | 打开面板自动回填已存译文；原文、各 locale 值、AI 批量翻译、保存和错误保留不丢 |
 | `TE-CAP-021` | 部件 AI 动作 | `loadVirtualThemeAiCatalog()`、`openVirtualThemeAiDialog()`、`handleWidgetAiAction()` | Weline Dialog/Checkbox/Progress | skill/style 选择、作用目标、上下文、执行反馈和预览刷新不丢 |
 | `TE-CAP-022` | AI 部件供应与放置上下文 | `getThemeWidgetAiContext()`、`registerThemeWidgetAiContextProvider()`、`placeWidgetFromProvider()` | `Weline.Theme.Editor` 公开业务命名空间 | 当前 theme/layout/slot、CSS 变量、已有值和供应部件放置契约不丢 |
 | `TE-CAP-023` | 版本管理 | `load/renderVersionPanel()`、`preview/switch/deleteVersion()`、`saveLayout()`、`showPromptDialog()` | Weline Menu/Dialog/Badge/Empty State | 当前/已发布标记、列表、命名保存、预览、切换、重命名、受限删除不丢 |

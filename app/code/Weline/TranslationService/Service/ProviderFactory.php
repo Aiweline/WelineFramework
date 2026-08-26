@@ -49,7 +49,7 @@ class ProviderFactory
      * @param string $providerCode 渠道代码
      * @return ProviderInterface|null
      */
-    public function create(string $providerCode): ?ProviderInterface
+    public function createProvider(string $providerCode): ?ProviderInterface
     {
         $providerCode = strtolower($providerCode);
         

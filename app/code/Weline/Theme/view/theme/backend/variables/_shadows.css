@@ -36,4 +36,8 @@
     --backend-focus-ring-danger: 0 0 0 0.15rem rgba(244, 106, 106, 0.25);
     --backend-focus-ring-success: 0 0 0 0.15rem rgba(52, 195, 143, 0.25);
     --backend-focus-ring-warning: 0 0 0 0.15rem rgba(241, 180, 76, 0.25);
+
+    /* ========== primary 阴影默认 ========== */
+    --backend-shadow-primary: 0 10px 24px rgba(85, 110, 230, 0.18);
+    --backend-shadow-primary-hover: 0 14px 30px rgba(85, 110, 230, 0.24);
 }

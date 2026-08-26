@@ -43,5 +43,34 @@
     --letter-spacing-tight: -0.025em;
     --letter-spacing-normal: 0;
     --letter-spacing-wide: 0.025em;
-}
 
+    /* ========== 字体别名 ========== */
+    --font-family-display: var(--font-family-base);
+    --font-size-md: var(--font-size-base);
+    --font-size-2_5xl: 1.375rem; /* 22px */
+    --font-size-xxl: var(--font-size-2xl);
+
+    /* ========== foundation 字体别名 ========== */
+    --weline-font-mono: var(--font-family-mono);
+    --weline-font-size-xs: var(--font-size-xs);
+    --weline-font-size-sm: var(--font-size-sm);
+    --weline-font-size-base: var(--font-size-base);
+    --weline-font-size-lg: var(--font-size-lg);
+    --weline-font-size-xl: var(--font-size-xl);
+    --weline-font-size-2xl: var(--font-size-2xl);
+    --weline-font-size-3xl: var(--font-size-3xl);
+    --weline-font-size-4xl: var(--font-size-4xl);
+    --weline-font-weight-medium: var(--font-weight-medium);
+    --weline-font-weight-semibold: var(--font-weight-semibold);
+    --weline-font-weight-bold: var(--font-weight-bold);
+
+    /* ========== weshop 字号桥接 ========== */
+    --weshop-font-size-xs: var(--font-size-xs);
+    --weshop-font-size-sm: var(--font-size-sm);
+    --weshop-font-size-base: var(--font-size-base);
+    --weshop-font-size-lg: var(--font-size-lg);
+    --weshop-font-size-xl: var(--font-size-xl);
+    --weshop-font-size-2xl: var(--font-size-2xl);
+    --weshop-font-size-3xl: var(--font-size-3xl);
+    --weshop-font-size-4xl: var(--font-size-4xl);
+}

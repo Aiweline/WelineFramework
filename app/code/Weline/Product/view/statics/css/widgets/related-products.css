@@ -1,0 +1,324 @@
+.weline-product-related {
+  --wpr-ink: #0f1111;
+  --wpr-muted: #565959;
+  --wpr-link: #2162a1;
+  --wpr-border: #d5d9d9;
+  --wpr-surface: #ffffff;
+  --wpr-stage: #f7f8f8;
+  --wpr-cta: #ffd814;
+  --wpr-cta-hover: #f7ca00;
+  --wpr-star: #de7921;
+  margin: 1.5rem 0 0;
+  padding: 1.25rem 1rem 0.5rem;
+  border-top: 1px solid var(--wpr-border);
+  color: var(--wpr-ink);
+  font-family: "Amazon Ember", Arial, sans-serif;
+}
+
+.weline-product-related .wpr-header {
+  margin: 0 0 0.85rem;
+  /* Align with carousel viewport (nav 2.1rem + gap 0.35rem) */
+  padding-inline: calc(2.1rem + 0.35rem);
+}
+
+.weline-product-related[data-layout="grid"] .wpr-header {
+  padding-inline: 0.25rem;
+}
+
+.weline-product-related .wpr-title {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.weline-product-related .wpr-subtitle {
+  margin: 0.2rem 0 0;
+  color: var(--wpr-muted);
+  font-size: 0.9rem;
+}
+
+.weline-product-related .wpr-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.weline-product-related[data-layout="grid"] .wpr-stage {
+  grid-template-columns: 1fr;
+}
+
+.weline-product-related .wpr-viewport {
+  overflow: hidden;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--wpr-stage) 0%, #fff 42%);
+  border: 1px solid var(--wpr-border);
+}
+
+.weline-product-related .wpr-track {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.weline-product-related .wpr-track.layout-carousel {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.weline-product-related .wpr-track.layout-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.weline-product-related .wpr-track.layout-grid.columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.weline-product-related .wpr-track.layout-grid.columns-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.weline-product-related .wpr-track.layout-grid.columns-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.weline-product-related .wpr-track.layout-grid.columns-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.weline-product-related .wpr-card {
+  flex: 0 0 calc((100% - 2.25rem) / 4);
+  min-width: 11.5rem;
+  scroll-snap-align: start;
+  background: var(--wpr-surface);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.55rem;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.weline-product-related .wpr-track.layout-grid .wpr-card {
+  flex: none;
+  min-width: 0;
+}
+
+.weline-product-related .wpr-card:hover {
+  border-color: #bbb;
+  box-shadow: 0 2px 8px rgba(15, 17, 17, 0.08);
+  transform: translateY(-1px);
+}
+
+.weline-product-related .wpr-media-wrap {
+  position: relative;
+}
+
+.weline-product-related .wpr-media-wrap .product-actions {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: flex;
+  gap: 0.35rem;
+  z-index: 2;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.weline-product-related .wpr-card:hover .product-actions,
+.weline-product-related .wpr-card:focus-within .product-actions {
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 768px) {
+  .weline-product-related .wpr-media-wrap .product-actions {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.weline-product-related .wpr-media {
+  display: block;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f3f3f3;
+}
+
+.weline-product-related .wpr-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.weline-product-related .wpr-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.55rem;
+}
+
+.weline-product-related .wpr-name {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  font-weight: 500;
+  min-height: 2.5em;
+}
+
+.weline-product-related .wpr-name a {
+  color: var(--wpr-link);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.weline-product-related .wpr-name a:hover {
+  color: #c45500;
+  text-decoration: underline;
+}
+
+.weline-product-related .wpr-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--wpr-muted);
+}
+
+.weline-product-related .wpr-stars {
+  --rating: 4.5;
+  position: relative;
+  display: inline-block;
+  width: 5.2em;
+  height: 1em;
+  font-size: 0.85rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: #d5d9d9;
+}
+
+.weline-product-related .wpr-stars::before,
+.weline-product-related .wpr-stars::after {
+  content: "★★★★★";
+  position: absolute;
+  inset: 0;
+  white-space: nowrap;
+}
+
+.weline-product-related .wpr-stars::after {
+  color: var(--wpr-star);
+  width: calc(var(--rating) / 5 * 100%);
+  overflow: hidden;
+}
+
+.weline-product-related .wpr-price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.weline-product-related .wpr-price-now {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.weline-product-related .wpr-price-was {
+  color: var(--wpr-muted);
+  text-decoration: line-through;
+  font-size: 0.82rem;
+}
+
+.weline-product-related .wpr-cta {
+  margin-top: 0.15rem;
+  appearance: none;
+  border: 1px solid #fcd200;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffe55c 0%, var(--wpr-cta) 100%);
+  color: #0f1111;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}
+
+.weline-product-related .wpr-cta:hover {
+  background: linear-gradient(180deg, #ffd814 0%, var(--wpr-cta-hover) 100%);
+}
+
+.weline-product-related .wpr-cta--link {
+  background: #fff;
+  border-color: #d5d9d9;
+}
+
+.weline-product-related .wpr-nav {
+  align-self: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--wpr-border);
+  background: #fff;
+  color: #0f1111;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 17, 17, 0.12);
+}
+
+.weline-product-related .wpr-nav:hover {
+  background: #f7f8f8;
+}
+
+.weline-product-related .wpr-nav[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@media (max-width: 1023px) {
+  .weline-product-related .wpr-card {
+    flex-basis: calc((100% - 1.5rem) / 3);
+  }
+  .weline-product-related .wpr-track.layout-grid.columns-4,
+  .weline-product-related .wpr-track.layout-grid.columns-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .weline-product-related {
+    padding-inline: 0.75rem;
+  }
+  .weline-product-related .wpr-header {
+    padding-inline: 0.15rem;
+  }
+  .weline-product-related .wpr-stage {
+    grid-template-columns: 1fr;
+  }
+  .weline-product-related .wpr-nav {
+    display: none;
+  }
+  .weline-product-related .wpr-card {
+    flex-basis: calc((100% - 0.75rem) / 2);
+    min-width: 9.5rem;
+  }
+  .weline-product-related .wpr-track.layout-grid.columns-2,
+  .weline-product-related .wpr-track.layout-grid.columns-3,
+  .weline-product-related .wpr-track.layout-grid.columns-4,
+  .weline-product-related .wpr-track.layout-grid.columns-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .weline-product-related .wpr-title {
+    font-size: 1.15rem;
+  }
+}

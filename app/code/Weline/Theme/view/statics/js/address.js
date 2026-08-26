@@ -47,35 +47,35 @@
         selectCityFirst: 'Please select city first'
     };
     var chinaFallback = [
-        {region_id: 100001, parent_region_id: 0, country_code: 'CN', region_code: 'BJ', region_name: '\u5317\u4eac\u5e02', region_type: 'province'},
-        {region_id: 100002, parent_region_id: 0, country_code: 'CN', region_code: 'SH', region_name: '\u4e0a\u6d77\u5e02', region_type: 'province'},
-        {region_id: 100003, parent_region_id: 0, country_code: 'CN', region_code: 'GD', region_name: '\u5e7f\u4e1c\u7701', region_type: 'province'},
-        {region_id: 100004, parent_region_id: 0, country_code: 'CN', region_code: 'ZJ', region_name: '\u6d59\u6c5f\u7701', region_type: 'province'},
-        {region_id: 100005, parent_region_id: 0, country_code: 'CN', region_code: 'JS', region_name: '\u6c5f\u82cf\u7701', region_type: 'province'},
-        {region_id: 100006, parent_region_id: 0, country_code: 'CN', region_code: 'SC', region_name: '\u56db\u5ddd\u7701', region_type: 'province'},
-        {region_id: 100007, parent_region_id: 0, country_code: 'CN', region_code: 'HB', region_name: '\u6e56\u5317\u7701', region_type: 'province'},
-        {region_id: 100008, parent_region_id: 0, country_code: 'CN', region_code: 'HN', region_name: '\u6e56\u5357\u7701', region_type: 'province'},
-        {region_id: 100009, parent_region_id: 0, country_code: 'CN', region_code: 'FJ', region_name: '\u798f\u5efa\u7701', region_type: 'province'},
-        {region_id: 100010, parent_region_id: 0, country_code: 'CN', region_code: 'SD', region_name: '\u5c71\u4e1c\u7701', region_type: 'province'},
-        {region_id: 110001, parent_region_id: 100001, country_code: 'CN', region_code: 'BJ-BJ', region_name: '\u5317\u4eac\u5e02', region_type: 'city'},
-        {region_id: 110002, parent_region_id: 100002, country_code: 'CN', region_code: 'SH-SH', region_name: '\u4e0a\u6d77\u5e02', region_type: 'city'},
-        {region_id: 110003, parent_region_id: 100003, country_code: 'CN', region_code: 'GZ', region_name: '\u5e7f\u5dde\u5e02', region_type: 'city'},
-        {region_id: 110004, parent_region_id: 100003, country_code: 'CN', region_code: 'SZ', region_name: '\u6df1\u5733\u5e02', region_type: 'city'},
-        {region_id: 110005, parent_region_id: 100003, country_code: 'CN', region_code: 'DG', region_name: '\u4e1c\u839e\u5e02', region_type: 'city'},
-        {region_id: 110006, parent_region_id: 100004, country_code: 'CN', region_code: 'HZ', region_name: '\u676d\u5dde\u5e02', region_type: 'city'},
-        {region_id: 110007, parent_region_id: 100005, country_code: 'CN', region_code: 'NJ', region_name: '\u5357\u4eac\u5e02', region_type: 'city'},
-        {region_id: 110008, parent_region_id: 100006, country_code: 'CN', region_code: 'CD', region_name: '\u6210\u90fd\u5e02', region_type: 'city'},
-        {region_id: 110009, parent_region_id: 100007, country_code: 'CN', region_code: 'WH', region_name: '\u6b66\u6c49\u5e02', region_type: 'city'},
-        {region_id: 110010, parent_region_id: 100008, country_code: 'CN', region_code: 'CS', region_name: '\u957f\u6c99\u5e02', region_type: 'city'},
-        {region_id: 110011, parent_region_id: 100009, country_code: 'CN', region_code: 'XM', region_name: '\u53a6\u95e8\u5e02', region_type: 'city'},
-        {region_id: 110012, parent_region_id: 100010, country_code: 'CN', region_code: 'QD', region_name: '\u9752\u5c9b\u5e02', region_type: 'city'},
-        {region_id: 120001, parent_region_id: 110004, country_code: 'CN', region_code: 'NS', region_name: '\u5357\u5c71\u533a', region_type: 'district'},
-        {region_id: 120002, parent_region_id: 110004, country_code: 'CN', region_code: 'FT', region_name: '\u798f\u7530\u533a', region_type: 'district'},
-        {region_id: 120003, parent_region_id: 110004, country_code: 'CN', region_code: 'LH', region_name: '\u7f57\u6e56\u533a', region_type: 'district'},
-        {region_id: 120004, parent_region_id: 110003, country_code: 'CN', region_code: 'TH', region_name: '\u5929\u6cb3\u533a', region_type: 'district'},
-        {region_id: 120005, parent_region_id: 110003, country_code: 'CN', region_code: 'PY', region_name: '\u756a\u79ba\u533a', region_type: 'district'},
-        {region_id: 120006, parent_region_id: 110001, country_code: 'CN', region_code: 'CY', region_name: '\u671d\u9633\u533a', region_type: 'district'},
-        {region_id: 120007, parent_region_id: 110002, country_code: 'CN', region_code: 'PD', region_name: '\u6d66\u4e1c\u65b0\u533a', region_type: 'district'}
+        {region_id: 100001, parent_region_id: 0, country_code: 'CN', region_code: 'BJ', region_name: '\u5317\u4eac\u5e02', region_type: 'province', postal_code: '100000'},
+        {region_id: 100002, parent_region_id: 0, country_code: 'CN', region_code: 'SH', region_name: '\u4e0a\u6d77\u5e02', region_type: 'province', postal_code: '200000'},
+        {region_id: 100003, parent_region_id: 0, country_code: 'CN', region_code: 'GD', region_name: '\u5e7f\u4e1c\u7701', region_type: 'province', postal_code: '510000'},
+        {region_id: 100004, parent_region_id: 0, country_code: 'CN', region_code: 'ZJ', region_name: '\u6d59\u6c5f\u7701', region_type: 'province', postal_code: '310000'},
+        {region_id: 100005, parent_region_id: 0, country_code: 'CN', region_code: 'JS', region_name: '\u6c5f\u82cf\u7701', region_type: 'province', postal_code: '210000'},
+        {region_id: 100006, parent_region_id: 0, country_code: 'CN', region_code: 'SC', region_name: '\u56db\u5ddd\u7701', region_type: 'province', postal_code: '610000'},
+        {region_id: 100007, parent_region_id: 0, country_code: 'CN', region_code: 'HB', region_name: '\u6e56\u5317\u7701', region_type: 'province', postal_code: '430000'},
+        {region_id: 100008, parent_region_id: 0, country_code: 'CN', region_code: 'HN', region_name: '\u6e56\u5357\u7701', region_type: 'province', postal_code: '410000'},
+        {region_id: 100009, parent_region_id: 0, country_code: 'CN', region_code: 'FJ', region_name: '\u798f\u5efa\u7701', region_type: 'province', postal_code: '350000'},
+        {region_id: 100010, parent_region_id: 0, country_code: 'CN', region_code: 'SD', region_name: '\u5c71\u4e1c\u7701', region_type: 'province', postal_code: '250000'},
+        {region_id: 110001, parent_region_id: 100001, country_code: 'CN', region_code: 'BJ-BJ', region_name: '\u5317\u4eac\u5e02', region_type: 'city', postal_code: '100000'},
+        {region_id: 110002, parent_region_id: 100002, country_code: 'CN', region_code: 'SH-SH', region_name: '\u4e0a\u6d77\u5e02', region_type: 'city', postal_code: '200000'},
+        {region_id: 110003, parent_region_id: 100003, country_code: 'CN', region_code: 'GZ', region_name: '\u5e7f\u5dde\u5e02', region_type: 'city', postal_code: '510000'},
+        {region_id: 110004, parent_region_id: 100003, country_code: 'CN', region_code: 'SZ', region_name: '\u6df1\u5733\u5e02', region_type: 'city', postal_code: '518000'},
+        {region_id: 110005, parent_region_id: 100003, country_code: 'CN', region_code: 'DG', region_name: '\u4e1c\u839e\u5e02', region_type: 'city', postal_code: '523000'},
+        {region_id: 110006, parent_region_id: 100004, country_code: 'CN', region_code: 'HZ', region_name: '\u676d\u5dde\u5e02', region_type: 'city', postal_code: '310000'},
+        {region_id: 110007, parent_region_id: 100005, country_code: 'CN', region_code: 'NJ', region_name: '\u5357\u4eac\u5e02', region_type: 'city', postal_code: '210000'},
+        {region_id: 110008, parent_region_id: 100006, country_code: 'CN', region_code: 'CD', region_name: '\u6210\u90fd\u5e02', region_type: 'city', postal_code: '610000'},
+        {region_id: 110009, parent_region_id: 100007, country_code: 'CN', region_code: 'WH', region_name: '\u6b66\u6c49\u5e02', region_type: 'city', postal_code: '430000'},
+        {region_id: 110010, parent_region_id: 100008, country_code: 'CN', region_code: 'CS', region_name: '\u957f\u6c99\u5e02', region_type: 'city', postal_code: '410000'},
+        {region_id: 110011, parent_region_id: 100009, country_code: 'CN', region_code: 'XM', region_name: '\u53a6\u95e8\u5e02', region_type: 'city', postal_code: '361000'},
+        {region_id: 110012, parent_region_id: 100010, country_code: 'CN', region_code: 'QD', region_name: '\u9752\u5c9b\u5e02', region_type: 'city', postal_code: '266000'},
+        {region_id: 120001, parent_region_id: 110004, country_code: 'CN', region_code: 'NS', region_name: '\u5357\u5c71\u533a', region_type: 'district', postal_code: '518052'},
+        {region_id: 120002, parent_region_id: 110004, country_code: 'CN', region_code: 'FT', region_name: '\u798f\u7530\u533a', region_type: 'district', postal_code: '518000'},
+        {region_id: 120003, parent_region_id: 110004, country_code: 'CN', region_code: 'LH', region_name: '\u7f57\u6e56\u533a', region_type: 'district', postal_code: '518001'},
+        {region_id: 120004, parent_region_id: 110003, country_code: 'CN', region_code: 'TH', region_name: '\u5929\u6cb3\u533a', region_type: 'district', postal_code: '510630'},
+        {region_id: 120005, parent_region_id: 110003, country_code: 'CN', region_code: 'PY', region_name: '\u756a\u79ba\u533a', region_type: 'district', postal_code: '511400'},
+        {region_id: 120006, parent_region_id: 110001, country_code: 'CN', region_code: 'CY', region_name: '\u671d\u9633\u533a', region_type: 'district', postal_code: '100020'},
+        {region_id: 120007, parent_region_id: 110002, country_code: 'CN', region_code: 'PD', region_name: '\u6d66\u4e1c\u65b0\u533a', region_type: 'district', postal_code: '200120'}
     ];
 
     function text(value) {
@@ -206,17 +206,23 @@
         return regionApiPromise;
     }
 
-    function loadRegions(sourceUrl) {
+    function loadRegions(sourceUrl, countryCode) {
         sourceUrl = text(sourceUrl || defaultSourceUrl);
-        if (Array.isArray(window.WelineShippingRegions)) {
+        countryCode = text(countryCode).toUpperCase();
+        var cacheKey = sourceUrl + '|' + countryCode;
+        if (Array.isArray(window.WelineShippingRegions) && !countryCode) {
             return Promise.resolve(normalizeRegions(window.WelineShippingRegions));
         }
         if (!window.Weline || !window.Weline.Api) {
             return Promise.resolve(fallbackRegions());
         }
-        if (!regionSources[sourceUrl]) {
-            regionSources[sourceUrl] = getRegionApi().then(function (RegionApi) {
-                return RegionApi.list({}, {silent: true});
+        if (!regionSources[cacheKey]) {
+            regionSources[cacheKey] = getRegionApi().then(function (RegionApi) {
+                var params = {};
+                if (countryCode) {
+                    params.country_code = countryCode;
+                }
+                return RegionApi.list(params, {silent: true});
             }).then(function (payload) {
                 return normalizeRegions(regionsFromPayload(payload));
             }).catch(function () {
@@ -224,7 +230,7 @@
             });
         }
 
-        return regionSources[sourceUrl];
+        return regionSources[cacheKey];
     }
 
     function groupFor(code, sourceUrl) {
@@ -368,6 +374,37 @@
         });
     }
 
+    function synthesizeCountry(countryCode, countryName) {
+        countryCode = text(countryCode).toUpperCase();
+        if (!countryCode) {
+            return null;
+        }
+        return {
+            region_id: 0,
+            parent_region_id: 0,
+            country_code: countryCode,
+            region_code: countryCode,
+            region_name: text(countryName) || countryCode,
+            region_type: 'country'
+        };
+    }
+
+    function ensureCountryInRegions(group, countryCode, countryName) {
+        countryCode = text(countryCode).toUpperCase();
+        if (!group || !countryCode) {
+            return;
+        }
+        group.regions = group.regions || [];
+        var exists = group.regions.some(function (region) {
+            return text(region.region_type) === 'country'
+                && (text(region.country_code) === countryCode || text(region.region_code) === countryCode);
+        });
+        if (exists) {
+            return;
+        }
+        group.regions.unshift(synthesizeCountry(countryCode, countryName || countryCode));
+    }
+
     function findRegion(group, level, value) {
         return optionsFor(group, level).find(function (region) {
             return matchesValue(region, value);
@@ -444,6 +481,16 @@
         if (!group.state.country && group.fixed.country) {
             group.state.country = findRegion(group, 'country', splitFilter(group.fixed.country)[0]);
         }
+        if (!group.state.country && !group.controls.country) {
+            // 顶部已锁定国家时，即使地区库没有该国节点，也合成国家状态，禁止回落到 CN。
+            var lockedCountry = text(group.fixed.country) || metadataValue(group, 'country_code');
+            if (lockedCountry) {
+                group.state.country = findRegion(group, 'country', lockedCountry)
+                    || synthesizeCountry(lockedCountry, metadataValue(group, 'country') || lockedCountry);
+            } else {
+                group.state.country = firstAllowed(group, 'country');
+            }
+        }
         if (!group.state.country && group.controls.country && !group.controls.country.field.value) {
             group.state.country = findRegion(group, 'country', 'CN') || firstAllowed(group, 'country');
         }
@@ -509,6 +556,39 @@
         metadataField('city_region_id').value = city ? text(city.region_id) : '';
         metadataField('district_code').value = district ? text(district.region_code) : '';
         metadataField('district_region_id').value = district ? text(district.region_id) : '';
+        syncPostalField(group, form);
+    }
+
+    function resolvePostalCode(group) {
+        var district = group.state.district;
+        var city = group.state.city;
+        var province = group.state.province;
+        var region = district || city || province || null;
+        if (!region) {
+            return '';
+        }
+        var postal = text(region.postal_code || '').trim();
+        if (postal) {
+            return postal;
+        }
+        var regionId = text(region.region_id);
+        var regionCode = text(region.region_code);
+        var fallback = (group.regions || []).find(function (item) {
+            return (regionId && regionId === text(item.region_id))
+                || (regionCode && regionCode === text(item.region_code) && text(item.region_type) === text(region.region_type));
+        });
+        return fallback ? text(fallback.postal_code || '').trim() : '';
+    }
+
+    function syncPostalField(group, form) {
+        if (!form) {
+            return;
+        }
+        var postalField = form.querySelector('[name="postal_code"]');
+        if (!postalField) {
+            return;
+        }
+        postalField.value = resolvePostalCode(group);
     }
 
     function clearAfter(group, level) {
@@ -555,32 +635,146 @@
         return group.state.city || group.fixed.city || group.state.province || group.fixed.province || group.state.country || group.fixed.country ? labels.selectDistrict : labels.selectCityFirst;
     }
 
+    function regionMatchesKeyword(region, needle) {
+        if (!needle) {
+            return true;
+        }
+        return labelOf(region).toLowerCase().indexOf(needle) > -1 ||
+            text(region.region_default_name).toLowerCase().indexOf(needle) > -1 ||
+            text(region.region_code).toLowerCase().indexOf(needle) > -1 ||
+            text(region.country_code).toLowerCase().indexOf(needle) > -1;
+    }
+
+    function findRegionById(group, regionId) {
+        regionId = text(regionId);
+        if (!regionId || regionId === '0') {
+            return null;
+        }
+        return (group.regions || []).find(function (region) {
+            return text(region.region_id) === regionId;
+        }) || null;
+    }
+
+    function parentRegion(group, region) {
+        if (!region) {
+            return null;
+        }
+        var parentId = text(region.parent_region_id);
+        if (parentId && parentId !== '0') {
+            return findRegionById(group, parentId);
+        }
+        if (text(region.region_type) === 'province') {
+            return group.state.country || findRegion(group, 'country', text(region.country_code)) || null;
+        }
+        return null;
+    }
+
+    function deeperSearchLevels(level) {
+        var index = order.indexOf(level);
+        if (index < 0) {
+            return [];
+        }
+        return order.slice(index + 1);
+    }
+
+    function searchHits(group, control, keyword) {
+        var needle = text(keyword).trim().toLowerCase();
+        var level = control.level;
+        var seen = {};
+        var hits = [];
+
+        function pushHit(region, hitLevel) {
+            if (!region) {
+                return;
+            }
+            var key = text(region.region_type) + ':' + text(region.region_id || region.region_code || labelOf(region));
+            if (seen[key]) {
+                return;
+            }
+            seen[key] = true;
+            hits.push({region: region, level: hitLevel});
+        }
+
+        optionsFor(group, level).forEach(function (region) {
+            if (regionMatchesKeyword(region, needle)) {
+                pushHit(region, level);
+            }
+        });
+
+        if (needle) {
+            deeperSearchLevels(level).forEach(function (deeperLevel) {
+                optionsFor(group, deeperLevel).forEach(function (region) {
+                    if (regionMatchesKeyword(region, needle)) {
+                        pushHit(region, deeperLevel);
+                    }
+                });
+            });
+        }
+
+        return hits.slice(0, 50);
+    }
+
+    function pathLabelForHit(group, hit, controlLevel) {
+        if (hit.level === controlLevel) {
+            return labelOf(hit.region);
+        }
+        var chain = [];
+        var node = hit.region;
+        var guard = 0;
+        while (node && guard++ < 8) {
+            chain.unshift(node);
+            node = parentRegion(group, node);
+        }
+        var start = order.indexOf(controlLevel);
+        var names = chain.filter(function (region) {
+            return order.indexOf(text(region.region_type)) >= start;
+        }).map(labelOf);
+        return names.length ? names.join(' / ') : labelOf(hit.region);
+    }
+
+    function applySearchHit(group, control, hit) {
+        var chain = [];
+        var node = hit.region;
+        var guard = 0;
+        while (node && guard++ < 8) {
+            chain.unshift(node);
+            node = parentRegion(group, node);
+        }
+        chain.forEach(function (region) {
+            var type = text(region.region_type);
+            if (order.indexOf(type) < 0) {
+                return;
+            }
+            group.state[type] = region;
+            if (group.controls[type]) {
+                group.controls[type].field.value = labelOf(region);
+            }
+        });
+        clearAfter(group, hit.level);
+        updateGroup(group);
+        closeMenus(group);
+        var emitControl = group.controls[hit.level] || control;
+        emitControl.field.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+
     function renderMenu(group, control, keyword) {
         var labels = group.labels || defaultLabels;
         var needle = text(keyword).trim().toLowerCase();
-        var items = optionsFor(group, control.level).filter(function (region) {
-            return !needle ||
-                labelOf(region).toLowerCase().indexOf(needle) > -1 ||
-                text(region.region_default_name).toLowerCase().indexOf(needle) > -1 ||
-                text(region.region_code).toLowerCase().indexOf(needle) > -1 ||
-                text(region.country_code).toLowerCase().indexOf(needle) > -1;
-        });
-        if (!items.length) {
+        var hits = searchHits(group, control, keyword);
+        if (!hits.length) {
             control.menu.innerHTML = '<div class="w-address__empty">' + escapeHtml(canUseManualInput(group, control) && needle ? labels.manual : labels.empty) + '</div>';
             return;
         }
-        control.menu.innerHTML = items.map(function (region, index) {
-            return '<button type="button" class="w-address__option" data-index="' + index + '">' + escapeHtml(labelOf(region)) + '</button>';
+        control.menu.innerHTML = hits.map(function (hit, index) {
+            return '<button type="button" class="w-address__option" data-index="' + index + '">' + escapeHtml(pathLabelForHit(group, hit, control.level)) + '</button>';
         }).join('');
         control.menu.querySelectorAll('.w-address__option').forEach(function (button) {
             button.addEventListener('click', function () {
-                var region = items[Number(button.dataset.index)];
-                control.field.value = labelOf(region);
-                group.state[control.level] = region;
-                clearAfter(group, control.level);
-                updateGroup(group);
-                closeMenus(group);
-                control.field.dispatchEvent(new Event('change', {bubbles: true}));
+                var hit = hits[Number(button.dataset.index)];
+                if (!hit) {
+                    return;
+                }
+                applySearchHit(group, control, hit);
             });
         });
     }
@@ -726,8 +920,108 @@
         });
         updateGroup(group);
         loadRegions(group.sourceUrl).then(function (regions) {
-            group.regions = regions;
+            group.regions = regions || [];
+            // 异步加载会覆盖本地合成国家；按已锁定国家重新注入。
+            ensureCountryInRegions(
+                group,
+                group.fixed.country || metadataValue(group, 'country_code'),
+                metadataValue(group, 'country')
+            );
             updateGroup(group);
+        });
+    }
+
+    function applyValues(codeOrRoot, values) {
+        values = values || {};
+        var group = null;
+        if (typeof codeOrRoot === 'string') {
+            group = groups[codeOrRoot];
+        } else if (codeOrRoot && codeOrRoot.dataset && codeOrRoot.dataset.addressCode) {
+            group = groups[codeOrRoot.dataset.addressCode];
+        } else if (codeOrRoot && codeOrRoot.getAttribute) {
+            var rootNode = codeOrRoot.closest ? codeOrRoot.closest('[data-w-address]') : null;
+            if (rootNode && rootNode.dataset.addressCode) {
+                group = groups[rootNode.dataset.addressCode];
+            }
+        }
+        if (!group) {
+            boot();
+            if (typeof codeOrRoot === 'string') {
+                group = groups[codeOrRoot];
+            }
+        }
+        if (!group) {
+            return Promise.resolve(false);
+        }
+
+        var root = null;
+        Object.keys(group.controls).some(function (level) {
+            root = group.controls[level].root;
+            return !!root;
+        });
+        var form = root ? root.closest('form') : null;
+        var countryCode = text(values.country_code || values.countryCode || '').toUpperCase();
+        var countryName = text(values.country || '').trim();
+        var hasLowerValues = !!(text(values.province || values.region || '').trim()
+            || text(values.city || '').trim()
+            || text(values.district || '').trim());
+        if (countryCode && root) {
+            findOrCreateField(root, form, 'country_code').value = countryCode;
+            // 无国家控件时（宿主顶部已选国家），锁定国家并写入隐藏字段供提交。
+            group.fixed.country = countryCode;
+            findOrCreateField(root, form, 'country').value = countryName || countryCode;
+            // 地区库可能没有该国节点（如澳门/香港），预先放入合成国家，避免 refreshState 回落 CN。
+            ensureCountryInRegions(group, countryCode, countryName || countryCode);
+        }
+
+        function setLevel(level, value) {
+            value = text(value).trim();
+            if (!group.controls[level] || !group.controls[level].field) {
+                return;
+            }
+            // 允许显式传空字符串以清空下级；无值则跳过（保留原值）。
+            if (!value && values[level] === undefined && !(level === 'province' && values.region !== undefined)) {
+                return;
+            }
+            group.controls[level].field.value = value;
+        }
+
+        setLevel('country', countryName || countryCode);
+        if (countryCode && !hasLowerValues) {
+            ['province', 'city', 'district'].forEach(function (level) {
+                if (group.controls[level] && group.controls[level].field) {
+                    group.controls[level].field.value = '';
+                }
+            });
+        }
+        setLevel('province', values.province || values.region);
+        setLevel('city', values.city);
+        setLevel('district', values.district);
+
+        function finish() {
+            refreshState(group);
+            // 无省市区数据时保持可手填；占位符在 updateGroup 中按 fixed.country 更新。
+            syncMetadata(group);
+            updateGroup(group);
+            return true;
+        }
+
+        // 切国家时带 country_code 重新拉列表，触发服务端 ensure 入库后再渲染级联。
+        if (countryCode) {
+            return loadRegions(group.sourceUrl, countryCode).then(function (regions) {
+                group.regions = regions || [];
+                ensureCountryInRegions(group, countryCode, countryName || countryCode);
+                return finish();
+            });
+        }
+
+        if (group.regions && group.regions.length) {
+            return Promise.resolve(finish());
+        }
+
+        return loadRegions(group.sourceUrl).then(function (regions) {
+            group.regions = regions || [];
+            return finish();
         });
     }
 
@@ -735,7 +1029,7 @@
         document.querySelectorAll('[data-w-address]').forEach(mount);
     }
 
-    window.WelineThemeAddress = {boot: boot, groups: groups};
+    window.WelineThemeAddress = {boot: boot, groups: groups, applyValues: applyValues};
     window.WelineThemeAddressModule = window.WelineThemeAddress;
     if (window.Weline && window.Weline.Theme) {
         window.Weline.Theme.Address = window.WelineThemeAddress;

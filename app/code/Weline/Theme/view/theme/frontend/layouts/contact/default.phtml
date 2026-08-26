@@ -37,8 +37,8 @@ $mailHref = 'mailto:' . $contactEmail;
         body.contact-layout {
             margin: 0;
             min-height: 100vh;
-            color: var(--weline-layout-text-primary, #172033);
-            background: var(--weline-layout-surface-primary, #ffffff);
+            color: var(--weline-layout-text-primary);
+            background: var(--weline-layout-surface-primary);
         }
 
         .contact-layout__page {
@@ -47,8 +47,8 @@ $mailHref = 'mailto:' . $contactEmail;
         }
 
         .contact-layout__breadcrumb {
-            border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-subtle, #e4e8f0);
-            background: var(--weline-layout-surface-secondary, #f8fafc);
+            border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            background: var(--weline-layout-surface-secondary);
         }
 
         .contact-layout__main {
@@ -56,21 +56,21 @@ $mailHref = 'mailto:' . $contactEmail;
         }
 
         .contact-layout__inner {
-            width: min(var(--weline-layout-content-max-width, 1120px), calc(100% - (var(--weline-layout-content-padding-inline, 20px) * 2)));
+            width: min(var(--weline-layout-content-max-width), calc(100% - (var(--weline-layout-content-padding-inline) * 2)));
             margin: 0 auto;
-            padding: var(--weline-layout-spacing-2xl, 48px) 0 var(--weline-layout-spacing-3xl, 64px);
+            padding: var(--weline-layout-spacing-2xl) 0 var(--weline-layout-spacing-3xl);
         }
 
         .contact-layout__hero-grid,
         .contact-layout__body-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.25fr) minmax(var(--sidebar-width, 280px), .75fr);
-            gap: var(--weline-layout-spacing-lg, 24px);
+            grid-template-columns: minmax(0, 1.25fr) minmax(var(--sidebar-width), .75fr);
+            gap: var(--weline-layout-spacing-lg);
             align-items: stretch;
         }
 
         .contact-layout__body-grid {
-            margin-top: var(--weline-layout-spacing-lg, 24px);
+            margin-top: var(--weline-layout-spacing-lg);
             align-items: start;
         }
 
@@ -78,26 +78,26 @@ $mailHref = 'mailto:' . $contactEmail;
         .contact-layout__panel,
         .contact-layout__method,
         .contact-layout__faq-item {
-            border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-subtle, #e4e8f0);
-            border-radius: var(--weline-layout-radius-lg, 8px);
-            background: var(--weline-layout-surface-primary, #ffffff);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-lg);
+            background: var(--weline-layout-surface-primary);
         }
 
         .contact-layout__section {
-            padding: var(--weline-layout-spacing-xl, 32px);
+            padding: var(--weline-layout-spacing-xl);
         }
 
         .contact-layout__panel {
-            padding: var(--weline-layout-spacing-xl, 32px);
-            background: var(--weline-layout-surface-secondary, #f8fafc);
+            padding: var(--weline-layout-spacing-xl);
+            background: var(--weline-layout-surface-secondary);
         }
 
         .contact-layout__eyebrow {
             display: inline-flex;
-            margin: 0 0 var(--weline-layout-spacing-sm, 8px);
-            font-size: var(--weline-layout-font-size-sm, 14px);
-            font-weight: var(--weline-layout-font-weight-bold, 700);
-            color: var(--weline-layout-link-color, #0f766e);
+            margin: 0 0 var(--weline-layout-spacing-sm);
+            font-size: var(--weline-layout-font-size-sm);
+            font-weight: var(--weline-layout-font-weight-bold);
+            color: var(--weline-layout-link-color);
         }
 
         .contact-layout h1,
@@ -105,141 +105,141 @@ $mailHref = 'mailto:' . $contactEmail;
         .contact-layout h3 {
             margin: 0;
             letter-spacing: 0;
-            color: var(--weline-layout-text-primary, #172033);
+            color: var(--weline-layout-text-primary);
         }
 
         .contact-layout h1 {
-            font-size: clamp(var(--weline-layout-font-size-4xl, 32px), 5vw, 48px);
-            line-height: var(--weline-layout-line-height-tight, 1.15);
+            font-size: clamp(var(--weline-layout-font-size-4xl), 5vw, var(--size-control-xl));
+            line-height: var(--weline-layout-line-height-tight);
         }
 
         .contact-layout h2 {
-            font-size: var(--weline-layout-font-size-2xl, 24px);
-            line-height: var(--weline-layout-line-height-tight, 1.2);
+            font-size: var(--weline-layout-font-size-2xl);
+            line-height: var(--weline-layout-line-height-tight);
         }
 
         .contact-layout h3 {
-            font-size: var(--weline-layout-font-size-lg, 18px);
-            line-height: var(--weline-layout-line-height-tight, 1.25);
+            font-size: var(--weline-layout-font-size-lg);
+            line-height: var(--weline-layout-line-height-tight);
         }
 
         .contact-layout p {
             margin: 0;
-            color: var(--weline-layout-text-secondary, #687286);
-            line-height: var(--weline-layout-line-height-relaxed, 1.7);
+            color: var(--weline-layout-text-secondary);
+            line-height: var(--weline-layout-line-height-relaxed);
         }
 
         .contact-layout__lead {
-            max-width: calc(var(--weline-layout-content-max-width, 1120px) / 2);
-            margin-top: var(--weline-layout-spacing-md, 16px);
-            font-size: var(--weline-layout-font-size-lg, 18px);
+            max-width: calc(var(--weline-layout-content-max-width) / 2);
+            margin-top: var(--weline-layout-spacing-md);
+            font-size: var(--weline-layout-font-size-lg);
         }
 
         .contact-layout__actions {
             display: flex;
             flex-wrap: wrap;
-            gap: var(--weline-layout-spacing-sm, 12px);
-            margin-top: var(--weline-layout-spacing-xl, 28px);
+            gap: var(--weline-layout-spacing-sm);
+            margin-top: var(--weline-layout-spacing-xl);
         }
 
         .contact-layout__button {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 44px;
-            padding: 0 var(--weline-layout-spacing-md, 16px);
-            border-radius: var(--weline-layout-radius-md, 6px);
-            border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-strong, #cbd5e1);
+            min-height: var(--size-control-lg);
+            padding: 0 var(--weline-layout-spacing-md);
+            border-radius: var(--weline-layout-radius-md);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-strong);
             text-decoration: none;
-            font-weight: var(--weline-layout-font-weight-bold, 700);
-            color: var(--weline-layout-text-primary, #172033);
-            background: var(--weline-layout-surface-primary, #ffffff);
+            font-weight: var(--weline-layout-font-weight-bold);
+            color: var(--weline-layout-text-primary);
+            background: var(--weline-layout-surface-primary);
         }
 
         .contact-layout__button:hover {
             text-decoration: none;
-            border-color: var(--weline-layout-link-color, #0f766e);
+            border-color: var(--weline-layout-link-color);
         }
 
         .contact-layout__button--primary {
-            border-color: var(--weline-layout-link-color, #0f766e);
-            background: var(--weline-layout-link-color, #0f766e);
-            color: var(--weline-theme-on-primary, #ffffff);
+            border-color: var(--weline-layout-link-color);
+            background: var(--weline-layout-link-color);
+            color: var(--weline-theme-on-primary);
         }
 
         .contact-layout__method-list,
         .contact-layout__faq-list {
             display: grid;
-            gap: var(--weline-layout-spacing-sm, 14px);
+            gap: var(--weline-layout-spacing-sm);
         }
 
         .contact-layout__method {
-            padding: var(--weline-layout-spacing-lg, 20px);
+            padding: var(--weline-layout-spacing-lg);
         }
 
         .contact-layout__method p,
         .contact-layout__faq-item p {
-            margin-top: var(--weline-layout-spacing-xs, 8px);
+            margin-top: var(--weline-layout-spacing-xs);
         }
 
         .contact-layout__form {
             display: grid;
-            gap: var(--weline-layout-spacing-md, 16px);
+            gap: var(--weline-layout-spacing-md);
         }
 
         .contact-layout__field {
             display: grid;
-            gap: var(--weline-layout-spacing-xs, 7px);
+            gap: var(--weline-layout-spacing-xs);
         }
 
         .contact-layout__field label {
-            font-size: var(--weline-layout-font-size-sm, 14px);
-            font-weight: var(--weline-layout-font-weight-bold, 700);
-            color: var(--weline-layout-text-primary, #172033);
+            font-size: var(--weline-layout-font-size-sm);
+            font-weight: var(--weline-layout-font-weight-bold);
+            color: var(--weline-layout-text-primary);
         }
 
         .contact-layout__field input,
         .contact-layout__field textarea {
             width: 100%;
-            min-height: 44px;
-            border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-subtle, #d8dee9);
-            border-radius: var(--weline-layout-radius-md, 6px);
-            padding: var(--weline-layout-spacing-sm, 10px) var(--weline-layout-spacing-md, 12px);
-            color: var(--weline-layout-text-primary, #172033);
-            background: var(--weline-layout-surface-primary, #ffffff);
+            min-height: var(--size-control-lg);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-md);
+            padding: var(--weline-layout-spacing-sm) var(--weline-layout-spacing-md);
+            color: var(--weline-layout-text-primary);
+            background: var(--weline-layout-surface-primary);
             box-sizing: border-box;
         }
 
         .contact-layout__field textarea {
-            min-height: 132px;
+            min-height: var(--token-size-132px);
             resize: vertical;
         }
 
         .contact-layout__faq-item {
-            padding: var(--weline-layout-spacing-lg, 20px);
+            padding: var(--weline-layout-spacing-lg);
         }
 
         .contact-layout__side-stack {
             display: grid;
-            gap: var(--weline-layout-spacing-lg, 24px);
+            gap: var(--weline-layout-spacing-lg);
         }
 
         .contact-layout__note {
-            margin-top: var(--weline-layout-spacing-sm, 10px);
+            margin-top: var(--weline-layout-spacing-sm);
         }
 
         .contact-layout__stack-list {
-            margin-top: var(--weline-layout-spacing-md, 16px);
+            margin-top: var(--weline-layout-spacing-md);
         }
 
         .contact-layout__form--spaced {
-            margin-top: var(--weline-layout-spacing-lg, 24px);
+            margin-top: var(--weline-layout-spacing-lg);
         }
 
         @media (max-width: 860px) {
             .contact-layout__inner {
-                width: min(100% - (var(--weline-layout-content-padding-inline, 14px) * 2), var(--weline-layout-content-max-width, 1120px));
-                padding: var(--weline-layout-spacing-xl, 32px) 0 var(--weline-layout-spacing-2xl, 56px);
+                width: min(100% - (var(--weline-layout-content-padding-inline) * 2), var(--weline-layout-content-max-width));
+                padding: var(--weline-layout-spacing-xl) 0 var(--weline-layout-spacing-2xl);
             }
 
             .contact-layout__hero-grid,
@@ -249,7 +249,7 @@ $mailHref = 'mailto:' . $contactEmail;
 
             .contact-layout__section,
             .contact-layout__panel {
-                padding: var(--weline-layout-spacing-lg, 24px);
+                padding: var(--weline-layout-spacing-lg);
             }
         }
     </style>

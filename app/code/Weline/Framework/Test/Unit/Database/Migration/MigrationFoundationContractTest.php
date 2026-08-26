@@ -257,6 +257,127 @@ final class MigrationFoundationContractTest extends TestCase
         $svc->destroy('weline');
     }
 
+    public function testFullCloneStreamsDumpThroughTemporaryFile(): void
+    {
+        $root = \sys_get_temp_dir() . '/mig_clone_stream_' . \uniqid('', true);
+        $bin = $root . '/bin';
+        $registryDir = $root . '/registry';
+        $restoreMarker = $root . '/restore.marker';
+        self::assertTrue(\mkdir($bin, 0777, true));
+
+        $scripts = [
+            'createdb' => <<<'SH'
+#!/bin/sh
+exit 0
+SH,
+            'pg_dump' => <<<'SH'
+#!/bin/sh
+dump_file=''
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = '--file' ] && [ "$#" -gt 1 ]; then
+        shift
+        dump_file="$1"
+    fi
+    shift
+done
+if [ -z "$dump_file" ]; then
+    echo 'stream_file_required' >&2
+    exit 41
+fi
+printf 'streamed-dump' > "$dump_file"
+SH,
+            'psql' => <<<'SH'
+#!/bin/sh
+dump_file=''
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = '-f' ] && [ "$#" -gt 1 ]; then
+        shift
+        dump_file="$1"
+    fi
+    shift
+done
+if [ ! -f "$dump_file" ]; then
+    echo 'restore_file_missing' >&2
+    exit 42
+fi
+cp "$dump_file" "$MIG_TEST_RESTORE_MARKER"
+SH,
+            'dropdb' => <<<'SH'
+#!/bin/sh
+exit 0
+SH,
+        ];
+        foreach ($scripts as $name => $script) {
+            $path = $bin . '/' . $name;
+            self::assertNotFalse(\file_put_contents($path, $script));
+            self::assertTrue(\chmod($path, 0755));
+        }
+
+        $previousEnvPath = $_ENV['PATH'] ?? null;
+        $previousServerPath = $_SERVER['PATH'] ?? null;
+        $previousProcessPath = \getenv('PATH');
+        $previousMarker = $_ENV['MIG_TEST_RESTORE_MARKER'] ?? null;
+        $previousServerMarker = $_SERVER['MIG_TEST_RESTORE_MARKER'] ?? null;
+        $_ENV['PATH'] = $bin . ':' . (string)($previousEnvPath ?? \getenv('PATH'));
+        $_SERVER['PATH'] = $_ENV['PATH'];
+        \putenv('PATH=' . $_ENV['PATH']);
+        $_ENV['MIG_TEST_RESTORE_MARKER'] = $restoreMarker;
+        $_SERVER['MIG_TEST_RESTORE_MARKER'] = $restoreMarker;
+
+        $registry = new MigrationCloneRegistry($registryDir);
+        try {
+            $handle = (new MigrationCloneService($registry, new DatabaseFingerprintGuard()))->create(
+                [
+                    'type' => 'pgsql',
+                    'hostname' => '127.0.0.1',
+                    'hostport' => '5432',
+                    'database' => 'weline',
+                    'username' => 'weline',
+                ],
+                MigrationCloneService::MODE_FULL,
+                'streamtest',
+                'phpunit',
+            );
+
+            self::assertSame('streamed-dump', \file_get_contents($restoreMarker));
+            self::assertSame(MigrationCloneService::MODE_FULL, $handle->mode);
+        } finally {
+            if ($previousEnvPath === null) {
+                unset($_ENV['PATH']);
+            } else {
+                $_ENV['PATH'] = $previousEnvPath;
+            }
+            if ($previousServerPath === null) {
+                unset($_SERVER['PATH']);
+            } else {
+                $_SERVER['PATH'] = $previousServerPath;
+            }
+            $previousProcessPath === false
+                ? \putenv('PATH')
+                : \putenv('PATH=' . $previousProcessPath);
+            if ($previousMarker === null) {
+                unset($_ENV['MIG_TEST_RESTORE_MARKER']);
+            } else {
+                $_ENV['MIG_TEST_RESTORE_MARKER'] = $previousMarker;
+            }
+            if ($previousServerMarker === null) {
+                unset($_SERVER['MIG_TEST_RESTORE_MARKER']);
+            } else {
+                $_SERVER['MIG_TEST_RESTORE_MARKER'] = $previousServerMarker;
+            }
+            foreach (\glob($registryDir . '/*') ?: [] as $file) {
+                @\unlink($file);
+            }
+            foreach (\glob($bin . '/*') ?: [] as $file) {
+                @\unlink($file);
+            }
+            @\unlink($restoreMarker);
+            @\rmdir($registryDir);
+            @\rmdir($bin);
+            @\rmdir($root);
+        }
+    }
+
     public function testDestroyFailureIsReportedAndKeepsRegistryEntry(): void
     {
         $dir = \sys_get_temp_dir() . '/mig_clone_reg_' . \uniqid('', true);

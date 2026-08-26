@@ -3313,7 +3313,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         ));
 
         $homepageProof = \strpos($source, '$homepageProcessFpcReady =');
-        $failOpenAudit = \strpos($source, 'Worker READY admitted via homepage fail-open');
+        $failOpenAudit = \strpos($source, 'Worker READY admitted with homepage warmup not hot (fail-open)');
         $workerRejection = \strpos($source, "if (\$readyRejection !== '')", (int)$homepageProof);
 
         self::assertIsInt($homepageProof);

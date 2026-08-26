@@ -170,6 +170,10 @@
 "高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成","高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成"
 "WLS 通知：%{1}","WLS 通知：%{1}"
 "WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。","WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。"
+"WLS Fiber concurrency probe is disabled.","WLS Fiber 并发探针未启用（需 DEV、ENV_TEST 或环境变量 WLS_FIBER_CONCURRENCY_PROBE=1）。"
+"WLS fiber probe: parallel clients are required; sequential PHP curl does not simulate users.","需要多路并行客户端；PHP 单进程里顺序 curl 无法模拟多用户同时访问。"
+"WLS fiber probe: set env WLS_FIBER_CONCURRENCY_PROBE=1 when DEV is off.","生产或 DEV 关闭时，可设置环境变量 WLS_FIBER_CONCURRENCY_PROBE=1 以启用探针。"
+"Invalid cid parameter for fiber probe.","Fiber 探针参数 cid 无效（需 8～128 位字母数字、下划线或连字符）。"
 "SSL 证书管理","SSL 证书管理"
 "无效的证书 ID","无效的证书 ID"
 不支持的策略字段,不支持的策略字段
@@ -195,6 +199,11 @@
 %{1}：%{2},%{1}：%{2}
 续签失败,续签失败
 "续签完成：成功 %{1} 个，失败 %{2} 个","续签完成：成功 %{1} 个，失败 %{2} 个"
+"WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。","WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。"
+请输入后端主机,请输入后端主机
+"端口必须在 1-65535 范围内","端口必须在 1-65535 范围内"
+连接成功,连接成功
+"连接失败: %{1}","连接失败: %{1}"
 "Legacy WLS Plugin Marketplace Redirect","旧版 WLS 插件市场重定向"
 store,店铺
 "Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace.","将旧的 WLS 市场条目重定向到独立的 WLS Panel 市场。"
@@ -343,10 +352,6 @@ minus,减
 安全规则已提交，但外部同步通知仍待重试。,安全规则已提交，但外部同步通知仍待重试。
 安全规则已保存,安全规则已保存
 保存失败：%{1},保存失败：%{1}
-"WLS Fiber concurrency probe is disabled.","WLS Fiber 并发探针未启用（需 DEV、ENV_TEST 或环境变量 WLS_FIBER_CONCURRENCY_PROBE=1）。"
-"WLS fiber probe: parallel clients are required; sequential PHP curl does not simulate users.","需要多路并行客户端；PHP 单进程里顺序 curl 无法模拟多用户同时访问。"
-"WLS fiber probe: set env WLS_FIBER_CONCURRENCY_PROBE=1 when DEV is off.","生产或 DEV 关闭时，可设置环境变量 WLS_FIBER_CONCURRENCY_PROBE=1 以启用探针。"
-"Invalid cid parameter for fiber probe.","Fiber 探针参数 cid 无效（需 8～128 位字母数字、下划线或连字符）。"
 定时器间隔必须大于0,定时器间隔必须大于0
 "定时器需要 pcntl 扩展或事件循环支持","定时器需要 pcntl 扩展或事件循环支持"
 无效的监听地址：%{1},无效的监听地址：%{1}
@@ -373,6 +378,8 @@ minus,减
 "Weline Server 正在运行，Master PID：%{1}","Weline Server 正在运行，Master PID：%{1}"
 "Weline Server 已停止","Weline Server 已停止"
 "域名 %{1} 已被其他证书记录使用（cert_id=%{2}），不能重复保存。请通过证书管理合并或删除重复记录。","域名 %{1} 已被其他证书记录使用（cert_id=%{2}），不能重复保存。请通过证书管理合并或删除重复记录。"
+"ReverseProxy 新建记录时 domain 不能为空","ReverseProxy 新建记录时 domain 不能为空"
+"域名格式无效: %{1}","域名格式无效: %{1}"
 频率限制,频率限制
 路径扫描,路径扫描
 恶意特征,恶意特征
@@ -951,6 +958,44 @@ PHP,PHP
 "项目重启完成，Master 保持在线且工作进程已恢复到 Ready。","项目重启完成，Master 保持在线且工作进程已恢复到 Ready。"
 "操作已提交，但等待 Ready 超时；请继续查看实例状态。","操作已提交，但等待 Ready 超时；请继续查看实例状态。"
 输入的项目名称不匹配。,输入的项目名称不匹配。
+反向代理配置,反向代理配置
+"配置 WLS Gateway 的域名路由规则","配置 WLS Gateway 的域名路由规则"
+总规则数,总规则数
+禁用,禁用
+新建规则,新建规则
+应用配置,应用配置
+后端地址,后端地址
+优先级,优先级
+暂无代理规则,暂无代理规则
+测试,测试
+"确定要应用配置到 Gateway 吗？","确定要应用配置到 Gateway 吗？"
+确定要删除此规则吗？,确定要删除此规则吗？
+应用失败,应用失败
+请求失败,请求失败
+连接失败,连接失败
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+编辑代理规则,编辑代理规则
+新建代理规则,新建代理规则
+返回列表,返回列表
+"支持通配符，如 *.example.com","支持通配符，如 *.example.com"
+后端主机,后端主机
+后端端口,后端端口
+"后端使用 SSL","后端使用 SSL"
+数字越大优先级越高,数字越大优先级越高
+保存,保存
+测试连接,测试连接
+帮助信息,帮助信息
+域名格式,域名格式
+精确匹配,精确匹配
+通配符匹配,通配符匹配
+优先级规则,优先级规则
+"精确匹配 > 通配符匹配 > 默认后端","精确匹配 > 通配符匹配 > 默认后端"
+同类型匹配按优先级数字排序（降序）,同类型匹配按优先级数字排序（降序）
+后端配置,后端配置
+"后端主机通常为 127.0.0.1","后端主机通常为 127.0.0.1"
+后端端口为项目实际监听端口,后端端口为项目实际监听端口
+保存失败,保存失败
+请先填写后端主机和端口,请先填写后端主机和端口
 "运行中 Workers","运行中 工人"
 总连接数,总连接数
 总请求数,总请求数
@@ -1054,7 +1099,6 @@ Host,主持人
 保存规则,保存规则
 重载页面数据,重载页面数据
 规则数据解析失败，已回退默认值：%{1},规则数据解析失败，已回退默认值：%{1}
-保存失败,保存失败
 请求失败：%{1},请求失败：%{1}
 概述,概述
 "WLS (Weline Server) 提供了一系列内部 API 接口，用于健康检查、进程管理和调试。","WLS (Weline Server) 提供了一系列内部 API 接口，用于健康检查、进程管理和调试。"
@@ -1470,6 +1514,14 @@ Ready,准备好
 缓存命名空间失效变更超出容量限制。,缓存命名空间失效变更超出容量限制。
 "缓存命名空间失效帧超过 64 KiB。","缓存命名空间失效帧超过 64 KiB。"
 缓存命名空间代际应用器不可用。,缓存命名空间代际应用器不可用。
+"HTTP 协议边缘未启用。","HTTP 协议边缘未启用。"
+"WLS 原生 HTTP/2/HTTP/3 使用 Worker/Dispatcher 数据面，无需协议边缘二进制。","WLS 原生 HTTP/2/HTTP/3 使用 Worker/Dispatcher 数据面，无需协议边缘二进制。"
+"%{1} 已验证：%{2}","%{1} 已验证：%{2}"
+"HTTP/2/HTTP/3 需要 %{1}，但 --no-auto-deps 禁止自动安装。","HTTP/2/HTTP/3 需要 %{1}，但 --no-auto-deps 禁止自动安装。"
+"无法获取 HTTP 协议边缘依赖安装锁。","无法获取 HTTP 协议边缘依赖安装锁。"
+"其他 WLS 启动进程已安装并验证 HTTP 协议边缘。","其他 WLS 启动进程已安装并验证 HTTP 协议边缘。"
+"%{1} 自动安装后仍无法验证 HTTP/3/HTTP/2 能力；WLS 已在创建子进程前停止。","%{1} 自动安装后仍无法验证 HTTP/3/HTTP/2 能力；WLS 已在创建子进程前停止。"
+"%{1} 已自动安装并验证：%{2}","%{1} 已自动安装并验证：%{2}"
 "操作 ID 已用于其他负载。","操作 ID 已用于其他负载。"
 缓存命名空间失效操作已接收。,缓存命名空间失效操作已接收。
 待处理的缓存命名空间失效操作超出容量限制。,待处理的缓存命名空间失效操作超出容量限制。
@@ -1580,6 +1632,26 @@ Configured,已配置
 "%{1} entries","%{1} 条"
 Local,本地
 Path,路径
+"Runtime action skipped.",已跳过运行时动作。
+"Select a target WLS instance before applying runtime changes.","应用运行时变更前请选择目标 WLS 实例。"
+"WLS runtime reload requested.","已请求 WLS 运行时重载。"
+"Selected WLS instance %{1} was not found.","未找到选定的 WLS 实例 %{1}。"
+"WLS restart command was submitted but no valid PID was returned.","WLS 重启命令已提交，但未返回有效 PID。"
+"WLS restart command submitted for %{1}. Master PID: %{2}","已为 %{1} 提交 WLS 重启命令。Master PID：%{2}"
+Unknown,未知
+Direct,直接的
+Dispatcher,调度员
+Auto,汽车
+"所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。","所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。"
+"仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。","仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。"
+"所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。","所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。"
+"Direct listener supported",支持直接监听
+"Direct listener unavailable",直接侦听器不可用
+"This runtime supports the native direct listener selected by WLS.","此运行时支持 WLS 选择的本机直接侦听器。"
+"Direct listener dependencies are not ready; server:start will run the authoritative dependency bootstrap and capability probe.","直接侦听器依赖项尚未准备好； server:start 将运行权威依赖引导程序和功能探测。"
+"Direct listener capability unknown",直接监听器能力未知
+"Gateway listen port must be between 1 and 65535.","网关监听端口必须在 1 到 65535 之间。"
+"Gateway listen host is invalid.",网关监听主机无效。
 请求处理错误：%{1},请求处理错误：%{1}
 "Managed project does not exist.",托管项目不存在。
 "Managed project saved.",托管项目已保存。
@@ -1704,6 +1776,28 @@ WLS错误扫描,WLS错误扫描
 证书自动续签任务失败：%{1},证书自动续签任务失败：%{1}
 "SSL 证书即将过期","SSL 证书即将过期"
 "域名 %{1} 的 SSL 证书将在 %{2} 天后过期（%{3}），请关注续签或手动续签。","域名 %{1} 的 SSL 证书将在 %{2} 天后过期（%{3}），请关注续签或手动续签。"
+"Linux/Mac SO_REUSEPORT 直连模式","Linux/Mac SO_REUSEPORT 直连模式"
+"使用 %{1} 启动服务器","使用 %{1} 启动服务器"
+"启动 Worker 失败","启动 Worker 失败"
+"Worker 脚本不存在: %{1}","Worker 脚本不存在: %{1}"
+"Worker #%{1} (%{2} 端口: %{3}) - 启动成功 (PID: %{4})","Worker #%{1} (%{2} 端口: %{3}) - 启动成功 (PID: %{4})"
+"Worker #%{1} (端口: %{2}) - 启动失败","Worker #%{1} (端口: %{2}) - 启动失败"
+"HTTP 重定向 Worker (端口: %{1}) - 启动成功","HTTP 重定向 Worker (端口: %{1}) - 启动成功"
+"Master 进程启动成功 (PID: %{1})","Master 进程启动成功 (PID: %{1})"
+"停止实例: %{1}","停止实例: %{1}"
+"实例不存在: %{1}","实例不存在: %{1}"
+"Master 进程已停止","Master 进程已停止"
+"Worker 进程已停止 (%{1} 个)","Worker 进程已停止 (%{1} 个)"
+"HTTP 重定向 Worker 已停止","HTTP 重定向 Worker 已停止"
+"Worker 直接监听端口（SO_REUSEPORT），内核自动负载均衡，无需 Dispatcher 中间层","Worker 直接监听端口（SO_REUSEPORT），内核自动负载均衡，无需 Dispatcher 中间层"
+"Windows Dispatcher TCP 透传模式","Windows Dispatcher TCP 透传模式"
+"Dispatcher 启动失败","Dispatcher 启动失败"
+"Dispatcher 脚本不存在: %{1}","Dispatcher 脚本不存在: %{1}"
+"Dispatcher (端口: %{1}) - 启动成功 (PID: %{2})","Dispatcher (端口: %{1}) - 启动成功 (PID: %{2})"
+"Dispatcher 进程已停止","Dispatcher 进程已停止"
+"Dispatcher 监听主端口做 TCP 透传，Worker 各自处理 SSL，多核并行","Dispatcher 监听主端口做 TCP 透传，Worker 各自处理 SSL，多核并行"
+没有可用的服务器启动策略,没有可用的服务器启动策略
+无可用策略,无可用策略
 "请指定域名：--domain example.com","请指定域名：--domain example.com"
 "正在为 %{1} 申请 SSL 证书...","正在为 %{1} 申请 SSL 证书..."
 联系邮箱：%{1},联系邮箱：%{1}
@@ -1748,7 +1842,6 @@ Webroot：%{1},网站根目录：%{1}
 "→ %{1} - 申请证书...","→ %{1} - 申请证书..."
 "✓ 成功","✓ 成功"
 "✗ 失败：%{1}","✗ 失败：%{1}"
-禁用,禁用
 "正在 %{1} %{2} 的 HTTPS...","正在 %{1} %{2} 的 HTTPS..."
 "✓ %{1}","✓ %{1}"
 重要：请重启服务器使配置生效,重要：请重启服务器使配置生效
@@ -2035,6 +2128,50 @@ pending,等待中
 "连接实例控制端口并发送 status，输出耗时与占用 PID","连接实例控制端口并发送 status，输出耗时与占用 PID"
 "实例名（默认 default）","实例名（默认 default）"
 探测默认实例,探测默认实例
+"Weline Server 多进程模式","Weline Server 多进程模式"
+基础端口：%{1},基础端口：%{1}
+进程数量：%{1},进程数量：%{1}
+平台：%{1},平台：%{1}
+检查端口...,检查端口...
+"端口 %{1} 已被占用，尝试释放...","端口 %{1} 已被占用，尝试释放..."
+"无法释放端口 %{1}","无法释放端口 %{1}"
+端口检查通过,端口检查通过
+"启动 Worker 进程...","启动 Worker 进程..."
+"Worker #%{1} 启动成功（端口: %{2}）%{3}","Worker #%{1} 启动成功（端口: %{2}）%{3}"
+"Worker #%{1} 启动失败：%{2}","Worker #%{1} 启动失败：%{2}"
+验证进程状态...,验证进程状态...
+"Worker #%{1} (:%{2}) - 运行中","Worker #%{1} (:%{2}) - 运行中"
+"Worker #%{1} (:%{2}) - 未响应","Worker #%{1} (:%{2}) - 未响应"
+启动结果,启动结果
+"成功启动：%{1}/%{2} 个进程","成功启动：%{1}/%{2} 个进程"
+启动方式：%{1},启动方式：%{1}
+测试命令：,测试命令：
+压测命令：,压测命令：
+停止命令：,停止命令：
+进程控制函数状态：,进程控制函数状态：
+"⚠️ 性能优化建议","⚠️ 性能优化建议"
+当前使用备用方案（%{1}）启动进程，性能可能受限。,当前使用备用方案（%{1}）启动进程，性能可能受限。
+"建议在 php.ini 中启用以下函数以获得最佳性能：","建议在 php.ini 中启用以下函数以获得最佳性能："
+修改方法：,修改方法：
+"1. 找到 php.ini 文件：%{1}","1. 找到 php.ini 文件：%{1}"
+"2. 找到 disable_functions 配置项","2. 找到 disable_functions 配置项"
+"3. 移除以上函数名，保存并重启服务","3. 移除以上函数名，保存并重启服务"
+启用后，服务器性能将有质的飞跃！🚀,启用后，服务器性能将有质的飞跃！🚀
+"进程控制核心函数，支持双向通信和精确的 PID 管理","进程控制核心函数，支持双向通信和精确的 PID 管理"
+进程资源释放，防止僵尸进程,进程资源释放，防止僵尸进程
+实时获取进程状态，支持进程监控,实时获取进程状态，支持进程监控
+真正的进程分叉，共享内存，性能最优,真正的进程分叉，共享内存，性能最优
+创建守护进程，脱离终端控制,创建守护进程，脱离终端控制
+轻量级进程通信,轻量级进程通信
+进程管理辅助函数,进程管理辅助函数
+没有可用的进程创建函数,没有可用的进程创建函数
+"多进程模式启动 Weline Server","多进程模式启动 Weline Server"
+启动多个独立进程以提高并发性能,启动多个独立进程以提高并发性能
+监听地址（默认：127.0.0.1）,监听地址（默认：127.0.0.1）
+基础端口（默认：8080）,基础端口（默认：8080）
+进程数量（默认：4）,进程数量（默认：4）
+"启动 4 个进程","启动 4 个进程"
+"启动 8 个进程","启动 8 个进程"
 "Session Server stopped",会话服务器已停止
 "Session Server stop was not confirmed; runtime identity was retained for retry/repair.",未确认会话服务器停止；保留运行时身份以进行重试/修复。
 "Memory Service stopped",内存服务已停止
@@ -2582,6 +2719,14 @@ Previous：%{1},上一篇：%{1}
 "--accept-storage 的协议字段兼容别名","--accept-storage 的协议字段兼容别名"
 "确认丢弃不可信 journal 链并从当前受信状态重新建立","确认丢弃不可信 journal 链并从当前受信状态重新建立"
 "清除当前运行时的 H3 隔离并执行一次显式重新探测","清除当前运行时的 H3 隔离并执行一次显式重新探测"
+"停止 Weline Server 多进程","停止 Weline Server 多进程"
+"Worker #%{1} (PID: %{2}, 端口: %{3}) 已停止","Worker #%{1} (PID: %{2}, 端口: %{3}) 已停止"
+"Worker #%{1} (端口: %{2}) 已停止","Worker #%{1} (端口: %{2}) 已停止"
+"Worker #%{1} (端口: %{2}) 未运行","Worker #%{1} (端口: %{2}) 未运行"
+"已停止 %{1}/%{2} 个进程","已停止 %{1}/%{2} 个进程"
+"停止多进程 Weline Server","停止多进程 Weline Server"
+"停止多个 Worker 进程","停止多个 Worker 进程"
+"停止 4 个进程","停止 4 个进程"
 "实例 [%{1}] 正在执行启动、停止或其他生命周期操作，已拒绝并发重载。","实例 [%{1}] 正在执行启动、停止或其他生命周期操作，已拒绝并发重载。"
 "实例 [%{1}] 自动匹配到 [%{2}]","实例 [%{1}] 自动匹配到 [%{2}]"
 "实例 [%{1}] 未检测到运行中的 WLS Worker","实例 [%{1}] 未检测到运行中的 WLS Worker"
@@ -2636,6 +2781,8 @@ Previous：%{1},上一篇：%{1}
 滚动重载（默认等待）,滚动重载（默认等待）
 不等待,不等待
 强制重载,强制重载
+"WLS Gateway - 多项目统一入口","WLS Gateway - 多项目统一入口"
+"自动发现 %{1} 个项目实例","自动发现 %{1} 个项目实例"
 "没有已登记的退役 PHP 内置服务器。","没有已登记的退役 PHP 内置服务器。"
 "无法持久化清理后的退役 PHP 服务器记录。","无法持久化清理后的退役 PHP 服务器记录。"
 "已清理无效的退役 PHP 内置服务器运行时记录。","已清理无效的退役 PHP 内置服务器运行时记录。"
@@ -2654,13 +2801,8 @@ Previous：%{1},上一篇：%{1}
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
 "Session Server %{1}","会话服务器 %{1}"
 "Memory Service %{1}","内存服务 %{1}"
-请输入后端主机,请输入后端主机
-"端口必须在 1-65535 范围内","端口必须在 1-65535 范围内"
-连接成功,连接成功
-"连接失败: %{1}","连接失败: %{1}"
 "应用 WLS 网关路由","应用 WLS 网关路由"
 "保存 WLS 网关配置","保存 WLS 网关配置"
-"域名格式无效: %{1}","域名格式无效: %{1}"
 "Gateway backend host is required.",网关后端主机不能为空。
 "Gateway backend port must be between 1 and 65535.","网关后端端口必须在 1 到 65535 之间。"
 自动,自动
@@ -2670,66 +2812,8 @@ Previous：%{1},上一篇：%{1}
 直连监听,直连监听
 派遣器监听,派遣器监听
 运行时监听,运行时监听
-"配置 WLS Gateway 的域名路由规则","配置 WLS Gateway 的域名路由规则"
-总规则数,总规则数
-新建规则,新建规则
-应用配置,应用配置
-后端地址,后端地址
-优先级,优先级
-暂无代理规则,暂无代理规则
-测试,测试
-"确定要应用配置到 Gateway 吗？","确定要应用配置到 Gateway 吗？"
-确定要删除此规则吗？,确定要删除此规则吗？
-应用失败,应用失败
-请求失败,请求失败
-连接失败,连接失败
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
-编辑代理规则,编辑代理规则
-新建代理规则,新建代理规则
-返回列表,返回列表
-"支持通配符，如 *.example.com","支持通配符，如 *.example.com"
-后端主机,后端主机
-后端端口,后端端口
-"后端使用 SSL","后端使用 SSL"
-数字越大优先级越高,数字越大优先级越高
-保存,保存
-测试连接,测试连接
-帮助信息,帮助信息
-域名格式,域名格式
-精确匹配,精确匹配
-通配符匹配,通配符匹配
-优先级规则,优先级规则
-"精确匹配 > 通配符匹配 > 默认后端","精确匹配 > 通配符匹配 > 默认后端"
-同类型匹配按优先级数字排序（降序）,同类型匹配按优先级数字排序（降序）
-后端配置,后端配置
-"后端主机通常为 127.0.0.1","后端主机通常为 127.0.0.1"
-后端端口为项目实际监听端口,后端端口为项目实际监听端口
-请先填写后端主机和端口,请先填写后端主机和端口
-"Runtime action skipped.",已跳过运行时动作。
-"Select a target WLS instance before applying runtime changes.","应用运行时变更前请选择目标 WLS 实例。"
-"WLS runtime reload requested.","已请求 WLS 运行时重载。"
-"Selected WLS instance %{1} was not found.","未找到选定的 WLS 实例 %{1}。"
-"WLS restart command was submitted but no valid PID was returned.","WLS 重启命令已提交，但未返回有效 PID。"
-"WLS restart command submitted for %{1}. Master PID: %{2}","已为 %{1} 提交 WLS 重启命令。Master PID：%{2}"
-Unknown,未知
-Direct,直接的
-Dispatcher,调度员
-Auto,汽车
-"所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。","所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。"
-"仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。","仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。"
-"所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。","所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。"
-"Direct listener supported",支持直接监听
-"Direct listener unavailable",直接侦听器不可用
-"This runtime supports the native direct listener selected by WLS.","此运行时支持 WLS 选择的本机直接侦听器。"
-"Direct listener dependencies are not ready; server:start will run the authoritative dependency bootstrap and capability probe.","直接侦听器依赖项尚未准备好； server:start 将运行权威依赖引导程序和功能探测。"
-"Direct listener capability unknown",直接监听器能力未知
-"Gateway listen port must be between 1 and 65535.","网关监听端口必须在 1 到 65535 之间。"
-"Gateway listen host is invalid.",网关监听主机无效。
 "Gateway rule is disabled for this project.",该项目的网关规则已停用。
 "Gateway rule saved.",网关规则已保存。
-"WLS Gateway - 多项目统一入口","WLS Gateway - 多项目统一入口"
-"自动发现 %{1} 个项目实例","自动发现 %{1} 个项目实例"
-"%{1} 已验证：%{2}","%{1} 已验证：%{2}"
 "时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。","时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。"
 证书已写入撤销事实，但证书生成选择器尚未停用：%{1},证书已写入撤销事实，但证书生成选择器尚未停用：%{1}
 证书已写入撤销事实，但服务清单尚未完成确认：%{1},证书已写入撤销事实，但服务清单尚未完成确认：%{1}
@@ -3121,12 +3205,10 @@ HTTP/3,HTTP/3
 "已按前缀清理 %{1} 个逃逸 Master 进程","已按前缀清理 %{1} 个逃逸 Master 进程"
 "无法释放 %{1} 端口 %{2}","无法释放 %{1} 端口 %{2}"
 "检查 Worker 端口可用性...","检查 Worker 端口可用性..."
-端口检查通过,端口检查通过
 "端口 %{1} 已被占用","端口 %{1} 已被占用"
 "端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...","端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳..."
 "端口 %{1} 被非框架进程占用，不予杀死","端口 %{1} 被非框架进程占用，不予杀死"
 "端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程...","端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程..."
-"无法释放端口 %{1}","无法释放端口 %{1}"
 "WLS 进程（实例 %{1}）","WLS 进程（实例 %{1}）"
 "PID %{1}","PID %{1}"
 未知进程,未知进程

@@ -14,16 +14,175 @@
     let activeDropSlot = null;
     let activeDropCandidate = null;
 
+    function normalizeInteractionMode(mode) {
+        return mode === 'preview' ? 'preview' : 'edit';
+    }
+
+    function normalizeSelectionTarget(mode) {
+        const value = String(mode || '').trim().toLowerCase();
+        if (value === 'slot' || value === 'widget') {
+            return value;
+        }
+        return 'default';
+    }
+
+    function normalizeLinkBlockEnabled(value) {
+        if (value === true || value === 1 || value === '1' || value === 'true' || value === 'on') {
+            return true;
+        }
+        return false;
+    }
+
+    function readBootInteractionMode() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('interaction_mode')) {
+                return normalizeInteractionMode(params.get('interaction_mode'));
+            }
+        } catch (error) {
+            // Ignore malformed URL search params.
+        }
+        return 'edit';
+    }
+
+    function readBootSelectionTarget() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('selection_target')) {
+                return normalizeSelectionTarget(params.get('selection_target'));
+            }
+        } catch (error) {
+            // Ignore malformed URL search params.
+        }
+        return 'default';
+    }
+
+    function readBootLinkBlockEnabled() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('link_block')) {
+                return normalizeLinkBlockEnabled(params.get('link_block'));
+            }
+        } catch (error) {
+            // Ignore malformed URL search params.
+        }
+        return false;
+    }
+
+    const bootInteractionMode = readBootInteractionMode();
+    const bootSelectionTarget = readBootSelectionTarget();
+    const bootLinkBlockEnabled = readBootLinkBlockEnabled();
+
     document.documentElement.dataset.wEditorPreview = 'true';
     document.documentElement.dataset.wEditorPreviewEngine = 'full';
-    document.documentElement.dataset.wEditorInteraction = 'edit';
+    document.documentElement.dataset.wEditorInteraction = bootInteractionMode;
+    document.documentElement.dataset.wEditorSelectionTarget = bootSelectionTarget;
+    document.documentElement.dataset.wEditorLinkBlock = bootLinkBlockEnabled ? '1' : '0';
 
-    // 启用编辑模式
-    document.body.classList.add('editor-mode');
-    let interactionMode = 'edit';
+    // 启用编辑模式（真预览时不挂 editor-mode，避免闪出插槽标记）
+    if (bootInteractionMode === 'edit') {
+        document.body.classList.add('editor-mode');
+    }
+    let interactionMode = bootInteractionMode;
+    let selectionTarget = bootSelectionTarget;
+    let linkBlockEnabled = bootLinkBlockEnabled;
 
     function isEditInteractionMode() {
         return interactionMode !== 'preview';
+    }
+
+    function isSlotSelectionTarget() {
+        return selectionTarget === 'slot';
+    }
+
+    function isWidgetSelectionTarget() {
+        return selectionTarget === 'widget';
+    }
+
+    function isLinkBlockEnabled() {
+        return linkBlockEnabled === true;
+    }
+
+    function preferredSlotHoverIndex(chain) {
+        if (!chain.length) {
+            return 0;
+        }
+        // 默认最内层（指针下真实容器）；外层大槽用穿透按钮 pin 上移，避免 header 吞掉子槽工具条。
+        return deepestSlotHoverIndex(chain);
+    }
+
+    function clearEmptySlotPlaceholders() {
+        document.querySelectorAll('[data-wslot].slot-mode-hit-area').forEach(function(slot) {
+            slot.classList.remove('slot-mode-hit-area');
+            if (slot.dataset.wSlotModeMinHeightApplied === '1') {
+                slot.style.minHeight = '';
+                delete slot.dataset.wSlotModeMinHeightApplied;
+            }
+        });
+    }
+
+    function refreshEmptySlotPlaceholders() {
+        clearEmptySlotPlaceholders();
+        if (!isEditInteractionMode() || !isSlotSelectionTarget()) {
+            return;
+        }
+        document.querySelectorAll('[data-wslot]').forEach(function(slot) {
+            slot.classList.add('slot-mode-hit-area');
+            const rect = slot.getBoundingClientRect();
+            const widgets = typeof getSlotWidgetElements === 'function'
+                ? getSlotWidgetElements(slot)
+                : [];
+            const collapsed = rect.height < 32 || rect.width < 32 || widgets.length === 0;
+            if (collapsed && (!slot.style.minHeight || parseFloat(slot.style.minHeight) < 48)) {
+                slot.style.minHeight = '48px';
+                slot.dataset.wSlotModeMinHeightApplied = '1';
+            }
+        });
+    }
+
+    function applySelectionTarget(mode) {
+        selectionTarget = normalizeSelectionTarget(mode);
+        document.documentElement.dataset.wEditorSelectionTarget = selectionTarget;
+        if (selectionTarget === 'widget') {
+            clearSlotHoverClearTimer();
+            resetSlotHoverState();
+            document.querySelectorAll('.slot-info-card, .slot-select-tree').forEach(function(el) {
+                el.remove();
+            });
+        }
+        if (selectionTarget === 'slot') {
+            document.querySelectorAll('.widget-wrapper.show-actions, .widget-wrapper.selected').forEach(function(el) {
+                el.classList.remove('show-actions', 'selected');
+            });
+        }
+        refreshEmptySlotPlaceholders();
+    }
+
+    function bindNolinkClickGuard() {
+        if (document.body._nolinkClickGuardBound) {
+            return;
+        }
+        document.body._nolinkClickGuardBound = true;
+        // 捕获阶段拦截，避免父页链接桥接把点击转成预览跳转。
+        document.addEventListener('click', function(e) {
+            if (!isEditInteractionMode() || !isLinkBlockEnabled()) {
+                return;
+            }
+            const link = e.target.closest && e.target.closest('a[href]');
+            if (!link) {
+                return;
+            }
+            if (link.closest('.slot-toolbar, .widget-hover-actions, [data-editor-interactive]')) {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+        }, true);
+    }
+
+    function applyLinkBlock(enabled) {
+        linkBlockEnabled = normalizeLinkBlockEnabled(enabled);
+        document.documentElement.dataset.wEditorLinkBlock = linkBlockEnabled ? '1' : '0';
     }
 
     function applyInteractionMode(mode) {
@@ -37,22 +196,287 @@
                     el.removeAttribute('data-state');
                 }
             });
-            document.querySelectorAll('.slot-info-card').forEach(function(el) {
+            document.querySelectorAll('.slot-info-card, .slot-select-tree').forEach(function(el) {
                 el.remove();
+            });
+            document.querySelectorAll('[data-wslot]').forEach(function(slot) {
+                slot._infoCardOpen = false;
+                slot._selectTreeOpen = false;
             });
             document.querySelectorAll('.widget-wrapper.show-actions, .widget-wrapper.selected').forEach(function(el) {
                 el.classList.remove('show-actions', 'selected');
             });
+            clearSlotHoverClearTimer();
+            resetSlotHoverState();
+            clearEmptySlotPlaceholders();
             clearIframeDropFeedback(null, false);
             activeDragWidget = null;
             activeDragSessionId = '';
             activeDropCandidate = null;
+        } else {
+            refreshEmptySlotPlaceholders();
         }
     }
 
     // 选择按钮的 SVG 图标
     const SELECT_ICON = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
     const INFO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
+    const INIT_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
+    const SLOT_PENETRATE_UP_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 10.828 7.05 15.778 5.636 14.364 12 8l6.364 6.364L16.95 15.778 12 10.828z"/></svg>';
+    const SLOT_PENETRATE_DOWN_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 13.172l4.95-4.95 1.414 1.414L12 16l-6.364-6.364L7.05 10.222 12 13.172z"/></svg>';
+
+    let slotHoverChain = [];
+    let slotHoverIndex = 0;
+    let slotHoverPinned = false;
+    let slotHoverClearTimer = 0;
+    let slotHoverPendingKey = '';
+    const SLOT_HOVER_STICKY_MS = 180;
+    const SLOT_HOVER_CHROME_SELECTOR = '.widget-hover-actions, .slot-toolbar, .slot-select-tree, .slot-info-card';
+
+    function getSlotChainFromElement(el) {
+        const chain = [];
+        let node = el;
+        while (node && node.nodeType === 1 && node !== document.body) {
+            if (node.hasAttribute && node.hasAttribute('data-wslot')) {
+                chain.unshift(node);
+            }
+            node = node.parentElement;
+        }
+        return chain;
+    }
+
+    /** 指针下默认命中最内层插槽（用户正在指向的容器）。 */
+    function deepestSlotHoverIndex(chain) {
+        return Math.max(0, chain.length - 1);
+    }
+
+    function clearSlotHoverClearTimer() {
+        if (slotHoverClearTimer) {
+            window.clearTimeout(slotHoverClearTimer);
+            slotHoverClearTimer = 0;
+        }
+        slotHoverPendingKey = '';
+    }
+
+    function clearSlotHoverTargets() {
+        document.querySelectorAll('[data-w-slot-hover-target="true"]').forEach(function(el) {
+            const toolbar = el.querySelector(':scope > .widget-hover-actions, :scope > .slot-toolbar');
+            if (toolbar) {
+                hideSlotToolbarChrome(toolbar);
+            }
+            el.removeAttribute('data-w-slot-hover-target');
+            el.classList.remove('slot-hover-target');
+        });
+        document.querySelectorAll('.slot-penetrate-btn').forEach(function(btn) {
+            btn.hidden = true;
+        });
+    }
+
+    function resetSlotHoverState() {
+        slotHoverChain = [];
+        slotHoverIndex = 0;
+        slotHoverPinned = false;
+        clearSlotHoverTargets();
+    }
+
+    function slotChainKey(chain) {
+        return chain.map(function(slot) {
+            return slot.dataset.wslot || '';
+        }).join('|');
+    }
+
+    function keepSlotHoverFromChrome(target) {
+        const chrome = target && target.closest ? target.closest(SLOT_HOVER_CHROME_SELECTOR) : null;
+        if (!chrome) {
+            return false;
+        }
+        clearSlotHoverClearTimer();
+        const owner = chrome.closest('[data-wslot]');
+        if (!owner) {
+            return true;
+        }
+        if (!slotHoverChain.length || slotHoverChain.indexOf(owner) < 0) {
+            slotHoverChain = getSlotChainFromElement(owner);
+        }
+        const ownerIdx = slotHoverChain.indexOf(owner);
+        slotHoverIndex = ownerIdx >= 0 ? ownerIdx : deepestSlotHoverIndex(slotHoverChain);
+        applySlotHoverTarget(slotHoverChain, slotHoverIndex);
+        return true;
+    }
+
+    function scheduleSlotHoverTransition(nextChain) {
+        const pending = nextChain.slice();
+        const pendingKey = slotChainKey(pending);
+        // 同一目标过渡中勿因持续 mousemove 反复重置计时，否则离开后工具条永不消失。
+        if (slotHoverClearTimer && slotHoverPendingKey === pendingKey) {
+            return;
+        }
+        clearSlotHoverClearTimer();
+        slotHoverPendingKey = pendingKey;
+        slotHoverClearTimer = window.setTimeout(function() {
+            slotHoverClearTimer = 0;
+            slotHoverPendingKey = '';
+            if (!pending.length) {
+                resetSlotHoverState();
+                return;
+            }
+            slotHoverChain = pending;
+            slotHoverPinned = false;
+            slotHoverIndex = preferredSlotHoverIndex(slotHoverChain);
+            applySlotHoverTarget(slotHoverChain, slotHoverIndex);
+        }, SLOT_HOVER_STICKY_MS);
+    }
+
+    function updateSlotPenetrateButtons(chain, index) {
+        if (!chain.length) {
+            return;
+        }
+        const target = chain[index];
+        if (!target) {
+            return;
+        }
+        const toolbar = target.querySelector(':scope > .widget-hover-actions, :scope > .slot-toolbar');
+        if (!toolbar) {
+            return;
+        }
+        const upBtn = toolbar.querySelector('.slot-penetrate-up');
+        const downBtn = toolbar.querySelector('.slot-penetrate-down');
+        if (upBtn) {
+            upBtn.hidden = !(chain.length > 1 && index > 0);
+        }
+        if (downBtn) {
+            downBtn.hidden = !(chain.length > 1 && index < chain.length - 1);
+        }
+    }
+
+    function applySlotHoverTarget(chain, index) {
+        if (!chain.length) {
+            clearSlotHoverTargets();
+            return;
+        }
+        const boundedIndex = Math.max(0, Math.min(index, chain.length - 1));
+        const target = chain[boundedIndex];
+        const prev = document.querySelector('[data-w-slot-hover-target="true"]');
+        // 同目标勿 clear/set：避免每帧 mousemove 触发 float hide + pending 不可见
+        if (prev === target) {
+            updateSlotPenetrateButtons(chain, boundedIndex);
+            return;
+        }
+        clearSlotHoverTargets();
+        target.setAttribute('data-w-slot-hover-target', 'true');
+        target.classList.add('slot-hover-target');
+        const toolbar = target.querySelector(':scope > .widget-hover-actions, :scope > .slot-toolbar');
+        if (toolbar) {
+            syncSlotToolbarFloat(toolbar);
+        }
+        updateSlotPenetrateButtons(chain, boundedIndex);
+        postPreviewMessage('slot-hover-sync', {
+            slot_id: target.dataset.wslot || '',
+        });
+    }
+
+    function bindSlotHoverTargetEvents() {
+        if (document.body._slotHoverTargetBound) {
+            return;
+        }
+        document.body._slotHoverTargetBound = true;
+
+        document.body.addEventListener('mousemove', function(e) {
+            if (!isEditInteractionMode() || isWidgetSelectionTarget()) {
+                return;
+            }
+            // 类似 tooltip：移到工具条/选择树/信息卡时保持，可点击操作。
+            if (keepSlotHoverFromChrome(e.target)) {
+                return;
+            }
+
+            const chain = getSlotChainFromElement(e.target);
+            const currentTarget = slotHoverChain[slotHoverIndex] || null;
+
+            // 仍在当前目标插槽内（含后代）：立即更新，取消关闭。
+            if (currentTarget && currentTarget.contains(e.target)) {
+                clearSlotHoverClearTimer();
+                const chainKey = slotChainKey(chain);
+                const prevKey = slotChainKey(slotHoverChain);
+                if (chainKey !== prevKey) {
+                    slotHoverChain = chain;
+                }
+                if (slotHoverPinned) {
+                    const keepIdx = slotHoverChain.indexOf(currentTarget);
+                    slotHoverIndex = keepIdx >= 0 ? keepIdx : preferredSlotHoverIndex(slotHoverChain);
+                    if (keepIdx < 0) {
+                        slotHoverPinned = false;
+                    }
+                } else {
+                    slotHoverIndex = preferredSlotHoverIndex(slotHoverChain);
+                }
+                applySlotHoverTarget(slotHoverChain, slotHoverIndex);
+                return;
+            }
+
+            // 离开当前目标（含外置工具条与 slot 之间的空隙）：延迟切换/关闭，便于移入提示条。
+            if (currentTarget && slotHoverChain.length) {
+                applySlotHoverTarget(slotHoverChain, slotHoverIndex);
+                scheduleSlotHoverTransition(chain);
+                return;
+            }
+
+            clearSlotHoverClearTimer();
+            if (!chain.length) {
+                resetSlotHoverState();
+                return;
+            }
+            slotHoverChain = chain;
+            slotHoverPinned = false;
+            slotHoverIndex = preferredSlotHoverIndex(slotHoverChain);
+            applySlotHoverTarget(slotHoverChain, slotHoverIndex);
+        });
+
+        document.body.addEventListener('mouseleave', function() {
+            scheduleSlotHoverTransition([]);
+        });
+    }
+
+    function appendSlotPenetrateButtons(toolbar) {
+        if (toolbar.querySelector('.slot-penetrate-up')) {
+            return;
+        }
+
+        const upBtn = document.createElement('button');
+        upBtn.className = 'slot-penetrate-up slot-penetrate-btn';
+        upBtn.type = 'button';
+        upBtn.title = '上级插槽';
+        upBtn.hidden = true;
+        upBtn.innerHTML = SLOT_PENETRATE_UP_ICON;
+        upBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (slotHoverIndex > 0) {
+                slotHoverIndex -= 1;
+                slotHoverPinned = true;
+                applySlotHoverTarget(slotHoverChain, slotHoverIndex);
+            }
+        });
+
+        const downBtn = document.createElement('button');
+        downBtn.className = 'slot-penetrate-down slot-penetrate-btn';
+        downBtn.type = 'button';
+        downBtn.title = '下级插槽';
+        downBtn.hidden = true;
+        downBtn.innerHTML = SLOT_PENETRATE_DOWN_ICON;
+        downBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (slotHoverIndex < slotHoverChain.length - 1) {
+                slotHoverIndex += 1;
+                slotHoverPinned = true;
+                applySlotHoverTarget(slotHoverChain, slotHoverIndex);
+            }
+        });
+
+        toolbar.appendChild(upBtn);
+        toolbar.appendChild(downBtn);
+    }
 
     function postPreviewMessage(type, detail) {
         if (window.parent === window) return;
@@ -63,6 +487,50 @@
         }, EDITOR_ORIGIN);
     }
 
+    /**
+     * Editor preview language switch: never navigate / write storefront cookies.
+     * Forward locale to the parent Theme Editor so toolbar + preview reload together.
+     * Capture phase runs before Weline UI language-switcher (which would assign location).
+     */
+    function readLanguageOptionLocale(option) {
+        if (!(option instanceof Element)) return '';
+        return String(
+            option.getAttribute('data-lang')
+            || option.dataset?.lang
+            || option.getAttribute('data-locale')
+            || ''
+        ).trim();
+    }
+
+    function isEditorLanguageOption(target) {
+        if (!(target instanceof Element)) return null;
+        // Prefer official language-switcher options; avoid bare a[data-lang] menu stubs.
+        const option = target.closest(
+            '.w-language-switcher__option[data-lang], [data-language-option][data-lang], .language-option[data-lang], [data-weline-choice-switcher="language"] [data-lang]'
+        );
+        if (!(option instanceof Element)) return null;
+        const switcher = option.closest(
+            '[data-i18n-switcher], [data-w-component*="language-switcher"], .w-language-switcher, [data-weline-choice-switcher="language"]'
+        );
+        if (!(switcher instanceof Element)
+            && !option.hasAttribute('data-language-option')
+            && !option.classList.contains('w-language-switcher__option')
+        ) {
+            return null;
+        }
+        const locale = readLanguageOptionLocale(option);
+        return locale ? { option, locale } : null;
+    }
+
+    document.addEventListener('click', function(event) {
+        const hit = isEditorLanguageOption(event.target);
+        if (!hit) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        postPreviewMessage('locale-change', { locale: hit.locale });
+    }, true);
+
     window.addEventListener('message', function(event) {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const data = event.data;
@@ -70,6 +538,22 @@
 
         if (data.type === 'interaction-mode') {
             applyInteractionMode(data.mode);
+            if (data.selection_target != null) {
+                applySelectionTarget(data.selection_target);
+            }
+            if (data.link_block != null) {
+                applyLinkBlock(data.link_block);
+            }
+            return;
+        }
+
+        if (data.type === 'selection-target') {
+            applySelectionTarget(data.mode);
+            return;
+        }
+
+        if (data.type === 'link-block') {
+            applyLinkBlock(data.enabled);
             return;
         }
 
@@ -215,80 +699,69 @@
     }
 
     /**
-     * 计算选择按钮的最佳位置
-     * @param {HTMLElement} slot - 插槽元素
-     * @param {HTMLElement} btn - 按钮元素
-     * @returns {object} - { top, left, position }
+     * 预览 iframe 优先用本页 Weline.UI；否则复用父主题编辑器已加载的 UI（与部件 hover 同源）。
      */
-    function calculateButtonPosition(slot, btn) {
-        const slotRect = slot.getBoundingClientRect();
-        const btnWidth = 100; // 工具栏预估宽度（选择 + 信息按钮）
-        const btnHeight = 24; // 按钮预估高度
-        const padding = 4;    // 内边距
-        const margin = 2;     // 外边距
-
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        let top, left;
-        let positionClass = 'inside'; // inside, outside-top, outside-bottom, outside-left, outside-right
-
-        // 默认：内部左上角
-        top = padding;
-        left = padding;
-
-        // 检查 slot 是否太小无法容纳按钮
-        const slotTooSmall = slotRect.width < btnWidth + padding * 2 || slotRect.height < btnHeight + padding * 2;
-
-        if (slotTooSmall) {
-            // 尝试放在外部
-            // 优先顺序：上方 > 下方 > 右侧 > 左侧
-
-            // 上方
-            if (slotRect.top > btnHeight + margin) {
-                top = -btnHeight - margin;
-                left = 0;
-                positionClass = 'outside-top';
+    function resolveEditorUi() {
+        try {
+            if (window.Weline && window.Weline.UI) {
+                return window.Weline.UI;
             }
-            // 下方
-            else if (viewportHeight - slotRect.bottom > btnHeight + margin) {
-                top = slotRect.height + margin;
-                left = 0;
-                positionClass = 'outside-bottom';
+        } catch (err) {}
+        try {
+            if (window.parent && window.parent !== window && window.parent.Weline && window.parent.Weline.UI) {
+                return window.parent.Weline.UI;
             }
-            // 右侧
-            else if (viewportWidth - slotRect.right > btnWidth + margin) {
-                top = 0;
-                left = slotRect.width + margin;
-                positionClass = 'outside-right';
-            }
-            // 左侧
-            else if (slotRect.left > btnWidth + margin) {
-                top = 0;
-                left = -btnWidth - margin;
-                positionClass = 'outside-left';
-            }
-            // 实在没地方，强制内部
-            else {
-                top = padding;
-                left = padding;
-                positionClass = 'inside-forced';
-            }
-        } else {
-            // Slot 足够大，检查按钮是否会超出视口
-            const btnAbsLeft = slotRect.left + left;
-            const btnAbsTop = slotRect.top + top;
+        } catch (err) {}
+        return null;
+    }
 
-            // 如果左上角超出视口，调整到右上角
-            if (btnAbsLeft < 0) {
-                left = slotRect.width - btnWidth - padding;
-            }
-            if (btnAbsTop < 0) {
-                top = slotRect.height - btnHeight - padding;
-            }
+    function attachSlotToolbarFloat(toolbar) {
+        if (!(toolbar instanceof HTMLElement)) {
+            return null;
         }
+        toolbar.setAttribute('data-w-component', 'anchored-float');
+        toolbar.setAttribute('data-w-float-self', '1');
+        toolbar.setAttribute('data-w-placement', 'top-end');
+        toolbar.setAttribute('data-w-portal', '0');
+        const UI = resolveEditorUi();
+        if (UI && UI.floating && typeof UI.floating.attach === 'function') {
+            return UI.floating.attach(toolbar, {
+                placement: 'top-end',
+                portal: false,
+                self: true,
+            });
+        }
+        return null;
+    }
 
-        return { top, left, positionClass };
+    function syncSlotToolbarFloat(toolbar) {
+        if (!(toolbar instanceof HTMLElement)) {
+            return;
+        }
+        const UI = resolveEditorUi();
+        const floatApi = UI && typeof UI.get === 'function' ? UI.get(toolbar, 'anchored-float') : null;
+        if (floatApi && typeof floatApi.sync === 'function') {
+            floatApi.sync();
+            return;
+        }
+        if (floatApi && typeof floatApi.place === 'function') {
+            floatApi.place();
+            return;
+        }
+        toolbar.dispatchEvent(new CustomEvent('weline:anchored-float:place'));
+    }
+
+    function hideSlotToolbarChrome(toolbar) {
+        if (!(toolbar instanceof HTMLElement)) {
+            return;
+        }
+        const UI = resolveEditorUi();
+        const floatApi = UI && typeof UI.get === 'function' ? UI.get(toolbar, 'anchored-float') : null;
+        if (floatApi && typeof floatApi.hide === 'function') {
+            floatApi.hide();
+            return;
+        }
+        toolbar.dispatchEvent(new CustomEvent('weline:anchored-float:hide'));
     }
 
     /**
@@ -296,25 +769,42 @@
      * @param {HTMLElement} slot - 插槽元素
      */
     function addSelectButton(slot) {
-        // 检查是否已有按钮
-        if (slot.querySelector('.slot-toolbar')) return;
+        // 检查是否已有按钮（与部件同用 .widget-hover-actions）
+        if (slot.querySelector(':scope > .widget-hover-actions, :scope > .slot-toolbar')) return;
 
         if (getComputedStyle(slot).position === 'static') {
             slot.style.position = 'relative';
         }
 
-        // 按钮容器（选择 + 信息）
+        // 与部件 .widget-hover-actions 同源：父页 floating.attach + anchored-float
         const toolbar = document.createElement('div');
-        toolbar.className = 'slot-toolbar';
+        toolbar.className = 'widget-hover-actions slot-toolbar';
+        toolbar.setAttribute('data-w-component', 'anchored-float');
+        toolbar.setAttribute('data-w-float-self', '1');
+        toolbar.setAttribute('data-w-placement', 'top-end');
+        toolbar.setAttribute('data-w-portal', '0');
+        toolbar.setAttribute('data-slot-hover-actions', '1');
+
+        const slotIdForLabel = slot.dataset.wslot || slot.getAttribute('data-slot') || '';
+        if (slotIdForLabel) {
+            toolbar.dataset.slotId = slotIdForLabel;
+        }
 
         // 选择按钮
         const btn = document.createElement('button');
         btn.className = 'slot-select-btn';
-        btn.innerHTML = SELECT_ICON + '<span>选择</span>';
+        const selectLabel = slotIdForLabel === 'header' || slotIdForLabel === 'footer' ? '整段' : '选择';
+        btn.innerHTML = SELECT_ICON + '<span>' + selectLabel + '</span>';
         btn.setAttribute('type', 'button');
+        btn.setAttribute('data-action', 'slot-select');
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            document.querySelectorAll('.slot-info-card').forEach(function(c) {
+                c.remove();
+            });
+            closeSlotSelectTrees();
+            slot._infoCardOpen = false;
             selectSlot(slot);
         });
 
@@ -323,28 +813,202 @@
         infoBtn.className = 'slot-info-btn';
         infoBtn.innerHTML = INFO_ICON;
         infoBtn.setAttribute('type', 'button');
+        infoBtn.setAttribute('title', '信息');
         infoBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             toggleSlotInfoCard(slot, toolbar);
         });
 
-        toolbar.appendChild(btn);
-        toolbar.appendChild(infoBtn);
-
-        // 鼠标进入时更新位置
-        slot.addEventListener('mouseenter', function() {
-            updateButtonPosition(slot, toolbar);
+        // 初始化默认部件（仅显式回填；删除后刷新不会自动补）
+        const initBtn = document.createElement('button');
+        initBtn.className = 'slot-init-btn';
+        initBtn.innerHTML = INIT_ICON + '<span>初始化</span>';
+        initBtn.setAttribute('type', 'button');
+        initBtn.setAttribute('data-action', 'slot-init-defaults');
+        initBtn.setAttribute('title', '初始化默认部件');
+        initBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            postPreviewMessage('slot-init-defaults', {
+                slot_id: slot.dataset.wslot || '',
+                area: slot.dataset.wslotPosition || slot.getAttribute('data-wslot-position') || '',
+                name: slot.dataset.wslotName || slot.getAttribute('data-name') || '',
+            });
         });
 
-        // 滚动时更新位置
-        window.addEventListener('scroll', function() {
-            if (slot.matches(':hover')) {
-                updateButtonPosition(slot, toolbar);
-            }
-        }, { passive: true });
+        const kindLabel = document.createElement('span');
+        kindLabel.className = 'slot-toolbar-kind';
+        kindLabel.textContent = '插槽';
+        kindLabel.setAttribute('aria-hidden', 'true');
 
+        toolbar.appendChild(kindLabel);
+        toolbar.appendChild(btn);
+        toolbar.appendChild(initBtn);
+        toolbar.appendChild(infoBtn);
+        appendSlotPenetrateButtons(toolbar);
         slot.appendChild(toolbar);
+        // 不在 iframe 内 attach：与部件一致，由父页挂载
+        postPreviewMessage('slot-hover-sync', {
+            slot_id: slot.dataset.wslot || '',
+        });
+    }
+
+    function escapeSlotTreeText(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function getDirectChildSlots(slot) {
+        return Array.from(slot.querySelectorAll('[data-wslot]')).filter(function(child) {
+            return child !== slot && child.parentElement && child.parentElement.closest('[data-wslot]') === slot;
+        });
+    }
+
+    function countDescendantSlots(slot) {
+        return Array.from(slot.querySelectorAll('[data-wslot]')).filter(function(child) {
+            return child !== slot;
+        }).length;
+    }
+
+    function closeSlotSelectTrees(exceptSlot) {
+        document.querySelectorAll('.slot-select-tree').forEach(function(card) {
+            const owner = card.closest('[data-wslot]');
+            if (exceptSlot && owner === exceptSlot) {
+                return;
+            }
+            card.remove();
+            if (owner) {
+                owner._selectTreeOpen = false;
+            }
+        });
+    }
+
+    function renderSlotTreeNode(slot, depth) {
+        const id = slot.dataset.wslot || '?';
+        const name = slot.dataset.wslotName || id;
+        const childCount = countDescendantSlots(slot);
+        const children = getDirectChildSlots(slot);
+        const isActive = slot.classList.contains('slot-active');
+        let html = '<button type="button" class="slot-select-tree-item'
+            + (isActive ? ' is-active' : '')
+            + '" data-slot-tree-id="' + escapeSlotTreeText(id) + '"'
+            + ' data-slot-tree-depth="' + depth + '"'
+            + ' style="--slot-tree-depth:' + depth + '">'
+            + '<span class="slot-select-tree-name">' + escapeSlotTreeText(name) + '</span>'
+            + '<code class="slot-select-tree-id">' + escapeSlotTreeText(id) + '</code>'
+            + (childCount ? '<span class="slot-select-tree-meta">' + childCount + ' 子槽</span>' : '')
+            + '</button>';
+        children.forEach(function(child) {
+            html += renderSlotTreeNode(child, depth + 1);
+        });
+        return html;
+    }
+
+    function findSlotInSubtree(root, slotId) {
+        if ((root.dataset.wslot || '') === slotId) {
+            return root;
+        }
+        const nodes = root.querySelectorAll('[data-wslot]');
+        for (let i = 0; i < nodes.length; i += 1) {
+            if ((nodes[i].dataset.wslot || '') === slotId) {
+                return nodes[i];
+            }
+        }
+        return null;
+    }
+
+    function positionSlotFloatingCard(card) {
+        requestAnimationFrame(function() {
+            const cardRect = card.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+
+            if (cardRect.left < 4) {
+                card.style.right = 'auto';
+                card.style.left = '0';
+            } else if (cardRect.right > vw - 4) {
+                card.style.left = 'auto';
+                card.style.right = '0';
+                const recalc = card.getBoundingClientRect();
+                if (recalc.left < 4) {
+                    card.style.right = 'auto';
+                    card.style.left = (-recalc.left + 4) + 'px';
+                }
+            }
+
+            if (cardRect.bottom > vh - 4) {
+                card.style.top = 'auto';
+                card.style.bottom = 'calc(100% + 6px)';
+            }
+        });
+    }
+
+    /**
+     * hover「选择」：无嵌套直接选中；有子槽时弹出子树，点选后再联动右侧部件推荐。
+     */
+    function toggleSlotSelectTree(slot, toolbar) {
+        if (!isEditInteractionMode()) {
+            return;
+        }
+
+        document.querySelectorAll('.slot-info-card').forEach(function(c) {
+            c.remove();
+        });
+        slot._infoCardOpen = false;
+
+        if (slot._selectTreeOpen) {
+            closeSlotSelectTrees();
+            return;
+        }
+
+        closeSlotSelectTrees();
+
+        if (countDescendantSlots(slot) === 0) {
+            selectSlot(slot);
+            return;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'slot-select-tree';
+        card.innerHTML = ''
+            + '<div class="slot-select-tree-header">'
+            + '<strong>选择插槽</strong>'
+            + '<span>点选后右侧推荐可用部件</span>'
+            + '</div>'
+            + '<div class="slot-select-tree-list">'
+            + renderSlotTreeNode(slot, 0)
+            + '</div>';
+
+        card.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const item = e.target.closest('.slot-select-tree-item');
+            if (!item) {
+                return;
+            }
+            const slotId = item.getAttribute('data-slot-tree-id') || '';
+            const target = findSlotInSubtree(slot, slotId) || slot;
+            closeSlotSelectTrees();
+            selectSlot(target);
+        });
+
+        toolbar.appendChild(card);
+        slot._selectTreeOpen = true;
+        positionSlotFloatingCard(card);
+
+        function closeTree(e) {
+            if (!card.contains(e.target) && !e.target.closest('.slot-select-btn')) {
+                card.remove();
+                slot._selectTreeOpen = false;
+                document.removeEventListener('click', closeTree, true);
+            }
+        }
+        setTimeout(function() {
+            document.addEventListener('click', closeTree, true);
+        }, 0);
     }
 
     /**
@@ -353,6 +1017,7 @@
     function toggleSlotInfoCard(slot, toolbar) {
         // 关闭其他已打开的卡片
         document.querySelectorAll('.slot-info-card').forEach(c => c.remove());
+        closeSlotSelectTrees();
 
         // 如果已有卡片在这个 slot，说明是切换关闭
         if (slot._infoCardOpen) {
@@ -447,22 +1112,10 @@
     }
 
     /**
-     * 更新按钮位置
-     */
-    function updateButtonPosition(slot, btn) {
-        const pos = calculateButtonPosition(slot, btn);
-        btn.style.top = pos.top + 'px';
-        btn.style.left = pos.left + 'px';
-    }
-
-    /**
      * 选中插槽
      * @param {HTMLElement} slot - 插槽元素
      */
     function selectSlot(slot) {
-        if (!isEditInteractionMode()) {
-            return;
-        }
         const currentWidgets = getSlotWidgetElements(slot);
         const maxWidgets = slot.dataset.wslotMax ? parseInt(slot.dataset.wslotMax, 10) : -1;
         // 构建插槽数据
@@ -487,6 +1140,10 @@
         // 高亮当前插槽
         document.querySelectorAll('[data-wslot]').forEach(s => s.classList.remove('slot-active'));
         slot.classList.add('slot-active');
+        slotHoverChain = getSlotChainFromElement(slot);
+        slotHoverIndex = Math.max(0, slotHoverChain.indexOf(slot));
+        slotHoverPinned = true;
+        applySlotHoverTarget(slotHoverChain, slotHoverIndex);
     }
 
     // ========== iframe 内拖拽排序辅助函数 ==========
@@ -772,6 +1429,9 @@
             const link = e.target.closest('a[href]');
             if (link && !link.closest('.slot-toolbar') && !link.closest('[data-editor-interactive]')) {
                 e.preventDefault(); // 仅阻止导航，不调用 selectSlot
+                if (isLinkBlockEnabled()) {
+                    e.stopPropagation();
+                }
             }
             // 不拦截其他元素的点击 — 选择由工具栏"选择"按钮负责
         });
@@ -967,6 +1627,8 @@
      */
     function initSlots() {
         initBackendStructuralSlots();
+        bindSlotHoverTargetEvents();
+        bindNolinkClickGuard();
         document.querySelectorAll('[data-wslot]').forEach(initSingleSlot);
 
         // 初始化不在插槽内的独立占位符
@@ -981,6 +1643,7 @@
                 }
             });
         });
+        refreshEmptySlotPlaceholders();
     }
 
     // DOM 加载完成后初始化

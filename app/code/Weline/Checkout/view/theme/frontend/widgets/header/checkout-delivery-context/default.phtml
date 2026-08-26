@@ -1,0 +1,539 @@
+<?php
+/**
+ * Header 配送地址部件（Checkout owned）
+ *
+ * @widget.code {checkout-delivery-context}
+ * @widget.name {结账配送地址}
+ * @widget.description {支持国家搜索与地址选择；快速新增由 Shipping Hook 提供（含验证码与级联地址）。}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {delivery}
+ * @widget.supports {["delivery","layout-header-delivery"]}
+ * @widget.default_injections {[{"layout_type":"*","slot":"delivery","area":"header","sort_order":0,"required":true,"reason":"前台顶栏默认展示结账配送地址上下文（非 Theme 部件，禁止布局内嵌）","config":{"title":"配送至","enable_country_search":true,"enable_auto_detect":true}}]}
+ *
+ * @param title {default="配送至",type="string",label="标题"}
+ * @param enable_country_search {default=true,type="bool",label="启用国家搜索"}
+ * @param enable_auto_detect {default=true,type="bool",label="启用自动定位（依赖 Weline_Location）"}
+ */
+
+use Weline\Checkout\Service\CheckoutDeliveryContextService;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('checkout-delivery-context');
+$wc = $scope->cssClass;
+$esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+
+$title = (string)__(trim((string)($this->getData('title') ?? '配送至')));
+$countrySearch = (bool)($this->getData('enable_country_search') ?? true);
+$autoDetect = (bool)($this->getData('enable_auto_detect') ?? true);
+
+$isEditorMode = false;
+try {
+    $editorModeFlag = trim((string)($this->request->getParam('editor_mode', '') ?? ''));
+    $isEditorMode = ($editorModeFlag === '1' || strtolower($editorModeFlag) === 'true')
+        || (bool)$this->getData('editor_mode');
+} catch (\Throwable) {
+    $isEditorMode = (bool)$this->getData('editor_mode');
+}
+
+$context = [];
+if ($isEditorMode) {
+    // Theme editor iframe: skip session/DB country lists and captcha quick-add render cost.
+    $context = [
+        'country_code' => 'CN',
+        'country_name' => (string)__('China'),
+        'countries' => [],
+        'addresses' => [],
+        'selected' => null,
+        'is_logged_in' => false,
+        'can_auto_detect' => false,
+        'display_text' => (string)__('选择国家/地址'),
+        'checkout_address' => [],
+    ];
+} else {
+    try {
+        $context = ObjectManager::getInstance(CheckoutDeliveryContextService::class)->getContext();
+    } catch (\Throwable) {
+        $context = [
+            'country_code' => 'CN',
+            'country_name' => (string)__('China'),
+            'countries' => [],
+            'addresses' => [],
+            'selected' => null,
+            'is_logged_in' => false,
+            'can_auto_detect' => false,
+            'display_text' => (string)__('选择国家/地址'),
+            'checkout_address' => [],
+        ];
+    }
+}
+
+$displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选择国家/地址');
+?>
+<section class="<?= $esc($wc) ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-checkout-delivery-widget>
+    <button type="button"
+            class="w-header-delivery-entry location-link delivery-entry"
+            data-action="toggle"
+            aria-haspopup="dialog">
+        <w:icon name="pin" size="sm"></w:icon>
+        <span class="location-text delivery-text">
+            <span class="w-text-muted location-line-1 delivery-line-1"><?= $esc($title) ?></span>
+            <span class="w-text location-line-2 delivery-line-2" data-delivery-display><?= $esc($displayText) ?></span>
+        </span>
+        <w:icon name="chevron-down" size="sm"></w:icon>
+    </button>
+
+    <div class="delivery-panel w-surface-body" data-surface="body" hidden data-panel>
+        <div class="delivery-panel-head">
+            <strong><?= __('配送地址') ?></strong>
+            <button type="button" class="w-button" data-action="close" data-size="xs" data-variant="outline"><?= __('关闭') ?></button>
+        </div>
+
+        <label class="w-field country-picker">
+            <span class="w-form-label w-field__label"><?= __('国家/地区') ?></span>
+            <input type="hidden" data-country-code value="<?= $esc((string)($context['country_code'] ?? 'CN')) ?>">
+            <input type="search"
+                   class="w-form-control w-input"
+                   data-country-search
+                   <?= $countrySearch ? '' : 'disabled' ?>
+                   placeholder="<?= $esc((string)__('搜索国家/地区')) ?>"
+                   value="<?= $esc((string)($context['country_name'] ?? '')) ?>">
+            <div class="country-results" data-country-results hidden></div>
+        </label>
+
+        <div class="address-list" data-address-list></div>
+
+        <div data-delivery-quick-add-slot>
+            <?php if (!$isEditorMode): ?>
+            <w:hook>Weline_Checkout::frontend::widgets::checkout-delivery-context::quick-add</w:hook>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($autoDetect && !$isEditorMode): ?>
+            <button type="button" class="w-button" data-action="auto-detect" data-variant="outline" data-size="sm"><?= __('自动定位') ?></button>
+        <?php endif; ?>
+        <p class="message" data-message hidden></p>
+    </div>
+</section>
+
+<script>
+(function () {
+    'use strict';
+    const root = document.querySelector('[data-checkout-delivery-widget]');
+    if (!root) return;
+    const state = <?= json_encode($context, $jsonFlags) ?> || {};
+    const opts = <?= json_encode(['countrySearch' => $countrySearch, 'autoDetect' => $autoDetect], $jsonFlags) ?>;
+    const panel = root.querySelector('[data-panel]');
+    const display = root.querySelector('[data-delivery-display]');
+    const message = root.querySelector('[data-message]');
+    const addressList = root.querySelector('[data-address-list]');
+    const countryCodeInput = root.querySelector('[data-country-code]');
+    const countrySearch = root.querySelector('[data-country-search]');
+    const countryResults = root.querySelector('[data-country-results]');
+    const ADDRESS_CODE = 'checkout-delivery-quick-add';
+
+    let checkoutApi = null;
+    let quickAddBound = false;
+
+    async function api() {
+        if (checkoutApi) return checkoutApi;
+        checkoutApi = await window.Weline.Api.resource('checkout');
+        return checkoutApi;
+    }
+
+    function text(v) { return v == null ? '' : String(v); }
+    function showMsg(msg, tone) {
+        if (!message) return;
+        message.hidden = !msg;
+        message.textContent = text(msg);
+        message.dataset.tone = tone || 'info';
+    }
+    function setDisplay(v) { if (display) display.textContent = text(v || '<?= addslashes((string)__('选择国家/地址')) ?>'); }
+
+    function quickAddForm() {
+        return root.querySelector('[data-quick-add-form]');
+    }
+
+    function openQuickAdd() {
+        const details = root.querySelector('[data-quick-add]');
+        if (details) details.open = true;
+        ensureLazyCaptcha().catch(function () {});
+    }
+
+    async function ensureLazyCaptcha() {
+        const form = quickAddForm();
+        if (!form) return;
+        const host = form.querySelector('[data-weline-captcha-lazy]');
+        if (!host || host.getAttribute('data-loaded') === '1') return;
+        const intent = host.getAttribute('data-intent') || 'checkout.save_delivery_address';
+        const formId = host.getAttribute('data-form-id') || form.id || 'checkout-delivery-quick-add-form';
+        const result = await (await api()).getDeliveryCaptchaChallenge({
+            intent: intent,
+            form_id: formId
+        }, {silent: true});
+        const payload = result && (result.data || result) || {};
+        const html = payload.html || '';
+        if (!html) {
+            throw new Error('captcha_empty');
+        }
+        host.outerHTML = html;
+        if (window.Weline && window.Weline.Form && typeof window.Weline.Form.mount === 'function') {
+            window.Weline.Form.mount(form);
+        }
+    }
+
+    function mountQuickAddRuntime() {
+        const form = quickAddForm();
+        if (!form) return null;
+        if (window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {
+            window.WelineThemeAddress.boot();
+        }
+        if (window.Weline && window.Weline.Form && typeof window.Weline.Form.mount === 'function') {
+            window.Weline.Form.mount(form);
+        } else if (window.WelineFormRuntime && typeof window.WelineFormRuntime.mount === 'function') {
+            window.WelineFormRuntime.mount(form);
+        }
+        return form;
+    }
+
+    function applyCascade(values, options) {
+        options = options || {};
+        const form = mountQuickAddRuntime();
+        if (!form) return Promise.resolve(false);
+        if (options.open !== false) openQuickAdd();
+        if (!window.WelineThemeAddress || typeof window.WelineThemeAddress.applyValues !== 'function') {
+            return Promise.resolve(false);
+        }
+        return window.WelineThemeAddress.applyValues(ADDRESS_CODE, values || {});
+    }
+
+    function syncCascadeCountry(countryCode, countryName) {
+        const code = text(countryCode).toUpperCase();
+        if (!code) return Promise.resolve(false);
+        return applyCascade({
+            country_code: code,
+            country: text(countryName) || code,
+        }, {open: false});
+    }
+
+    function renderAddresses(ctx) {
+        if (!addressList) return;
+        const list = Array.isArray(ctx.addresses) ? ctx.addresses : [];
+        const hasQuickAdd = !!quickAddForm();
+        const emptyText = hasQuickAdd
+            ? '<?= addslashes((string)__('当前国家暂无地址，可直接快速新增。')) ?>'
+            : '<?= addslashes((string)__('当前国家暂无地址。')) ?>';
+        addressList.innerHTML = list.length ? list.map(function (a) {
+            const selected = a.is_selected ? 'is-selected' : '';
+            const extra = a.is_anonymous ? '<?= addslashes((string)__('匿名')) ?>' : '<?= addslashes((string)__('已登录地址')) ?>';
+            return '<button type="button" class="address-item ' + selected + '" data-id="' + text(a.id) + '">' +
+                '<strong>' + text(a.display_label || a.full_address || a.city || a.country_code) + '</strong>' +
+                '<small>' + extra + '</small>' +
+                '</button>';
+        }).join('') : '<p class="address-empty">' + emptyText + '</p>';
+    }
+
+    function renderCountries(keyword) {
+        if (!countryResults) return;
+        const list = Array.isArray(state.countries) ? state.countries : [];
+        const query = text(keyword).toLowerCase().trim();
+        const filtered = list.filter(function (item) {
+            if (!query) return true;
+            return text(item.name).toLowerCase().includes(query) || text(item.code).toLowerCase().includes(query);
+        }).slice(0, 30);
+        countryResults.innerHTML = filtered.map(function (item) {
+            return '<button type="button" data-country="' + text(item.code) + '">' + text(item.name) + ' (' + text(item.code) + ')</button>';
+        }).join('');
+        countryResults.hidden = filtered.length === 0;
+    }
+
+    async function refreshCountry(countryCode) {
+        const result = await (await api()).setDeliveryCountry({country_code: countryCode}, {silent: true});
+        const ctx = result.data || result;
+        Object.assign(state, ctx);
+        countryCodeInput.value = text(ctx.country_code || '');
+        if (countrySearch) countrySearch.value = text(ctx.country_name || '');
+        renderAddresses(ctx);
+        setDisplay(ctx.display_text);
+        await syncCascadeCountry(ctx.country_code, ctx.country_name);
+        showMsg('<?= addslashes((string)__('国家已切换')) ?>', 'success');
+    }
+
+    async function refreshContext() {
+        const result = await (await api()).getDeliveryContext({country_code: text(countryCodeInput.value || '')}, {silent: true});
+        const ctx = result.data || result;
+        Object.assign(state, ctx);
+        renderAddresses(ctx);
+        setDisplay(ctx.display_text);
+        mountQuickAddRuntime();
+        bindQuickAddForm();
+        await syncCascadeCountry(ctx.country_code, ctx.country_name);
+    }
+
+    function bindQuickAddForm() {
+        const form = quickAddForm();
+        if (!form || form.dataset.checkoutDeliveryQuickAddBound === '1') return;
+        form.dataset.checkoutDeliveryQuickAddBound = '1';
+        quickAddBound = true;
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
+                return;
+            }
+            const fd = new FormData(form);
+            const countryCode = text(fd.get('country_code') || countryCodeInput.value).toUpperCase() || 'CN';
+            const address = {
+                country_code: countryCode,
+                // 国家由弹窗顶部选择；快速新增表单不再渲染国家控件。
+                country: text(fd.get('country') || (countrySearch && countrySearch.value) || '').trim() || countryCode,
+                contact_name: text(fd.get('contact_name')).trim(),
+                contact_phone: text(fd.get('contact_phone')).trim(),
+                province: text(fd.get('province')).trim(),
+                city: text(fd.get('city')).trim(),
+                district: text(fd.get('district')).trim(),
+                street: text(fd.get('street')).trim(),
+                postal_code: text(fd.get('postal_code')).trim(),
+            };
+            const payload = {
+                address: address,
+                captcha_provider: text(fd.get('captcha_provider')).trim(),
+                captcha_token: text(fd.get('captcha_token')).trim(),
+                captcha_response: text(fd.get('captcha_response')).trim(),
+                captcha_action: text(fd.get('captcha_action')).trim(),
+            };
+            try {
+                const result = await (await api()).saveDeliveryAddress(payload, {silent: true});
+                const ctx = result.data || result;
+                Object.assign(state, ctx);
+                renderAddresses(ctx);
+                setDisplay(ctx.display_text);
+                showMsg('<?= addslashes((string)__('地址已保存并应用')) ?>', 'success');
+                form.reset();
+                await syncCascadeCountry(ctx.country_code, ctx.country_name);
+            } catch (e) {
+                showMsg(e.message || '<?= addslashes((string)__('地址保存失败')) ?>', 'error');
+            }
+        });
+    }
+
+    root.querySelector('[data-action="toggle"]').addEventListener('click', function () {
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) {
+            refreshContext().catch(function (e) { showMsg(e.message || '<?= addslashes((string)__('加载失败')) ?>', 'error'); });
+            ensureLazyCaptcha().catch(function () {});
+        }
+    });
+    root.querySelector('[data-action="close"]').addEventListener('click', function () { panel.hidden = true; });
+
+    const quickAddDetails = root.querySelector('[data-quick-add]');
+    if (quickAddDetails) {
+        quickAddDetails.addEventListener('toggle', function () {
+            if (quickAddDetails.open) {
+                ensureLazyCaptcha().catch(function () {});
+            }
+        });
+    }
+
+    addressList.addEventListener('click', async function (event) {
+        const btn = event.target.closest('[data-id]');
+        if (!btn) return;
+        try {
+            const result = await (await api()).selectDeliveryAddress({id: btn.dataset.id}, {silent: true});
+            const ctx = result.data || result;
+            Object.assign(state, ctx);
+            renderAddresses(ctx);
+            setDisplay(ctx.display_text);
+            showMsg('<?= addslashes((string)__('地址已应用到结账')) ?>', 'success');
+        } catch (e) {
+            showMsg(e.message || '<?= addslashes((string)__('地址选择失败')) ?>', 'error');
+        }
+    });
+
+    if (countrySearch && opts.countrySearch) {
+        countrySearch.addEventListener('focus', function () { renderCountries(countrySearch.value); });
+        countrySearch.addEventListener('input', function () { renderCountries(countrySearch.value); });
+    }
+    if (countryResults) {
+        countryResults.addEventListener('click', function (event) {
+            const btn = event.target.closest('[data-country]');
+            if (!btn) return;
+            refreshCountry(btn.dataset.country).catch(function (e) { showMsg(e.message || '<?= addslashes((string)__('国家切换失败')) ?>', 'error'); });
+            countryResults.hidden = true;
+        });
+    }
+
+    const autoBtn = root.querySelector('[data-action="auto-detect"]');
+    if (autoBtn && opts.autoDetect) {
+        autoBtn.addEventListener('click', async function () {
+            try {
+                if (typeof WelineLocation === 'undefined') {
+                    if (window.Weline && typeof window.Weline.load === 'function') {
+                        try {
+                            await window.Weline.load('geo');
+                        } catch (e) {
+                            openQuickAdd();
+                            showMsg('<?= addslashes((string)__('自动定位不可用，请手动选择国家并完善地址。')) ?>', 'error');
+                            return;
+                        }
+                    } else {
+                        openQuickAdd();
+                        showMsg('<?= addslashes((string)__('自动定位不可用，请手动选择国家并完善地址。')) ?>', 'error');
+                        return;
+                    }
+                }
+
+                let position = null;
+                try {
+                    position = await WelineLocation.getLocation();
+                } catch (e) {
+                    openQuickAdd();
+                    showMsg('<?= addslashes((string)__('自动定位不可用，请手动选择国家并完善地址。')) ?>', 'error');
+                    return;
+                }
+
+                let addr = null;
+                try {
+                    if (window.Weline && typeof window.Weline.load === 'function') {
+                        await window.Weline.load('location');
+                    }
+                    const locationApi = await window.Weline.Api.resource('location');
+                    const geo = await locationApi.address({
+                        latitude: Number(position.latitude),
+                        longitude: Number(position.longitude)
+                    }, {silent: true});
+                    addr = geo && geo.data ? geo.data : null;
+                } catch (error) {
+                    openQuickAdd();
+                    showMsg('<?= addslashes((string)__('自动定位可用位置，但反查地址服务不可用，请手动完善地址并保存。')) ?>', 'error');
+                    return;
+                }
+                if (!addr) {
+                    openQuickAdd();
+                    showMsg('<?= addslashes((string)__('自动定位反查地址失败，请手动完善地址并保存。')) ?>', 'error');
+                    return;
+                }
+                const nextCountryCode = text(addr.countryCode || addr.country_code || state.country_code || 'CN').toUpperCase() || 'CN';
+                await refreshCountry(nextCountryCode);
+
+                const applied = await applyCascade({
+                    country_code: nextCountryCode,
+                    country: text(addr.country || countrySearch && countrySearch.value || nextCountryCode).trim(),
+                    province: text(addr.province || addr.region || '').trim(),
+                    city: text(addr.city || '').trim(),
+                    district: text(addr.district || '').trim(),
+                });
+                const form = quickAddForm();
+                if (form) {
+                    const streetInput = form.querySelector('[name="street"]');
+                    const postalInput = form.querySelector('[name="postal_code"]');
+                    if (streetInput) streetInput.value = text(addr.street || '').trim();
+                    if (postalInput) postalInput.value = text(addr.postalCode || addr.postal_code || '').trim();
+                }
+                if (!applied && !form) {
+                    showMsg('<?= addslashes((string)__('定位完成，但当前未启用地址添加模块。')) ?>', 'error');
+                    return;
+                }
+                showMsg('<?= addslashes((string)__('定位完成，已自动选择国家/省市区，请补全收货人信息并保存。')) ?>', 'success');
+            } catch (e) {
+                openQuickAdd();
+                showMsg('<?= addslashes((string)__('自动定位失败，请手动选择国家并完善地址。')) ?>', 'error');
+            }
+        });
+    }
+
+    setDisplay(state.display_text);
+    renderAddresses(state);
+    mountQuickAddRuntime();
+    bindQuickAddForm();
+})();
+</script>
+
+<style>
+/* 入口按钮外观由主题 Theme UI：.w-header-delivery-entry / .location-link / .delivery-entry 提供 */
+.<?= $wc ?> { position: relative; }
+.<?= $wc ?> .delivery-panel {
+    position: absolute;
+    left: 0;
+    top: calc(100% + var(--weline-space-2));
+    width: min(var(--size-content-640, 42.5rem), 92vw);
+    min-width: min(22.5rem, 92vw);
+    box-sizing: border-box;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-body-border, var(--weline-theme-border));
+    border-radius: var(--weline-theme-radius-lg);
+    padding: var(--weline-space-4, 1rem);
+    box-shadow: var(--weline-theme-shadow-md);
+    z-index: var(--z-index-dropdown);
+    overflow: visible;
+}
+.<?= $wc ?> .delivery-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+    margin-bottom: var(--weline-space-4);
+}
+.<?= $wc ?> .delivery-panel-head strong {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--weline-layout-font-size-base, 1rem);
+    line-height: 1.35;
+    white-space: nowrap;
+}
+.<?= $wc ?> .country-picker { display: grid; gap: var(--weline-space-2); margin-bottom: var(--weline-space-3); }
+.<?= $wc ?> .country-results {
+    max-height: var(--size-panel-180, 11.25rem);
+    overflow: auto;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-body-border, var(--weline-theme-border));
+    border-radius: var(--weline-theme-radius-md);
+    background: var(--weline-chrome-bg-primary, #ffffff);
+}
+.<?= $wc ?> .country-results button {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: var(--weline-space-2) var(--weline-space-3);
+    cursor: pointer;
+}
+.<?= $wc ?> .country-results button:hover { background: var(--weline-theme-surface-muted); }
+.<?= $wc ?> .address-list { display: grid; gap: var(--weline-space-2); margin-bottom: var(--weline-space-3); }
+.<?= $wc ?> .address-item {
+    text-align: left;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    background: transparent;
+    color: inherit;
+    border-radius: var(--weline-theme-radius-md);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    cursor: pointer;
+}
+.<?= $wc ?> .address-item.is-selected {
+    border-color: var(--weline-theme-primary);
+    background: var(--weline-theme-primary-surface);
+}
+.<?= $wc ?> .address-item strong { display: block; font-size: var(--weline-layout-font-size-sm); }
+.<?= $wc ?> .address-item small { font-size: var(--weline-layout-font-size-xs); color: var(--weline-theme-text-muted); }
+.<?= $wc ?> .address-empty { font-size: var(--weline-layout-font-size-sm); color: var(--weline-theme-text-muted); margin: 0; line-height: 1.5; }
+.<?= $wc ?> .quick-add { margin-bottom: var(--weline-space-3); overflow: visible; }
+.<?= $wc ?> .quick-add summary { cursor: pointer; margin-bottom: var(--weline-space-2); font-weight: var(--weline-layout-font-weight-semibold); }
+.<?= $wc ?> .field-grid {
+    display: grid;
+    gap: var(--weline-space-3);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: var(--weline-space-3);
+}
+.<?= $wc ?> .field-grid .w-field { margin: 0; }
+.<?= $wc ?> .field-grid .span-full { grid-column: 1 / -1; }
+.<?= $wc ?> .delivery-panel .w-address { margin: 0; }
+.<?= $wc ?> .message { margin: var(--weline-space-2) 0 0; font-size: var(--weline-layout-font-size-xs); }
+.<?= $wc ?> .message[data-tone="error"] { color: var(--weline-theme-danger); }
+.<?= $wc ?> .message[data-tone="success"] { color: var(--weline-theme-success); }
+</style>

@@ -1,4 +1,6 @@
 <?php
+
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
 /**
  * Related products root.
  *
@@ -12,20 +14,24 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product"]}
  * @widget.supports {["layout-product-related-products","layout-product-sidebar"]}
- * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-related-products","area":"content","sort_order":0}]}
  *
  * @param title {default="相关产品",type="string",label="标题"}
  * @param limit {default=4,type="number",label="显示数量"}
  * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
  * @param layout {default="carousel",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
 
+use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('related-products');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
 $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
@@ -34,9 +40,7 @@ $widgetTitle = WidgetI18n::label($titleSource, '相关产品');
 $limit = max(1, (int)($this->getData('limit') ?? 4));
 $columns = (string)($this->getData('columns') ?? '4');
 $layout = (string)($this->getData('layout') ?? 'carousel');
-$placeholder = 'data:image/svg+xml;charset=UTF-8,' . rawurlencode(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#f8fafc"/><stop offset="1" stop-color="#e2e8f0"/></linearGradient></defs><rect width="640" height="640" fill="url(#g)"/><circle cx="320" cy="270" r="72" fill="#cbd5e1"/><path d="M160 488c42-94 94-141 156-141s116 47 164 141" fill="#cbd5e1"/></svg>'
-);
+$placeholder = StorefrontImagePlaceholder::url(0);
 
 $products = [];
 for ($i = 1; $i <= $limit; $i++) {
@@ -99,13 +103,6 @@ if ($realProducts !== []) {
     unset($product);
 }
 
-$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
-    | JSON_UNESCAPED_SLASHES
-    | JSON_HEX_TAG
-    | JSON_HEX_AMP
-    | JSON_HEX_APOS
-    | JSON_HEX_QUOT
-    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -130,7 +127,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0);
                     $actionProductUrl = (string)($product['url'] ?? '');
                     ?>
-                    <article class="product-card">
+                    <article class="product-card" data-product-id="<?= $actionProductId ?>">
                         <div class="product-image-wrapper">
                             <a href="<?= htmlspecialchars((string)($product['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="product-image-link">
                                 <img src="<?= htmlspecialchars((string)($product['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
@@ -139,18 +136,13 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                      loading="lazy">
                             </a>
 
-                            <div class="product-actions">
-                                <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" type="button" title="<?= __('加入收藏') ?>" aria-label="<?= __('加入收藏') ?>" aria-pressed="false" data-product-id="<?= $actionProductId ?>">
-                                    <svg class="action-icon weline-pixel::add_to_wishlist" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-                                        <path d="M12 20.35l-1.45-1.32C5.4 14.36 2 11.27 2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.08C13.09 2.81 14.76 2 16.5 2 19.58 2 22 4.42 22 7.5c0 3.77-3.4 6.86-8.55 11.53L12 20.35z"/>
-                                    </svg>
-                                </button>
-                                <a class="action-btn btn-quickview" href="<?= htmlspecialchars($actionProductUrl, ENT_QUOTES, 'UTF-8') ?>" title="<?= __('快速查看') ?>" aria-label="<?= __('快速查看') ?>" data-product-id="<?= $actionProductId ?>">
-                                    <svg class="action-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-                                        <path d="M12 4.5c5.05 0 9.27 3.11 11 7.5-1.73 4.39-5.95 7.5-11 7.5S2.73 16.39 1 12c1.73-4.39 5.95-7.5 11-7.5zm0 2C8.24 6.5 4.93 8.57 3.18 12 4.93 15.43 8.24 17.5 12 17.5s7.07-2.07 8.82-5.5C19.07 8.57 15.76 6.5 12 6.5zm0 2.5a3 3 0 110 6 3 3 0 010-6z"/>
-                                    </svg>
-                                </a>
-                            </div>
+                            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                                'product_id' => $actionProductId,
+                                'show_wishlist' => $shopperActions['show_wishlist'],
+                                'show_compare' => $shopperActions['show_compare'],
+                                'show_quickview' => $shopperActions['show_quickview'],
+                                'wishlist_pixel' => true,
+                            ]) ?>
                         </div>
 
                         <div class="product-info">
@@ -194,129 +186,24 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     </div>
 </section>
 
-<script>
-(function () {
-    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
-    if (!root || root.dataset.wishlistActionsBound === '1') {
-        return;
-    }
-    root.dataset.wishlistActionsBound = '1';
-
-    var texts = {
-        added: <?= json_encode((string)__('已加入收藏'), $jsonForScriptFlags) ?>,
-        failed: <?= json_encode((string)__('加入收藏失败，请稍后重试'), $jsonForScriptFlags) ?>,
-        login: <?= json_encode((string)__('请先登录'), $jsonForScriptFlags) ?>
-    };
-
-    function showNotice(message, type) {
-        if (window.Weline && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
-            window.Weline.UI.toast.show(message, {tone: type || 'info'});
-        }
-    }
-
-    async function getWishlistApi() {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
-            return window.Weline.Api.resource('wishlist');
-        }
-        if (window.Weline && typeof window.Weline.use === 'function') {
-            await window.Weline.use('api');
-        }
-        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-            throw new Error('Weline.Api.resource is not available');
-        }
-        return window.Weline.Api.resource('wishlist');
-    }
-
-    function normalizeWishlistPayload(payload) {
-        if (payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object') {
-            if ('success' in payload.data || 'message' in payload.data || 'redirect_url' in payload.data) {
-                return payload.data;
-            }
-        }
-        return payload && typeof payload === 'object' ? payload : {};
-    }
-
-    function updateWishlistCount(count) {
-        if (count === undefined || count === null) {
-            return;
-        }
-        document.querySelectorAll('.wishlist-count').forEach(function (node) {
-            node.textContent = String(count);
-            node.setAttribute('data-count', String(count));
-            node.style.display = Number(count) > 0 ? '' : 'none';
-        });
-    }
-
-    root.addEventListener('click', function (event) {
-        var button = event.target && event.target.closest ? event.target.closest('.btn-wishlist') : null;
-        if (!button || !root.contains(button)) {
-            return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-
-        var productId = Number(button.getAttribute('data-product-id') || 0);
-        if (productId <= 0 || button.disabled) {
-            return;
-        }
-
-        button.disabled = true;
-        button.setAttribute('aria-busy', 'true');
-
-        getWishlistApi()
-            .then(function (WishlistApi) {
-                return WishlistApi.add({ product_id: productId });
-            })
-            .then(function (payload) {
-                var data = normalizeWishlistPayload(payload);
-                var redirectUrl = data.redirect_url || (data.data && data.data.redirect_url) || '';
-                if (redirectUrl) {
-                    window.location.href = redirectUrl;
-                    return;
-                }
-                if (data.success === false) {
-                    showNotice(data.message || texts.login, 'warning');
-                    return;
-                }
-                button.classList.add('is-active');
-                button.setAttribute('aria-pressed', 'true');
-                updateWishlistCount(
-                    Object.prototype.hasOwnProperty.call(data, 'wishlist_count')
-                        ? data.wishlist_count
-                        : (data.data && data.data.wishlist_count)
-                );
-                showNotice(data.message || texts.added, 'success');
-            })
-            .catch(function (error) {
-                console.error('[related-products] wishlist add failed', error);
-                showNotice(texts.failed, 'error');
-            })
-            .finally(function () {
-                button.disabled = false;
-                button.removeAttribute('aria-busy');
-            });
-    });
-})();
-</script>
-
 <style>
 .<?= $wc ?> {
     width: 100%;
-    max-width: var(--layout-max-width, 1600px);
+    max-width: var(--layout-max-width);
     margin: 0 auto;
-    padding: 0 var(--weline-space-6, 1.5rem);
+    padding: 0 var(--weline-space-6);
     box-sizing: border-box;
 }
 
 .<?= $wc ?> .widget-header {
-    margin-bottom: var(--weline-space-5, 1.5rem);
+    margin-bottom: var(--weline-space-5);
 }
 
 .<?= $wc ?> .widget-title {
     margin: 0;
     color: var(--weline-theme-text);
-    font-size: clamp(1.5rem, 2vw, 2rem);
-    font-weight: var(--font-weight-bold, 700);
+    font-size: clamp(var(--font-size-2xl), 2vw, var(--font-size-4xl));
+    font-weight: var(--font-weight-bold);
     line-height: 1.2;
 }
 
@@ -332,7 +219,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
 .<?= $wc ?> .products-grid {
     display: grid;
-    gap: var(--spacing-4, 1rem);
+    gap: var(--spacing-4);
     width: 100%;
 }
 
@@ -346,7 +233,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
 .<?= $wc ?> .products-grid.columns-4,
 .<?= $wc ?> .products-grid.columns-5 {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--size-panel-220), 1fr));
 }
 
 .<?= $wc ?> .product-card {
@@ -354,10 +241,10 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--weline-theme-border);
-    border-radius: var(--radius-lg, 12px);
+    border: var(--border-width-thin) solid var(--weline-theme-border);
+    border-radius: var(--radius-lg);
     background: var(--weline-theme-surface-raised);
-    box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+    box-shadow: var(--shadow-sm);
 }
 
 .<?= $wc ?> .product-image-wrapper {
@@ -380,24 +267,24 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
 .<?= $wc ?> .product-actions {
     position: absolute;
-    top: .75rem;
-    right: .75rem;
+    top: var(--weline-space-3);
+    right: var(--weline-space-3);
     display: flex;
-    gap: .5rem;
+    gap: var(--spacing-sm);
 }
 
 .<?= $wc ?> .action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: var(--spacing-2_25);
+    height: var(--spacing-2_25);
     border: 0;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, .92);
+    border-radius: var(--border-radius-full);
+    background: var(--color-on-dark-92);
     color: var(--weline-theme-text);
     cursor: pointer;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, .12);
+    box-shadow: 0 var(--spacing-sm) var(--weline-space-5) var(--color-overlay-12);
     text-decoration: none;
 }
 
@@ -412,8 +299,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
 .<?= $wc ?> .action-icon {
     display: block;
-    width: 1.125rem;
-    height: 1.125rem;
+    width: var(--font-size-lg);
+    height: var(--font-size-lg);
     fill: currentColor;
 }
 
@@ -423,13 +310,13 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     min-width: 0;
     flex: 1;
     flex-direction: column;
-    gap: .6rem;
-    padding: var(--spacing-4, 1rem);
+    gap: var(--token-size-6rem);
+    padding: var(--spacing-4);
 }
 
 .<?= $wc ?> .product-name {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--font-size-base);
     line-height: 1.35;
 }
 
@@ -445,9 +332,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 .<?= $wc ?> .product-rating {
     display: flex;
     align-items: center;
-    gap: .5rem;
+    gap: var(--spacing-sm);
     color: var(--weline-theme-text-muted);
-    font-size: .875rem;
+    font-size: var(--font-size-sm);
 }
 
 .<?= $wc ?> .product-rating .stars i {
@@ -461,7 +348,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 .<?= $wc ?> .product-price {
     display: flex;
     align-items: baseline;
-    gap: .5rem;
+    gap: var(--spacing-sm);
     margin-top: auto;
 }
 
@@ -479,11 +366,11 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: .5rem;
+    gap: var(--spacing-sm);
     width: 100%;
-    min-height: 2.75rem;
+    min-height: var(--spacing-2_75);
     border: 0;
-    border-radius: var(--radius-md, 10px);
+    border-radius: var(--radius-md);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     cursor: pointer;

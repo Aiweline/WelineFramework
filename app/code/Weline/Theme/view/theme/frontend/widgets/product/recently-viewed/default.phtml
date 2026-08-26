@@ -1,4 +1,6 @@
 <?php
+
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
 /**
  * 最近浏览部件
  *
@@ -12,7 +14,6 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-product-list-recommendations","layout-search-recommendations"]}
- * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-recently-viewed","area":"content","sort_order":0}]}
  * @widget.compatible {true}
  *
  * @param title {default="最近浏览",type="string",label="标题"}
@@ -20,14 +21,19 @@
  * @param columns {default="6",type="select",label="每行列数",options={3:"3列",4:"4列",5:"5列",6:"6列"}}
  * @param layout {default="carousel",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  * @param show_price {default=true,type="bool",label="显示价格"}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
 
+use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('recently-viewed');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
 $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
@@ -37,9 +43,7 @@ $limit = max(1, (int)($this->getData('limit') ?? 6));
 $columns = (string)($this->getData('columns') ?? '6');
 $layout = (string)($this->getData('layout') ?? 'carousel');
 $showPrice = (bool)($this->getData('show_price') ?? true);
-$placeholder = 'data:image/svg+xml;charset=UTF-8,' . rawurlencode(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#f8fafc"/><stop offset="1" stop-color="#dbeafe"/></linearGradient></defs><rect width="640" height="640" fill="url(#g)"/><circle cx="320" cy="320" r="150" fill="none" stroke="#93c5fd" stroke-width="34"/><path d="M320 220v112l86 52" fill="none" stroke="#60a5fa" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-);
+$placeholder = StorefrontImagePlaceholder::url(1);
 
 $products = [];
 try {
@@ -84,7 +88,10 @@ try {
             'url' => $handle !== ''
                 ? $this->getUrl('product/' . $handle)
                 : $this->getUrl('weshop/product/view', ['id' => $productId]),
-            'image' => (string)($product['image'] ?? $product['thumbnail'] ?? $placeholder),
+            'image' => StorefrontImagePlaceholder::resolve(
+                (string)($product['image'] ?? $product['thumbnail'] ?? ''),
+                $productId,
+            )['src'],
             'price' => (float)($product['price'] ?? 0),
         ];
     }
@@ -112,21 +119,32 @@ if (empty($products)) {
         <div class="products-wrapper">
             <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>">
                 <?php foreach ($products as $product): ?>
-                    <article class="product-card compact-card">
-                        <a href="<?= htmlspecialchars((string)$product['url'], ENT_QUOTES, 'UTF-8') ?>" class="card-link">
-                            <div class="product-image-wrapper">
+                    <?php $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0); ?>
+                    <article class="product-card compact-card" data-product-id="<?= $actionProductId ?>">
+                        <div class="product-image-wrapper">
+                            <a href="<?= htmlspecialchars((string)$product['url'], ENT_QUOTES, 'UTF-8') ?>" class="product-image-link">
                                 <img src="<?= htmlspecialchars((string)$product['image'], ENT_QUOTES, 'UTF-8') ?>"
                                      alt="<?= htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8') ?>"
                                      class="product-image"
                                      loading="lazy">
-                            </div>
-                            <div class="product-info">
-                                <h3 class="product-name"><?= htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8') ?></h3>
-                                <?php if ($showPrice): ?>
-                                    <span class="price-current">¥<?= number_format((float)$product['price'], 2) ?></span>
-                                <?php endif; ?>
-                            </div>
-                        </a>
+                            </a>
+                            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                                'product_id' => $actionProductId,
+                                'show_wishlist' => $shopperActions['show_wishlist'],
+                                'show_compare' => $shopperActions['show_compare'],
+                                'show_quickview' => $shopperActions['show_quickview'],
+                            ]) ?>
+                        </div>
+                        <div class="product-info">
+                            <h3 class="product-name">
+                                <a href="<?= htmlspecialchars((string)$product['url'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8') ?>
+                                </a>
+                            </h3>
+                            <?php if ($showPrice): ?>
+                                <span class="price-current">¥<?= number_format((float)$product['price'], 2) ?></span>
+                            <?php endif; ?>
+                        </div>
                     </article>
                 <?php endforeach; ?>
             </div>
@@ -137,29 +155,29 @@ if (empty($products)) {
 <style>
 .<?= $wc ?> {
     width: 100%;
-    max-width: var(--layout-max-width, 1600px);
+    max-width: var(--layout-max-width);
     margin: 0 auto;
-    padding: var(--weline-space-8, 2rem) var(--weline-space-6, 1.5rem);
+    padding: var(--weline-space-8) var(--weline-space-6);
     box-sizing: border-box;
     background: var(--weline-theme-surface-muted);
 }
 
-.<?= $wc ?> .widget-header { margin-bottom: var(--weline-space-5, 1.5rem); }
+.<?= $wc ?> .widget-header { margin-bottom: var(--weline-space-5); }
 .<?= $wc ?> .widget-title {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
     margin: 0;
     color: var(--weline-theme-text);
-    font-size: clamp(1.25rem, 1.6vw, 1.6rem);
-    font-weight: var(--weline-font-weight-bold, 700);
+    font-size: clamp(var(--font-size-xl), 1.6vw, var(--token-size-1-6rem));
+    font-weight: var(--weline-font-weight-bold);
     line-height: 1.2;
 }
 .<?= $wc ?> .widget-title :is(i, svg) { color: var(--weline-theme-text-muted); }
 .<?= $wc ?> .products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: var(--weline-space-4, 1rem);
+    grid-template-columns: repeat(auto-fit, minmax(var(--size-panel-180), 1fr));
+    gap: var(--weline-space-4);
     width: 100%;
     box-sizing: border-box;
 }
@@ -168,8 +186,8 @@ if (empty($products)) {
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg, 12px);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
     background: var(--weline-theme-surface-raised);
     box-shadow: var(--weline-theme-shadow-sm);
 }
@@ -179,19 +197,53 @@ if (empty($products)) {
     min-width: 0;
     flex: 1;
     flex-direction: column;
-    gap: var(--weline-space-2, 0.45rem);
-    padding: var(--weline-space-3, 0.875rem);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-3);
     box-sizing: border-box;
 }
 .<?= $wc ?> .products-wrapper { width: 100%; overflow: hidden; }
-.<?= $wc ?> .card-link { display: flex; height: 100%; flex-direction: column; color: inherit; text-decoration: none; }
+.<?= $wc ?> .product-image-link { display: block; width: 100%; height: 100%; }
+.<?= $wc ?> .product-name a { color: inherit; text-decoration: none; }
+.<?= $wc ?> .product-name a:hover { color: var(--weline-theme-primary); }
+.<?= $wc ?> .product-actions {
+    position: absolute;
+    top: var(--weline-space-2);
+    right: var(--weline-space-2);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-1);
+    opacity: 0;
+    transform: translateX(6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.<?= $wc ?> .product-card:hover .product-actions,
+.<?= $wc ?> .product-card:focus-within .product-actions {
+    opacity: 1;
+    transform: translateX(0);
+}
+.<?= $wc ?> .action-btn {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    color: var(--weline-theme-text);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 17, 17, 0.12);
+}
 .<?= $wc ?> .product-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
-.<?= $wc ?> .product-card:hover { transform: translateY(-2px); border-color: var(--weline-theme-primary); box-shadow: var(--shadow-md, 0 12px 30px rgba(15,23,42,.10)); }
+.<?= $wc ?> .product-card:hover { transform: translateY(var(--spacing-neg-0_5)); border-color: var(--weline-theme-primary); box-shadow: var(--shadow-md); }
 .<?= $wc ?> .product-image-wrapper { position: relative; overflow: hidden; background: var(--weline-theme-surface-raised); aspect-ratio: 1 / 1; }
 .<?= $wc ?> .product-image { display: block; width: 100%; height: 100%; object-fit: cover; }
-.<?= $wc ?> .product-name { margin: 0; color: var(--weline-theme-text); font-size: .875rem; font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.<?= $wc ?> .product-rating { display: flex; align-items: center; gap: .45rem; }
-.<?= $wc ?> .stars { display: flex; align-items: center; gap: 2px; }
-.<?= $wc ?> .card-link:hover .product-name { color: var(--weline-theme-primary); }
+.<?= $wc ?> .product-name { margin: 0; color: var(--weline-theme-text); font-size: var(--font-size-sm); font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.<?= $wc ?> .product-rating { display: flex; align-items: center; gap: var(--spacing-0_45); }
+.<?= $wc ?> .stars { display: flex; align-items: center; gap: var(--spacing-0_5); }
 .<?= $wc ?> .price-current { color: var(--weline-theme-primary); font-weight: 800; }
+@media (max-width: 768px) {
+    .<?= $wc ?> .product-actions { opacity: 1; transform: none; }
+}
 </style>

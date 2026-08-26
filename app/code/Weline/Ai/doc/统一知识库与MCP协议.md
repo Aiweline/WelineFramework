@@ -23,15 +23,15 @@ prepare_project(repository, client_session_id)
 
 返回 `project-readiness.v1`：
 
-- `ready`：三文档契约、项目身份、模块清单、文档 Hash 和 SQLite 索引有效；返回 `readiness_id`。
-- `needs_repair`：缺少必要文档；返回确定性 `project-repair-bundle.v1`，禁止继续开发。
+- `ready`：三文档契约、项目身份、模块清单、文档 Hash 和 SQLite 索引有效；返回 `readiness_id`。缺失文档会在准备阶段自动修复。
+- `needs_repair`：兼容状态；当前实现会在 `prepare_project` 内自动修复并直接返回 `ready`（附带 `repair` 元数据）。
 - `blocked`：项目布局、索引、凭据型文档内容或知识冲突不可安全处理，禁止开发。
 
 `readiness_id` 与规范化项目、客户端会话、模块清单、文档 Hash 和当前索引 revision 绑定。除 health、索引状态、准备和修复外，所有知识及编辑工具都必须同时提交 `readiness_id` 与 `client_session_id`。
 
 ## 文档修复
 
-`repair_project_docs` 只有在调用方传入原 Bundle、同一会话和 `authorized=true` 时才执行。第一版只创建确定性确认缺失的文档，不覆盖现有文档。文件创建、目标重索引和失败回滚属于同一修复事务；内容模板明确标注未知历史，不补造需求或验收结论。
+`prepare_project` 发现缺失文档时会自动应用确定性 `project-repair-bundle.v1` 并继续开发。`repair_project_docs` 保留为手动重放同一 Bundle 的兼容入口。修复只创建确定性确认缺失的文档，不覆盖现有文档。文件创建、目标重索引和失败回滚属于同一修复事务；内容模板明确标注未知历史，不补造需求或验收结论。
 
 ## 任务知识
 
@@ -84,8 +84,8 @@ DROP TABLE ai_knowledge_call_history;
 
 ## 客户端支持边界
 
-- Codex：项目 `.codex/config.toml` 注册本地 STDIO MCP，并以 `required=true` 把启动失败作为会话门禁。
+- Codex：项目 `.codex/config.toml` 注册本地 STDIO MCP，并以 `required=true` 优先保证标准项目智能流程。若完成 `ensure-project-guidance.php` 自动修复并至少重试一次后，当前会话仍无工具或持续 `Transport closed`，记录 `HOST_MCP_NOT_ATTACHED`；若工具已附加但有界上下文批次后仍明确无法物化本次精确目标，记录 `MCP_TARGET_UNAVAILABLE`。这两种情况允许受限原生回退，无需仅为重新附加而新开会话。
 - Cursor：第一步运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php` 自检并自动修复宿主环境；通过后调用 `prepare_project`。`ensure-cursor-mcp.php` 仅作为其子步骤，不单独要求用户手工配置。
 - 其他 AI：仅当支持本地 STDIO MCP、能稳定传递会话 ID 并遵守 readiness 状态机时受支持。
 
-客户端启动 MCP 不等于项目已经 ready；只有 `prepare_project.status=ready` 才允许进入开发。
+客户端启动 MCP 不等于项目已经 ready；标准路径只有 `prepare_project.status=ready` 才允许进入开发。受限原生回退不是 readiness 替代品：只允许精确已知路径读取、`apply_patch` 与定向验证，必须记录失败证据，禁止仓库级索引替代品、宽泛递归扫描、`generated/` 修改和验收降级；`blocked` 状态不可回退，MCP 恢复后必须重新进入标准路径。

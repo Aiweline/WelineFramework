@@ -1,0 +1,48 @@
+<?php
+/**
+ * @hook-priority 180
+ * @hook-sort-order 5
+ */
+$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
+if ($isBackend) {
+    return;
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Compare::css/product-shopper-chrome.css)?v=20260824-shopper1">
+<dialog id="weline-product-quickview-dialog"
+        class="w-dialog w-product-quickview"
+        data-w-component="dialog"
+        data-state="closed"
+        data-size="lg"
+        data-w-closable="true"
+        data-w-backdrop="dismissible"
+        aria-labelledby="weline-product-quickview-title">
+    <header class="w-dialog__header">
+        <h2 id="weline-product-quickview-title" class="w-dialog__title"><?= __('快速查看') ?></h2>
+        <button type="button"
+                class="w-button"
+                data-variant="ghost"
+                data-size="sm"
+                data-w-action="dialog.close"
+                data-w-close
+                data-quickview-close
+                aria-label="<?= __('关闭') ?>">×</button>
+    </header>
+    <div class="w-dialog__body w-product-quickview__body" data-quickview-body>
+        <div class="w-product-quickview__loading"><?= __('加载中…') ?></div>
+    </div>
+</dialog>
+<aside class="w-compare-bar" data-compare-bar hidden aria-label="<?= __('对比栏') ?>">
+    <div class="w-compare-bar__inner">
+        <div class="w-compare-bar__summary">
+            <strong data-compare-bar-label"><?= __('对比') ?></strong>
+            <span data-compare-bar-count>0/4</span>
+        </div>
+        <div class="w-compare-bar__thumbs" data-compare-bar-thumbs></div>
+        <div class="w-compare-bar__actions">
+            <button type="button" class="w-button" data-variant="outline" data-size="sm" data-compare-clear"><?= __('清空') ?></button>
+            <a href="/compare" class="w-button" data-variant="primary" data-size="sm"><?= __('开始对比') ?></a>
+        </div>
+    </div>
+</aside>
+<script src="@static(Weline_Compare::js/product-card-actions.js)?v=20260826-shopper3" defer></script>

@@ -724,6 +724,12 @@ $productsUrl = $this->getUrl('products');
     }
 
     function render(data) {
+        const deliveryAddress = data && data.delivery && typeof data.delivery === 'object'
+            ? data.delivery.checkout_address
+            : null;
+        if (deliveryAddress && typeof deliveryAddress === 'object') {
+            applyDefaultShippingAddress(deliveryAddress);
+        }
         applyDefaultShippingAddress(data.default_shipping_address);
         checkoutState.currency = text(data.currency || data.cart && data.cart.currency || 'CNY') || 'CNY';
         checkoutState.cart = data.cart || {};

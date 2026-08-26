@@ -24,13 +24,21 @@ final class ProductProviderRegistryTest extends TestCase
     {
         $registry = ProductProviderRegistry::forTesting([], autoEnsureDefault: true);
         $meta = $registry->listMetadata(true);
-        self::assertCount(1, $meta);
+        self::assertCount(5, $meta);
+        self::assertSame(
+            ['simple', 'configurable', 'virtual', 'downloadable', 'bundle'],
+            array_column($meta, 'type'),
+        );
         self::assertSame(ProductProviderInterface::CODE_DEFAULT, $meta[0]['code']);
         self::assertSame(ProductProviderInterface::TYPE_SIMPLE, $meta[0]['type']);
         self::assertSame(DefaultProductProvider::REQUIRED_ATTRIBUTES, $meta[0]['required_attributes']);
         self::assertContains(ProductPricingCapabilityInterface::class, $meta[0]['capabilities']);
         self::assertContains(ProductInventoryCapabilityInterface::class, $meta[0]['capabilities']);
         self::assertContains(ProductRendererCapabilityInterface::class, $meta[0]['capabilities']);
+
+        foreach (['simple', 'configurable', 'virtual', 'downloadable', 'bundle'] as $type) {
+            self::assertNotNull($registry->getByType($type, true), 'Missing built-in type: ' . $type);
+        }
 
         $provider = $registry->getByType('simple');
         self::assertInstanceOf(DefaultProductProvider::class, $provider);
@@ -76,7 +84,7 @@ final class ProductProviderRegistryTest extends TestCase
         self::assertNull($registry->getByType('bundle', true));
         self::assertNotNull($registry->getByType('bundle', false));
         self::assertInstanceOf(DefaultProductProvider::class, $registry->getByType('simple', true));
-        self::assertSame(['name', 'sku'], $registry->requiredAttributesForType('simple'));
+        self::assertSame(DefaultProductProvider::REQUIRED_ATTRIBUTES, $registry->requiredAttributesForType('simple'));
     }
 
     public function testRequiredAttributesEmptyRejected(): void
@@ -175,7 +183,7 @@ final class ProductProviderRegistryTest extends TestCase
         self::assertNull($registry->getByType('disabled-custom', true));
         self::assertNotNull($registry->getByType('disabled-custom', false));
         self::assertInstanceOf(DefaultProductProvider::class, $registry->getByType('simple', true));
-        self::assertSame(['name', 'sku'], $registry->requiredAttributesForType('simple'));
+        self::assertSame(DefaultProductProvider::REQUIRED_ATTRIBUTES, $registry->requiredAttributesForType('simple'));
     }
 
     public function testMatchedExtensionWithInvalidContractFailsFast(): void

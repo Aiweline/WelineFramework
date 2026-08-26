@@ -569,6 +569,44 @@ class CustomVendorService
     }
 
     /**
+     * 按已保存供应商 ID 做一键连通性测试（解析 Base URL + 默认/首个模型）
+     *
+     * @return array{success:bool,message:string,response?:mixed,model_code?:string}
+     */
+    public function testSavedVendorById(int $id, string $apiKey = ''): array
+    {
+        if ($id <= 0) {
+            throw new \InvalidArgumentException(__('参数错误'));
+        }
+
+        /** @var CustomVendor $vendor */
+        $vendor = ObjectManager::getInstance(CustomVendor::class)->load($id);
+        if (!$vendor->getId()) {
+            throw new \InvalidArgumentException(__('自定义供应商不存在'));
+        }
+
+        $baseUrl = trim((string)$vendor->getData(CustomVendor::schema_fields_BASE_URL));
+        $modelCode = trim((string)$vendor->getData(CustomVendor::schema_fields_TEST_MODEL));
+        if ($modelCode === '') {
+            $code = (string)$vendor->getData(CustomVendor::schema_fields_CODE);
+            foreach ($this->listModelsForVendor($code) as $model) {
+                $candidate = trim((string)($model['model_code'] ?? ''));
+                if ($candidate !== '') {
+                    $modelCode = $candidate;
+                    break;
+                }
+            }
+        }
+
+        $result = $this->testCompatEndpoint($baseUrl, $modelCode, $apiKey);
+        if (!empty($result['success'])) {
+            $result['model_code'] = $modelCode;
+        }
+
+        return $result;
+    }
+
+    /**
      * 对 OpenAI 兼容端点做连通性测试（无需先落库供应商）
      *
      * @return array{success:bool,message:string,response?:mixed}

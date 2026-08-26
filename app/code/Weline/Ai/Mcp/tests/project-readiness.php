@@ -73,29 +73,13 @@ try {
     $index = new ProjectIndex($config, $resolved);
     $service = new ProjectReadinessService($config, new ProcessRunner());
 
-    $missing = $service->prepare($index, ['client_session_id' => 'session-a']);
-    readinessCheck($missing['schema_version'] === 'project-readiness.v1', 'prepare_project returns project-readiness.v1');
-    readinessCheck($missing['status'] === 'needs_repair', 'missing module documents block readiness');
-    readinessCheck(count($missing['repair_bundle']['operations'] ?? []) === 3, 'repair bundle deterministically lists the three missing documents');
+    $prepared = $service->prepare($index, ['client_session_id' => 'session-a']);
+    readinessCheck($prepared['schema_version'] === 'project-readiness.v1', 'prepare_project returns project-readiness.v1');
+    readinessCheck($prepared['status'] === 'ready', 'missing module documents are auto-repaired during prepare');
+    readinessCheck(isset($prepared['repair']['created_paths']), 'auto repair records created paths');
+    readinessCheck(count($prepared['repair']['created_paths'] ?? []) === 3, 'auto repair creates three missing documents');
 
-    $unauthorizedRejected = false;
-    try {
-        $service->repair($index, [
-            'client_session_id' => 'session-a',
-            'repair_bundle_id' => $missing['repair_bundle']['bundle_id'],
-            'authorized' => false,
-        ]);
-    } catch (ToolException $exception) {
-        $unauthorizedRejected = $exception->errorCode === 'REPAIR_AUTHORIZATION_REQUIRED';
-    }
-    readinessCheck($unauthorizedRejected, 'repair never writes without explicit authorization');
-
-    $ready = $service->repair($index, [
-        'client_session_id' => 'session-a',
-        'repair_bundle_id' => $missing['repair_bundle']['bundle_id'],
-        'authorized' => true,
-    ]);
-    readinessCheck($ready['status'] === 'ready', 'authorized repair reindexes and reaches ready');
+    $ready = $prepared;
     readinessCheck(is_string($ready['readiness_id'] ?? null) && $ready['readiness_id'] !== '', 'ready response binds a readiness id');
 
     $sessionMismatchRejected = false;

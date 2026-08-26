@@ -92,9 +92,9 @@ class DevToolPanelObserver implements ObserverInterface
                 return;
             }
 
-            if ($this->shouldSkipForResponseSize($result)) {
-                return;
-            }
+            // Oversized HTML still gets the tiny lazy bootstrap so keyboard "weline" works
+            // on heavy storefront pages (e.g. /categories ~1.4MB). Full panel HTML stays gated.
+            $skipFullPanelForSize = $this->shouldSkipForResponseSize($result);
 
             $existingRequestIds = $this->extractRequestIdsFromResult($result);
             $panelAlreadyInjected = stripos($result, 'id="dev-tool-panel"') !== false
@@ -117,7 +117,7 @@ class DevToolPanelObserver implements ObserverInterface
                                 fn() => $this->appendPanelHtml($result, $loaderHtml)
                             );
                         }
-                    } else {
+                    } elseif (!$skipFullPanelForSize) {
                         $panelHtml = $this->measureTraceStage(
                             'dev_tool_panel::render_panel',
                             fn() => $this->renderPanel()

@@ -4,8 +4,8 @@
 
 `prepare_project(repository, client_session_id)` returns:
 
-- `ready`: module documents and index are current; includes `readiness_id`.
-- `needs_repair`: development is denied; includes missing paths and a deterministic repair Bundle.
+- `ready`: module documents and index are current; includes `readiness_id`. Missing required documents are auto-repaired during preparation.
+- `needs_repair`: retained only for compatibility receipts; current servers auto-repair and return `ready` with a `repair` section instead.
 - `blocked`: project identity, index refresh, document conflict, Git branch policy, or safety validation failed. Framework repositories with a `dev` branch require `git switch dev` before development (`GIT_BRANCH_FORBIDDEN` on `master` or other branches).
 
 The receipt contains project ID, revision, module count, inventory Hash and document Hash. Every guarded knowledge/edit tool requires `repository`, `client_session_id`, and `readiness_id`.
@@ -26,7 +26,7 @@ It never returns the entire framework corpus by default. `resolve_skill` and `ge
 
 ## Document repair
 
-The repair Bundle contains only missing `doc/README.md`, `doc/需求.md`, and `doc/开发日志.md` create operations. Existing files, symlinks and changed snapshots cause deterministic refusal. Repairs are authorized separately from preparation and immediately reindexed.
+The repair Bundle contains only missing `doc/README.md`, `doc/需求.md`, and `doc/开发日志.md` create operations. Existing files, symlinks and changed snapshots cause deterministic refusal. `prepare_project` applies the bundle automatically; `repair_project_docs` remains for manual replay of the same bundle.
 
 ## Freshness
 

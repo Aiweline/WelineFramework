@@ -12,7 +12,8 @@
         "weline/module-theme": "@dev"
     },
     "suggest": {
-        "weline/module-ai": "Enables optional AI translation for customer-service conversations."
+        "weline/module-ai": "Enables optional AI translation for customer-service conversations.",
+        "weline/module-captcha": "Enables guest bind-email captcha challenges on the storefront widget."
     },
     "autoload": {
         "psr-4": {

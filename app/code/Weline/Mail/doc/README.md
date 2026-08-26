@@ -16,7 +16,7 @@ php bin/w mail:service:status
 php bin/w mail:dns:check example.com mail.example.com
 ```
 
-`mail:env:install` 默认只展示安装计划；真实依赖安装优先走框架入口。Stalwart 在框架环境检测中属于推荐依赖，不阻断 Weline_Mail 模块安装：
+后台入口默认展示 Stalwart 真实收件箱，`?view=config` 展示域名、DNS 与账号设置。前台账号中心仅对 `customer_id` 明确绑定了 active 邮箱账号的登录用户展示“我的邮箱”；JMAP 读取固定走本机回环地址，并使用服务器上的密封读取凭据。\n\n`mail:env:install` 默认只展示安装计划；真实依赖安装优先走框架入口。Stalwart 在框架环境检测中属于推荐依赖，不阻断 Weline_Mail 模块安装：
 
 ```bash
 php bin/w env:install stalwart-mail-server -y
@@ -45,14 +45,65 @@ fake 引擎仅用于 `.test` / `.invalid` 域名的本地业务冒烟。fake 账
 
 ## DNS 要求
 
-每个邮箱域需要配置：
+邮箱地址中的域和邮件服务主机名是两个概念：例如 `user@example.com` 的邮箱域是 `example.com`，服务主机名可以是 `mail.example.com`。
 
-- MX：指向邮件服务主机名。
-- SPF：默认建议 `v=spf1 mx -all`。
-- DKIM：由邮件引擎生成公钥后填写。
-- DMARC：默认建议 quarantine 策略。
-- PTR：公网 IP 反向解析应指向邮件服务主机名。
+### 必需 DNS
 
+| 记录 | 主机/名称 | 建议值 | 要求 |
+| --- | --- | --- | --- |
+| A | `mail.example.com` | 服务器公网 IPv4 | 必需。 |
+| AAAA | `mail.example.com` | 服务器公网 IPv6 | 仅当邮件服务、防火墙和 PTR 都完整支持 IPv6 时配置。 |
+| MX | `example.com` | `10 mail.example.com` | 必需；MX 目标必须直接解析 A/AAAA，不使用 CNAME。 |
+| SPF | `example.com` | `v=spf1 mx -all` | 必需，作为 TXT 发布。 |
+| DKIM | `selector._domainkey.example.com` | 邮件引擎生成的公钥 | 必需；选择器和值以邮件引擎实际输出为准。 |
+| DMARC | `_dmarc.example.com` | 先 `p=none`，再升级 `quarantine` / `reject` | 先观察报告，确认 SPF/DKIM 对齐后再收紧策略；模块检测器会给出强化建议。 |
+| PTR/rDNS | 服务器公网 IP | `mail.example.com` | 在 VPS/云厂商控制台设置，并确保主机名正向解析回同一公网 IP。 |
+
+### smtp 别名、TLS 与端口
+
+`smtp.example.com` 不是必需项，客户端可以直接连接 `mail.example.com`。如需友好别名，可用 CNAME 指向 `mail.example.com`，也可使用指向同一公网 IPv4 的 A 记录；TLS 证书必须覆盖客户端实际连接的主机名。
+
+- `25`：服务器接收入站邮件（MTA），不作为普通客户端提交端口。
+- `587`：客户端提交发信，推荐 STARTTLS。
+- `465`：可选的隐式 TLS 提交端口。
+- `993`：IMAPS 客户端收信。
+
+### 后台每域名配置面板
+
+后台“企业邮箱管理”分为“邮箱 / 用户与账号 / 域名与 DNS”三页。域名页会为每个已开通域名展示可直接照做的 DNS 清单，并提供 Cloudflare 连接、预览和一键应用入口。
+
+固定流程：
+
+1. 连接或重新授权 Cloudflare。
+2. 填写源站公网 IP，以及 Stalwart 实际生成的 DKIM 选择器和公钥。
+3. 先预览变更，再确认 mail 主机将以 DNS-only 暴露源站公网 IP。
+4. 应用当前域名的 mail A/AAAA、根 MX、根 SPF、当前 DKIM 和 DMARC；写后重新读取校验，失败则回滚并列出残留变更。
+
+安全边界：
+
+- mail A/AAAA 永远强制 proxied=false；SMTP、IMAP、POP 不能走 Cloudflare 橙云代理。
+- smtp 子域名是可选项；配置时同样必须 DNS-only。
+- Cloudflare Email Routing 锁定的 MX/SPF 会阻止写入，需先解除托管。
+- DKIM 私钥、示例值或缺失公钥会阻止操作；后台只保存公开 DNS 值。
+- PTR/rDNS 仍需 VPS/云服务器厂商配置，Cloudflare 无法代配。
+- TLS 必须使用有效证书，但无需购买商业证书；可通过 Stalwart/ACME 自动申请 Let’s Encrypt，或配置自有证书。
+- Fake 测试域名只用于本地业务冒烟，不执行公网 DNS 写入。
+
+账号与邮件：
+
+- 真实账号由后台通过只读文件权限保护的密封 Stalwart 管理凭据开通或重置密码；密码不写入业务数据库和日志。
+- 后台可按账号查看真实 Inbox / Sent，并在 ACL 授权后使用活动账号代发。
+- Customer 侧菜单仅在当前系统用户拥有 active MailAccount 时展示；发信前再次校验账号所有权。
+- 通用 Mail QueryProvider 仍只允许 fake 发信，不能绕过前台所有权或后台 ACL 获得真实账号代发能力。
+
+### 开通后的收发验收
+
+1. 创建两个测试邮箱 A、B，验证 A→B 与 B→A。
+2. 向 QQ、Gmail 或 Outlook 等外部邮箱发送，并从外部邮箱回复。
+3. 检查外部收件邮件头，确认 SPF、DKIM、DMARC 均为 `pass`。
+4. 未认证 SMTP 向外域中继必须被拒绝，确认服务器不是开放中继。
+5. 验证中文主题、正文、附件，以及 587 STARTTLS、可选 465、993 的证书链和主机名。
+6. 全部通过后再逐步提高发信额度；DNS 或 DKIM 未通过时不要开放大批量发信。
 ## 安全边界
 
 - 默认不开放中继。

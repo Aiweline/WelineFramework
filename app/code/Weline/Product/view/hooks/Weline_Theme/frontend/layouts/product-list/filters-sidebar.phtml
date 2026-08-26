@@ -1,0 +1,226 @@
+<?php
+/**
+ * @hook-priority 200
+ * @hook-sort-order 1
+ *
+ * All-products listing filters: root categories (department) + price.
+ * Request-scoped only; mirrors category filters-sidebar without baking widgets.
+ */
+
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Product\Service\StorefrontCategoryListingFilter;
+use Weline\Product\Service\StorefrontCategoryTreeIndex;
+
+/** @var \Weline\Framework\View\Template $this */
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+/** @var Request $request */
+$request = ObjectManager::getInstance(Request::class);
+/** @var StorefrontCategoryListingFilter $listingFilter */
+$listingFilter = ObjectManager::getInstance(StorefrontCategoryListingFilter::class);
+/** @var StorefrontCategoryTreeIndex $tree */
+$tree = ObjectManager::getInstance(StorefrontCategoryTreeIndex::class);
+
+$offers = $this->getData('storefront_offers_unfiltered');
+if (!is_array($offers) || $offers === []) {
+    $offers = $this->getData('storefront_offers');
+}
+$offers = is_array($offers) ? $offers : [];
+
+$websiteId = max(0, RequestContext::getWelineWebsiteId());
+$roots = $tree->childrenOf($websiteId, 0);
+
+$listingUrl = '/products';
+$requestUri = (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? '');
+$requestPath = strtolower(trim(str_replace('\\', '/', (string)(parse_url($requestUri, PHP_URL_PATH) ?: '')), '/'));
+if (preg_match('#(?:^|/)(categories|products|product-list)(?:/|$)#', $requestPath, $pathMatch) === 1) {
+    $listingUrl = '/' . ($pathMatch[1] === 'product-list' ? 'products' : $pathMatch[1]);
+} else {
+    $listingUrl = trim((string)$this->getUrl('products'));
+    if ($listingUrl === '') {
+        $listingUrl = '/products';
+    }
+    $listingPath = parse_url($listingUrl, PHP_URL_PATH);
+    if (is_string($listingPath) && $listingPath !== '') {
+        $listingUrl = $listingPath;
+    } else {
+        $queryPos = strpos($listingUrl, '?');
+        if ($queryPos !== false) {
+            $listingUrl = substr($listingUrl, 0, $queryPos);
+        }
+    }
+}
+
+$activePrice = $listingFilter->normalizePriceBucket((string)$request->getParam('price', ''));
+$activeSort = $listingFilter->normalizeSort((string)$request->getParam('sort', ''));
+$priceBuckets = $listingFilter->priceBucketsWithCounts($offers);
+
+$baseParams = [];
+if ($activeSort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
+    $baseParams['sort'] = $activeSort;
+}
+$clearUrl = $listingFilter->buildListingUrl($listingUrl, []);
+$hasActiveFilters = $activePrice !== '';
+$rootDepartmentsUrl = '/categories';
+?>
+<aside class="amz-filter" data-product-list-filter-panel="1" data-hook-source="Weline_Product" data-testid="storefront-products-filter">
+    <?php if ($hasActiveFilters): ?>
+        <div class="amz-filter__clear-row">
+            <a class="amz-filter__clear" href="<?= $escape($clearUrl) ?>"><?= __('清除筛选条件') ?></a>
+        </div>
+    <?php endif; ?>
+
+    <section class="amz-filter__section" weline-code="product-list-category-filters">
+        <h3 class="amz-filter__heading"><?= __('分类') ?></h3>
+        <ul class="amz-filter__dept">
+            <li>
+                <span class="amz-filter__dept-current" data-testid="storefront-products-dept-all">
+                    <?= __('全部商品') ?>
+                </span>
+            </li>
+            <?php if ($roots === []): ?>
+                <li>
+                    <a class="amz-filter__dept-root" href="<?= $escape($rootDepartmentsUrl) ?>">
+                        <?= __('浏览全部分类') ?>
+                    </a>
+                </li>
+            <?php else: ?>
+                <?php foreach ($roots as $root): ?>
+                    <?php
+                    if (!is_array($root)) {
+                        continue;
+                    }
+                    $rootUrl = trim((string)($root['url'] ?? ''));
+                    if ($rootUrl === '') {
+                        $path = trim(str_replace('\\', '/', (string)($root['path'] ?? '')), '/');
+                        if ($path === '') {
+                            continue;
+                        }
+                        $rootUrl = '/category/' . $path;
+                    }
+                    ?>
+                    <li>
+                        <a
+                            class="amz-filter__dept-child"
+                            href="<?= $escape($rootUrl) ?>"
+                            data-testid="storefront-products-dept-root"
+                        >
+                            <?= $escape($root['name'] ?? '') ?>
+                        </a>
+                    </li>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </ul>
+    </section>
+
+    <section class="amz-filter__section" weline-code="product-list-price-filters">
+        <h3 class="amz-filter__heading"><?= __('价格') ?></h3>
+        <ul class="amz-filter__price">
+            <?php foreach ($priceBuckets as $bucket): ?>
+                <?php if ((int)$bucket['count'] <= 0) { continue; } ?>
+                <?php
+                $isActive = $activePrice === $bucket['code'];
+                $href = $listingFilter->buildListingUrl(
+                    $listingUrl,
+                    array_merge($baseParams, $isActive ? [] : ['price' => $bucket['code']])
+                );
+                ?>
+                <li>
+                    <a
+                        href="<?= $escape($href) ?>"
+                        class="amz-filter__price-item<?= $isActive ? ' is-active' : '' ?>"
+                        aria-current="<?= $isActive ? 'true' : 'false' ?>"
+                        data-testid="storefront-products-price-filter"
+                    >
+                        <span class="amz-filter__radio" aria-hidden="true"></span>
+                        <span class="amz-filter__price-label"><?= $escape($bucket['label']) ?></span>
+                        <span class="amz-filter__price-count"><?= (int)$bucket['count'] ?></span>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+</aside>
+<style>
+.amz-filter {
+    color: #0f1111;
+    font-size: 13px;
+    line-height: 1.35;
+}
+.amz-filter__clear-row { margin-bottom: 12px; }
+.amz-filter__clear {
+    color: #c45500;
+    text-decoration: none;
+    font-weight: 600;
+}
+.amz-filter__clear:hover { text-decoration: underline; }
+.amz-filter__section + .amz-filter__section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+}
+.amz-filter__heading {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+}
+.amz-filter__dept,
+.amz-filter__price {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.amz-filter__dept-root,
+.amz-filter__dept-child {
+    display: block;
+    padding: 4px 0 4px 12px;
+    color: #2162a1;
+    text-decoration: none;
+}
+.amz-filter__dept-root:hover,
+.amz-filter__dept-child:hover { color: #c45500; text-decoration: underline; }
+.amz-filter__dept-current {
+    display: block;
+    padding: 4px 0;
+    font-weight: 700;
+}
+.amz-filter__price-item {
+    display: inline-grid;
+    grid-template-columns: 1rem auto auto;
+    align-items: center;
+    justify-content: start;
+    gap: 8px;
+    max-width: 100%;
+    padding: 5px 0;
+    color: #0f1111;
+    text-decoration: none;
+}
+.amz-filter__price-item:hover { color: #c45500; }
+.amz-filter__radio {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #879596;
+    border-radius: 50%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+.amz-filter__price-item.is-active .amz-filter__radio {
+    border-color: #e47911;
+    box-shadow: inset 0 0 0 3px #e47911;
+}
+.amz-filter__price-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.amz-filter__price-count {
+    color: #565959;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+</style>

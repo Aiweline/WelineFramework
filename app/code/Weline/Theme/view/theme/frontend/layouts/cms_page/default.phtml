@@ -132,19 +132,19 @@ $isEditorPreview = (bool)($this->getData('editor_mode') ?? false)
     }
     
     .cms-page-content-slot {
-        min-height: 400px;
+        min-height: var(--size-panel-400);
         position: relative;
     }
     
     .cms-page-default-content {
         width: 100%;
-        padding: var(--weline-layout-spacing-2xl, 3rem) 0;
+        padding: var(--weline-layout-spacing-2xl) 0;
     }
     
     .container {
-        max-width: var(--weline-layout-content-max-width, 1440px);
+        max-width: var(--weline-layout-content-max-width);
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+        padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
     }
     
@@ -153,7 +153,7 @@ $isEditorPreview = (bool)($this->getData('editor_mode') ?? false)
     /* 响应式设计 */
     @media (max-width: 768px) {
         .cms-page-default-content {
-            padding: var(--weline-layout-spacing-xl, 2rem) 0;
+            padding: var(--weline-layout-spacing-xl) 0;
         }
         
     }

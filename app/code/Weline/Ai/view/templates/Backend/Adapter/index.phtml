@@ -356,9 +356,9 @@ foreach ($adapters as $a) {
                                         };
                                         $adapterId = (int)$adapter->getId();
                                         $adapterCode = (string)$adapter->getData('code');
-                                        $adapterName = (string)$adapter->getData('name');
+                                        $adapterName = (string)__((string)$adapter->getData('name'));
                                         $adapterVersion = (string)$adapter->getData('version');
-                                        $adapterDesc = (string)$adapter->getData('description');
+                                        $adapterDesc = (string)__((string)$adapter->getData('description'));
                                         $isActive = (bool)$adapter->getData('is_active');
                                         $createdLabel = date('Y-m-d H:i', (int)$adapter->getData('created_time'));
                                         $statusBadgeClass = $isActive

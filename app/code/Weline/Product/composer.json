@@ -5,11 +5,14 @@
     "require": {
         "php": "^8.4",
         "weline/framework": "@dev",
+        "weline/module-file-manager": "@dev",
+        "weline/module-search": "@dev",
         "weline/module-websites": "@dev"
     },
     "suggest": {
         "weline/module-cart": "Provides cart contracts for the Product-backed cart snapshot query provider.",
-        "weline/module-inventory": "Provides optional website-aware sellable quantity snapshots for cart lines."
+        "weline/module-inventory": "Provides optional website-aware sellable quantity snapshots for cart lines.",
+        "weline/module-media-manager": "Provides the authenticated backend picker for FileAsset-backed product media."
     },
     "authors": [
         {

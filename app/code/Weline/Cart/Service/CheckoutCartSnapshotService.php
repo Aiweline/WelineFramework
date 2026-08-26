@@ -119,7 +119,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
                 $lineUuid = 'line-' . substr($serverSelectionHash, 0, 24);
             }
 
-            $lines[] = [
+            $frozenLine = [
                 'line_uuid' => $lineUuid,
                 'provider_code' => $offer->providerCode,
                 'global_offer_uuid' => $offer->globalOfferUuid,
@@ -140,6 +140,10 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
                 'selection' => CartSelectionHash::normalizeSelection($selection),
                 'selection_hash' => $serverSelectionHash,
             ];
+            if ($snapshot->fulfillmentMetadata !== []) {
+                $frozenLine['fulfillment_metadata'] = $snapshot->fulfillmentMetadata;
+            }
+            $lines[] = $frozenLine;
         }
 
         $canonical = [

@@ -16,4 +16,11 @@
                   shared="true"
                   sort="200"/>
     </event>
+    <event name="Weline_Search::hot_words_changed">
+        <observer name="search_hot_words_cache_invalidator"
+                  instance="Weline\Search\Observer\SearchHotWordsCacheInvalidator"
+                  disabled="false"
+                  shared="true"
+                  sort="100"/>
+    </event>
 </config>

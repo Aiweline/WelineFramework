@@ -302,6 +302,9 @@ final class CartV2ServiceTest extends TestCase
             'unit_price_minor' => 1000,
             'stock' => 5,
             'sellable' => true,
+            'fulfillment_metadata' => [
+                'digital_download' => ['schema_version' => 'cart-v1'],
+            ],
         ];
         $provider = new class($offerUuid, $current) implements CartItemSnapshotProviderV2Interface {
             /** @var array<string, mixed> */
@@ -347,6 +350,7 @@ final class CartV2ServiceTest extends TestCase
                     weightMinor: 250,
                     volumeMinor: 1250,
                     taxClassCode: 'reduced',
+                    fulfillmentMetadata: (array)$this->current['fulfillment_metadata'],
                 );
             }
         };
@@ -361,8 +365,18 @@ final class CartV2ServiceTest extends TestCase
             2,
             $guest,
         );
+
+        $stored = $cart->getCart($scope, $guest);
+        self::assertSame(
+            'cart-v1',
+            $stored['items'][0]['fulfillment_metadata']['digital_download']['schema_version'],
+        );
+
         $provider->current['unit_price_minor'] = 1250;
         $provider->current['stock'] = 2;
+        $provider->current['fulfillment_metadata'] = [
+            'digital_download' => ['schema_version' => 'checkout-v2'],
+        ];
 
         $snapshot = (new CheckoutCartSnapshotService($cart))->freeze($scope, $guest);
         self::assertSame('CNY', $snapshot['currency']);
@@ -376,6 +390,10 @@ final class CartV2ServiceTest extends TestCase
         self::assertSame(500, $snapshot['lines'][0]['weight_minor']);
         self::assertSame(2500, $snapshot['lines'][0]['volume_minor']);
         self::assertSame('reduced', $snapshot['lines'][0]['tax_class_code']);
+        self::assertSame(
+            'checkout-v2',
+            $snapshot['lines'][0]['fulfillment_metadata']['digital_download']['schema_version'],
+        );
         self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $snapshot['cart_hash']);
 
         $provider->current['sellable'] = false;

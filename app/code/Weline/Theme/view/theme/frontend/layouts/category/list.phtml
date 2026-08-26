@@ -23,7 +23,7 @@ $class = $this->getData('class') ?? '';
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
@@ -31,12 +31,11 @@ $this->assign('title', $title);
     <style>
         body.category-list-layout {
             margin: 0;
-            background: var(--weline-layout-surface-secondary);
             color: var(--weline-layout-text-primary);
         }
 
         .category-list-main {
-            width: min(1200px, calc(100% - 40px));
+            width: min(var(--token-size-1200px), calc(100% - var(--size-control-md)));
             margin: 0 auto;
             padding: var(--weline-layout-spacing-xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
         }
@@ -60,7 +59,7 @@ $this->assign('title', $title);
 
         .category-content-wrapper {
             display: grid;
-            grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+            grid-template-columns: minmax(var(--size-panel-220), var(--layout-sidebar-width)) minmax(0, 1fr);
             gap: var(--weline-layout-spacing-lg);
             align-items: start;
         }
@@ -70,7 +69,7 @@ $this->assign('title', $title);
         }
 
         .category-content {
-            min-height: 360px;
+            min-height: var(--size-panel-360);
             padding: var(--weline-layout-spacing-lg);
         }
 
@@ -100,7 +99,7 @@ $this->assign('title', $title);
         }
 
         .category-list__card {
-            min-height: 168px;
+            min-height: var(--token-size-168px);
             border: var(--weline-theme-border-width) var(--border-style-dashed) var(--weline-theme-border-color-strong);
             border-radius: var(--weline-layout-radius-lg);
             background: var(--weline-theme-primary-surface);
@@ -108,8 +107,8 @@ $this->assign('title', $title);
 
         @media (max-width: 900px) {
             .category-list-main {
-                width: min(100% - 28px, 1200px);
-                padding: 24px 0 56px;
+                width: min(100% - var(--size-control-xs), var(--token-size-1200px));
+                padding: var(--spacing-lg) 0 var(--size-control-2xl);
             }
 
             .category-content-wrapper {

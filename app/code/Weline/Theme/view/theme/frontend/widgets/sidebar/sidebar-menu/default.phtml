@@ -82,16 +82,16 @@ if (empty($menuItems)) {
 <style>
 .<?= $wc ?> {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg, 10px);
-    padding: var(--weline-space-5, 20px);
+    border-radius: var(--weline-radius-lg);
+    padding: var(--weline-space-5);
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-4, 15px);
-    padding-bottom: var(--weline-space-4, 15px);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin: 0 0 var(--weline-space-4);
+    padding-bottom: var(--weline-space-4);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     color: var(--weline-theme-text);
 }
 
@@ -104,12 +104,12 @@ if (empty($menuItems)) {
 .<?= $wc ?> .menu-link {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
-    padding: var(--weline-space-3, 12px) var(--weline-space-4, 15px);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-4);
     color: var(--weline-theme-text);
     text-decoration: none;
-    border-radius: var(--weline-radius-md, 8px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    border-radius: var(--weline-radius-md);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .menu-link:hover,
@@ -119,28 +119,28 @@ if (empty($menuItems)) {
 }
 
 .<?= $wc ?> .menu-badge {
-    padding: 2px var(--weline-space-2, 8px);
+    padding: var(--spacing-0_5) var(--weline-space-2);
     background: var(--weline-theme-danger);
     color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-xs, 11px);
+    font-size: var(--weline-font-size-xs);
     font-weight: 600;
-    border-radius: var(--weline-radius-round, 999px);
+    border-radius: var(--weline-radius-round);
     margin-left: auto;
 }
 
 .<?= $wc ?> .submenu {
     list-style: none;
-    margin: var(--weline-space-1, 5px) 0 0;
-    padding: 0 0 0 var(--weline-space-12, 47px);
+    margin: var(--weline-space-1) 0 0;
+    padding: 0 0 0 var(--weline-space-12);
 }
 
 .<?= $wc ?> .submenu-item a {
     display: block;
-    padding: var(--weline-space-2, 8px) var(--weline-space-4, 15px);
+    padding: var(--weline-space-2) var(--weline-space-4);
     color: var(--weline-theme-text-muted);
     text-decoration: none;
-    font-size: var(--weline-font-size-sm, 13px);
-    border-radius: var(--weline-radius-sm, 6px);
+    font-size: var(--weline-font-size-sm);
+    border-radius: var(--weline-radius-sm);
 }
 
 .<?= $wc ?> .submenu-item a:hover {
@@ -150,7 +150,7 @@ if (empty($menuItems)) {
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3, 12px);
+    padding: var(--weline-space-3);
 }
 </style>
 

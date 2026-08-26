@@ -128,13 +128,13 @@ if ($totalPages <= 1) {
 .<?= $wc ?> {
     display: flex;
     justify-content: center;
-    padding: var(--weline-space-5, 20px) 0;
+    padding: var(--weline-space-5) 0;
 }
 
 .<?= $wc ?> .pagination-list {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -144,15 +144,15 @@ if ($totalPages <= 1) {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-1, 5px);
-    min-width: 40px;
-    height: 40px;
-    padding: 0 var(--weline-space-3, 12px);
+    gap: var(--weline-space-1);
+    min-width: var(--size-control-md);
+    height: var(--size-control-md);
+    padding: 0 var(--weline-space-3);
     color: var(--weline-theme-text-muted);
     text-decoration: none;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     background: var(--weline-theme-surface);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .page-link:hover {
@@ -179,11 +179,11 @@ if ($totalPages <= 1) {
 .<?= $wc ?> .page-item.is-ellipsis .page-link {
     border: none;
     background: none;
-    min-width: 30px;
+    min-width: var(--spacing-7);
 }
 
 .<?= $wc ?>.style-default .page-link {
-    border-radius: var(--weline-radius-sm, 6px);
+    border-radius: var(--weline-radius-sm);
 }
 
 .<?= $wc ?>.style-simple .page-link {
@@ -193,12 +193,12 @@ if ($totalPages <= 1) {
 
 .<?= $wc ?>.style-simple .page-item.is-active .page-link {
     background: var(--weline-theme-primary);
-    border-radius: var(--weline-radius-sm, 6px);
+    border-radius: var(--weline-radius-sm);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3, 12px) 0;
+    padding: var(--weline-space-3) 0;
 }
 
 .widget-preview-canvas .<?= $wc ?> .page-prev span,
@@ -215,10 +215,10 @@ if ($totalPages <= 1) {
     }
 
     .<?= $wc ?> .page-link {
-        min-width: 36px;
-        height: 36px;
-        padding: 0 var(--weline-space-2, 8px);
-        font-size: var(--weline-font-size-sm, 13px);
+        min-width: var(--size-control-sm);
+        height: var(--size-control-sm);
+        padding: 0 var(--weline-space-2);
+        font-size: var(--weline-font-size-sm);
     }
 }
 </style>

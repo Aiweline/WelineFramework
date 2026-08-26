@@ -21,7 +21,11 @@ class RegionQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'list' => $this->regionService->getAllActiveList(),
+            'list' => $this->regionService->getAllActiveList(
+                trim((string)($params['country_code'] ?? '')) !== ''
+                    ? strtoupper(trim((string)$params['country_code']))
+                    : null
+            ),
             'children' => $this->regionService->getChildrenList(
                 isset($params['parent_region_id']) && $params['parent_region_id'] !== ''
                     ? (int)$params['parent_region_id']

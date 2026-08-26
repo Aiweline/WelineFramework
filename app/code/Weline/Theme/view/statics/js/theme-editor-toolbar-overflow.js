@@ -180,7 +180,9 @@
 
             if (usedWidth(element, more) > limit + 1) {
                 more.hidden = false;
-                const movable = [...itemsHost.children].filter((item) => item instanceof HTMLElement);
+                const movable = [...itemsHost.children].filter((item) => (
+                    item instanceof HTMLElement && !item.hasAttribute('data-w-toolbar-overflow-pin')
+                ));
                 let guard = 0;
                 while (usedWidth(element, more) > limit + 1 && movable.length > 0 && guard < 64) {
                     guard += 1;

@@ -1,0 +1,196 @@
+<?php
+/** @var list<array<string,mixed>> $wishlist_items */
+/** @var int $wishlist_count */
+$items = is_array($wishlist_items ?? null) ? $wishlist_items : [];
+$count = (int)($wishlist_count ?? count($items));
+$esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<section class="storefront-wishlist" data-testid="storefront-wishlist-page" weline-code="wishlist.page.section_1">
+    <header class="storefront-wishlist__header">
+        <h1 class="storefront-wishlist__title"><?= __('我的收藏') ?></h1>
+        <p class="storefront-wishlist__meta"><?= $esc((string)__('共 %{1} 件商品', [$count])) ?></p>
+    </header>
+
+    <?php if ($items === []): ?>
+        <div class="storefront-wishlist__empty">
+            <p><?= __('收藏夹暂无商品') ?></p>
+            <a class="storefront-wishlist__cta" href="/"><?= __('去逛逛') ?></a>
+        </div>
+    <?php else: ?>
+        <div class="storefront-wishlist__grid">
+            <?php foreach ($items as $item): ?>
+                <?php
+                $productId = (int)($item['product_id'] ?? 0);
+                $url = (string)($item['url'] ?? '#');
+                $name = (string)($item['name'] ?? '');
+                $image = (string)($item['image'] ?? '');
+                $price = (string)($item['formatted_price'] ?? '');
+                $rating = (float)($item['rating'] ?? 0);
+                $reviewCount = (int)($item['review_count'] ?? 0);
+                ?>
+                <article class="storefront-wishlist__card" data-product-id="<?= $productId ?>">
+                    <a class="storefront-wishlist__media" href="<?= $esc($url) ?>">
+                        <?php if ($image !== ''): ?>
+                            <img src="<?= $esc($image) ?>" alt="<?= $esc($name) ?>" class="storefront-wishlist__image" loading="lazy">
+                        <?php else: ?>
+                            <span class="storefront-wishlist__image-placeholder" aria-hidden="true"></span>
+                        <?php endif; ?>
+                    </a>
+                    <div class="storefront-wishlist__body">
+                        <h2 class="storefront-wishlist__name">
+                            <a href="<?= $esc($url) ?>"><?= $esc($name) ?></a>
+                        </h2>
+                        <p class="storefront-wishlist__rating"><?= $esc(number_format($rating, 1)) ?> (<?= $reviewCount ?>)</p>
+                        <p class="storefront-wishlist__price"><?= $esc($price) ?></p>
+                        <div class="storefront-wishlist__actions">
+                            <button type="button"
+                                    class="storefront-wishlist__add-cart"
+                                    data-wishlist-add-cart
+                                    data-product-id="<?= $productId ?>">
+                                <?= __('加入购物车') ?>
+                            </button>
+                            <button type="button"
+                                    class="storefront-wishlist__remove"
+                                    data-wishlist-remove
+                                    data-product-id="<?= $productId ?>">
+                                <?= __('移除') ?>
+                            </button>
+                        </div>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</section>
+
+<style>
+.storefront-wishlist {
+    max-width: var(--weline-layout-content-max-width, 75rem);
+    margin: 0 auto;
+    padding: var(--weline-space-6, 1.5rem);
+    color: var(--weline-theme-body-text, #0f1111);
+}
+.storefront-wishlist__title { margin: 0 0 .5rem; font-size: clamp(1.5rem, 2vw, 1.75rem); }
+.storefront-wishlist__meta { margin: 0 0 1.5rem; color: #565959; }
+.storefront-wishlist__empty {
+    padding: 3rem 1.5rem;
+    border: 1px dashed #e7e7e7;
+    border-radius: 12px;
+    text-align: center;
+    background: #f8fafc;
+}
+.storefront-wishlist__cta {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: .5rem 1rem;
+    border-radius: 8px;
+    background: var(--weline-theme-primary, #ff9900);
+    color: #111;
+    text-decoration: none;
+    font-weight: 600;
+}
+.storefront-wishlist__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+@media (min-width: 768px) {
+    .storefront-wishlist__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .storefront-wishlist__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+}
+.storefront-wishlist__card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e7e7e7;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+}
+.storefront-wishlist__media { display: block; aspect-ratio: 1 / 1; background: #f8fafc; }
+.storefront-wishlist__image,
+.storefront-wishlist__image-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.storefront-wishlist__image-placeholder { background: linear-gradient(135deg, #fff7ed, #ffedd5); }
+.storefront-wishlist__body { padding: 1rem; display: flex; flex-direction: column; gap: .5rem; flex: 1; }
+.storefront-wishlist__name { margin: 0; font-size: 1rem; line-height: 1.4; }
+.storefront-wishlist__name a { color: inherit; text-decoration: none; }
+.storefront-wishlist__name a:hover { color: #007185; }
+.storefront-wishlist__rating,
+.storefront-wishlist__price { margin: 0; font-size: .875rem; }
+.storefront-wishlist__price { font-weight: 700; font-size: 1rem; }
+.storefront-wishlist__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-top: auto;
+    padding-top: .75rem;
+}
+.storefront-wishlist__add-cart,
+.storefront-wishlist__remove {
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    font: inherit;
+    cursor: pointer;
+}
+.storefront-wishlist__add-cart {
+    border: 0;
+    background: var(--weline-theme-primary, #ff9900);
+    color: #111;
+    font-weight: 600;
+}
+.storefront-wishlist__remove {
+    border: 1px solid #d5d9d9;
+    background: #fff;
+    color: #007185;
+}
+</style>
+
+<script>
+(function () {
+    function toast(message, tone) {
+        if (window.Weline && window.Weline.UI && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
+            window.Weline.UI.toast.show(message, { tone: tone || 'info' });
+        }
+    }
+
+    document.addEventListener('click', function (event) {
+        var removeButton = event.target && event.target.closest ? event.target.closest('[data-wishlist-remove]') : null;
+        if (removeButton) {
+            event.preventDefault();
+            var removeId = Number(removeButton.getAttribute('data-product-id') || 0);
+            if (removeId <= 0 || !window.Weline || !window.Weline.Api) {
+                return;
+            }
+            window.Weline.Api.resource('wishlist').then(function (api) {
+                return api.remove({ product_id: removeId });
+            }).then(function () {
+                window.location.reload();
+            }).catch(function () {
+                toast(<?= json_encode((string)__('加入收藏失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>, 'error');
+            });
+            return;
+        }
+
+        var cartButton = event.target && event.target.closest ? event.target.closest('[data-wishlist-add-cart]') : null;
+        if (!cartButton) {
+            return;
+        }
+        event.preventDefault();
+        var productId = Number(cartButton.getAttribute('data-product-id') || 0);
+        if (productId <= 0 || !window.Weline || !window.Weline.Api) {
+            return;
+        }
+        window.Weline.Api.resource('cart').then(function (api) {
+            return api.add({ product_id: productId, qty: 1 }, { silent: true });
+        }).then(function () {
+            toast(<?= json_encode((string)__('已加入购物车'), JSON_UNESCAPED_UNICODE) ?>, 'success');
+        }).catch(function () {});
+    });
+})();
+</script>

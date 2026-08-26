@@ -96,6 +96,91 @@ class PreviewContextServiceTest extends TestCase
         $this->assertSame(66, $context['version_id']);
     }
 
+    public function testRawQueryLocaleOverridesStickyTokenLocaleWithoutChangingTheme(): void
+    {
+        $this->setRequestUri(
+            '/theme/frontend/theme-preview/content?theme_id=11&locale=en_US&weline_preview_token=pv_11_oldtoken'
+        );
+        $service = $this->createService(
+            [
+                'theme_id' => 11,
+                'locale' => 'en_US',
+                'weline_preview_token' => 'pv_11_oldtoken',
+            ],
+            [
+                'token' => 'pv_11_oldtoken',
+                'theme_id' => 11,
+                'version_id' => 77,
+                'context' => [
+                    'frontend_theme_id' => 11,
+                    'preview_token' => 'pv_11_oldtoken',
+                    'locale' => 'zh_Hans_CN',
+                    'shell' => PreviewContextService::SHELL_PREVIEW,
+                ],
+            ]
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame(11, $context['frontend_theme_id']);
+        $this->assertSame('pv_11_oldtoken', $context['preview_token']);
+        $this->assertSame(77, $context['version_id']);
+        $this->assertSame('en_US', $context['locale']);
+    }
+
+    public function testRawQueryDefaultLocaleClearsStickyTokenLocale(): void
+    {
+        $this->setRequestUri(
+            '/theme/frontend/theme-preview/content?locale=default&weline_preview_token=pv_11_oldtoken'
+        );
+        $service = $this->createService(
+            [
+                'locale' => 'default',
+                'weline_preview_token' => 'pv_11_oldtoken',
+            ],
+            [
+                'token' => 'pv_11_oldtoken',
+                'theme_id' => 11,
+                'context' => [
+                    'frontend_theme_id' => 11,
+                    'preview_token' => 'pv_11_oldtoken',
+                    'locale' => 'zh_Hans_CN',
+                ],
+            ]
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame('', $context['locale']);
+        $this->assertSame(11, $context['frontend_theme_id']);
+    }
+
+    public function testRequestParamLocaleOverridesTokenWhenRawQueryMissing(): void
+    {
+        // WLS may expose a path-only REQUEST_URI while locale remains in the request bag.
+        $this->setRequestUri('/theme/frontend/theme-preview/content');
+        $service = $this->createService(
+            [
+                'locale' => 'en_US',
+                'weline_preview_token' => 'pv_11_oldtoken',
+            ],
+            [
+                'token' => 'pv_11_oldtoken',
+                'theme_id' => 11,
+                'context' => [
+                    'frontend_theme_id' => 11,
+                    'preview_token' => 'pv_11_oldtoken',
+                    'locale' => 'zh_Hans_CN',
+                ],
+            ]
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame('en_US', $context['locale']);
+        $this->assertSame(11, $context['frontend_theme_id']);
+    }
+
     public function testRawQueryFrontendThemeIdOverridesRequestParamBagValue(): void
     {
         $this->setRequestUri('/theme/frontend/theme-preview/content?frontend_theme_id=6&preview_theme=6&editor_area=frontend');

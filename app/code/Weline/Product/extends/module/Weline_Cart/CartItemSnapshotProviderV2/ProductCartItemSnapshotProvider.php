@@ -118,6 +118,9 @@ final class ProductCartItemSnapshotProvider implements CartItemSnapshotProviderV
             weightMinor: max(0, (int)($row['weight_minor'] ?? 0)),
             volumeMinor: max(0, (int)($row['volume_minor'] ?? 0)),
             taxClassCode: (string)($row['tax_class_code'] ?? 'standard'),
+            fulfillmentMetadata: is_array($row['fulfillment_metadata'] ?? null)
+                ? $row['fulfillment_metadata']
+                : [],
         );
     }
 

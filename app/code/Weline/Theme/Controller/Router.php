@@ -48,8 +48,11 @@ class Router implements RouterInterface
             'register' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '注册'],
             'contact' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '联系我们'],
             'support' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '支持'],
-            'help' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '帮助中心'],
-            'faq' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '常见问题'],
+            'help' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '帮助中心'],
+            'faq' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '常见问题'],
+            'orders/track' => ['layout_type' => 'order_tracking', 'layout_option' => 'default', 'title' => '订单跟踪'],
+            'order/track' => ['layout_type' => 'order_tracking', 'layout_option' => 'default', 'title' => '订单跟踪'],
+            'order/tracking' => ['layout_type' => 'order_tracking', 'layout_option' => 'default', 'title' => '订单跟踪'],
             'about' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '关于我们'],
             'solutions' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '解决方案'],
             'docs' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '文档'],
@@ -69,6 +72,7 @@ class Router implements RouterInterface
             'policy/cookie' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
             'policy/refund' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退款政策'],
             'policy/disclaimer' => ['layout_type' => 'policy', 'layout_option' => 'disclaimer', 'title' => '免责声明'],
+            'search' => ['layout_type' => 'search', 'layout_option' => 'default', 'title' => '搜索'],
             'review' => ['layout_type' => 'review', 'layout_option' => 'default', 'title' => '评价'],
             'rma' => ['layout_type' => 'rma', 'layout_option' => 'default', 'title' => '退换货'],
             'activity' => ['layout_type' => 'activity', 'layout_option' => 'default', 'title' => '活动'],
@@ -106,18 +110,26 @@ class Router implements RouterInterface
             return;
         }
 
-        $layoutType = trim((string)($request?->getParam('page_type', $request?->getParam('layout_type', '')) ?? ''));
-        if ($layoutType === '') {
-            try {
-                /** @var ThemePageTypeResolver $resolver */
-                $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
+        // Prefer layout inferred from the public path being rewritten (product/{slug}, …).
+        // Query page_type/layout_type may be stale when navigating between preview pages.
+        $layoutType = '';
+        try {
+            /** @var ThemePageTypeResolver $resolver */
+            $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
+            if ($normalizedPath !== '') {
+                $layoutType = $resolver->resolveLayoutTypeFromUri('/' . $normalizedPath, '');
+            }
+            if ($layoutType === '') {
                 $layoutType = $resolver->resolveLayoutTypeFromUri(
                     (string)($request?->getUri() ?? '/'),
                     ''
                 );
-            } catch (\Throwable) {
-                $layoutType = '';
             }
+        } catch (\Throwable) {
+            $layoutType = '';
+        }
+        if ($layoutType === '') {
+            $layoutType = trim((string)($request?->getParam('page_type', $request?->getParam('layout_type', '')) ?? ''));
         }
         if ($layoutType === '') {
             if (self::isThemePreviewEntryPath($normalizedPath)) {
@@ -163,6 +175,12 @@ class Router implements RouterInterface
         if ((string)($request?->getParam('target_value', '') ?? '') === '') {
             $queryOverrides['target_value'] = $layoutType;
         }
+        // Always bind the public alias being rewritten (e.g. product/{slug}) so Theme
+        // visual preview re-selects layout and Product widgets resolve the entity.
+        // Overwrite stale theme_public_route left from a prior preview navigation.
+        if ($normalizedPath !== '' && !str_starts_with($normalizedPath, 'theme/')) {
+            $queryOverrides['theme_public_route'] = $normalizedPath;
+        }
 
         self::applyQueryOverrides($request, $queryOverrides);
 
@@ -198,6 +216,12 @@ class Router implements RouterInterface
             || self::isInstalledModuleOwnedPublicRoute($normalizedPath)
             || self::generatedFrontendRouteExists($normalizedPath, $request)
         ) {
+            if ($normalizedPath === 'search' && class_exists('Weline\\Search\\Controller\\Router')) {
+                \Weline\Search\Controller\Router::process($path, $rule);
+            }
+            if ($normalizedPath === 'compare' && class_exists('Weline\\Compare\\Controller\\Router')) {
+                \Weline\Compare\Controller\Router::process($path, $rule);
+            }
             return;
         }
 
@@ -325,16 +349,33 @@ class Router implements RouterInterface
      */
     private static function isInstalledModuleOwnedPublicRoute(string $normalizedPath): bool
     {
-        if (!class_exists('Weline\\Product\\Controller\\Router')) {
-            return false;
+        if (class_exists('Weline\\Product\\Controller\\Router')) {
+            if (in_array($normalizedPath, ['products', 'product-list', 'category', 'categories'], true)) {
+                return true;
+            }
+            if (preg_match('#^category/.+#D', $normalizedPath) === 1) {
+                return true;
+            }
+            // Match Weline_Product\\Controller\\Router: numeric id and kebab slug detail URLs.
+            if (preg_match('#^product/[1-9][0-9]*$#D', $normalizedPath) === 1) {
+                return true;
+            }
+            if (preg_match('#^product/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath) === 1) {
+                return true;
+            }
         }
 
-        if (in_array($normalizedPath, ['products', 'product-list'], true)) {
+        if (class_exists('Weline\\Search\\Controller\\Router') && $normalizedPath === 'search') {
             return true;
         }
 
-        return preg_match('#^product/[1-9][0-9]*$#D', $normalizedPath) === 1;
+        if (class_exists('Weline\\Compare\\Controller\\Router') && $normalizedPath === 'compare') {
+            return true;
+        }
+
+        return false;
     }
+
 
     /**
      * @return array{layout_type: string, layout_option: string, title: string}|null

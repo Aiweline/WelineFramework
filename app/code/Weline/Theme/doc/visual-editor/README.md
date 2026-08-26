@@ -59,6 +59,7 @@
 - [局部刷新机制](./partial-refresh.md)
 - [组件库筛选](./component-library-filtering.md)
 - [component.json 规范](./component-library-filtering.md)
+- [Anchored Float 贴边智能定位（部件操作条）](../widgets/anchored-float.md)
 
 ## 相关服务
 

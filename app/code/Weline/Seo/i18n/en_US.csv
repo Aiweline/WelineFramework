@@ -46,6 +46,8 @@
 配置自动化策略，查看聚合审计，并创建调度器所有的幂等队列。,"Configure automation policies, view aggregate audits, and create scheduler-owned idempotent queues."
 "AI 优化实时控制中心","AI optimized real-time control center"
 只读查看站点检测、证据、发布与实验实时状态。,"Read-only view of site detection, evidence, publishing and experiment real-time status."
+"SEO 事件表现分析","SEO Event Performance Analysis"
+将汇总的访客与搜索证据转换为一条有边界的结构化优化建议。,"Converts aggregated Visitor/Search evidence into one bounded structured recommendation."
 id属性不能为空,"The id attribute cannot be empty"
 搜索SEO账户...,"Search SEO accounts..."
 请选择SEO账户,"Please select SEO account"

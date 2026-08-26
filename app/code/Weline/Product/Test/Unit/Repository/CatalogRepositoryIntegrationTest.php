@@ -24,6 +24,7 @@ use Weline\Product\Model\ProductShardRegistry;
 use Weline\Product\Model\Shard\AbstractWebsiteShardModel;
 use Weline\Product\Model\Shard\AttributeValue;
 use Weline\Product\Model\Shard\Category;
+use Weline\Product\Model\Shard\CategoryLink;
 use Weline\Product\Model\Shard\Media;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Price;
@@ -31,6 +32,7 @@ use Weline\Product\Model\Shard\Product;
 use Weline\Product\Model\Shard\StoreOffer;
 use Weline\Product\Model\Shard\StoreProduct;
 use Weline\Product\Repository\AttributeValueRepository;
+use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Repository\CategoryRepository;
 use Weline\Product\Repository\MediaRepository;
 use Weline\Product\Repository\OfferRepository;
@@ -93,6 +95,10 @@ final class CatalogRepositoryIntegrationTest extends TestCase
                 $provisioner,
                 $this->modelFactory($connectionFactory, Category::class),
             );
+            $categoryLinks = new CategoryLinkRepository(
+                $provisioner,
+                $this->modelFactory($connectionFactory, CategoryLink::class),
+            );
             $offers = new OfferRepository(
                 $provisioner,
                 $this->modelFactory($connectionFactory, Offer::class),
@@ -143,6 +149,14 @@ final class CatalogRepositoryIntegrationTest extends TestCase
                 (int)$category->getId(),
                 (int)$categories->findByGlobalUuid(0, $categoryUuid)?->getId(),
             );
+            $scopeProduct0 = $products->create(0, [
+                Product::schema_fields_SKU => 'P2A004-SCOPE-SOURCE',
+                Product::schema_fields_GLOBAL_PRODUCT_UUID => '00000000-0000-4000-8000-000000000050',
+            ]);
+            $scopeTargetProduct0 = $products->create(0, [
+                Product::schema_fields_SKU => 'P2A004-SCOPE-TARGET',
+                Product::schema_fields_GLOBAL_PRODUCT_UUID => '00000000-0000-4000-8000-000000000051',
+            ]);
             $product7 = $products->create(7, [
                 Product::schema_fields_SKU => 'P2A004-SAME-SKU',
                 Product::schema_fields_GLOBAL_PRODUCT_UUID => '00000000-0000-0000-0000-000000000040',
@@ -193,6 +207,13 @@ final class CatalogRepositoryIntegrationTest extends TestCase
                 $connectionFactory,
                 $products,
                 $offers,
+            );
+            $this->assertTaxonomyAndTypedMediaScope(
+                $categoryLinks,
+                $media,
+                (int)$category->getId(),
+                (int)$scopeProduct0->getId(),
+                (int)$scopeTargetProduct0->getId(),
             );
             $this->assertMediaCowAndRollback(
                 $provisioner,
@@ -300,6 +321,133 @@ final class CatalogRepositoryIntegrationTest extends TestCase
         );
         $prices->deleteOverlay(0, 11, $offer0Id, 'CNY');
         self::assertSame(1990, $prices->assertSellable(0, 11, $offer0Id, 'CNY'));
+    }
+
+    private function assertTaxonomyAndTypedMediaScope(
+        CategoryLinkRepository $categoryLinks,
+        MediaRepository $media,
+        int $categoryId,
+        int $sourceProductId,
+        int $targetProductId,
+    ): void {
+        $websiteRows = $categoryLinks->syncProductScope(0, $sourceProductId, 0, [[
+            'category_id' => $categoryId,
+            'selected' => true,
+            'position' => 3,
+        ]]);
+        self::assertCount(1, $websiteRows);
+        self::assertSame(0, $websiteRows[0]['store_id']);
+        self::assertTrue($websiteRows[0]['selected']);
+        self::assertSame(3, $websiteRows[0]['position']);
+
+        $storeRows = $categoryLinks->syncProductScope(0, $sourceProductId, 11, [[
+            'category_id' => $categoryId,
+            'scope_state' => 'cleared',
+            'selected' => false,
+            'position' => 4,
+        ]]);
+        self::assertCount(1, $storeRows);
+        self::assertSame(11, $storeRows[0]['store_id']);
+        self::assertFalse($storeRows[0]['selected']);
+        self::assertCount(
+            1,
+            $categoryLinks->listByProductIds(0, [$sourceProductId], [0]),
+            'Store exclusion must not change the Website assignment.',
+        );
+
+        self::assertSame(
+            [],
+            $categoryLinks->syncProductScope(0, $sourceProductId, 11, [[
+                'category_id' => $categoryId,
+                'scope_state' => 'inherit',
+            ]]),
+            'Inherit removes the Store override.',
+        );
+        self::assertCount(
+            1,
+            $categoryLinks->listByProductIds(0, [$sourceProductId], [0]),
+        );
+
+        $legacy = $media->create(0, [
+            Media::schema_fields_PRODUCT_ID => $sourceProductId,
+            Media::schema_fields_PATH => '/media/legacy-migration.jpg',
+            Media::schema_fields_BLOB_KEY => 'legacy-migration-' . $sourceProductId,
+        ]);
+        $firstAssetId = '10000000-0000-4000-8000-000000000001';
+        $sharedAssetId = '10000000-0000-4000-8000-000000000002';
+        $media->syncProductScope(0, $sourceProductId, 0, [
+            [
+                Media::schema_fields_ASSET_ID => $firstAssetId,
+                Media::schema_fields_ASSET_VISIBILITY => 'public',
+                Media::schema_fields_MIME_TYPE => 'image/jpeg',
+                Media::schema_fields_ROLE => 'gallery',
+                Media::schema_fields_POSITION => 1,
+            ],
+            [
+                Media::schema_fields_ASSET_ID => $sharedAssetId,
+                Media::schema_fields_ASSET_VISIBILITY => 'public',
+                Media::schema_fields_MIME_TYPE => 'image/png',
+                Media::schema_fields_ROLE => 'gallery',
+                Media::schema_fields_POSITION => 2,
+            ],
+        ]);
+
+        $sourceRows = $media->listByProductIds(0, [$sourceProductId], [0]);
+        $sharedSource = array_values(array_filter(
+            $sourceRows,
+            static fn(array $row): bool => ($row[Media::schema_fields_ASSET_ID] ?? null)
+                === $sharedAssetId,
+        ));
+        self::assertCount(1, $sharedSource);
+        $sharedCopy = $media->shareCopy(
+            0,
+            (int)$sharedSource[0][Media::schema_fields_ID],
+            $targetProductId,
+            7,
+        );
+        self::assertSame(
+            $sharedAssetId,
+            $sharedCopy->getData(Media::schema_fields_ASSET_ID),
+        );
+
+        $media->syncProductScope(0, $sourceProductId, 0, [[
+            Media::schema_fields_ASSET_ID => $firstAssetId,
+            Media::schema_fields_ASSET_VISIBILITY => 'public',
+            Media::schema_fields_MIME_TYPE => 'image/jpeg',
+            Media::schema_fields_ROLE => 'main',
+            Media::schema_fields_POSITION => 0,
+        ]]);
+
+        $sourceRows = $media->listByProductIds(0, [$sourceProductId], [0]);
+        self::assertCount(2, $sourceRows, 'Typed sync must retain one legacy migration row.');
+        $legacyRows = array_values(array_filter(
+            $sourceRows,
+            static fn(array $row): bool => empty($row[Media::schema_fields_ASSET_ID]),
+        ));
+        self::assertCount(1, $legacyRows);
+        self::assertSame((int)$legacy->getId(), (int)$legacyRows[0][Media::schema_fields_ID]);
+        $firstAssetRows = array_values(array_filter(
+            $sourceRows,
+            static fn(array $row): bool => ($row[Media::schema_fields_ASSET_ID] ?? null)
+                === $firstAssetId,
+        ));
+        self::assertCount(1, $firstAssetRows);
+        self::assertSame('main', $firstAssetRows[0][Media::schema_fields_ROLE]);
+        self::assertSame(0, (int)$firstAssetRows[0][Media::schema_fields_POSITION]);
+
+        $targetRows = array_values(array_filter(
+            $media->listByProductIds(0, [$targetProductId], [0]),
+            static fn(array $row): bool => ($row[Media::schema_fields_ASSET_ID] ?? null)
+                === $sharedAssetId,
+        ));
+        self::assertCount(1, $targetRows, 'Removing the shared owner must retain the target copy.');
+        self::assertSame(1, (int)$targetRows[0][Media::schema_fields_REF_COUNT]);
+        self::assertNull($targetRows[0][Media::schema_fields_COW_SOURCE_MEDIA_ID]);
+
+        $media->syncProductScope(0, $sourceProductId, 0, []);
+        $sourceRows = $media->listByProductIds(0, [$sourceProductId], [0]);
+        self::assertCount(1, $sourceRows);
+        self::assertSame((int)$legacy->getId(), (int)$sourceRows[0][Media::schema_fields_ID]);
     }
 
     private function assertStoreOnlySelection(

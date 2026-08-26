@@ -9,7 +9,7 @@ Required flow:
 1. Start `bin/learning-mcp`.
 2. Call `prepare_project` with the repository and a unique `client_session_id`.
 3. Continue only when `project-readiness.v1.status` is `ready`.
-4. If documents are missing, review the deterministic repair bundle and call `repair_project_docs` only after explicit authorization.
+4. Missing module documents are auto-repaired during `prepare_project`; `repair_project_docs` remains a compatibility replay entry.
 5. Call `resolve_task_context` and pass the returned `readiness_id` to every guarded tool.
 6. Store temporary user decisions with `set_session_directives`; they remain process-memory only.
 

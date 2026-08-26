@@ -32,6 +32,21 @@ final class PreviewRequestInspector
         return $path[0] === '/' ? $path : ('/' . $path);
     }
 
+    public function isEditorMode(): bool
+    {
+        $editorMode = \trim((string)$this->request->getParam('editor_mode', ''));
+        if ($editorMode === '1' || \strtolower($editorMode) === 'true') {
+            return true;
+        }
+
+        $raw = $this->getRawQueryValue('editor_mode');
+        if ($raw === null) {
+            return false;
+        }
+
+        return $raw === '1' || \strtolower($raw) === 'true';
+    }
+
     public function isPreviewShellPath(?string $path = null): bool
     {
         $path = $this->normalizePath($path);

@@ -45,6 +45,27 @@ php bin/w mig:foundation journal-verify --checkpoint=cp-1
 业务配置若需要切换连接，必须创建连接级非共享模型；仅对进程共享模型调用
 `setConnection()` 不能证明其已有查询状态、缓存或数据集已被清空。
 
+### 大型 full clone 的 dump/restore
+
+`MigrationCloneService` 不得把 `pg_dump` stdout 完整读入 PHP 字符串。真实
+full clone 可能超过 CLI memory_limit；标准路径必须是：
+
+1. `pg_dump --file {temp}` 由子进程直接流式写临时文件；
+2. `psql -f {temp}` 恢复；
+3. finally 删除临时文件，失败时销毁精确 clone 并保留稳定错误码。
+
+2026-08-26 在 256MB CLI 限制下复现内存耗尽并修复；聚焦迁移底座为
+14 tests / 41 assertions，随后成功创建 full clone。用于 Product 矩阵的
+临时 clone 已通过 `clone-destroy` 清理。
+
+### PostgreSQL 冷建表索引命名
+
+冷建 `CREATE TABLE`、增量 `ADD INDEX`、Schema 回读和 normalizer 必须共用
+`PgsqlIndexName::canonicalPhysical()`。旧 Create adapter 的 55+hash 截断与
+新 54+hash 映射并存时，同一逻辑索引会出现两份并导致 provision
+不收敛。2026-08-26 已统一 Create adapter，长 schema/table 聚焦回归
+4 tests / 12 assertions，Product PostgreSQL 跨站矩阵随后 4/88 通过。
+
 ## 回滚
 
 保留 journal 文件；具体 rollout 回退模式由业务迁移定义。所有迁移均拒绝

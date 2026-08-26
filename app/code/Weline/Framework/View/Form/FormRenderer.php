@@ -248,8 +248,10 @@ final class FormRenderer
 
         $csrf = self::normalizeSwitch((string)($attributes['csrf'] ?? 'auto'), ['auto', 'on', 'off'], 'auto');
         // Captcha is opt-in: ordinary POST forms (including async admin actions) stay clean
-        // unless a template explicitly sets captcha="auto|required".
-        $captcha = self::normalizeSwitch((string)($attributes['captcha'] ?? 'off'), ['auto', 'required', 'off'], 'off');
+        // unless a template explicitly sets captcha="auto|required|lazy".
+        // lazy = reserve slot only; client fetches /captcha/frontend/challenge when the form is shown
+        // (avoids LocalImageCaptcha password_hash SSR on every page that embeds a hidden form).
+        $captcha = self::normalizeSwitch((string)($attributes['captcha'] ?? 'off'), ['auto', 'required', 'lazy', 'off'], 'off');
         // Async form posts are handled by XHR/bin-query and never go through the
         // synchronous captcha challenge path, so keep the widget out of the markup.
         if ($captcha !== 'off' && isset($attributes['data-async-action'])) {

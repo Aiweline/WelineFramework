@@ -43,6 +43,11 @@ final class OrderFacade implements OrderFacadeInterface
     public const ERROR_COMMIT_FAILED = 'order_group_commit_failed';
     private const MAX_SCOPE_ID = 2_147_483_647;
     private const MAX_LINES = 10_000;
+    private const MAX_FULFILLMENT_METADATA_BYTES = 32_768;
+    private const MAX_FULFILLMENT_METADATA_DEPTH = 8;
+    private const MAX_FULFILLMENT_METADATA_NODES = 1_024;
+    private const MAX_FULFILLMENT_METADATA_KEY_BYTES = 128;
+    private const MAX_FULFILLMENT_METADATA_STRING_BYTES = 4_096;
 
     /**
      * @var array{
@@ -765,7 +770,102 @@ final class OrderFacade implements OrderFacadeInterface
                     \__('行 %{1} split_key 非法', [$i]),
                 );
             }
+            if (array_key_exists('provider_code', $line)
+                && (!is_string($line['provider_code'])
+                    || preg_match('/^[a-z][a-z0-9_.-]{0,63}$/D', $line['provider_code']) !== 1)
+            ) {
+                throw new OrderFacadeConflictException(
+                    self::ERROR_INVALID_COMMAND,
+                    \__('行 %{1} provider_code 非法', [$i]),
+                );
+            }
+            if (array_key_exists('global_offer_uuid', $line)
+                && (!is_string($line['global_offer_uuid'])
+                    || preg_match(
+                        '/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/D',
+                        strtolower($line['global_offer_uuid']),
+                    ) !== 1)
+            ) {
+                throw new OrderFacadeConflictException(
+                    self::ERROR_INVALID_COMMAND,
+                    \__('行 %{1} global_offer_uuid 非法', [$i]),
+                );
+            }
+            if (array_key_exists('fulfillment_metadata', $line)) {
+                if (!is_array($line['fulfillment_metadata'])) {
+                    throw new OrderFacadeConflictException(
+                        self::ERROR_INVALID_COMMAND,
+                        \__('行 %{1} fulfillment_metadata 必须为数组', [$i]),
+                    );
+                }
+                if ($line['fulfillment_metadata'] !== []) {
+                    $this->assertFulfillmentMetadata($line['fulfillment_metadata'], $i);
+                }
+            }
             $this->checkedMultiply($line['qty_minor'], $line['unit_price_minor']);
+        }
+    }
+
+    /** @param array<string|int,mixed> $metadata */
+    private function assertFulfillmentMetadata(array $metadata, int|string $lineIndex): void
+    {
+        try {
+            $nodes = 0;
+            $this->assertFulfillmentMetadataNode($metadata, 0, $nodes);
+            $encoded = json_encode(
+                $metadata,
+                JSON_UNESCAPED_UNICODE
+                    | JSON_UNESCAPED_SLASHES
+                    | JSON_PRESERVE_ZERO_FRACTION
+                    | JSON_THROW_ON_ERROR,
+            );
+            if (strlen($encoded) > self::MAX_FULFILLMENT_METADATA_BYTES) {
+                throw new \InvalidArgumentException('fulfillment_metadata_bytes_exceeded');
+            }
+        } catch (\Throwable $exception) {
+            throw new OrderFacadeConflictException(
+                self::ERROR_INVALID_COMMAND,
+                \__('行 %{1} fulfillment_metadata 非法', [$lineIndex]),
+                ['line_index' => $lineIndex],
+                $exception,
+            );
+        }
+    }
+
+    private function assertFulfillmentMetadataNode(
+        mixed $value,
+        int $depth,
+        int &$nodes,
+    ): void {
+        $nodes++;
+        if ($depth > self::MAX_FULFILLMENT_METADATA_DEPTH
+            || $nodes > self::MAX_FULFILLMENT_METADATA_NODES
+        ) {
+            throw new \InvalidArgumentException('fulfillment_metadata_structure_exceeded');
+        }
+        if (is_array($value)) {
+            foreach ($value as $key => $child) {
+                if (is_string($key)
+                    && (strlen($key) > self::MAX_FULFILLMENT_METADATA_KEY_BYTES
+                        || preg_match('/[\x00-\x1F\x7F]/', $key) === 1)
+                ) {
+                    throw new \InvalidArgumentException('fulfillment_metadata_key_invalid');
+                }
+                $this->assertFulfillmentMetadataNode($child, $depth + 1, $nodes);
+            }
+            return;
+        }
+        if (is_string($value)) {
+            if (strlen($value) > self::MAX_FULFILLMENT_METADATA_STRING_BYTES) {
+                throw new \InvalidArgumentException('fulfillment_metadata_string_exceeded');
+            }
+            return;
+        }
+        if (is_float($value) && !is_finite($value)) {
+            throw new \InvalidArgumentException('fulfillment_metadata_float_invalid');
+        }
+        if (!is_int($value) && !is_float($value) && !is_bool($value) && $value !== null) {
+            throw new \InvalidArgumentException('fulfillment_metadata_value_invalid');
         }
     }
 
@@ -897,7 +997,7 @@ final class OrderFacade implements OrderFacadeInterface
                     storeId: $groupTaxSnapshot->storeId,
                 );
             }
-            $buckets[$split]['items'][] = [
+            $plannedItem = [
                 'line_uuid' => $lineUuid !== '' ? $lineUuid : null,
                 'offer_id' => $line['offer_id'] ?? null,
                 'product_id' => $line['product_id'] ?? null,
@@ -912,6 +1012,19 @@ final class OrderFacade implements OrderFacadeInterface
                 'tax_amount_minor' => $lineTax,
                 'tax_snapshot' => $lineTaxSnapshot->toArray(),
             ];
+            $providerCode = trim((string)($line['provider_code'] ?? ''));
+            if ($providerCode !== '') {
+                $plannedItem['provider_code'] = $providerCode;
+            }
+            $globalOfferUuid = strtolower(trim((string)($line['global_offer_uuid'] ?? '')));
+            if ($globalOfferUuid !== '') {
+                $plannedItem['global_offer_uuid'] = $globalOfferUuid;
+            }
+            $fulfillmentMetadata = $line['fulfillment_metadata'] ?? [];
+            if (is_array($fulfillmentMetadata) && $fulfillmentMetadata !== []) {
+                $plannedItem['fulfillment_metadata'] = $fulfillmentMetadata;
+            }
+            $buckets[$split]['items'][] = $plannedItem;
             $buckets[$split]['subtotal_minor'] = $this->checkedAdd(
                 (int)$buckets[$split]['subtotal_minor'],
                 $lineTotal,

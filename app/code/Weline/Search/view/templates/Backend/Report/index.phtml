@@ -1,0 +1,61 @@
+<?php
+/** @var array<string,mixed> $report */
+/** @var string $range */
+/** @var string $engine */
+$report = is_array($this->getData('report') ?? null) ? $this->getData('report') : [];
+$esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+?>
+<div class="search-admin-report" id="search-report-root">
+    <h1><lang>搜索管理 · 搜索报告</lang></h1>
+    <w:scope url="@backend-url('backend/user-data')" container-id="search-report-root" event="input change click"/>
+    <form method="get" class="search-admin-report__filters">
+        <label><lang>时间</lang>
+            <select name="range">
+                <option value="24h"<?= $range === '24h' ? ' selected' : '' ?>><lang>近 24 小时</lang></option>
+                <option value="7d"<?= $range === '7d' ? ' selected' : '' ?>><lang>近 7 天</lang></option>
+                <option value="30d"<?= $range === '30d' ? ' selected' : '' ?>><lang>近 30 天</lang></option>
+            </select>
+        </label>
+        <button type="submit"><lang>刷新</lang></button>
+    </form>
+    <p><lang>引擎只读</lang>: <?= $esc($engine) ?> (default=mysql)</p>
+    <div class="search-admin-report__cards">
+        <div class="w-card"><div class="w-card__body"><strong><lang>请求量</lang></strong><div><?= $esc((string)($report['request_count'] ?? 0)) ?></div></div></div>
+        <div class="w-card"><div class="w-card__body"><strong><lang>零结果率</lang></strong><div><?= $esc((string)($report['zero_rate'] ?? 0)) ?>%</div></div></div>
+        <div class="w-card"><div class="w-card__body"><strong><lang>Top 类型</lang></strong><div><?= $esc((string)($report['top_type'] ?? 'all')) ?></div></div></div>
+    </div>
+    <h2><lang>趋势（按日）</lang></h2>
+    <pre class="search-admin-report__trend"><?php foreach (($report['trend'] ?? []) as $day => $count): ?><?= $esc($day) ?> <?= str_repeat('█', min(40, (int)$count)) ?> (<?= (int)$count ?>)
+<?php endforeach; ?></pre>
+    <div class="search-admin-report__tables">
+        <section>
+            <h3><lang>Top 关键词</lang></h3>
+            <table class="w-table">
+                <thead><tr><th>q</th><th><lang>次数</lang></th><th><lang>类型</lang></th></tr></thead>
+                <tbody>
+                <?php foreach (($report['top_keywords'] ?? []) as $row): ?>
+                    <tr>
+                        <td><?= $esc((string)($row['q'] ?? '')) ?></td>
+                        <td><?= (int)($row['request_count'] ?? 0) ?></td>
+                        <td><?= $esc((string)($row['type'] ?? '')) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </section>
+        <section>
+            <h3><lang>零结果词</lang></h3>
+            <table class="w-table">
+                <thead><tr><th>q</th><th><lang>次数</lang></th></tr></thead>
+                <tbody>
+                <?php foreach (($report['zero_keywords'] ?? []) as $row): ?>
+                    <tr>
+                        <td><?= $esc((string)($row['q'] ?? '')) ?></td>
+                        <td><?= (int)($row['request_count'] ?? 0) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </section>
+    </div>
+</div>

@@ -57,4 +57,23 @@
     --backend-border-sidebar: var(--backend-border-width-thin) var(--backend-border-style-solid) var(--backend-color-border-light);
     --backend-border-header: var(--backend-border-width-thin) var(--backend-border-style-solid) var(--backend-color-border-light);
     --backend-border-divider: var(--backend-border-width-thin) var(--backend-border-style-solid) var(--backend-color-border-light);
+
+    /* ========== 圆角别名（兼容历史 --radius-*） ========== */
+    --radius-none: var(--border-radius-none);
+    --radius-sm: var(--border-radius-sm);
+    --radius-md: var(--border-radius-md);
+    --radius-lg: var(--border-radius-lg);
+    --radius-xl: var(--border-radius-xl);
+    --radius-2xl: var(--border-radius-2xl);
+    --radius-full: var(--border-radius-full);
+    --radius-pill: var(--border-radius-full);
+
+    /* ========== border 桥接默认 ========== */
+    --backend-border-width: 1px;
+    --backend-border-width-2: 2px;
+    --backend-border-style: solid;
+
+    /* ========== frontend-compat borders ========== */
+    --border-width-thin: 1px;
+    --border-width-medium: 2px;
 }

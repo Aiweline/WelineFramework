@@ -10,6 +10,7 @@ $presets = $presets ?? [];
 $listUrl = $this->getBackendUrl('*/backend/customvendor/listjson');
 $deleteUrl = $this->getBackendUrl('*/backend/customvendor/delete');
 $toggleUrl = $this->getBackendUrl('*/backend/customvendor/toggleactive');
+$testUrl = $this->getBackendUrl('*/backend/customvendor/testconnection');
 $editUrl = $this->getBackendUrl('*/backend/customvendor/editoffcanvas', ['id' => 0, 'isIframe' => 'true']);
 $drawerId = 'weline_ai_custom_vendor_drawer';
 $addTitle = __('添加本地供应商');
@@ -198,6 +199,7 @@ $pageBreadcrumbs = [
     var listUrl = <?= json_encode($listUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var deleteUrl = <?= json_encode($deleteUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var toggleUrl = <?= json_encode($toggleUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var testUrl = <?= json_encode($testUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var drawerId = <?= json_encode($drawerId, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var addTitle = <?= json_encode($addTitle, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var editTitle = <?= json_encode($editTitle, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
@@ -271,6 +273,7 @@ $pageBreadcrumbs = [
                         '</td>' +
                         '<td class="cv-actions">' +
                         '<div class="w-cluster" style="--w-gap:var(--weline-space-1);">' +
+                        '<button type="button" class="w-button" data-size="sm" data-tone="info" data-variant="outline" data-cv-test="' + esc(row.id) + '" data-cv-loading-label="<?= htmlspecialchars(__('测试中...'), ENT_QUOTES, 'UTF-8') ?>"><?= __('一键测试') ?></button>' +
                         '<button type="button" class="w-button" data-size="sm" data-tone="primary" data-variant="outline" data-cv-edit="' + esc(row.id) + '"><?= __('编辑') ?></button>' +
                         '<button type="button" class="w-button" data-size="sm" data-tone="neutral" data-variant="outline" data-cv-toggle="' + esc(row.id) + '" data-active="' + esc(row.is_active) + '">' +
                         (active ? '<?= __('停用') ?>' : '<?= __('启用') ?>') +
@@ -315,6 +318,52 @@ $pageBreadcrumbs = [
         }).then(function (r) { return r.json(); });
     }
 
+    function setButtonLoading(btn, loading) {
+        if (!btn) return;
+        if (loading) {
+            if (!btn.dataset.cvOrigHtml) {
+                btn.dataset.cvOrigHtml = btn.innerHTML;
+            }
+            var label = btn.getAttribute('data-cv-loading-label') || '<?= __('测试中...') ?>';
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+            btn.innerHTML = '<span class="w-spinner" aria-hidden="true"></span><span>' + esc(label) + '</span>';
+            return;
+        }
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        if (btn.dataset.cvOrigHtml) {
+            btn.innerHTML = btn.dataset.cvOrigHtml;
+            delete btn.dataset.cvOrigHtml;
+        }
+    }
+
+    function runOneClickTest(id, triggerBtn) {
+        if (!id) {
+            showToast('error', '<?= __('参数错误') ?>');
+            return;
+        }
+        if (triggerBtn && triggerBtn.getAttribute('aria-busy') === 'true') {
+            return;
+        }
+        setButtonLoading(triggerBtn, true);
+        postForm(testUrl, {id: id}).then(function (res) {
+            if (!res || !res.success) {
+                showToast('error', (res && res.message) || '<?= __('连通性测试失败') ?>');
+                return;
+            }
+            var okMsg = res.message || '<?= __('连通性测试成功') ?>';
+            if (res.model_code) {
+                okMsg = okMsg + ' (' + res.model_code + ')';
+            }
+            showToast('success', okMsg);
+        }).catch(function (e) {
+            showToast('error', (e && e.message) || '<?= __('连通性测试失败') ?>');
+        }).finally(function () {
+            setButtonLoading(triggerBtn, false);
+        });
+    }
+
     if (addBtn) {
         addBtn.addEventListener('click', function () {
             // 新建：重置到 id=0
@@ -337,9 +386,13 @@ $pageBreadcrumbs = [
     document.getElementById('custom-vendor-refresh') && document.getElementById('custom-vendor-refresh').addEventListener('click', loadList);
 
     tbody.addEventListener('click', function (ev) {
-        var t = ev.target.closest('[data-cv-edit],[data-cv-toggle],[data-cv-del]');
+        var t = ev.target.closest('[data-cv-test],[data-cv-edit],[data-cv-toggle],[data-cv-del]');
         if (!t) return;
-        var id = t.getAttribute('data-cv-edit') || t.getAttribute('data-cv-toggle') || t.getAttribute('data-cv-del');
+        var id = t.getAttribute('data-cv-test') || t.getAttribute('data-cv-edit') || t.getAttribute('data-cv-toggle') || t.getAttribute('data-cv-del');
+        if (t.hasAttribute('data-cv-test')) {
+            runOneClickTest(id, t);
+            return;
+        }
         if (t.hasAttribute('data-cv-edit')) {
             openVendorDrawer(id);
             return;

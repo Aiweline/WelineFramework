@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\FileManager\Extends\Module\Weline_Theme\Integration;
+namespace Weline\FileManager\extends\module\Weline_Theme\Integration;
 
 use Weline\FileManager\Api\Data\FileAccessContext;
 use Weline\FileManager\Api\Data\ImageUsage;
@@ -33,8 +33,16 @@ final class FileImageLayoutValueHydrator implements LayoutValueHydratorInterface
         }
         $usage = ImageUsage::fromArray($node['usage']);
         $locale = trim((string)($context['locale_code'] ?? ''));
+        $purpose = trim((string)($context['purpose'] ?? 'render'));
         if ($locale === '' || $locale !== $usage->localeCode) {
-            throw new \RuntimeException((string)__('图片语境语言与当前布局语言不一致。'));
+            // Theme editor preview may switch layout locale while media remains
+            // stamped with the site-default locale. Soft-fallback for preview only;
+            // publish/render stay strict so production never serves cross-locale usage.
+            if ($purpose === 'preview' && $usage->localeCode !== '') {
+                $locale = $usage->localeCode;
+            } else {
+                throw new \RuntimeException((string)__('图片语境语言与当前布局语言不一致。'));
+            }
         }
         $access = new FileAccessContext(
             $scope,

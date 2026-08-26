@@ -47,6 +47,7 @@ guidance:
     - app/code/Weline/Ai/doc/AI工程交付流程.md
     - app/code/Weline/Framework/doc/3-开发/扩展点选型.md
     - app/code/Weline/Ai/doc/文档索引.md
+    - app/code/Weline/Theme/doc/开发/Theme开发总指南.md
     - app/code/Weline/Theme/doc/部件开发指南.md
 
 promotion:

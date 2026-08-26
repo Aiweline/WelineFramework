@@ -164,13 +164,21 @@ class CustomVendor extends BackendPageController
                     $data = array_merge($data, $body);
                 }
             }
-            $baseUrl = trim((string)($data['base_url'] ?? ''));
-            $modelCode = trim((string)($data['model_code'] ?? $data['test_model'] ?? ''));
             $apiKey = trim((string)($data['api_key'] ?? ''));
-            $result = $this->customVendorService->testCompatEndpoint($baseUrl, $modelCode, $apiKey);
+            $id = (int)($data['id'] ?? 0);
+            $modelCode = '';
+            if ($id > 0) {
+                $result = $this->customVendorService->testSavedVendorById($id, $apiKey);
+            } else {
+                $baseUrl = trim((string)($data['base_url'] ?? ''));
+                $modelCode = trim((string)($data['model_code'] ?? $data['test_model'] ?? ''));
+                $result = $this->customVendorService->testCompatEndpoint($baseUrl, $modelCode, $apiKey);
+            }
             if (!empty($result['success'])) {
                 $result['message'] = $result['message'] ?? __('连通性测试成功');
-                $result['model_code'] = $modelCode;
+                if (!isset($result['model_code']) || trim((string)$result['model_code']) === '') {
+                    $result['model_code'] = $modelCode;
+                }
             }
             return $this->fetchJson($result);
         } catch (ResponseTerminateException $e) {

@@ -71,7 +71,11 @@ class Content extends FrontendController
         $layoutOption = $layoutOption !== '' ? $layoutOption : 'default';
 
         $this->layoutType = $layoutType;
-        $this->request->setData('skip_view_file_cache', true);
+        // Preview draft correctness comes from status/layout payload + private no-store responses.
+        // Do not force view file-path cold lookups on every iframe render (PROD path cache remains usable).
+        $editorModeFlag = \trim((string)$this->request->getParam('editor_mode', ''));
+        $isEditorMode = ($editorModeFlag === '1' || \strtolower($editorModeFlag) === 'true');
+        $this->assign('editor_mode', $isEditorMode);
         $this->request->setGet('page_type', $layoutType);
         $this->request->setGet('layout_type', $layoutType);
         $this->request->setGet('layout_option', $layoutOption);
@@ -96,6 +100,12 @@ class Content extends FrontendController
         $this->assign('theme_id', $themeId);
         $this->assign('layout_type', $layoutType);
         $this->assign('layout_option', $layoutOption);
+
+        $themePublicRoute = \trim(\str_replace('\\', '/', (string)$this->request->getParam('theme_public_route', '')), '/');
+        if ($themePublicRoute !== '') {
+            $this->request->setGet('theme_public_route', $themePublicRoute);
+            $this->assign('theme_public_route', $themePublicRoute);
+        }
 
         /** @var ThemePreviewContentRenderer $previewContentRenderer */
         $previewContentRenderer = ObjectManager::getInstance(ThemePreviewContentRenderer::class);
@@ -286,13 +296,23 @@ class Content extends FrontendController
     private function applyPreviewLocale(string $locale): void
     {
         $locale = \trim($locale);
-        if ($locale === '' || !\preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale)) {
+        if ($locale === '' || \strcasecmp($locale, 'default') === 0) {
+            // Explicit default / all-language identity: drop request override so
+            // Cookie-backed external language preference remains authoritative.
+            State::setRequestLanguageOverride('');
+            State::resetRequestPathLocalizationCache();
+            State::resetLangLocalCache();
+            return;
+        }
+        if (!\preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale)) {
             return;
         }
 
         $this->request->setGet('locale', $locale);
         $this->assign('locale', $locale);
         RequestContext::locale($locale);
+        // Request-scoped only — never write WELINE_USER_LANG (external switcher owns cookies).
+        State::setRequestLanguageOverride($locale);
         State::resetRequestPathLocalizationCache();
         State::resetLangLocalCache();
     }

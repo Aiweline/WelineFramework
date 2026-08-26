@@ -86,6 +86,26 @@
 4. 根据 `data-wslot-accept` 过滤显示的部件（只显示接受的部件）
 5. 动态渲染的子插槽（容器部件内部的 `data-wslot`）会自动初始化交互事件
 
+## 模板内嵌部件（Copy-on-Write）
+
+允许在 `<w:slot>` 内直接写 `<w:widget>` 作为**默认展示**，不必预先写入布局 JSON：
+
+```html
+<w:slot id="user-area" accept="account,mini-cart-icon" multiple="true">
+  <w:widget type="header" name="account" />
+  <w:widget type="header" name="mini-cart-icon" />
+</w:slot>
+```
+
+规则：
+
+1. **未改动**：只渲染模板内嵌结果，不写布局。
+2. **用户改过**（改参、换件、删除、排序等）：将该实例物化进布局，`config.template_ref` 指向模板标记；同槽未改实例仍跟模板。
+3. **排序整槽**：物化时带 `config.cow_full_slot=true`，之后以布局 `sort_order` 为准。
+4. **与 `default_injections`**：目录检测到槽内有模板内嵌部件时，不再自动注入，避免重复落库。
+
+渲染侧由 `TemplateInlineWidgetMerger` 合并模板节点与布局覆盖；`w:widget` 输出带 `data-weline-template-widget` / `data-template-ref` 供编辑器识别虚拟实例。
+
 ## 迁移指南
 
 ### 旧方式（不推荐）

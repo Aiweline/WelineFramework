@@ -65,12 +65,48 @@ class MailSmtpAccountService
         }
 
         if (empty($config['is_fake'])) {
-            return ['success' => false, 'message' => __('真实自建邮箱账号请通过 SMTP 协议发送')];
+            return ['success' => false, 'message' => __('真实自建邮箱账号必须通过已鉴权的邮箱界面发送')];
         }
 
         /** @var MailFakeMailboxService $fakeMailbox */
         $fakeMailbox = ObjectManager::getInstance(MailFakeMailboxService::class);
         return $fakeMailbox->sendFromAccount($accountId, $to, $subject, $content);
+    }
+
+    /**
+     * 仅供已完成前台所有权校验或后台 ACL 校验的调用方使用。
+     */
+    public function sendViaAuthorizedAccount(
+        int $accountId,
+        string|array $to,
+        string $subject,
+        string $content
+    ): array {
+        $config = $this->getAccountConfig($accountId);
+        if ($config === null) {
+            return ['success' => false, 'message' => __('请选择已启用的自建邮箱账号')];
+        }
+
+        if (!empty($config['is_fake'])) {
+            /** @var MailFakeMailboxService $fakeMailbox */
+            $fakeMailbox = ObjectManager::getInstance(MailFakeMailboxService::class);
+            return $fakeMailbox->sendFromAccount($accountId, $to, $subject, $content);
+        }
+
+        try {
+            /** @var StalwartEngineAdapter $stalwart */
+            $stalwart = ObjectManager::getInstance(StalwartEngineAdapter::class);
+            return $stalwart->sendMessage(
+                (string)$config['email'],
+                $to,
+                $subject,
+                $content
+            );
+        } catch (\InvalidArgumentException|\DomainException $exception) {
+            return ['success' => false, 'message' => $exception->getMessage()];
+        } catch (\Throwable) {
+            return ['success' => false, 'message' => __('企业邮箱发送失败，请检查邮件服务状态')];
+        }
     }
 
     private function buildAccountConfig(MailAccount $account): ?array

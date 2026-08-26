@@ -35,6 +35,8 @@ class Region extends AbstractModel
     public const schema_fields_REGION_TYPE = 'region_type';
     #[Col('varchar', 100, comment: '邮政编码格式')]
     public const schema_fields_POSTAL_CODE_PATTERN = 'postal_code_pattern';
+    #[Col('varchar', 20, comment: '默认邮政编码')]
+    public const schema_fields_POSTAL_CODE = 'postal_code';
     #[Col('int', 1, nullable: false, default: 1, comment: '是否启用')]
     public const schema_fields_IS_ACTIVE = 'is_active';
     #[Col('int', null, nullable: false, default: 0, comment: '排序')]

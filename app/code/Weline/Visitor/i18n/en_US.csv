@@ -287,7 +287,7 @@ Events,Events
 "按 item_id 展开 items：曝光 / 加购 / 购买与收入","Expand items by item_id: views / add_to_cart / purchases & revenue"
 "商品表现暂不可用（扁平列或 items 未就绪）。","Item performance unavailable (flat columns or items missing)."
 "该窗口暂无带 items 的电商事件。","No ecommerce events with items in this window."
-商品,commodity
+商品,Products
 曝光,Views
 结账,Checkout
 购买,Buy

@@ -1,0 +1,242 @@
+@layer page {
+    .w-auth-login {
+        width: min(27.5rem, calc(100% - 2rem));
+        margin-inline: auto;
+        overflow: hidden;
+        animation: w-auth-login-enter 240ms ease-out;
+    }
+
+    .w-auth-login__header {
+        display: grid;
+        justify-items: center;
+        gap: var(--weline-space-2);
+        padding: var(--weline-space-8) var(--weline-space-6) var(--weline-space-4);
+        text-align: center;
+    }
+
+    .w-auth-login__icon {
+        display: grid;
+        width: 4rem;
+        height: 4rem;
+        place-items: center;
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-primary-surface);
+        color: var(--weline-theme-primary);
+    }
+
+    .w-auth-login__title {
+        margin: 0;
+        font-size: clamp(var(--weline-font-size-xl), 5vw, 1.875rem);
+    }
+
+    .w-auth-login__subtitle {
+        margin: 0;
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-auth-login__messages,
+    .w-auth-login__form {
+        display: grid;
+        gap: var(--weline-space-4);
+        padding-inline: var(--weline-space-6);
+    }
+
+    .w-auth-login__password {
+        position: relative;
+    }
+
+    .w-auth-login__password .w-input {
+        padding-inline-end: 3.25rem;
+    }
+
+    .w-auth-login__password > .w-button {
+        position: absolute;
+        inset-block-start: 50%;
+        inset-inline-end: var(--weline-space-1);
+        translate: 0 -50%;
+    }
+
+    .w-auth-login__remember {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        padding: var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+    }
+
+    .w-auth-login__remember-label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--weline-space-2);
+        color: var(--weline-theme-text);
+        font-size: var(--weline-font-size-sm);
+        font-weight: 650;
+        white-space: nowrap;
+    }
+
+    .w-auth-login__remember .w-select {
+        width: auto;
+        min-width: 9.5rem;
+        min-height: var(--weline-control-height-sm);
+    }
+
+    .w-auth-login__forgot {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .w-auth-login__form .weline-captcha {
+        margin-block: 0;
+    }
+
+    .w-auth-login__form .weline-captcha .w-field {
+        gap: var(--weline-space-2);
+    }
+
+    .w-auth-login__form .weline-captcha-row {
+        align-items: stretch;
+    }
+
+    .w-auth-login__form .weline-captcha-image {
+        width: min(168px, 42%);
+        height: var(--weline-control-height-lg);
+        flex: 0 0 auto;
+    }
+
+    .w-auth-login__form .weline-captcha-field {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .w-auth-login__form .weline-captcha-field .w-input {
+        letter-spacing: 0.24em;
+    }
+
+    .w-auth-login__submit {
+        width: 100%;
+    }
+
+    .w-auth-login__submit[data-tone="success"] {
+        background: var(--weline-theme-success);
+        border-color: var(--weline-theme-success);
+        color: var(--weline-theme-surface);
+    }
+
+    .w-auth-login__social {
+        display: grid;
+        gap: var(--weline-space-3);
+        margin-block-start: var(--weline-space-2);
+        padding: var(--weline-space-4) var(--weline-space-6) 0;
+        border-block-start: 1px solid var(--weline-theme-border);
+    }
+
+    .w-auth-login__social-title {
+        margin: 0;
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+        text-align: center;
+    }
+
+    .w-auth-login__social .auth-form__provider {
+        width: 100%;
+        margin: 0;
+    }
+
+    .w-auth-login__social .auth-form__provider + .auth-form__provider {
+        margin-top: var(--weline-space-3);
+    }
+
+    .w-auth-login__social .auth-form__submit--provider {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--weline-space-2);
+        min-height: var(--weline-control-height);
+        padding: 0 var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border-strong);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        color: var(--weline-theme-primary);
+        font-weight: 650;
+        text-decoration: none;
+        box-shadow: none;
+        cursor: pointer;
+        transition: background-color var(--weline-motion-fast), border-color var(--weline-motion-fast), color var(--weline-motion-fast);
+    }
+
+    .w-auth-login__social .auth-form__submit--provider:hover,
+    .w-auth-login__social .auth-form__submit--provider:focus-visible {
+        background: var(--weline-theme-primary-surface);
+        border-color: var(--weline-theme-primary);
+        color: var(--weline-theme-primary);
+        outline: none;
+    }
+
+    .w-auth-login__footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--weline-space-2);
+        margin-block-start: var(--weline-space-6);
+        padding: var(--weline-space-4) var(--weline-space-6);
+        border-block-start: 1px solid var(--weline-theme-border);
+    }
+
+    .w-auth-login--shake {
+        animation: w-auth-login-shake 0.45s ease;
+    }
+
+    @keyframes w-auth-login-enter {
+        from {
+            opacity: 0;
+            translate: 0 var(--weline-space-3);
+        }
+        to {
+            opacity: 1;
+            translate: 0 0;
+        }
+    }
+
+    @keyframes w-auth-login-shake {
+        0%, 100% { translate: 0 0; }
+        25% { translate: -0.35rem 0; }
+        75% { translate: 0.35rem 0; }
+    }
+
+    @media (max-width: 39.99rem) {
+        .w-auth-login {
+            width: min(100% - 1rem, 27.5rem);
+        }
+
+        .w-auth-login__header {
+            padding: var(--weline-space-6) var(--weline-space-4) var(--weline-space-3);
+        }
+
+        .w-auth-login__messages,
+        .w-auth-login__form,
+        .w-auth-login__social {
+            padding-inline: var(--weline-space-4);
+        }
+
+        .w-auth-login__remember {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .w-auth-login__remember .w-select {
+            width: 100%;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .w-auth-login,
+        .w-auth-login--shake {
+            animation: none;
+        }
+    }
+}

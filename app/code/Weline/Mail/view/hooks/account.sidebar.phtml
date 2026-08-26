@@ -8,6 +8,16 @@
  * @hook-sort-order 11
  * @hook-solo false
  */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Mail\Service\MailCustomerAccountService;
+
+/** @var MailCustomerAccountService $mailService */
+$mailService = ObjectManager::getInstance(MailCustomerAccountService::class);
+$customerId = $mailService->resolveFrontendCustomerId($user ?? $this->getData('user'));
+if (!$mailService->hasActiveAccountForCustomer($customerId)) {
+    return;
+}
+
 $accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
 if (!is_string($accountIndexPath) || $accountIndexPath === '') {
     $accountIndexPath = '/customer/account/index';
@@ -19,7 +29,7 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
         <w:icon name="mail" size="sm"></w:icon>
         <span class="account-hook-nav-link__text">
             <strong><?= __('我的邮箱') ?></strong>
-            <span><?= __('申请和管理企业邮箱账号') ?></span>
+            <span><?= __('查看企业邮箱收件箱') ?></span>
         </span>
     </span>
     <span class="account-hook-nav-link__arrow" aria-hidden="true">

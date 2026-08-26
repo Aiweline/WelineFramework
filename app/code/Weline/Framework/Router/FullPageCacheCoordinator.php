@@ -1513,6 +1513,8 @@ final class FullPageCacheCoordinator
             'delivery',
             'tax',
             'rma',
+            // Search results vary by q/type/category_id; never share one FPC body.
+            'search',
         ]);
         if ($firstSegment !== '' && \in_array($firstSegment, $blockedPrefixes, true)) {
             return true;

@@ -123,6 +123,8 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('class="w-textarea', $textarea);
         $this->assertStringNotContainsString('w-param-input', $text . $select . $textarea);
         $this->assertStringNotContainsString('w-param-select', $text . $select . $textarea);
+        $this->assertStringContainsString('class="w-button w-param-btn-save-widget"', $form);
+        $this->assertStringContainsString('type="submit"', $form);
         $this->assertStringContainsString('class="w-button w-param-btn-delete-widget"', $form);
         $this->assertStringContainsString('data-tone="danger"', $form);
         $this->assertStringContainsString('data-variant="outline"', $form);
@@ -355,6 +357,33 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('function reindexArrayItemIdentity(itemEl, newIndex)', $script);
         $this->assertStringContainsString("node.setAttribute('data-array-index', String(newIndex))", $script);
         $this->assertStringContainsString("node.setAttribute('data-field', newFieldPrefix", $script);
+    }
+
+    public function testNavTreeBootUsesTextareaForInnerHtmlInjection(): void
+    {
+        $renderer = new ParamTypeRenderer();
+        $html = $renderer->renderField('menu_tree', [
+            'type' => 'nav_tree',
+            'label' => '导航树',
+            'max_depth' => 3,
+            'item_schema' => [
+                'name' => ['type' => 'string', 'label' => '名称'],
+            ],
+        ], [], 10);
+
+        $this->assertStringContainsString('w-nav-tree-boot-data', $html);
+        $this->assertStringContainsString('id="config_10_menu_tree_nav_tree_boot"', $html);
+        $this->assertStringContainsString('w-nav-tree-editor', $html);
+        $this->assertStringNotContainsString('type="application/json"', $html);
+        $this->assertStringNotContainsString('<script', $html);
+
+        $script = file_get_contents(BP . '/app/code/Weline/Widget/view/statics/js/widget-param-types.js');
+        $this->assertIsString($script);
+        $this->assertStringContainsString('bootEl.value || bootEl.textContent', $script);
+        $this->assertStringContainsString('bindDropSurface', $script);
+        $this->assertStringContainsString('resolveDropMode', $script);
+        $this->assertStringContainsString('moveRow', $script);
+        $this->assertStringContainsString('w-nav-tree-drop-end', $script);
     }
 
     public function testIconPickerStoresSemanticNamesAndUsesTheSharedSvgIconComponent(): void

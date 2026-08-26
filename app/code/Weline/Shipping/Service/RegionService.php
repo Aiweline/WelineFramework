@@ -27,11 +27,13 @@ class RegionService
 {
     private ObjectManager $objectManager;
     private RuntimeProviderResolver $runtimeProviders;
+    private RegionCascadeEnsureService $cascadeEnsure;
 
     public function __construct(ObjectManager $objectManager)
     {
         $this->objectManager = $objectManager;
         $this->runtimeProviders = $objectManager->getInstance(RuntimeProviderResolver::class);
+        $this->cascadeEnsure = $objectManager->getInstance(RegionCascadeEnsureService::class);
     }
 
     /**
@@ -96,6 +98,7 @@ class RegionService
             'region_locale' => $this->currentLocale(),
             'region_type' => $region->getData(Region::schema_fields_REGION_TYPE),
             'postal_code_pattern' => $region->getData(Region::schema_fields_POSTAL_CODE_PATTERN),
+            'postal_code' => (string)$region->getData(Region::schema_fields_POSTAL_CODE),
             'is_active' => $region->getData(Region::schema_fields_IS_ACTIVE),
             'sort_order' => $region->getData(Region::schema_fields_SORT_ORDER),
             'children' => [],
@@ -135,6 +138,10 @@ class RegionService
 
     public function getChildrenList(?int $parentRegionId, ?string $countryCode = null): array
     {
+        if ($countryCode) {
+            $this->cascadeEnsure->ensureCountry($countryCode);
+        }
+
         $model = $this->getModel()->reset();
 
         if ($parentRegionId !== null && $parentRegionId > 0) {
@@ -160,8 +167,12 @@ class RegionService
         return $regionList;
     }
 
-    public function getAllActiveList(): array
+    public function getAllActiveList(?string $ensureCountryCode = null): array
     {
+        if ($ensureCountryCode) {
+            $this->cascadeEnsure->ensureCountry($ensureCountryCode);
+        }
+
         $regions = $this->getModel()->reset()
             ->where(Region::schema_fields_IS_ACTIVE, 1)
             ->order(Region::schema_fields_SORT_ORDER, 'ASC')
@@ -175,6 +186,16 @@ class RegionService
         }
 
         return $this->mergeFallbackRegions($regionList);
+    }
+
+    /**
+     * 用到某国家时按需把数据包写入 w_shipping_regions（幂等）。
+     *
+     * @return array{imported:int,skipped:bool,reason:string,country_code:string}
+     */
+    public function ensureCountryCascade(string $countryCode): array
+    {
+        return $this->cascadeEnsure->ensureCountry($countryCode);
     }
 
     private function toRegionList(array $regions): array
@@ -199,6 +220,7 @@ class RegionService
                 'region_locale' => $this->currentLocale(),
                 'region_type' => $regionType,
                 'postal_code_pattern' => (string)$region->getData(Region::schema_fields_POSTAL_CODE_PATTERN),
+                'postal_code' => (string)$region->getData(Region::schema_fields_POSTAL_CODE),
             ];
         }
 
@@ -226,6 +248,7 @@ class RegionService
                 'region_locale' => $this->currentLocale(),
                 'region_type' => Region::TYPE_COUNTRY,
                 'postal_code_pattern' => '',
+                'postal_code' => '',
             ];
         }
 
@@ -305,6 +328,7 @@ class RegionService
                 'region_locale' => $this->currentLocale(),
                 'region_type' => Region::TYPE_PROVINCE,
                 'postal_code_pattern' => '',
+                'postal_code' => '',
             ];
             $regions[] = [
                 'region_id' => 841000 + $index + 1,
@@ -316,6 +340,7 @@ class RegionService
                 'region_locale' => $this->currentLocale(),
                 'region_type' => Region::TYPE_CITY,
                 'postal_code_pattern' => '',
+                'postal_code' => '',
             ];
         }
 

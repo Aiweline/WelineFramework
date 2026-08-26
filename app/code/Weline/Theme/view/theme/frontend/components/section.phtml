@@ -166,13 +166,13 @@ $rootClass = trim($wc . ' w-builder-section w-builder-section--' . $variant . ' 
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    min-height: var(--wc-section-min-height, auto);
-    padding: var(--wc-section-padding, var(--weline-space-8, 32px));
-    border-radius: var(--wc-section-radius, 0);
-    background-color: var(--wc-section-bg, var(--weline-theme-surface));
+    min-height: var(--wc-section-min-height);
+    padding: var(--wc-section-padding);
+    border-radius: var(--wc-section-radius);
+    background-color: var(--wc-section-bg);
     background-size: cover;
-    background-position: var(--wc-section-bg-position, center);
-    color: var(--wc-section-color, var(--weline-theme-text));
+    background-position: var(--wc-section-bg-position);
+    color: var(--wc-section-color);
     overflow: hidden;
 }
 
@@ -193,17 +193,17 @@ $rootClass = trim($wc . ' w-builder-section w-builder-section--' . $variant . ' 
 }
 
 .<?= $wc ?>.w-builder-section--hero {
-    min-height: var(--wc-section-min-height, 420px);
-    background-color: var(--wc-section-bg, var(--weline-theme-primary-surface));
+    min-height: var(--wc-section-min-height);
+    background-color: var(--wc-section-bg);
 }
 
 .<?= $wc ?>.w-builder-section--cta {
-    background-color: var(--wc-section-bg, var(--weline-theme-primary));
-    color: var(--wc-section-color, var(--weline-theme-on-primary));
+    background-color: var(--wc-section-bg);
+    color: var(--wc-section-color);
 }
 
 .<?= $wc ?>.w-builder-section--subtle {
-    background-color: var(--wc-section-bg, var(--weline-theme-surface-muted));
+    background-color: var(--wc-section-bg);
 }
 
 .<?= $wc ?> .section-background,
@@ -224,32 +224,32 @@ $rootClass = trim($wc . ' w-builder-section w-builder-section--' . $variant . ' 
     position: relative;
     z-index: 1;
     width: 100%;
-    max-width: var(--wc-section-max-width, 100%);
+    max-width: var(--wc-section-max-width);
 }
 
 .<?= $wc ?> .section-eyebrow {
-    margin: 0 0 var(--weline-space-2, 8px);
+    margin: 0 0 var(--weline-space-2);
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-sm, 13px);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-size: var(--weline-font-size-sm);
+    font-weight: var(--weline-font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--token-size-0-04em);
 }
 
 .<?= $wc ?> .section-title {
     margin: 0;
-    font-size: clamp(1.5rem, 2vw, 2.25rem);
-    font-weight: var(--weline-font-weight-bold, 700);
+    font-size: clamp(var(--font-size-2xl), 2vw, var(--spacing-2_25));
+    font-weight: var(--weline-font-weight-bold);
 }
 
 .<?= $wc ?> .section-description {
-    margin: var(--weline-space-3, 12px) 0 0;
+    margin: var(--weline-space-3) 0 0;
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-base, 15px);
+    font-size: var(--weline-font-size-base);
     line-height: 1.6;
 }
 
 .<?= $wc ?> .section-body {
-    margin-top: var(--weline-space-6, 24px);
+    margin-top: var(--weline-space-6);
 }
 </style>

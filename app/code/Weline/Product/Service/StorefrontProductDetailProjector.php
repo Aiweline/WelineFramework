@@ -16,7 +16,7 @@ use Weline\Product\Model\Shard\Media;
 final class StorefrontProductDetailProjector
 {
     private const CONTENT_CODES = ['name', 'short_description', 'description'];
-    private const INTERNAL_CODES = ['quote_only', 'slug'];
+    private const INTERNAL_CODES = ['quote_only', 'slug', 'attribute_set', 'attribute_set_label'];
 
     public function __construct(
         private readonly CatalogOverlayResolver $resolver = new CatalogOverlayResolver(),
@@ -103,6 +103,8 @@ final class StorefrontProductDetailProjector
             'short_description' => $resolved['short_description'] ?? '',
             'description' => $resolved['description'] ?? '',
             'slug' => $slug,
+            'attribute_set' => $resolved['attribute_set'] ?? '',
+            'attribute_set_label' => $resolved['attribute_set_label'] ?? '',
             'quote_only' => ($resolved['quote_only'] ?? '0') === '1',
             'specifications' => $specifications,
             'images' => array_keys($images),

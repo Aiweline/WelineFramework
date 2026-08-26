@@ -18,7 +18,7 @@ $config = [
         'cancelling' => (string)__('正在取消草稿…'),
         'cancelled' => (string)__('草稿已取消'),
         'cancelFailed' => (string)__('取消草稿失败'),
-        'targetRequired' => (string)__('请选择目标 Website 与 Store'),
+        'targetRequired' => (string)__('请选择目标 Website，并至少保留一个目标 Store'),
         'sourceRequired' => (string)__('当前入口需要选择来源 Website 与 Store'),
         'sourceWebsiteRequired' => (string)__('当前入口需要选择来源 Website'),
         'emptyOption' => (string)__('请选择'),
@@ -39,7 +39,7 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
         <div>
             <h3 data-testid="store-copy-title" style="--w-mb:var(--weline-space-1);"><lang>Store 商品复制向导</lang></h3>
             <p class="w-text" data-testid="store-copy-summary" data-tone="muted" style="--w-mb:0;">
-                <lang>三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。</lang>
+                <lang>目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。</lang>
             </p>
         </div>
         <span class="w-badge w-text border-primary-subtle" data-w-background="primary" data-w-border="border" data-tone="primary">
@@ -84,8 +84,20 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
                             />
                         </div>
                         <div style="--w-span-md:6;">
-                            <label class="w-field__label" for="store-copy-target-store"><lang>目标 Store</lang></label>
-                            <select class="w-select" id="store-copy-target-store" data-testid="store-copy-target-store"></select>
+                            <span class="w-field__label" id="store-copy-target-stores-label"><lang>目标 Store</lang></span>
+                            <div
+                                id="store-copy-target-stores"
+                                data-testid="store-copy-target-store"
+                                role="group"
+                                aria-labelledby="store-copy-target-stores-label"
+                                aria-describedby="store-copy-target-stores-help"
+                                data-w-border="border"
+                                data-w-radius="md"
+                                style="--w-p:var(--weline-space-3);max-height:12rem;overflow:auto;"
+                            ></div>
+                            <p class="w-text" id="store-copy-target-stores-help" data-size="sm" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                                <lang>默认选中该 Website 下全部活动 Store；取消勾选即可排除，至少保留一个。</lang>
+                            </p>
                         </div>
 
                         <div data-copy-source-field="website" style="--w-span-md:6;" data-testid="store-copy-source-website">
@@ -183,6 +195,8 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
                         <lang>正在加载 Website/Store 选项…</lang>
                     </div>
                     <div class="w-grid w-text" data-size="sm" style="--w-mb:var(--weline-space-4);">
+                        <span style="--w-span:6;"><lang>目标 Store</lang></span>
+                        <span class="w-text" data-testid="store-copy-preview-stores" data-align="end" style="--w-span:6;">—</span>
                         <span style="--w-span:6;"><lang>分类</lang></span>
                         <span class="w-text" data-testid="store-copy-count-categories" data-align="end" style="--w-span:6;">0</span>
                         <span style="--w-span:6;"><lang>商品</lang></span>
@@ -211,7 +225,7 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
                             <lang>库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。</lang>
                         </li>
                         <li data-testid="store-copy-contract-cross-website" style="--w-mb:var(--weline-space-2);">
-                            <lang>跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。</lang>
+                            <lang>跨 Website：目录只建一次，所选 Store 在同一目标 Website 事务内整体写入；任一失败则全部回滚。</lang>
                         </li>
                         <li data-testid="store-copy-contract-duplicate">
                             <lang>同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。</lang>
@@ -248,7 +262,7 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
     var elements = {
         entry: document.getElementById('store-copy-entry'),
         targetWebsite: document.getElementById('store-copy-target-website_value'),
-        targetStore: document.getElementById('store-copy-target-store'),
+        targetStores: document.getElementById('store-copy-target-stores'),
         sourceWebsite: document.getElementById('store-copy-source-website_value'),
         sourceStore: document.getElementById('store-copy-source-store'),
         categories: document.getElementById('store-copy-category-ids'),
@@ -329,11 +343,15 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
         }
     }
 
-    function fillStoreSelect(select, websiteId, selectedValue) {
-        select.innerHTML = '';
-        var stores = state.stores.filter(function (store) {
+    function storesForWebsite(websiteId) {
+        return state.stores.filter(function (store) {
             return Number(store.website_id) === Number(websiteId);
         });
+    }
+
+    function fillStoreSelect(select, websiteId, selectedValue) {
+        select.innerHTML = '';
+        var stores = storesForWebsite(websiteId);
         if (stores.length === 0) {
             var empty = document.createElement('option');
             empty.value = '';
@@ -352,6 +370,68 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
         if (selectedValue !== undefined && selectedValue !== null) {
             select.value = String(selectedValue);
         }
+    }
+
+    function renderTargetStores(websiteId, selectedIds) {
+        elements.targetStores.replaceChildren();
+        var stores = storesForWebsite(websiteId);
+        var selected = Array.isArray(selectedIds)
+            ? selectedIds.reduce(function (result, storeId) {
+                result[Number(storeId)] = true;
+                return result;
+            }, {})
+            : null;
+        if (stores.length === 0) {
+            var empty = document.createElement('p');
+            empty.className = 'w-text';
+            empty.dataset.tone = 'muted';
+            empty.textContent = messages.noStores || '';
+            elements.targetStores.appendChild(empty);
+            return;
+        }
+        stores.forEach(function (store) {
+            var storeId = Number(store.store_id);
+            var row = document.createElement('div');
+            row.className = 'w-check';
+            row.style.marginBottom = 'var(--weline-space-2)';
+
+            var input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = 'store-copy-target-store';
+            input.value = String(storeId);
+            input.id = 'store-copy-target-store-' + storeId;
+            input.dataset.testid = 'store-copy-target-store-' + storeId;
+            input.checked = selected === null || !!selected[storeId];
+
+            var label = document.createElement('label');
+            label.htmlFor = input.id;
+            label.textContent = store.name + ' (' + store.code + ', ID=' + storeId + ')';
+
+            row.appendChild(input);
+            row.appendChild(label);
+            elements.targetStores.appendChild(row);
+        });
+    }
+
+    function selectedTargetStoreIds() {
+        return Array.prototype.slice.call(
+            elements.targetStores.querySelectorAll('input[name="store-copy-target-store"]:checked')
+        ).map(function (input) {
+            return Number(input.value);
+        }).filter(function (storeId) {
+            return Number.isInteger(storeId) && storeId > 0;
+        });
+    }
+
+    function targetStoreLabels(storeIds) {
+        return (storeIds || []).map(function (storeId) {
+            var store = state.stores.find(function (candidate) {
+                return Number(candidate.store_id) === Number(storeId);
+            });
+            return store
+                ? String(store.name || store.code || storeId) + ' (#' + storeId + ')'
+                : '#' + storeId;
+        });
     }
 
     function updateEntryFields() {
@@ -402,10 +482,12 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
 
     function payload() {
         var entry = elements.entry.value;
+        var targetStoreIds = selectedTargetStoreIds();
         var data = {
             entry: entry,
             target_website_id: Number(elements.targetWebsite.value),
-            target_store_id: Number(elements.targetStore.value),
+            target_store_id: targetStoreIds[0] || 0,
+            target_store_ids: targetStoreIds,
             category_ids: parseIdList(elements.categories.value),
             excluded_category_ids: parseIdList(elements.excludedCategories.value),
             include_products: !!elements.includeProducts.checked,
@@ -423,7 +505,10 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
     }
 
     function validatePayload(data) {
-        if (!Number.isInteger(data.target_website_id) || !Number.isInteger(data.target_store_id) || data.target_store_id <= 0) {
+        if (!Number.isInteger(data.target_website_id)
+            || !Array.isArray(data.target_store_ids)
+            || data.target_store_ids.length === 0
+        ) {
             throw new Error(messages.targetRequired || '');
         }
         if (data.entry === 'site_pull' && !Number.isInteger(data.source_website_id)) {
@@ -448,6 +533,11 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
     }
 
     function renderPreview(preview) {
+        var targetStoreIds = preview.target_store_ids
+            || (state.draft ? state.draft.target_store_ids : [])
+            || [];
+        document.querySelector('[data-testid="store-copy-preview-stores"]').textContent =
+            targetStoreLabels(targetStoreIds).join(', ') || '—';
         document.querySelector('[data-testid="store-copy-count-categories"]').textContent = String(preview.category_count || 0);
         document.querySelector('[data-testid="store-copy-count-products"]').textContent = String(preview.product_count || 0);
         document.querySelector('[data-testid="store-copy-count-offers"]').textContent = String(preview.offer_count || 0);
@@ -460,6 +550,7 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
             preview.inventory_will_copy_qty ? 'true' : 'false';
         elements.result.textContent = JSON.stringify({
             draft_id: preview.draft_id,
+            target_store_ids: targetStoreIds,
             warnings: preview.warnings || [],
             items: preview.items || []
         }, null, 2);
@@ -500,7 +591,7 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
             state.stores = response.stores || [];
             fillWebsiteSelect('store-copy-target-website', 0);
             fillWebsiteSelect('store-copy-source-website', 0);
-            fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
+            renderTargetStores(elements.targetWebsite.value);
             fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
             updateEntryFields();
             setStatus(messages.ready || '', 'secondary');
@@ -591,7 +682,7 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
     }
 
     window.storeCopyOnTargetWebsiteSelect = function () {
-        fillStoreSelect(elements.targetStore, elements.targetWebsite ? elements.targetWebsite.value : '');
+        renderTargetStores(elements.targetWebsite ? elements.targetWebsite.value : '');
     };
     window.storeCopyOnSourceWebsiteSelect = function () {
         fillStoreSelect(elements.sourceStore, elements.sourceWebsite ? elements.sourceWebsite.value : '');
@@ -600,9 +691,17 @@ $storeCopyWebsiteSelectOptionsJson = '[]';
     elements.entry.addEventListener('change', updateEntryFields);
     if (elements.targetWebsite) {
         elements.targetWebsite.addEventListener('change', function () {
-            fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
+            renderTargetStores(elements.targetWebsite.value);
         });
     }
+    elements.targetStores.addEventListener('change', function () {
+        state.draft = null;
+        state.preview = null;
+        state.requestHash = '';
+        document.querySelector('[data-testid="store-copy-preview-stores"]').textContent = '—';
+        setStatus(messages.ready || '', 'secondary');
+        setBusy(false);
+    });
     if (elements.sourceWebsite) {
         elements.sourceWebsite.addEventListener('change', function () {
             fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);

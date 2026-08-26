@@ -17,14 +17,22 @@ use Weline\Framework\Database\Schema\Shard\ShardSchemaProvisioner;
 use Weline\Framework\Database\Transaction\TransactionCoordinator;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Setup\Model\Migration;
+use Weline\Product\Api\Data\OfferIdentityV2;
+use Weline\Product\Api\Data\ProductIdentityV2;
+use Weline\Product\Api\ProductIdentityV2ResolverInterface;
+use Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface;
 use Weline\Product\Extends\Module\Weline_Framework\Schema\ProductShardSchemaProvider;
 use Weline\Product\Model\ProductSearchProjectionStream;
 use Weline\Product\Model\ProductShardKey;
 use Weline\Product\Model\ProductShardRegistry;
 use Weline\Product\Model\Shard\AbstractWebsiteShardModel;
+use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
+use Weline\Product\Model\Shard\StoreOffer;
 use Weline\Product\Model\Shard\StoreProduct;
+use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
+use Weline\Product\Repository\StoreOfferRepository;
 use Weline\Product\Repository\StoreProductRepository;
 use Weline\Product\Service\ProductSearchProjectionService;
 use Weline\Product\Service\ProductShardProvisioner;
@@ -69,18 +77,59 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
             self::assertTrue($provisioner->provisionWebsite(0)->isReady());
 
             $tokens = 0;
+            $nextToken = static function () use (&$tokens): string {
+                $tokens++;
+                return str_pad(dechex($tokens), 64, '0', STR_PAD_LEFT);
+            };
+            $projectionMutations = new class implements ProductSearchProjectionMutationCoordinatorInterface {
+                /** @var list<array{website_id:int,target_type:string,target_id:int,store_id:?int}> */
+                private array $calls = [];
+
+                public function execute(
+                    ConnectionFactory $connection,
+                    int $websiteId,
+                    string $targetType,
+                    int $targetId,
+                    ?int $storeId,
+                    callable $mutation,
+                ): mixed {
+                    $this->calls[] = [
+                        'website_id' => $websiteId,
+                        'target_type' => $targetType,
+                        'target_id' => $targetId,
+                        'store_id' => $storeId,
+                    ];
+                    return $mutation();
+                }
+
+                /** @return list<array{website_id:int,target_type:string,target_id:int,store_id:?int}> */
+                public function calls(): array
+                {
+                    return $this->calls;
+                }
+            };
             $products = new ProductRepository(
                 $provisioner,
                 $this->modelFactory($connection, Product::class),
-                static function () use (&$tokens): string {
-                    $tokens++;
-
-                    return str_pad(dechex($tokens), 64, '0', STR_PAD_LEFT);
-                },
+                $nextToken,
+                $projectionMutations,
             );
             $storeProducts = new StoreProductRepository(
                 $provisioner,
                 $this->modelFactory($connection, StoreProduct::class),
+                $projectionMutations,
+            );
+            $offers = new OfferRepository(
+                $provisioner,
+                $this->modelFactory($connection, Offer::class),
+                $nextToken,
+                $projectionMutations,
+            );
+            $storeOffers = new StoreOfferRepository(
+                $provisioner,
+                $this->modelFactory($connection, StoreOffer::class),
+                $offers,
+                $projectionMutations,
             );
             $stream = new ProductSearchProjectionStream();
             $stream->setConnection($connection);
@@ -141,9 +190,45 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
                 [11, [$channelA]],
                 [12, [$channelB]],
             ]);
+            $identities = $this->createMock(ProductIdentityV2ResolverInterface::class);
+            $identities->method('resolveProductByUuid')->willReturn(new ProductIdentityV2(
+                301,
+                '00000000-0000-4000-8000-000000000301',
+                'P-000301',
+                0,
+                'builtin_configurable',
+                'configurable',
+                'published',
+                3,
+                'default_site',
+            ));
+            $identities->method('resolveOfferByUuid')->willReturnCallback(
+                static fn(string $uuid): ?OfferIdentityV2 => match ($uuid) {
+                    '00000000-0000-4000-8000-000000000401' => new OfferIdentityV2(
+                        401,
+                        $uuid,
+                        '00000000-0000-4000-8000-000000000301',
+                        'SKU-A',
+                        'published',
+                        4,
+                    ),
+                    '00000000-0000-4000-8000-000000000402' => new OfferIdentityV2(
+                        402,
+                        $uuid,
+                        '00000000-0000-4000-8000-000000000301',
+                        'SKU-B',
+                        'published',
+                        5,
+                    ),
+                    default => null,
+                },
+            );
             $service = new ProductSearchProjectionService(
                 $products,
                 $storeProducts,
+                $offers,
+                $storeOffers,
+                $identities,
                 $stream,
                 $websites,
                 $stores,
@@ -151,12 +236,32 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
             );
 
             $product = $products->create(0, [
-                Product::schema_fields_SKU => 'SAME-SKU',
+                Product::schema_fields_SKU => 'PRODUCT-301',
                 Product::schema_fields_GLOBAL_PRODUCT_UUID
                     => '00000000-0000-4000-8000-000000000301',
             ]);
             $productId = (int)$product->getId();
             $products->publish(0, $productId, 0);
+            $offerA = $offers->create(0, [
+                Offer::schema_fields_PRODUCT_ID => $productId,
+                Offer::schema_fields_GLOBAL_OFFER_UUID
+                    => '00000000-0000-4000-8000-000000000401',
+                Offer::schema_fields_SKU => 'SKU-A',
+                Offer::schema_fields_IDENTITY_VERSION => 4,
+                Offer::schema_fields_COMBINATION_KEY => 'color=red',
+            ]);
+            $offerB = $offers->create(0, [
+                Offer::schema_fields_PRODUCT_ID => $productId,
+                Offer::schema_fields_GLOBAL_OFFER_UUID
+                    => '00000000-0000-4000-8000-000000000402',
+                Offer::schema_fields_SKU => 'SKU-B',
+                Offer::schema_fields_IDENTITY_VERSION => 5,
+                Offer::schema_fields_COMBINATION_KEY => 'color=blue',
+            ]);
+            $offerAId = (int)$offerA->getId();
+            $offerBId = (int)$offerB->getId();
+            $offers->publish(0, $offerAId, 0);
+            $offers->publish(0, $offerBId, 0);
             self::assertSame(
                 1,
                 $transactions->run($connection, static fn(): int => $stream->next(0)),
@@ -164,19 +269,47 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
 
             $full = $service->snapshotWebsite(0);
             self::assertSame('product.search_projection_snapshot.v1', $full['contract']);
+            self::assertSame('product.offer_identity.v2', $full['identity_contract']);
             self::assertSame(1, $full['source_watermark']);
             self::assertSame(2, $full['scope_count']);
-            self::assertSame(2, $full['document_count']);
+            self::assertSame(4, $full['document_count']);
             self::assertSame(
-                [[11, 111, 'SAME-SKU'], [12, 121, 'SAME-SKU']],
+                [
+                    [11, 111, 'SKU-A', '00000000-0000-4000-8000-000000000401'],
+                    [11, 111, 'SKU-B', '00000000-0000-4000-8000-000000000402'],
+                    [12, 121, 'SKU-A', '00000000-0000-4000-8000-000000000401'],
+                    [12, 121, 'SKU-B', '00000000-0000-4000-8000-000000000402'],
+                ],
                 array_map(
                     static fn(array $row): array => [
                         (int)$row['store_id'],
                         (int)$row['channel_id'],
                         (string)$row['sku'],
+                        (string)$row['global_offer_uuid'],
                     ],
                     $full['documents'],
                 ),
+            );
+            self::assertSame(
+                ['product_offer'],
+                array_values(array_unique(array_column($full['documents'], 'entity_type'))),
+            );
+            self::assertSame('builtin_configurable', $full['documents'][0]['provider_code']);
+            self::assertSame('configurable', $full['documents'][0]['product_type']);
+            self::assertSame('product/' . $productId, $full['documents'][0]['url']);
+
+            $storeOffers->select(0, 11, $offerBId, false);
+            $afterOfferSelection = $service->snapshotWebsite(0);
+            self::assertSame(3, $afterOfferSelection['document_count']);
+            self::assertSame(
+                ['SKU-A'],
+                array_values(array_map(
+                    static fn(array $row): string => (string)$row['sku'],
+                    array_values(array_filter(
+                        $afterOfferSelection['documents'],
+                        static fn(array $row): bool => (int)$row['store_id'] === 11,
+                    )),
+                )),
             );
 
             $storeProducts->select(0, 12, $productId, false);
@@ -193,15 +326,64 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
             ]);
             self::assertSame('product.search_projection_change.v1', $change['contract']);
             self::assertSame([], $change['documents']);
-            self::assertCount(1, $change['delete_keys']);
-            self::assertSame(12, (int)$change['delete_keys'][0]['store_id']);
-            self::assertSame(121, (int)$change['delete_keys'][0]['channel_id']);
+            self::assertCount(3, $change['delete_keys']);
+            self::assertContains('product', array_column($change['delete_keys'], 'entity_type'));
+            self::assertSame(
+                2,
+                count(array_filter(
+                    $change['delete_keys'],
+                    static fn(array $row): bool => $row['entity_type'] === 'product_offer',
+                )),
+            );
+            foreach ($change['delete_keys'] as $deleteKey) {
+                self::assertSame(12, (int)$deleteKey['store_id']);
+                self::assertSame(121, (int)$deleteKey['channel_id']);
+            }
 
             $afterSelection = $service->snapshotWebsite(0);
             self::assertSame(2, $afterSelection['source_watermark']);
             self::assertSame(1, $afterSelection['document_count']);
             self::assertSame(11, (int)$afterSelection['documents'][0]['store_id']);
             self::assertSame(111, (int)$afterSelection['documents'][0]['channel_id']);
+            self::assertSame('SKU-A', (string)$afterSelection['documents'][0]['sku']);
+
+            $offerC = $offers->create(0, [
+                Offer::schema_fields_PRODUCT_ID => $productId,
+                Offer::schema_fields_GLOBAL_OFFER_UUID
+                    => '00000000-0000-4000-8000-000000000403',
+                Offer::schema_fields_SKU => 'SKU-C',
+                Offer::schema_fields_IDENTITY_VERSION => 6,
+                Offer::schema_fields_COMBINATION_KEY => 'color=green',
+            ]);
+            $offerCId = (int)$offerC->getId();
+            $offers->updateVersioned(0, $offerCId, 0, [
+                Offer::schema_fields_REQUIRES_SHIPPING => 0,
+            ]);
+            $offers->transition(0, $offerCId, 1, Offer::STATUS_DISABLED);
+            $storeOffers->select(0, 12, $offerCId, false);
+            $products->updateVersioned(0, $productId, 1, [
+                Product::schema_fields_SKU => 'PRODUCT-301-UPDATED',
+            ]);
+            $products->transition(0, $productId, 2, 'disabled');
+
+            self::assertSame(
+                [
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'store_product', 'target_id' => $productId, 'store_id' => 11],
+                    ['website_id' => 0, 'target_type' => 'store_product', 'target_id' => $productId, 'store_id' => 12],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'store_product', 'target_id' => $productId, 'store_id' => 12],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                    ['website_id' => 0, 'target_type' => 'product', 'target_id' => $productId, 'store_id' => null],
+                ],
+                $projectionMutations->calls(),
+            );
 
             try {
                 $transactions->run($connection, static function () use ($stream): void {

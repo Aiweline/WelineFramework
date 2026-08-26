@@ -30,6 +30,9 @@ final class ThemePageTypeResolver
         'checkout_success' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'checkout_failer' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'customer_service' => ThemeLayout::PAGE_TYPE_DEFAULT,
+        'help' => ThemeLayout::PAGE_TYPE_DEFAULT,
+        'order_tracking' => ThemeLayout::PAGE_TYPE_DEFAULT,
+        'contact' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'promotion' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'review' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'qa' => ThemeLayout::PAGE_TYPE_DEFAULT,
@@ -40,9 +43,9 @@ final class ThemePageTypeResolver
 
     private const PREVIEW_ROUTE_BY_PAGE_TYPE = [
         ThemeLayout::PAGE_TYPE_HOME => 'index/index',
-        ThemeLayout::PAGE_TYPE_CATEGORY => 'category/default',
-        ThemeLayout::PAGE_TYPE_PRODUCT => 'product/default',
-        ThemeLayout::PAGE_TYPE_PRODUCT_LIST => 'products',
+        ThemeLayout::PAGE_TYPE_CATEGORY => 'theme/frontend/theme-preview/content',
+        ThemeLayout::PAGE_TYPE_PRODUCT => 'theme/frontend/theme-preview/content',
+        ThemeLayout::PAGE_TYPE_PRODUCT_LIST => 'theme/frontend/theme-preview/content',
         ThemeLayout::PAGE_TYPE_CMS => 'page/default',
         ThemeLayout::PAGE_TYPE_CART => 'cart',
         ThemeLayout::PAGE_TYPE_CHECKOUT => 'checkout',
@@ -196,6 +199,10 @@ final class ThemePageTypeResolver
         if ($contains('product') && ($contains('productlist') || $contains('product_list'))) {
             return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
         }
+        // Catalog listing must win over generic product detail inference.
+        if ($contains('product') && $contains('catalog')) {
+            return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
+        }
         if ($contains('product')) {
             return ThemeLayout::PAGE_TYPE_PRODUCT;
         }
@@ -247,53 +254,91 @@ final class ThemePageTypeResolver
         if ($path === '' || str_ends_with($path, 'index/index') || $path === 'index') {
             return ThemeLayout::PAGE_TYPE_HOME;
         }
-        if (str_contains($path, '/search')) {
+        if ($this->pathMatchesRoute($path, 'search')) {
             return ThemeLayout::PAGE_TYPE_SEARCH;
         }
-        if (str_contains($path, '/products')) {
+        // products before product — avoid matching product-list prefix incorrectly.
+        if ($this->pathMatchesRoute($path, 'products') || $this->pathMatchesRoute($path, 'product-list')) {
             return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
         }
-        if (str_contains($path, '/product/')) {
+        if ($this->pathMatchesRoute($path, 'product')) {
             return ThemeLayout::PAGE_TYPE_PRODUCT;
         }
-        if (str_contains($path, '/category/')) {
+        if ($this->pathMatchesRoute($path, 'category') || $this->pathMatchesRoute($path, 'categories')) {
             return ThemeLayout::PAGE_TYPE_CATEGORY;
         }
-        if (str_contains($path, '/page/')) {
+        if ($this->pathMatchesRoute($path, 'page')) {
             return 'cms';
         }
-        if (str_contains($path, '/checkout/success')) {
+        if ($this->pathMatchesRoute($path, 'checkout/success')) {
             return 'checkout_success';
         }
-        if (str_contains($path, '/checkout')) {
+        if ($this->pathMatchesRoute($path, 'checkout')) {
             return ThemeLayout::PAGE_TYPE_CHECKOUT;
         }
-        if (str_contains($path, '/cart')) {
+        if ($this->pathMatchesRoute($path, 'cart')) {
             return ThemeLayout::PAGE_TYPE_CART;
         }
-        if (str_contains($path, '/account/login') || str_contains($path, '/account/register') || str_contains($path, '/account/forgot')) {
+        if ($this->pathMatchesRoute($path, 'account/login')
+            || $this->pathMatchesRoute($path, 'account/register')
+            || $this->pathMatchesRoute($path, 'account/forgot')
+            || $this->pathMatchesRoute($path, 'account/forgot-password')
+            || $this->pathMatchesRoute($path, 'customer/account/login')
+            || $this->pathMatchesRoute($path, 'customer/account/register')
+            || $this->pathMatchesRoute($path, 'customer/account/forgot')
+            || $this->pathMatchesRoute($path, 'customer/account/forgot-password')
+        ) {
             return 'account.auth';
         }
-        if (str_contains($path, '/account')) {
+        if ($this->pathMatchesRoute($path, 'account') || $this->pathMatchesRoute($path, 'customer/account')) {
             return ThemeLayout::PAGE_TYPE_ACCOUNT;
         }
-        if (str_contains($path, '/customer') && str_contains($path, '/service')) {
+        if ($this->pathMatchesRoute($path, 'orders/track')
+            || $this->pathMatchesRoute($path, 'order/track')
+            || $this->pathMatchesRoute($path, 'order/tracking')
+        ) {
+            return 'order_tracking';
+        }
+        if ($this->pathMatchesRoute($path, 'help') || $this->pathMatchesRoute($path, 'faq')) {
+            return 'help';
+        }
+        if ($this->pathMatchesRoute($path, 'customer/service') || $this->pathMatchesRoute($path, 'customer-service')) {
             return 'customer_service';
         }
-        if (str_contains($path, '/promotion')) {
+        if ($this->pathMatchesRoute($path, 'contact') || $path === 'support' || str_ends_with($path, '/support')) {
+            return 'contact';
+        }
+        if ($this->pathMatchesRoute($path, 'promotion')) {
             return 'promotion';
         }
-        if (str_contains($path, '/review')) {
+        if ($this->pathMatchesRoute($path, 'review')) {
             return 'review';
         }
-        if (str_contains($path, '/qa')) {
+        if ($this->pathMatchesRoute($path, 'qa')) {
             return 'qa';
         }
-        if (str_contains($path, '/rma')) {
+        if ($this->pathMatchesRoute($path, 'rma')) {
             return 'rma';
         }
 
         return '';
+    }
+
+    /**
+     * Match a route after leading/trailing slashes were trimmed.
+     * Bare paths like product/{slug} must not require a leading "/product/".
+     */
+    private function pathMatchesRoute(string $normalizedPath, string $route): bool
+    {
+        $route = strtolower(trim($route, '/'));
+        if ($route === '' || $normalizedPath === '') {
+            return false;
+        }
+
+        return $normalizedPath === $route
+            || str_starts_with($normalizedPath, $route . '/')
+            || str_contains($normalizedPath, '/' . $route . '/')
+            || str_ends_with($normalizedPath, '/' . $route);
     }
 
     private function getRequest(): ?Request

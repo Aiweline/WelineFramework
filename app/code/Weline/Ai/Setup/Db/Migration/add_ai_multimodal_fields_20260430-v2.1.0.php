@@ -23,6 +23,14 @@ class AddAiMultimodalFields20260430V210 extends AbstractMigration
         return '2.1.0';
     }
 
+    public function getAffectedTables(): array
+    {
+        return [
+            AiModel::schema_table,
+            AiScenarioAdapter::schema_table,
+        ];
+    }
+
     public function install(): bool
     {
         $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
