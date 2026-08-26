@@ -385,17 +385,144 @@ function bindLanguageRequestForm(UI, form, requestDialog) {
     });
 }
 
+/**
+ * Resolve the switcher root for a language option. Chrome partial cache may
+ * clone the same markup into header/sidebar/footer with duplicate ids; portaled
+ * menu panels are no longer contained by root.
+ */
+function resolveSwitcherRootForOption(option) {
+    const direct = option.closest('[data-i18n-switcher]');
+    if (direct instanceof HTMLElement) {
+        return direct;
+    }
+    const panelEl = option.closest('[data-w-menu-panel]');
+    if (!(panelEl instanceof HTMLElement)) {
+        return null;
+    }
+    const toggleId = String(panelEl.getAttribute('aria-labelledby') || '').trim();
+    const panelId = String(panelEl.id || '').trim();
+    const roots = [...document.querySelectorAll('[data-i18n-switcher]')];
+
+    for (const root of roots) {
+        const trigger = root.querySelector('[data-w-menu-trigger]');
+        if (!(trigger instanceof HTMLElement)) {
+            continue;
+        }
+        const nestedPanel = root.querySelector('[data-w-menu-panel]');
+        if (nestedPanel === panelEl) {
+            return root;
+        }
+        if (toggleId !== ''
+            && trigger.id === toggleId
+            && panelId !== ''
+            && trigger.getAttribute('aria-controls') === panelId
+            && trigger.getAttribute('aria-expanded') === 'true') {
+            return root;
+        }
+    }
+
+    if (toggleId === '') {
+        return null;
+    }
+
+    const candidates = roots.filter((root) => {
+        const trigger = root.querySelector('[data-w-menu-trigger]');
+        return trigger instanceof HTMLElement && trigger.id === toggleId;
+    });
+    const openCandidates = candidates.filter((root) => {
+        const trigger = root.querySelector('[data-w-menu-trigger]');
+        return trigger?.getAttribute('aria-expanded') === 'true';
+    });
+    if (openCandidates.length === 1) {
+        return openCandidates[0];
+    }
+    if (candidates.length === 1) {
+        return candidates[0];
+    }
+    return null;
+}
+
+function navigateLanguageOption(option, root) {
+    const locale = String(option.dataset.lang || '').trim();
+    if (!locale) {
+        return;
+    }
+    writeLanguagePreference(locale, root.dataset.websiteId || '');
+    const panelEl = option.closest('[data-w-menu-panel]');
+    refreshLanguageOptionHrefs(
+        root,
+        panelEl instanceof HTMLElement ? panelEl : root.querySelector('[data-w-menu-panel]'),
+    );
+    const href = resolveLanguageNavigationHref(
+        locale,
+        option.getAttribute('href') || '',
+        root.dataset.websiteMount || '',
+    );
+    if (!href) {
+        return;
+    }
+    try {
+        const target = new URL(href, window.location.href);
+        const currentUrl = new URL(window.location.href);
+        if (target.origin === currentUrl.origin
+            && target.pathname === currentUrl.pathname
+            && target.search === currentUrl.search
+            && target.hash === currentUrl.hash) {
+            window.location.reload();
+            return;
+        }
+        window.location.assign(target.href);
+    } catch (_error) {
+        window.location.assign(href);
+    }
+}
+
+function installGlobalLanguageOptionCapture() {
+    if (window.__WelineLanguageOptionCapture) {
+        return;
+    }
+    window.__WelineLanguageOptionCapture = true;
+    document.addEventListener('click', (event) => {
+        const option = event.target instanceof Element
+            ? event.target.closest('[data-language-option][data-lang]')
+            : null;
+        if (!(option instanceof HTMLAnchorElement)) {
+            return;
+        }
+        const root = resolveSwitcherRootForOption(option);
+        if (!(root instanceof HTMLElement)) {
+            return;
+        }
+        const navigation = String(root.dataset.i18nNavigation || 'path').toLowerCase();
+        if (navigation === 'emit') {
+            return;
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        navigateLanguageOption(option, root);
+    }, true);
+}
+
 export function register(UI) {
+    installGlobalLanguageOptionCapture();
     UI.define('language-switcher', ({ element: root, listen, emit }) => {
         const resolvePanel = () => {
+            // Prefer the panel nested under this switcher root. Chrome partial cache
+            // reuses switcher markup across header/sidebar/footer, so duplicate
+            // aria-controls ids would bind every instance to the first panel.
+            const nested = root.querySelector('[data-w-menu-panel]');
+            if (nested instanceof HTMLElement) {
+                return nested;
+            }
             const trigger = root.querySelector('[data-w-menu-trigger]');
             const panelId = String(trigger?.getAttribute('aria-controls') || '').trim();
             if (panelId) {
                 const byId = document.getElementById(panelId);
-                if (byId instanceof HTMLElement) return byId;
+                if (byId instanceof HTMLElement) {
+                    return byId;
+                }
             }
-            const nested = root.querySelector('[data-w-menu-panel]');
-            return nested instanceof HTMLElement ? nested : null;
+            return null;
         };
 
         let panel = resolvePanel();
@@ -510,11 +637,8 @@ export function register(UI) {
                 ? event.target.closest('[data-language-option]')
                 : null;
             if (!(option instanceof HTMLAnchorElement)) return;
-            // Menu panel is portaled to <body>; do not require root.contains(option).
-            panel = resolvePanel() || panel;
-            const inRoot = root.contains(option);
-            const inPanel = panel instanceof HTMLElement && panel.contains(option);
-            if (!inRoot && !inPanel) return;
+            const owningRoot = resolveSwitcherRootForOption(option);
+            if (owningRoot !== root) return;
             const locale = String(option.dataset.lang || '').trim();
             if (!locale) return;
             const navigation = String(root.dataset.i18nNavigation || 'path').toLowerCase();
@@ -533,31 +657,7 @@ export function register(UI) {
 
             event.preventDefault();
             event.stopImmediatePropagation();
-            writeLanguagePreference(locale, root.dataset.websiteId || '');
-            refreshLanguageOptionHrefs(root, panel);
-            const optionHref = String(option.getAttribute('href') || option.href || '').trim();
-            const href = resolveLanguageNavigationHref(
-                locale,
-                optionHref,
-                root.dataset.websiteMount || '',
-            );
-            if (!href) {
-                return;
-            }
-            try {
-                const target = new URL(href, window.location.href);
-                const currentUrl = new URL(window.location.href);
-                if (target.origin === currentUrl.origin
-                    && target.pathname === currentUrl.pathname
-                    && target.search === currentUrl.search
-                    && target.hash === currentUrl.hash) {
-                    window.location.reload();
-                    return;
-                }
-                window.location.assign(target.href);
-            } catch (_error) {
-                window.location.assign(href);
-            }
+            navigateLanguageOption(option, root);
         };
 
         const restoreDraft = () => {

@@ -13,7 +13,7 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         $taglib = $this->read('Taglib/LanguageSwitcher.php');
         $runtime = $this->read('view/statics/js/language-switcher.js');
 
-        self::assertStringContainsString('|markup=weline-ui-2-language-switcher-component-19', $taglib);
+        self::assertStringContainsString('|markup=weline-ui-2-language-switcher-component-20', $taglib);
         self::assertStringContainsString('data-w-component="menu language-switcher"', $taglib);
         self::assertStringContainsString('data-w-anchor-mode="element"', $taglib);
         self::assertStringContainsString('data-w-language-search', $taglib);
@@ -21,7 +21,9 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertStringContainsString('translateChrome', $taglib);
         self::assertStringContainsString('loadChromeDictionary', $taglib);
         self::assertStringContainsString('applySearchFilter', $runtime);
-        self::assertStringContainsString('resolvePanel', $runtime);
+        self::assertStringContainsString('installGlobalLanguageOptionCapture', $runtime);
+        self::assertStringContainsString('resolveSwitcherRootForOption', $runtime);
+        self::assertStringContainsString('Prefer the panel nested under this switcher root', $runtime);
         self::assertStringContainsString('bindSearch', $runtime);
         self::assertStringContainsString('focusSearch', $runtime);
         self::assertStringContainsString('window.setTimeout', $runtime);
@@ -31,8 +33,8 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertStringContainsString('rebuildPathWithLocale', $runtime);
         self::assertStringContainsString('refreshLanguageOptionHrefs', $runtime);
         self::assertStringContainsString('window.urlWithLang', $runtime);
+        self::assertStringContainsString('navigateLanguageOption', $runtime);
         self::assertStringContainsString('window.location.assign(', $runtime);
-        self::assertStringContainsString('inPanel', $runtime);
         self::assertStringContainsString('window.location.reload();', $runtime);
         self::assertStringNotContainsString('<script', $taglib);
         self::assertStringNotContainsString('window.WelineI18n', $runtime);
