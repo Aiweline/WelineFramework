@@ -8,7 +8,7 @@
 3. 仅当返回 `project-readiness.v1.status=ready` 时继续，并在后续工具调用中携带返回的 `readiness_id`。框架仓必须在 `dev` 分支上开发；在 `master` 或其他分支上 `prepare_project` 会返回 `blocked`（`GIT_BRANCH_FORBIDDEN`），需先 `git switch dev`。
 4. `prepare_project` 发现缺失模块文档时会自动执行确定性修复并继续；仅 `blocked` 时停止开发并报告原因。
 5. 开始任务前调用 `resolve_task_context`，只使用返回的 `guidance-bundle.v1`、命中文档和源码证据；临时用户决定通过 `set_session_directives` 保存，不得自动写入长期规范。
-6. **引导即告知（硬规则）**：`prepare_project` / `workflow_contract.v1.session_startup_notices` 要求——每个功能完成后对照归属模块 `doc/` 与实现是否一致，有差异必须改文档或代码；Web/UI 设计阶段就要考虑平板与 PC 响应式（≈768 / ≥1024，兼顾 375），验收收集多断点证据。
+6. **引导即告知（硬规则）**：`prepare_project` / `workflow_contract.v1.session_startup_notices` 要求——每个功能完成后对照归属模块 `doc/` 与实现是否一致；**交付地址须为可直接打开的 https Markdown 链接**（`[名称](https://…)`，见 `feature_delivery_urls.link_format`），禁止 `command:simpleBrowser.api.open` 伪协议与仅变色「打开」伪链接；Web/UI 须考虑平板与 PC 响应式并收集多断点证据。
 
 ### 受限原生回退
 

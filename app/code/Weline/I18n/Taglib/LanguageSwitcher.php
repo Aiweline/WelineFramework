@@ -38,6 +38,9 @@ class LanguageSwitcher implements TaglibInterface
      */
     private static array $chromeDictionaryCache = [];
 
+    /** Monotonic per-request render sequence so cached chrome gets unique DOM ids. */
+    private static int $switcherRenderSeq = 0;
+
     /**
      * Drop process-local language/html memo so lifecycle changes take effect immediately.
      */
@@ -212,7 +215,10 @@ class LanguageSwitcher implements TaglibInterface
             $currentFlag = self::sanitizeInlineFlagMarkup((string)($welineCurrentLanguage['flag'] ?? ''));
             $renderFor = strtolower(trim((string)($attributes['for'] ?? '')));
             $switcherScopeId = $scope->mode . ':' . ($isBackendArea ? 'backend' : (string)$websiteId);
-            $switcherId = 'weline-i18n-switcher-' . substr(md5($switcherScopeId . '|' . $currentCode . '|' . json_encode(array_keys($welineLanguages))), 0, 12);
+            $renderSeq = ++self::$switcherRenderSeq;
+            $switcherId = 'weline-i18n-switcher-' . substr(md5(
+                $switcherScopeId . '|' . $currentCode . '|' . json_encode(array_keys($welineLanguages)) . '|inst=' . $renderSeq
+            ), 0, 12);
             $parts = explode('_', $currentCode);
             $shortCode = strtoupper(substr($currentCode, 0, 2));
             if (count($parts) >= 2) {
@@ -284,8 +290,9 @@ class LanguageSwitcher implements TaglibInterface
                 . '|navigation=' . $navigation
                 . '|show_search=' . ($showSearch ? '1' : '0')
                 . '|label_mode=' . $labelMode
-                . '|markup=weline-ui-2-language-switcher-component-19'
-                . '|mount=' . $websiteMount;
+                . '|markup=weline-ui-2-language-switcher-component-20'
+                . '|mount=' . $websiteMount
+                . '|inst=' . $renderSeq;
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
                 return self::$htmlCache[$htmlCacheKey]['html'];

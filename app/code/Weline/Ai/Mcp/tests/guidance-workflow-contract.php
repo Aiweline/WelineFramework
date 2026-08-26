@@ -13,6 +13,9 @@ $frontend = is_array($contract['frontend_development'] ?? null)
 $chapterDelivery = is_array($contract['chapter_delivery'] ?? null)
     ? $contract['chapter_delivery']
     : [];
+$featureDeliveryUrls = is_array($contract['feature_delivery_urls'] ?? null)
+    ? $contract['feature_delivery_urls']
+    : [];
 $webuiDefaults = is_array($chapterDelivery['webui_defaults'] ?? null)
     ? $chapterDelivery['webui_defaults']
     : [];
@@ -50,10 +53,29 @@ $checks = [
             $contract['session_startup_notices'],
             static fn (bool $ok, mixed $notice): bool => $ok || (is_string($notice) && str_contains($notice, 'WB-VIS')),
             false,
+        )
+        && array_reduce(
+            $contract['session_startup_notices'],
+            static fn (bool $ok, mixed $notice): bool => $ok || (is_string($notice) && (str_contains($notice, '前台') || str_contains($notice, 'frontend page URL'))),
+            false,
         ),
-    'mandatory_before_closeout includes docs and responsive' => is_array($contract['mandatory_before_closeout'] ?? null)
+    'mandatory_before_closeout includes docs responsive and delivery urls' => is_array($contract['mandatory_before_closeout'] ?? null)
         && in_array('module_docs_reconciled_with_behavior', $contract['mandatory_before_closeout'], true)
-        && in_array('responsive_breakpoints_considered_for_web_ui', $contract['mandatory_before_closeout'], true),
+        && in_array('responsive_breakpoints_considered_for_web_ui', $contract['mandatory_before_closeout'], true)
+        && in_array('feature_delivery_urls_provided', $contract['mandatory_before_closeout'], true),
+    'feature_delivery_urls contract present' => ($featureDeliveryUrls['schema'] ?? '') === 'feature-delivery-urls.v1'
+        && ($featureDeliveryUrls['required_on_feature_closeout'] ?? false) === true
+        && is_array($featureDeliveryUrls['rules'] ?? null)
+        && count($featureDeliveryUrls['rules']) >= 3,
+    'feature_delivery_urls defines clickable link format' => is_array($featureDeliveryUrls['link_format'] ?? null)
+        && str_contains((string)($featureDeliveryUrls['link_format']['primary_acceptance'] ?? ''), '{url}')
+        && !str_contains((string)($featureDeliveryUrls['link_format']['primary_acceptance'] ?? ''), 'command:simpleBrowser'),
+    'feature_delivery_urls forbids styled plain open text' => is_array($featureDeliveryUrls['forbidden_delivery_patterns'] ?? null)
+        && array_reduce(
+            $featureDeliveryUrls['forbidden_delivery_patterns'],
+            static fn (bool $ok, mixed $item): bool => $ok || (is_string($item) && str_contains($item, '打开')),
+            false,
+        ),
     'pinned includes Theme开发总指南' => in_array(
         'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
         $pinned,
@@ -103,6 +125,10 @@ $checks = [
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'docs_reconcile_per_feature'),
         false,
+    ) && array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'feature_delivery_urls'),
+        false,
     ),
     'required rules mention section identity' => array_reduce(
         $required,
@@ -138,6 +164,16 @@ $checks = [
             ? $webuiDefaults['forbidden_substitutes']
             : [],
         true,
+    ),
+    'hard_rules require delivery urls' => array_reduce(
+        $hardRules,
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'URL inventory')),
+        false,
+    ),
+    'required rules mention delivery urls' => array_reduce(
+        $required,
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'frontend/backend/API URLs')),
+        false,
     ),
     'mandatory_before_code includes webui acceptance agreement' => in_array(
         'webui_acceptance_cases_agreed_for_web_surface',

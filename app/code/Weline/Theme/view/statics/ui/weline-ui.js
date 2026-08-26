@@ -15,7 +15,7 @@ const lazyComponentSources = new Map([
     ['icon-picker', './weline-ui-advanced.js'],
     ['dependent-field', './weline-ui-advanced.js'],
     ['language-select', './components/weline-language-select.js'],
-    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-21'],
+    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-23'],
     ['online-translation-collector', './components/weline-online-translation-collector.js'],
     ['scope-persistence', './components/weline-scope-persistence.js'],
     ['file-preview', './components/weline-file-picker.js'],
