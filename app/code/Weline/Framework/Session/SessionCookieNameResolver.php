@@ -134,9 +134,10 @@ final class SessionCookieNameResolver
             return '';
         }
 
-        // Prefer the HTTP authority because it normally retains an explicit
-        // non-standard port. Some HTTP/2 and HTTP/3 request envelopes expose
-        // only a host name, so fall back to the validated listener port.
+        // Prefer the normalized HTTP authority because it retains an explicit
+        // non-standard port. WlsRequest owns public-origin normalization, so a
+        // valid SERVER_PORT (including trusted-proxy 80/443) must never be
+        // replaced by an internal WLS worker/listener port.
         $httpHost = trim((string)($context->get('input.server.HTTP_HOST', '') ?? ''));
         $inputHost = trim((string)($context->get('input.host', '') ?? ''));
 
@@ -152,9 +153,8 @@ final class SessionCookieNameResolver
             return '';
         }
 
-        $serverPort = $context->get('input.server.SERVER_PORT');
-        $port = self::normalizeTcpPort($serverPort);
-        if ($port === null || $port === 80 || $port === 443) {
+        $port = self::normalizeTcpPort($context->get('input.server.SERVER_PORT'));
+        if ($port === null) {
             $listenPort = self::normalizeTcpPort($context->get('input.server.WLS_PORT'));
             if ($listenPort === null) {
                 $envListen = \getenv('WLS_PORT');
