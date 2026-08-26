@@ -16,5 +16,7 @@ return [
         'cache.edge_adapter.100.cloudflare' => \Weline\Cdn\Adapter\Cloudflare::class,
         \Weline\Cdn\Api\ScopedAccountBindingRepositoryInterface::class
             => \Weline\Cdn\Service\OrmScopedAccountBindingRepository::class,
+        \Weline\Cdn\Api\MailDnsManagerInterface::class
+            => \Weline\Cdn\Service\CloudflareMailDnsManager::class,
     ],
 ];

@@ -26,15 +26,17 @@
 
 ```html
 <div class="header-location">
-    <a href="#" class="location-link" title="<lang>选择配送地址</lang>">
-        <i class="fas fa-map-marker-alt"></i>
+    <a href="#" class="w-header-delivery-entry location-link" title="<lang>选择配送地址</lang>">
+        <w:icon name="pin" size="sm"></w:icon>
         <div class="location-text">
-            <span class="location-line-1"><lang>配送至</lang></span>
-            <span class="location-line-2"><lang>中国大陆</lang></span>
+            <span class="w-text-muted location-line-1"><lang>配送至</lang></span>
+            <span class="w-text location-line-2"><lang>中国大陆</lang></span>
         </div>
     </a>
 </div>
 ```
+
+页头深色条必须带 `data-surface="inverse"`（见 [`theme-surface-text-roles.md`](../../theme-surface-text-roles.md)），文案用 `.w-text` / `.w-text-muted`，不要依赖裸 `span` 继承页面黑字。
 
 ## 示例代码
 

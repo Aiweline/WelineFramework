@@ -12,8 +12,8 @@ final class EventPerformanceAnalysisAdapter implements ScenarioAdapterInterface,
 {
     public function getDefaultModelBindings(): array { return ['text2text' => 'deepseek-v4-flash']; }
     public function getCode(): string { return 'seo_event_performance_analysis'; }
-    public function getName(): string { return 'SEO Event Performance Analysis'; }
-    public function getDescription(): string { return 'Converts aggregated Visitor/Search evidence into one bounded structured recommendation.'; }
+    public function getName(): string { return (string)__('SEO 事件表现分析'); }
+    public function getDescription(): string { return (string)__('将汇总的访客与搜索证据转换为一条有边界的结构化优化建议。'); }
     public function getVersion(): string { return '1.0.2'; }
     public function getSupportedModelTypes(): array { return ['text2text']; }
 

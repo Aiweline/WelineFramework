@@ -14,10 +14,11 @@
  * @widget.page_layouts {["*"]}
  * @widget.is_container {true}
  * @widget.exclusive {true}
+ * @widget.supports {["layout-global-footer","footer-container"]}
  * @widget.slots {"links":{"name":"链接区插槽","position":"top","accept":["footer-links"],"max":4},"newsletter":{"name":"订阅区插槽","position":"top-right","accept":["footer-newsletter"],"max":1},"social":{"name":"社交媒体插槽","position":"bottom-left","accept":["footer-social"],"max":1},"payment":{"name":"支付方式插槽","position":"bottom-center","accept":["footer-payment"],"max":1},"copyright":{"name":"版权信息插槽","position":"bottom-right","accept":["footer-copyright"],"max":1}}
  *
- * @param bg_color {default="var(--weline-theme-canvas)",type="color",label="背景颜色"}
- * @param text_color {default="var(--weline-theme-on-primary)",type="color",label="文字颜色"}
+ * @param bg_color {default="var(--weline-theme-footer-bg,#232f3e)",type="color",label="背景颜色"}
+ * @param text_color {default="var(--weline-theme-footer-text,#ffffff)",type="color",label="文字颜色"}
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
@@ -32,15 +33,18 @@ $children = $children ?? [];
 $isPreviewMode = (bool)($config['preview_mode'] ?? false);
 $bgColor = ThemeUiColor::sanitize(
     $config['bg_color'] ?? '',
-    'var(--weline-theme-canvas)'
+    'var(--weline-theme-footer-bg,#232f3e)'
 );
 $textColor = ThemeUiColor::sanitize(
     $config['text_color'] ?? '',
-    'var(--weline-theme-on-primary)'
+    'var(--weline-theme-footer-text,#ffffff)'
 );
 
 $rootStyle = '--wc-footer-bg:' . $bgColor . ';--wc-footer-text:' . $textColor . ';';
 ?>
+
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/footer-chrome-amazon.css)?v=20260824-chrome-layout">
 
 <footer class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
         weline-code="<?= $esc($scope->code) ?>"
@@ -137,26 +141,40 @@ $rootStyle = '--wc-footer-bg:' . $bgColor . ';--wc-footer-text:' . $textColor . 
 <style>
 .<?= $wc ?> {
     width: 100%;
-    background-color: var(--wc-footer-bg, var(--weline-theme-canvas));
-    color: var(--wc-footer-text, var(--weline-theme-on-primary));
+    background-color: var(--wc-footer-bg);
+    color: var(--wc-footer-text);
+    font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.5;
+}
+
+.<?= $wc ?> a {
+    color: var(--weline-theme-footer-link, #dddddd);
+    text-decoration: none;
+}
+
+.<?= $wc ?> a:hover,
+.<?= $wc ?> a:focus-visible {
+    color: var(--wc-footer-text);
+    text-decoration: underline;
 }
 
 .<?= $wc ?> .footer-inner {
-    max-width: var(--weline-theme-container-max, 1400px);
+    max-width: var(--weline-theme-container-max);
     margin: 0 auto;
-    padding: 0 var(--weline-space-5, 20px);
+    padding: 0 var(--weline-space-5);
 }
 
 .<?= $wc ?> .footer-top {
-    padding: var(--weline-space-12, 50px) 0 var(--weline-space-10, 40px);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
-        color-mix(in srgb, var(--wc-footer-text, var(--weline-theme-on-primary)) 12%, transparent);
+    padding: var(--weline-space-12) 0 var(--weline-space-10);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style)
+        color-mix(in srgb, var(--wc-footer-text) 12%, transparent);
 }
 
 .<?= $wc ?> .footer-top .footer-inner {
     display: flex;
     justify-content: space-between;
-    gap: var(--weline-space-10, 40px);
+    gap: var(--weline-space-10);
 }
 
 .<?= $wc ?> .footer-links-area {
@@ -165,34 +183,34 @@ $rootStyle = '--wc-footer-bg:' . $bgColor . ';--wc-footer-text:' . $textColor . 
 
 .<?= $wc ?> .slot-links {
     display: flex;
-    gap: var(--weline-space-15, 60px);
+    gap: var(--weline-space-15);
     flex-wrap: wrap;
 }
 
 .<?= $wc ?> .footer-link-group {
-    min-width: 150px;
+    min-width: var(--size-panel-150);
 }
 
 .<?= $wc ?> .slot-newsletter {
-    width: 300px;
+    width: var(--size-panel-300);
     flex-shrink: 0;
 }
 
 .<?= $wc ?> .footer-bottom {
-    padding: var(--weline-space-8, 30px) 0;
+    padding: var(--weline-space-8) 0;
 }
 
 .<?= $wc ?> .footer-bottom .footer-inner {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--weline-space-5, 20px);
+    gap: var(--weline-space-5);
     flex-wrap: wrap;
 }
 
 .<?= $wc ?> .footer-slot {
     position: relative;
-    min-height: 40px;
+    min-height: var(--size-control-md);
 }
 
 .<?= $wc ?> .slot-widget {
@@ -201,7 +219,7 @@ $rootStyle = '--wc-footer-bg:' . $bgColor . ';--wc-footer-text:' . $textColor . 
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 80px;
+    min-height: var(--sidebar-collapsed-width);
 }
 
 @media (max-width: 992px) {

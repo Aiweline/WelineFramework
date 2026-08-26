@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Eav',
-    "version" => '1.1.3',
+    "version" => '1.1.4',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -13,6 +13,7 @@ return [
     "provides" => [
         \Weline\Framework\Setup\Stage\EavSchemaProviderInterface::class => \Weline\Eav\Api\SchemaProvider::class,
         \Weline\Eav\Api\Attribute\EntityAttributeStoreInterface::class => \Weline\Eav\Service\EntityAttributeStore::class,
+        \Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface::class => \Weline\Eav\Service\AttributeMetadataCatalog::class,
         \Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface::class => \Weline\Eav\Service\AttributeOptionStore::class,
         \Weline\Eav\Api\Attribute\Type\AttributeTypeRegistryInterface::class => \Weline\Eav\Service\AttributeTypeRegistry::class,
         \Weline\Eav\Api\Attribute\AttributeDependenceResolverInterface::class => \Weline\Eav\Service\AttributeDependenceResolver::class,

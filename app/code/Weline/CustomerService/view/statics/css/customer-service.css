@@ -497,8 +497,32 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: calc(var(--weline-z-overlay) + 100);
+        z-index: calc(var(--weline-z-overlay) + 350);
         padding: var(--weline-space-4);
+        pointer-events: auto;
+    }
+
+    #cs-bind-modal.cs-modal,
+    #cs-bind-modal.cs-modal.w-modal {
+        z-index: calc(var(--weline-z-overlay) + 350);
+    }
+
+    body.cs-bind-modal-open #customer-service-widget {
+        pointer-events: none;
+    }
+
+    body.cs-bind-modal-open #customer-service-widget .cs-chat-window {
+        visibility: hidden;
+    }
+
+    body.cs-bind-modal-open #cs-bind-modal {
+        pointer-events: auto;
+    }
+
+    .cs-modal .w-modal-dialog {
+        position: relative;
+        z-index: 1;
+        pointer-events: auto;
     }
 
     .cs-modal-content {
@@ -546,8 +570,16 @@
         transition: background-color var(--weline-motion-fast) ease, color var(--weline-motion-fast) ease;
     }
 
-    .cs-modal-close:hover {
+    .cs-modal-close.w-button[data-tone="quiet"] {
+        background: transparent;
+        border-color: transparent;
+        color: var(--weline-theme-text-muted);
+    }
+
+    .cs-modal-close.w-button[data-tone="quiet"]:hover,
+    .cs-modal-close.w-modal-close:hover {
         background: var(--weline-theme-surface-hover);
+        border-color: transparent;
         color: var(--weline-theme-text);
     }
 
@@ -573,8 +605,25 @@
         line-height: var(--weline-line-height);
     }
 
-    .cs-w-field {
-        margin-bottom: var(--weline-space-4);
+    .cs-bind-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .cs-bind-form .cs-modal-footer {
+        margin-top: var(--weline-space-4);
+        padding: 0;
+        border-top: 0;
+        background: transparent;
+    }
+
+    .cs-bind-form .weline-captcha {
+        margin-block: var(--weline-space-4);
+    }
+
+    .cs-bind-form .weline-captcha-row {
+        flex-wrap: wrap;
     }
 
     .cs-w-field label {
@@ -711,6 +760,87 @@
         display: none !important;
     }
 
+    .cs-notice-alert {
+        position: fixed;
+        inset: 0;
+        z-index: calc(var(--weline-z-overlay) + 500);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(1rem, env(safe-area-inset-top, 0px))
+            max(1rem, env(safe-area-inset-right, 0px))
+            max(1rem, env(safe-area-inset-bottom, 0px))
+            max(1rem, env(safe-area-inset-left, 0px));
+        box-sizing: border-box;
+        background: color-mix(in srgb, var(--weline-theme-text, #0f172a) 48%, transparent);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity var(--weline-motion-fast, 160ms) ease, visibility var(--weline-motion-fast, 160ms) ease;
+    }
+
+    .cs-notice-alert.is-open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    .cs-notice-alert__dialog {
+        width: min(100%, 24rem);
+        max-height: min(90vh, 28rem);
+        overflow: auto;
+        border: 1px solid var(--weline-theme-border, #cbd5e1);
+        border-radius: var(--weline-radius-lg, 0.75rem);
+        background: var(--weline-theme-surface, #fff);
+        color: var(--weline-theme-text, #0f172a);
+        box-shadow: var(--weline-theme-shadow-lg, 0 22px 56px rgba(15, 23, 42, 0.28));
+        display: flex;
+        flex-direction: column;
+    }
+
+    .cs-notice-alert__header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--weline-theme-border, #e2e8f0);
+    }
+
+    .cs-notice-alert__title {
+        margin: 0;
+        font-size: var(--weline-font-size-lg, 1.05rem);
+        font-weight: 650;
+    }
+
+    .cs-notice-alert--error .cs-notice-alert__title {
+        color: var(--weline-theme-danger, #dc2626);
+    }
+
+    .cs-notice-alert--success .cs-notice-alert__title {
+        color: var(--weline-theme-success, #16a34a);
+    }
+
+    .cs-notice-alert--warning .cs-notice-alert__title {
+        color: var(--weline-theme-warning, #d97706);
+    }
+
+    .cs-notice-alert__body {
+        padding: 1.25rem;
+        line-height: 1.55;
+        color: var(--weline-theme-text, #0f172a);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .cs-notice-alert__actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-top: 1px solid var(--weline-theme-border, #e2e8f0);
+    }
+
+    .cs-notice-alert__confirm {
+        min-width: 6.5rem;
+    }
+
     @media (max-width: 720px) {
         .customer-service-widget {
             bottom: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
@@ -782,6 +912,18 @@
 
         .cs-modal-footer .cs-btn {
             flex: 1 1 8rem;
+        }
+
+        #cs-bind-modal.cs-modal,
+        #cs-bind-modal.cs-modal.w-modal {
+            z-index: calc(var(--weline-z-overlay) + 400);
+        }
+
+        body.cs-bind-modal-open #customer-service-widget .cs-chat-window,
+        body.cs-bind-modal-open #customer-service-widget .cs-chat-window.w-panel {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
         }
     }
 }

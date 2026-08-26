@@ -10,6 +10,7 @@ use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 use Weline\Theme\Dto\ThemeSlotDefinition;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Widget\Service\ParamSchemaRegistry;
 
 class ThemeResourceCatalog
 {
@@ -554,13 +555,49 @@ class ThemeResourceCatalog
         if (!$normalizer instanceof ParamDefinitionNormalizerInterface) {
             throw new \RuntimeException('Weline_Meta param normalizer provider is unavailable.');
         }
-        return $normalizer->normalizeParsedParamList($params);
+        $formatted = $normalizer->normalizeParsedParamList($params);
+
+        /** @var ParamSchemaRegistry $schemaRegistry */
+        $schemaRegistry = ObjectManager::getInstance(ParamSchemaRegistry::class);
+
+        return $schemaRegistry->expandParams($formatted);
     }
 
     private function extractSlots(string $content, string $area, string $filePath): array
     {
         $slots = [];
-        if (preg_match_all('/<w:slot\b([^>]*)>/i', $content, $matches, PREG_SET_ORDER)) {
+        if (preg_match_all('/<w:slot\b([^>]*)>(.*?)<\/w:slot>/is', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $attributes = $this->parseHtmlAttributes((string)$match[1]);
+                $slotId = $attributes['id'] ?? '';
+                if ($slotId === '' || $this->isDynamicSlotId($slotId) || isset($slots[$slotId])) {
+                    continue;
+                }
+                $templateWidgets = $this->extractNestedTemplateWidgets((string)$match[2]);
+                $slots[$slotId] = new ThemeSlotDefinition(
+                    $slotId,
+                    (string)($attributes['name'] ?? $slotId),
+                    $area,
+                    $this->splitCsv((string)($attributes['accept'] ?? '')),
+                    $this->toBool((string)($attributes['exclusive'] ?? 'false')),
+                    $this->toBool((string)($attributes['multiple'] ?? 'true'), true),
+                    $this->toBool((string)($attributes['append'] ?? 'false')),
+                    $this->toBool((string)($attributes['prepend'] ?? 'false')),
+                    [
+                        'position' => $attributes['position'] ?? null,
+                        'reject' => $this->splitCsv((string)($attributes['reject'] ?? '')),
+                        'max' => $this->normalizeOptionalInt($attributes['max'] ?? null),
+                        'min' => $this->normalizeOptionalInt($attributes['min'] ?? null),
+                        'required' => $this->toBool((string)($attributes['required'] ?? 'false')),
+                        'has_template_widgets' => $templateWidgets !== [],
+                        'template_widgets' => $templateWidgets,
+                    ],
+                    $filePath,
+                );
+            }
+        }
+
+        if (preg_match_all('/<w:slot\b([^>]*)\/?>/i', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $attributes = $this->parseHtmlAttributes((string)$match[1]);
                 $slotId = $attributes['id'] ?? '';
@@ -582,6 +619,8 @@ class ThemeResourceCatalog
                         'max' => $this->normalizeOptionalInt($attributes['max'] ?? null),
                         'min' => $this->normalizeOptionalInt($attributes['min'] ?? null),
                         'required' => $this->toBool((string)($attributes['required'] ?? 'false')),
+                        'has_template_widgets' => false,
+                        'template_widgets' => [],
                     ],
                     $filePath,
                 );
@@ -610,6 +649,8 @@ class ThemeResourceCatalog
                         'max' => $this->normalizeOptionalInt($attributes['data-wslot-max'] ?? null),
                         'min' => $this->normalizeOptionalInt($attributes['data-wslot-min'] ?? null),
                         'required' => $this->toBool((string)($attributes['data-wslot-required'] ?? 'false')),
+                        'has_template_widgets' => false,
+                        'template_widgets' => [],
                     ],
                     $filePath,
                 );
@@ -617,6 +658,39 @@ class ThemeResourceCatalog
         }
 
         return array_values(array_map(static fn(ThemeSlotDefinition $slot): array => $slot->toArray(), $slots));
+    }
+
+    /**
+     * @return list<array{type:string,name:string,code:string,ref:string,module:string}>
+     */
+    private function extractNestedTemplateWidgets(string $innerHtml): array
+    {
+        $widgets = [];
+        if (!preg_match_all('/<w:widget\b([^>]*)\/?>/i', $innerHtml, $matches, PREG_SET_ORDER)) {
+            return [];
+        }
+
+        foreach ($matches as $match) {
+            $attributes = $this->parseHtmlAttributes((string)$match[1]);
+            $type = (string)($attributes['type'] ?? '');
+            $name = (string)($attributes['name'] ?? '');
+            $code = (string)($attributes['code'] ?? $name);
+            if ($name === '' && $code !== '') {
+                $name = $code;
+            }
+            if ($type === '' || ($name === '' && $code === '')) {
+                continue;
+            }
+            $widgets[] = [
+                'type' => $type,
+                'name' => $name !== '' ? $name : $code,
+                'code' => $code !== '' ? $code : $name,
+                'ref' => (string)($attributes['ref'] ?? ''),
+                'module' => (string)($attributes['module'] ?? ''),
+            ];
+        }
+
+        return $widgets;
     }
 
     private function isDynamicSlotId(string $slotId): bool

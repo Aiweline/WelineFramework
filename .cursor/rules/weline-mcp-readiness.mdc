@@ -3,4 +3,4 @@ description: Weline 项目智能 MCP 与开发前 readiness 门禁
 alwaysApply: true
 ---
 
-开发前必须启动 `weline_project_intelligence` MCP，并按根 `AGENTS.md` 调用 `prepare_project`。只有 `project-readiness.v1.status=ready` 才能继续；所有知识与编辑调用必须携带当前会话的 `readiness_id`。规范由 MCP 按任务查询，不在 Cursor 规则中复制。
+任何开发任务的第一步：运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php` 确认引导状态；不正常时 AI 必须自行修复环境（MCP 注册/`cursor-agent mcp enable`、必要时 `git switch dev`、重跑自检），禁止让用户去 Settings 手写配置，也禁止调用 Cursor `mcp_auth`（本 MCP 是本地 STDIO，无 OAuth，授权弹窗对本服务无效）。只有 `project-guidance-bootstrap.v1.status=ready` 后，才能在 `dev` 上调用 `prepare_project` 并携带 `readiness_id` 继续；缺失模块文档会在 `prepare_project` 内自动修复，无需用户授权。规范由 MCP 按任务查询，不在 Cursor 规则中复制。

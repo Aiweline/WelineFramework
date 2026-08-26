@@ -1,4 +1,6 @@
 <?php
+
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
 /**
  * Durable Product catalog cards. Cart mutation is performed by the browser
  * through Weline.Api and the Cart V2 OfferIdentity boundary.
@@ -8,22 +10,66 @@
 $offers = $this->getData('storefront_offers') ?? [];
 $offers = is_array($offers) ? $offers : [];
 $cartGuestToken = trim((string)($this->getData('cart_guest_token') ?? ''));
+$activePrice = trim((string)($this->getData('storefront_listing_price') ?? ''));
+$totalCount = max(0, (int)($this->getData('storefront_listing_total') ?? count($offers)));
+$visibleCount = max(0, (int)($this->getData('storefront_listing_count') ?? count($offers)));
+$sortOptions = $this->getData('storefront_listing_sort_options') ?? [];
+$sortOptions = is_array($sortOptions) ? $sortOptions : [];
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <section class="product-storefront"
          data-testid="storefront-product-catalog"
          weline-code="product.frontend.catalog.section_1">
     <header class="product-storefront__header">
-        <p class="product-storefront__eyebrow"><?= __('真实商品目录') ?></p>
-        <h1><?= __('商品') ?></h1>
-        <p><?= __('页面价格、库存与购物车均来自当前网站的持久化商品 Offer。') ?></p>
+        <h1><?= __('全部商品') ?></h1>
+        <p class="product-storefront__lede"><?= __('浏览当前网站已发布的商品，可按分类与价格筛选。') ?></p>
     </header>
+
+    <div class="product-storefront__toolbar" data-testid="storefront-products-toolbar">
+        <p class="product-storefront__count">
+            <?php if ($visibleCount > 0): ?>
+                <?= __('共 %{1} 件商品', [$visibleCount]) ?>
+            <?php else: ?>
+                <?= __('0 件商品') ?>
+            <?php endif; ?>
+            <?php if ($activePrice !== '' && $visibleCount !== $totalCount): ?>
+                <span class="product-storefront__count-hint"><?= __('（筛选自 %{1} 件）', [$totalCount]) ?></span>
+            <?php endif; ?>
+        </p>
+        <?php if ($sortOptions !== []): ?>
+            <label class="product-storefront__sort">
+                <span><?= __('排序') ?>:</span>
+                <select class="product-storefront__sort-select"
+                        data-testid="storefront-products-sort"
+                        onchange="if (this.value) { window.location.href = this.value; }">
+                    <?php foreach ($sortOptions as $option): ?>
+                        <?php
+                        if (!is_array($option)) {
+                            continue;
+                        }
+                        $href = trim((string)($option['url'] ?? ''));
+                        if ($href === '') {
+                            continue;
+                        }
+                        ?>
+                        <option value="<?= $escape($href) ?>"<?= !empty($option['selected']) ? ' selected' : '' ?>>
+                            <?= $escape($option['label'] ?? '') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        <?php endif; ?>
+    </div>
 
     <div class="product-storefront__notice" data-testid="catalog-message" aria-live="polite"></div>
 
     <?php if ($offers === []): ?>
         <div class="product-storefront__empty" data-testid="storefront-product-empty">
-            <?= __('当前网站暂无已发布商品。') ?>
+            <?php if ($activePrice !== ''): ?>
+                <?= __('当前筛选条件下暂无商品，请调整筛选。') ?>
+            <?php else: ?>
+                <?= __('当前网站暂无已发布商品。') ?>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <div class="product-storefront__grid">
@@ -36,36 +82,42 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 $productId = max(0, (int)($offer['product_id'] ?? 0));
                 $productName = trim((string)($offer['name'] ?? ''));
                 $productSlug = trim((string)($offer['slug'] ?? ''));
-                $productUrl = $productSlug !== '' ? (string)$this->getUrl('product/' . $productSlug) : '';
+                $productUrl = '';
+                if ($productSlug !== '') {
+                    $productUrl = (string)$this->getUrl('product/' . $productSlug);
+                } elseif ($productId > 0) {
+                    $productUrl = (string)$this->getUrl('product/' . $productId);
+                }
                 ?>
-                <article class="product-storefront__card"
+                <article class="product-storefront__card product-card<?= $productUrl !== '' ? ' is-clickable' : '' ?>"
                          data-testid="storefront-product-card"
+                         data-product-id="<?= $productId ?>"
                          data-global-offer-uuid="<?= $escape($uuid) ?>">
                     <?php if ($productUrl !== ''): ?>
-                        <a class="product-storefront__media-link"
+                        <a class="product-storefront__card-hit"
                            href="<?= $escape($productUrl) ?>"
-                           aria-label="<?= $escape($productName) ?>">
+                           aria-label="<?= $escape($productName) ?>"
+                           data-testid="storefront-product-card-link"></a>
                     <?php endif; ?>
-                        <div class="product-storefront__media"<?= $productUrl === '' ? ' aria-hidden="true"' : '' ?>>
-                            <?php if (trim((string)($offer['image'] ?? '')) !== ''): ?>
-                                <img src="<?= $escape($offer['image']) ?>" alt="<?= $escape($productName) ?>">
-                            <?php else: ?>
-                                <span>W</span>
-                            <?php endif; ?>
-                        </div>
-                    <?php if ($productUrl !== ''): ?>
-                        </a>
-                    <?php endif; ?>
+                    <?php
+                    $imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ?? ''), $productId);
+                    ?>
+                    <div class="product-storefront__media"<?= $productUrl === '' ? ' aria-hidden="true"' : '' ?>>
+                        <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                            'product_id' => $productId,
+                            'show_wishlist' => true,
+                            'show_compare' => true,
+                            'show_quickview' => true,
+                        ]) ?>
+                        <img src="<?= $escape($imageResolved['src']) ?>"
+                             alt=""
+                             data-storefront-img="1"
+                             data-fallback="<?= $escape($imageResolved['fallback']) ?>"
+                             loading="lazy"
+                             decoding="async">
+                    </div>
                     <div class="product-storefront__body">
-                        <h2>
-                            <?php if ($productUrl !== ''): ?>
-                                <a class="product-storefront__title-link" href="<?= $escape($productUrl) ?>">
-                                    <?= $escape($productName) ?>
-                                </a>
-                            <?php else: ?>
-                                <?= $escape($productName) ?>
-                            <?php endif; ?>
-                        </h2>
+                        <h2><?= $escape($productName) ?></h2>
                         <p class="product-storefront__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></p>
                         <p class="product-storefront__price">
                             <?php if ($quoteOnly): ?>
@@ -98,29 +150,195 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 </section>
 
 <style>
-    .product-storefront { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:44px 0 64px; }
-    .product-storefront__header h1,.product-storefront__header p { margin:0; }
-    .product-storefront__header h1 { margin-top:4px; font-size:34px; }
-    .product-storefront__header > p:last-child { margin-top:9px; color:#64748b; }
-    .product-storefront__eyebrow { color:#2563eb; font-size:13px; font-weight:800; }
-    .product-storefront__notice { min-height:24px; margin:16px 0; color:#166534; }
-    .product-storefront__notice.is-error { color:#991b1b; }
-    .product-storefront__grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px; }
-    .product-storefront__card { overflow:hidden; border:1px solid #e5e7eb; border-radius:12px; background:#fff; }
-    .product-storefront__media-link { display:block; color:inherit; text-decoration:none; }
-    .product-storefront__media { display:grid; min-height:150px; place-items:center; background:#f8fafc; color:#94a3b8; font-size:44px; font-weight:900; }
-    .product-storefront__media img { width:100%; height:180px; object-fit:cover; }
-    .product-storefront__body { display:grid; gap:9px; padding:18px; }
-    .product-storefront__body h2,.product-storefront__body p { margin:0; }
-    .product-storefront__title-link { color:inherit; text-decoration:none; }
-    .product-storefront__title-link:hover,.product-storefront__title-link:focus-visible { color:#2563eb; }
-    .product-storefront__sku { color:#64748b; font-size:13px; }
-    .product-storefront__price { font-size:19px; font-weight:800; }
-    .product-storefront__add,.product-storefront__cart { min-height:42px; border:0; border-radius:8px; background:#2563eb; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
-    .product-storefront__add:disabled { background:#94a3b8; cursor:not-allowed; }
-    .product-storefront__cart { display:inline-flex; align-items:center; justify-content:center; margin-top:20px; padding:0 18px; text-decoration:none; }
+    .product-storefront { width:100%; min-width:0; margin:0; padding:0 0 48px; color:#0f1111; }
+    .product-storefront__header { margin:0 0 8px; }
+    .product-storefront__header h1 { margin:0; font-size:22px; font-weight:700; line-height:1.25; }
+    .product-storefront__lede { margin:6px 0 0; color:#565959; font-size:13px; line-height:1.4; }
+    .product-storefront__toolbar {
+        display:flex;
+        flex-wrap:wrap;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px 16px;
+        margin:0 0 14px;
+        padding:8px 0 10px;
+        border-bottom:1px solid #e3e6e6;
+    }
+    .product-storefront__count { margin:0; font-size:14px; color:#0f1111; }
+    .product-storefront__count-hint { margin-left:6px; color:#565959; }
+    .product-storefront__sort {
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        margin:0 0 0 auto;
+        font-size:13px;
+        color:#565959;
+        white-space:nowrap;
+    }
+    .product-storefront__sort-select {
+        min-height:32px;
+        padding:4px 28px 4px 10px;
+        border:1px solid #d5d9d9;
+        border-radius:8px;
+        background:#f0f2f2;
+        color:inherit;
+        font:inherit;
+        box-shadow:0 2px 5px rgba(15,17,17,.05);
+    }
+    .product-storefront__notice { min-height:0; margin:0 0 10px; color:#067d62; font-size:13px; }
+    .product-storefront__notice.is-error { color:#b12704; }
+    .product-storefront__grid {
+        display:grid;
+        grid-template-columns:repeat(4, minmax(0, 1fr));
+        gap:12px;
+        align-items:stretch;
+    }
+    .product-storefront__card {
+        position:relative;
+        display:flex;
+        flex-direction:column;
+        min-width:0;
+        overflow:hidden;
+        border:1px solid #d5d9d9;
+        border-radius:8px;
+        background:#fff;
+    }
+    .product-storefront__card.is-clickable { cursor:pointer; }
+    .product-storefront__card.is-clickable:hover { border-color:#bbb; }
+    .product-storefront__card-hit {
+        position:absolute;
+        inset:0;
+        z-index:1;
+        color:inherit;
+        text-decoration:none;
+    }
+    .product-storefront__media {
+        position:relative;
+        display:block;
+        height:160px;
+        max-height:160px;
+        overflow:hidden;
+        background:#fff;
+        color:#bbb;
+        font-size:36px;
+        font-weight:800;
+    }
+    .product-storefront__media span {
+        position:absolute;
+        inset:0;
+        display:grid;
+        place-items:center;
+    }
+    .product-storefront__media img {
+        position:absolute;
+        inset:0;
+        width:100%;
+        height:100%;
+        object-fit:cover;
+        object-position:center;
+    }
+    .product-storefront__media .product-actions {
+        position:absolute;
+        top:8px;
+        right:8px;
+        z-index:2;
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+        opacity:0;
+        transition:opacity .2s ease;
+    }
+    .product-storefront__card:hover .product-actions,
+    .product-storefront__card:focus-within .product-actions {
+        opacity:1;
+    }
+    .product-storefront__media .action-btn {
+        width:2rem;
+        height:2rem;
+        border:0;
+        border-radius:999px;
+        background:rgba(255,255,255,.96);
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        cursor:pointer;
+        box-shadow:0 2px 8px rgba(15,17,17,.12);
+    }
+    .product-storefront__body {
+        position:relative;
+        z-index:1;
+        display:grid;
+        gap:4px;
+        padding:8px 10px 10px;
+        flex:1;
+        align-content:start;
+        background:#fff;
+    }
+    .product-storefront__body h2 {
+        margin:0;
+        font-size:13px;
+        font-weight:400;
+        line-height:1.35;
+        display:-webkit-box;
+        -webkit-line-clamp:2;
+        -webkit-box-orient:vertical;
+        overflow:hidden;
+        min-height:2.5em;
+    }
+    .product-storefront__sku { margin:0; color:#565959; font-size:11px; }
+    .product-storefront__price { margin:2px 0 0; font-size:16px; font-weight:700; line-height:1.2; }
+    .product-storefront__add,.product-storefront__cart {
+        position:relative;
+        z-index:2;
+        margin-top:6px;
+        min-height:30px;
+        border:1px solid #fcd200;
+        border-radius:20px;
+        background:#ffd814;
+        color:#0f1111;
+        font:inherit;
+        font-size:12px;
+        font-weight:600;
+        cursor:pointer;
+    }
+    .product-storefront__add:hover { background:#f7ca00; }
+    .product-storefront__add:disabled {
+        border-color:#d5d9d9;
+        background:#f0f2f2;
+        color:#9a9a9a;
+        cursor:not-allowed;
+    }
+    .product-storefront__cart {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        margin-top:16px;
+        padding:0 14px;
+        text-decoration:none;
+    }
     .product-storefront__cart[hidden] { display:none; }
-    .product-storefront__empty { padding:32px; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b; text-align:center; }
+    .product-storefront__empty {
+        padding:28px 16px;
+        border:1px dashed #d5d9d9;
+        border-radius:8px;
+        color:#565959;
+        text-align:center;
+        background:#fff;
+    }
+    @media (max-width:1200px) {
+        .product-storefront__grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width:900px) {
+        .product-storefront__grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width:768px) {
+        .product-storefront__toolbar { align-items:stretch; }
+        .product-storefront__sort { width:100%; justify-content:space-between; }
+        .product-storefront__sort-select { flex:1; }
+    }
+    @media (max-width:520px) {
+        .product-storefront__grid { grid-template-columns:1fr; }
+    }
 </style>
 
 <script>

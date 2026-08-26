@@ -19,19 +19,13 @@
 
 ## 默认结构参考
 
-在主题默认模板 `header/default.phtml` 中，未实现 Hook 时的结构大致如下：
+在主题默认模板 `header/default.phtml` 中，未实现 Hook 时默认注入 `all-menu` 部件（`menu_tree` 可配置导航树）：
 
 ```html
-<a href="#" class="hamburger-menu-btn" id="hamburger-menu"
-   role="button"
-   aria-label="<lang>打开所有类别菜单</lang>"
-   aria-expanded="false"
-   aria-controls="categories-list">
-    <i class="fas fa-bars" aria-hidden="true"></i>
-    <span class="hamburger-label"><lang>全部</lang></span>
-</a>
+<w:widget type="navigation" name="all-menu" />
 ```
 
+部件输出桌面「全部」按钮（`.hamburger-menu-btn.js-header-drawer-trigger`），并向 `AllMenuTreeRegistry` 发布树数据供 `#categories-sidebar` 消费。
 ## 示例代码
 
 ```php
@@ -58,6 +52,8 @@
 - `.hamburger-menu-btn`：汉堡菜单按钮样式
 - `.hamburger-label`：按钮文本（如“全部”）
 - `.header-main-nav`：主导航容器（由主题模板提供）
+- `.header-mobile-menu-btn`：小屏顶栏汉堡，打开同一 `#categories-sidebar` 抽屉
+- `.js-header-drawer-trigger`：所有打开分类抽屉的触发器
 
 ## 注意事项
 

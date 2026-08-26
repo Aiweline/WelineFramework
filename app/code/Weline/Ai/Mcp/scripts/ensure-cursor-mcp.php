@@ -30,10 +30,7 @@ if ($repoRoot === null) {
     ]);
 }
 
-$php = PHP_BINARY;
-if ($php === '' || !is_file($php)) {
-    $php = 'php';
-}
+$php = welineCursorMcpResolvePhpBinary();
 
 $configPath = welineCursorMcpConfigPath();
 $serverConfig = [
@@ -242,6 +239,41 @@ function welineCursorMcpAgentCandidates(): array
     }
 
     return array_values(array_unique($candidates));
+}
+
+/**
+ * Prefer stable PHP paths so Cursor mcp-approvals fingerprints do not churn on
+ * Homebrew Cellar version bumps (which re-trigger workspace MCP approval).
+ */
+function welineCursorMcpResolvePhpBinary(): string
+{
+    $candidates = [];
+    foreach (['/opt/homebrew/bin/php', '/usr/local/bin/php'] as $stable) {
+        $candidates[] = $stable;
+    }
+    $which = trim((string) shell_exec('command -v php 2>/dev/null'));
+    if ($which !== '') {
+        $candidates[] = $which;
+    }
+    if (PHP_BINARY !== '') {
+        $candidates[] = PHP_BINARY;
+    }
+    $candidates[] = 'php';
+
+    foreach ($candidates as $candidate) {
+        if ($candidate === 'php') {
+            return 'php';
+        }
+        if (!is_file($candidate) || !is_executable($candidate)) {
+            continue;
+        }
+        // Keep the stable symlink path when it points at a Cellar binary.
+        if (!str_contains($candidate, DIRECTORY_SEPARATOR . 'Cellar' . DIRECTORY_SEPARATOR)) {
+            return $candidate;
+        }
+    }
+
+    return 'php';
 }
 
 function welineCursorMcpFindAgent(): ?string

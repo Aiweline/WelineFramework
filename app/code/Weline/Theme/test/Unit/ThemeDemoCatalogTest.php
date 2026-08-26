@@ -14,7 +14,9 @@ class ThemeDemoCatalogTest extends TestCase
         $products = ThemeDemoCatalog::products(4, 2);
 
         self::assertCount(4, $products);
-        self::assertStringStartsWith('data:image/svg+xml', $products[0]['image']);
+        self::assertStringEndsWith('/images/storefront-placeholder/default.svg', $products[0]['image']);
+        self::assertStringNotContainsString('data:image/', $products[0]['image']);
+        self::assertSame($products[0]['image'], ThemeDemoCatalog::productImage(99));
         self::assertNotSame('', $products[0]['name']);
         self::assertGreaterThan(0, $products[0]['price']);
     }

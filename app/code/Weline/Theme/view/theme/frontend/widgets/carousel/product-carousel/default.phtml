@@ -19,13 +19,18 @@
  * @param slides_per_view {default=4,type="number",label="每屏显示数量"}
  * @param autoplay {default=false,type="bool",label="自动播放"}
  * @param loop {default=true,type="bool",label="循环播放"}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
+use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-carousel');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
 $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
@@ -66,8 +71,9 @@ if ($title === '') {
         <div class="carousel-viewport">
             <div class="carousel-track">
                 <?php foreach ($products as $product): ?>
+                    <?php $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0); ?>
                     <div class="carousel-slide">
-                        <div class="product-card">
+                        <div class="product-card" data-product-id="<?= $actionProductId ?>">
                             <div class="product-image-wrapper">
                                 <a href="<?= $esc((string)($product['url'] ?? '')) ?>" class="product-image-link">
                                     <img src="<?= $esc((string)($product['image'] ?? '')) ?>"
@@ -76,11 +82,14 @@ if ($title === '') {
                                          loading="lazy">
                                 </a>
 
-                                <div class="product-actions">
-                                    <button class="action-btn btn-wishlist" type="button" title="<?= __('加入收藏') ?>">
-                                        <w:icon name="heart" size="sm"></w:icon>
-                                    </button>
-                                    <button class="action-btn btn-cart" type="button" title="<?= __('加入购物车') ?>">
+                                <div class="product-action-bar product-action-bar--carousel">
+                                    <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                                        'product_id' => $actionProductId,
+                                        'show_wishlist' => $shopperActions['show_wishlist'],
+                                        'show_compare' => $shopperActions['show_compare'],
+                                        'show_quickview' => $shopperActions['show_quickview'],
+                                    ]) ?>
+                                    <button class="action-btn btn-cart" type="button" title="<?= __('加入购物车') ?>" aria-label="<?= __('加入购物车') ?>" data-product-id="<?= $actionProductId ?>">
                                         <w:icon name="pin" size="sm"></w:icon>
                                     </button>
                                 </div>
@@ -114,15 +123,15 @@ if ($title === '') {
 
 <style>
 .<?= $wc ?> {
-    padding: var(--weline-space-5, 20px) 0;
+    padding: var(--weline-space-5) 0;
 }
 
 .<?= $wc ?> .widget-header {
-    margin-bottom: var(--weline-space-5, 20px);
+    margin-bottom: var(--weline-space-5);
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-xl, 22px);
+    font-size: var(--weline-font-size-xl);
     font-weight: 600;
     margin: 0;
     color: var(--weline-theme-text);
@@ -130,7 +139,7 @@ if ($title === '') {
 
 .<?= $wc ?> .carousel-container {
     position: relative;
-    padding: 0 50px;
+    padding: 0 var(--size-control-50);
 }
 
 .<?= $wc ?> .carousel-viewport {
@@ -139,7 +148,7 @@ if ($title === '') {
 
 .<?= $wc ?> .carousel-track {
     display: flex;
-    gap: var(--weline-space-5, 20px);
+    gap: var(--weline-space-5);
     transition: transform 0.4s ease;
 }
 
@@ -149,15 +158,15 @@ if ($title === '') {
 
 .<?= $wc ?> .product-card {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg, 10px);
+    border-radius: var(--weline-radius-lg);
     overflow: hidden;
     box-shadow: var(--weline-theme-shadow-sm);
-    transition: all var(--weline-theme-transition-base, 0.3s);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .product-card:hover {
     box-shadow: var(--weline-theme-shadow-md);
-    transform: translateY(-3px);
+    transform: translateY(var(--spacing-neg-1_5));
 }
 
 .<?= $wc ?> .product-image-wrapper {
@@ -184,25 +193,37 @@ if ($title === '') {
     transform: scale(1.05);
 }
 
-.<?= $wc ?> .product-actions {
+.<?= $wc ?> .product-action-bar {
     position: absolute;
-    bottom: var(--weline-space-2, 10px);
+    bottom: var(--weline-space-2);
     left: 50%;
-    transform: translateX(-50%) translateY(20px);
+    transform: translateX(-50%) translateY(var(--weline-space-5));
     display: flex;
-    gap: var(--weline-space-2, 8px);
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-2);
     opacity: 0;
-    transition: all var(--weline-theme-transition-base, 0.3s);
+    transition: all var(--weline-theme-transition-base);
+    z-index: 3;
+    max-width: calc(100% - 1rem);
 }
-
-.<?= $wc ?> .product-card:hover .product-actions {
+.<?= $wc ?> .product-action-bar--carousel .product-actions {
+    position: static;
+    transform: none;
+    opacity: 1;
+    flex-direction: row;
+    display: inline-flex;
+    gap: var(--weline-space-1);
+}
+.<?= $wc ?> .product-card:hover .product-action-bar {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
 
 .<?= $wc ?> .action-btn {
-    width: 36px;
-    height: 36px;
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
     border: none;
     background: var(--weline-theme-surface-raised);
     border-radius: 50%;
@@ -211,7 +232,7 @@ if ($title === '') {
     align-items: center;
     justify-content: center;
     box-shadow: var(--weline-theme-shadow-sm);
-    transition: all var(--weline-theme-transition-base, 0.3s);
+    transition: all var(--weline-theme-transition-base);
     color: var(--weline-theme-text);
 }
 
@@ -221,12 +242,12 @@ if ($title === '') {
 }
 
 .<?= $wc ?> .product-info {
-    padding: var(--weline-space-4, 15px);
+    padding: var(--weline-space-4);
 }
 
 .<?= $wc ?> .product-name {
-    margin: 0 0 var(--weline-space-2, 8px);
-    font-size: var(--weline-font-size-sm, 14px);
+    margin: 0 0 var(--weline-space-2);
+    font-size: var(--weline-font-size-sm);
     font-weight: 500;
 }
 
@@ -242,17 +263,17 @@ if ($title === '') {
 .<?= $wc ?> .product-price {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
 }
 
 .<?= $wc ?> .price-original {
-    font-size: var(--weline-font-size-xs, 12px);
+    font-size: var(--weline-font-size-xs);
     color: var(--weline-theme-text-muted);
     text-decoration: line-through;
 }
 
 .<?= $wc ?> .price-current {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 700;
     color: var(--weline-theme-danger);
 }
@@ -261,8 +282,8 @@ if ($title === '') {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 44px;
-    height: 44px;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
     background: var(--weline-theme-surface-raised);
     border: none;
     border-radius: 50%;
@@ -272,7 +293,7 @@ if ($title === '') {
     justify-content: center;
     box-shadow: var(--weline-theme-shadow-sm);
     z-index: 10;
-    transition: all var(--weline-theme-transition-base, 0.3s);
+    transition: all var(--weline-theme-transition-base);
     color: var(--weline-theme-text);
 }
 
@@ -292,17 +313,17 @@ if ($title === '') {
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3, 12px) 0;
+    padding: var(--weline-space-3) 0;
 }
 
 @media (max-width: 768px) {
     .<?= $wc ?> .carousel-container {
-        padding: 0 var(--weline-space-4, 15px);
+        padding: 0 var(--weline-space-4);
     }
 
     .<?= $wc ?> .carousel-arrow {
-        width: 36px;
-        height: 36px;
+        width: var(--size-control-sm);
+        height: var(--size-control-sm);
     }
 }
 </style>

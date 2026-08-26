@@ -342,6 +342,11 @@ w:slot 主题插槽标签
 <w:slot id="logo" accept="logo" exclusive="true"/>
 <w:slot id="sidebar" accept="sidebar-*" max="5" position="sidebar"/>
 <w:slot id="dashboard-summary" accept="dashboard-stat,dashboard-kpi" max="4" position="dashboard-summary"/>
+<w:slot id="user-area" accept="account,mini-cart-icon" multiple="true">
+  <w:widget type="header" name="account" />
+</w:slot>
+
+说明：slot 内可直接嵌套 w:widget 作为默认展示；未改动不写布局，用户改过才按 template_ref copy-on-write 物化。
 DOC;
     }
 }

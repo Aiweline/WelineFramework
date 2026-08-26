@@ -73,11 +73,18 @@ final class MediaRepository extends AbstractWebsiteShardRepository
     }
 
     /**
+     * Existing consumers receive Website media by default. Product admin can
+     * request explicit Store scopes without leaking overlays into storefronts.
+     *
      * @param list<int> $productIds
+     * @param list<int>|null $storeIds null means every explicit scope
      * @return list<array<string, mixed>>
      */
-    public function listByProductIds(int $websiteId, array $productIds): array
-    {
+    public function listByProductIds(
+        int $websiteId,
+        array $productIds,
+        ?array $storeIds = null,
+    ): array {
         $this->assertWebsite($websiteId);
         $productIds = array_values(array_unique(array_filter(
             array_map('intval', $productIds),
@@ -86,24 +93,236 @@ final class MediaRepository extends AbstractWebsiteShardRepository
         if ($productIds === []) {
             return [];
         }
-        $rows = $this->newModel($websiteId)
+        $query = $this->newModel($websiteId)
             ->clear()
-            ->where(Media::schema_fields_PRODUCT_ID, $productIds, 'IN')
-            ->select()
-            ->fetchArray();
+            ->where(Media::schema_fields_PRODUCT_ID, $productIds, 'IN');
+        if ($storeIds !== null) {
+            $storeIds = array_values(array_unique(array_filter(
+                array_map('intval', $storeIds),
+                static fn(int $id): bool => $id >= 0,
+            )));
+            if ($storeIds === []) {
+                return [];
+            }
+            $query->where(Media::schema_fields_STORE_ID, $storeIds, 'IN');
+        }
+        try {
+            $rows = $query->select()->fetchArray();
+        } catch (\PDOException $e) {
+            // Legacy website shards may predate store_id; retry without scope filter.
+            if ($storeIds === null || !str_contains($e->getMessage(), 'store_id')) {
+                throw $e;
+            }
+            $rows = $this->newModel($websiteId)
+                ->clear()
+                ->where(Media::schema_fields_PRODUCT_ID, $productIds, 'IN')
+                ->select()
+                ->fetchArray();
+        }
         usort(
             $rows,
             static fn(array $left, array $right): int => [
                 (int)($left[Media::schema_fields_PRODUCT_ID] ?? 0),
+                (int)($left[Media::schema_fields_STORE_ID] ?? 0),
                 (int)($left[Media::schema_fields_POSITION] ?? 0),
                 (int)($left[Media::schema_fields_ID] ?? 0),
             ] <=> [
                 (int)($right[Media::schema_fields_PRODUCT_ID] ?? 0),
+                (int)($right[Media::schema_fields_STORE_ID] ?? 0),
                 (int)($right[Media::schema_fields_POSITION] ?? 0),
                 (int)($right[Media::schema_fields_ID] ?? 0),
             ],
         );
         return $rows;
+    }
+
+    /**
+     * Complete the asset-backed rows for one Product scope. Legacy path/blob
+     * rows are migration inputs and are deliberately left untouched.
+     *
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    public function syncProductScope(
+        int $websiteId,
+        int $productId,
+        int $storeId,
+        array $rows,
+    ): array {
+        $this->assertWebsite($websiteId);
+        $this->assertStoreId($storeId);
+        if ($productId < 1) {
+            throw new \InvalidArgumentException('product_media_product_invalid');
+        }
+
+        $desired = [];
+        foreach ($rows as $index => $row) {
+            if (!is_array($row)) {
+                throw new \InvalidArgumentException('product_media_assignment_invalid');
+            }
+            $assetId = strtolower(trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')));
+            if (preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/', $assetId) !== 1) {
+                throw new \InvalidArgumentException('product_media_asset_id_invalid');
+            }
+            if (isset($desired[$assetId])) {
+                throw new \InvalidArgumentException('product_media_asset_duplicate');
+            }
+            $role = strtolower(trim((string)($row[Media::schema_fields_ROLE] ?? 'gallery')));
+            $visibility = strtolower(trim((string)($row[Media::schema_fields_ASSET_VISIBILITY] ?? 'public')));
+            $mimeType = strtolower(trim((string)($row[Media::schema_fields_MIME_TYPE] ?? '')));
+            $policy = $row[Media::schema_fields_ACCESS_POLICY_JSON] ?? null;
+            $position = (int)($row[Media::schema_fields_POSITION] ?? $index);
+            if (!in_array($role, ['main', 'gallery', 'file', 'download'], true)
+                || !in_array($visibility, ['public', 'private'], true)
+                || $mimeType === ''
+                || strlen($mimeType) > 128
+                || $position < 0
+                || ($policy !== null && !is_string($policy))
+            ) {
+                throw new \InvalidArgumentException('product_media_assignment_invalid');
+            }
+            if ($policy !== null) {
+                try {
+                    $decoded = json_decode($policy, true, 64, JSON_THROW_ON_ERROR);
+                } catch (\JsonException) {
+                    throw new \InvalidArgumentException('product_media_access_policy_invalid');
+                }
+                if (!is_array($decoded)) {
+                    throw new \InvalidArgumentException('product_media_access_policy_invalid');
+                }
+            }
+            $desired[$assetId] = [
+                Media::schema_fields_STORE_ID => $storeId,
+                Media::schema_fields_SCOPE_STATE => 'explicit',
+                Media::schema_fields_HIDDEN => !empty($row[Media::schema_fields_HIDDEN]) ? 1 : 0,
+                Media::schema_fields_ROLE => $role,
+                Media::schema_fields_ASSET_ID => $assetId,
+                Media::schema_fields_ASSET_VISIBILITY => $visibility,
+                Media::schema_fields_MIME_TYPE => $mimeType,
+                Media::schema_fields_ACCESS_POLICY_JSON => $policy,
+                Media::schema_fields_POSITION => $position,
+            ];
+        }
+
+        $existing = $this->listByProductIds($websiteId, [$productId], [$storeId]);
+        $byAsset = [];
+        $duplicates = [];
+        foreach ($existing as $row) {
+            $assetId = strtolower(trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')));
+            if ($assetId === '') {
+                continue;
+            }
+            if (isset($byAsset[$assetId])) {
+                $duplicates[] = (int)($row[Media::schema_fields_ID] ?? 0);
+                continue;
+            }
+            $byAsset[$assetId] = $row;
+        }
+
+        foreach ($desired as $assetId => $fields) {
+            $existingRow = $byAsset[$assetId] ?? null;
+            if ($existingRow === null) {
+                $this->create($websiteId, array_merge($fields, [
+                    Media::schema_fields_PRODUCT_ID => $productId,
+                    Media::schema_fields_PATH => 'asset://' . $assetId,
+                    Media::schema_fields_BLOB_KEY => 'asset:' . hash(
+                        'sha256',
+                        implode("\0", [
+                            (string)$websiteId,
+                            (string)$productId,
+                            (string)$storeId,
+                            $assetId,
+                            bin2hex(random_bytes(16)),
+                        ]),
+                    ),
+                ]));
+                continue;
+            }
+            $media = $this->findById($websiteId, (int)$existingRow[Media::schema_fields_ID]);
+            if ($media === null) {
+                throw new \RuntimeException('product_media_assignment_readback_failed');
+            }
+            foreach ($fields as $field => $value) {
+                $media->setData($field, $value);
+            }
+            $media->save();
+            unset($byAsset[$assetId]);
+        }
+
+        foreach ($byAsset as $row) {
+            $this->remove($websiteId, (int)$row[Media::schema_fields_ID]);
+        }
+        foreach ($duplicates as $mediaId) {
+            if ($mediaId > 0) {
+                $this->remove($websiteId, $mediaId);
+            }
+        }
+        return $this->listByProductIds($websiteId, [$productId], [$storeId]);
+    }
+
+    /**
+     * Remove one media row while preserving legacy COW owner/ref-count rules.
+     */
+    public function remove(int $websiteId, int $mediaId): void
+    {
+        $this->assertWebsite($websiteId);
+        for ($attempt = 0; $attempt < self::MAX_CAS_ATTEMPTS; $attempt++) {
+            try {
+                $this->transactions->run(
+                    $this->connectionFactory,
+                    function () use ($websiteId, $mediaId): void {
+                        $media = $this->findById($websiteId, $mediaId);
+                        if ($media === null) {
+                            return;
+                        }
+                        $blobKey = (string)$media->getData(Media::schema_fields_BLOB_KEY);
+                        $group = $this->loadBlobGroup($websiteId, $blobKey);
+                        $owner = $this->blobOwner($group, $blobKey);
+                        $this->assertBlobInvariant($group, $owner, $blobKey);
+                        $count = count($group);
+                        $claimedOwner = $this->claimOwner($websiteId, $owner, $count, $count);
+                        if ($claimedOwner === null) {
+                            throw $this->contention($websiteId, $blobKey);
+                        }
+
+                        if ($count === 1) {
+                            $claimedOwner->delete();
+                            return;
+                        }
+                        $ownerId = (int)$claimedOwner->getId();
+                        if ($mediaId === $ownerId) {
+                            $this->promoteReplacementOwner(
+                                $websiteId,
+                                $group,
+                                $claimedOwner,
+                                $blobKey,
+                            );
+                            $claimedOwner->delete();
+                        } else {
+                            $claimedOwner
+                                ->setData(Media::schema_fields_REF_COUNT, $count - 1)
+                                ->setData(Media::schema_fields_CAS_TOKEN, $this->newCasToken())
+                                ->save();
+                            $media->delete();
+                        }
+
+                        $remaining = $this->loadBlobGroup($websiteId, $blobKey);
+                        $remainingOwner = $this->blobOwner($remaining, $blobKey);
+                        $this->assertBlobInvariant($remaining, $remainingOwner, $blobKey);
+                    },
+                );
+                return;
+            } catch (CatalogConflictException $exception) {
+                if ($exception->errorCode() !== 'media_cas_contention') {
+                    throw $exception;
+                }
+            }
+        }
+        throw new CatalogConflictException(
+            'media_cas_contention',
+            __('Media remove 并发重试耗尽：media_id=%{1}', [$mediaId]),
+            ['website_id' => $websiteId, 'media_id' => $mediaId],
+        );
     }
 
     /**
@@ -179,6 +398,18 @@ final class MediaRepository extends AbstractWebsiteShardRepository
                             $websiteId,
                             [
                                 Media::schema_fields_PRODUCT_ID => $targetProductId,
+                                Media::schema_fields_STORE_ID => 0,
+                                Media::schema_fields_SCOPE_STATE => 'explicit',
+                                Media::schema_fields_HIDDEN => (int)$source->getData(Media::schema_fields_HIDDEN),
+                                Media::schema_fields_ROLE => (string)$source->getData(Media::schema_fields_ROLE),
+                                Media::schema_fields_ASSET_ID => $source->getData(Media::schema_fields_ASSET_ID),
+                                Media::schema_fields_ASSET_VISIBILITY => (string)$source->getData(
+                                    Media::schema_fields_ASSET_VISIBILITY,
+                                ),
+                                Media::schema_fields_MIME_TYPE => $source->getData(Media::schema_fields_MIME_TYPE),
+                                Media::schema_fields_ACCESS_POLICY_JSON => $source->getData(
+                                    Media::schema_fields_ACCESS_POLICY_JSON,
+                                ),
                                 Media::schema_fields_PATH => (string)$source->getData(
                                     Media::schema_fields_PATH,
                                 ),

@@ -1,0 +1,237 @@
+<?php
+/**
+ * 顶栏一级分类 Mega Menu：左侧二级分类 + 右侧三级子项卡片（图 + 说明）。
+ * 名称/描述：优先节点 i18n（主题一键 AI 翻译），再走 WidgetI18n / __()。
+ *
+ * @var array<string,mixed> $item
+ * @var string $panel_id
+ * @var callable(string):string $esc
+ * @var callable(string):string|null $esc_desc
+ * @var bool $drawer_flyout
+ */
+use Weline\Theme\Helper\ThemeDemoCatalog;
+use Weline\Theme\Helper\WidgetI18n;
+
+$item = is_array($item ?? null) ? $item : [];
+$children = is_array($item['children'] ?? null) ? $item['children'] : [];
+if ($children === []) {
+    return;
+}
+$panelId = trim((string)($panel_id ?? ''));
+if ($panelId === '') {
+    $panelId = 'mega-menu-' . substr(md5(json_encode($item, JSON_UNESCAPED_UNICODE)), 0, 10);
+}
+$drawerFlyout = !empty($drawer_flyout);
+$esc = is_callable($esc ?? null) ? $esc : static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+$escDesc = is_callable($esc_desc ?? null)
+    ? $esc_desc
+    : static function (string $v): string {
+        $v = trim($v);
+        if ($v === '') {
+            return '';
+        }
+        try {
+            return htmlspecialchars(WidgetI18n::label($v), ENT_QUOTES, 'UTF-8');
+        } catch (\Throwable) {
+            return htmlspecialchars((string)__($v), ENT_QUOTES, 'UTF-8');
+        }
+    };
+$escAttr = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+
+$resolveLocale = static function (): string {
+    try {
+        $lang = trim((string)\Weline\Framework\App\State::getLangLocal());
+    } catch (\Throwable) {
+        $lang = '';
+    }
+    $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+    if ($requestUri !== '' && preg_match('#/(en_US|zh_Hans_CN|zh_CN|zh_Hant_TW)(?:/|$)#', $requestUri, $matches)) {
+        return (string)$matches[1];
+    }
+
+    return $lang !== '' ? $lang : 'zh_Hans_CN';
+};
+
+$resolveImage = static function (array $node, int $seed): string {
+    $image = trim((string)($node['image'] ?? $node['img'] ?? $node['icon_url'] ?? ''));
+    // Hard forbid: never output data:image media; use one shared static SVG src.
+    if ($image !== '' && !str_starts_with($image, 'data:image/')) {
+        return $image;
+    }
+
+    return ThemeDemoCatalog::productImage($seed);
+};
+
+$resolveDescription = static function (array $node, string $label) use ($resolveLocale, $escDesc): string {
+    $description = trim((string)($node['description'] ?? $node['desc'] ?? $node['subtitle'] ?? ''));
+    $locale = $resolveLocale();
+    $i18nMap = $node['i18n']['description'] ?? null;
+    if (is_array($i18nMap)) {
+        $localized = trim((string)($i18nMap[$locale] ?? ''));
+        if ($localized !== '') {
+            return htmlspecialchars($localized, ENT_QUOTES, 'UTF-8');
+        }
+    }
+    if ($description !== '') {
+        return $escDesc($description);
+    }
+
+    $fallback = (string)__('浏览 %{1} 相关商品与配件', [$label]);
+
+    return htmlspecialchars($fallback, ENT_QUOTES, 'UTF-8');
+};
+
+$resolveName = static function (array $node) use ($resolveLocale, $esc): string {
+    $name = trim((string)($node['text'] ?? $node['name'] ?? ''));
+    $locale = $resolveLocale();
+    $i18nMap = $node['i18n']['name'] ?? null;
+    if (is_array($i18nMap)) {
+        $localized = trim((string)($i18nMap[$locale] ?? ''));
+        if ($localized !== '') {
+            return htmlspecialchars($localized, ENT_QUOTES, 'UTF-8');
+        }
+    }
+    if ($name === '') {
+        return '';
+    }
+
+    return $esc($name);
+};
+?>
+<div class="w-popover w-mega-menu w-mega-menu--split header-category-panel w-surface-body is-megamenu is-mega-panel-split<?= $drawerFlyout ? ' is-drawer-flyout' : '' ?>"
+     data-w-component="mega-menu"
+     data-surface="body"
+     data-w-popover-panel
+     data-w-mega-menu
+     data-mega-menu
+     data-w-gap="0"
+     <?= $drawerFlyout ? 'data-drawer-flyout="1"' : '' ?>
+     role="dialog"
+     data-state="closed"
+     aria-hidden="true"
+     hidden>
+    <div class="mega-menu-layout">
+        <ul class="mega-menu-sidebar" role="tablist" aria-label="<?= $esc((string)__('分类')) ?>">
+            <?php foreach ($children as $index => $child): ?>
+                <?php
+                if (!is_array($child)) {
+                    continue;
+                }
+                $childTextHtml = $resolveName($child);
+                if ($childTextHtml === '') {
+                    continue;
+                }
+                $tabId = $panelId . '-tab-' . $index;
+                $panelTarget = $panelId . '-panel-' . $index;
+                $isActive = $index === 0;
+                $childImage = $resolveImage($child, ($index + 1) * 11);
+                ?>
+                <li class="mega-menu-sidebar-item-wrap" role="presentation">
+                    <button type="button"
+                            class="mega-menu-sidebar-item<?= $isActive ? ' is-active' : '' ?>"
+                            role="tab"
+                            id="<?= $escAttr($tabId) ?>"
+                            data-mega-tab="<?= $escAttr($panelTarget) ?>"
+                            aria-selected="<?= $isActive ? 'true' : 'false' ?>"
+                            aria-controls="<?= $escAttr($panelTarget) ?>">
+                        <span class="mega-menu-sidebar-item__media">
+                            <img src="<?= $escAttr($childImage) ?>"
+                                 alt=""
+                                 loading="lazy"
+                                 width="36"
+                                 height="36">
+                        </span>
+                        <span class="mega-menu-sidebar-item__label"><?= $childTextHtml ?></span>
+                    </button>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+        <div class="mega-menu-panels">
+            <?php foreach ($children as $index => $child): ?>
+                <?php
+                if (!is_array($child)) {
+                    continue;
+                }
+                $childTextHtml = $resolveName($child);
+                if ($childTextHtml === '') {
+                    continue;
+                }
+                $childTextPlain = trim((string)($child['text'] ?? $child['name'] ?? ''));
+                $childUrl = (string)($child['url'] ?? '#');
+                $grandchildren = is_array($child['children'] ?? null) ? $child['children'] : [];
+                $contentId = $panelId . '-panel-' . $index;
+                $isActive = $index === 0;
+                ?>
+                <div class="mega-menu-panel<?= $isActive ? ' is-active' : '' ?>"
+                     id="<?= $escAttr($contentId) ?>"
+                     role="tabpanel"
+                     data-mega-panel="<?= $escAttr($contentId) ?>"
+                     aria-labelledby="<?= $escAttr($panelId . '-tab-' . $index) ?>"
+                     <?= $isActive ? '' : ' hidden' ?>>
+                    <div class="mega-menu-panel__head">
+                        <h3 class="mega-menu-panel__title"><?= $childTextHtml ?></h3>
+                        <a class="mega-menu-panel__all" href="<?= $escAttr($childUrl) ?>"><?= __('查看全部') ?></a>
+                    </div>
+                    <?php if ($grandchildren !== []): ?>
+                        <ul class="mega-menu-subgrid mega-menu-subgrid--cards" role="list">
+                            <?php foreach ($grandchildren as $gcIndex => $grandchild): ?>
+                                <?php
+                                if (!is_array($grandchild)) {
+                                    continue;
+                                }
+                                $gcTextHtml = $resolveName($grandchild);
+                                $gcTextPlain = trim((string)($grandchild['text'] ?? $grandchild['name'] ?? ''));
+                                $gcUrl = (string)($grandchild['url'] ?? '#');
+                                if ($gcTextHtml === '') {
+                                    continue;
+                                }
+                                $gcImage = $resolveImage($grandchild, ($index + 1) * 17 + (int)$gcIndex);
+                                $gcDesc = $resolveDescription($grandchild, $gcTextPlain !== '' ? (string)__($gcTextPlain) : strip_tags($gcTextHtml));
+                                $gcChildren = is_array($grandchild['children'] ?? null) ? $grandchild['children'] : [];
+                                $hasExpand = $gcChildren !== [];
+                                ?>
+                                <li class="mega-menu-card<?= $hasExpand ? ' has-expand is-expanded' : '' ?>"
+                                    <?= $hasExpand ? 'data-mega-card-expand="1"' : '' ?>>
+                                    <a class="mega-menu-card__link" href="<?= $escAttr($gcUrl) ?>">
+                                        <span class="mega-menu-card__media">
+                                            <img src="<?= $escAttr($gcImage) ?>"
+                                                 alt=""
+                                                 loading="lazy"
+                                                 width="72"
+                                                 height="72">
+                                        </span>
+                                        <span class="mega-menu-card__body">
+                                            <span class="mega-menu-card__title"><?= $gcTextHtml ?></span>
+                                            <span class="mega-menu-card__desc"><?= $gcDesc ?></span>
+                                        </span>
+                                    </a>
+                                    <?php if ($hasExpand): ?>
+                                        <ul class="mega-menu-card__children" role="list">
+                                            <?php foreach ($gcChildren as $leaf): ?>
+                                                <?php
+                                                if (!is_array($leaf)) {
+                                                    continue;
+                                                }
+                                                $leafTextHtml = $resolveName($leaf);
+                                                $leafUrl = (string)($leaf['url'] ?? '#');
+                                                if ($leafTextHtml === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <li>
+                                                    <a href="<?= $escAttr($leafUrl) ?>"><?= $leafTextHtml ?></a>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?>
+                        <p class="mega-menu-panel__empty"><?= __('暂无子分类') ?></p>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>

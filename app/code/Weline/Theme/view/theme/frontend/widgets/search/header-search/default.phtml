@@ -2,22 +2,24 @@
 /**
  * Header 搜索框部件
  *
+ * 视觉对齐 Theme 页头默认 Amazon 风格搜索栏（分类下拉 + 直角输入 + 橙色搜索钮）。
+ *
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {header-search}
  * @widget.name {Header 搜索框}
- * @widget.description {搜索框部件，支持热词和自动补全}
+ * @widget.description {搜索框部件，热搜对接 Weline_Search，支持自动补全}
  * @widget.type {search}
  * @widget.area {frontend}
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {search}
  * @widget.supports {["layout-header-search","layout-global-header-search"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"search","area":"header","sort_order":0}]}
  * @widget.exclusive {true}
  *
  * @param placeholder {default="搜索商品...",type="string",label="占位符文字"}
  * @param show_hot_words {default=true,type="bool",label="显示热搜词"}
+ * @param show_category {default=true,type="bool",label="显示分类下拉"}
  * @param auto_complete {default=true,type="bool",label="启用自动补全"}
  * @param search_type {default="all",type="select",label="搜索范围",options={all:"全站搜索",product:"仅搜商品",category:"仅搜分类"}}
  */
@@ -31,175 +33,51 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $placeholder = $this->getData('placeholder') ?? __('搜索商品...');
 $showHotWords = (bool)($this->getData('show_hot_words') ?? true);
-$autoComplete = (bool)($this->getData('auto_complete') ?? true);
-$searchType = $this->getData('search_type') ?? 'all';
-
-$hotWords = ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
+$searchType = (string)($this->getData('search_type') ?? 'all');
+$query = (string)($this->request->getParam('q') ?? '');
+$selectedType = trim((string)($this->request->getParam('type') ?? ''));
+$searchCategoryId = (int)($this->request->getParam('category_id') ?? 0);
 ?>
+
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)?v=20260825-type-label-sync1">
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)?v=20260825-type-label-sync1">
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-autocomplete="<?= $autoComplete ? 'true' : 'false' ?>">
-    <w:form action="/search" method="get" class="search-form">
-        <div class="search-input-wrapper">
-            <?php if ($searchType !== 'all'): ?>
-                <input type="hidden" name="type" value="<?= $esc((string)$searchType) ?>">
-            <?php endif; ?>
-            <input type="search"
-                   name="q"
-                   class="search-input"
-                   placeholder="<?= $esc((string)$placeholder) ?>"
-                   autocomplete="off">
-            <button type="submit" class="search-button" aria-label="<?= __('搜索') ?>">
-                <w:icon name="search" size="sm"></w:icon>
-            </button>
-            <?php if ($autoComplete): ?>
-                <div class="search-suggestions" hidden>
-                    <div class="suggestion-list"></div>
-                </div>
-            <?php endif; ?>
-        </div>
-    </w:form>
-
-    <?php if ($showHotWords && !empty($hotWords)): ?>
-        <div class="hot-words">
-            <span class="hot-label"><w:icon name="fire" size="sm"></w:icon> <?= __('热搜') ?>:</span>
-            <?php foreach ($hotWords as $word): ?>
-                <a href="/search?q=<?= urlencode($word) ?>" class="hot-word"><?= $esc($word) ?></a>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/header-bar.phtml', [
+        'placeholder' => (string)$placeholder,
+        'query' => $query,
+        'show_hot_words' => $showHotWords,
+        'panel_id' => 'header-search-panel',
+        'search_type' => $searchType,
+        'selected_type' => $selectedType,
+        'search_category_id' => $searchCategoryId,
+    ]) ?>
 </section>
 
 <style>
 .<?= $wc ?> {
     width: 100%;
-    max-width: 600px;
+    max-width: none;
+    font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
 }
 
-.<?= $wc ?> .search-form {
-    width: 100%;
-}
-
-.<?= $wc ?> .search-input-wrapper {
+.<?= $wc ?> .header-search-form,
+.<?= $wc ?> .w-search-form {
     position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.<?= $wc ?> .search-input {
-    width: 100%;
-    padding: var(--weline-space-3, 12px) 50px var(--weline-space-3, 12px) var(--weline-space-5, 20px);
-    border: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-round, 999px);
-    font-size: var(--weline-font-size-sm, 14px);
-    outline: none;
-    transition: border-color var(--weline-theme-transition-base, 0.2s ease), box-shadow var(--weline-theme-transition-base, 0.2s ease);
-    background: var(--weline-theme-surface);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .search-input:focus {
-    border-color: var(--weline-theme-primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-primary) 15%, transparent);
-}
-
-.<?= $wc ?> .search-button {
-    position: absolute;
-    right: var(--weline-space-1, 5px);
-    top: 50%;
-    transform: translateY(-50%);
-    width: 40px;
-    height: 40px;
-    border: none;
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
-}
-
-.<?= $wc ?> .search-button:hover {
-    background: var(--weline-theme-primary-hover);
-}
-
-.<?= $wc ?> .hot-words {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--weline-space-2, 8px);
-    margin-top: var(--weline-space-3, 10px);
-    font-size: var(--weline-font-size-xs, 12px);
-}
-
-.<?= $wc ?> .hot-label {
-    color: var(--weline-theme-text-muted);
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-1, 4px);
-}
-
-.<?= $wc ?> .hot-word {
-    color: var(--weline-theme-text-muted);
-    text-decoration: none;
-    padding: 2px var(--weline-space-2, 8px);
-    background: var(--weline-theme-surface-muted);
-    border-radius: var(--weline-radius-round, 999px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
-}
-
-.<?= $wc ?> .hot-word:hover {
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-}
-
-.<?= $wc ?> .search-suggestions {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-md, 8px);
-    box-shadow: var(--weline-theme-shadow-md);
-    margin-top: var(--weline-space-1, 5px);
-    z-index: 1000;
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.<?= $wc ?> .suggestion-item {
-    padding: var(--weline-space-3, 10px) var(--weline-space-5, 20px);
-    cursor: pointer;
-    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
-}
-
-.<?= $wc ?> .suggestion-item:hover {
-    background-color: var(--weline-theme-surface-muted);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
     max-width: 100%;
 }
-
-.widget-preview-canvas .<?= $wc ?> .hot-words,
-.<?= $wc ?>.is-preview .hot-words {
-    display: none;
-}
-
-.widget-preview-canvas .<?= $wc ?> .search-input,
-.<?= $wc ?>.is-preview .search-input {
-    padding: var(--weline-space-2, 8px) 40px var(--weline-space-2, 8px) var(--weline-space-3, 12px);
-    font-size: var(--weline-font-size-xs, 12px);
-}
 </style>
 
-<script src="@static(Weline_Theme::js/widgets/header-search.js)?v=20260823-header-search"
+<script src="@static(Weline_Theme::js/widgets/header-search.js)?v=20260825-type-label-sync1"
         defer
         data-no-extract="true"
         data-w-header-search-loader="true"></script>

@@ -164,8 +164,6 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
             'customer/account',
             'checkout',
             'cart',
-            'wishlist',
-            'search',
             'weshop/product',
             'weshop/catalog',
             'weshop/blog',

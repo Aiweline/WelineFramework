@@ -39,7 +39,7 @@ final class EditorModeAssetInjectorTest extends TestCase
         $result = $injector->inject($html);
 
         self::assertStringContainsString('/Weline/Theme/view/statics/ui/pages/weline-theme-preview.css', $result);
-        self::assertStringContainsString('/Weline/Theme/view/statics/ui/pages/weline-theme-preview.js', $result);
+        self::assertStringContainsString('/Weline/Theme/view/statics/ui/pages/weline-theme-preview.js?v=20260826-slot-toolbar-action-v1', $result);
         self::assertLessThan(
             strpos($result, '</head>'),
             strpos($result, '/Weline/Theme/view/statics/ui/pages/weline-theme-preview.css')

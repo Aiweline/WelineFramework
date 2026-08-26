@@ -185,10 +185,10 @@ if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
    ============================================ */
 
 .backend-data-list {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-md, 8px);
-    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+    background: var(--backend-color-card-bg);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius-md);
+    box-shadow: var(--backend-card-shadow);
     overflow: hidden;
 }
 
@@ -197,34 +197,34 @@ if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
     flex-wrap: wrap;
-    gap: var(--backend-spacing-sm, 12px);
+    gap: var(--backend-spacing-sm);
 }
 
 .backend-data-list-title {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm, 12px);
+    gap: var(--backend-spacing-sm);
 }
 
 .backend-data-list-title h4 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: var(--token-size-1-1rem);
     font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
+    color: var(--backend-color-text-primary);
 }
 
 .backend-data-list-count {
-    font-size: 0.875rem;
-    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-secondary);
 }
 
 .backend-data-list-actions {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-md, 16px);
+    gap: var(--backend-spacing-md);
 }
 
 /* 搜索框 */
@@ -233,33 +233,33 @@ if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
 }
 
 .backend-data-list-search-input {
-    width: 220px;
-    padding: var(--backend-spacing-xs, 6px) var(--backend-spacing-sm, 12px);
-    padding-left: 36px;
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-color-input-bg, #fff);
-    color: var(--backend-color-text-primary, #212529);
-    font-size: 0.875rem;
+    width: var(--size-panel-220);
+    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
+    padding-left: var(--spacing-9);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius);
+    background: var(--backend-color-input-bg);
+    color: var(--backend-color-text-primary);
+    font-size: var(--font-size-sm);
     transition: all 0.2s ease;
 }
 
 .backend-data-list-search-input:focus {
     outline: none;
-    border-color: var(--backend-color-primary, #556ee6);
-    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.1));
+    border-color: var(--backend-color-primary);
+    box-shadow: var(--backend-focus-ring);
 }
 
 .backend-data-list-search-input::placeholder {
-    color: var(--backend-color-text-tertiary, #adb5bd);
+    color: var(--backend-color-text-tertiary);
 }
 
 .backend-data-list-search-icon {
     position: absolute;
-    left: 12px;
+    left: var(--weline-space-3);
     top: 50%;
     transform: translateY(-50%);
-    color: var(--backend-color-text-tertiary, #adb5bd);
+    color: var(--backend-color-text-tertiary);
     pointer-events: none;
 }
 
@@ -267,30 +267,30 @@ if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
 .backend-data-list-batch-bar {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-md, 16px);
-    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-lg, 24px);
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    border-bottom: 1px solid var(--backend-color-primary, #556ee6);
+    gap: var(--backend-spacing-md);
+    padding: var(--backend-spacing-sm) var(--backend-spacing-lg);
+    background: var(--backend-color-primary-bg-subtle);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-primary);
 }
 
 .backend-data-list-batch-info {
-    font-size: 0.875rem;
-    color: var(--backend-color-primary, #556ee6);
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-primary);
     font-weight: 500;
 }
 
 .backend-data-list-batch-cancel {
     margin-left: auto;
-    padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 12px);
+    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
     border: none;
     background: transparent;
-    color: var(--backend-color-text-secondary, #6c757d);
+    color: var(--backend-color-text-secondary);
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
 }
 
 .backend-data-list-batch-cancel:hover {
-    color: var(--backend-color-text-primary, #212529);
+    color: var(--backend-color-text-primary);
 }
 
 /* 表格 */
@@ -304,46 +304,46 @@ if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
 }
 
 .backend-data-list-table th {
-    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-md, 16px);
+    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
     text-align: left;
     font-weight: 600;
-    font-size: 0.875rem;
-    color: var(--backend-color-text-primary, #212529);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-primary);
+    background: var(--backend-color-bg-secondary);
+    border-bottom: var(--border-width-medium) solid var(--backend-color-border-default);
     white-space: nowrap;
 }
 
 .backend-data-list-table td {
-    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-md, 16px);
-    color: var(--backend-color-text-primary, #212529);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
-    font-size: 0.875rem;
+    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
+    color: var(--backend-color-text-primary);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
+    font-size: var(--font-size-sm);
 }
 
 /* 表格变体 */
 .backend-data-list-table--striped tbody tr:nth-child(even) {
-    background: var(--backend-color-bg-tertiary, rgba(0, 0, 0, 0.02));
+    background: var(--backend-color-bg-tertiary);
 }
 
 .backend-data-list-table--hover tbody tr:hover {
-    background: var(--backend-color-table-bg-hover, #f8f9fa);
+    background: var(--backend-color-table-bg-hover);
 }
 
 .backend-data-list-table--bordered td,
 .backend-data-list-table--bordered th {
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border: var(--border-width-thin) solid var(--backend-color-border-light);
 }
 
 /* 复选框列 */
 .backend-data-list-checkbox-col {
-    width: 40px;
+    width: var(--size-control-md);
     text-align: center;
 }
 
 /* 排序图标 */
 .backend-data-list-sort-icon {
-    margin-left: var(--backend-spacing-xs, 4px);
+    margin-left: var(--backend-spacing-xs);
     cursor: pointer;
     opacity: 0.5;
     transition: opacity 0.2s;
@@ -356,49 +356,49 @@ if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
 /* 空状态 */
 .backend-data-list-empty {
     text-align: center;
-    padding: var(--backend-spacing-xl, 48px) var(--backend-spacing-md, 20px);
-    color: var(--backend-color-text-tertiary, #adb5bd);
+    padding: var(--backend-spacing-xl) var(--backend-spacing-md);
+    color: var(--backend-color-text-tertiary);
 }
 
 .backend-data-list-empty i {
-    font-size: 3rem;
+    font-size: var(--spacing-2xl);
     opacity: 0.4;
-    margin-bottom: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-md);
     display: block;
 }
 
 .backend-data-list-empty p {
     margin: 0;
-    font-size: 0.9375rem;
+    font-size: var(--font-size-sm);
 }
 
 /* 分页 */
 .backend-data-list-footer {
     display: flex;
     justify-content: center;
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
-    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-top: var(--border-width-thin) solid var(--backend-color-border-light);
 }
 
 .backend-data-list-pagination {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm, 12px);
+    gap: var(--backend-spacing-sm);
 }
 
 .backend-data-list-page-btn {
-    padding: var(--backend-spacing-xs, 6px) var(--backend-spacing-sm, 12px);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-color-card-bg, #fff);
-    color: var(--backend-color-text-primary, #212529);
+    padding: var(--backend-spacing-xs) var(--backend-spacing-sm);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius);
+    background: var(--backend-color-card-bg);
+    color: var(--backend-color-text-primary);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .backend-data-list-page-btn:hover:not(:disabled) {
-    border-color: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary);
+    color: var(--backend-color-primary);
 }
 
 .backend-data-list-page-btn:disabled {
@@ -407,8 +407,8 @@ if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
 }
 
 .backend-data-list-page-info {
-    font-size: 0.875rem;
-    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-secondary);
 }
 
 /* 响应式 */

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
+use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -47,7 +49,11 @@ class PreviewTokenService
 
     private const REQUEST_STATE_KEY = 'theme.preview_token.state.v1';
 
+    /** Durable shared fallback identity (bypasses WLS memory hijack of theme pool). */
+    private const FILE_FALLBACK_IDENTITY = 'theme_preview_token';
+
     private CachePoolInterface $cache;
+    private ?CachePoolInterface $fileFallback = null;
     private Request $request;
     
     public function __construct(
@@ -105,10 +111,10 @@ class PreviewTokenService
         ];
         
         $cacheKey = self::CACHE_PREFIX . $token;
-        if (!$this->cache->set($cacheKey, $tokenData, self::TOKEN_TTL)) {
-            // A bearer token is usable only after its capability payload is
-            // visible in the shared cache. Never return a token that another
-            // WLS Worker is guaranteed to reject.
+        // Primary pool may be wls_memory under WLS and can fail transiently
+        // (sidecar cool-down). Persist to shared file fallback so another Worker
+        // can still validate the bearer capability.
+        if (!$this->storeCapability($cacheKey, $tokenData)) {
             throw new \RuntimeException((string)__('Theme 预览 Token 无法写入共享缓存。'));
         }
         
@@ -132,7 +138,7 @@ class PreviewTokenService
         }
         
         $cacheKey = self::CACHE_PREFIX . $token;
-        $tokenData = $this->cache->get($cacheKey);
+        $tokenData = $this->loadCapability($cacheKey);
         
         if (is_array($tokenData)) {
             if (!$this->isTokenPayloadValid($token, $tokenData)) {
@@ -152,7 +158,7 @@ class PreviewTokenService
             // 自动续期，但不能让 bearer capability 无限存活。
             $tokenData['expires_at'] = min(time() + self::TOKEN_TTL, $absoluteExpiry);
             $tokenData['last_activity'] = time();
-            $this->cache->set($cacheKey, $tokenData, self::TOKEN_TTL);
+            $this->storeCapability($cacheKey, $tokenData);
             return $tokenData;
         }
         
@@ -173,9 +179,93 @@ class PreviewTokenService
         }
         
         $cacheKey = self::CACHE_PREFIX . $token;
-        $this->cache->delete($cacheKey);
+        $this->deleteCapability($cacheKey);
         
         return true;
+    }
+
+    /**
+     * Write capability to primary theme pool and/or durable file fallback.
+     * Success if either store accepts the payload (cross-Worker readable).
+     *
+     * @param array<string,mixed> $tokenData
+     */
+    private function storeCapability(string $cacheKey, array $tokenData): bool
+    {
+        $primaryOk = false;
+        try {
+            $primaryOk = (bool)$this->cache->set($cacheKey, $tokenData, self::TOKEN_TTL);
+        } catch (\Throwable) {
+            $primaryOk = false;
+        }
+
+        $fileOk = false;
+        try {
+            $fileOk = (bool)$this->fileFallback()->set($cacheKey, $tokenData, self::TOKEN_TTL);
+        } catch (\Throwable) {
+            $fileOk = false;
+        }
+
+        return $primaryOk || $fileOk;
+    }
+
+    /** @return array<string,mixed>|null */
+    private function loadCapability(string $cacheKey): ?array
+    {
+        try {
+            $tokenData = $this->cache->get($cacheKey);
+            if (is_array($tokenData)) {
+                return $tokenData;
+            }
+        } catch (\Throwable) {
+            // fall through to durable file
+        }
+
+        try {
+            $tokenData = $this->fileFallback()->get($cacheKey);
+            return is_array($tokenData) ? $tokenData : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function deleteCapability(string $cacheKey): void
+    {
+        try {
+            $this->cache->delete($cacheKey);
+        } catch (\Throwable) {
+            // ignore primary delete failure
+        }
+        try {
+            $this->fileFallback()->delete($cacheKey);
+        } catch (\Throwable) {
+            // ignore fallback delete failure
+        }
+    }
+
+    /**
+     * Shared file store that is not remapped to wls_memory under WLS.
+     * Injectable via reflection for unit tests.
+     */
+    private function fileFallback(): CachePoolInterface
+    {
+        if ($this->fileFallback instanceof CachePoolInterface) {
+            return $this->fileFallback;
+        }
+
+        $adapter = new FileAdapter(self::FILE_FALLBACK_IDENTITY, [
+            'path' => BP . 'var' . DS . 'cache' . DS,
+        ]);
+        $this->fileFallback = new CachePool(
+            self::FILE_FALLBACK_IDENTITY,
+            $adapter,
+            'Theme preview token durable shared fallback',
+            false,
+            self::TOKEN_TTL,
+            true,
+        );
+
+        return $this->fileFallback;
     }
 
     /**

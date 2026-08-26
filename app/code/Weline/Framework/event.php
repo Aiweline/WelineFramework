@@ -151,6 +151,17 @@ return [
         'description' => __('在路由收集完成后触发，用于 ACL 等与路由阶段收集的数据做 diff（如清理已卸载模块的 type=pc 权限）。'),
         'doc' => 'setup/路由收集后.md',
     ],
+    'Weline_Framework::controller_annotation_rules_collected' => [
+        'name' => __('控制器注解规则已收集'),
+        'description' => __('setup:upgrade 路由编译后 @Cdn/@Attack 解析完成，Cdn/WLS 各自监听并内部生效。'),
+        'doc' => 'router/控制器注解规则已收集.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'schema_version' => ['type' => 'string', 'required' => true],
+            'rules' => ['type' => 'array', 'required' => true],
+        ],
+    ],
     'Weline_Framework_Setup::collect_taglib_registry' => [
         'name' => __('收集标签注册表'),
         'description' => __('在 setup:upgrade 注册表阶段触发，允许外部模块执行标签注册表收集并通过 result 回传结果。'),

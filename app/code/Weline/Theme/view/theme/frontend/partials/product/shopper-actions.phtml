@@ -1,0 +1,57 @@
+<?php
+/**
+ * 片段：商品卡片悬浮操作（收藏 / 对比 / 快速查看）
+ *
+ * @param product_id {type=int,required=true}
+ * @param show_wishlist {default=true,type=bool}
+ * @param show_compare {default=true,type=bool}
+ * @param show_quickview {default=true,type=bool}
+ * @param wishlist_pixel {default=false,type=bool,description="是否附加 weline-pixel 收藏类名"}
+ */
+
+use Weline\Theme\Helper\ProductCardShopperActionParams;
+
+/** @var \Weline\Framework\View\Template $block */
+$template = (isset($block) && $block instanceof \Weline\Framework\View\Template) ? $block : $this;
+$productId = ProductCardShopperActionParams::resolveProductId($template);
+$showWishlist = ProductCardShopperActionParams::resolveFlag($template, 'shopper_show_wishlist', 'show_wishlist', true);
+$showCompare = ProductCardShopperActionParams::resolveFlag($template, 'shopper_show_compare', 'show_compare', true);
+$showQuickview = ProductCardShopperActionParams::resolveFlag($template, 'shopper_show_quickview', 'show_quickview', true);
+$wishlistPixel = ProductCardShopperActionParams::resolveFlag($template, 'shopper_wishlist_pixel', 'wishlist_pixel', false);
+
+if ($productId <= 0 || (!$showWishlist && !$showCompare && !$showQuickview)) {
+    return;
+}
+
+$wishlistClass = 'action-btn btn-wishlist' . ($wishlistPixel ? ' weline-pixel::add_to_wishlist' : '');
+?>
+<div class="product-actions">
+    <?php if ($showWishlist): ?>
+        <button class="<?= htmlspecialchars($wishlistClass, ENT_QUOTES, 'UTF-8') ?>"
+                type="button"
+                title="<?= __('加入收藏') ?>"
+                aria-label="<?= __('加入收藏') ?>"
+                aria-pressed="false"
+                data-product-id="<?= $productId ?>">
+            <w:icon name="heart" size="sm"></w:icon>
+        </button>
+    <?php endif; ?>
+    <?php if ($showCompare): ?>
+        <button class="action-btn btn-compare"
+                type="button"
+                title="<?= __('加入对比') ?>"
+                aria-label="<?= __('加入对比') ?>"
+                data-product-id="<?= $productId ?>">
+            <w:icon name="list" size="sm"></w:icon>
+        </button>
+    <?php endif; ?>
+    <?php if ($showQuickview): ?>
+        <button class="action-btn btn-quickview"
+                type="button"
+                title="<?= __('快速查看') ?>"
+                aria-label="<?= __('快速查看') ?>"
+                data-product-id="<?= $productId ?>">
+            <w:icon name="eye" size="sm"></w:icon>
+        </button>
+    <?php endif; ?>
+</div>

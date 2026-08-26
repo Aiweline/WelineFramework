@@ -155,21 +155,21 @@ $renderCategoryList = static function (
 <style>
 .<?= $wc ?> {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg, 10px);
-    padding: var(--weline-space-5, 20px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    padding: var(--weline-space-5);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .list-title {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-4, 15px);
-    padding-bottom: var(--weline-space-4, 15px);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin: 0 0 var(--weline-space-4);
+    padding-bottom: var(--weline-space-4);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
     color: var(--weline-theme-text);
 }
 
@@ -190,8 +190,8 @@ $renderCategoryList = static function (
 
 .<?= $wc ?> .category-list.depth-1,
 .<?= $wc ?> .category-list.depth-2 {
-    padding-left: var(--weline-space-4, 15px);
-    margin-top: var(--weline-space-1, 5px);
+    padding-left: var(--weline-space-4);
+    margin-top: var(--weline-space-1);
 }
 
 .<?= $wc ?> .category-item {
@@ -201,13 +201,13 @@ $renderCategoryList = static function (
 .<?= $wc ?> .category-link {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 10px);
-    padding: var(--weline-space-3, 10px) var(--weline-space-8, 30px) var(--weline-space-3, 10px) 0;
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-8) var(--weline-space-3) 0;
     color: var(--weline-theme-text);
     text-decoration: none;
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style)
         color-mix(in srgb, var(--weline-theme-border) 50%, transparent);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .category-item:last-child > .category-link {
@@ -216,32 +216,32 @@ $renderCategoryList = static function (
 
 .<?= $wc ?> .category-link:hover {
     color: var(--weline-theme-primary);
-    padding-left: var(--weline-space-1, 5px);
+    padding-left: var(--weline-space-1);
 }
 
 .<?= $wc ?> .category-image {
-    width: 30px;
-    height: 30px;
-    border-radius: var(--weline-radius-md, 6px);
+    width: var(--spacing-7);
+    height: var(--spacing-7);
+    border-radius: var(--weline-radius-md);
     object-fit: cover;
 }
 
 .<?= $wc ?> .category-name {
     flex: 1;
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .category-count {
-    font-size: var(--weline-font-size-xs, 12px);
+    font-size: var(--weline-font-size-xs);
     color: var(--weline-theme-text-muted);
 }
 
 .<?= $wc ?> .toggle-btn {
     position: absolute;
     right: 0;
-    top: 8px;
-    width: 24px;
-    height: 24px;
+    top: var(--spacing-sm);
+    width: var(--spacing-lg);
+    height: var(--spacing-lg);
     background: transparent;
     border: 0;
     cursor: pointer;
@@ -249,7 +249,7 @@ $renderCategoryList = static function (
     align-items: center;
     justify-content: center;
     color: var(--weline-theme-text-muted);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .toggle-btn:hover {
@@ -265,19 +265,19 @@ $renderCategoryList = static function (
 }
 
 .<?= $wc ?> .depth-1 .category-link {
-    padding: var(--weline-space-2, 8px) var(--weline-space-8, 30px) var(--weline-space-2, 8px) 0;
-    font-size: var(--weline-font-size-sm, 13px);
+    padding: var(--weline-space-2) var(--weline-space-8) var(--weline-space-2) 0;
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .depth-2 .category-link {
-    padding: var(--weline-space-1, 6px) var(--weline-space-8, 30px) var(--weline-space-1, 6px) 0;
-    font-size: var(--weline-font-size-xs, 12px);
+    padding: var(--weline-space-1) var(--weline-space-8) var(--weline-space-1) 0;
+    font-size: var(--weline-font-size-xs);
     color: var(--weline-theme-text-muted);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 80px;
+    min-height: var(--sidebar-collapsed-width);
 }
 </style>
 

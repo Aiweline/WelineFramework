@@ -126,37 +126,86 @@
 
     /**
      * 获取当前语言代码
+     * 优先级：URL 路径段 > document data-lang/lang > query locale/lang > Cookie > 主题配置
+     *
+     * 主题预览 iframe 无路径语言段，但服务端已用请求级 override 写出 data-lang；
+     * 若仍优先 Cookie，updateCurrentLanguageDisplay 会把切换器钉回站外偏好语言。
      */
-    function getCurrentLang() {
-        const cookieLang = readLanguagePreference();
-        const pathLang = detectPathLanguage();
-        const config = window.__WelineThemeConfig || {};
-        const configLang = config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || '';
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
 
-        // URL 路径段优先（与服务端 State::getLang 一致）
+    function readDocumentLanguage() {
+        try {
+            const el = document.documentElement;
+            if (!el) {
+                return '';
+            }
+            const attrLang = (typeof el.getAttribute === 'function')
+                ? (el.getAttribute('data-lang') || el.getAttribute('lang') || '')
+                : '';
+            const raw = String(attrLang || el.lang || '').trim();
+            return normalizeLangCode(raw);
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function readQueryLanguage() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search || '');
+            const candidates = [
+                urlParams.get('locale'),
+                urlParams.get('locale_code'),
+                urlParams.get('lang'),
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                const raw = String(candidates[i] || '').trim();
+                if (!raw || raw.toLowerCase() === 'default') {
+                    continue;
+                }
+                return normalizeLangCode(raw);
+            }
+        } catch (error) {
+            // ignore malformed search
+        }
+        return '';
+    }
+
+    function getCurrentLang() {
+        const pathLang = detectPathLanguage();
         if (pathLang) {
             return pathLang;
         }
 
-        // Cookie 仅在属于页面上真实可选语言时生效，避免残留 ar_* 把头部钉死在 AR
+        const docLang = readDocumentLanguage();
+        if (docLang && isLanguageOfferedOnPage(docLang)) {
+            return docLang;
+        }
+
+        const queryLang = readQueryLanguage();
+        if (queryLang && isLanguageOfferedOnPage(queryLang)) {
+            return queryLang;
+        }
+
+        const cookieLang = readLanguagePreference();
         if (cookieLang && isLanguageOfferedOnPage(cookieLang)) {
             return cookieLang;
         }
 
+        const config = window.__WelineThemeConfig || {};
+        const configLang = config.currentLang
+            || config.lang
+            || (config.i18n && config.i18n.currentLang)
+            || (window.site && window.site.lang)
+            || '';
         if (configLang) {
-            return configLang;
+            return normalizeLangCode(configLang);
         }
 
         const firstOffered = getFirstOfferedLanguage();
         if (firstOffered) {
             return firstOffered;
-        }
-
-        // 从 URL 参数获取（兼容旧链接）
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlLang = urlParams.get('lang');
-        if (urlLang) {
-            return urlLang;
         }
 
         return 'zh_Hans_CN';

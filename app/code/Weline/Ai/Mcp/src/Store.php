@@ -33,11 +33,11 @@ final class Store
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
         foreach ([
+            'PRAGMA busy_timeout = 30000',
             'PRAGMA foreign_keys = ON',
             'PRAGMA auto_vacuum = INCREMENTAL',
             'PRAGMA journal_mode = WAL',
             'PRAGMA synchronous = NORMAL',
-            'PRAGMA busy_timeout = 5000',
         ] as $statement) {
             $this->db->exec($statement);
         }

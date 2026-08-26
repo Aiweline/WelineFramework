@@ -11,13 +11,22 @@
  * @meta.palette_role {default="brand",name="palette_role",description="palette_role"}
  */
 
-[data-theme="amazon"] {
+[data-theme="amazon"],
+[data-theme="default"],
+[data-theme="light"] {
     /* Amazon风格的颜色调整 */
     --color-primary: #ff9900;
     /* Amazon橙色 */
-    --color-primary-light: #ffb84d;
+    --color-primary-light: #febd69;
     --color-primary-dark: #e68900;
     --color-primary-border: #cc7700;
+    --color-primary-rgb: 255, 153, 0;
+    --color-primary-hover: #e68900;
+    --color-primary-active: #cc7700;
+    --color-primary-bg-subtle: #fff4e0;
+    --color-primary-border-subtle: #ffd699;
+    --color-primary-text-emphasis: #c45500;
+    --color-on-primary: #111111;
 
     /* 文本色 - Amazon风格 */
     --color-text-primary: #111;
@@ -27,16 +36,19 @@
     --color-text-dark: #131921;
     --color-text-muted: #565959;
     --color-text-placeholder: #999;
-    --color-text-light: #f1f5f9;
-    --color-text-light-secondary: #cbd5e1;
+    --color-text-light: #ffffff;
+    --color-text-light-secondary: #dddddd;
 
-    /* 背景色 - Amazon风格 */
+    /* 背景色 - Amazon：Body 画布白 #ffffff；secondary 浅灰底板 #eaeded；卡片/菜单白底 */
+    --color-bg-canvas: #ffffff;
+    --color-bg-canvas-rgb: 255, 255, 255;
     --color-bg-primary: #fff;
-    --color-bg-secondary: #f3f3f3;
+    --color-bg-secondary: #eaeded;
     --color-bg-tertiary: #e7e7e7;
     --color-bg-dark: #232f3e;
     --color-bg-dark-secondary: #131921;
     --color-bg-dark-tertiary: #232f3e;
+    --color-surface-hover: #f3f3f3;
 
     /* 边框色 - Amazon风格 */
     --color-border-default: #ddd;
@@ -57,10 +69,32 @@
     --color-error: #dc3545;
     --color-error-hover: #ef4444;
     --color-error-light: rgba(239, 68, 68, 0.05);
-    --color-info: #17a2b8;
+    --color-info: #007185;
 
     /* 链接色 - Amazon风格 */
     --color-link: #007185;
     --color-link-hover: #c45500;
     --color-link-visited: #551a8b;
+
+    /* chrome 令牌与 palette 同步 */
+    --weline-chrome-primary: var(--color-primary);
+    --weline-chrome-primary-light: var(--color-primary-light);
+    --weline-chrome-primary-dark: var(--color-primary-dark);
+    --weline-chrome-bg-dark: var(--color-bg-dark-secondary);
+    --weline-chrome-bg-dark-secondary: var(--color-bg-dark);
+    --weline-chrome-bg-primary: var(--color-bg-primary);
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-canvas: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
+    --weline-chrome-bg-secondary: var(--color-bg-secondary);
+    --weline-chrome-bg-tertiary: var(--color-bg-tertiary);
+    --weline-chrome-border-default: var(--color-border-default);
+    --weline-chrome-border-focus: var(--color-border-focus);
+    --weline-chrome-text-primary: var(--color-text-primary);
+    --weline-chrome-text-secondary: var(--color-text-secondary);
+    --weline-chrome-text-muted: var(--color-text-placeholder);
+    --weline-chrome-text-light: var(--color-text-light);
+    --weline-chrome-text-light-secondary: var(--color-text-light-secondary);
+    --weline-chrome-body-link-hover: var(--color-primary);
+    --weline-chrome-menu-panel-text-hover: var(--color-primary);
 }

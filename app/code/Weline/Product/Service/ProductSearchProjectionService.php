@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Product\Api\ProductIdentityV2ResolverInterface;
 use Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface;
 use Weline\Product\Model\ProductSearchProjectionStream;
+use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
+use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
+use Weline\Product\Repository\StoreOfferRepository;
 use Weline\Product\Repository\StoreProductRepository;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\Data\WebsiteSummary;
@@ -23,6 +27,9 @@ final class ProductSearchProjectionService
     public function __construct(
         private readonly ProductRepository $products,
         private readonly StoreProductRepository $storeProducts,
+        private readonly OfferRepository $offers,
+        private readonly StoreOfferRepository $storeOffers,
+        private readonly ProductIdentityV2ResolverInterface $identities,
         private readonly ProductSearchProjectionStream $stream,
         private readonly WebsiteCatalogInterface $websites,
         private readonly StoreCatalogInterface $stores,
@@ -45,7 +52,7 @@ final class ProductSearchProjectionService
         $website = $this->website($websiteId);
         $watermark = $this->stream->current($websiteId);
         $scopes = $this->activeScopes($websiteId);
-        $documents = [];
+        $publishedProducts = [];
         foreach ($this->products->listAll($websiteId) as $row) {
             if ((string)($row[Product::schema_fields_STATUS] ?? '') !== Product::STATUS_PUBLISHED) {
                 continue;
@@ -56,17 +63,47 @@ final class ProductSearchProjectionService
                     'Product Search 快照包含非法 product_id',
                 ));
             }
+            $publishedProducts[$productId] = $row;
+        }
+
+        $offersByProduct = [];
+        foreach ($this->offers->listByProductIds($websiteId, array_keys($publishedProducts)) as $offer) {
+            if ((string)($offer[Offer::schema_fields_STATUS] ?? '') !== Offer::STATUS_PUBLISHED) {
+                continue;
+            }
+            $productId = (int)($offer[Offer::schema_fields_PRODUCT_ID] ?? 0);
+            if (isset($publishedProducts[$productId])) {
+                $offersByProduct[$productId][] = $offer;
+            }
+        }
+
+        $documents = [];
+        foreach ($publishedProducts as $productId => $product) {
             foreach ($scopes as $scope) {
-                if (!$this->storeProducts->isSelected($websiteId, $scope['store']->id, $productId)) {
+                $storeId = $scope['store']->id;
+                if (!$this->storeProducts->isSelected($websiteId, $storeId, $productId)) {
                     continue;
                 }
-                $documents[] = $this->document($website, $scope, $row, $watermark);
+                foreach ($offersByProduct[$productId] ?? [] as $offer) {
+                    $offerId = (int)($offer[Offer::schema_fields_ID] ?? 0);
+                    if ($offerId <= 0 || !$this->storeOffers->isSelected($websiteId, $storeId, $offerId)) {
+                        continue;
+                    }
+                    $documents[] = $this->document(
+                        $website,
+                        $scope,
+                        $product,
+                        $offer,
+                        $watermark,
+                    );
+                }
             }
         }
         $this->sortDocuments($documents);
 
         return [
             'contract' => 'product.search_projection_snapshot.v1',
+            'identity_contract' => 'product.offer_identity.v2',
             'website_id' => $websiteId,
             'source_watermark' => $watermark,
             'scope_count' => \count($scopes),
@@ -109,28 +146,55 @@ final class ProductSearchProjectionService
             $storeId = $this->requiredInt($change, 'store_id', 1);
         }
         $scopes = $this->activeScopes($websiteId, $storeId);
+        $productOffers = $this->offers->listByProductIds($websiteId, [$productId]);
         $deleteKeys = [];
         foreach ($scopes as $scope) {
-            $deleteKeys[] = $this->documentIdentity($website, $scope, $productId);
+            $deleteKeys[] = $this->legacyDocumentIdentity($website, $scope, $productId);
+            foreach ($productOffers as $offer) {
+                $offerUuid = \trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
+                if ($offerUuid !== '') {
+                    $deleteKeys[] = $this->documentIdentity($website, $scope, $offerUuid);
+                }
+            }
         }
+        $this->sortDocuments($deleteKeys);
 
         $documents = [];
         $product = $this->products->findById($websiteId, $productId);
         if ($product !== null
             && (string)$product->getData(Product::schema_fields_STATUS) === Product::STATUS_PUBLISHED
         ) {
-            $row = $product->getData();
+            $productRow = $product->getData();
             foreach ($scopes as $scope) {
-                if (!$this->storeProducts->isSelected($websiteId, $scope['store']->id, $productId)) {
+                $scopeStoreId = $scope['store']->id;
+                if (!$this->storeProducts->isSelected($websiteId, $scopeStoreId, $productId)) {
                     continue;
                 }
-                $documents[] = $this->document($website, $scope, $row, $currentWatermark);
+                foreach ($productOffers as $offer) {
+                    if ((string)($offer[Offer::schema_fields_STATUS] ?? '') !== Offer::STATUS_PUBLISHED) {
+                        continue;
+                    }
+                    $offerId = (int)($offer[Offer::schema_fields_ID] ?? 0);
+                    if ($offerId <= 0
+                        || !$this->storeOffers->isSelected($websiteId, $scopeStoreId, $offerId)
+                    ) {
+                        continue;
+                    }
+                    $documents[] = $this->document(
+                        $website,
+                        $scope,
+                        $productRow,
+                        $offer,
+                        $currentWatermark,
+                    );
+                }
             }
         }
         $this->sortDocuments($documents);
 
         return [
             'contract' => 'product.search_projection_change.v1',
+            'identity_contract' => 'product.offer_identity.v2',
             'website_id' => $websiteId,
             'event_seq' => $eventSeq,
             'source_watermark' => $currentWatermark,
@@ -183,20 +247,48 @@ final class ProductSearchProjectionService
     private function document(
         WebsiteSummary $website,
         array $scope,
-        array $row,
+        array $product,
+        array $offer,
         int $documentVersion,
     ): array {
-        $productId = (int)($row[Product::schema_fields_ID] ?? 0);
-        $sku = \trim((string)($row[Product::schema_fields_SKU] ?? ''));
-        if ($productId <= 0 || $sku === '') {
+        $productId = (int)($product[Product::schema_fields_ID] ?? 0);
+        $offerId = (int)($offer[Offer::schema_fields_ID] ?? 0);
+        $offerUuid = \trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
+        $offerIdentity = $offerUuid === ''
+            ? null
+            : $this->identities->resolveOfferByUuid($offerUuid);
+        $sku = \trim($offerIdentity?->sku
+            ?? (string)($offer[Offer::schema_fields_SKU] ?? ''));
+        if ($productId <= 0 || $offerId <= 0 || $offerUuid === '' || $sku === '') {
             throw new \RuntimeException((string)__(
-                'Product Search published 投影缺少 product_id 或 SKU',
+                'Product Search published Offer 投影缺少 Product/Offer 身份或 SKU',
             ));
         }
-        $identity = $this->documentIdentity($website, $scope, $productId);
+
+        $productUuid = \trim($offerIdentity?->globalProductUuid
+            ?? (string)($product[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? ''));
+        $productIdentity = $productUuid === ''
+            ? null
+            : $this->identities->resolveProductByUuid($productUuid);
+        $identity = $this->documentIdentity($website, $scope, $offerUuid);
 
         return $identity + [
             'title' => $sku,
+            'keywords' => \trim($sku . ' ' . ($productIdentity?->productCode ?? '')),
+            'url' => 'product/' . $productId,
+            'product_id' => $productId,
+            'offer_id' => $offerId,
+            'global_product_uuid' => $productUuid,
+            'global_offer_uuid' => $offerUuid,
+            'product_code' => $productIdentity?->productCode ?? '',
+            'owner_website_id' => $productIdentity?->ownerWebsiteId ?? $website->id,
+            'provider_code' => $productIdentity?->providerCode ?? 'default',
+            'product_type' => $productIdentity?->productType ?? 'simple',
+            'product_identity_version' => $productIdentity?->version ?? 0,
+            'offer_identity_version' => $offerIdentity?->version
+                ?? (int)($offer[Offer::schema_fields_IDENTITY_VERSION] ?? 0),
+            'offer_identity_status' => $offerIdentity?->status
+                ?? (string)($offer[Offer::schema_fields_STATUS] ?? ''),
             'sku' => $sku,
             'status' => Product::STATUS_PUBLISHED,
             'document_version' => $documentVersion,
@@ -208,6 +300,25 @@ final class ProductSearchProjectionService
      * @return array<string,mixed>
      */
     private function documentIdentity(
+        WebsiteSummary $website,
+        array $scope,
+        string $globalOfferUuid,
+    ): array {
+        return [
+            'entity_type' => 'product_offer',
+            'entity_id' => $globalOfferUuid,
+            'website_id' => $website->id,
+            'website_code' => $website->code,
+            'store_id' => $scope['store']->id,
+            'store_code' => $scope['store']->code,
+            'channel_id' => $scope['channel']->id,
+            'channel_code' => $scope['channel']->code,
+            'locale' => '',
+            'currency' => '',
+        ];
+    }
+
+    private function legacyDocumentIdentity(
         WebsiteSummary $website,
         array $scope,
         int $productId,

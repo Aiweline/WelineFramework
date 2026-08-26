@@ -14,10 +14,11 @@
  * @widget.page_layouts {["*"]}
  * @widget.is_container {true}
  * @widget.exclusive {true}
+ * @widget.supports {["layout-global-header","header-container"]}
  * @widget.slots {"logo":{"name":"Logo 插槽","position":"left","accept":["logo"],"max":1},"search":{"name":"搜索框插槽","position":"center","accept":["header-search"],"max":1},"navigation":{"name":"导航菜单插槽","position":"center-bottom","accept":["main-nav","category-menu"],"max":1},"user-area":{"name":"用户区域插槽","position":"right","accept":["account","mini-cart-icon","wishlist-icon","language-switcher","currency-switcher"],"max":5}}
  *
  * @param sticky {default=true,type="bool",label="吸顶效果"}
- * @param bg_color {default="var(--weline-theme-surface)",type="color",label="背景颜色"}
+ * @param bg_color {default="var(--weline-theme-header-bg,#131921)",type="color",label="背景颜色"}
  * @param shadow {default=true,type="bool",label="显示阴影"}
  */
 
@@ -34,7 +35,7 @@ $isPreviewMode = (bool)($config['preview_mode'] ?? false);
 $sticky = (bool)($config['sticky'] ?? true);
 $bgColor = ThemeUiColor::sanitize(
     $config['bg_color'] ?? '',
-    'var(--weline-theme-surface)'
+    'var(--weline-theme-header-bg,#131921)'
 );
 $shadow = (bool)($config['shadow'] ?? true);
 
@@ -50,9 +51,21 @@ if ($shadow) {
         data-js-ns="<?= $esc($scope->jsNs) ?>"
         style="<?= $esc($rootStyle) ?>">
 
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)?v=20260824-notice-gap1">
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)?v=20260824-hotword-contrast1">
+
     <div class="header-main">
-        <div class="header-inner">
+        <div class="header-inner header-inner--primary">
             <div class="header-slot slot-logo" data-slot="logo" data-accept="logo">
+                <button type="button"
+                        class="header-mobile-menu-btn"
+                        aria-label="<?= __('打开菜单') ?>"
+                        aria-expanded="false"
+                        aria-controls="<?= $esc($scope->uid) ?>-mobile-nav">
+                    <w:icon name="menu" size="sm"></w:icon>
+                </button>
                 <?php if (!empty($children['logo'])): ?>
                     <?php foreach ($children['logo'] as $child): ?>
                         <div class="slot-widget" data-widget-code="<?= $esc((string)($child['code'] ?? '')) ?>">
@@ -99,7 +112,7 @@ if ($shadow) {
         </div>
     </div>
 
-    <div class="header-nav">
+    <div class="header-nav" id="<?= $esc($scope->uid) ?>-mobile-nav">
         <div class="header-inner">
             <div class="header-slot slot-navigation" data-slot="navigation" data-accept="main-nav,category-menu">
                 <?php if (!empty($children['navigation'])): ?>
@@ -123,9 +136,12 @@ if ($shadow) {
 .<?= $wc ?> {
     width: 100%;
     z-index: 100;
-    background-color: var(--wc-header-bg, var(--weline-theme-surface));
-    color: var(--weline-theme-text);
-    box-shadow: var(--wc-header-shadow, none);
+    background-color: var(--wc-header-bg);
+    color: var(--weline-theme-header-text, #ffffff);
+    font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.4;
+    box-shadow: var(--wc-header-shadow, 0 2px 4px var(--color-overlay-light, rgba(0, 0, 0, 0.1)));
 }
 
 .<?= $wc ?>.is-sticky {
@@ -134,50 +150,97 @@ if ($shadow) {
 }
 
 .<?= $wc ?> .header-inner {
-    max-width: var(--weline-theme-container-max, 1400px);
+    max-width: var(--weline-theme-container-max);
     margin: 0 auto;
-    padding: 0 var(--weline-space-5, 20px);
+    padding: 0 var(--weline-space-5);
 }
 
 .<?= $wc ?> .header-main {
-    padding: var(--weline-space-4, 15px) 0;
+    padding: var(--weline-space-4) 0;
 }
 
-.<?= $wc ?> .header-main .header-inner {
+.<?= $wc ?> .header-main .header-inner--primary {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: var(--weline-space-8, 30px);
+    gap: var(--weline-space-4) var(--weline-space-8);
 }
 
 .<?= $wc ?> .header-nav {
-    background: var(--weline-theme-surface-muted);
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    padding: var(--weline-space-3, 10px) 0;
+    background: var(--weline-theme-header-nav-bg, #232f3e);
+    color: var(--weline-theme-header-text, #ffffff);
+    border-top: var(--border-width-thin, 1px) solid var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
+    padding: var(--weline-space-3) 0;
 }
 
 .<?= $wc ?> .header-slot {
     position: relative;
-    min-height: 40px;
+    min-height: var(--size-control-md);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
 }
 
 .<?= $wc ?> .slot-logo {
     flex-shrink: 0;
-    min-width: 120px;
+    min-width: var(--size-panel-120);
+    gap: var(--weline-space-2);
+    align-items: center;
+    order: 1;
+}
+
+.<?= $wc ?> .header-mobile-menu-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
+    padding: 0;
+    border: var(--border-width-thin) solid transparent;
+    border-radius: var(--border-radius-md);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.<?= $wc ?> .header-mobile-drawer-overlay {
+    display: none;
 }
 
 .<?= $wc ?> .slot-search {
-    flex: 1;
-    max-width: 500px;
+    flex: 1 1 var(--token-size-280px);
+    max-width: var(--size-content-640, 40rem);
+    margin: 0 auto;
+    order: 2;
+    align-self: flex-start;
 }
 
 .<?= $wc ?> .slot-user-area {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-4, 15px);
+    gap: var(--weline-space-4);
     flex-shrink: 0;
+    margin-left: auto;
+    order: 3;
+    min-height: var(--size-control-md);
+}
+
+@media (max-width: 1100px) {
+    .<?= $wc ?> .slot-search {
+        flex: 0 0 100%;
+        max-width: none;
+        order: 4;
+        margin: 0;
+    }
+
+    .<?= $wc ?> .slot-logo {
+        order: 1;
+    }
+
+    .<?= $wc ?> .slot-user-area {
+        order: 2;
+    }
 }
 
 .<?= $wc ?> .slot-navigation {
@@ -190,19 +253,50 @@ if ($shadow) {
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 56px;
+    min-height: var(--size-control-2xl);
 }
 
 @media (max-width: 768px) {
-    .<?= $wc ?> .header-main .header-inner {
-        flex-wrap: wrap;
-        gap: var(--weline-space-4, 15px);
+    .<?= $wc ?> .header-mobile-menu-btn {
+        display: inline-flex;
+    }
+
+    .<?= $wc ?> .header-main {
+        gap: var(--weline-space-3);
+    }
+
+    .<?= $wc ?> .header-main .header-inner--primary {
+        gap: var(--weline-space-3);
+    }
+
+    .<?= $wc ?> .slot-logo {
+        min-width: 0;
+        order: 1;
+    }
+
+    .<?= $wc ?> .slot-user-area {
+        margin-left: auto;
+        gap: var(--weline-space-2);
+        order: 2;
     }
 
     .<?= $wc ?> .slot-search {
-        order: 3;
         flex: 0 0 100%;
         max-width: none;
+        order: 3;
+        margin: 0;
+    }
+
+    .<?= $wc ?> .header-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 0;
+    }
+
+    .<?= $wc ?> .header-nav::-webkit-scrollbar {
+        display: none;
     }
 
     .<?= $wc ?> .slot-navigation {
@@ -210,10 +304,72 @@ if ($shadow) {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        width: max-content;
     }
 
     .<?= $wc ?> .slot-navigation::-webkit-scrollbar {
         display: none;
     }
+
+    .<?= $wc ?>.is-drawer-open .header-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(80vw, var(--token-size-22-5rem));
+        max-width: 80vw;
+        overflow-y: auto;
+        overflow-x: hidden;
+        background: var(--weline-theme-surface);
+        color: var(--weline-theme-text);
+        z-index: 1000;
+        padding: var(--weline-space-4) 0;
+        box-shadow: var(--spacing-0_5) 0 var(--weline-space-3) var(--token-color-rgba-0-0-0-0-18);
+    }
+
+    .<?= $wc ?>.is-drawer-open .header-mobile-drawer-overlay,
+    .<?= $wc ?> .header-mobile-drawer-overlay {
+        display: none;
+    }
+
+    .<?= $wc ?>.is-drawer-open .header-mobile-drawer-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: var(--token-color-rgba-0-0-0-0-55);
+        z-index: 999;
+    }
 }
 </style>
+<script>
+(function () {
+    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
+    if (!root) return;
+    var toggle = root.querySelector('.header-mobile-menu-btn');
+    var overlay = document.createElement('div');
+    overlay.className = 'header-mobile-drawer-overlay';
+    overlay.setAttribute('aria-hidden', 'true');
+    root.appendChild(overlay);
+
+    function setOpen(open) {
+        root.classList.toggle('is-drawer-open', open);
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+        document.body.style.overflow = open ? 'hidden' : '';
+    }
+
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            setOpen(!root.classList.contains('is-drawer-open'));
+        });
+    }
+    overlay.addEventListener('click', function () { setOpen(false); });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && root.classList.contains('is-drawer-open')) {
+            setOpen(false);
+        }
+    });
+})();
+</script>

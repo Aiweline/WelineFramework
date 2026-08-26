@@ -522,17 +522,40 @@ class App
         if ($parsedLanguage !== '' && !State::isAllowedLanguageCode($parsedLanguage)) {
             $parsedLanguage = '';
         }
-        $effectiveLanguage = $pathLanguage !== '' ? $pathLanguage : $parsedLanguage;
-        if ($effectiveLanguage === '') {
-            $effectiveLanguage = \str_replace(
-                '-',
-                '_',
-                \trim((string)WelineEnv::get('user.lang', ''))
-            );
+        if ($pathLanguage !== '') {
+            $effectiveLanguage = $pathLanguage;
+        } else {
+            // Unprefixed storefront URLs must follow Cookie/default via State::getLang().
+            // Parser/cache may still carry the previous route locale (e.g. en_US) even
+            // when the visitor path is /USD/help after switching back to zh_Hans_CN.
+            $effectiveLanguage = State::getLang();
         }
         if ($effectiveLanguage === '' || !State::isAllowedLanguageCode($effectiveLanguage)) {
             $effectiveLanguage = State::resolveWebsiteDefaultLanguage();
         }
+
+        // #region agent log
+        if (\getenv('WELINE_DEBUG_LANG_SWITCH') === '1' || isset($_GET['_debug_lang_switch'])) {
+            @\file_put_contents(
+                \defined('BP') ? BP . '.cursor/debug-cf1e19.log' : '.cursor/debug-cf1e19.log',
+                \json_encode([
+                    'sessionId' => 'cf1e19',
+                    'hypothesisId' => 'H-server-sync',
+                    'location' => 'App.php:synchronizeParsedLocalization',
+                    'message' => 'locale sync',
+                    'data' => [
+                        'uri' => $rawRequestUri,
+                        'pathLanguage' => $pathLanguage,
+                        'parsedLanguage' => $parsedLanguage,
+                        'effectiveLanguage' => $effectiveLanguage,
+                        'cookieLang' => Cookie::get('WELINE_USER_LANG'),
+                    ],
+                    'timestamp' => (int)\round(\microtime(true) * 1000),
+                ], JSON_UNESCAPED_UNICODE) . "\n",
+                FILE_APPEND
+            );
+        }
+        // #endregion
 
         $parse['currency'] = $effectiveCurrency;
         $parse['language'] = $effectiveLanguage;

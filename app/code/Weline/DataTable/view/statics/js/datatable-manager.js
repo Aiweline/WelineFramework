@@ -27,8 +27,19 @@ function registerDataTable(UI) {
             if (length) element.style.setProperty(property, length);
         }
         const table = element.querySelector('table');
-        if (table && config.stickyActions !== false) {
+        const isLocal = String(config.mode || 'api').toLowerCase() === 'local';
+        const selectable = config.selectable === true;
+        const rowActions = Array.isArray(config.rowActions) ? config.rowActions : [];
+        const showActions = config.showActions === true
+            || config.editable === true
+            || config.modalEdit === true
+            || rowActions.length > 0;
+        const selectField = String(config.selectField || 'id');
+        if (table && config.stickyActions !== false && showActions) {
             table.setAttribute('data-w-sticky-end', '');
+        }
+        if (table && selectable) {
+            table.setAttribute('data-w-sticky-start', '');
         }
         const body = table?.querySelector('.w-datatable__body');
         const filterForm = table?.querySelector('[data-w-datatable-filter]');
@@ -105,6 +116,18 @@ function registerDataTable(UI) {
                 table.prepend(head);
             }
             const row = document.createElement('tr');
+            if (selectable) {
+                const th = document.createElement('th');
+                th.dataset.wSticky = 'start';
+                th.style.width = '2.5rem';
+                const selectAll = document.createElement('input');
+                selectAll.type = 'checkbox';
+                selectAll.setAttribute('data-testid', 'datatable-select-all');
+                selectAll.setAttribute('data-w-datatable-select-all', '');
+                selectAll.setAttribute('aria-label', translate('全选'));
+                th.append(selectAll);
+                row.append(th);
+            }
             for (const field of state.displayFields) {
                 const th = document.createElement('th');
                 th.dataset.field = field.name;
@@ -122,7 +145,7 @@ function registerDataTable(UI) {
                     row.append(th);
                 }
             }
-            if (config.editable || config.modalEdit) {
+            if (showActions) {
                 const th = document.createElement('th');
                 th.dataset.wSticky = 'end';
                 th.textContent = translate('操作');
@@ -140,13 +163,33 @@ function registerDataTable(UI) {
             return cell;
         };
 
+        const interpolate = (template, rowData) => String(template || '').replace(/\{([a-zA-Z0-9_.]+)\}/g, (_match, key) => {
+            const value = valueFor(rowData, key);
+            return value == null ? '' : encodeURIComponent(String(value));
+        });
+
+        const selectedCountEl = () => element.querySelector('[data-w-datatable-selected-count]');
+
+        const syncSelection = () => {
+            const boxes = [...element.querySelectorAll('.w-datatable__row-select')];
+            const selected = boxes.filter((box) => box.checked);
+            const countEl = selectedCountEl();
+            if (countEl) countEl.textContent = String(selected.length);
+            const selectAll = element.querySelector('[data-w-datatable-select-all]');
+            if (selectAll instanceof HTMLInputElement) {
+                selectAll.checked = boxes.length > 0 && selected.length === boxes.length;
+                selectAll.indeterminate = selected.length > 0 && selected.length < boxes.length;
+            }
+        };
+
         const renderBody = () => {
             const fragment = document.createDocumentFragment();
+            const extraColumns = (selectable ? 1 : 0) + (showActions ? 1 : 0);
             if (state.data.length === 0) {
                 const row = document.createElement('tr');
                 row.className = 'w-datatable__empty';
                 const cell = document.createElement('td');
-                cell.colSpan = Math.max(1, state.displayFields.length + ((config.editable || config.modalEdit) ? 1 : 0));
+                cell.colSpan = Math.max(1, state.displayFields.length + extraColumns);
                 cell.textContent = translate('暂无数据');
                 row.append(cell);
                 fragment.append(row);
@@ -154,18 +197,60 @@ function registerDataTable(UI) {
             state.data.forEach((rowData, rowIndex) => {
                 const row = document.createElement('tr');
                 row.dataset.rowIndex = String(rowIndex);
-                row.dataset.recordId = String(rowData.id ?? '');
+                const recordId = valueFor(rowData, selectField) ?? rowData.id ?? rowData.product_id ?? '';
+                row.dataset.recordId = String(recordId);
+                if (selectable) {
+                    const selectCell = document.createElement('td');
+                    selectCell.dataset.wSticky = 'start';
+                    if (recordId !== '' && recordId != null) {
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'w-datatable__row-select';
+                        checkbox.value = String(recordId);
+                        checkbox.setAttribute('data-testid', 'datatable-row-select');
+                        checkbox.setAttribute('data-record-id', String(recordId));
+                        checkbox.setAttribute('aria-label', translate('选择行') + ' ' + String(recordId));
+                        selectCell.append(checkbox);
+                    }
+                    row.append(selectCell);
+                }
                 for (const field of state.displayFields) row.append(renderCell(rowData, field, rowIndex));
-                if (config.editable || config.modalEdit) {
+                if (showActions) {
                     const actions = document.createElement('td');
                     actions.dataset.wSticky = 'end';
                     const group = document.createElement('div');
                     group.className = 'w-datatable__cell-actions';
-                    const edit = button(translate('编辑'), {tone: 'neutral', size: 'sm', action: 'row.edit', icon: 'edit'});
-                    edit.dataset.rowIndex = String(rowIndex);
-                    const remove = button(translate('删除'), {tone: 'danger', size: 'sm', action: 'row.delete', icon: 'trash'});
-                    remove.dataset.rowIndex = String(rowIndex);
-                    group.append(edit, remove);
+                    for (const action of rowActions) {
+                        if (String(action.type || 'link') !== 'link') continue;
+                        const link = document.createElement('a');
+                        link.className = 'w-button';
+                        link.dataset.tone = action.tone || 'primary';
+                        link.dataset.variant = action.variant || 'outline';
+                        link.dataset.size = action.size || 'sm';
+                        if (action.testId) link.setAttribute('data-testid', String(action.testId));
+                        link.href = interpolate(action.hrefTemplate || action.href || '#', {
+                            ...rowData,
+                            id: recordId,
+                            product_id: rowData.product_id ?? recordId,
+                        });
+                        if (action.icon) {
+                            const iconEl = document.createElement('w-icon');
+                            iconEl.setAttribute('name', String(action.icon));
+                            iconEl.setAttribute('size', 'sm');
+                            link.append(iconEl);
+                        }
+                        const label = document.createElement('span');
+                        label.textContent = String(action.label || translate('操作'));
+                        link.append(label);
+                        group.append(link);
+                    }
+                    if (config.editable || config.modalEdit) {
+                        const edit = button(translate('编辑'), {tone: 'neutral', size: 'sm', action: 'row.edit', icon: 'edit'});
+                        edit.dataset.rowIndex = String(rowIndex);
+                        const remove = button(translate('删除'), {tone: 'danger', size: 'sm', action: 'row.delete', icon: 'trash'});
+                        remove.dataset.rowIndex = String(rowIndex);
+                        group.append(edit, remove);
+                    }
                     actions.append(group);
                     row.append(actions);
                 }
@@ -173,6 +258,7 @@ function registerDataTable(UI) {
             });
             body.replaceChildren(fragment);
             updateStats();
+            syncSelection();
         };
 
         const renderPagination = () => {
@@ -260,7 +346,36 @@ function registerDataTable(UI) {
             }
         };
 
+        const loadLocalData = () => {
+            let rows = Array.isArray(config.localData) ? config.localData : [];
+            if ((!rows || rows.length === 0) && config.localDataEl) {
+                const el = document.querySelector(String(config.localDataEl));
+                if (el) {
+                    try {
+                        const parsed = JSON.parse(el.textContent || '[]');
+                        rows = Array.isArray(parsed) ? parsed : [];
+                    } catch (_error) {
+                        rows = [];
+                    }
+                }
+            }
+            state.data = Array.isArray(rows) ? rows : [];
+            state.pagination = {
+                page: 1,
+                pageSize: Math.max(1, state.data.length || state.pageSize),
+                total: state.data.length,
+                pages: 1,
+            };
+            state.page = 1;
+            setBusy(false);
+            render();
+        };
+
         const loadData = async () => {
+            if (isLocal) {
+                loadLocalData();
+                return;
+            }
             setBusy(true, translate('正在加载数据…'));
             try {
                 const response = await request(config, 'data', {
@@ -590,7 +705,30 @@ function registerDataTable(UI) {
             if (event instanceof CustomEvent && event.detail?.formId === config.formId) void loadData();
         });
 
+        listen(element, 'change', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement)) return;
+            if (target.matches('[data-w-datatable-select-all]')) {
+                element.querySelectorAll('.w-datatable__row-select').forEach((box) => {
+                    if (box instanceof HTMLInputElement) box.checked = target.checked;
+                });
+                syncSelection();
+                return;
+            }
+            if (target.classList.contains('w-datatable__row-select')) {
+                syncSelection();
+            }
+        });
+
         queueMicrotask(async () => {
+            if (isLocal) {
+                state.displayFields = templateDisplayFields.length
+                    ? templateDisplayFields
+                    : state.displayFields;
+                state.filterFields = templateFilterFields;
+                if (!state.destroyed) loadLocalData();
+                return;
+            }
             await loadFields();
             if (!state.destroyed) await loadData();
         });

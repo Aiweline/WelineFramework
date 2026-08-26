@@ -36,6 +36,7 @@
 - 存在 `Controller/Backend`，后台页面/行为变更时应同时检查菜单、ACL、返回地址和用户提示。
 - 存在 `Model/`，字段或索引变更需走模型 attribute + `setup:upgrade`，不要手改生成物。
 - 存在模板源文件；出现页面问题时先追源码，不要直接改 `view/tpl`。
+- 有激活前台主题时，`Controller/Index` 设置 `layoutType=homepage` 并 fetch `homepage-shell.phtml`，由 Theme 渲染 `layouts/homepage`；无激活主题时才走下方官方自绘页。
 - `view/templates/Index.phtml` 自己输出完整 `<!DOCTYPE html>/<head>`，必须在 favicon、SEO 与页面私有样式前挂载 `Weline_Theme::frontend::layouts::base::head-before`，并渲染 `Weline\Theme\Block\Partials(area=frontend,type=head,default-option=default)`。该标准 head partial 负责 Theme runtime config、`theme.js`、`Weline.Api` 与 Worker bootstrap；完整页面不得假设外层 layout 会代为注入。
 - 首页私有 `--wf-*` 变量只允许作为 `--weline-theme-*` 语义 Token 的布局/品牌别名；不得在页面内维护 light/dark 色盘，也不得用 `@media (prefers-color-scheme: dark)` 绕过用户的显式主题偏好。`system|light|dark` 的解析与 Bootstrap/Weline 通用组件适配由 `Weline_Theme` 统一负责。
 - 官方首页导航右侧挂载 `header-language-switcher` Hook（由 `Weline_I18n` 实现）。零号站（`website_id=0`）默认至少启用 `zh_Hans_CN` 与 `en_US`，语言列表按 `WebsiteLanguage` 收窄；`<html lang>` 跟随当前 `State::getLangLocal()`。

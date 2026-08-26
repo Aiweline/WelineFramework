@@ -27,6 +27,14 @@ final class SchemaDiffEngineTest extends TestCase
             $priority[SchemaDiffOp::KIND_DROP_COLUMN],
             $priority[SchemaDiffOp::KIND_DROP_INDEX],
         );
+        self::assertLessThan(
+            $priority[SchemaDiffOp::KIND_ADD_INDEX],
+            $priority[SchemaDiffOp::KIND_DROP_INDEX],
+        );
+        self::assertLessThan(
+            $priority[SchemaDiffOp::KIND_ADD_FOREIGN_KEY],
+            $priority[SchemaDiffOp::KIND_DROP_FOREIGN_KEY],
+        );
     }
 
     public function testSqliteEquivalentColumnMetadataDoesNotTriggerModify(): void

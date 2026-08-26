@@ -398,7 +398,7 @@ class Partials extends Block
             }
 
             return KeyBuilder::environmentHash([
-                'schema' => 'chrome-partial-v2',
+                'schema' => 'chrome-partial-v4',
                 'area' => $area,
                 'type' => $type,
                 'option' => $defaultOption,
@@ -412,6 +412,10 @@ class Partials extends Block
                     : '',
                 'auth' => $authContext,
                 'auth_mode' => $policy['auth'],
+                // Theme-preview request language override must win over storefront
+                // Cookie lang used by environmentContext when website=true.
+                'lang' => (string)State::getLang(),
+                'lang_local' => (string)State::getLangLocal(),
                 // Invalidate chrome when backend installed/active locale catalog changes
                 // (language switcher is embedded in topbar/sidebar chrome HTML).
                 'locale_catalog' => $area === 'backend'
@@ -456,9 +460,42 @@ class Partials extends Block
     private function resolvePartialCacheDataContext(string $type, array $data, bool $isChrome = false): mixed
     {
         if ($type === 'header') {
+            // Search facade embeds type + category_id; chrome header HTML must vary on them.
+            // Prefer query bag so Request data leftovers cannot collapse keys across navigations.
+            $q = '';
+            $typeParam = '';
+            $categoryId = 0;
+            $blogCategoryId = 0;
+            try {
+                $q = \trim((string)($this->request->getQuery('q', '') ?? ''));
+                $typeParam = \trim((string)($this->request->getQuery('type', '') ?? ''));
+                $categoryId = (int)($this->request->getQuery('category_id', 0) ?? 0);
+                $blogCategoryId = (int)($this->request->getQuery('blog_category_id', 0) ?? 0);
+            } catch (\Throwable) {
+                // fall through to getParam / $_GET
+            }
+            if ($q === '') {
+                $q = \trim((string)($_GET['q'] ?? $this->request->getParam('q', '') ?? ''));
+            }
+            if ($typeParam === '') {
+                $typeParam = \trim((string)($_GET['type'] ?? $this->request->getParam('type', '') ?? ''));
+            }
+            if ($categoryId <= 0) {
+                $categoryId = (int)($_GET['category_id'] ?? $this->request->getParam('category_id', 0) ?? 0);
+            }
+            if ($blogCategoryId <= 0) {
+                $blogCategoryId = (int)($_GET['blog_category_id'] ?? $this->request->getParam('blog_category_id', 0) ?? 0);
+            }
+
             return $this->normalizePartialCacheData([
-                'q' => (string)$this->request->getParam('q', ''),
-                'category' => (string)$this->request->getParam('category', ''),
+                'q' => $q,
+                'type' => $typeParam,
+                'category_id' => $categoryId,
+                'blog_category_id' => $blogCategoryId,
+                // Legacy key kept for older callers that still send ?category=
+                'category' => \trim((string)($_GET['category'] ?? $this->request->getParam('category', '') ?? '')),
+                'lang' => (string)State::getLang(),
+                'lang_local' => (string)State::getLangLocal(),
                 'cart_count' => $data['cart_count'] ?? 0,
                 'cart_total' => $data['cart_total'] ?? 0,
                 'logo' => $data['logo'] ?? null,

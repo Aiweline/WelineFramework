@@ -14,7 +14,7 @@
 1. 客户端启动 `bin/learning-mcp`。
 2. 以仓库根目录和唯一 `client_session_id` 调用 `prepare_project`。
 3. 只有 `project-readiness.v1.status=ready` 才能继续。
-4. `needs_repair` 只返回确定性、create-only 的修复 Bundle；用户明确授权后调用 `repair_project_docs`。
+4. 缺失模块文档时 `prepare_project` 会自动执行确定性、create-only 的修复并继续；`repair_project_docs` 仅保留为手动重放同一 Bundle 的兼容入口。
 5. 开发前调用 `resolve_task_context`，后续受保护工具都携带同一会话的 `readiness_id`。
 6. 临时用户决定写入 `set_session_directives`，仅在当前 MCP 进程内存中生效。
 

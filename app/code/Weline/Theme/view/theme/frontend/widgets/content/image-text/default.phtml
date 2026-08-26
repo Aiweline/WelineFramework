@@ -123,14 +123,14 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
 
 <style>
 .<?= $wc ?> {
-    margin: var(--weline-space-8, 30px) 0;
+    margin: var(--weline-space-8) 0;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .content-row {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-10, 40px);
+    gap: var(--weline-space-10);
 }
 
 .<?= $wc ?>.layout-image-right .content-row {
@@ -139,19 +139,19 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
 
 .<?= $wc ?> .image-section {
     overflow: hidden;
-    border-radius: var(--weline-radius-xl, 12px);
+    border-radius: var(--weline-radius-xl);
 }
 
 .<?= $wc ?>.layout-image-left .image-section,
 .<?= $wc ?>.layout-image-right .image-section {
-    flex: 0 0 var(--wc-image-width, 50%);
+    flex: 0 0 var(--wc-image-width);
 }
 
 .<?= $wc ?> .content-image {
     width: 100%;
     height: auto;
     display: block;
-    transition: transform var(--weline-theme-transition-slow, 0.5s ease);
+    transition: transform var(--weline-theme-transition-slow);
 }
 
 .<?= $wc ?> .content-image--asset img {
@@ -169,47 +169,47 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
 }
 
 .<?= $wc ?> .content-title {
-    font-size: var(--weline-font-size-3xl, 28px);
+    font-size: var(--weline-font-size-3xl);
     font-weight: 700;
-    margin: 0 0 var(--weline-space-4, 15px);
+    margin: 0 0 var(--weline-space-4);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .content-text {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     line-height: 1.7;
     color: var(--weline-theme-text-muted);
-    margin-bottom: var(--weline-space-5, 20px);
+    margin-bottom: var(--weline-space-5);
 }
 
 .<?= $wc ?> .content-button {
     display: inline-block;
-    padding: var(--weline-space-3, 12px) var(--weline-space-8, 30px);
+    padding: var(--weline-space-3) var(--weline-space-8);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     text-decoration: none;
-    border-radius: var(--weline-radius-lg, 8px);
+    border-radius: var(--weline-radius-lg);
     font-weight: 600;
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .content-button:hover {
     background: var(--weline-theme-primary-hover);
-    transform: translateY(-2px);
+    transform: translateY(var(--spacing-neg-0_5));
     box-shadow: var(--weline-theme-shadow-md);
 }
 
 .<?= $wc ?>.layout-image-top .text-section {
     text-align: center;
-    padding: var(--weline-space-8, 30px) 0;
+    padding: var(--weline-space-8) 0;
 }
 
 .<?= $wc ?>.layout-image-bg .bg-container {
     position: relative;
-    min-height: 400px;
+    min-height: var(--size-panel-400);
     background-size: cover;
     background-position: center;
-    border-radius: var(--weline-radius-xl, 12px);
+    border-radius: var(--weline-radius-xl);
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -241,13 +241,13 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
     position: relative;
     z-index: 2;
     text-align: center;
-    padding: var(--weline-space-10, 40px);
-    max-width: 700px;
+    padding: var(--weline-space-10);
+    max-width: var(--token-size-700px);
 }
 
 .<?= $wc ?>.layout-image-bg .content-title {
     color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-4xl, 36px);
+    font-size: var(--weline-font-size-4xl);
 }
 
 .<?= $wc ?>.layout-image-bg .content-text {
@@ -265,7 +265,7 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
 
 .widget-preview-canvas .<?= $wc ?>.layout-image-bg .bg-container,
 .<?= $wc ?>.is-preview.layout-image-bg .bg-container {
-    min-height: 120px;
+    min-height: var(--size-panel-120);
 }
 
 @media (max-width: 768px) {
@@ -283,7 +283,7 @@ if ($layout === 'image-bg' && $imageFileHtml === '' && $backgroundImage !== '') 
     }
 
     .<?= $wc ?> .content-title {
-        font-size: var(--weline-font-size-xl, 22px);
+        font-size: var(--weline-font-size-xl);
     }
 }
 </style>

@@ -36,7 +36,9 @@ php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php
 
 That script auto-repairs MCP registration/approval (via `ensure-cursor-mcp.php`), probes local STDIO health, and checks Git branch inputs. It only touches user `mcp.json` when registration changed or the host CLI is not ready (avoiding per-session approval resets). It does **not** write `~/.cursor/permissions.json`; non-empty `mcpAllowlist` there can lock Cursor away from **Run Everything**. Agents must not send operators to Settings first. Continue with `prepare_project` only when `project-guidance-bootstrap.v1.status=ready`.
 
-For IDE Agent chats, use the operator's chosen Cursor **Run Mode** (for example **Run Everything** or **Auto-review**). MCP approval is handled via `cursor-agent mcp enable weline_project_intelligence` and normal Cursor MCP approval flows, not by editing `permissions.json`.
+For IDE Agent chats, use the operator's chosen Cursor **Run Mode** (for example **Run Everything** or **Auto-review**). One-time MCP enable is handled via `cursor-agent mcp enable weline_project_intelligence`, not by editing `permissions.json`.
+
+This server is **local STDIO with no OAuth**. Agents must **never** call Cursor `mcp_auth` for `weline_project_intelligence` — that only opens the host authorization toast and is not required for tools to work. If tools are missing in the current chat after `status=ready`, start a new Agent turn or stop with `HOST_MCP_NOT_ATTACHED`. Keep the registered PHP `command` on a stable path (for example `/opt/homebrew/bin/php`) so `mcp-approvals` fingerprints do not churn and re-prompt workspace approval.
 
 ## Verification
 

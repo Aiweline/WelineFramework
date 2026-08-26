@@ -909,6 +909,30 @@ const EavManager = (function() {
                                     <label class="form-check-label" for="frontend_is_filterable">可筛选</label>
                                 </div>
                             </div>
+                            <div class="col-md-4 mb-2">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="frontend_is_searchable" id="frontend_is_searchable" ${data.frontend_is_searchable == 1 ? 'checked' : ''}>
+                                    <label class="form-check-label" for="frontend_is_searchable">可搜索</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 对比配置组 -->
+                    <div class="settings-group mb-3">
+                        <div class="settings-group-title text-muted small mb-2">
+                            <i class="mdi mdi-compare-horizontal me-1"></i>商品对比
+                        </div>
+                        <div class="row ps-3">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label" for="compare_mode">可比模式</label>
+                                <select class="form-select form-select-sm" name="compare_mode" id="compare_mode">
+                                    <option value="none" ${(data.compare_mode || 'none') === 'none' ? 'selected' : ''}>不参与对比</option>
+                                    <option value="diff" ${data.compare_mode === 'diff' ? 'selected' : ''}>仅标差异</option>
+                                    <option value="higher_better" ${data.compare_mode === 'higher_better' ? 'selected' : ''}>越大越好</option>
+                                    <option value="lower_better" ${data.compare_mode === 'lower_better' ? 'selected' : ''}>越小越好</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     

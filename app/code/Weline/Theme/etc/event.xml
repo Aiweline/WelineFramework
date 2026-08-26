@@ -230,4 +230,13 @@
                   sort="100"/>
     </event>
 
+    <!-- all-menu：页面候选（壳页 + CMS） -->
+    <event name="Weline_Theme::all_menu_page_candidates">
+        <observer name="Weline_Theme::all_menu_page_candidates"
+                  instance="Weline\Theme\Observer\AllMenuPageCandidates"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
 </config>

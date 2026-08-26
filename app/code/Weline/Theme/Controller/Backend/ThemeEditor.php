@@ -8,6 +8,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
@@ -33,8 +34,10 @@ use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Service\ThemeResourceCatalog;
+use Weline\Theme\Service\ThemeEditorDraftResetService;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeSlotContractService;
+use Weline\Theme\Service\TemplateInlineWidgetMerger;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Api\Param\ParamFormRendererInterface;
@@ -412,23 +415,8 @@ class ThemeEditor extends BackendController
                 $this->layoutService->initDraftFromPublished($currentThemeId, $pageType, $layoutIdentity);
             }
             $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity);
-            if (!$scopeLegacyReadonly) {
-                /** @var WidgetDefaultInjectionService $defaultInjectionService */
-                $defaultInjectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-                $appliedDefaults = $defaultInjectionService->applyMissingForAllPageTypes(
-                    $currentThemeId,
-                    $layoutIdentity,
-                    $editorArea === PreviewContextService::AREA_BACKEND
-                        ? PreviewContextService::AREA_BACKEND
-                        : PreviewContextService::AREA_FRONTEND,
-                    ThemeLayout::STATUS_DRAFT
-                );
-                if ($appliedDefaults > 0) {
-                    $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity);
-                    $hasDraft = true;
-                    ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-                }
-            }
+            // 打开/刷新编辑器不得按 default_injections 自动回填空 slot。
+            // 默认部件仅在主题初始化、草稿重置、「应用」tab / 显式 slot 初始化、部件首次入库或 Dashboard view ready 时写入。
         }
 
         // 部件库改为前端异步加载（页面与主预览就绪后再拉取），首屏不再同步渲染全部部件预览，
@@ -1053,12 +1041,20 @@ class ThemeEditor extends BackendController
         try {
             /** @var WidgetDefaultInjectionService $service */
             $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-            $items = $service->getMissingForLayout($themeId, $pageType, $identity, $editorArea, $keyword);
+            // 「应用」Tab 需要看到全部声明（含已应用的万能评论等），不能只返回缺失项。
+            $items = $service->getDeclaredForLayout($themeId, $pageType, $identity, $editorArea, $keyword);
+            $pendingTotal = 0;
+            foreach ($items as $item) {
+                if (($item['injection_status'] ?? '') === 'missing') {
+                    $pendingTotal++;
+                }
+            }
 
             return $this->fetchJson([
                 'success' => true,
                 'items' => $items,
                 'total' => count($items),
+                'pending_total' => $pendingTotal,
                 'theme_id' => $themeId,
                 'page_type' => $pageType,
                 'layout_option' => $identity['layout_option'],
@@ -1180,6 +1176,94 @@ class ThemeEditor extends BackendController
             }
 
             return $this->fetchJson($response);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 插槽工具条「初始化」：按 default_injections 显式回填指定 slot (Query)
+     */
+    public function postInitSlotDefaults()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $decoded = json_decode($bodyParams, true);
+            $data = is_array($decoded) ? $decoded : [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)(
+            $data['page_type']
+            ?? $data['layout_type']
+            ?? $this->request->getParam('page_type', $this->request->getParam('layout_type', ThemeLayout::PAGE_TYPE_HOME))
+        );
+        $slotId = trim((string)($data['slot_id'] ?? $this->request->getParam('slot_id', '')));
+        $editorArea = (string)($data['editor_area'] ?? $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND));
+        $editorArea = $editorArea === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
+
+        if ($themeId <= 0 || $pageType === '' || $slotId === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('参数不完整'),
+            ]);
+        }
+
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $themeId = $context->themeId;
+            $pageType = $context->layoutType;
+            $editorArea = $context->area;
+            $identity = $this->layoutIdentityFromEditorContext($context);
+
+            /** @var WidgetDefaultInjectionService $service */
+            $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+            $result = $service->initSlotDefaultInjections(
+                $themeId,
+                $pageType,
+                $identity,
+                $slotId,
+                $editorArea,
+                ThemeLayout::STATUS_DRAFT
+            );
+
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            $snapshot = $this->layoutService->getLayout(
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_DRAFT,
+                $identity,
+            );
+            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
+                $context,
+                $snapshot,
+                'Init slot default widget injections',
+            );
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => ($result['applied_defaults'] ?? 0) > 0
+                    ? __('已初始化插槽默认部件')
+                    : __('该插槽暂无缺失的默认部件'),
+                'data' => [
+                    'slot_id' => $slotId,
+                    'cleared_user_deleted' => (int)($result['cleared_user_deleted'] ?? 0),
+                    'applied_defaults' => (int)($result['applied_defaults'] ?? 0),
+                    'items' => $result['items'] ?? [],
+                    'scoped_workspace' => $scopedDraft,
+                ],
+            ]);
         } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -1540,8 +1624,26 @@ class ThemeEditor extends BackendController
             $data = [];
         }
         
-        $layoutId = (int)($data['layout_id'] ?? $this->request->getParam('layout_id', 0));
+        $rawLayoutId = $data['layout_id'] ?? $this->request->getParam('layout_id', 0);
+        $layoutId = is_numeric($rawLayoutId) ? (int)$rawLayoutId : 0;
+        $templateRef = trim((string)($data['template_ref'] ?? ''));
+        if ($templateRef === '' && is_string($rawLayoutId) && str_starts_with(trim($rawLayoutId), 'tpl:')) {
+            $templateRef = trim($rawLayoutId);
+        }
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+
+        if (!$layoutId && $templateRef !== '') {
+            try {
+                return $this->fetchJson($this->removeTemplateInlineWidget($data, $themeId, $templateRef));
+            } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
 
         if (!$layoutId) {
             return $this->fetchJson([
@@ -1572,6 +1674,10 @@ class ThemeEditor extends BackendController
             
             // 如果 DB 记录不存在，使用前端提供的 fallback 数据
             $recordExists = !empty($widget->getLayoutId());
+            if ($recordExists && $nodeUid === '') {
+                $widget->save();
+                $nodeUid = $widget->getNodeUid();
+            }
             $context = $this->requireLayoutWriteContext(
                 $data,
                 $themeId > 0 ? $themeId : null,
@@ -1648,6 +1754,110 @@ class ThemeEditor extends BackendController
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * 删除模板内嵌部件（无 layout_id）：写入 template_deleted 墓碑行。
+     *
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    private function removeTemplateInlineWidget(array $data, int $themeId, string $templateRef): array
+    {
+        $widgetModule = trim((string)($data['widget_module'] ?? ''));
+        $widgetType = trim((string)($data['widget_type'] ?? ''));
+        $widgetCode = trim((string)($data['widget_code'] ?? ''));
+        $slotId = trim((string)($data['slot_id'] ?? ''));
+        $area = trim((string)($data['area'] ?? ThemeLayout::AREA_CONTENT));
+        if ($area === '') {
+            $area = ThemeLayout::AREA_CONTENT;
+        }
+
+        if ($widgetModule === '' || $widgetType === '' || $widgetCode === '' || $slotId === '') {
+            throw new \InvalidArgumentException((string)__('缺少部件身份信息'));
+        }
+
+        $pageType = (string)($data['layout_type'] ?? $data['page_type'] ?? 'homepage');
+        $context = $this->requireLayoutWriteContext($data, $themeId > 0 ? $themeId : null, $pageType !== '' ? $pageType : null);
+        $themeId = $context->themeId;
+        $layoutIdentity = $this->resolveVersionLayoutIdentity($data);
+
+        $newLayoutId = $this->layoutService->saveWidget([
+            'theme_id' => $themeId,
+            'page_type' => $pageType,
+            'layout_option' => $layoutIdentity['layout_option'] ?? 'default',
+            'scope' => $layoutIdentity['scope'] ?? 'default',
+            'locale_code' => $layoutIdentity['locale_code'] ?? '',
+            'target_type' => $layoutIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL,
+            'target_id' => (int)($layoutIdentity['target_id'] ?? 0),
+            'area' => $area,
+            'slot_id' => $slotId,
+            'widget_module' => $widgetModule,
+            'widget_type' => $widgetType,
+            'widget_code' => $widgetCode,
+            'config' => [
+                TemplateInlineWidgetMerger::CONFIG_TEMPLATE_REF => $templateRef,
+                TemplateInlineWidgetMerger::CONFIG_TEMPLATE_DELETED => true,
+            ],
+            'sort_order' => max(0, (int)($data['sort_order'] ?? 0)),
+            'exclusive' => false,
+            'status' => ThemeLayout::STATUS_DRAFT,
+        ]);
+
+        $saved = clone $this->themeLayout;
+        $saved->clearQuery()->clearData()->load($newLayoutId);
+        $nodeUid = $saved->getNodeUid();
+        if ($nodeUid === '') {
+            $saved->save();
+            $nodeUid = $saved->getNodeUid();
+        }
+
+        ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+
+        $editorArea = ObjectManager::getInstance(PreviewContextService::class)->normalizeArea(
+            (string)($data['editor_area'] ?? $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)),
+            PreviewContextService::AREA_FRONTEND
+        );
+        ObjectManager::getInstance(WidgetDefaultInjectionService::class)->markUserDeleted(
+            $themeId,
+            $pageType,
+            $layoutIdentity,
+            [
+                'module' => $widgetModule,
+                'type' => $widgetType,
+                'code' => $widgetCode,
+                'slot_id' => $slotId,
+                'area' => $area,
+                'sort_order' => max(0, (int)($data['sort_order'] ?? 0)),
+            ],
+            $editorArea
+        );
+
+        $response = [
+            'success' => true,
+            'message' => __('删除成功'),
+            'layout_id' => $newLayoutId,
+            'slot_id' => $slotId,
+            'node_uid' => $nodeUid,
+        ];
+
+        if ($themeId > 0 && $slotId !== '') {
+            $layoutType = (string)($data['layout_type'] ?? $this->request->getParam('layout_type', 'homepage'));
+            $layoutOption = (string)($data['layout_option'] ?? $this->request->getParam('layout_option', 'default'));
+            $originalHtml = $this->getOriginalSlotContent(
+                $themeId,
+                $pageType,
+                $slotId,
+                $area,
+                $layoutType,
+                $layoutOption,
+                $layoutIdentity
+            );
+            $response['original_html'] = $originalHtml;
+            $response['has_original'] = $originalHtml !== '';
+        }
+
+        return $response;
     }
 
     /**
@@ -2260,6 +2470,217 @@ class ThemeEditor extends BackendController
     }
 
     /**
+     * 批量读取部件某一字段在各已安装语言下的译文（草稿优先，已发布回退）。
+     */
+    public function getWidgetFieldI18n()
+    {
+        return $this->fetchJson($this->getWidgetFieldI18nPayload());
+    }
+
+    /** @return array<string,mixed> */
+    public function getWidgetFieldI18nPayload(): array
+    {
+        $layoutId = (int)$this->request->getParam('layout_id', 0);
+        $fieldKey = trim((string)$this->request->getParam('field', ''));
+        if ($layoutId <= 0 || $fieldKey === '') {
+            return [
+                'success' => false,
+                'message' => __('缺少布局ID或字段'),
+            ];
+        }
+
+        $widgetLayout = $this->themeLayout->reset()->load($layoutId);
+        if (!$widgetLayout->getLayoutId()) {
+            return [
+                'success' => false,
+                'message' => __('部件不存在'),
+            ];
+        }
+
+        $widgetModule = $widgetLayout->getData('widget_module');
+        $widgetCode = $widgetLayout->getData('widget_code');
+        $widgetType = $widgetLayout->getData('widget_type') ?: '';
+        $slotArea = (string)($widgetLayout->getData('area') ?: ThemeLayout::AREA_CONTENT);
+        $area = $this->normalizeThemeConfigArea($slotArea);
+        $params = $this->getWidgetParamDefinitions($widgetModule, $widgetCode, $area, $widgetType);
+        if ($params === []) {
+            return [
+                'success' => false,
+                'message' => __('该部件没有配置项'),
+            ];
+        }
+
+        $baseConfig = $this->ensureWidgetI18nInstance($widgetLayout);
+        if (!is_array($baseConfig)) {
+            $baseConfig = [];
+        }
+        $identify = $this->resolveThemeConfigIdentifyForLayout(
+            $widgetLayout,
+            $widgetModule,
+            $widgetType,
+            $widgetCode,
+            $area,
+            $baseConfig,
+        );
+
+        $sourceConfig = $this->composeWidgetConfigForLocale(
+            $widgetLayout,
+            $params,
+            $identify,
+            $slotArea,
+            $area,
+            $baseConfig,
+            null,
+        );
+        $sourceValue = $this->readConfigPathScalar($sourceConfig, $fieldKey);
+
+        $translations = [];
+        foreach ($this->getInstalledLocalesPayload() as $localeRow) {
+            if (!is_array($localeRow)) {
+                continue;
+            }
+            $locale = trim((string)($localeRow['code'] ?? ''));
+            if ($locale === '') {
+                continue;
+            }
+            $localeConfig = $this->composeWidgetConfigForLocale(
+                $widgetLayout,
+                $params,
+                $identify,
+                $slotArea,
+                $area,
+                $baseConfig,
+                $locale,
+            );
+            $translations[$locale] = $this->readConfigPathScalar($localeConfig, $fieldKey);
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'layout_id' => $layoutId,
+                'node_uid' => $widgetLayout->getNodeUid(),
+                'field' => $fieldKey,
+                'source_value' => $sourceValue,
+                'translations' => $translations,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $baseConfig
+     * @return array<string,mixed>
+     */
+    private function composeWidgetConfigForLocale(
+        ThemeLayout $widgetLayout,
+        array $params,
+        string $identify,
+        string $slotArea,
+        string $area,
+        array $baseConfig,
+        ?string $locale,
+    ): array {
+        $config = $baseConfig;
+        if ($locale !== null && $locale !== '') {
+            $config = $this->mergeTranslatedPathsForLayout($config, $params, $identify, $locale, $slotArea, $area);
+        }
+
+        $editorPayload = $this->overlayEditorContextTranslationLocale(
+            $this->getEditorJsonPayload(),
+            $locale,
+        );
+        if (!array_key_exists('editor_context', $editorPayload)) {
+            return $this->materializeWidgetConfigPaths($config, []);
+        }
+
+        try {
+            /** @var ThemeEditorContextFactory $factory */
+            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            $typedContext = $factory->fromInput(
+                $editorPayload,
+                $locale === null || $locale === ''
+                    ? ThemeEditorContext::RESOURCE_LAYOUT
+                    : ThemeEditorContext::RESOURCE_I18N,
+            );
+            $this->assertRawLayoutContextMatches($editorPayload, $typedContext);
+            $this->assertLayoutBelongsToEditorContext($widgetLayout, $typedContext);
+            /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
+            $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+            $scopedState = $scopedWorkspace->load($typedContext, true);
+            $draftPayload = is_array($scopedState['draft_payload'] ?? null)
+                ? $scopedState['draft_payload']
+                : [];
+            $nodeUid = strtolower((string)$widgetLayout->getNodeUid());
+            $draftConfig = ($locale === null || $locale === '')
+                ? ($draftPayload['nodes'][$nodeUid]['config'] ?? null)
+                : ($draftPayload['translations'][$nodeUid] ?? null);
+            if (is_array($draftConfig)) {
+                $config = ($locale === null || $locale === '')
+                    ? $draftConfig
+                    : $this->materializeWidgetConfigPaths($draftConfig, $config);
+            }
+        } catch (\Throwable) {
+            // Keep published/base merge when draft workspace is unavailable.
+        }
+
+        return $this->materializeWidgetConfigPaths($config, []);
+    }
+
+    /** @param array<string,mixed> $config */
+    private function readConfigPathScalar(array $config, string $path): string
+    {
+        if ($path !== '' && array_key_exists($path, $config)) {
+            $direct = $config[$path];
+            if (is_string($direct) || is_numeric($direct) || is_bool($direct)) {
+                return (string)$direct;
+            }
+
+            return '';
+        }
+
+        $cursor = $config;
+        foreach (explode('.', $path) as $segment) {
+            if ($segment === '' || !is_array($cursor) || !array_key_exists($segment, $cursor)) {
+                return '';
+            }
+            $cursor = $cursor[$segment];
+        }
+        if (is_string($cursor) || is_numeric($cursor) || is_bool($cursor)) {
+            return (string)$cursor;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function overlayEditorContextTranslationLocale(array $payload, ?string $locale): array
+    {
+        $locale = is_string($locale) ? trim($locale) : '';
+        if ($locale === '' || !array_key_exists('editor_context', $payload)) {
+            return $payload;
+        }
+
+        $raw = $payload['editor_context'];
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : null;
+        }
+        if (!is_array($raw)) {
+            return $payload;
+        }
+
+        $raw['locale'] = $locale;
+        $raw['resource_type'] = ThemeEditorContext::RESOURCE_I18N;
+        $payload['editor_context'] = $raw;
+
+        return $payload;
+    }
+
+    /**
      * 获取部件配置信息 (GET)
      * 
      * 支持多语言：传递 locale 参数获取特定语言的配置值
@@ -2317,7 +2738,10 @@ class ThemeEditor extends BackendController
         if ($locale !== null) {
             $config = $this->mergeTranslatedPathsForLayout($config, $params, $identify, $locale, $slotArea, $area);
         }
-        $editorPayload = $this->getEditorJsonPayload();
+        $editorPayload = $this->overlayEditorContextTranslationLocale(
+            $this->getEditorJsonPayload(),
+            $locale,
+        );
         if (array_key_exists('editor_context', $editorPayload)) {
             try {
                 /** @var ThemeEditorContextFactory $factory */
@@ -2337,17 +2761,14 @@ class ThemeEditor extends BackendController
                 $nodeUid = strtolower((string)$widgetLayout->getNodeUid());
                 $draftConfig = $locale === null
                     ? ($draftPayload['nodes'][$nodeUid]['config'] ?? null)
-                    : ($draftPayload['translations'][$nodeUid] ?? null);
+                    : ($draftPayload['translations'][$nodeUid] ?? $draftPayload[$nodeUid] ?? null);
                 if (is_array($draftConfig)) {
                     $config = $locale === null
                         ? $draftConfig
                         : $this->materializeWidgetConfigPaths($draftConfig, $config);
                 }
-            } catch (\Throwable $e) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => $e->getMessage(),
-                ]);
+            } catch (\Throwable) {
+                // Keep published/base merge when draft workspace is unavailable.
             }
         }
 
@@ -2642,7 +3063,154 @@ class ThemeEditor extends BackendController
 
     public function postAiTranslateConfig()
     {
+        if ($this->wantsAiTranslateConfigStream()) {
+            $this->streamAiTranslateConfig();
+
+            return;
+        }
+
         return $this->fetchJson($this->aiTranslateConfigPayload());
+    }
+
+    private function wantsAiTranslateConfigStream(): bool
+    {
+        $accept = strtolower(trim((string)($this->request->getHeader('Accept') ?? '')));
+        if ($accept !== '' && (str_starts_with($accept, 'text/event-stream') || str_contains($accept, 'text/event-stream'))) {
+            return true;
+        }
+
+        $payload = $this->getThemeAiRequestPayload();
+        $streamFlag = $payload['stream'] ?? $this->request->getParam('stream', null);
+        if (is_bool($streamFlag)) {
+            return $streamFlag;
+        }
+        if (is_int($streamFlag) || is_float($streamFlag)) {
+            return ((int)$streamFlag) === 1;
+        }
+
+        $normalized = strtolower(trim((string)$streamFlag));
+
+        return in_array($normalized, ['1', 'true', 'yes', 'on', 'stream'], true);
+    }
+
+    private function streamAiTranslateConfig(): void
+    {
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+
+        try {
+            $payload = $this->getThemeAiRequestPayload();
+            $sourceText = trim((string)($payload['source_text'] ?? ''));
+            if ($sourceText === '') {
+                $sse->sendError((string)__('缺少源文案。'), 400);
+                $sse->close();
+
+                return;
+            }
+
+            $sourceLocale = trim((string)($payload['source_locale'] ?? 'zh_Hans_CN')) ?: 'zh_Hans_CN';
+            $targetLocales = $this->normalizeThemeAiLocaleList($payload['target_locales'] ?? []);
+            $targetLocales = array_values(array_filter(
+                $targetLocales,
+                static fn(string $locale): bool => $locale !== '' && $locale !== $sourceLocale
+            ));
+            if ($targetLocales === []) {
+                $sse->sendError((string)__('缺少目标语言。'), 400);
+                $sse->close();
+
+                return;
+            }
+
+            $fieldKey = trim((string)($payload['field_key'] ?? ''));
+            $total = count($targetLocales);
+            $translations = [];
+            $failed = [];
+
+            $sse->sendEvent('start', [
+                'message' => (string)__('开始 AI 翻译'),
+                'source_locale' => $sourceLocale,
+                'target_locales' => $targetLocales,
+                'total' => $total,
+                'current' => 0,
+                'progress' => 0,
+                'field_key' => $fieldKey,
+            ]);
+
+            foreach ($targetLocales as $index => $locale) {
+                if (!$sse->isAlive()) {
+                    return;
+                }
+
+                $current = $index + 1;
+                $sse->sendEvent('progress', [
+                    'message' => (string)__('正在翻译 %{1}…', [$locale]),
+                    'locale' => $locale,
+                    'current' => $current,
+                    'total' => $total,
+                    'progress' => (int)floor((($current - 1) / max(1, $total)) * 100),
+                    'status' => 'translating',
+                ]);
+
+                try {
+                    $text = $this->translateThemeConfigTextViaAdapter($sourceText, $locale, $sourceLocale);
+                    if ($text === '') {
+                        throw new \RuntimeException((string)__('AI 翻译未返回目标语言结果。'));
+                    }
+                    $translations[$locale] = $text;
+                    $sse->sendEvent('locale', [
+                        'message' => (string)__('已完成 %{1}', [$locale]),
+                        'locale' => $locale,
+                        'text' => $text,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => (int)floor(($current / max(1, $total)) * 100),
+                        'status' => 'done',
+                    ]);
+                } catch (\Throwable $localeError) {
+                    $errorMessage = trim(strip_tags($localeError->getMessage()));
+                    $failed[] = [
+                        'locale' => $locale,
+                        'message' => $errorMessage,
+                    ];
+                    $sse->sendEvent('locale_error', [
+                        'message' => (string)__('翻译 %{1} 失败：%{2}', [$locale, $errorMessage]),
+                        'locale' => $locale,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => (int)floor(($current / max(1, $total)) * 100),
+                        'status' => 'error',
+                    ]);
+                }
+            }
+
+            $sse->complete([
+                'success' => $translations !== [],
+                'message' => $translations === []
+                    ? (string)__('AI翻译未返回目标语言结果')
+                    : (string)__('AI翻译已回填'),
+                'data' => [
+                    'source_locale' => $sourceLocale,
+                    'target_locales' => $targetLocales,
+                    'translations' => $translations,
+                    'failed' => $failed,
+                    'translated_count' => count($translations),
+                    'failed_count' => count($failed),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            try {
+                if (!$sse->isStarted()) {
+                    $sse->start();
+                }
+                $sse->sendError((string)__('主题配置 AI 翻译失败：%{1}', [trim(strip_tags($e->getMessage()))]), 500);
+                $sse->close();
+            } catch (\Throwable) {
+                // ignore secondary stream failures
+            }
+        }
     }
 
     public function aiTranslateConfigPayload(): array
@@ -2670,47 +3238,14 @@ class ThemeEditor extends BackendController
                 ];
             }
 
-            if (!function_exists('w_query')) {
-                throw new \RuntimeException((string)__('AI 查询入口不可用。'));
+            $translations = [];
+            foreach ($targetLocales as $locale) {
+                $text = $this->translateThemeConfigTextViaAdapter($sourceText, $locale, $sourceLocale);
+                if ($text === '') {
+                    throw new \RuntimeException((string)__('AI 翻译未返回目标语言结果。'));
+                }
+                $translations[$locale] = $text;
             }
-
-            $fieldKey = trim((string)($payload['field_key'] ?? ''));
-            $layoutType = trim((string)($payload['layout_type'] ?? ''));
-            $layoutOption = trim((string)($payload['layout_option'] ?? ''));
-            $context = trim((string)($payload['context'] ?? ''));
-            $prompt = $this->buildThemeConfigTranslationPrompt(
-                $sourceText,
-                $sourceLocale,
-                $targetLocales,
-                $fieldKey,
-                $layoutType,
-                $layoutOption,
-                $context
-            );
-
-            $response = w_query('ai', 'generate', [
-                'prompt' => $prompt,
-                'scenario_code' => 'theme',
-                'params' => [
-                    'operation' => 'config_i18n_translate',
-                    'source_locale' => $sourceLocale,
-                    'target_locales' => $targetLocales,
-                    'field_key' => $fieldKey,
-                    'layout_type' => $layoutType,
-                    'layout_option' => $layoutOption,
-                    'context' => $context,
-                    'disable_conversation_history' => true,
-                    'disable_conversation_persist' => true,
-                    'is_backend' => true,
-                ],
-                'is_backend' => true,
-            ]);
-
-            if (!is_string($response)) {
-                $response = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
-            }
-
-            $translations = $this->parseThemeConfigTranslationResponse($response, $targetLocales);
 
             return [
                 'success' => true,
@@ -2724,9 +3259,27 @@ class ThemeEditor extends BackendController
         } catch (\Throwable $e) {
             return [
                 'success' => false,
-                'message' => __('主题配置 AI 翻译失败：%{1}', [$e->getMessage()]),
+                'message' => __('主题配置 AI 翻译失败：%{1}', [trim(strip_tags($e->getMessage()))]),
             ];
         }
+    }
+
+    private function translateThemeConfigTextViaAdapter(string $sourceText, string $targetLocale, string $sourceLocale): string
+    {
+        if (!class_exists(\Weline\Ai\Api\TranslationService::class)) {
+            throw new \RuntimeException((string)__('AI翻译服务未找到，请确保AI模块已安装'));
+        }
+
+        /** @var \Weline\Ai\Api\TranslationService $translationService */
+        $translationService = ObjectManager::getInstance(\Weline\Ai\Api\TranslationService::class);
+        $text = trim((string)$translationService->translate(
+            $sourceText,
+            $targetLocale,
+            $sourceLocale !== '' ? $sourceLocale : 'auto',
+            \Weline\Ai\Api\TranslationService::STRATEGY_LIGHT
+        ));
+
+        return $text;
     }
 
     public function postSaveWidgetConfig()
@@ -3101,7 +3654,7 @@ class ThemeEditor extends BackendController
     {
         // Header 相关的插槽名
         $headerSlots = [
-            'logo', 'search', 'main-nav', 'category-menu', 'user-area', 'cart', 'language', 'currency',
+            'logo', 'delivery', 'search', 'main-nav', 'category-menu', 'user-area', 'cart', 'language', 'currency',
             'header-left', 'header-center', 'header-right', 'header-container',
             'top-bar', 'top-bar-left', 'top-bar-right', 'navigation',
         ];
@@ -3494,7 +4047,42 @@ class ThemeEditor extends BackendController
             return $config;
         }
 
+        // Backend theme.editorRequest has no storefront ScopeIdentity. Seed the
+        // authoritative editor storage scope so ThemeData translation dual-read
+        // does not call ThemeContextService::resolveCurrentScope(frontend).
+        $translationScope = $this->resolveEditorTranslationStorageScope($themeArea);
+        if ($translationScope !== '') {
+            ThemeData::seedRequestedScope($themeArea, $translationScope);
+        }
+
         return ThemeData::mergeTranslatedPaths($config, $params, $identify, $locale);
+    }
+
+    private function resolveEditorTranslationStorageScope(string $themeArea): string
+    {
+        try {
+            $payload = $this->getEditorJsonPayload();
+            if (array_key_exists('editor_context', $payload)) {
+                /** @var ThemeEditorContextFactory $factory */
+                $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+                $typedContext = $factory->fromInput($payload, ThemeEditorContext::RESOURCE_I18N);
+
+                return $this->legacyScopeForEditorContext($typedContext);
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (RequestContext::scopeIdentity() instanceof ScopeIdentity) {
+                return ObjectManager::getInstance(ThemeContextService::class)
+                    ->resolveCurrentScope($themeArea);
+            }
+        } catch (\Throwable) {
+        }
+
+        // Editor-only fallback: keep translation reads on the default website
+        // scope without installing a synthetic RequestContext ScopeIdentity.
+        return ThemeContextService::DEFAULT_SCOPE;
     }
 
     private function buildWidgetPreviewDefaultConfig(string $widgetCode): array
@@ -4663,9 +5251,11 @@ HTML;
             'source_locale',
             'target_locales',
             'field_key',
+            'layout_id',
             'layout_type',
             'layout_option',
             'context',
+            'stream',
         ];
         $payload = [];
         foreach ($keys as $key) {
@@ -5001,6 +5591,53 @@ HTML;
                     'new_version' => $newVersion->toArray(),
                     'scoped_workspace' => $scopedDraft,
                 ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Reset current editing draft materialization for selected resources.
+     * Does not delete version history or call restoreOriginal().
+     */
+    public function postResetDraftResources()
+    {
+        return $this->fetchJson($this->resetDraftResourcesPayload());
+    }
+
+    public function resetDraftResourcesPayload(): array
+    {
+        $data = $this->getVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+        $resources = $data['resources'] ?? [];
+        if (!\is_array($resources)) {
+            $resources = [];
+        }
+        $layoutScope = (string)($data['layout_scope'] ?? ThemeEditorDraftResetService::LAYOUT_SCOPE_CURRENT);
+
+        if (!$themeId) {
+            return [
+                'success' => false,
+                'message' => __('Missing theme ID'),
+            ];
+        }
+
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            /** @var ThemeEditorDraftResetService $resetService */
+            $resetService = ObjectManager::getInstance(ThemeEditorDraftResetService::class);
+            $result = $resetService->reset($context, $resources, $layoutScope);
+            $this->clearVersionPreviewCaches($themeId);
+
+            return [
+                'success' => true,
+                'message' => __('Current draft resources reset'),
+                'data' => $result,
             ];
         } catch (\Throwable $e) {
             return [
@@ -6622,7 +7259,14 @@ HTML;
                 'data' => [
                     'redirect_url' => $this->_url->getFrontendUrl(
                         $this->getThemePageTypeResolver()->getPreviewRouteByPageType($pageType),
-                        []
+                        [
+                            'page_type' => $pageType,
+                            'layout_type' => $pageType,
+                            'layout_option' => 'default',
+                            'status' => 'published',
+                            'editor_area' => PreviewContextService::AREA_FRONTEND,
+                            'preview_area' => PreviewContextService::AREA_FRONTEND,
+                        ]
                     ),
                     'editor_url' => $this->buildEditorShellUrl($editorContext, $pageType),
                     'context' => $editorContext,
@@ -6862,19 +7506,7 @@ HTML;
 
     private function getPreviewPathByPageType(string $pageType): string
     {
-        $pathMap = [
-            ThemeLayout::PAGE_TYPE_HOME => '/',
-            ThemeLayout::PAGE_TYPE_CATEGORY => '/category/default',
-            ThemeLayout::PAGE_TYPE_PRODUCT => '/product/default',
-            ThemeLayout::PAGE_TYPE_PRODUCT_LIST => '/products',
-            ThemeLayout::PAGE_TYPE_CMS => '/page/default',
-            ThemeLayout::PAGE_TYPE_CART => '/cart',
-            ThemeLayout::PAGE_TYPE_CHECKOUT => '/checkout',
-            ThemeLayout::PAGE_TYPE_ACCOUNT => '/account',
-            ThemeLayout::PAGE_TYPE_SEARCH => '/search',
-        ];
-
-        return $pathMap[$pageType] ?? '/';
+        return $this->getThemePageTypeResolver()->getPreviewPathByPageType($pageType);
     }
 
     // ==================== 编辑锁定 API ====================
@@ -6887,8 +7519,25 @@ HTML;
      */
     public function getCheckLock()
     {
-        $themeId = (int)$this->request->getParam('theme_id', 0);
-        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        return $this->respondEditorLockAcquire($this->getEditorJsonPayload());
+    }
+
+    /**
+     * Acquire/check editor lock via JSON body (preferred; avoids GET query truncation).
+     * Route: /backend/theme-editor/check-lock (POST)
+     */
+    public function postCheckLock()
+    {
+        return $this->respondEditorLockAcquire($this->getEditorJsonPayload());
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function respondEditorLockAcquire(array $payload)
+    {
+        $themeId = (int)($payload['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($payload['page_type']
+            ?? $payload['layout_type']
+            ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
 
         if (!$themeId) {
             return $this->fetchJson([
@@ -6901,15 +7550,15 @@ HTML;
         $userId = $this->session->getLoginUserID() ?: 0;
         $userName = $this->session->getLoginUsername() ?: '';
         $lockContextKey = $this->resolveEditorLockContextKey(
-            $this->getEditorJsonPayload(),
+            $payload,
             $themeId,
-            (string)$pageType,
+            $pageType,
         );
 
         // 尝试获取锁定
         $result = $this->editorLockService->acquireLock(
             $themeId,
-            (string)$pageType,
+            $pageType,
             $userId,
             $userName,
             $lockContextKey,
@@ -7202,6 +7851,42 @@ HTML;
         }
     }
 
+    public function getThemeDiskTokens()
+    {
+        try {
+            $theme = $this->resolveEditorThemeFromRequest();
+            if (!$theme || !(int)$theme->getId()) {
+                return $this->fetchJson(['success' => false, 'message' => __('请选择主题')]);
+            }
+            $input = $this->getEditorJsonPayload();
+            $area = $this->resolveRequestedEditorArea((string)($input['editor_area'] ?? 'frontend'));
+            $context = $this->validateLegacyEditorContext(
+                $input,
+                ThemeEditorContext::RESOURCE_APPEARANCE,
+                (int)$theme->getId(),
+                $area,
+            );
+            $panel = (string)($input['panel'] ?? '');
+            $ref = (string)($input['ref'] ?? '');
+            /** @var \Weline\Theme\Service\Disk\ThemeTokenCatalogService $catalog */
+            $catalog = ObjectManager::getInstance(\Weline\Theme\Service\Disk\ThemeTokenCatalogService::class);
+            $tokens = $catalog->getDiskTokensForRef($area, $theme, $panel, $ref);
+
+            return $this->fetchJson([
+                'success' => true,
+                'data' => [
+                    'panel' => $panel,
+                    'ref' => $ref,
+                    'tokens_json' => \json_encode($tokens, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]',
+                ],
+            ]);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     public function postDiskSave()
     {
         return $this->handleDiskSave(false);
@@ -7384,16 +8069,9 @@ HTML;
                 throw new \InvalidArgumentException('theme_editor_raw_context_mismatch:' . $field);
             }
         }
-        foreach (['locale', 'locale_code'] as $field) {
-            if (!array_key_exists($field, $input) || $input[$field] === null) {
-                continue;
-            }
-            $actual = trim((string)$input[$field]);
-            $expected = $context->locale === 'default' ? '' : $context->locale;
-            if ($actual !== $expected && !($actual === 'default' && $expected === '')) {
-                throw new \InvalidArgumentException('theme_editor_raw_context_mismatch:' . $field);
-            }
-        }
+        // Top-level locale/locale_code on widget-config / layout-config is the
+        // translation target, not the editor identity. Identity locale lives in
+        // editor_context only, so do not compare these fields here.
         if (array_key_exists('scope', $input)
             && trim((string)$input['scope']) !== ''
             && trim((string)$input['scope']) !== $this->legacyScopeForEditorContext($context)
@@ -7419,6 +8097,11 @@ HTML;
         ThemeEditorContext $context,
     ): void {
         $identity = $this->layoutIdentityFromEditorContext($context);
+        // Layout rows are stored under default locale identity; i18n overlays
+        // live in scoped workspaces keyed by translation locale.
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_I18N) {
+            $identity['locale_code'] = '';
+        }
         $matches = (int)$layout->getData(ThemeLayout::schema_fields_THEME_ID) === $context->themeId
             && (string)$layout->getData(ThemeLayout::schema_fields_PAGE_TYPE) === $context->layoutType
             && (string)$layout->getData(ThemeLayout::schema_fields_LAYOUT_OPTION) === $identity['layout_option']

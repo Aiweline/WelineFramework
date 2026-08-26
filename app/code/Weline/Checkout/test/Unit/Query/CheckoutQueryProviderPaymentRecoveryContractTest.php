@@ -29,7 +29,10 @@ final class CheckoutQueryProviderPaymentRecoveryContractTest extends TestCase
 
         self::assertStringContainsString('use Weline\\Shipping\\Model\\DeliveryAddress;', $provider);
         self::assertStringContainsString('use Weline\\Shipping\\Service\\DeliveryAddressService;', $provider);
+        self::assertStringContainsString('use Weline\\Checkout\\Service\\CheckoutDeliveryContextService;', $provider);
         self::assertStringContainsString("'default_shipping_address' => \$this->customerAddressPrefill()", $provider);
+        self::assertStringContainsString("'delivery' => \$this->deliveryContextService->getContext(\$params)", $provider);
+        self::assertStringContainsString("'getDeliveryContext' => \$this->deliveryContext(\$params)", $provider);
         self::assertStringContainsString('private function customerAddressPrefill(): array', $provider);
         self::assertStringContainsString('->getDefaultByCustomer($identity->getId())', $provider);
     }

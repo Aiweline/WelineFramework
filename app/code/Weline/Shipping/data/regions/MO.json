@@ -1,0 +1,34 @@
+{
+  "country_code": "MO",
+  "country_name": "中国澳门特别行政区",
+  "regions": [
+    {
+      "code": "MO-PEN",
+      "name": "澳门半岛",
+      "type": "province",
+      "children": [
+        {"code": "MO-PEN-N", "name": "花地玛堂区", "type": "city"},
+        {"code": "MO-PEN-S", "name": "圣安多尼堂区", "type": "city"},
+        {"code": "MO-PEN-I", "name": "望德堂区", "type": "city"},
+        {"code": "MO-PEN-L", "name": "风顺堂区", "type": "city"},
+        {"code": "MO-PEN-SE", "name": "大堂区", "type": "city"}
+      ]
+    },
+    {
+      "code": "MO-TAI",
+      "name": "氹仔",
+      "type": "province",
+      "children": [
+        {"code": "MO-TAI-C", "name": "嘉模堂区", "type": "city"}
+      ]
+    },
+    {
+      "code": "MO-COL",
+      "name": "路环",
+      "type": "province",
+      "children": [
+        {"code": "MO-COL-C", "name": "圣方济各堂区", "type": "city"}
+      ]
+    }
+  ]
+}

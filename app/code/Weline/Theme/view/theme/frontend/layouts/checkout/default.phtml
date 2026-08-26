@@ -72,7 +72,9 @@ $meta['showFooter'] = $meta['showFooter'] ?? true;
                     position="content"
                     wrapper="section"
                     class="checkout-main__trust-slot">
-                <w:hook>Weline_Theme::frontend::layouts::checkout::trust</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::checkout::trust<else/>
+                    <w:widget type="content" name="trust-badges" />
+                </w:hook>
             </w:slot>
             </w:slot>
             <w:hook>Weline_Theme::frontend::layouts::checkout::main-after</w:hook>

@@ -1,10 +1,10 @@
 /**
  * 色系：default
- * 
- * 默认简约主题的颜色覆盖文件
+ *
+ * 默认主题品牌色板（与页头 Amazon chrome 橙色一致）
  * 字段
  * @meta.name {default="default",name="default",description="default，用于描述色系的名称"}
- * @meta.description {default="简约现代的默认主题颜色，提供清晰易读的界面和温和的交互色",name="简约现代的默认主题颜色，提供清晰易读的界面和温和的交互色",description="简约现代的默认主题颜色，提供清晰易读的界面和温和的交互色，用于描述色系的用途"}
+ * @meta.description {default="默认主题品牌色：Amazon 橙色主色与暖色交互面，对齐页头 chrome",name="默认主题品牌色：Amazon 橙色主色与暖色交互面，对齐页头 chrome",description="默认主题品牌色：Amazon 橙色主色与暖色交互面，对齐页头 chrome，用于描述色系的用途"}
  * @meta.theme {default="default",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
  * @meta.panel {default="color",name="panel",description="panel"}
  * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
@@ -12,63 +12,59 @@
  */
 
 :root,
-[data-theme="default"] {
-    /* ========== 品牌色（温和的蓝色系） ========== */
-    --color-primary: #4a90e2;
-    --color-primary-light: #6ba3e8;
-    --color-primary-dark: #3a7bc8;
-    --color-primary-border: #2e6ba8;
+[data-theme="default"],
+[data-theme="light"] {
+    /* ========== 品牌色（Amazon 橙色，对齐 chrome primary） ========== */
+    --color-primary: #ff9900;
+    --color-primary-light: #febd69;
+    --color-primary-dark: #e68900;
+    --color-primary-border: #cc7700;
+    --color-primary-rgb: 255, 153, 0;
+    --color-primary-hover: #e68900;
+    --color-primary-active: #cc7700;
+    --color-primary-bg-subtle: #fff4e0;
+    --color-primary-border-subtle: #ffd699;
+    --color-primary-text-emphasis: #c45500;
+    --color-on-primary: #111111;
 
     /* ========== 文本色 ========== */
-    --color-text-primary: #1a1a1a;
-    /* 深色文本，确保在白色背景上有足够对比度 */
-    --color-text-secondary: #4a5568;
-    /* 次要文本，提高对比度，从 #7f8c8d 调整为更深的颜色 */
-    --color-text-tertiary: #64748b;
-    /* 三级文本，提高对比度 */
-    --color-text-disabled: #cbd5e1;
-    /* 禁用文本，保持较浅但仍有区分度 */
-    --color-text-dark: #000000;
-    /* 纯黑色，确保在白色背景上有足够对比度 */
-    --color-text-muted: #475569;
-    /* 弱化文本，提高对比度，从 #6c757d 调整为更深的颜色 */
-    --color-text-placeholder: #94a3b8;
-    /* 占位符文本，提高对比度 */
+    --color-text-primary: #0f1111;
+    --color-text-secondary: #565959;
+    --color-text-tertiary: #767676;
+    --color-text-disabled: #c7c7c7;
+    --color-text-dark: #0f1111;
+    --color-text-muted: #565959;
+    --color-text-placeholder: #999999;
     --color-text-light: #ffffff;
-    /* 浅色文本，用于深色背景 */
-    --color-text-light-secondary: #e2e8f0;
-    /* 浅色次要文本，用于深色背景 */
+    --color-text-light-secondary: #dddddd;
 
     /* ========== 背景色 ========== */
+    /* Body 画布=亚马逊白；secondary=浅灰底板（卡片间隔可选）；卡片/菜单用 bg-primary */
+    --color-bg-canvas: #ffffff;
+    --color-bg-canvas-rgb: 255, 255, 255;
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-canvas: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
     --color-bg-primary: #ffffff;
-    /* 主背景色，纯白色 */
-    --color-bg-secondary: #f1f5f9;
-    /* 次要背景色，从 #f8f9fa 调整为更明显的区分 */
-    --color-bg-tertiary: #e2e8f0;
-    /* 三级背景色，从 #e9ecef 调整为更明显的区分 */
-    --color-bg-dark: #1e293b;
-    /* 深色背景，从 #2c3e50 调整为更深的颜色 */
-    --color-bg-dark-secondary: #0f172a;
-    /* 深色次要背景，从 #1a1a1a 调整为更深的颜色 */
-    --color-bg-dark-tertiary: #334155;
-    /* 深色三级背景，从 #343a40 调整为更深的颜色 */
+    --color-bg-secondary: #eaeded;
+    --color-bg-tertiary: #e7e7e7;
+    --color-bg-dark: #232f3e;
+    --color-bg-dark-secondary: #131921;
+    --color-bg-dark-tertiary: #37475a;
+    --color-surface-hover: #f3f3f3;
 
     /* ========== 边框色 ========== */
-    --color-border-default: #cbd5e1;
-    /* 默认边框，从 #dee2e6 调整为更明显的边框 */
-    --color-border-emphasis: #94a3b8;
-    /* 强调边框，从 #adb5bd 调整为更明显的边框 */
-    --color-border-focus: #4a90e2;
-    /* 焦点边框，保持品牌色 */
-    --color-border-light: #e2e8f0;
-    /* 浅色边框，从 #e9ecef 调整为更明显的边框 */
+    --color-border-default: #dddddd;
+    --color-border-emphasis: #a6a6a6;
+    --color-border-focus: #ff9900;
+    --color-border-light: #e7e7e7;
 
-    /* ========== 强调色（温和的蓝色系，用于交互元素） ========== */
-    --color-accent: #4a90e2;
-    --color-accent-hover: #3a7bc8;
-    --color-accent-light: rgba(74, 144, 226, 0.08);
-    --color-accent-medium: rgba(74, 144, 226, 0.12);
-    --color-accent-dark: rgba(74, 144, 226, 0.18);
+    /* ========== 强调色 ========== */
+    --color-accent: #ff9900;
+    --color-accent-hover: #e68900;
+    --color-accent-light: rgba(255, 153, 0, 0.08);
+    --color-accent-medium: rgba(255, 153, 0, 0.14);
+    --color-accent-dark: rgba(255, 153, 0, 0.2);
 
     /* ========== 功能色 ========== */
     --color-success: #28a745;
@@ -76,21 +72,28 @@
     --color-error: #dc3545;
     --color-error-hover: #c82333;
     --color-error-light: rgba(220, 53, 69, 0.08);
-    --color-info: #17a2b8;
+    --color-info: #007185;
 
-    /* ========== 链接色 ========== */
-    --color-link: #4a90e2;
-    --color-link-hover: #3a7bc8;
-    --color-link-visited: #6c5ce7;
+    /* ========== 链接色（Amazon：青绿链接 + 橙色 hover） ========== */
+    --color-link: #007185;
+    --color-link-hover: #c45500;
+    --color-link-visited: #551a8b;
 
-    /* ========== Header 专用颜色 ========== */
-    --color-header-bg: #f8f9fa;
-    /* Header 背景色，浅灰色，与白色背景区分 */
-    --color-header-bg-hover: #f8f9fa;
-    --color-header-border-hover: #dee2e6;
-    --color-header-shadow: rgba(0, 0, 0, 0.1);
-    --color-header-focus-ring: rgba(74, 144, 226, 0.3);
+    /* ========== Header ========== */
+    --color-header-bg: #131921;
+    --color-header-bg-hover: #232f3e;
+    --color-header-border-hover: #3a4553;
+    --color-header-shadow: rgba(0, 0, 0, 0.18);
+    --color-header-focus-ring: rgba(255, 153, 0, 0.35);
     --color-header-dropdown-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+    /* ========== chrome 同步 ========== */
+    --weline-chrome-primary: var(--color-primary);
+    --weline-chrome-primary-light: var(--color-primary-light);
+    --weline-chrome-primary-dark: var(--color-primary-dark);
+    --weline-chrome-border-focus: var(--color-border-focus);
+    --weline-chrome-body-link-hover: var(--color-primary);
+    --weline-chrome-menu-panel-text-hover: var(--color-primary);
 
     /* ========== 滚动条 ========== */
     --scrollbar-width: 4px;

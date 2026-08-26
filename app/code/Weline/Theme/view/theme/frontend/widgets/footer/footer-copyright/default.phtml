@@ -13,7 +13,6 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {copyright}
  * @widget.supports {["layout-footer-copyright","layout-global-footer-copyright"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"footer-copyright","area":"footer","sort_order":0}]}
  * @widget.exclusive {true}
  *
  * @param copyright_text {default="© {year} {site_name}. All Rights Reserved.",type="string",label="版权文字"}
@@ -21,7 +20,7 @@
  * @param icp_link {default="https://beian.miit.gov.cn/",type="string",label="ICP备案链接"}
  * @param police_number {default="",type="string",label="公安备案号"}
  * @param police_link {default="",type="string",label="公安备案链接"}
- * @param text_color {default="var(--weline-theme-on-primary)",type="color",label="文字颜色"}
+ * @param text_color {default="var(--weline-theme-text-on-dark-muted, #cbd5e1)",type="color",label="文字颜色"}
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
@@ -38,7 +37,10 @@ $icpLink = $this->getData('icp_link') ?? 'https://beian.miit.gov.cn/';
 $policeNumber = $this->getData('police_number') ?? '';
 $policeLink = $this->getData('police_link') ?? '';
 $additionalText = $this->getData('additional_text') ?? '';
-$textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--weline-theme-on-primary)');
+$textColor = ThemeUiColor::sanitize(
+    $this->getData('text_color') ?? '',
+    'var(--weline-theme-text-on-dark-muted, #cbd5e1)'
+);
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
 $siteName = 'WeShop';
@@ -49,7 +51,7 @@ $copyrightText = str_replace(['{year}', '{site_name}'], [date('Y'), $siteName], 
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="--wc-copyright-text:<?= $esc($textColor) ?>;">
+         style="--wc-copyright-text: <?= $esc($textColor) ?>;">
     <div class="copyright-text"><?= $esc($copyrightText) ?></div>
     <?php if ($icpNumber !== '' || $policeNumber !== '' || $additionalText !== ''): ?>
         <div class="copyright-links">
@@ -72,46 +74,47 @@ $copyrightText = str_replace(['{year}', '{site_name}'], [date('Y'), $siteName], 
 <style>
 .<?= $wc ?> {
     text-align: center;
-    padding: var(--weline-space-5, 20px) 0;
-    font-size: var(--weline-font-size-sm, 13px);
-    color: color-mix(in srgb, var(--wc-copyright-text, var(--weline-theme-on-primary)) 60%, transparent);
+    padding: var(--weline-space-5) 0;
+    font-size: var(--weline-font-size-sm);
+    color: var(--wc-copyright-text);
 }
 
 .<?= $wc ?> .copyright-text {
-    margin-bottom: var(--weline-space-3, 10px);
+    margin-bottom: var(--weline-space-3);
 }
 
 .<?= $wc ?> .copyright-links {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: var(--weline-space-5, 20px);
+    gap: var(--weline-space-5);
 }
 
 .<?= $wc ?> .copyright-links a {
-    color: color-mix(in srgb, var(--wc-copyright-text, var(--weline-theme-on-primary)) 60%, transparent);
+    color: var(--wc-copyright-text);
     text-decoration: none;
-    transition: color var(--weline-theme-transition-base, 0.2s ease);
+    transition: color var(--weline-theme-transition-base);
 }
 
-.<?= $wc ?> .copyright-links a:hover {
-    color: var(--wc-copyright-text, var(--weline-theme-on-primary));
+.<?= $wc ?> .copyright-links a:hover,
+.<?= $wc ?> .copyright-links a:focus-visible {
+    color: var(--weline-theme-text-on-dark);
 }
 
 .<?= $wc ?> .police-link {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
 }
 
 .<?= $wc ?> .police-icon {
-    width: 16px;
-    height: 16px;
+    width: var(--spacing-md);
+    height: var(--spacing-md);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3, 12px) 0;
-    font-size: var(--weline-font-size-xs, 11px);
+    padding: var(--weline-space-3) 0;
+    font-size: var(--weline-font-size-xs);
 }
 </style>

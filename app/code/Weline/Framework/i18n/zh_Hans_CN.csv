@@ -128,7 +128,6 @@
 "Shard family provider %{1} 的 family code 不能为空","分片家族提供者 %{1} 的家族代码不能为空"
 "Shard family code %{1} 重复：%{2} 与 %{3}","Shard family code %{1} 重复：%{2} 与 %{3}"
 "PostgreSQL 表 %{1} 的物理索引 %{2} 同时匹配多个逻辑索引声明","PostgreSQL 表 %{1} 的物理索引 %{2} 同时匹配多个逻辑索引声明"
-"PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致","PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致"
 "Schema DDL 审计写入失败（migration_id=0），已中止执行：module=%{1} table=%{2} kind=%{3}","Schema DDL 审计写入失败（migration_id=0），已中止执行：module=%{1} table=%{2} kind=%{3}"
 "表 %{1} 的索引 %{2} 新增后未通过物理定义回读","表 %{1} 的索引 %{2} 新增后未通过物理定义回读"
 "PostgreSQL 表 %{1} 的索引 %{2} 删除后仍然存在","PostgreSQL 表 %{1} 的索引 %{2} 删除后仍然存在"
@@ -259,6 +258,8 @@ URL解析后，你可以在这里做一些后续操作。,URL解析后，你可�
 "在收集路由之前触发，允许其他模块在路由收集前执行操作（如菜单收集，确保 ControllerAttributes 断言时 ACL 已有 type=menus 节点）。","在收集路由之前触发，允许其他模块在路由收集前执行操作（如菜单收集，确保 ControllerAttributes 断言时 ACL 已有 type=menus 节点）。"
 路由收集后,路由收集后
 "在路由收集完成后触发，用于 ACL 等与路由阶段收集的数据做 diff（如清理已卸载模块的 type=pc 权限）。","在路由收集完成后触发，用于 ACL 等与路由阶段收集的数据做 diff（如清理已卸载模块的 type=pc 权限）。"
+控制器注解规则已收集,控制器注解规则已收集
+"setup:upgrade 路由编译后 @Cdn/@Attack 解析完成，Cdn/WLS 各自监听并内部生效。","setup:upgrade 路由编译后 @Cdn/@Attack 解析完成，Cdn/WLS 各自监听并内部生效。"
 收集标签注册表,收集标签注册表
 "在 setup:upgrade 注册表阶段触发，允许外部模块执行标签注册表收集并通过 result 回传结果。","在 setup:upgrade 注册表阶段触发，允许外部模块执行标签注册表收集并通过 result 回传结果。"
 "清理缺失模块 ACL 残留","清理缺失模块 ACL 残留"
@@ -500,6 +501,67 @@ ACL分发,ACL分发
 位置：generated/extends.php,位置：generated/extends.php
 "✖ 写入扩展注册表失败。","✖ 写入扩展注册表失败。"
 重建失败：%{1},重建失败：%{1}
+"Pest 测试框架初始化失败: %{1}","Pest 测试框架初始化失败: %{1}"
+"请先定义项目根目录常量 BP","请先定义项目根目录常量 BP"
+"Pest 测试框架未安装，请运行: composer require --dev pestphp/pest","Pest 测试框架未安装，请运行: composer require --dev pestphp/pest"
+PHPUnit报告服务器未运行,PHPUnit报告服务器未运行
+"PHPUnit报告服务器未运行 (PID: %{1})","PHPUnit报告服务器未运行 (PID: %{1})"
+"PHPUnit报告服务器已停止 (PID: %{1})","PHPUnit报告服务器已停止 (PID: %{1})"
+PHPUnit报告服务器状态检查,PHPUnit报告服务器状态检查
+================================,================================
+"PID文件不存在: %{1}","PID文件不存在: %{1}"
+"状态: 未运行","状态: 未运行"
+"PID文件: %{1}","PID文件: %{1}"
+"进程ID: %{1}","进程ID: %{1}"
+"状态: 运行中","状态: 运行中"
+"运行时间: %{1}秒","运行时间: %{1}秒"
+"启动时间: %{1}","启动时间: %{1}"
+"访问地址: http://%{1}:%{2}","访问地址: http://%{1}:%{2}"
+"端口%{1}: 已占用","端口%{1}: 已占用"
+"端口%{1}: 未占用","端口%{1}: 未占用"
+"状态: 未运行 (进程不存在)","状态: 未运行 (进程不存在)"
+"建议: 清理PID文件并重新启动","建议: 清理PID文件并重新启动"
+"注意: 端口%{1}仍被占用，可能被其他进程使用","注意: 端口%{1}仍被占用，可能被其他进程使用"
+env.php中的服务器信息:,env.php中的服务器信息:
+"主机: %{1}","主机: %{1}"
+"端口: %{1}","端口: %{1}"
+"PID: %{1}","PID: %{1}"
+"状态: %{1}","状态: %{1}"
+"未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
+"模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"
+"未找到可运行的 E2E 用例，退出。","未找到可运行的 E2E 用例，退出。"
+工作目录：%{1},工作目录：%{1}
+执行命令：%{1},执行命令：%{1}
+"E2E 测试执行成功。","E2E 测试执行成功。"
+"E2E 测试执行失败，退出码：%{1}","E2E 测试执行失败，退出码：%{1}"
+"运行 Playwright E2E（自动在 tests/e2e 目录执行）","运行 Playwright E2E（自动在 tests/e2e 目录执行）"
+"直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。","直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。"
+"可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js","可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js"
+"指定 Playwright project，如 chromium/firefox/webkit","指定 Playwright project，如 chromium/firefox/webkit"
+"只运行指定模块（基于 collected-tests.json 精准过滤）","只运行指定模块（基于 collected-tests.json 精准过滤）"
+"按测试标题关键词筛选（映射为 --grep）","按测试标题关键词筛选（映射为 --grep）"
+"按 `[case:ID]` 标签筛选，推荐新用例使用该风格","按 `[case:ID]` 标签筛选，推荐新用例使用该风格"
+列出可运行模块及文件数量,列出可运行模块及文件数量
+强制刷新测试收集映射,强制刷新测试收集映射
+有界面模式（默认会自动追加）,有界面模式（默认会自动追加）
+"无界面模式（设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（设置 PLAYWRIGHT_HEADLESS=1）"
+"Playwright UI 模式",剧作家UI模式
+按测试名过滤,按测试名过滤
+"并发 worker 数","系数 工人数"
+"运行全部 E2E","运行全部 E2E"
+运行单个后端用例,运行单个后端用例
+按模块运行,按模块运行
+按用例标题运行,按用例标题运行
+"按用例 ID 运行","按用例 ID 运行"
+列模块,列模块
+"UI 调试","UI 调试"
+"检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
+"未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。","未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。"
+"无法创建 E2E node_modules 目录：%{1}","无法创建 E2E node_modules 目录：%{1}"
+"无法创建 @playwright/test shim 目录：%{1}","无法创建 @playwright/test shim 目录：%{1}"
+"无法创建 playwright shim 目录：%{1}","无法创建 playwright shim 目录：%{1}"
+测试清单写入失败，模块过滤可能不可用。,测试清单写入失败，模块过滤可能不可用。
+"可用 E2E 模块列表：","可用 E2E 模块列表："
 最终响应装饰器返回了无效响应,最终响应装饰器返回了无效响应
 当前请求的商城范围未完整冻结,当前请求的商城范围未完整冻结
 当前请求的商城路由上下文未完整冻结,当前请求的商城路由上下文未完整冻结
@@ -1821,6 +1883,9 @@ Transport,运输
 "前台 section / wrapper=section 必须配置 weline-code","前台 section / wrapper=section 必须配置 weline-code"
 "【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。","【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。"
 "【致命错误】前台 section weline-code 约束违反（规则 frontend-section-weline-code），共 %{1} 处。请修复后重试 setup:upgrade。","【致命错误】前台 section weline-code 约束违反（规则 frontend-section-weline-code），共 %{1} 处。请修复后重试 setup:upgrade。"
+"Theme 布局/partial 仅允许内嵌 Weline_Theme 部件","Theme 布局/partial 仅允许内嵌 Weline_Theme 部件"
+"【致命错误】Theme 布局内嵌非 Theme 部件：共 %{1} 处。","【致命错误】Theme 布局内嵌非 Theme 部件：共 %{1} 处。"
+"【致命错误】Theme 布局部件归属约束违反（规则 frontend-theme-layout-widget-owner），共 %{1} 处。请修复后重试 setup:upgrade。","【致命错误】Theme 布局部件归属约束违反（规则 frontend-theme-layout-widget-owner），共 %{1} 处。请修复后重试 setup:upgrade。"
 系统正在升级，请稍后再试。,系统正在升级，请稍后再试。
 "参数 provider 不能为空","参数 provider 不能为空"
 查询被拒绝,查询被拒绝
@@ -2175,6 +2240,10 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "JSON 格式输出完整报告","JSON 格式输出完整报告"
 本地门禁,本地门禁
 "JSON 报告","JSON 报告"
+"Theme 布局部件归属检查：发现 %{1} 条违规。","Theme 布局部件归属检查：发现 %{1} 条违规。"
+"【致命错误】Theme 布局/partial 内嵌非 Theme 部件：共 %{1} 处。请改为 default_injections 后重新运行 frontend:check-theme-layout-widgets。","【致命错误】Theme 布局/partial 内嵌非 Theme 部件：共 %{1} 处。请改为 default_injections 后重新运行 frontend:check-theme-layout-widgets。"
+"Theme 布局部件归属检查通过。","Theme 布局部件归属检查通过。"
+"检查 Theme layouts/partials 是否仅内嵌 Weline_Theme 部件","检查 Theme layouts/partials 是否仅内嵌 Weline_Theme 部件"
 "框架编译完成：%{1} 个模块，%{2} 个 QueryProvider，%{3} 个延迟 Provider。","框架编译完成：%{1} 个模块，%{2} 个 QueryProvider，%{3} 个延迟 Provider。"
 "编译模块依赖图和 QueryProvider 运行时索引","编译模块依赖图和 QueryProvider 运行时索引"
 编译运行时索引,编译运行时索引
@@ -2276,6 +2345,7 @@ Operation：%{1}.%{2},操作：%{1}.%{2}
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+"PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致","PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致"
 Close,关闭
 "SQLite 版本校验朚过（连接已建立，升级可继续）：%{1}","SQLite 版本校验朚过（连接已建立，升级可继续）：%{1}"
 "SQL 准失败?{1}。SQL: %{2}","SQL 准失败?{1}。SQL: %{2}"
@@ -2340,67 +2410,6 @@ Close,关闭
 沙盒数据库,沙盒数据库
 无法打开文件：%{1},无法打开文件：%{1}
 "PDO execute 失败：%{1}。SQL预览：%{2}","PDO execute 失败：%{1}。SQL预览：%{2}"
-"Pest 测试框架初始化失败: %{1}","Pest 测试框架初始化失败: %{1}"
-"请先定义项目根目录常量 BP","请先定义项目根目录常量 BP"
-"Pest 测试框架未安装，请运行: composer require --dev pestphp/pest","Pest 测试框架未安装，请运行: composer require --dev pestphp/pest"
-PHPUnit报告服务器未运行,PHPUnit报告服务器未运行
-"PHPUnit报告服务器未运行 (PID: %{1})","PHPUnit报告服务器未运行 (PID: %{1})"
-"PHPUnit报告服务器已停止 (PID: %{1})","PHPUnit报告服务器已停止 (PID: %{1})"
-PHPUnit报告服务器状态检查,PHPUnit报告服务器状态检查
-================================,================================
-"PID文件不存在: %{1}","PID文件不存在: %{1}"
-"状态: 未运行","状态: 未运行"
-"PID文件: %{1}","PID文件: %{1}"
-"进程ID: %{1}","进程ID: %{1}"
-"状态: 运行中","状态: 运行中"
-"运行时间: %{1}秒","运行时间: %{1}秒"
-"启动时间: %{1}","启动时间: %{1}"
-"访问地址: http://%{1}:%{2}","访问地址: http://%{1}:%{2}"
-"端口%{1}: 已占用","端口%{1}: 已占用"
-"端口%{1}: 未占用","端口%{1}: 未占用"
-"状态: 未运行 (进程不存在)","状态: 未运行 (进程不存在)"
-"建议: 清理PID文件并重新启动","建议: 清理PID文件并重新启动"
-"注意: 端口%{1}仍被占用，可能被其他进程使用","注意: 端口%{1}仍被占用，可能被其他进程使用"
-env.php中的服务器信息:,env.php中的服务器信息:
-"主机: %{1}","主机: %{1}"
-"端口: %{1}","端口: %{1}"
-"PID: %{1}","PID: %{1}"
-"状态: %{1}","状态: %{1}"
-"未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
-"模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"
-"未找到可运行的 E2E 用例，退出。","未找到可运行的 E2E 用例，退出。"
-工作目录：%{1},工作目录：%{1}
-执行命令：%{1},执行命令：%{1}
-"E2E 测试执行成功。","E2E 测试执行成功。"
-"E2E 测试执行失败，退出码：%{1}","E2E 测试执行失败，退出码：%{1}"
-"运行 Playwright E2E（自动在 tests/e2e 目录执行）","运行 Playwright E2E（自动在 tests/e2e 目录执行）"
-"直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。","直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。"
-"可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js","可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js"
-"指定 Playwright project，如 chromium/firefox/webkit","指定 Playwright project，如 chromium/firefox/webkit"
-"只运行指定模块（基于 collected-tests.json 精准过滤）","只运行指定模块（基于 collected-tests.json 精准过滤）"
-"按测试标题关键词筛选（映射为 --grep）","按测试标题关键词筛选（映射为 --grep）"
-"按 `[case:ID]` 标签筛选，推荐新用例使用该风格","按 `[case:ID]` 标签筛选，推荐新用例使用该风格"
-列出可运行模块及文件数量,列出可运行模块及文件数量
-强制刷新测试收集映射,强制刷新测试收集映射
-有界面模式（默认会自动追加）,有界面模式（默认会自动追加）
-"无界面模式（设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（设置 PLAYWRIGHT_HEADLESS=1）"
-"Playwright UI 模式",剧作家UI模式
-按测试名过滤,按测试名过滤
-"并发 worker 数","系数 工人数"
-"运行全部 E2E","运行全部 E2E"
-运行单个后端用例,运行单个后端用例
-按模块运行,按模块运行
-按用例标题运行,按用例标题运行
-"按用例 ID 运行","按用例 ID 运行"
-列模块,列模块
-"UI 调试","UI 调试"
-"检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
-"未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。","未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。"
-"无法创建 E2E node_modules 目录：%{1}","无法创建 E2E node_modules 目录：%{1}"
-"无法创建 @playwright/test shim 目录：%{1}","无法创建 @playwright/test shim 目录：%{1}"
-"无法创建 playwright shim 目录：%{1}","无法创建 playwright shim 目录：%{1}"
-测试清单写入失败，模块过滤可能不可用。,测试清单写入失败，模块过滤可能不可用。
-"可用 E2E 模块列表：","可用 E2E 模块列表："
 "critical/async 观察者必须继承于：","critical/async 观察者必须继承于："
 事件观察者配置必须是数组：%{1},事件观察者配置必须是数组：%{1}
 "事件 %{1} 的 critical/async 观察者缺少 instance","事件 %{1} 的 critical/async 观察者缺少 instance"

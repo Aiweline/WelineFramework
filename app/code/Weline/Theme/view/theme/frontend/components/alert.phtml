@@ -92,10 +92,10 @@ $rootClass = trim($wc . ' w-alert' . ($dismissible ? ' w-alert-dismissible' : ''
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: start;
-    gap: var(--weline-space-3, 12px);
-    padding: var(--weline-space-4, 16px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md, 8px);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-4);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text);
 }
@@ -126,12 +126,12 @@ $rootClass = trim($wc . ' w-alert' . ($dismissible ? ' w-alert-dismissible' : ''
 
 .<?= $wc ?> .alert-content {
     display: grid;
-    gap: var(--weline-space-1, 4px);
+    gap: var(--weline-space-1);
     min-width: 0;
 }
 
 .<?= $wc ?> .alert-title {
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-weight: var(--weline-font-weight-semibold);
 }
 
 .<?= $wc ?> .alert-close {

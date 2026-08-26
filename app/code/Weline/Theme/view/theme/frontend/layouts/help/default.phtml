@@ -1,0 +1,252 @@
+<?php
+/**
+ * 帮助中心默认布局（电商常见模板）
+ *
+ * 自动读取站点名称、描述与联系方式；提供主题话题、FAQ、联系卡片，
+ * 并预留可扩展 slot 供其他模块投放小部件。
+ *
+ * @meta.name {default="帮助中心",name="帮助中心",description="电商帮助中心默认布局"}
+ * @meta.description {default="站点帮助中心：主题导航、FAQ、联系方式与可扩展部件槽",name="描述",description="帮助中心页面布局"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="帮助中心通常允许访客访问"}
+ * @param.title {default="帮助中心",name="页面标题",description="帮助中心标题"}
+ * @param.subtitle {default="",name="副标题",description="留空时使用站点描述"}
+ * @param.showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
+ * @param.showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
+ * @param.class {default="",name="额外 CSS 类",description="主内容额外 CSS 类"}
+ */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteContactInfo;
+
+$meta = $this->getData('meta') ?? [];
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+
+$contact = [
+    'site_name' => 'Weline',
+    'site_description' => (string)__('官方商城帮助与客户服务'),
+    'contact_email' => 'support@example.com',
+    'contact_phone' => '',
+    'service_hours' => (string)__('周一至周五 9:00 - 18:00（法定节假日除外）'),
+    'contact_address' => '',
+];
+try {
+    $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+    if ($resolver instanceof SiteContactInfo) {
+        $contact = array_merge($contact, $resolver->resolve());
+    }
+} catch (\Throwable) {
+}
+
+$title = (string)($meta['title'] ?? __('帮助中心'));
+$subtitle = trim((string)($meta['subtitle'] ?? ''));
+if ($subtitle === '') {
+    $subtitle = (string)$contact['site_description'];
+}
+$siteName = (string)$contact['site_name'];
+$email = (string)$contact['contact_email'];
+$phone = (string)$contact['contact_phone'];
+$hours = (string)$contact['service_hours'];
+$address = (string)$contact['contact_address'];
+$mailHref = 'mailto:' . $email;
+$trackUrl = '/orders/track';
+$contactUrl = '/contact';
+$accountUrl = '/account';
+$cartUrl = '/cart';
+
+$topics = [
+    ['icon' => 'truck', 'title' => __('物流配送'), 'desc' => __('发货时效、运费与配送范围'), 'url' => '#help-shipping'],
+    ['icon' => 'undo', 'title' => __('退换货'), 'desc' => __('退货条件、流程与退款进度'), 'url' => '/rma'],
+    ['icon' => 'credit-card', 'title' => __('支付与发票'), 'desc' => __('支付方式、账单与发票开具'), 'url' => '#help-payment'],
+    ['icon' => 'box', 'title' => __('订单问题'), 'desc' => __('下单、改单、取消与订单状态'), 'url' => $trackUrl],
+    ['icon' => 'user', 'title' => __('账户与安全'), 'desc' => __('登录、密码与个人信息'), 'url' => $accountUrl],
+    ['icon' => 'headset', 'title' => __('联系客服'), 'desc' => __('电话、邮箱与在线支持通道'), 'url' => $contactUrl],
+];
+
+$faqs = [
+    ['q' => __('下单后多久发货？'), 'a' => __('一般情况下，现货订单在付款成功后 24–48 小时内发出；预售或定制商品以商品页说明为准。')],
+    ['q' => __('如何查询物流？'), 'a' => __('可在「订单跟踪」页输入订单号与下单邮箱/手机号查询；登录账户后也可在「我的订单」中查看物流。')],
+    ['q' => __('支持哪些支付方式？'), 'a' => __('支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页展示为准。')],
+    ['q' => __('如何申请退换货？'), 'a' => __('请确认商品在可退换期内且符合退换政策，然后前往退换货中心提交申请，或联系客服协助处理。')],
+];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::help::head-after</w:hook>
+    <style>
+        body.help-layout { margin: 0; min-height: 100vh; color: var(--weline-layout-text-primary); background: var(--weline-layout-surface-primary); }
+        .help-layout__inner { width: min(var(--weline-layout-content-max-width), calc(100% - (var(--weline-layout-content-padding-inline) * 2))); margin: 0 auto; padding: var(--size-control-md) 0 var(--token-size-64px); }
+        .help-layout__hero { display: grid; gap: var(--weline-space-3); margin-bottom: var(--spacing-7); }
+        .help-layout__eyebrow { margin: 0; font-size: var(--font-size-sm); font-weight: 700; color: var(--weline-layout-link-color); }
+        .help-layout__hero h1 { margin: 0; font-size: clamp(var(--font-size-3xl), 4vw, var(--size-control-md)); line-height: 1.15; }
+        .help-layout__hero p { margin: 0; max-width: var(--token-size-46rem); color: var(--weline-layout-text-secondary); line-height: 1.7; }
+        .help-layout__search { margin-top: var(--spacing-sm); }
+        .help-layout__search-form { display: flex; gap: var(--spacing-sm); max-width: var(--token-size-560px); }
+        .help-layout__search-form input { flex: 1; min-height: var(--size-control-lg); border: var(--border-width-thin) solid var(--color-border-panel-2); border-radius: var(--border-radius-lg); padding: 0 var(--spacing-3_5); }
+        .help-layout__search-form button { min-height: var(--size-control-lg); border: 0; border-radius: var(--border-radius-lg); padding: 0 var(--spacing-md); background: var(--weline-layout-link-color); color: var(--color-bg-primary); font-weight: 700; cursor: pointer; }
+        .help-layout__grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(var(--token-size-240px), .9fr); gap: var(--spacing-lg); align-items: start; }
+        .help-layout__topics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-3_5); }
+        .help-layout__topic { display: grid; gap: var(--spacing-1_5); padding: var(--spacing-4_5); border: var(--border-width-thin) solid var(--color-border-slate); border-radius: var(--token-size-10px); text-decoration: none; color: inherit; background: var(--color-bg-primary); }
+        .help-layout__topic:hover { border-color: var(--weline-layout-link-color); text-decoration: none; }
+        .help-layout__topic strong { font-size: var(--font-size-base); }
+        .help-layout__topic span { color: var(--weline-layout-text-secondary); font-size: var(--weline-font-size-sm); line-height: 1.5; }
+        .help-layout__section { margin-top: var(--spacing-7); padding: var(--spacing-lg); border: var(--border-width-thin) solid var(--color-border-slate); border-radius: var(--border-radius-xl); background: var(--color-bg-primary); }
+        .help-layout__section h2 { margin: 0 0 var(--spacing-md); font-size: var(--font-size-2_5xl); }
+        .help-layout__faq { display: grid; gap: var(--weline-space-3); }
+        .help-layout__faq-item { padding: var(--spacing-3_5) var(--spacing-md); border: var(--border-width-thin) solid var(--token-color-e8edf5); border-radius: var(--border-radius-lg); background: var(--color-bg-slate); }
+        .help-layout__faq-item strong { display: block; margin-bottom: var(--spacing-1_5); }
+        .help-layout__faq-item p { margin: 0; color: var(--weline-layout-text-secondary); line-height: 1.65; }
+        .help-layout__side { display: grid; gap: var(--spacing-md); }
+        .help-layout__card { padding: var(--weline-space-5); border: var(--border-width-thin) solid var(--color-border-slate); border-radius: var(--border-radius-xl); background: var(--color-bg-slate); }
+        .help-layout__card h3 { margin: 0 0 var(--spacing-2_5); font-size: var(--font-size-base); }
+        .help-layout__card p, .help-layout__card a { margin: 0 0 var(--spacing-sm); color: var(--weline-layout-text-secondary); line-height: 1.6; text-decoration: none; }
+        .help-layout__card a:hover { color: var(--weline-layout-link-color); text-decoration: underline; }
+        .help-layout__extras { margin-top: var(--spacing-lg); display: grid; gap: var(--spacing-md); }
+        @media (max-width: 900px) {
+            .help-layout__grid { grid-template-columns: 1fr; }
+            .help-layout__topics { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 560px) {
+            .help-layout__topics { grid-template-columns: 1fr; }
+            .help-layout__search-form { flex-direction: column; }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="help-layout <?= $escape($meta['class'] ?? '') ?>">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::help::body-start</w:hook>
+
+    <div class="weline-page-wrapper">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <main class="help-layout__main" id="help-main" data-layout="help">
+            <div class="help-layout__inner">
+                <header class="help-layout__hero">
+                    <p class="help-layout__eyebrow"><?= $escape($siteName) ?></p>
+                    <h1><?= $escape($title) ?></h1>
+                    <p><?= $escape($subtitle) ?></p>
+                    <div class="help-layout__search">
+                        <w:form action="/search" method="get" class="help-layout__search-form">
+                            <input type="search" name="q" placeholder="<?= $escape(__('搜索帮助主题，例如：退货、运费、发票')) ?>" aria-label="<?= $escape(__('搜索帮助')) ?>">
+                            <button type="submit"><?= $escape(__('搜索')) ?></button>
+                        </w:form>
+                    </div>
+                </header>
+
+                <div class="help-layout__grid">
+                    <div class="help-layout__primary">
+                        <w:slot id="help-topics"
+                                name="帮助主题"
+                                accept="layout-help-topics,help-topics,content,faq,notice"
+                                reject="header,footer,logo,navigation"
+                                multiple="true"
+                                append="true"
+                                max="12"
+                                position="content"
+                                class="help-layout__topics-slot">
+                            <div class="help-layout__topics" id="help-topics">
+                                <?php foreach ($topics as $topic): ?>
+                                    <a class="help-layout__topic" href="<?= $escape($topic['url']) ?>">
+                                        <strong><?= $escape($topic['title']) ?></strong>
+                                        <span><?= $escape($topic['desc']) ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </w:slot>
+
+                        <section class="help-layout__section" id="help-faq" aria-labelledby="help-faq-title" weline-code="theme.help.faq">
+                            <h2 id="help-faq-title"><?= $escape(__('常见问题')) ?></h2>
+                            <w:slot id="help-faq"
+                                    name="帮助 FAQ"
+                                    accept="layout-help-faq,faq,content,notice"
+                                    reject="header,footer,logo,navigation"
+                                    multiple="true"
+                                    append="true"
+                                    max="12"
+                                    position="content"
+                                    class="help-layout__faq-slot">
+                                <div class="help-layout__faq">
+                                    <?php foreach ($faqs as $faq): ?>
+                                        <article class="help-layout__faq-item">
+                                            <strong><?= $escape($faq['q']) ?></strong>
+                                            <p><?= $escape($faq['a']) ?></p>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </w:slot>
+                        </section>
+
+                        <w:slot id="help-extras"
+                                name="帮助扩展区"
+                                accept="layout-help-extras,content,faq,notice,banner,promo-banner,trust-badges"
+                                reject="header,footer,logo,navigation,product"
+                                multiple="true"
+                                append="true"
+                                max="16"
+                                position="content"
+                                class="help-layout__extras">
+                            <w:hook>Weline_Theme::frontend::layouts::help::extras</w:hook>
+                        </w:slot>
+                    </div>
+
+                    <aside class="help-layout__side">
+                        <w:slot id="help-sidebar"
+                                name="帮助侧栏"
+                                accept="layout-help-sidebar,content,notice,faq,banner,contact"
+                                reject="header,footer,logo,navigation,product"
+                                multiple="true"
+                                append="true"
+                                max="10"
+                                position="content"
+                                class="help-layout__sidebar-slot">
+                            <div class="help-layout__card">
+                                <h3><?= $escape(__('联系我们')) ?></h3>
+                                <?php if ($email !== ''): ?>
+                                    <p><a href="<?= $escape($mailHref) ?>"><?= $escape($email) ?></a></p>
+                                <?php endif; ?>
+                                <?php if ($phone !== ''): ?>
+                                    <p><a href="tel:<?= $escape(preg_replace('/\s+/', '', $phone) ?? $phone) ?>"><?= $escape($phone) ?></a></p>
+                                <?php endif; ?>
+                                <?php if ($hours !== ''): ?>
+                                    <p><?= $escape($hours) ?></p>
+                                <?php endif; ?>
+                                <?php if ($address !== ''): ?>
+                                    <p><?= $escape($address) ?></p>
+                                <?php endif; ?>
+                                <p><a href="<?= $escape($contactUrl) ?>"><?= $escape(__('前往联系我们页')) ?></a></p>
+                            </div>
+                            <div class="help-layout__card">
+                                <h3><?= $escape(__('快捷入口')) ?></h3>
+                                <p><a href="<?= $escape($trackUrl) ?>"><?= $escape(__('订单跟踪')) ?></a></p>
+                                <p><a href="<?= $escape($accountUrl) ?>"><?= $escape(__('我的账户')) ?></a></p>
+                                <p><a href="<?= $escape($cartUrl) ?>"><?= $escape(__('购物车')) ?></a></p>
+                                <p><a href="/rma"><?= $escape(__('退换货')) ?></a></p>
+                                <p><a href="/privacy"><?= $escape(__('隐私政策')) ?></a></p>
+                                <p><a href="/terms"><?= $escape(__('服务条款')) ?></a></p>
+                            </div>
+                        </w:slot>
+                    </aside>
+                </div>
+            </div>
+        </main>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::help::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

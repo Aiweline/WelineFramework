@@ -1,0 +1,169 @@
+<?php
+/**
+ * Product-owned recommended products for category (and list) recommendation slots.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {recommended-products}
+ * @widget.name {推荐产品}
+ * @widget.description {展示真实目录推荐产品，支持网格与轮播}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["category","product_list"]}
+ * @widget.supports {["layout-category-recommendations","layout-product-list-recommendations","recommended-products","featured-products"]}
+ * @widget.default_injections {[{ "layout_type":"category", "layout_option":"default", "slot":"category-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"分类页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} },{ "layout_type":"product_list", "layout_option":"default", "slot":"list-recommendations", "area":"content", "sort_order":0, "required":true, "reason":"产品列表页默认推荐产品槽", "config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"} }]}
+ *
+ * @param title {default="推荐产品",type="string",label="标题"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
+ * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\StorefrontProductWidgetCatalog;
+use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('recommended-products');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '推荐产品';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
+    $titleSource = '推荐产品';
+}
+$widgetTitle = WidgetI18n::label($titleSource, '推荐产品');
+$limit = max(1, min(24, (int)($this->getData('limit') ?? 8)));
+$columns = (string)($this->getData('columns') ?? '4');
+$layout = (string)($this->getData('layout') ?? 'grid');
+if (!in_array($columns, ['2', '3', '4', '5'], true)) {
+    $columns = '4';
+}
+if (!in_array($layout, ['grid', 'carousel'], true)) {
+    $layout = 'grid';
+}
+
+$products = [];
+try {
+    $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards($limit);
+} catch (\Throwable) {
+    $products = [];
+}
+
+foreach ($products as &$product) {
+    $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+    $product['id'] = $productId;
+    $route = trim((string)($product['url'] ?? ''));
+    $product['url'] = str_starts_with($route, 'http://') || str_starts_with($route, 'https://')
+        ? $route
+        : $this->getUrl(ltrim($route, '/'));
+}
+unset($product);
+
+if ($products === []) {
+    return;
+}
+?>
+<link rel="stylesheet"
+      href="@static(Weline_Product::css/widgets/recommended-products.css)?v=20260826-listalign1"
+      data-no-extract="true">
+
+<section class="<?= $esc($wc) ?> weline-product-recommended<?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-testid="storefront-recommended-products"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-layout="<?= $esc($layout) ?>"
+         data-columns="<?= $esc($columns) ?>">
+    <header class="wpc-header">
+        <h2 class="wpc-title"><?= $esc($widgetTitle) ?></h2>
+        <p class="wpc-subtitle"><?= $esc((string)__('精选好物，为你推荐')) ?></p>
+    </header>
+
+    <div class="wpc-stage" data-wpc-stage>
+        <?php if ($layout === 'carousel'): ?>
+            <button class="wpc-nav wpc-nav--prev" type="button" data-wpc-prev aria-label="<?= $esc((string)__('上一组')) ?>">
+                <span aria-hidden="true">‹</span>
+            </button>
+        <?php endif; ?>
+
+        <div class="wpc-viewport" data-wpc-viewport>
+            <div class="wpc-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?>" data-wpc-track>
+                <?php foreach ($products as $product): ?>
+                    <?php
+                    $productId = (int)($product['id'] ?? 0);
+                    $productUrl = (string)($product['url'] ?? '#');
+                    $productName = (string)($product['name'] ?? '');
+                    $imageResolved = StorefrontImagePlaceholder::resolve((string)($product['image'] ?? ''), $productId);
+                    $productImage = $imageResolved['src'];
+                    $imageFallback = $imageResolved['fallback'];
+                    $price = (float)($product['price'] ?? 0);
+                    $originalPrice = (float)($product['original_price'] ?? 0);
+                    $rating = (float)($product['rating'] ?? 0);
+                    $reviewCount = (int)($product['review_count'] ?? 0);
+                    $offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
+                    $sellable = !empty($product['sellable']);
+                    ?>
+                    <article class="wpc-card product-card" data-product-id="<?= $productId ?>">
+                        <div class="wpc-media-wrap">
+                            <a class="wpc-media" href="<?= $esc($productUrl) ?>" aria-label="<?= $esc($productName) ?>">
+                                <img src="<?= $esc($productImage) ?>"
+                                     alt=""
+                                     data-storefront-img="1"
+                                     data-fallback="<?= $esc($imageFallback) ?>"
+                                     loading="lazy"
+                                     decoding="async">
+                            </a>
+                            <?= $this->fetch(
+                                'Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml',
+                                ProductCardShopperActionParams::fetchDictionary($productId, $shopperActions, true)
+                            ) ?>
+                        </div>
+                        <div class="wpc-body">
+                            <h3 class="wpc-name">
+                                <a href="<?= $esc($productUrl) ?>"><?= $esc($productName) ?></a>
+                            </h3>
+                            <div class="wpc-rating" aria-label="<?= $esc(number_format($rating, 1)) ?>">
+                                <span class="wpc-stars" style="--rating: <?= $esc(number_format(min(5, max(0, $rating)), 2)) ?>"></span>
+                                <span class="wpc-reviews">(<?= $reviewCount ?>)</span>
+                            </div>
+                            <div class="wpc-price">
+                                <?php if ($originalPrice > $price && $price > 0): ?>
+                                    <span class="wpc-price-was">¥<?= number_format($originalPrice, 2) ?></span>
+                                <?php endif; ?>
+                                <span class="wpc-price-now">¥<?= number_format($price, 2) ?></span>
+                            </div>
+                            <?php if ($sellable && $offerUuid !== ''): ?>
+                                <button type="button"
+                                        class="wpc-cta weline-pixel::add_to_cart"
+                                        data-product-id="<?= $productId ?>"
+                                        data-global-offer-uuid="<?= $esc($offerUuid) ?>">
+                                    <?= $esc((string)__('加入购物车')) ?>
+                                </button>
+                            <?php else: ?>
+                                <a class="wpc-cta wpc-cta--link" href="<?= $esc($productUrl) ?>"><?= $esc((string)__('查看详情')) ?></a>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <?php if ($layout === 'carousel'): ?>
+            <button class="wpc-nav wpc-nav--next" type="button" data-wpc-next aria-label="<?= $esc((string)__('下一组')) ?>">
+                <span aria-hidden="true">›</span>
+            </button>
+        <?php endif; ?>
+    </div>
+</section>
+
+<script src="@static(Weline_Product::js/widgets/recommended-products.js)?v=20260825-rec2"
+        defer
+        data-no-extract="true"></script>

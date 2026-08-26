@@ -11,7 +11,8 @@
  * @widget.area {frontend}
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
- * @widget.slot {user-area}
+ * @widget.slot {language}
+ * @widget.supports {["layout-header-language","language"]}
  *
  * @param show_flag {default=true,type="bool",label="显示国旗"}
  * @param show_name {default=true,type="bool",label="显示语言名"}
@@ -104,15 +105,15 @@ $currentLang = reset($currentLang) ?: $languages[0];
 .<?= $wc ?> .language-current {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 6px);
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-2) var(--weline-space-3);
     background: none;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-sm, 6px);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-sm);
     cursor: pointer;
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .language-current:hover {
@@ -120,28 +121,28 @@ $currentLang = reset($currentLang) ?: $languages[0];
 }
 
 .<?= $wc ?> .lang-flag {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
 }
 
 .<?= $wc ?> .lang-name {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .language-list {
     position: absolute;
     top: 100%;
     left: 0;
-    min-width: 160px;
+    min-width: var(--token-size-160px);
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
     box-shadow: var(--weline-theme-shadow-md);
     list-style: none;
-    margin: var(--weline-space-1, 5px) 0 0;
-    padding: var(--weline-space-2, 8px) 0;
+    margin: var(--weline-space-1) 0 0;
+    padding: var(--weline-space-2) 0;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(10px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transform: translateY(var(--spacing-2_5));
+    transition: all var(--weline-theme-transition-base);
     z-index: 1000;
 }
 
@@ -155,11 +156,11 @@ $currentLang = reset($currentLang) ?: $languages[0];
 .<?= $wc ?> .language-list li a {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 10px);
-    padding: var(--weline-space-2, 8px) var(--weline-space-4, 15px);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-2) var(--weline-space-4);
     color: var(--weline-theme-text);
     text-decoration: none;
-    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
+    transition: background-color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .language-list li a:hover {
@@ -178,19 +179,19 @@ $currentLang = reset($currentLang) ?: $languages[0];
 .<?= $wc ?> .language-inline {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
 }
 
 .<?= $wc ?> .lang-item {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-1, 4px);
-    padding: var(--weline-space-2, 6px) var(--weline-space-3, 10px);
+    gap: var(--weline-space-1);
+    padding: var(--weline-space-2) var(--weline-space-3);
     color: var(--weline-theme-text-muted);
     text-decoration: none;
-    border-radius: var(--weline-radius-sm, 4px);
-    font-size: var(--weline-font-size-sm, 13px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    border-radius: var(--weline-radius-sm);
+    font-size: var(--weline-font-size-sm);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .lang-item:hover {
@@ -210,7 +211,7 @@ $currentLang = reset($currentLang) ?: $languages[0];
     visibility: visible;
     transform: none;
     box-shadow: none;
-    margin-top: var(--weline-space-2, 8px);
+    margin-top: var(--weline-space-2);
 }
 </style>
 

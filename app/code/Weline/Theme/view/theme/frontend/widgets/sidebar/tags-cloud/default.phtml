@@ -95,38 +95,38 @@ $countRange = $maxCount - $minCount ?: 1;
 <style>
 .<?= $wc ?> {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg, 10px);
-    padding: var(--weline-space-5, 20px);
+    border-radius: var(--weline-radius-lg);
+    padding: var(--weline-space-5);
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-4, 15px);
-    padding-bottom: var(--weline-space-4, 15px);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin: 0 0 var(--weline-space-4);
+    padding-bottom: var(--weline-space-4);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .tags-container {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
     line-height: 1.8;
 }
 
 .<?= $wc ?> .tag-item {
     display: inline-block;
-    padding: var(--weline-space-1, 4px) var(--weline-space-3, 12px);
-    font-size: var(--wc-tag-size, var(--weline-font-size-sm, 14px));
+    padding: var(--weline-space-1) var(--weline-space-3);
+    font-size: var(--wc-tag-size);
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text-muted);
     text-decoration: none;
-    border-radius: var(--weline-radius-round, 999px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    border-radius: var(--weline-radius-round);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .tag-item:hover {
@@ -135,12 +135,12 @@ $countRange = $maxCount - $minCount ?: 1;
 }
 
 .<?= $wc ?> .tag-count {
-    font-size: var(--weline-font-size-xs, 11px);
+    font-size: var(--weline-font-size-xs);
     opacity: 0.7;
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-3, 12px);
+    padding: var(--weline-space-3);
 }
 </style>

@@ -411,6 +411,20 @@ HTML;
             \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
             'Weline_Theme::ui/weline-ui.js'
         );
+        $foundationCssUrl = (string)$template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            'Weline_Theme::ui/weline-foundation.css'
+        );
+        $frontendCssUrl = (string)$template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            'Weline_Theme::ui/weline-frontend.css'
+        );
+        $foundationCssVersion = $this->uiStaticAssetVersion('weline-foundation.css');
+        $frontendCssVersion = $this->uiStaticAssetVersion('weline-frontend.css');
+        $uiScriptVersion = $this->uiStaticAssetVersion('weline-ui.js');
+        $foundationCssHref = $this->appendStaticAssetVersion($foundationCssUrl, $foundationCssVersion);
+        $frontendCssHref = $this->appendStaticAssetVersion($frontendCssUrl, $frontendCssVersion);
+        $uiScriptHref = $this->appendStaticAssetVersion($uiScriptUrl, $uiScriptVersion);
         $queryBinUrl = $this->resolveFrontendQueryBinUrl();
 
         $currentLang = $this->envString('user.lang', 'zh_Hans_CN');
@@ -467,15 +481,35 @@ HTML;
         $runtimeScriptUrlEsc = \htmlspecialchars($runtimeScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $businessScriptUrlEsc = \htmlspecialchars($businessScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $welineScriptUrlEsc = \htmlspecialchars($welineScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $uiScriptUrlEsc = \htmlspecialchars($uiScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $uiScriptUrlEsc = \htmlspecialchars($uiScriptHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $foundationCssUrlEsc = \htmlspecialchars($foundationCssHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $frontendCssUrlEsc = \htmlspecialchars($frontendCssHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         return <<<HTML
     <script type="application/json" data-weline-runtime-config data-auth-runtime-config>{$configJson}</script>
+    <link rel="stylesheet" href="{$foundationCssUrlEsc}">
+    <link rel="stylesheet" href="{$frontendCssUrlEsc}">
     <script src="{$runtimeScriptUrlEsc}"></script>
     <script src="{$businessScriptUrlEsc}"></script>
     <script src="{$welineScriptUrlEsc}"></script>
     <script type="module" src="{$uiScriptUrlEsc}"></script>
 HTML;
+    }
+
+    private function appendStaticAssetVersion(string $url, string $version): string
+    {
+        if ($url === '' || $version === '0') {
+            return $url;
+        }
+
+        return \str_contains($url, '?') ? $url . '&v=' . $version : $url . '?v=' . $version;
+    }
+
+    private function uiStaticAssetVersion(string $relative): string
+    {
+        $path = BP . 'app/code/Weline/Theme/view/statics/ui/' . \ltrim($relative, '/');
+
+        return \is_file($path) ? (string)\filemtime($path) : '0';
     }
 
     private function resolveFrontendQueryBinUrl(): string

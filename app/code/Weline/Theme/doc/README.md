@@ -13,6 +13,8 @@
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
+   - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：[`theme-css-variables-only.md`](./theme-css-variables-only.md) — 禁止硬编码颜色/尺寸，须用主题 Token；待改清单见 [`theme-hardcoded-visual-audit.md`](./theme-hardcoded-visual-audit.md)
+   - **Surface / Text 语义（反色顶栏）**：[`theme-surface-text-roles.md`](./theme-surface-text-roles.md) — `data-surface` + `.w-text*`，禁止裸 span 黑底黑字
    - Slot：[`widget-slot-attributes.md`](./widget-slot-attributes.md)
    - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
    - WLS 视图预热贡献：[`worker-view-warmup-contributions.md`](./worker-view-warmup-contributions.md)
@@ -84,9 +86,11 @@ Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”�
 
 ### 4. Weline UI 浮层基座
 
-前后台与前台主题统一使用 `Weline.UI` 的 `menu`、`popover`、`tooltip`、`combobox` 等声明式组件。调用方只声明组件、触发器、面板、语义 placement 与可选 viewport padding；不得计算 `left/top`、复制断点逻辑或发布旧全局定位对象。
+前后台与前台主题统一使用 `Weline.UI` 的 `menu`、`popover`、`tooltip`、`combobox`、`anchored-float` 等声明式组件。调用方只声明组件、触发器、面板、语义 placement 与可选 viewport padding；不得计算 `left/top`、复制断点逻辑或发布旧全局定位对象。
 
-共享内核统一处理 `visualViewport`、safe area、四边限界、自动翻转、可用宽高、滚动/缩放/旋转重排、重复开启稳定性与 portal 层级。非原生弹层的浮层挂到 body，原生模态框浮层留在 top layer；嵌套浮层保持逻辑父子关系，子层点击不误关父层，Escape 每次只关闭最上层并恢复焦点。窄屏尺寸和触控目标由组件自动降级，页面不得为同一组件另写移动端坐标算法。
+共享内核统一处理 `visualViewport`、safe area、四边限界、自动翻转、可用宽高、滚动/缩放/旋转重排、重复开启稳定性与 portal 层级（含跨 iframe 文档坐标）。非原生弹层的浮层挂到 body，原生模态框浮层留在 top layer；嵌套浮层保持逻辑父子关系，子层点击不误关父层，Escape 每次只关闭最上层并恢复焦点。窄屏尺寸和触控目标由组件自动降级，页面不得为同一组件另写移动端坐标算法。
+
+相对锚点展示的工具条 / 操作条（含主题编辑器预览内 `.widget-hover-actions`）必须使用 `anchored-float` 或 `Weline.UI.floating.attach`，详见 `doc/widgets/anchored-float.md`。
 
 ### 5. 严格边界
 
@@ -175,6 +179,8 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 - 运行时缓存失效与 IPC deadline：[`runtime-cache-invalidation.md`](./runtime-cache-invalidation.md)
 - Theme Editor Scope 逐值继承：[`visual-editor/scope-switching.md`](./visual-editor/scope-switching.md)
 - Theme Editor Scope 运营操作：[`运营/主题编辑器作用域切换.md`](./运营/主题编辑器作用域切换.md)
+- Anchored Float 贴边智能定位：[`widgets/anchored-float.md`](./widgets/anchored-float.md)
+- 弹出层 z-index 抬升：[`widgets/elevate-stack-layers.md`](./widgets/elevate-stack-layers.md)
 - 默认主题目录规范：[`../view/theme/README.md`](../view/theme/README.md)
 
 ## 对外能力

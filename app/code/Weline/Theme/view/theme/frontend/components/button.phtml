@@ -232,30 +232,30 @@ $attrString = implode(' ', $attrs);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-2, 8px);
-    padding: var(--weline-space-2, 8px) var(--weline-space-4, 16px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) transparent;
-    border-radius: var(--wc-button-radius, var(--weline-radius-md, 8px));
-    background: var(--wc-button-bg, var(--weline-theme-primary));
-    color: var(--wc-button-color, var(--weline-theme-on-primary));
-    font-size: var(--weline-font-size-base, 15px);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-2) var(--weline-space-4);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) transparent;
+    border-radius: var(--wc-button-radius);
+    background: var(--wc-button-bg);
+    color: var(--wc-button-color);
+    font-size: var(--weline-font-size-base);
+    font-weight: var(--weline-font-weight-semibold);
     line-height: 1.2;
     text-decoration: none;
     cursor: pointer;
-    transition: opacity var(--weline-theme-transition-base, 0.2s ease), transform var(--weline-theme-transition-base, 0.2s ease);
+    transition: opacity var(--weline-theme-transition-base), transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .w-btn-sm,
 .<?= $wc ?> .w-btn.w-btn-sm {
-    padding: var(--weline-space-1, 4px) var(--weline-space-3, 12px);
-    font-size: var(--weline-font-size-sm, 13px);
+    padding: var(--weline-space-1) var(--weline-space-3);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .w-btn-lg,
 .<?= $wc ?> .w-btn.w-btn-lg {
-    padding: var(--weline-space-3, 12px) var(--weline-space-6, 24px);
-    font-size: var(--weline-font-size-lg, 17px);
+    padding: var(--weline-space-3) var(--weline-space-6);
+    font-size: var(--weline-font-size-lg);
 }
 
 .<?= $wc ?> .w-btn:hover,

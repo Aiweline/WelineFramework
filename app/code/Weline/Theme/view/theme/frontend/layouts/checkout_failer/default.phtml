@@ -34,7 +34,7 @@
         }
 
         .checkout-failer-main {
-            width: min(960px, calc(100% - 40px));
+            width: min(var(--size-content-960), calc(100% - var(--size-control-md)));
             margin: 0 auto;
             padding: var(--weline-layout-spacing-3xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
         }
@@ -49,8 +49,8 @@
         }
 
         .failer-icon {
-            width: 64px;
-            height: 64px;
+            width: var(--auth-icon-size);
+            height: var(--auth-icon-size);
             margin: 0 auto var(--weline-layout-spacing-lg);
             display: inline-flex;
             align-items: center;
@@ -92,7 +92,7 @@
         }
 
         .w-btn {
-            min-height: 42px;
+            min-height: var(--size-control-42);
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -117,7 +117,7 @@
         }
 
         .help-tips {
-            max-width: 620px;
+            max-width: var(--token-size-620px);
             margin-left: auto;
             margin-right: auto;
             text-align: left;
@@ -125,13 +125,13 @@
 
         .help-tips ul {
             margin: var(--weline-layout-spacing-sm) 0 0;
-            padding-left: 20px;
+            padding-left: var(--weline-space-5);
         }
 
         @media (max-width: 640px) {
             .checkout-failer-main {
-                width: min(100% - 28px, 960px);
-                padding: 40px 0 56px;
+                width: min(100% - var(--size-control-xs), var(--size-content-960));
+                padding: var(--size-control-md) 0 var(--size-control-2xl);
             }
         }
     </style>

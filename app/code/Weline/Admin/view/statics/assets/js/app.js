@@ -181,17 +181,14 @@ File: Main Js File
 
     /**
      * 最长路径匹配算法 - 用于后台菜单选中
-     * 
-     * 算法说明：
-     * 1. 优先使用精确匹配（URL完全相同）
-     * 2. 支持前缀匹配：菜单路径是当前路径的前缀
-     * 3. 支持同级匹配：路径长度相同，只有最后一段不同（如 edit vs index）
-     * 4. 返回连续匹配的路径段数量，用于选择最佳匹配
-     * 
-     * 示例：
-     * - 菜单B：/admin/ -> 匹配前1段，得分1
-     * - 结果：选择菜单A（得分更高）
-     * 
+     *
+     * 规则（优先级从高到低）：
+     * 1. 精确匹配：当前路径与菜单路径完全一致 → 最高分
+     * 2. 真前缀匹配：菜单路径是当前路径的完整前缀（子页，如 /offers → /offers/edit）
+     * 3. 动作别名匹配：同级仅当末段属于 index/CRUD 动作集合时互认
+     *    （禁止 products↔offers 等并列功能菜单互认）
+     * 4. 返回连续匹配段数，供最长匹配择优；无有效匹配返回 -1
+     *
      * @param {string} currentPath - 当前页面路径
      * @param {string} menuPath - 菜单项路径
      * @returns {number} - 匹配的路径段数量，-1表示不匹配
@@ -207,28 +204,28 @@ File: Main Js File
                 return url.replace(/\/+$/, '');
             }
         };
-        
+
         var currentPathname = getPathname(currentPath);
         var menuPathname = getPathname(menuPath);
-        
+
         // 精确匹配返回最高分
         if (currentPathname === menuPathname) {
             return Number.MAX_SAFE_INTEGER;
         }
-        
+
         // 分割路径段
         var currentSegments = currentPathname.split('/').filter(function(s) { return s.length > 0; });
         var menuSegments = menuPathname.split('/').filter(function(s) { return s.length > 0; });
-        
+
         // 如果菜单路径比当前路径长，不可能匹配
         if (menuSegments.length > currentSegments.length) {
             return -1;
         }
-        
+
         // 计算从开始连续匹配的路径段数量
         var matchCount = 0;
         var minLength = Math.min(currentSegments.length, menuSegments.length);
-        
+
         for (var i = 0; i < minLength; i++) {
             if (menuSegments[i] === currentSegments[i]) {
                 matchCount++;
@@ -237,19 +234,32 @@ File: Main Js File
                 break;
             }
         }
-        
+
         // 情况1：菜单路径完全是当前路径的前缀（所有菜单段都匹配）
         // 例如：菜单 /admin/page 匹配当前 /admin/page/edit
         if (matchCount === menuSegments.length) {
             return matchCount;
         }
-        
-        // 情况2：同级页面匹配（路径长度相同，前N-1段匹配，只有最后一段不同）
-        // 例如：菜单 /admin/page/index 匹配当前 /admin/page/edit
-        if (menuSegments.length === currentSegments.length && matchCount === menuSegments.length - 1) {
-            return matchCount;
+
+        // 情况2：同级动作别名（仅 index/CRUD；禁止 products↔offers 等功能叶互认）
+        // 例如：菜单 /admin/page/index 可匹配当前 /admin/page/edit
+        var actionAliases = {
+            index: true, edit: true, new: true, create: true, add: true,
+            form: true, view: true, detail: true, show: true, update: true,
+            save: true, delete: true, remove: true, get: true, post: true
+        };
+        if (
+            menuSegments.length === currentSegments.length
+            && matchCount === menuSegments.length - 1
+            && menuSegments.length > 0
+        ) {
+            var menuAction = String(menuSegments[menuSegments.length - 1] || '').toLowerCase();
+            var currentAction = String(currentSegments[currentSegments.length - 1] || '').toLowerCase();
+            if (actionAliases[menuAction] && actionAliases[currentAction]) {
+                return matchCount;
+            }
         }
-        
+
         // 其他情况：不是有效匹配
         return -1;
     }

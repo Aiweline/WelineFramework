@@ -134,6 +134,17 @@ class FrontendController extends PcController
     }
 
     /**
+     * 渲染前台首页布局（Theme layouts/homepage）
+     */
+    protected function renderHomepageLayout(
+        string $contentTemplate,
+        ?string $title = null,
+        array $additionalData = []
+    ): string {
+        return $this->renderLayout('homepage', $contentTemplate, $title, $additionalData);
+    }
+
+    /**
      * 获取当前登录用户
      *
      * @return \Weline\Framework\Session\Auth\AuthenticableInterface|null

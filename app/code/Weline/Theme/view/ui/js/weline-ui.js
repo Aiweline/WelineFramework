@@ -14,19 +14,23 @@ const lazyComponentSources = new Map([
     ['icon-picker', './weline-ui-advanced.js'],
     ['dependent-field', './weline-ui-advanced.js'],
     ['language-select', './components/weline-language-select.js'],
-    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-19'],
+    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-21'],
     ['online-translation-collector', './components/weline-online-translation-collector.js'],
     ['scope-persistence', './components/weline-scope-persistence.js'],
     ['file-preview', './components/weline-file-picker.js'],
     ['file-picker', './components/weline-file-picker.js'],
     ['local-translation', './components/weline-local-translation.js'],
+    ['mega-menu', './components/weline-mega-menu.js'],
     ['account-recovery', './pages/weline-customer-account-recovery.js'],
+    ['account-login', './pages/weline-customer-account-login.js'],
 ]);
 const lazyComponentStyles = new Map([
     ['language-select', './components/weline-language-select.css'],
     ['file-preview', './components/weline-file-picker.css'],
     ['file-picker', './components/weline-file-picker.css'],
+    ['mega-menu', './components/weline-mega-menu.css'],
     ['account-recovery', './pages/weline-customer-account-recovery.css'],
+    ['account-login', './pages/weline-customer-account-login.css'],
 ]);
 const lazyComponentLoads = new Map();
 const lazyStyleLoads = new Map();
@@ -234,10 +238,15 @@ function initializeThemePreference() {
     const media = typeof window.matchMedia === 'function'
         ? window.matchMedia('(prefers-color-scheme: dark)')
         : null;
-    const normalize = (value) => ['system', 'light', 'dark'].includes(value) ? value : 'system';
+    const normalize = (value) => ['system', 'light', 'dark'].includes(value) ? value : (area === 'backend' ? 'system' : 'light');
     const apply = (value) => {
-        const preference = normalize(String(value || root.dataset.themePreference || 'system'));
-        const theme = preference === 'dark' || (preference === 'system' && media?.matches) ? 'dark' : 'light';
+        const fallback = area === 'backend' ? 'system' : 'light';
+        let preference = normalize(String(value || root.dataset.themePreference || fallback));
+        // Storefront: coerce system→light so prefers-color-scheme dark CSS cannot flip canvas to #020617.
+        if (area !== 'backend' && preference === 'system') preference = 'light';
+        const theme = area === 'backend'
+            ? (preference === 'dark' || (preference === 'system' && media?.matches) ? 'dark' : 'light')
+            : (preference === 'dark' ? 'dark' : 'light');
         root.dataset.themePreference = preference;
         root.dataset.theme = theme;
         root.style.colorScheme = theme;
@@ -310,14 +319,30 @@ function initializeThemePreference() {
     apply(storedPreference());
 }
 
-function floatingViewport(padding = 8) {
-    const visual = window.visualViewport;
-    const width = visual?.width || document.documentElement.clientWidth || window.innerWidth;
-    const height = visual?.height || document.documentElement.clientHeight || window.innerHeight;
+function resolveFloatingDocument(root = null) {
+    if (root instanceof Document) return root;
+    if (root instanceof Node) return root.ownerDocument || document;
+    return document;
+}
+
+function resolveFloatingWindow(root = null) {
+    return resolveFloatingDocument(root).defaultView || window;
+}
+
+/**
+ * Viewport bounds for floating placement. When `root` is an iframe node/document,
+ * use that document's visualViewport so cross-frame toolbars clamp correctly.
+ */
+function floatingViewport(padding = 8, root = null) {
+    const doc = resolveFloatingDocument(root);
+    const win = resolveFloatingWindow(root);
+    const visual = win.visualViewport;
+    const width = visual?.width || doc.documentElement.clientWidth || win.innerWidth;
+    const height = visual?.height || doc.documentElement.clientHeight || win.innerHeight;
     const offsetLeft = visual?.offsetLeft || 0;
     const offsetTop = visual?.offsetTop || 0;
     const safePadding = Math.max(4, Math.min(32, Number(padding) || 8));
-    const rootStyle = getComputedStyle(document.documentElement);
+    const rootStyle = getComputedStyle(doc.documentElement);
     const safeInset = (side) => Math.max(
         0,
         Number.parseFloat(rootStyle.getPropertyValue(`--weline-safe-area-${side}`)) || 0,
@@ -525,6 +550,241 @@ function applyFloatingStackElevation(floating, host) {
     floating.style.setProperty('z-index', String(peak));
 }
 
+/**
+ * In-place hover/open flyouts (megamenu, overflow dropdown, …).
+ * Opt-in: [data-wf-scope] > [data-wf-host] > [data-wf-layer]
+ * Rule: elevate the scope above sibling stacking contexts, then layer = scope + 1.
+ */
+const elevateLayerSessions = new WeakMap();
+
+function elevateHostIsActive(host) {
+    if (!(host instanceof Element)) return false;
+    if (host.matches(':hover') || host.matches(':focus-within')) return true;
+    if (host.classList.contains('active') || host.classList.contains('is-open')) return true;
+    if (host.getAttribute('data-state') === 'open') return true;
+    if (host.getAttribute('aria-expanded') === 'true') return true;
+    return false;
+}
+
+function resolveElevateLayer(host) {
+    if (!(host instanceof Element)) return null;
+    const direct = host.querySelector(':scope > [data-wf-layer]');
+    if (direct instanceof HTMLElement) return direct;
+    const nested = host.querySelector('[data-wf-layer]');
+    return nested instanceof HTMLElement ? nested : null;
+}
+
+function resolveElevateScope(host) {
+    if (!(host instanceof Element)) return null;
+    const scoped = host.closest('[data-wf-scope]');
+    if (scoped instanceof HTMLElement) return scoped;
+    // Header / layout slots often form sibling stacking contexts (e.g.「全部」vs 分类).
+    const layoutScope = host.closest(
+        '.header-categories, .header-nav-left-slot, .header-nav-right-slot, .header-nav-links-slot, .header-nav-fill, .header-main-nav',
+    );
+    if (layoutScope instanceof HTMLElement) return layoutScope;
+    return host instanceof HTMLElement ? host : null;
+}
+
+function siblingStackPeak(element) {
+    if (!(element instanceof Element) || !element.parentElement) return 0;
+    let peak = 0;
+    for (const sibling of element.parentElement.children) {
+        if (!(sibling instanceof Element) || sibling === element) continue;
+        const z = effectiveStackZ(sibling);
+        if (z > peak) peak = z;
+    }
+    return peak;
+}
+
+/**
+ * Elevate an in-place layer (and its scope) to host/sibling peak + 1.
+ * @returns {{scope: HTMLElement|null, host: HTMLElement|null, layer: HTMLElement, scopeZ: number, layerZ: number}|null}
+ */
+function applyElevateLayer(layerOrHost, hostHint = null) {
+    let layer = null;
+    let host = hostHint instanceof HTMLElement ? hostHint : null;
+    if (layerOrHost instanceof HTMLElement) {
+        if (layerOrHost.hasAttribute('data-wf-layer')) {
+            layer = layerOrHost;
+            host = host || layer.closest('[data-wf-host]') || layer.parentElement;
+        } else if (layerOrHost.hasAttribute('data-wf-host')) {
+            host = layerOrHost;
+            layer = resolveElevateLayer(host);
+        } else {
+            layer = layerOrHost;
+            host = host || layer.closest('[data-wf-host]') || layer.parentElement;
+        }
+    }
+    if (!(layer instanceof HTMLElement)) return null;
+    if (!(host instanceof HTMLElement)) {
+        host = layer.parentElement instanceof HTMLElement ? layer.parentElement : null;
+    }
+    const scope = resolveElevateScope(host || layer);
+    let base = Math.max(
+        siblingStackPeak(scope || host || layer),
+        effectiveStackZ(scope || host || layer),
+        floatingMenuFloor() - 1,
+    );
+    // Nested elevate layers: sit above the parent layer session.
+    const parentLayer = layer.parentElement?.closest('[data-wf-layer][data-wf-raised]');
+    if (parentLayer instanceof HTMLElement) {
+        base = Math.max(base, effectiveStackZ(parentLayer));
+    }
+    const scopeZ = base + 1;
+    const layerZ = scopeZ + 1;
+
+    if (scope instanceof HTMLElement) {
+        scope.dataset.wfRaised = 'true';
+        scope.style.setProperty('z-index', String(scopeZ));
+        scope.style.setProperty('--wf-stack-z', String(scopeZ));
+    }
+    if (host instanceof HTMLElement && host !== scope) {
+        host.dataset.wfRaised = 'true';
+        host.style.setProperty('z-index', String(scopeZ));
+    }
+    layer.dataset.wfRaised = 'true';
+    layer.dataset.wFloatingPortal = 'true';
+    layer.style.setProperty('z-index', String(layerZ));
+    layer.style.setProperty('--wf-stack-z', String(layerZ));
+    unclipElevateAncestors(layer, scope);
+
+    const session = { scope, host, layer, scopeZ, layerZ };
+    elevateLayerSessions.set(layer, session);
+    if (host) elevateLayerSessions.set(host, session);
+    if (scope) elevateLayerSessions.set(scope, session);
+    return session;
+}
+
+function unclipElevateAncestors(layer, scope) {
+    if (!(layer instanceof Element)) return;
+    let node = layer.parentElement;
+    while (node && node !== document.body && node !== document.documentElement) {
+        if (node instanceof HTMLElement) {
+            node.dataset.wfUnclip = 'true';
+        }
+        if (scope && node === scope) break;
+        node = node.parentElement;
+    }
+}
+
+function clearElevateUnclip(scope, layer) {
+    const roots = [scope, layer?.parentElement].filter(Boolean);
+    for (const root of roots) {
+        if (!(root instanceof Element)) continue;
+        root.querySelectorAll('[data-wf-unclip]').forEach((node) => {
+            if (!(node instanceof HTMLElement)) return;
+            // Keep unclip while another elevated layer still needs this ancestor.
+            if (node.querySelector('[data-wf-layer][data-wf-raised]')) return;
+            delete node.dataset.wfUnclip;
+        });
+        if (root instanceof HTMLElement && root.hasAttribute('data-wf-unclip')) {
+            if (!root.querySelector('[data-wf-layer][data-wf-raised]')) {
+                delete root.dataset.wfUnclip;
+            }
+        }
+    }
+}
+
+function clearElevateLayer(target) {
+    const session = target instanceof Element ? elevateLayerSessions.get(target) : null;
+    const layer = session?.layer
+        || (target instanceof HTMLElement && target.hasAttribute('data-wf-layer') ? target : null)
+        || (target instanceof Element ? resolveElevateLayer(target) : null);
+    const host = session?.host
+        || (target instanceof HTMLElement && target.hasAttribute('data-wf-host') ? target : null)
+        || (layer instanceof Element ? layer.closest('[data-wf-host]') : null);
+    const scope = session?.scope || resolveElevateScope(host || layer);
+
+    if (layer instanceof HTMLElement) {
+        delete layer.dataset.wfRaised;
+        clearFloatingStackElevation(layer);
+        layer.style.removeProperty('--wf-stack-z');
+        elevateLayerSessions.delete(layer);
+    }
+    if (host instanceof HTMLElement) {
+        // Keep host elevated while still active (e.g. .active / :hover).
+        if (!elevateHostIsActive(host)) {
+            delete host.dataset.wfRaised;
+            host.style.removeProperty('z-index');
+            host.style.removeProperty('--wf-stack-z');
+            elevateLayerSessions.delete(host);
+        }
+    }
+    if (scope instanceof HTMLElement) {
+        const stillActive = scope.querySelector('[data-wf-host][data-wf-raised], [data-wf-layer][data-wf-raised]');
+        if (!stillActive) {
+            delete scope.dataset.wfRaised;
+            scope.style.removeProperty('z-index');
+            scope.style.removeProperty('--wf-stack-z');
+            elevateLayerSessions.delete(scope);
+        }
+    }
+    clearElevateUnclip(scope, layer);
+}
+
+function syncElevateHost(host) {
+    if (!(host instanceof HTMLElement) || !host.hasAttribute('data-wf-host')) return;
+    if (elevateHostIsActive(host)) {
+        applyElevateLayer(host);
+        return;
+    }
+    clearElevateLayer(host);
+}
+
+function installElevateLayerRuntime() {
+    if (document.documentElement.dataset.wfStackRt === '1') return;
+    document.documentElement.dataset.wfStackRt = '1';
+
+    const onPointerOver = (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const host = target.closest('[data-wf-host]');
+        if (host instanceof HTMLElement) applyElevateLayer(host);
+    };
+    const onPointerOut = (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const host = target.closest('[data-wf-host]');
+        if (!(host instanceof HTMLElement)) return;
+        const related = event.relatedTarget;
+        if (related instanceof Node && host.contains(related)) return;
+        // Defer so :hover has settled after leaving into the layer/sibling.
+        queueMicrotask(() => syncElevateHost(host));
+    };
+
+    document.addEventListener('pointerover', onPointerOver, true);
+    document.addEventListener('pointerout', onPointerOut, true);
+    document.addEventListener('focusin', (event) => {
+        const host = event.target instanceof Element
+            ? event.target.closest('[data-wf-host]')
+            : null;
+        if (host instanceof HTMLElement) applyElevateLayer(host);
+    }, true);
+    document.addEventListener('focusout', (event) => {
+        const host = event.target instanceof Element
+            ? event.target.closest('[data-wf-host]')
+            : null;
+        if (!(host instanceof HTMLElement)) return;
+        queueMicrotask(() => syncElevateHost(host));
+    }, true);
+
+    const observer = new MutationObserver((records) => {
+        for (const record of records) {
+            if (!(record.target instanceof Element)) continue;
+            const host = record.target.closest('[data-wf-host]') || (
+                record.target.hasAttribute('data-wf-host') ? record.target : null
+            );
+            if (host instanceof HTMLElement) syncElevateHost(host);
+        }
+    });
+    observer.observe(document.documentElement, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'data-state', 'aria-expanded'],
+    });
+}
+
 function floatingPortalContains(record, target, visited = new Set()) {
     if (!(target instanceof Node) || !record?.mounted || visited.has(record)) return false;
     visited.add(record);
@@ -672,7 +932,8 @@ function positionFloating(anchor, floating, placement = 'bottom-start', referenc
     const side = ['top', 'right', 'bottom', 'left'].includes(requestedSide) ? requestedSide : 'bottom';
     const alignment = ['start', 'center', 'end'].includes(requestedAlignment) ? requestedAlignment : 'start';
     const viewportPadding = floating.dataset.wViewportPadding || anchor.dataset.wViewportPadding || 8;
-    const viewport = floatingViewport(viewportPadding);
+    syncFloatingViewportCssBounds(floating.ownerDocument);
+    const viewport = floatingViewport(viewportPadding, floating);
     const anchorVisible = liveRect.bottom > viewport.top
         && liveRect.top < viewport.bottom
         && liveRect.right > viewport.left
@@ -703,7 +964,12 @@ function positionFloating(anchor, floating, placement = 'bottom-start', referenc
                 };
         })()
         : liveRect;
-    const gap = 8;
+    const gapSource = floating.dataset.wGap
+        || anchor.dataset.wGap
+        || (anchor instanceof Element ? anchor.closest?.('[data-w-gap]')?.dataset?.wGap : '')
+        || '';
+    const gapParsed = Number.parseFloat(String(gapSource));
+    const gap = Number.isFinite(gapParsed) ? Math.max(0, gapParsed) : 8;
     const available = {
         top: Math.max(0, referenceRect.top - viewport.top - gap),
         right: Math.max(0, viewport.right - referenceRect.right - gap),
@@ -769,6 +1035,45 @@ function createFloatingMonitor(anchor, getFloating, getPlacement, onAnchorHidden
     let frame = 0;
     let reference = null;
     let observedFloating = null;
+    let boundWin = null;
+    let onWinScroll = null;
+    let onWinResize = null;
+    const raf = (callback) => {
+        const win = resolveFloatingWindow(observedFloating || anchor);
+        return (win.requestAnimationFrame || requestAnimationFrame)(callback);
+    };
+    const caf = (id) => {
+        const win = resolveFloatingWindow(observedFloating || anchor);
+        (win.cancelAnimationFrame || cancelAnimationFrame)(id);
+    };
+    const unbindForeignWindow = () => {
+        if (!boundWin) return;
+        if (onWinScroll) boundWin.removeEventListener('scroll', onWinScroll, true);
+        if (onWinResize) {
+            boundWin.removeEventListener('resize', onWinResize);
+            boundWin.visualViewport?.removeEventListener('resize', onWinResize);
+            boundWin.visualViewport?.removeEventListener('scroll', onWinResize);
+        }
+        boundWin = null;
+        onWinScroll = null;
+        onWinResize = null;
+    };
+    const bindForeignWindow = (floating) => {
+        const win = resolveFloatingWindow(floating);
+        if (!win || win === window) {
+            unbindForeignWindow();
+            return;
+        }
+        if (win === boundWin) return;
+        unbindForeignWindow();
+        boundWin = win;
+        onWinScroll = () => schedule(true);
+        onWinResize = () => schedule(true);
+        win.addEventListener('scroll', onWinScroll, true);
+        win.addEventListener('resize', onWinResize);
+        win.visualViewport?.addEventListener('resize', onWinResize, { passive: true });
+        win.visualViewport?.addEventListener('scroll', onWinResize, { passive: true });
+    };
     const place = (nextReference = reference) => {
         const floating = getFloating();
         if (!(floating instanceof HTMLElement) || floating.hidden) return null;
@@ -783,8 +1088,8 @@ function createFloatingMonitor(anchor, getFloating, getPlacement, onAnchorHidden
         if (refreshAnchor && reference?.mode !== 'pointer') {
             reference = captureFloatingReference(anchor);
         }
-        cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(() => place());
+        caf(frame);
+        frame = raf(() => place());
     };
     const observer = typeof ResizeObserver === 'function'
         ? new ResizeObserver(() => schedule(false))
@@ -796,6 +1101,7 @@ function createFloatingMonitor(anchor, getFloating, getPlacement, onAnchorHidden
             if (!(floating instanceof HTMLElement)) return;
             if (observedFloating && observedFloating !== floating) observer?.unobserve(observedFloating);
             observedFloating = floating;
+            bindForeignWindow(floating);
             observer?.observe(anchor);
             observer?.observe(floating);
             activeFloatingMonitors.add(monitor);
@@ -803,14 +1109,18 @@ function createFloatingMonitor(anchor, getFloating, getPlacement, onAnchorHidden
         unobserve(floating) {
             if (floating instanceof HTMLElement) observer?.unobserve(floating);
             observer?.unobserve(anchor);
-            if (observedFloating === floating) observedFloating = null;
+            if (observedFloating === floating) {
+                observedFloating = null;
+                unbindForeignWindow();
+            }
             activeFloatingMonitors.delete(monitor);
         },
         reset() { reference = null; },
         destroy() {
-            cancelAnimationFrame(frame);
+            caf(frame);
             observer?.disconnect();
             observedFloating = null;
+            unbindForeignWindow();
             activeFloatingMonitors.delete(monitor);
         },
     };
@@ -824,13 +1134,14 @@ function scheduleFloatingViewportUpdate() {
     });
 }
 
-function syncFloatingViewportCssBounds() {
-    const viewport = floatingViewport(8);
-    const root = document.documentElement;
-    root.style.setProperty('--w-floating-viewport-left', `${viewport.left}px`);
-    root.style.setProperty('--w-floating-viewport-top', `${viewport.top}px`);
-    root.style.setProperty('--w-floating-viewport-right', `${viewport.right}px`);
-    root.style.setProperty('--w-floating-viewport-bottom', `${viewport.bottom}px`);
+function syncFloatingViewportCssBounds(root = document) {
+    const doc = resolveFloatingDocument(root);
+    const viewport = floatingViewport(8, doc);
+    const html = doc.documentElement;
+    html.style.setProperty('--w-floating-viewport-left', `${viewport.left}px`);
+    html.style.setProperty('--w-floating-viewport-top', `${viewport.top}px`);
+    html.style.setProperty('--w-floating-viewport-right', `${viewport.right}px`);
+    html.style.setProperty('--w-floating-viewport-bottom', `${viewport.bottom}px`);
 }
 
 function refreshFloatingViewportGeometry() {
@@ -931,6 +1242,8 @@ function mountElement(element) {
                 monitor: createFloatingMonitor,
                 clear: clearFloatingPosition,
                 portal: createFloatingPortal,
+                viewport: floatingViewport,
+                syncViewport: syncFloatingViewportCssBounds,
             },
             UI,
         };
@@ -1219,6 +1532,52 @@ function registerRemoteDrawer() {
     });
 }
 
+function bindHoverOpenSurface({
+    element,
+    trigger,
+    panel,
+    listen,
+    open,
+    close,
+}) {
+    if (!(element instanceof HTMLElement) || element.dataset.wOpenOn !== 'hover') {
+        return false;
+    }
+    let hoverCloseTimer = 0;
+    const clearHoverClose = () => {
+        window.clearTimeout(hoverCloseTimer);
+        hoverCloseTimer = 0;
+    };
+    const scheduleHoverClose = () => {
+        clearHoverClose();
+        hoverCloseTimer = window.setTimeout(() => {
+            hoverCloseTimer = 0;
+            close();
+        }, 160);
+    };
+    listen(trigger, 'pointerenter', (event) => {
+        if (event.pointerType === 'touch') return;
+        clearHoverClose();
+        open();
+    });
+    listen(trigger, 'pointerleave', (event) => {
+        if (event.pointerType === 'touch') return;
+        scheduleHoverClose();
+    });
+    listen(panel, 'pointerenter', (event) => {
+        if (event.pointerType === 'touch') return;
+        clearHoverClose();
+    });
+    listen(panel, 'pointerleave', (event) => {
+        if (event.pointerType === 'touch') return;
+        scheduleHoverClose();
+    });
+    return {
+        clear: clearHoverClose,
+        destroy: clearHoverClose,
+    };
+}
+
 function registerMenu() {
     define('menu', ({ element, listen, emit: emitLocal }) => {
         const trigger = element.querySelector('[data-w-menu-trigger]');
@@ -1272,7 +1631,19 @@ function registerMenu() {
             if (anchorMode() !== 'pointer' || !event.isPrimary || event.button !== 0) return;
             pointerReference = captureFloatingReference(trigger, event, anchorMode());
         });
+        const hoverBound = bindHoverOpenSurface({
+            element,
+            trigger,
+            panel,
+            listen,
+            open: () => open(false, captureFloatingReference(trigger)),
+            close: () => close(false, 'hover-leave'),
+        });
         listen(trigger, 'click', (event) => {
+            // Hover menus keep click for keyboard/touch toggle; mouse hover already opened.
+            if (hoverBound && event.pointerType === 'mouse' && event.detail > 0) {
+                return;
+            }
             if (!panel.hidden) {
                 close(false, 'trigger');
                 return;
@@ -1338,6 +1709,7 @@ function registerMenu() {
             close,
             element,
             destroy: () => {
+                hoverBound?.destroy?.();
                 close(false, 'unmount', true);
                 monitor.destroy();
                 clearFloatingPosition(panel);
@@ -1441,6 +1813,139 @@ function registerNavFilter() {
         if (!(input instanceof HTMLInputElement) || !(list instanceof HTMLElement)) return {};
         const entries = [...list.querySelectorAll(':scope > .w-backend-nav__entry')];
         const groups = [...list.querySelectorAll(':scope > .w-backend-nav__group')];
+        const backendTokenPattern = /^[A-Za-z0-9_-]{16,}$/;
+        const actionAliases = new Set([
+            'index', 'edit', 'new', 'create', 'add', 'form', 'view', 'detail',
+            'show', 'update', 'save', 'delete', 'remove', 'get', 'post',
+        ]);
+        const routeSegments = (rawUrl) => {
+            try {
+                const url = new URL(rawUrl, window.location.href);
+                if (
+                    (url.protocol !== 'http:' && url.protocol !== 'https:')
+                    || url.origin !== window.location.origin
+                ) {
+                    return null;
+                }
+                const segments = url.pathname
+                    .split('/')
+                    .filter(Boolean)
+                    .map((segment) => {
+                        try {
+                            return decodeURIComponent(segment);
+                        } catch {
+                            return segment;
+                        }
+                    });
+                if (segments.length > 0 && backendTokenPattern.test(segments[0])) {
+                    segments.shift();
+                }
+                return segments;
+            } catch {
+                return null;
+            }
+        };
+        const pathMatchScore = (currentSegments, menuSegments) => {
+            const exact = currentSegments.length === menuSegments.length
+                && menuSegments.every((segment, index) => segment === currentSegments[index]);
+            if (exact) return Number.MAX_SAFE_INTEGER;
+            if (menuSegments.length === 0 || menuSegments.length > currentSegments.length) return -1;
+
+            let matched = 0;
+            while (
+                matched < menuSegments.length
+                && menuSegments[matched] === currentSegments[matched]
+            ) {
+                matched++;
+            }
+            if (matched === menuSegments.length) return matched;
+
+            if (
+                menuSegments.length === currentSegments.length
+                && matched === menuSegments.length - 1
+            ) {
+                const menuAction = String(menuSegments.at(-1) || '').toLocaleLowerCase();
+                const currentAction = String(currentSegments.at(-1) || '').toLocaleLowerCase();
+                if (actionAliases.has(menuAction) && actionAliases.has(currentAction)) {
+                    return matched;
+                }
+            }
+            return -1;
+        };
+        const syncCurrentRoute = () => {
+            const currentSegments = routeSegments(window.location.href);
+            const menuItems = [...list.querySelectorAll('.w-backend-nav__item')];
+            const disclosures = [...list.querySelectorAll('details.w-backend-nav__disclosure')];
+            menuItems.forEach((item) => {
+                item.removeAttribute('aria-current');
+                item.removeAttribute('data-state');
+            });
+
+            let current = null;
+            let bestScore = -1;
+            if (currentSegments) {
+                const canonicalLinks = menuItems.filter((item) =>
+                    item instanceof HTMLAnchorElement
+                    && item.hasAttribute('href')
+                    && !item.closest('[data-menu-source-ref]')
+                );
+                canonicalLinks.forEach((link) => {
+                    const menuSegments = routeSegments(link.getAttribute('href'));
+                    if (!menuSegments) return;
+                    const score = pathMatchScore(currentSegments, menuSegments);
+                    if (score > bestScore) {
+                        current = link;
+                        bestScore = score;
+                    }
+                });
+            }
+
+            const currentDisclosures = new Set();
+            if (current && bestScore >= 0) {
+                current.setAttribute('aria-current', 'page');
+                current.setAttribute('data-state', 'active');
+                let node = current.parentElement;
+                while (node && node !== list) {
+                    if (node instanceof HTMLDetailsElement) currentDisclosures.add(node);
+                    node = node.parentElement;
+                }
+            }
+            disclosures.forEach((disclosure) => {
+                disclosure.open = currentDisclosures.has(disclosure);
+            });
+            return current;
+        };
+        const scrollCurrentIntoView = () => {
+            const current = list.querySelector('.w-backend-nav__item[aria-current="page"]');
+            if (!(current instanceof HTMLElement)) return;
+            let node = current.parentElement;
+            while (node && node !== element) {
+                if (node instanceof HTMLDetailsElement) node.open = true;
+                node = node.parentElement;
+            }
+            const scroller = element.querySelector(':scope > nav')
+                || element.closest('.w-backend-sidebar')
+                || element.closest('[data-w-component~="drawer"]')
+                || element;
+            if (!(scroller instanceof HTMLElement)) return;
+            const scrollerRect = scroller.getBoundingClientRect();
+            const currentRect = current.getBoundingClientRect();
+            if (scrollerRect.height <= 0 || currentRect.height <= 0) return;
+            const delta = (currentRect.top + currentRect.height / 2)
+                - (scrollerRect.top + scroller.clientHeight / 2);
+            if (Math.abs(delta) > 8) {
+                scroller.scrollTop += delta;
+            }
+        };
+        const scheduleScrollCurrentIntoView = () => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(scrollCurrentIntoView);
+            });
+        };
+        const syncCurrentRouteAndScroll = () => {
+            syncCurrentRoute();
+            scheduleScrollCurrentIntoView();
+        };
         const apply = () => {
             const query = input.value.trim().toLocaleLowerCase();
             let visible = 0;
@@ -1472,7 +1977,187 @@ function registerNavFilter() {
             }
         });
         apply();
-        return { apply, element };
+        syncCurrentRoute();
+        const drawer = element.closest('[data-w-component~="drawer"]');
+        if (drawer) {
+            listen(drawer, 'weline:ui:drawer:open', syncCurrentRouteAndScroll);
+        }
+        listen(window, 'pageshow', syncCurrentRouteAndScroll);
+        listen(window, 'popstate', syncCurrentRouteAndScroll);
+        scheduleScrollCurrentIntoView();
+        return { apply, syncCurrentRoute, scrollCurrentIntoView, element };
+    });
+}
+
+function registerAnchoredFloat() {
+    /**
+     * Base floating surface: tooltip-like flip/shift against an anchor.
+     *
+     * Usage:
+     *   <div class="widget" data-w-component="anchored-float" data-w-placement="top-end">
+     *     <div data-w-float-surface>...</div>
+     *   </div>
+     * or self-surface:
+     *   <div class="toolbar" data-w-component="anchored-float" data-w-float-self
+     *        data-w-placement="top-end" data-w-portal="0">...</div>
+     */
+    define('anchored-float', ({ element, listen, emit: emitLocal }) => {
+        const selfSurface = element.hasAttribute('data-w-float-self')
+            || element.dataset.wFloatSelf === '1'
+            || element.dataset.wFloatSelf === 'true';
+        const surface = selfSurface
+            ? element
+            : (element.querySelector('[data-w-float-surface]') || element);
+        if (!(surface instanceof HTMLElement)) return {};
+
+        const resolveAnchor = () => {
+            const selector = element.dataset.wFloatAnchor || surface.dataset.wFloatAnchor || '';
+            if (selector) {
+                return element.closest(selector)
+                    || surface.closest(selector)
+                    || resolveFloatingDocument(element).querySelector(selector);
+            }
+            if (surface === element) return element.parentElement;
+            return element;
+        };
+
+        const placement = () => (
+            surface.dataset.wPlacement
+            || element.dataset.wPlacement
+            || 'top-end'
+        );
+        const usePortal = !(
+            element.dataset.wPortal === '0'
+            || element.dataset.wPortal === 'false'
+            || surface.dataset.wPortal === '0'
+            || surface.dataset.wPortal === 'false'
+        );
+
+        let portal = null;
+        let active = false;
+        let syncFrame = 0;
+        const monitor = createFloatingMonitor(
+            resolveAnchor() || element,
+            () => surface,
+            placement,
+            () => hide('anchor-hidden', true),
+        );
+
+        const isSurfaceVisible = () => {
+            if (!(surface instanceof HTMLElement) || !surface.isConnected) return false;
+            if (surface.hidden) return false;
+            const style = getComputedStyle(surface);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            return true;
+        };
+
+        const refreshMonitorAnchor = () => {
+            const nextAnchor = resolveAnchor();
+            if (!(nextAnchor instanceof Element)) return null;
+            // Recreate monitor binding by observing with current place target; place() reads live rect.
+            return nextAnchor;
+        };
+
+        const place = () => {
+            const anchor = refreshMonitorAnchor();
+            if (!(anchor instanceof Element) || !isSurfaceVisible()) return null;
+            if (usePortal) {
+                portal ||= createFloatingPortal(surface, 'anchored-float');
+                portal.mount();
+            } else if (!surface.hasAttribute('data-w-floating-portal')) {
+                // Enable foundation fixed-position CSS without moving the node.
+                surface.dataset.wFloatingPortal = 'local';
+            }
+            monitor.observe(surface);
+            return monitor.place(captureFloatingReference(anchor));
+        };
+
+        const hide = (reason = '', force = false) => {
+            if (!active && !surface.dataset.wFloatingPositioned) return false;
+            if (!force && !emitLocal('before-close', { reason })) return false;
+            active = false;
+            monitor.unobserve(surface);
+            monitor.reset();
+            clearFloatingPosition(surface);
+            if (surface.dataset.wFloatingPortal === 'local') {
+                delete surface.dataset.wFloatingPortal;
+            }
+            portal?.restore?.();
+            emitLocal('close', { reason }, false);
+            return true;
+        };
+
+        const show = (force = false) => {
+            if (!isSurfaceVisible() && !force) return false;
+            if (!emitLocal('before-open') && !force) return false;
+            active = true;
+            const result = place();
+            if (result?.anchorVisible === false) {
+                hide('anchor-hidden', true);
+                return false;
+            }
+            emitLocal('open', {}, false);
+            return true;
+        };
+
+        const sync = () => {
+            const win = resolveFloatingWindow(surface);
+            (win.cancelAnimationFrame || cancelAnimationFrame)(syncFrame);
+            syncFrame = (win.requestAnimationFrame || requestAnimationFrame)(() => {
+                if (isSurfaceVisible()) {
+                    if (!active) show(true);
+                    else place();
+                    return;
+                }
+                if (active || surface.dataset.wFloatingPositioned) hide('hidden', true);
+            });
+        };
+
+        const mutationRoot = surface === element ? element.parentElement : element;
+        const visibilityObserver = typeof MutationObserver === 'function'
+            ? new MutationObserver(sync)
+            : null;
+        visibilityObserver?.observe(element, {
+            attributes: true,
+            attributeFilter: ['class', 'style', 'hidden', 'data-state'],
+        });
+        if (mutationRoot && mutationRoot !== element) {
+            visibilityObserver?.observe(mutationRoot, {
+                attributes: true,
+                attributeFilter: ['class', 'style', 'hidden', 'data-state'],
+            });
+        }
+
+        listen(element, 'weline:anchored-float:place', () => {
+            place();
+        });
+        listen(element, 'weline:anchored-float:show', () => {
+            show(true);
+        });
+        listen(element, 'weline:anchored-float:hide', () => {
+            hide('api', true);
+        });
+
+        // Initial sync after CSS (e.g. :hover / .show-actions) may already expose the surface.
+        queueMicrotask(sync);
+
+        return {
+            show: () => show(true),
+            hide: () => hide('api', true),
+            place,
+            sync,
+            element,
+            surface,
+            destroy: () => {
+                const win = resolveFloatingWindow(surface);
+                (win.cancelAnimationFrame || cancelAnimationFrame)(syncFrame);
+                visibilityObserver?.disconnect();
+                hide('unmount', true);
+                monitor.destroy();
+                portal?.destroy?.();
+                portal = null;
+            },
+        };
     });
 }
 
@@ -1584,7 +2269,7 @@ function registerPopover() {
                 close('anchor-hidden', true);
                 return false;
             }
-            if (focus || panel.getAttribute('role') === 'dialog') {
+            if ((focus || panel.getAttribute('role') === 'dialog') && panel.dataset.drawerFlyout !== '1') {
                 queueMicrotask(() => {
                     const first = getFocusable(panel)[0];
                     if (first instanceof HTMLElement) {
@@ -1602,7 +2287,19 @@ function registerPopover() {
             if (!event.isPrimary || event.button !== 0) return;
             pointerReference = captureFloatingReference(trigger, event, anchorMode());
         });
+        const hoverBound = bindHoverOpenSurface({
+            element,
+            trigger,
+            panel,
+            listen,
+            open: () => open(captureFloatingReference(trigger), false),
+            close: () => close('hover-leave'),
+        });
         listen(trigger, 'click', (event) => {
+            if (hoverBound && event.pointerType === 'mouse' && event.detail > 0) {
+                // Allow <a> navigation / keep hover-open panel.
+                return;
+            }
             if (!panel.hidden) {
                 close('trigger');
                 return;
@@ -1639,6 +2336,7 @@ function registerPopover() {
             close,
             element,
             destroy: () => {
+                hoverBound?.destroy?.();
                 close('unmount', true);
                 monitor.destroy();
                 clearFloatingPosition(panel);
@@ -2050,6 +2748,7 @@ if (!existingRuntime) {
     registerNavFilter();
     registerTooltip();
     registerPopover();
+    registerAnchoredFloat();
 }
 
 const createdUI = {
@@ -2060,6 +2759,42 @@ const createdUI = {
     unmount,
     get,
     position: positionFloating,
+    floating: {
+        capture: captureFloatingReference,
+        monitor: createFloatingMonitor,
+        clear: clearFloatingPosition,
+        portal: createFloatingPortal,
+        viewport: floatingViewport,
+        syncViewport: syncFloatingViewportCssBounds,
+        /** Mount/ensure anchored-float on a surface or host element. */
+        attach(target, options = {}) {
+            const element = asElement(target);
+            if (!(element instanceof HTMLElement)) return null;
+            if (options.placement) element.dataset.wPlacement = String(options.placement);
+            if (options.portal === false) element.dataset.wPortal = '0';
+            if (options.self !== false && !element.querySelector('[data-w-float-surface]')) {
+                element.dataset.wFloatSelf = '1';
+            }
+            if (options.anchor) element.dataset.wFloatAnchor = String(options.anchor);
+            if (!/\banchored-float\b/.test(element.getAttribute('data-w-component') || '')) {
+                const existing = element.getAttribute('data-w-component');
+                element.setAttribute(
+                    'data-w-component',
+                    existing ? `${existing} anchored-float` : 'anchored-float',
+                );
+            }
+            return ensureMounted(element, 'anchored-float');
+        },
+    },
+    stack: {
+        /** Portal / dialog floatings: host z-index + 1 */
+        apply: applyFloatingStackElevation,
+        clear: clearFloatingStackElevation,
+        /** In-place hover/open layers: scope above siblings, layer = scope + 1 */
+        elevate: applyElevateLayer,
+        clearElevate: clearElevateLayer,
+        syncHost: syncElevateHost,
+    },
     icon: {
         create: createIcon,
         ensureSprite: ensureIconSprite,
@@ -2089,6 +2824,7 @@ const UI = existingRuntime || createdUI;
 
 function start() {
     initializeThemePreference();
+    installElevateLayerRuntime();
     mount(document);
     observer = new MutationObserver((records) => {
         for (const record of records) {

@@ -100,6 +100,14 @@
                   sort="10"/>
     </event>
 
+    <event name="Weline_Framework::controller_annotation_rules_collected">
+        <observer name="Weline_Cdn::controller_annotation_rules"
+                  instance="Weline\Cdn\Observer\ControllerAnnotationRulesHandler"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <event name="Weline_Framework::resource_changed"
            schema_version="1"
            async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"

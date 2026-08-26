@@ -58,10 +58,103 @@ final class CategoryRepository extends AbstractWebsiteShardRepository
             ->fetchArray();
         usort(
             $rows,
-            static fn(array $left, array $right): int => (int)($left[Category::schema_fields_ID] ?? 0)
-                <=> (int)($right[Category::schema_fields_ID] ?? 0),
+            static function (array $left, array $right): int {
+                $leftParent = (int)($left[Category::schema_fields_PARENT_ID] ?? 0);
+                $rightParent = (int)($right[Category::schema_fields_PARENT_ID] ?? 0);
+                if ($leftParent !== $rightParent) {
+                    return $leftParent <=> $rightParent;
+                }
+                $leftPosition = (int)($left[Category::schema_fields_POSITION] ?? 0);
+                $rightPosition = (int)($right[Category::schema_fields_POSITION] ?? 0);
+                if ($leftPosition !== $rightPosition) {
+                    return $leftPosition <=> $rightPosition;
+                }
+
+                return (int)($left[Category::schema_fields_ID] ?? 0)
+                    <=> (int)($right[Category::schema_fields_ID] ?? 0);
+            },
         );
         return $rows;
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function listSiblings(int $websiteId, int $parentId, int $excludeId = 0): array
+    {
+        $parentField = Category::schema_fields_PARENT_ID;
+        $rows = [];
+        foreach ($this->listAll($websiteId) as $row) {
+            $rowParent = (int)($row[$parentField] ?? 0);
+            $rowId = (int)($row[Category::schema_fields_ID] ?? 0);
+            if ($rowParent === $parentId && $rowId !== $excludeId) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
+    public function deleteById(int $websiteId, int $categoryId): void
+    {
+        $category = $this->findById($websiteId, $categoryId)
+            ?? throw new \InvalidArgumentException(__('Category 不存在：%{1}', [$categoryId]));
+        $category->delete();
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function updateFields(int $websiteId, int $categoryId, array $data): Category
+    {
+        $category = $this->findById($websiteId, $categoryId)
+            ?? throw new \InvalidArgumentException(__('Category 不存在：%{1}', [$categoryId]));
+        foreach ($data as $field => $value) {
+            $category->setData((string)$field, $value);
+        }
+        $category->save();
+
+        return $this->findById($websiteId, $categoryId)
+            ?? throw new \RuntimeException(__('Category 更新后无法回读：%{1}', [$categoryId]));
+    }
+
+    /** @param array<int, int> $positions id => position */
+    public function batchUpdatePosition(int $websiteId, array $positions): void
+    {
+        if ($positions === []) {
+            return;
+        }
+        $model = $this->newModel($websiteId);
+        $connection = $model->getConnection();
+        $table = $model->getTable();
+        $ids = [];
+        $cases = [];
+        $idField = Category::schema_fields_ID;
+        foreach ($positions as $nodeId => $position) {
+            $nodeId = (int)$nodeId;
+            $position = (int)$position;
+            if ($nodeId <= 0) {
+                continue;
+            }
+            $ids[] = $nodeId;
+            $cases[] = "WHEN {$nodeId} THEN {$position}";
+        }
+        if ($ids === []) {
+            return;
+        }
+        $idsStr = implode(',', $ids);
+        $casesStr = implode(' ', $cases);
+        $connection->query(
+            "UPDATE `{$table}` SET `position` = CASE `{$idField}` {$casesStr} END WHERE `{$idField}` IN ({$idsStr})",
+        )->fetch();
+    }
+
+    public function nextSiblingPosition(int $websiteId, int $parentId): int
+    {
+        $max = 0;
+        foreach ($this->listSiblings($websiteId, $parentId) as $row) {
+            $max = max($max, (int)($row[Category::schema_fields_POSITION] ?? 0));
+        }
+
+        return $max + 1;
     }
 
     /**
@@ -79,6 +172,7 @@ final class CategoryRepository extends AbstractWebsiteShardRepository
         $model->clear()->setData(array_merge([
             Category::schema_fields_STATUS => 'active',
             Category::schema_fields_PATH => '',
+            Category::schema_fields_POSITION => 0,
         ], $data))->save();
         $id = (int)$model->getId();
         $loaded = $this->findById($websiteId, $id);
@@ -96,6 +190,7 @@ final class CategoryRepository extends AbstractWebsiteShardRepository
         foreach ([
             Category::schema_fields_PARENT_ID,
             Category::schema_fields_PATH,
+            Category::schema_fields_POSITION,
             Category::schema_fields_STATUS,
         ] as $field) {
             if (array_key_exists($field, $data)) {

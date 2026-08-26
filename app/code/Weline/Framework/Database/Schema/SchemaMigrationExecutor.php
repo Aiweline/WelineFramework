@@ -36,22 +36,22 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
     ) {
     }
 
-    /** 先创建列再创建依赖；删除时先外键/索引再列。回滚按 sequence 倒序执行时恰好相反。 */
+    /** 先加列，再 DROP 旧外键/索引，再 ADD 新索引/外键，最后 DROP 列；同名索引可先删后建。回滚按 sequence 倒序。 */
     private const KIND_PRIORITY = [
         SchemaDiffOp::KIND_CREATE_TABLE => 0,
         SchemaDiffOp::KIND_ADD_COLUMN => 1,
         SchemaDiffOp::KIND_MODIFY_COLUMN => 2,
-        SchemaDiffOp::KIND_ADD_INDEX => 3,
-        SchemaDiffOp::KIND_ADD_FOREIGN_KEY => 4,
-        SchemaDiffOp::KIND_DROP_FOREIGN_KEY => 5,
-        SchemaDiffOp::KIND_DROP_INDEX => 6,
+        SchemaDiffOp::KIND_DROP_FOREIGN_KEY => 3,
+        SchemaDiffOp::KIND_DROP_INDEX => 4,
+        SchemaDiffOp::KIND_ADD_INDEX => 5,
+        SchemaDiffOp::KIND_ADD_FOREIGN_KEY => 6,
         SchemaDiffOp::KIND_DROP_COLUMN => 7,
         SchemaDiffOp::KIND_MODIFY_TABLE_COMMENT => 8,
     ];
 
     /**
      * 执行一组差异操作；单条 DDL 失败即抛异常。每条 DDL 记录 forward_ddl/rollback_ddl，DROP COLUMN 前备份列数据。
-     * 按表名+操作类型排序，确保 ADD_COLUMN 先于 ADD_INDEX/ADD_FOREIGN_KEY 执行。
+     * 按表名+操作类型排序：ADD_COLUMN → DROP 旧外键/索引 → ADD 新索引/外键 → DROP_COLUMN。
      *
      * @param list<SchemaDiffOp> $ops
      */

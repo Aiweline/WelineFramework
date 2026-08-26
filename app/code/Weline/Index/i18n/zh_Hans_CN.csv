@@ -6,6 +6,7 @@
 "Provides storefront contact form operations.",提供店面联系表操作。
 "Submit storefront contact form.",提交店面联系表。
 "Weline 首页 sitemap URL 提供器","Weline 首页 sitemap URL 提供器"
+首页,首页
 保存成功,保存成功
 保存失败!,保存失败!
 保存成功!,保存成功!
@@ -15,7 +16,6 @@
 多语言多站点,多语言多站点
 常驻运行时,常驻运行时
 "启动框架内置 HTTPS 服务，默认首页可通过 %{url} 访问。","启动框架内置 HTTPS 服务，默认首页可通过 %{url} 访问。"
-首页,首页
 """Unsupported contact operation: %{1}""",“不支持的联系操作：%{1}”
 """﻿""""Unsupported contact operation: %{1}""""""","""﻿""""不支持的联系操作：%{1}"""""""
 首页导航,首页导航

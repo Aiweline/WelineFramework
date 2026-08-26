@@ -12,7 +12,6 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-homepage-trust","layout-cart-trust","layout-checkout-trust","layout-contact-help","layout-contact-methods","layout-contact-content","layout-default-content"]}
- * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-trust","area":"content","sort_order":0},{"layout_type":"checkout","layout_option":"default","slot":"checkout-trust","area":"content","sort_order":0}]}
  * @widget.compatible {true}
  *
  * @param title {default="",type="string",label="标题"}
@@ -97,21 +96,21 @@ if (is_array($badges)) {
 
 <style>
 .<?= $wc ?> {
-    padding: var(--weline-space-8, 30px) 0;
+    padding: var(--weline-space-8) 0;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .badges-heading {
-    font-size: var(--weline-font-size-lg, 18px);
+    font-size: var(--weline-font-size-lg);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-5, 20px);
+    margin: 0 0 var(--weline-space-5);
     text-align: center;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .badges-grid {
     display: grid;
-    gap: var(--weline-space-5, 20px);
+    gap: var(--weline-space-5);
 }
 
 .<?= $wc ?> .badges-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
@@ -124,8 +123,8 @@ if (is_array($badges)) {
 }
 
 .<?= $wc ?>.style-icon-only .badge-icon {
-    width: 60px;
-    height: 60px;
+    width: var(--spacing-15);
+    height: var(--spacing-15);
     background: var(--weline-theme-surface-muted);
     border-radius: 50%;
     display: flex;
@@ -137,14 +136,14 @@ if (is_array($badges)) {
 .<?= $wc ?>.style-icon-text .badge-item {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
+    gap: var(--weline-space-3);
 }
 
 .<?= $wc ?>.style-icon-text .badge-icon {
-    width: 50px;
-    height: 50px;
+    width: var(--size-control-50);
+    height: var(--size-control-50);
     background: var(--weline-theme-primary);
-    border-radius: var(--weline-radius-lg, 12px);
+    border-radius: var(--weline-radius-lg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -154,53 +153,53 @@ if (is_array($badges)) {
 
 .<?= $wc ?>.style-icon-text .badge-title {
     margin: 0;
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     font-weight: 600;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?>.style-card .badge-item {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-xl, 12px);
-    padding: var(--weline-space-6, 25px);
+    border-radius: var(--weline-radius-xl);
+    padding: var(--weline-space-6);
     text-align: center;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     box-shadow: var(--weline-theme-shadow-sm);
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>.style-card .badge-item:hover {
     box-shadow: var(--weline-theme-shadow-md);
-    transform: translateY(-3px);
+    transform: translateY(var(--spacing-neg-1_5));
 }
 
 .<?= $wc ?>.style-card .badge-icon {
-    width: 70px;
-    height: 70px;
+    width: var(--layout-header-height);
+    height: var(--layout-header-height);
     background: var(--weline-theme-primary-surface);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto var(--weline-space-4, 15px);
+    margin: 0 auto var(--weline-space-4);
     color: var(--weline-theme-primary);
 }
 
 .<?= $wc ?>.style-card .badge-title {
-    margin: 0 0 var(--weline-space-2, 8px);
-    font-size: var(--weline-font-size-base, 16px);
+    margin: 0 0 var(--weline-space-2);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
 }
 
 .<?= $wc ?>.style-card .badge-description {
     margin: 0;
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-4, 15px) 0;
+    padding: var(--weline-space-4) 0;
 }
 
 @media (max-width: 768px) {

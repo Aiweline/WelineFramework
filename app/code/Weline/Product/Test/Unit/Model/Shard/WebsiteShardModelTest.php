@@ -12,7 +12,7 @@ use Weline\Product\Model\Shard\Product;
 use Weline\Product\Service\ProductShardSchemaCatalog;
 
 /**
- * Shard model table binding + schema v3.1 catalog entities.
+ * Shard model table binding + schema v4 catalog entities.
  */
 final class WebsiteShardModelTest extends TestCase
 {
@@ -32,9 +32,9 @@ final class WebsiteShardModelTest extends TestCase
         (new Media())->forWebsite(-1);
     }
 
-    public function testSchemaVersionThreeEntities(): void
+    public function testSchemaVersionFourEntities(): void
     {
-        self::assertSame('3.1.1', ProductShardSchemaCatalog::SCHEMA_VERSION);
+        self::assertSame('4.1.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
         self::assertContains('attribute_value', ProductShardSchemaCatalog::ENTITIES);
         self::assertContains('store_offer', ProductShardSchemaCatalog::ENTITIES);
         $catalog = new ProductShardSchemaCatalog();
@@ -64,6 +64,14 @@ final class WebsiteShardModelTest extends TestCase
         self::assertContains(
             'global_category_uuid',
             array_map(static fn ($column): string => $column->name, $category->columns),
+        );
+        self::assertContains(
+            'position',
+            array_map(static fn ($column): string => $column->name, $category->columns),
+        );
+        self::assertContains(
+            'idx_parent_position',
+            array_map(static fn ($index): string => $index->name, $category->indexes),
         );
         self::assertContains(
             'uk_global_category_uuid',

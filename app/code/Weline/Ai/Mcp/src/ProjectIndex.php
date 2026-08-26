@@ -63,7 +63,7 @@ final class ProjectIndex
             PDO::ATTR_STRINGIFY_FETCHES => false,
         ]);
         $this->database->exec('PRAGMA foreign_keys = ON');
-        $this->database->exec('PRAGMA busy_timeout = 5000');
+        $this->database->exec('PRAGMA busy_timeout = 30000');
         $this->sqliteMmapBytes = max(0, (int) $config->get('index.sqlite_mmap_bytes', 268_435_456));
         $this->sqliteCacheKib = max(1_024, (int) $config->get('index.sqlite_cache_kib', 16_384));
         $this->database->exec('PRAGMA mmap_size = ' . $this->sqliteMmapBytes);

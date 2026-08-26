@@ -231,18 +231,18 @@ async function applyFromApplicationsTab(page) {
   await expect(item.locator('.btn-apply-default-injection[data-apply-scope="current"]')).toBeVisible();
   await expect(item.locator('.btn-apply-default-injection[data-apply-scope="all"]')).toHaveCount(0);
   await item.locator('.btn-apply-default-injection[data-apply-scope="current"]').click();
-  // Theme Editor mutations are transported through theme.editorRequest (BinQuery),
-  // so the browser never emits a response whose URL is the controller route.
-  // The item disappearing is the UI's completion signal; callers then assert
-  // the persisted rows and the API projection for the requested identity.
-  await expect(item).toHaveCount(0, { timeout: 30000 });
+  // Declared apps remain visible after apply with an applied badge (no apply button).
+  await expect(item).toHaveAttribute('data-injection-status', 'applied', { timeout: 30000 });
+  await expect(item).toContainText('已应用');
+  await expect(item.locator('.btn-apply-default-injection')).toHaveCount(0);
 }
 
 async function waitForDefaultInjectionAbsent(page, defaultInjectionsApi, payload) {
   await expect.poll(async () => {
     const result = await callEditorRequest(page, buildQueryPath(defaultInjectionsApi, payload), 'GET');
     expectEditorSuccess(result, 'default injections after apply');
-    return !findDefaultInjection(result.items || []);
+    const item = findDefaultInjection(result.items || []);
+    return !!item && (item.injection_status === 'applied' || item.applied === true);
   }, {
     timeout: 30000,
     intervals: [250, 500, 1000],

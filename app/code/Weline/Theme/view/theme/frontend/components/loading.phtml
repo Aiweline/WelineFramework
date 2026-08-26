@@ -77,25 +77,25 @@ $rootClass = trim($wc . ' w-loading' . ($class !== '' ? ' ' . $class : ''));
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
-    padding: var(--weline-space-6, 24px);
-    border-radius: var(--weline-radius-lg, 12px);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-6);
+    border-radius: var(--weline-radius-lg);
     background: var(--weline-theme-surface-raised);
     color: var(--weline-theme-text);
-    box-shadow: var(--weline-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+    box-shadow: var(--weline-shadow-md);
 }
 
 .<?= $wc ?> .loading-spinner {
-    width: 2rem;
-    height: 2rem;
-    border: 3px solid var(--weline-theme-border);
+    width: var(--spacing-xl);
+    height: var(--spacing-xl);
+    border: var(--border-width-thick) solid var(--weline-theme-border);
     border-top-color: var(--weline-theme-primary);
     border-radius: 50%;
     animation: <?= $esc($scope->jsNs) ?>-spin 0.8s linear infinite;
 }
 
 .<?= $wc ?> .loading-message {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
 }
 

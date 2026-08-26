@@ -35,13 +35,14 @@ final class CartItemSnapshot
         public readonly int $weightMinor = 0,
         public readonly int $volumeMinor = 0,
         public readonly string $taxClassCode = 'standard',
+        public readonly array $fulfillmentMetadata = [],
     ) {
     }
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $data = [
             'offer' => $this->offer->toArray(),
             'name' => $this->name,
             'sku' => $this->sku,
@@ -68,5 +69,9 @@ final class CartItemSnapshot
             'price' => round($this->unitPriceMinor / 100, 2),
             'legacy_product_id' => $this->offer->legacyProductId ?? 0,
         ];
+        if ($this->fulfillmentMetadata !== []) {
+            $data['fulfillment_metadata'] = $this->fulfillmentMetadata;
+        }
+        return $data;
     }
 }

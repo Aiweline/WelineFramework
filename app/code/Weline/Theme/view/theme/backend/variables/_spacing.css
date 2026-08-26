@@ -75,4 +75,119 @@
     --backend-spacing-page-padding: var(--backend-spacing-xl);
     --backend-spacing-page-title-margin: var(--backend-spacing-lg);
     --backend-spacing-card-margin: var(--backend-spacing-md);
+
+    /* ========== REQ-THEME-0007 扩展刻度（禁止业务硬编码） ========== */
+    --spacing-px: 1px;
+    --spacing-0_5: 0.125rem;   /* 2px */
+    --spacing-1_5: 0.375rem;   /* 6px */
+    --spacing-2_5: 0.625rem;   /* 10px */
+    --spacing-3_5: 0.875rem;   /* 14px */
+    --spacing-4_5: 1.125rem;   /* 18px */
+    --spacing-5_5: 1.375rem;   /* 22px */
+    --spacing-7: 1.75rem;      /* 28px */
+    --spacing-9: 2.25rem;      /* 36px */
+    --spacing-11: 2.75rem;     /* 44px */
+    --spacing-13: 3.25rem;     /* 52px */
+    --spacing-15: 3.75rem;     /* 60px */
+    --size-control-xs: 28px;
+    --size-control-sm: 36px;
+    --size-control-md: 40px;
+    --size-control-lg: 44px;
+    --size-control-xl: 48px;
+    --size-control-2xl: 56px;
+    --size-icon-sm: 16px;
+    --size-icon-md: 20px;
+    --size-icon-lg: 24px;
+    --size-scrollbar: 6px;
+    --breakpoint-sm: 576px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 992px;
+    --breakpoint-xl: 1200px;
+
+    --spacing-neg-px: -1px;
+    --spacing-neg-0_5: -2px;
+    --spacing-neg-2_5: -10px;
+    --spacing-0_4: 0.4rem;
+    --spacing-0_45: 0.45rem;
+    --spacing-0_55: 0.55rem;
+    --spacing-0_65: 0.65rem;
+    --spacing-0_7: 0.7rem;
+    --spacing-0_9: 0.9rem;
+    --spacing-0_95: 0.95rem;
+    --spacing-1_05: 1.05rem;
+    --spacing-2_25: 2.25rem;
+    --spacing-5rem: 5rem;
+    --size-control-50: 50px;
+    --size-panel-120: 120px;
+    --size-panel-180: 180px;
+    --size-panel-220: 220px;
+    --size-panel-300: 300px;
+    --size-content-640: 640px;
+    --size-content-1180: 1180px;
+    --spacing-container-max-width: 1440px;
+    --breakpoint-xs: 480px;
+
+    --spacing-0_2: 0.2rem;
+    --spacing-0_8: 0.8rem;
+    --spacing-0_85: 0.85rem;
+    --spacing-1_2: 1.2rem;
+    --spacing-2_75: 2.75rem;
+    --spacing-neg-1_5: -3px;
+    --size-panel-150: 150px;
+    --size-panel-200: 200px;
+    --size-panel-360: 360px;
+    --size-panel-400: 400px;
+    --size-content-720: 720px;
+    --size-content-900: 900px;
+    --size-content-960: 960px;
+    --size-control-42: 42px;
+    --font-size-13: 0.8125rem;
+
+    /* ========== foundation 间距叶子（主题包自带，不依赖 UI foundation 是否加载） ========== */
+    --weline-space-1: 0.25rem;
+    --weline-space-2: 0.5rem;
+    --weline-space-3: 0.75rem;
+    --weline-space-4: 1rem;
+    --weline-space-5: 1.25rem;
+    --weline-space-6: 1.5rem;
+    --weline-space-8: 2rem;
+    --weline-space-9: 2.25rem;
+    --weline-space-10: 2.5rem;
+    --weline-space-12: 3rem;
+    --weline-space-15: 3.75rem;
+    --control-height-sm: 34px;
+    --control-height: 42px;
+    --control-height-lg: 48px;
+    --transition-fast: 0.16s ease;
+    --transition-base: 0.2s ease;
+    --transition-slow: 0.32s ease;
+
+    /* ========== 数字刻度别名（兼容 var(--spacing-N) / 布局桥接） ========== */
+    --spacing-1: var(--weline-space-1);
+    --spacing-2: var(--weline-space-2);
+    --spacing-3: var(--weline-space-3);
+    --spacing-4: var(--weline-space-4);
+    --spacing-5: var(--weline-space-5);
+    --spacing-6: var(--weline-space-6);
+    --spacing-8: var(--weline-space-8);
+    --spacing-10: var(--weline-space-10);
+    --spacing-12: var(--weline-space-12);
+    --layout-max-width: var(--spacing-container-max-width);
+    --z-index-dropdown: 1000;
+    --z-index-sticky: 1020;
+    --z-index-fixed: 1030;
+    --z-index-modal-backdrop: 1040;
+    --z-index-modal: 1050;
+    --z-index-popover: 1060;
+    --z-index-tooltip: 1070;
+    --z-index-overlay: 998;
+
+    /* ========== control / z-index 默认 ========== */
+    --backend-control-height: 42px;
+    --backend-loader-border-width: 3px;
+    --backend-z-index-modal: 1050;
+
+    /* ========== frontend-compat spacing ========== */
+    --spacing-sm: 0.5rem;
+    --spacing-2xl: 3rem;
 }

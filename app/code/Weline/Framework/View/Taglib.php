@@ -255,14 +255,20 @@ class Taglib
     private function getCompilePipeline(): CompilePipeline
     {
         if ($this->pipeline === null) {
-            $this->pipeline = new CompilePipeline();
-            // 添加优化通道（按文档约定优先级）
-            $this->pipeline->addPass(new StageResolutionPass($this->getStageResolver()));
-            $this->pipeline->addPass(new ConstantFoldingPass());
-            $this->pipeline->addPass(new DeadCodeEliminationPass());
-            $this->pipeline->addPass(new InlineOptimizationPass());
+            $this->pipeline = $this->newCompilePipeline();
         }
         return $this->pipeline;
+    }
+
+    private function newCompilePipeline(): CompilePipeline
+    {
+        $pipeline = new CompilePipeline();
+        $pipeline->addPass(new StageResolutionPass($this->getStageResolver()));
+        $pipeline->addPass(new ConstantFoldingPass());
+        $pipeline->addPass(new DeadCodeEliminationPass());
+        $pipeline->addPass(new InlineOptimizationPass());
+
+        return $pipeline;
     }
     
     /**
@@ -462,12 +468,17 @@ class Taglib
         self::setCompileDepthValue($compileDepth);
         $topLevelCompile = $compileDepth === 1;
         try {
-            $extractor = ($compileDepth > 1) ? new PhpExtractor() : $this->getPhpExtractor();
+            // Nested compile (w:widget / w:template fetchHtml) must not reset the
+            // parent Tokenizer/AstBuilder/CodeGenerator. Doing so remaps parent
+            // __PHP_N__ placeholders onto the child's foreach/endif and yields
+            // "unexpected token endforeach" in the compiled parent.
+            $nested = $compileDepth > 1;
+            $extractor = $nested ? new PhpExtractor() : $this->getPhpExtractor();
             $extractor->reset();
             $cleanContent = $extractor->extract($content);
             
             // 阶段 2: 词法分析（复用实例 + reset）
-            $tokenizer = $this->getTokenizer();
+            $tokenizer = $nested ? new Tokenizer() : $this->getTokenizer();
             $tokenizer->reset();
             $tags = $this->getTags($template, $fileName, $content);
             if ($topLevelCompile) {
@@ -477,17 +488,17 @@ class Taglib
             $tokens = $tokenizer->tokenize($cleanContent);
             
             // 阶段 3: 构建 AST（复用实例 + reset）
-            $astBuilder = $this->getAstBuilder();
+            $astBuilder = $nested ? new AstBuilder() : $this->getAstBuilder();
             $astBuilder->reset();
             $astBuilder->setPhpExtractor($extractor);
             $ast = $astBuilder->build($tokens, $fileName);
             
             // 阶段 4: 编译管道优化
-            $pipeline = $this->getCompilePipeline();
+            $pipeline = $nested ? $this->newCompilePipeline() : $this->getCompilePipeline();
             $ast = $pipeline->process($ast);
             
             // 阶段 5: 生成代码（复用实例 + reset，避免回调累积）
-            $generator = $this->getCodeGenerator();
+            $generator = $nested ? new CodeGenerator() : $this->getCodeGenerator();
             $generator->reset();
             $generator->setPhpExtractor($extractor);
             
@@ -541,8 +552,20 @@ class Taglib
             
             // 构建注册闭包
             $registerCallback = function(string $registerName) use ($generator, $callback, $tagConfig, $tagName, $fileName) {
+                $ownsChildCompilation = isset($tagConfig['class'])
+                    && \is_string($tagConfig['class'])
+                    && \is_a(
+                        $tagConfig['class'],
+                        \Weline\Framework\Taglib\OwnsChildCompilationInterface::class,
+                        true
+                    );
+                if ($ownsChildCompilation) {
+                    // 运行期 generateRuntimeTag 需识别：禁止先编译子标签
+                    $generator->markOwnsChildCompilation($registerName);
+                }
+
                 // 将回调适配到原始参数格式：function ($tag_key, $config, $tag_data, $attributes)
-                $generator->registerTag($registerName, function(array $params) use ($callback, $tagConfig, $tagName, $fileName) {
+                $generator->registerTag($registerName, function(array $params) use ($callback, $tagConfig, $tagName, $fileName, $ownsChildCompilation) {
                 // 从 params 中提取属性
                 $attrs = [];
                 foreach ($params as $key => $value) {
@@ -560,13 +583,6 @@ class Taglib
                 
                 // 获取子内容代码
                 $isHookTag = ($tagName === 'hook' || $tagName === 'w:hook');
-                $ownsChildCompilation = isset($tagConfig['class'])
-                    && \is_string($tagConfig['class'])
-                    && \is_a(
-                        $tagConfig['class'],
-                        \Weline\Framework\Taglib\OwnsChildCompilationInterface::class,
-                        true
-                    );
                 $innerContent = '';
                 $rawContent = $params['rawContent'] ?? '';
                 

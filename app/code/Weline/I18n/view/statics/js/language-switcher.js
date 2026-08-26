@@ -103,6 +103,25 @@ function rebuildPathWithLocale(pathname, locale, websiteMount = '') {
     return `/${out.join('/')}`;
 }
 
+function normalizeLangCode(value) {
+    return String(value || '').trim().replace(/-/g, '_');
+}
+
+function sameLang(a, b) {
+    const left = normalizeLangCode(a).toLowerCase();
+    const right = normalizeLangCode(b).toLowerCase();
+    return left !== '' && right !== '' && left === right;
+}
+
+function pathLocale(pathname) {
+    for (const part of String(pathname || '/').split('/').filter(Boolean)) {
+        if (LOCALE_PATH_PATTERN.test(part)) {
+            return part;
+        }
+    }
+    return '';
+}
+
 /**
  * Resolve navigation target for a language option.
  * Prefer window.urlWithLang (backend) / live pathname rebuild over option.href,
@@ -113,6 +132,18 @@ function resolveLanguageNavigationHref(locale, optionHref, websiteMount = '') {
     if (!lang) {
         return String(optionHref || '').trim();
     }
+
+    let hrefFromRebuild = '';
+    try {
+        const rebuiltPath = rebuildPathWithLocale(window.location.pathname, lang, websiteMount);
+        hrefFromRebuild = new URL(
+            `${rebuiltPath}${window.location.search || ''}`,
+            window.location.href,
+        ).href;
+    } catch (_error) {
+    }
+
+    let hrefFromUrlWithLang = '';
     try {
         if (typeof window.urlWithLang === 'function') {
             const built = String(window.urlWithLang(
@@ -120,17 +151,33 @@ function resolveLanguageNavigationHref(locale, optionHref, websiteMount = '') {
                 lang,
             ) || '').trim();
             if (built) {
-                return new URL(built, window.location.href).href;
+                hrefFromUrlWithLang = new URL(built, window.location.href).href;
             }
         }
     } catch (_error) {
     }
-    try {
-        const rebuiltPath = rebuildPathWithLocale(window.location.pathname, lang, websiteMount);
-        const target = new URL(window.location.href);
-        target.pathname = rebuiltPath;
-        return target.href;
-    } catch (_error) {
+
+    const effectiveLang = pathLocale(window.location.pathname)
+        || document.documentElement.getAttribute('data-lang')
+        || '';
+    const localeChanging = effectiveLang !== '' && !sameLang(effectiveLang, lang);
+
+    if (hrefFromUrlWithLang && hrefFromRebuild && localeChanging) {
+        try {
+            const omittedPath = new URL(hrefFromUrlWithLang).pathname;
+            const explicitPath = new URL(hrefFromRebuild).pathname;
+            if (omittedPath !== explicitPath) {
+                return hrefFromRebuild;
+            }
+        } catch (_error) {
+        }
+    }
+
+    if (hrefFromUrlWithLang) {
+        return hrefFromUrlWithLang;
+    }
+    if (hrefFromRebuild) {
+        return hrefFromRebuild;
     }
     return String(optionHref || '').trim();
 }

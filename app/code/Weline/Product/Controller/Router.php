@@ -10,7 +10,9 @@ use Weline\Framework\Router\RouterInterface;
 final class Router implements RouterInterface
 {
     private const CATALOG_ROUTE = 'weline_product/frontend/catalog';
+    private const CATEGORY_ROUTE = 'weline_product/frontend/category';
     private const DETAIL_ROUTE = 'weline_product/frontend/detail';
+    private const DOWNLOAD_ROUTE = 'weline_product/frontend/download';
 
     /**
      * @inheritDoc
@@ -22,9 +24,43 @@ final class Router implements RouterInterface
         }
 
         $normalizedPath = strtolower(trim(str_replace('\\', '/', $path), '/'));
+        if (preg_match(
+            '#^product-download/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$#D',
+            $normalizedPath,
+            $matches,
+        ) === 1) {
+            $path = self::DOWNLOAD_ROUTE;
+            $rule['module'] = 'Weline_Product';
+            \Weline\Framework\Context::current()->set(
+                'input.query.entitlement_uuid',
+                (string)$matches[1],
+            );
+            return;
+        }
+
         if (in_array($normalizedPath, ['products', 'product-list'], true)) {
             $path = self::CATALOG_ROUTE;
             $rule['module'] = 'Weline_Product';
+            return;
+        }
+
+        if (preg_match('#^category/(.+)$#D', $normalizedPath, $matches) === 1) {
+            $categoryPath = trim((string)$matches[1], '/');
+            if ($categoryPath === '') {
+                return;
+            }
+
+            $path = self::CATEGORY_ROUTE;
+            $rule['module'] = 'Weline_Product';
+            \Weline\Framework\Context::current()->set('input.query.path', $categoryPath);
+
+            return;
+        }
+
+        if ($normalizedPath === 'category' || $normalizedPath === 'categories') {
+            $path = self::CATALOG_ROUTE;
+            $rule['module'] = 'Weline_Product';
+
             return;
         }
 
