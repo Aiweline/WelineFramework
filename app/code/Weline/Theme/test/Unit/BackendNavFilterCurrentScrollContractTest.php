@@ -20,6 +20,7 @@ final class BackendNavFilterCurrentScrollContractTest extends TestCase
 
         foreach ([$runtime, $published] as $source) {
             self::assertStringContainsString("function registerNavFilter()", $source);
+            self::assertStringContainsString('stripLocalizationSegments', $source);
             self::assertStringContainsString('scrollCurrentIntoView', $source);
             self::assertStringContainsString('.w-backend-nav__item[aria-current="page"]', $source);
             self::assertStringContainsString("element.querySelector(':scope > nav')", $source);
