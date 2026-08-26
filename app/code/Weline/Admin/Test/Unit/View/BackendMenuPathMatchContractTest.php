@@ -34,6 +34,7 @@ final class BackendMenuPathMatchContractTest extends TestCase
             "aria-current=\"page\" data-state=\"active\"",
             $php
         );
+        self::assertStringContainsString('stripLocalizationRouteSegments', $php);
     }
 
     public function testActiveCssIsDistinctFromHover(): void

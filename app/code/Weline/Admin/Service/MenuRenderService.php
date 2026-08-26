@@ -262,18 +262,34 @@ class MenuRenderService
         $segments = explode('/', $url);
         if (count($segments) > 1 && preg_match('/^[A-Za-z0-9]{16,}$/', $segments[0]) === 1) {
             $segments = array_slice($segments, 1);
-            $url = implode('/', $segments);
         }
 
-        if (
-            count($segments) > 2
-            && State::isAllowedCurrencyCode((string)$segments[0])
-            && preg_match('/^[a-z]{2}_[A-Za-z]+_[A-Z]{2}$/', $segments[1]) === 1
-        ) {
-            $url = implode('/', array_slice($segments, 2));
+        $segments = $this->stripLocalizationRouteSegments($segments);
+
+        return rtrim(implode('/', $segments), '/');
+    }
+
+    /**
+     * 菜单激活比较时忽略可选的货币/语言路径段。
+     *
+     * 后台菜单 href 通过 getBackendUrl() 生成，默认语言/货币会被省略；
+     * 浏览器地址栏仍可能保留显式 locale（如 /zh_Hans_CN/eav/...），
+     * 比较前须剥掉这些段，否则侧栏无法高亮与滚动定位。
+     *
+     * @param array<int, string> $segments
+     * @return array<int, string>
+     */
+    private function stripLocalizationRouteSegments(array $segments): array
+    {
+        if ($segments !== [] && State::isAllowedCurrencyCode((string)$segments[0])) {
+            $segments = array_slice($segments, 1);
         }
 
-        return rtrim($url, '/');
+        if ($segments !== [] && State::isAllowedLanguageCode((string)$segments[0])) {
+            $segments = array_slice($segments, 1);
+        }
+
+        return $segments;
     }
     /**
      * 检查菜单 URL 是否匹配当前 URL

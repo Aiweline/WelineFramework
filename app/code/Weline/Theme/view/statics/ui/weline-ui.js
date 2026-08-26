@@ -1819,6 +1819,19 @@ function registerNavFilter() {
             'index', 'edit', 'new', 'create', 'add', 'form', 'view', 'detail',
             'show', 'update', 'save', 'delete', 'remove', 'get', 'post',
         ]);
+        const localeSegmentPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
+        const stripLocalizationSegments = (segments) => {
+            const normalized = [...segments];
+            const maybeCurrency = normalized[0];
+            if (maybeCurrency && /^[A-Z]{3}$/.test(maybeCurrency)) {
+                normalized.shift();
+            }
+            const maybeLocale = normalized[0];
+            if (maybeLocale && localeSegmentPattern.test(maybeLocale)) {
+                normalized.shift();
+            }
+            return normalized;
+        };
         const routeSegments = (rawUrl) => {
             try {
                 const url = new URL(rawUrl, window.location.href);
@@ -1841,7 +1854,7 @@ function registerNavFilter() {
                 if (segments.length > 0 && backendTokenPattern.test(segments[0])) {
                     segments.shift();
                 }
-                return segments;
+                return stripLocalizationSegments(segments);
             } catch {
                 return null;
             }
