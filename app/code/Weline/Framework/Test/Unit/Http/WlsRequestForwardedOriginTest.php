@@ -41,10 +41,14 @@ final class WlsRequestForwardedOriginTest extends TestCase
     public function testForwardedHeadersOmitDefaultHttpsPort(): void
     {
         $request = $this->createRequest(
-            "Host: 127.0.0.1:3999\r\n"
+            "Host: 127.0.0.1\r\n"
             . "X-Forwarded-Host: 127.0.0.1\r\n"
             . "X-Forwarded-Proto: https\r\n"
-            . "X-Forwarded-Port: 443\r\n"
+            . "X-Forwarded-Port: 443\r\n",
+            [
+                'WLS_PORT' => 3999,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
         );
 
         self::assertTrue($request->isSecure());
@@ -57,10 +61,14 @@ final class WlsRequestForwardedOriginTest extends TestCase
     public function testForwardedHeadersPreserveNonDefaultPort(): void
     {
         $request = $this->createRequest(
-            "Host: 127.0.0.1:3999\r\n"
+            "Host: 127.0.0.1\r\n"
             . "X-Forwarded-Host: 127.0.0.1\r\n"
             . "X-Forwarded-Proto: http\r\n"
-            . "X-Forwarded-Port: 8088\r\n"
+            . "X-Forwarded-Port: 8088\r\n",
+            [
+                'WLS_PORT' => 3999,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
         );
 
         self::assertFalse($request->isSecure());
@@ -78,7 +86,11 @@ final class WlsRequestForwardedOriginTest extends TestCase
             . "Weline-Original-Host: 127.0.0.1\r\n"
             . "Weline-Original-Scheme: https\r\n"
             . "Weline-Original-Port: 8443\r\n"
-            . "Weline-Original-Ssl: on\r\n"
+            . "Weline-Original-Ssl: on\r\n",
+            [
+                'WLS_PORT' => 3999,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
         );
 
         self::assertTrue($request->isSecure());
@@ -86,6 +98,28 @@ final class WlsRequestForwardedOriginTest extends TestCase
         self::assertSame('8443', $_SERVER['SERVER_PORT'] ?? null);
         self::assertSame('https://127.0.0.1:8443/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
         self::assertSame('https://127.0.0.1:8443', $request->getBaseHost());
+    }
+
+    public function testDispatcherRestoresPublicDefaultHttpsAuthorityInsteadOfInternalWorkerPort(): void
+    {
+        $request = $this->createRequest(
+            "Host: app.example.com:23922\r\n"
+            . "Weline-Via-Dispatcher: 1\r\n"
+            . "Weline-Original-Host: app.example.com\r\n"
+            . "Weline-Original-Scheme: https\r\n"
+            . "Weline-Original-Port: 443\r\n"
+            . "Weline-Original-Ssl: on\r\n",
+            [
+                'WLS_PORT' => 23922,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('app.example.com', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('443', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertSame('https://app.example.com/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
+        self::assertSame('https://app.example.com', $request->getBaseHost());
     }
 
     public function testDirectListenPortFillsHostWhenAuthorityOmitsNonStandardPort(): void

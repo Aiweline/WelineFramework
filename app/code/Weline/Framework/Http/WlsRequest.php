@@ -513,9 +513,10 @@ class WlsRequest extends Request
             ['1', 'true', 'yes', 'on'],
             true,
         );
-        // Host is the public authority already validated by WorkerPolicyKernel
-        // and consumed by Static/FPC. Never replace it with proxy-specific
-        // Forwarded/Weline headers before Router/Controller execution.
+        // WorkerPolicyKernel validates the wire Host before framework hydration.
+        // A trusted Dispatcher may rewrite that wire authority to its selected
+        // Worker listener, so restore the separately preserved public Host only
+        // after the transport has authenticated the forwarded metadata.
         $originalHost = \trim((string)($headers['Host'] ?? ''));
         // 检测是否经过 WLS Dispatcher；不再信任公网客户端自报的标记。
         $viaDispatcher = $trustForwardedHeaders
@@ -523,8 +524,10 @@ class WlsRequest extends Request
             && $headers['Weline-Via-Dispatcher'] === '1';
         
         if ($viaDispatcher) {
-            // Weline transport metadata may restore scheme/client facts only;
-            // the standard Host header remains the sole public authority.
+            $dispatcherOriginalHost = \trim(\explode(',', (string)($headers['Weline-Original-Host'] ?? ''), 2)[0]);
+            if ($dispatcherOriginalHost !== '') {
+                $originalHost = $dispatcherOriginalHost;
+            }
             $originalScheme = \strtolower(\trim(\explode(',', $headers['Weline-Original-Scheme'] ?? 'http', 2)[0]));
             $originalSsl = $headers['Weline-Original-Ssl'] ?? 'off';
             $realIp = $headers['CF-Connecting-IP'] ?? ($headers['Weline-Real-Ip'] ?? '');
