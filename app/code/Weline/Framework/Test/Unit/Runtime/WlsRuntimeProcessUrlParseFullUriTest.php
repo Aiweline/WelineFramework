@@ -112,6 +112,58 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
         self::assertSame('/pagebuilder/backend/page/index', $request->getUri());
         self::assertSame('/pagebuilder/backend/page/index', $request->getUrlPath());
     }
+    public function testProcessUrlParsePreservesDispatcherPublicAuthorityAfterGlobalsEmulation(): void
+    {
+        $_SERVER = [];
+        $_GET = [];
+        $_POST = [];
+
+        $request = WlsRequest::fromRaw(
+            "GET /U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/zh_Hans_CN/weline_mail/backend HTTP/1.1\r\n"
+            . "Host: app.example.com:23922\r\n"
+            . "Weline-Via-Dispatcher: 1\r\n"
+            . "Weline-Original-Host: app.example.com\r\n"
+            . "Weline-Original-Scheme: https\r\n"
+            . "Weline-Original-Port: 443\r\n"
+            . "Weline-Original-Ssl: on\r\n\r\n",
+            [
+                'WLS_PORT' => 23922,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        $emulator = new \Weline\Framework\Runtime\GlobalsEmulator();
+        try {
+            $emulator->emulate($request);
+            $parse = [
+                'area' => 'backend',
+                'uri' => '/weline_mail/backend',
+                'server' => [
+                    'REQUEST_SCHEME' => $_SERVER['REQUEST_SCHEME'],
+                    'HTTP_HOST' => $_SERVER['HTTP_HOST'],
+                    'REQUEST_URI' => '/weline_mail/backend',
+                    'QUERY_STRING' => '',
+                    'WELINE_AREA' => 'backend',
+                ],
+            ];
+
+            $runtime = new WlsRuntime();
+            $method = new ReflectionMethod(WlsRuntime::class, 'processUrlParse');
+            $method->setAccessible(true);
+            $method->invoke($runtime, $parse);
+
+            self::assertSame('https', WelineEnv::get('request.scheme'));
+            self::assertSame('app.example.com', WelineEnv::get('server.http_host'));
+            self::assertSame(
+                'https://app.example.com/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/zh_Hans_CN/weline_mail/backend',
+                $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null,
+            );
+            self::assertStringNotContainsString(':23922', (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? ''));
+        } finally {
+            $emulator->reset();
+        }
+    }
+
 
     public function testProcessUrlParseBackendRequestUriDoesNotKeepPreviousFrontendValue(): void
     {
