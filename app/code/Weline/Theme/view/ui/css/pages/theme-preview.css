@@ -1,7 +1,8 @@
 @layer reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
-    [data-w-editor-preview="true"] [data-wslot] {
+    /* 薄适配器：仅无完整 editor-mode 引擎时生效；full 引擎由 editor-mode.css + data-w-slot-hover-target 接管 */
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot] {
         position: relative;
         min-block-size: 2.5rem;
         outline: 1px dashed color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
@@ -9,9 +10,9 @@
         transition: outline-color var(--weline-motion-fast), box-shadow var(--weline-motion-fast);
     }
 
-    [data-w-editor-preview="true"] [data-wslot]:hover,
-    [data-w-editor-preview="true"] [data-wslot]:focus-within,
-    [data-w-editor-preview="true"] [data-wslot][data-state="selected"] {
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:hover,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:focus-within,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot][data-state="selected"] {
         outline-color: var(--weline-theme-primary);
         box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--weline-theme-primary) 18%, transparent);
     }
@@ -39,9 +40,9 @@
         transition: opacity var(--weline-motion-fast), translate var(--weline-motion-fast);
     }
 
-    [data-wslot]:hover > .w-theme-preview-slot-action,
-    [data-wslot]:focus-within > .w-theme-preview-slot-action,
-    [data-wslot][data-state="selected"] > .w-theme-preview-slot-action {
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:hover > .w-theme-preview-slot-action,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:focus-within > .w-theme-preview-slot-action,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot][data-state="selected"] > .w-theme-preview-slot-action {
         opacity: 1;
         translate: 0;
     }

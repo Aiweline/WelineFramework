@@ -62,34 +62,34 @@ $this->assign('title', $title);
     <style>
         .weshop-product-layout__main {
             width: 100%;
-            padding: 24px 0 56px;
-            background: #fff7ed;
+            padding: var(--spacing-lg) 0 var(--size-control-2xl);
+            background: var(--color-warning-soft-3);
         }
         .weshop-product-layout__banner {
-            width: min(1180px, calc(100% - 32px));
-            margin: 0 auto 24px;
-            padding: 18px 22px;
-            border: 1px solid #fed7aa;
-            border-radius: 8px;
-            background: #ffffff;
+            width: min(var(--size-content-1180), calc(100% - var(--spacing-xl)));
+            margin: 0 auto var(--spacing-lg);
+            padding: var(--spacing-4_5) var(--spacing-5_5);
+            border: var(--border-width-thin) solid var(--color-warning-soft-4);
+            border-radius: var(--border-radius-lg);
+            background: var(--color-bg-primary);
         }
         .weshop-product-layout__eyebrow {
             display: inline-flex;
-            margin-bottom: 8px;
-            color: #c2410c;
-            font-size: 0.875rem;
+            margin-bottom: var(--spacing-sm);
+            color: var(--color-warning-ember);
+            font-size: var(--font-size-sm);
             font-weight: 700;
         }
         .weshop-product-layout__title {
             margin: 0;
-            color: #111827;
-            font-size: clamp(1.5rem, 2vw, 2.25rem);
+            color: var(--color-text-slate);
+            font-size: clamp(var(--font-size-2xl), 2vw, var(--spacing-2_25));
             line-height: 1.15;
         }
         .weshop-product-layout__content,
         .weshop-product-layout__sections {
-            width: min(1180px, calc(100% - 32px));
-            margin: 0 auto 24px;
+            width: min(var(--size-content-1180), calc(100% - var(--spacing-xl)));
+            margin: 0 auto var(--spacing-lg);
         }
     </style>
     <w:hook>seo::footer</w:hook>

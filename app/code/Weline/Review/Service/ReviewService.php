@@ -6,9 +6,10 @@ namespace Weline\Review\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Review\Api\ReviewSeoFactsInterface;
 use Weline\Review\Model\ProductReview;
 
-final class ReviewService
+final class ReviewService implements ReviewSeoFactsInterface
 {
     public function __construct(
         private readonly ReviewTypeRegistry $types,
@@ -126,6 +127,92 @@ final class ReviewService
             'total' => $total,
             'average_rating' => $items === [] ? 0.0 : round($ratingSum / count($items), 1),
             'pagination' => $pagination,
+        ];
+    }
+
+    /**
+     * SEO-facing review facts for the current request locale.
+     *
+     * AggregateRating uses overall rating across all approved reviews.
+     * Sample review rows carry author display names already translated for the
+     * active language (never a multi-locale map).
+     *
+     * @return array{
+     *   success:bool,
+     *   review_count:int,
+     *   average_rating:float,
+     *   reviews:list<array<string,mixed>>
+     * }
+     */
+    public function seoFacts(string $typeCode, string $externalEntityUuid, int $sampleSize = 10): array
+    {
+        $type = $this->types->get($typeCode);
+        $entity = $type->resolveEntity($externalEntityUuid);
+        if ($entity === null) {
+            return [
+                'success' => true,
+                'review_count' => 0,
+                'average_rating' => 0.0,
+                'reviews' => [],
+            ];
+        }
+
+        $sampleSize = max(1, min(20, $sampleSize));
+        /** @var ProductReview $review */
+        $review = ObjectManager::getInstance(ProductReview::class);
+        $aggregateRows = $review->clear()
+            ->fields([
+                'COUNT(*) AS review_count',
+                'AVG(' . ProductReview::schema_fields_RATING . ') AS average_rating',
+            ])
+            ->where(ProductReview::schema_fields_ENTITY_UUID, $entity['entity_uuid'])
+            ->where(ProductReview::schema_fields_STATUS, ProductReview::STATUS_APPROVED)
+            ->select()
+            ->fetchArray();
+        $aggregate = is_array($aggregateRows[0] ?? null) ? $aggregateRows[0] : [];
+        $reviewCount = (int)($aggregate['review_count'] ?? 0);
+        $averageRating = $reviewCount > 0
+            ? round((float)($aggregate['average_rating'] ?? 0), 1)
+            : 0.0;
+
+        if ($reviewCount <= 0 || $averageRating <= 0) {
+            return [
+                'success' => true,
+                'review_count' => 0,
+                'average_rating' => 0.0,
+                'reviews' => [],
+            ];
+        }
+
+        $listed = $this->list($typeCode, $externalEntityUuid, 1, $sampleSize);
+        $reviews = [];
+        foreach (($listed['items'] ?? []) as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $body = trim((string)($item['content'] ?? ''));
+            $rating = max(1, min(5, (int)($item['rating'] ?? 0)));
+            if ($body === '' && $rating <= 0) {
+                continue;
+            }
+            $createdAt = (string)($item['created_at'] ?? '');
+            $reviews[] = [
+                'author' => (string)($item['reviewer'] ?? __('已认证买家')),
+                'rating' => $rating,
+                'ratingValue' => $rating,
+                'title' => (string)($item['title'] ?? ''),
+                'content' => $body,
+                'reviewBody' => $body,
+                'created_at' => $createdAt,
+                'datePublished' => $createdAt,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'review_count' => $reviewCount,
+            'average_rating' => $averageRating,
+            'reviews' => $reviews,
         ];
     }
 

@@ -10,6 +10,7 @@ use Weline\Product\Api\Capability\ProductInventoryCapabilityInterface;
 use Weline\Product\Api\Capability\ProductPricingCapabilityInterface;
 use Weline\Product\Api\Capability\ProductRendererCapabilityInterface;
 use Weline\Product\Api\ProductProviderInterface;
+use Weline\Product\Service\Provider\BuiltInProductProviderCatalog;
 
 /**
  * Product Provider registry：code/type 唯一；小接口 capability 可发现；不调用 Renderer。
@@ -236,6 +237,13 @@ final class ProductProviderRegistry
             $this->defaultEnsured = true;
             if (!isset($this->byCode[ProductProviderInterface::CODE_DEFAULT])) {
                 $this->register(new DefaultProductProvider());
+            }
+            foreach (BuiltInProductProviderCatalog::additionalProviders() as $provider) {
+                $code = $this->normalizeKey($provider->getCode());
+                $type = $this->normalizeKey($provider->getType());
+                if (!isset($this->byCode[$code]) && !isset($this->typeIndex[$type])) {
+                    $this->register($provider);
+                }
             }
         }
         if ($this->autoLoadExtends && !$this->extendsLoaded) {

@@ -88,8 +88,8 @@ $rootClass = trim($wc . ' w-table-wrap');
 
 .<?= $wc ?> .table-scroll {
     overflow-x: auto;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md, 8px);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
 }
 
@@ -100,16 +100,16 @@ $rootClass = trim($wc . ' w-table-wrap');
 
 .<?= $wc ?> th,
 .<?= $wc ?> td {
-    padding: var(--weline-space-3, 12px) var(--weline-space-4, 16px);
+    padding: var(--weline-space-3) var(--weline-space-4);
     text-align: left;
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> th {
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-sm, 13px);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-size: var(--weline-font-size-sm);
+    font-weight: var(--weline-font-weight-semibold);
 }
 
 .<?= $wc ?> tbody tr:last-child td {
@@ -122,7 +122,7 @@ $rootClass = trim($wc . ' w-table-wrap');
 
 .<?= $wc ?> .is-bordered th,
 .<?= $wc ?> .is-bordered td {
-    border-right: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .is-hover tbody tr:hover {

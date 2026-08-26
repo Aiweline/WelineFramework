@@ -196,6 +196,7 @@
         }
         for (var i = 0; i < forms.length; i++) {
             initArrayEditors(forms[i]);
+            initNavTreeEditors(forms[i]);
             initRangeSliders(forms[i]);
             initDatetimeShortcuts(forms[i]);
             initColorPickers(forms[i]);
@@ -569,6 +570,741 @@
             title.addEventListener('click', function () {
                 setExpanded(title.getAttribute('aria-expanded') !== 'true');
             });
+        });
+    }
+
+    function initNavTreeEditors(container) {
+        qa(container, '.w-param-nav-tree[data-w-component="nav-tree"]').forEach(function (wrapper) {
+            if (wrapper.dataset.wParamInited) return;
+            wrapper.dataset.wParamInited = '1';
+            var fieldId = wrapper.getAttribute('data-field-id');
+            var maxDepth = parseInt(wrapper.getAttribute('data-max-depth'), 10) || 3;
+            var hiddenInput = doc.getElementById(fieldId);
+            var mount = doc.getElementById(fieldId + '_editor');
+            var bootEl = doc.getElementById(fieldId + '_nav_tree_boot');
+            if (!hiddenInput || !mount) return;
+            var boot = {};
+            if (bootEl) {
+                try {
+                    boot = JSON.parse(bootEl.value || bootEl.textContent || '{}') || {};
+                } catch (e) {
+                    boot = {};
+                }
+            }
+            var labels = boot.labels || {};
+            var locales = resolveNavTreeLocales(boot);
+            var state = {
+                tree: Array.isArray(boot.tree) ? boot.tree : [],
+                pageCandidates: Array.isArray(boot.page_candidates) ? boot.page_candidates : [],
+                categoryCandidates: Array.isArray(boot.category_candidates) ? boot.category_candidates : [],
+                detailPath: null
+            };
+
+            function resolveNavTreeLocales(bootPayload) {
+                if (bootPayload && Array.isArray(bootPayload.locales) && bootPayload.locales.length) {
+                    return bootPayload.locales;
+                }
+                var themeEl = doc.getElementById('themeEditor');
+                if (themeEl) {
+                    try {
+                        var parsed = JSON.parse(themeEl.getAttribute('data-installed-locales') || '[]');
+                        if (Array.isArray(parsed) && parsed.length) return parsed;
+                    } catch (e) {}
+                }
+                return [{ code: 'zh_Hans_CN', name: '简体中文' }, { code: 'en_US', name: 'English' }];
+            }
+
+            function serializeImageFormValue(image) {
+                if (image === null || image === undefined || image === '') return '';
+                if (typeof image === 'object') {
+                    try { return JSON.stringify(image); } catch (e) { return ''; }
+                }
+                return String(image);
+            }
+
+            function imagePreviewFromNode(image) {
+                if (!image) return '';
+                var node = parseFileImageNode(image);
+                if (node && node.usage && node.usage.preview_url) {
+                    return sanitizeLegacyImagePreviewUrl(String(node.usage.preview_url));
+                }
+                if (typeof image === 'string') {
+                    var trimmed = image.trim();
+                    if (trimmed.charAt(0) === '{') {
+                        var parsed = parseFileImageNode(trimmed);
+                        if (parsed && parsed.usage && parsed.usage.preview_url) {
+                            return sanitizeLegacyImagePreviewUrl(String(parsed.usage.preview_url));
+                        }
+                        return '';
+                    }
+                    return sanitizeLegacyImagePreviewUrl(trimmed);
+                }
+                return '';
+            }
+
+            function ensureNodeI18n(node) {
+                if (!node.i18n || typeof node.i18n !== 'object') node.i18n = {};
+                if (!node.i18n.name || typeof node.i18n.name !== 'object') node.i18n.name = {};
+                if (!node.i18n.description || typeof node.i18n.description !== 'object') node.i18n.description = {};
+                return node.i18n;
+            }
+
+            function uid() {
+                return 'n_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+            }
+
+            function cloneNode(src, tagOverride) {
+                var node = {
+                    id: uid(),
+                    tag: tagOverride || src.tag || 'custom',
+                    name: String(src.name || src.text || ''),
+                    url: String(src.url || '#'),
+                    children: []
+                };
+                if (src.ref) node.ref = String(src.ref);
+                if (src.description) node.description = String(src.description);
+                if (src.image) node.image = src.image;
+                if (src.i18n && typeof src.i18n === 'object') node.i18n = JSON.parse(JSON.stringify(src.i18n));
+                if (src.meta && typeof src.meta === 'object') node.meta = src.meta;
+                return node;
+            }
+
+            function walk(list, fn, path) {
+                path = path || [];
+                (list || []).forEach(function (node, index) {
+                    var p = path.concat([index]);
+                    fn(node, p);
+                    if (node.children && node.children.length) walk(node.children, fn, p);
+                });
+            }
+
+            function getAt(path) {
+                if (!path || !path.length) {
+                    return { parent: null, index: -1, node: null };
+                }
+                var parent = state.tree;
+                for (var i = 0; i < path.length - 1; i++) {
+                    var mid = parent[path[i]];
+                    if (!mid) return { parent: null, index: -1, node: null };
+                    mid.children = mid.children || [];
+                    parent = mid.children;
+                }
+                var index = path[path.length - 1];
+                return { parent: parent, index: index, node: parent[index] || null };
+            }
+
+            function removeAt(path) {
+                var hit = getAt(path);
+                if (!hit.parent || hit.index < 0) return;
+                hit.parent.splice(hit.index, 1);
+            }
+
+            function depthOf(path) {
+                return path.length;
+            }
+
+            function pathsEqual(a, b) {
+                if (!a || !b || a.length !== b.length) {
+                    return false;
+                }
+                for (var i = 0; i < a.length; i++) {
+                    if (a[i] !== b[i]) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            function pathIsPrefix(prefix, path) {
+                if (!prefix || !path || prefix.length > path.length) {
+                    return false;
+                }
+                for (var i = 0; i < prefix.length; i++) {
+                    if (prefix[i] !== path[i]) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            function pathIsAncestor(ancestor, path) {
+                return pathIsPrefix(ancestor, path) && ancestor.length < path.length;
+            }
+
+            function subtreeDepth(node) {
+                var kids = node && node.children ? node.children : [];
+                if (!kids.length) {
+                    return 1;
+                }
+                var maxChild = 1;
+                kids.forEach(function (child) {
+                    maxChild = Math.max(maxChild, subtreeDepth(child));
+                });
+                return 1 + maxChild;
+            }
+
+            function canNestUnder(targetPath, node) {
+                return targetPath.length + subtreeDepth(node) <= maxDepth;
+            }
+
+            function remapPathAfterRemoval(removedPath, targetPath) {
+                if (!targetPath || !targetPath.length) {
+                    return [];
+                }
+                if (pathsEqual(removedPath, targetPath)) {
+                    return null;
+                }
+                var next = targetPath.slice();
+                var limit = Math.min(removedPath.length, targetPath.length);
+                for (var level = 0; level < limit; level++) {
+                    if (removedPath[level] !== targetPath[level]) {
+                        return next;
+                    }
+                }
+                if (removedPath.length <= targetPath.length) {
+                    var removedIndex = removedPath[removedPath.length - 1];
+                    var targetIndex = targetPath[removedPath.length - 1];
+                    if (targetIndex > removedIndex) {
+                        next[removedPath.length - 1] = targetIndex - 1;
+                    }
+                }
+                return next;
+            }
+
+            function resolveDropMode(rowEl, ev) {
+                var rect = rowEl.getBoundingClientRect();
+                if (!rect.height) {
+                    return 'child';
+                }
+                var ratio = (ev.clientY - rect.top) / rect.height;
+                if (ratio < 0.28) {
+                    return 'before';
+                }
+                if (ratio > 0.72) {
+                    return 'after';
+                }
+                return 'child';
+            }
+
+            function clearDropMarkers(scope) {
+                qa(scope || mount, '.w-nav-tree-row.is-drop-before, .w-nav-tree-row.is-drop-after, .w-nav-tree-row.is-drop-child, .w-nav-tree-children.is-drop-child, .w-nav-tree-drop-end.is-drop-target').forEach(function (el) {
+                    el.classList.remove('is-drop-before', 'is-drop-after', 'is-drop-child', 'is-drop-target');
+                });
+            }
+
+            function markDropTarget(el, mode) {
+                clearDropMarkers(mount);
+                if (!el) {
+                    return;
+                }
+                if (el.classList.contains('w-nav-tree-drop-end')) {
+                    el.classList.add('is-drop-target');
+                    return;
+                }
+                if (el.classList.contains('w-nav-tree-children')) {
+                    el.classList.add('is-drop-child');
+                    return;
+                }
+                el.classList.remove('is-drop-before', 'is-drop-after', 'is-drop-child');
+                if (mode === 'before') {
+                    el.classList.add('is-drop-before');
+                } else if (mode === 'after') {
+                    el.classList.add('is-drop-after');
+                } else {
+                    el.classList.add('is-drop-child');
+                }
+            }
+
+            function insertBefore(path, node) {
+                if (!path || !path.length) {
+                    state.tree.unshift(node);
+                    return;
+                }
+                var hit = getAt(path);
+                if (!hit.parent) {
+                    state.tree.push(node);
+                    return;
+                }
+                hit.parent.splice(hit.index, 0, node);
+            }
+
+            function insertAfter(path, node) {
+                if (!path || !path.length) {
+                    state.tree.push(node);
+                    return;
+                }
+                var hit = getAt(path);
+                if (!hit.parent) {
+                    state.tree.push(node);
+                    return;
+                }
+                hit.parent.splice(hit.index + 1, 0, node);
+            }
+
+            function insertAsChild(path, node) {
+                if (!path || !path.length) {
+                    state.tree.push(node);
+                    return;
+                }
+                var hit = getAt(path);
+                if (!hit.node) {
+                    state.tree.push(node);
+                    return;
+                }
+                hit.node.children = hit.node.children || [];
+                hit.node.children.push(node);
+            }
+
+            function applyDrop(node, targetPath, mode) {
+                if (!node) {
+                    return;
+                }
+                if (mode === 'append-root') {
+                    state.tree.push(node);
+                    return;
+                }
+                if (!targetPath || !targetPath.length) {
+                    if (mode === 'before') {
+                        state.tree.unshift(node);
+                    } else {
+                        state.tree.push(node);
+                    }
+                    return;
+                }
+                if (mode === 'child') {
+                    if (targetPath.length >= maxDepth || !canNestUnder(targetPath, node)) {
+                        insertAfter(targetPath, node);
+                        return;
+                    }
+                    insertAsChild(targetPath, node);
+                    return;
+                }
+                if (mode === 'before') {
+                    insertBefore(targetPath, node);
+                    return;
+                }
+                insertAfter(targetPath, node);
+            }
+
+            function moveRow(fromPath, targetPath, mode) {
+                if (!fromPath || !fromPath.length) {
+                    return;
+                }
+                var fromHit = getAt(fromPath);
+                if (!fromHit.node) {
+                    return;
+                }
+                if (pathsEqual(fromPath, targetPath)) {
+                    return;
+                }
+                if (targetPath && targetPath.length && pathIsAncestor(fromPath, targetPath)) {
+                    return;
+                }
+                var moving = JSON.parse(JSON.stringify(fromHit.node));
+                if (mode === 'child' && targetPath && targetPath.length && !canNestUnder(targetPath, moving)) {
+                    mode = 'after';
+                }
+                removeAt(fromPath);
+                var adjusted = mode === 'append-root' ? [] : remapPathAfterRemoval(fromPath, targetPath || []);
+                if (adjusted === null) {
+                    state.tree.push(moving);
+                    persist();
+                    render();
+                    return;
+                }
+                applyDrop(moving, adjusted, mode);
+            }
+
+            function handleTreeDrop(ev, targetPath, mode) {
+                ev.preventDefault();
+                clearDropMarkers(mount);
+                var candRaw = ev.dataTransfer.getData('application/x-w-nav-candidate');
+                var rowRaw = ev.dataTransfer.getData('application/x-w-nav-row');
+                if (candRaw) {
+                    try {
+                        var meta = JSON.parse(candRaw);
+                        var list = meta.source === 'category' ? state.categoryCandidates : state.pageCandidates;
+                        var src = list[meta.index];
+                        if (src) {
+                            applyDrop(cloneNode(src, meta.source), targetPath, mode);
+                            persist();
+                            render();
+                        }
+                    } catch (e) {}
+                    return;
+                }
+                if (rowRaw) {
+                    moveRow(parsePath(rowRaw), targetPath, mode);
+                    persist();
+                    render();
+                }
+            }
+
+            function persist() {
+                hiddenInput.value = JSON.stringify(state.tree || []);
+                try {
+                    hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                } catch (e) {}
+            }
+
+            function tagLabel(tag) {
+                if (tag === 'page') return labels.tag_page || '页面';
+                if (tag === 'category') return labels.tag_category || '分类';
+                return labels.tag_custom || '自定义';
+            }
+
+            function renderCandidateList(title, items, tag) {
+                var html = '<div class="w-nav-tree-panel"><div class="w-nav-tree-panel-title">' + esc(title) + '</div><ul class="w-nav-tree-candidates">';
+                if (!items.length) {
+                    html += '<li class="w-nav-tree-empty">—</li>';
+                } else {
+                    items.forEach(function (item, idx) {
+                        html += '<li class="w-nav-tree-candidate" draggable="true" data-source="' + esc(tag) + '" data-index="' + idx + '" title="' + esc(labels.add_to_tree || '点击添加到菜单树') + '">'
+                            + '<span class="w-nav-tree-badge">' + esc(tagLabel(tag)) + '</span> '
+                            + '<span class="w-nav-tree-candidate-name">' + esc(item.name || '') + '</span>'
+                            + '<button type="button" class="w-button w-nav-tree-candidate-add" data-tone="primary" data-variant="outline" data-size="sm" data-source="' + esc(tag) + '" data-index="' + idx + '" title="' + esc(labels.add_to_tree || '点击添加到菜单树') + '">+</button>'
+                            + '</li>';
+                    });
+                }
+                html += '</ul></div>';
+                return html;
+            }
+
+            function addCandidateToTree(source, index, targetPath, mode) {
+                var list = source === 'category' ? state.categoryCandidates : state.pageCandidates;
+                var src = list[index];
+                if (!src) {
+                    return false;
+                }
+                applyDrop(cloneNode(src, source), targetPath || [], mode || 'append-root');
+                persist();
+                render();
+                return true;
+            }
+
+            function renderRows(list, pathPrefix) {
+                pathPrefix = pathPrefix || [];
+                var html = '';
+                (list || []).forEach(function (node, index) {
+                    var path = pathPrefix.concat([index]);
+                    var depth = path.length;
+                    var indent = (depth - 1) * 20;
+                    var previewUrl = imagePreviewFromNode(node.image);
+                    var thumbHtml = previewUrl
+                        ? '<span class="w-nav-tree-thumb"><img src="' + esc(previewUrl) + '" alt=""></span>'
+                        : (node.image ? '<span class="w-nav-tree-thumb w-nav-tree-thumb--placeholder" title="' + esc(labels.has_image || '已设图片') + '">🖼</span>' : '');
+                    var metaHtml = '';
+                    if (node.description && String(node.description).trim()) {
+                        metaHtml += '<span class="w-nav-tree-meta-badge" title="' + esc(node.description) + '">' + esc(labels.has_description || '描述') + '</span>';
+                    }
+                    html += '<div class="w-nav-tree-node" data-node-path="' + esc(path.join('.')) + '">';
+                    html += '<div class="w-nav-tree-row" draggable="true" data-path="' + esc(path.join('.')) + '" style="padding-left:' + indent + 'px">'
+                        + '<span class="w-nav-tree-handle" title="' + esc(labels.indent_hint || '') + '">⋮⋮</span>'
+                        + thumbHtml
+                        + '<span class="w-nav-tree-badge w-nav-tree-badge--' + esc(node.tag || 'custom') + '">' + esc(tagLabel(node.tag)) + '</span>'
+                        + '<span class="w-nav-tree-name">' + esc(node.name || '') + '</span>'
+                        + metaHtml
+                        + '<span class="w-nav-tree-url">' + esc(node.url || '') + '</span>'
+                        + '<button type="button" class="w-button w-nav-tree-detail" data-tone="neutral" data-variant="outline" data-size="sm" data-path="' + esc(path.join('.')) + '">' + esc(labels.detail || '编辑') + '</button>'
+                        + '<button type="button" class="w-button w-nav-tree-remove" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-path="' + esc(path.join('.')) + '" aria-label="' + esc(labels.remove || '删除') + '">×</button>'
+                        + '</div>';
+                    if (depth < maxDepth) {
+                        html += '<div class="w-nav-tree-children" data-parent-path="' + esc(path.join('.')) + '">';
+                        if (node.children && node.children.length) {
+                            html += renderRows(node.children, path);
+                        } else {
+                            html += '<div class="w-nav-tree-children-empty">' + esc(labels.drop_child_empty || '拖入成为子项') + '</div>';
+                        }
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                });
+                return html;
+            }
+
+            function esc(v) {
+                return String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            }
+
+            function renderDetailMediaImage(inputId, node) {
+                var stored = serializeImageFormValue(node.image);
+                var previewUrl = imagePreviewFromNode(node.image);
+                var hasImage = stored !== '';
+                var html = '<div class="w-param-media-image w-nav-tree-detail-image">';
+                html += '<div class="w-param-image-preview' + (hasImage ? ' w-param-has-image' : '') + '" id="' + esc(inputId) + '_preview">';
+                if (previewUrl) html += '<img src="' + esc(previewUrl) + '" alt="">';
+                html += '<div class="w-param-image-placeholder"' + (hasImage && previewUrl ? ' hidden' : '') + '>' + esc(labels.image_pick || '从媒体库选择') + '</div>';
+                html += '<div class="w-param-image-actions">';
+                html += '<button type="button" class="w-button w-param-media-image-select" data-tone="primary" data-variant="outline" data-size="sm" data-target="' + esc(inputId) + '" data-default-dir="nav">' + esc(labels.image_pick || '选择') + '</button>';
+                if (hasImage) {
+                    html += '<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="' + esc(inputId) + '" aria-label="×">×</button>';
+                }
+                html += '</div></div>';
+                html += '<input type="hidden" id="' + esc(inputId) + '" data-detail-field="image" value="' + esc(stored) + '" data-preview="' + esc(inputId) + '_preview" data-clear-label="×">';
+                html += '</div>';
+                return html;
+            }
+
+            function renderDetailI18nSection(node) {
+                var i18n = ensureNodeI18n(node);
+                var html = '<div class="w-nav-tree-detail-i18n"><div class="w-nav-tree-detail-i18n-title">' + esc(labels.i18n || '多语言') + '</div>';
+                locales.forEach(function (locale) {
+                    var code = locale.code || locale.locale_code || '';
+                    if (!code) return;
+                    var localeName = locale.name || code;
+                    var nameVal = (i18n.name && i18n.name[code]) ? i18n.name[code] : (code === 'zh_Hans_CN' ? (node.name || '') : '');
+                    var descVal = (i18n.description && i18n.description[code]) ? i18n.description[code] : (code === 'zh_Hans_CN' ? (node.description || '') : '');
+                    html += '<div class="w-nav-tree-detail-i18n-row" data-locale="' + esc(code) + '">';
+                    html += '<div class="w-nav-tree-detail-i18n-locale">' + esc(localeName) + ' <small>(' + esc(code) + ')</small></div>';
+                    html += '<label>' + esc(labels.i18n_name || '名称翻译') + '<input type="text" class="w-input" data-i18n-field="name" data-locale="' + esc(code) + '" value="' + esc(nameVal) + '"></label>';
+                    html += '<label>' + esc(labels.i18n_description || '描述翻译') + '<textarea class="w-textarea" rows="2" data-i18n-field="description" data-locale="' + esc(code) + '">' + esc(descVal) + '</textarea></label>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                return html;
+            }
+
+            function renderDetail() {
+                if (!state.detailPath) return '';
+                var hit = getAt(state.detailPath.split('.').map(function (n) { return parseInt(n, 10); }));
+                var node = hit.node || { id: uid(), name: '', url: '', tag: 'custom', description: '', image: '', ref: '' };
+                if (!node.id) node.id = uid();
+                var imageInputId = fieldId + '_nav_detail_image_' + String(node.id).replace(/[^a-z0-9_-]/gi, '_');
+                return '<div class="w-nav-tree-detail-dialog" role="dialog">'
+                    + '<div class="w-nav-tree-detail-card">'
+                    + '<h4>' + esc(labels.detail || '编辑') + '</h4>'
+                    + '<label>' + esc(labels.name || '名称') + ' (' + esc(labels.i18n_name || '中文源串') + ')<input type="text" class="w-input" data-detail-field="name" value="' + esc(node.name || '') + '"></label>'
+                    + '<label>' + esc(labels.url || '链接') + '<input type="text" class="w-input" data-detail-field="url" value="' + esc(node.url || '') + '"></label>'
+                    + '<label>' + esc(labels.description || '描述') + '<textarea class="w-textarea" rows="2" data-detail-field="description">' + esc(node.description || '') + '</textarea></label>'
+                    + renderDetailMediaImage(imageInputId, node)
+                    + renderDetailI18nSection(node)
+                    + '<label>' + esc(labels.ref || '引用') + '<input type="text" class="w-input" data-detail-field="ref" value="' + esc(node.ref || '') + '"></label>'
+                    + '<div class="w-nav-tree-detail-actions">'
+                    + '<button type="button" class="w-button" data-tone="primary" data-detail-save="1">' + esc(labels.save_detail || '保存') + '</button>'
+                    + '<button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-detail-cancel="1">' + esc(labels.cancel || '取消') + '</button>'
+                    + '</div></div></div>';
+            }
+
+            function render() {
+                mount.innerHTML = '<div class="w-nav-tree-layout">'
+                    + '<div class="w-nav-tree-sources">'
+                    + renderCandidateList(labels.pages || '页面', state.pageCandidates, 'page')
+                    + renderCandidateList(labels.categories || '分类', state.categoryCandidates, 'category')
+                    + '<button type="button" class="w-button w-nav-tree-add-custom" data-tone="primary" data-variant="outline">+ '
+                    + esc(labels.add_custom || '添加自定义') + '</button>'
+                    + '</div>'
+                    + '<div class="w-nav-tree-main">'
+                    + '<div class="w-nav-tree-hint">' + esc(labels.indent_hint || '') + '</div>'
+                    + '<div class="w-nav-tree-rows" data-drop-root="1">'
+                    + (state.tree.length ? renderRows(state.tree) : '<div class="w-nav-tree-empty">' + esc(labels.empty || '') + '</div>')
+                    + '<div class="w-nav-tree-drop-end" data-drop-end="1">' + esc(labels.drop_append || '拖放到此处添加') + '</div>'
+                    + '</div></div></div>'
+                    + renderDetail();
+                bind();
+                if (state.detailPath) initMediaImagePicker(mount);
+            }
+
+            function parsePath(str) {
+                return String(str || '').split('.').filter(Boolean).map(function (n) { return parseInt(n, 10); });
+            }
+
+            function bindDropSurface(el, getTargetPath, getMode) {
+                if (!el) {
+                    return;
+                }
+                el.addEventListener('dragover', function (ev) {
+                    ev.preventDefault();
+                    ev.dataTransfer.dropEffect = 'move';
+                    markDropTarget(el, typeof getMode === 'function' ? getMode(ev) : getMode);
+                });
+                el.addEventListener('dragleave', function (ev) {
+                    if (el.contains(ev.relatedTarget)) {
+                        return;
+                    }
+                    el.classList.remove('is-drop-before', 'is-drop-after', 'is-drop-child', 'is-drop-target');
+                });
+                el.addEventListener('drop', function (ev) {
+                    var mode = typeof getMode === 'function' ? getMode(ev) : getMode;
+                    handleTreeDrop(ev, typeof getTargetPath === 'function' ? getTargetPath(ev) : getTargetPath, mode);
+                });
+            }
+
+            function bind() {
+                var dragStarted = false;
+
+                var addCustom = q(mount, '.w-nav-tree-add-custom');
+                if (addCustom) {
+                    addCustom.addEventListener('click', function () {
+                        state.tree.push(cloneNode({ name: labels.tag_custom || '自定义', url: '#', tag: 'custom' }, 'custom'));
+                        persist();
+                        state.detailPath = String(state.tree.length - 1);
+                        render();
+                    });
+                }
+
+                function openDetail(pathStr) {
+                    state.detailPath = pathStr;
+                    render();
+                }
+
+                qa(mount, '.w-nav-tree-candidate').forEach(function (el) {
+                    el.addEventListener('dragstart', function (ev) {
+                        dragStarted = true;
+                        var source = el.getAttribute('data-source');
+                        var idx = parseInt(el.getAttribute('data-index'), 10);
+                        ev.dataTransfer.setData('application/x-w-nav-candidate', JSON.stringify({ source: source, index: idx }));
+                        ev.dataTransfer.effectAllowed = 'copy';
+                    });
+                    el.addEventListener('dragend', function () {
+                        setTimeout(function () { dragStarted = false; }, 0);
+                    });
+                    el.addEventListener('click', function (ev) {
+                        if (dragStarted || ev.target.closest('.w-nav-tree-candidate-add')) {
+                            return;
+                        }
+                        addCandidateToTree(el.getAttribute('data-source'), parseInt(el.getAttribute('data-index'), 10));
+                    });
+                });
+
+                qa(mount, '.w-nav-tree-candidate-add').forEach(function (btn) {
+                    btn.addEventListener('click', function (ev) {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        addCandidateToTree(btn.getAttribute('data-source'), parseInt(btn.getAttribute('data-index'), 10));
+                    });
+                });
+
+                qa(mount, '.w-nav-tree-row').forEach(function (el) {
+                    el.addEventListener('dragstart', function (ev) {
+                        if (ev.target && ev.target.closest && ev.target.closest('button')) {
+                            ev.preventDefault();
+                            return;
+                        }
+                        ev.stopPropagation();
+                        ev.dataTransfer.setData('application/x-w-nav-row', el.getAttribute('data-path') || '');
+                        ev.dataTransfer.effectAllowed = 'move';
+                    });
+                    el.addEventListener('dragend', function () {
+                        clearDropMarkers(mount);
+                    });
+                    bindDropSurface(el, function () {
+                        return parsePath(el.getAttribute('data-path'));
+                    }, function (ev) {
+                        return resolveDropMode(el, ev);
+                    });
+                });
+
+                qa(mount, '.w-nav-tree-children').forEach(function (el) {
+                    bindDropSurface(el, function () {
+                        return parsePath(el.getAttribute('data-parent-path') || '');
+                    }, 'child');
+                });
+
+                qa(mount, '.w-nav-tree-children-empty').forEach(function (el) {
+                    var parentEl = el.closest('.w-nav-tree-children');
+                    bindDropSurface(el, function () {
+                        return parentEl ? parsePath(parentEl.getAttribute('data-parent-path') || '') : [];
+                    }, 'child');
+                });
+
+                bindDropSurface(q(mount, '.w-nav-tree-drop-end'), function () {
+                    return [];
+                }, 'append-root');
+
+                bindDropSurface(q(mount, '.w-nav-tree-empty'), function () {
+                    return [];
+                }, 'append-root');
+
+                qa(mount, '.w-nav-tree-name').forEach(function (el) {
+                    el.addEventListener('click', function () {
+                        var row = el.closest('.w-nav-tree-row');
+                        if (!row) return;
+                        openDetail(row.getAttribute('data-path'));
+                    });
+                });
+
+                qa(mount, '.w-nav-tree-remove').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        removeAt(parsePath(btn.getAttribute('data-path')));
+                        persist();
+                        render();
+                    });
+                });
+
+                qa(mount, '.w-nav-tree-detail').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        openDetail(btn.getAttribute('data-path'));
+                    });
+                });
+
+                var saveBtn = q(mount, '[data-detail-save]');
+                var cancelBtn = q(mount, '[data-detail-cancel]');
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', function () {
+                        state.detailPath = null;
+                        render();
+                    });
+                }
+                if (saveBtn && state.detailPath) {
+                    saveBtn.addEventListener('click', function () {
+                        var hit = getAt(parsePath(state.detailPath));
+                        if (!hit.node) {
+                            state.detailPath = null;
+                            render();
+                            return;
+                        }
+                        qa(mount, '[data-detail-field]').forEach(function (input) {
+                            var field = input.getAttribute('data-detail-field');
+                            if (field === 'image') {
+                                var raw = input.value || '';
+                                var imageNode = parseFileImageNode(raw);
+                                hit.node[field] = imageNode || raw;
+                                return;
+                            }
+                            hit.node[field] = input.value;
+                        });
+                        var i18n = ensureNodeI18n(hit.node);
+                        i18n.name = {};
+                        i18n.description = {};
+                        qa(mount, '[data-i18n-field]').forEach(function (input) {
+                            var field = input.getAttribute('data-i18n-field');
+                            var locale = input.getAttribute('data-locale');
+                            if (!field || !locale) return;
+                            var val = String(input.value || '').trim();
+                            if (val !== '') i18n[field][locale] = val;
+                        });
+                        if (i18n.name.zh_Hans_CN) hit.node.name = i18n.name.zh_Hans_CN;
+                        if (i18n.description.zh_Hans_CN) hit.node.description = i18n.description.zh_Hans_CN;
+                        if (!Object.keys(i18n.name).length && !Object.keys(i18n.description).length) {
+                            delete hit.node.i18n;
+                        }
+                        if (!hit.node.description) delete hit.node.description;
+                        if (!hit.node.image) delete hit.node.image;
+                        if (!hit.node.ref) delete hit.node.ref;
+                        state.detailPath = null;
+                        persist();
+                        render();
+                    });
+                }
+                var detailDialog = q(mount, '.w-nav-tree-detail-dialog');
+                if (detailDialog) {
+                    detailDialog.addEventListener('click', function (ev) {
+                        if (ev.target === detailDialog) {
+                            state.detailPath = null;
+                            render();
+                        }
+                    });
+                }
+            }
+
+            // Ensure initial hidden value matches boot tree
+            persist();
+            render();
         });
     }
 

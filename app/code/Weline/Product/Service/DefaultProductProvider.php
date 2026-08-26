@@ -7,18 +7,23 @@ namespace Weline\Product\Service;
 use Weline\Product\Api\Capability\ProductInventoryCapabilityInterface;
 use Weline\Product\Api\Capability\ProductPricingCapabilityInterface;
 use Weline\Product\Api\Capability\ProductRendererCapabilityInterface;
+use Weline\Product\Api\Data\ProductTypeDefinition;
+use Weline\Product\Api\Data\ProductValidationContext;
+use Weline\Product\Api\Data\ProductValidationResult;
 use Weline\Product\Api\ProductProviderInterface;
+use Weline\Product\Api\ProductProviderV2Interface;
 use Weline\Product\Service\Capability\DefaultProductInventoryCapability;
 use Weline\Product\Service\Capability\DefaultProductPricingCapability;
 use Weline\Product\Service\Capability\DefaultProductRendererCapability;
+use Weline\Product\Service\Provider\BuiltInProductValidation;
 
 /**
- * Built-in simple product Provider (type=simple, code=default).
+ * Built-in ordinary physical Product Provider. Simple Product owns exactly one default Offer.
  */
-final class DefaultProductProvider implements ProductProviderInterface
+final class DefaultProductProvider implements ProductProviderV2Interface
 {
     /** @var list<string> */
-    public const REQUIRED_ATTRIBUTES = ['name', 'sku'];
+    public const REQUIRED_ATTRIBUTES = ['name', 'sku', 'price'];
 
     private readonly ProductPricingCapabilityInterface $pricing;
     private readonly ProductInventoryCapabilityInterface $inventory;
@@ -38,17 +43,17 @@ final class DefaultProductProvider implements ProductProviderInterface
 
     public function getCode(): string
     {
-        return self::CODE_DEFAULT;
+        return ProductProviderInterface::CODE_DEFAULT;
     }
 
     public function getType(): string
     {
-        return self::TYPE_SIMPLE;
+        return ProductProviderInterface::TYPE_SIMPLE;
     }
 
     public function getLabel(): string
     {
-        return (string)__('简单商品');
+        return (string)__('普通实体商品');
     }
 
     public function isEnabled(): bool
@@ -90,6 +95,45 @@ final class DefaultProductProvider implements ProductProviderInterface
         return $this->renderer;
     }
 
+    public function getDefinition(): ProductTypeDefinition
+    {
+        return new ProductTypeDefinition(
+            code: $this->getType(),
+            label: $this->getLabel(),
+            minimumOffers: 1,
+            maximumOffers: 1,
+            formSchema: [
+                'sections' => [
+                    'overview',
+                    'basic',
+                    'attributes',
+                    'offer_price',
+                    'categories',
+                    'media',
+                    'stores',
+                    'inventory_shipping',
+                    'diagnostics',
+                    'audit',
+                ],
+                'fields' => [],
+                'default_offer' => true,
+            ],
+            requiredProductAttributes: ['name'],
+            requiredOfferAttributes: ['sku', 'price'],
+            supportsVariants: false,
+            supportsPricing: true,
+            tracksInventory: true,
+            requiresShipping: true,
+            supportsDigitalDelivery: false,
+            supportsComposition: false,
+        );
+    }
+
+    public function validateForPublish(ProductValidationContext $context): ProductValidationResult
+    {
+        return BuiltInProductValidation::validate($this->getDefinition(), $context);
+    }
+
     public function getMetadata(): array
     {
         return [
@@ -100,6 +144,7 @@ final class DefaultProductProvider implements ProductProviderInterface
             'sort_order' => $this->getSortOrder(),
             'required_attributes' => $this->getRequiredAttributes(),
             'capabilities' => array_keys(array_filter($this->getCapabilityMap())),
+            'definition' => $this->getDefinition()->toArray(),
             'pricing' => [
                 'currencies' => $this->pricing->supportedCurrencies(),
                 'allows_cleared' => $this->pricing->allowsClearedPrice(),

@@ -45,7 +45,7 @@ if ($hasExternalHtml) {
     return;
 }
 
-$hookContent = $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar');
+$hookContent = $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar', true);
 
 if (is_string($hookContent) && trim($hookContent) !== '') {
     ?>
@@ -68,7 +68,26 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
 }
 ?>
 
-<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+<?php if (!$isPreviewMode): ?>
+<section class="<?= $esc($wc) ?> is-empty"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <p class="filters-empty"><?= __('暂无可用筛选条件') ?></p>
+</section>
+<style>
+.<?= $wc ?> .filters-empty {
+    margin: 0;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+}
+</style>
+<?php
+    return;
+}
+?>
+
+<section class="<?= $esc($wc) ?> is-preview"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>">
@@ -79,68 +98,12 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
             <button type="button" class="filter-clear"><?= __('清除全部') ?></button>
         </div>
 
-        <div class="filter-applied">
-            <span class="filter-chip is-active">
-                <?= __('电子产品') ?>
-                <button type="button" class="chip-remove" aria-label="<?= __('移除') ?>">×</button>
-            </span>
-            <span class="filter-chip">
-                <?= __('100 - 299 元') ?>
-                <button type="button" class="chip-remove" aria-label="<?= __('移除') ?>">×</button>
-            </span>
-        </div>
-
         <div class="filter-group">
             <div class="filter-group-title"><?= __('价格区间') ?></div>
             <ul class="filter-list">
                 <li><a href="#" class="filter-item"><span class="label"><?= __('0 - 99 元') ?></span><span class="count">128</span></a></li>
                 <li><a href="#" class="filter-item"><span class="label"><?= __('100 - 299 元') ?></span><span class="count">86</span></a></li>
                 <li><a href="#" class="filter-item"><span class="label"><?= __('300 元以上') ?></span><span class="count">42</span></a></li>
-            </ul>
-        </div>
-
-        <div class="filter-group">
-            <div class="filter-group-title"><?= __('配送方式') ?></div>
-            <ul class="filter-list">
-                <li><a href="#" class="filter-item"><span class="label"><?= __('Prime 极速达') ?></span><span class="count">64</span></a></li>
-                <li><a href="#" class="filter-item"><span class="label"><?= __('免运费') ?></span><span class="count">97</span></a></li>
-                <li><a href="#" class="filter-item"><span class="label"><?= __('当日/次日达') ?></span><span class="count">23</span></a></li>
-            </ul>
-        </div>
-
-        <div class="filter-group">
-            <div class="filter-group-title"><?= __('品牌') ?></div>
-            <ul class="filter-list">
-                <li><a href="#" class="filter-item"><span class="label">Brand A</span><span class="count">56</span></a></li>
-                <li><a href="#" class="filter-item"><span class="label">Brand B</span><span class="count">34</span></a></li>
-                <li><a href="#" class="filter-item"><span class="label">Brand C</span><span class="count">19</span></a></li>
-            </ul>
-        </div>
-
-        <div class="filter-group">
-            <div class="filter-group-title"><?= __('颜色') ?></div>
-            <ul class="filter-list">
-                <li><a href="#" class="filter-item"><span class="label"><?= __('黑色') ?></span><span class="count">73</span></a></li>
-                <li><a href="#" class="filter-item"><span class="label"><?= __('白色') ?></span><span class="count">41</span></a></li>
-                <li><a href="#" class="filter-item"><span class="label"><?= __('蓝色') ?></span><span class="count">27</span></a></li>
-            </ul>
-        </div>
-
-        <div class="filter-group">
-            <div class="filter-group-title"><?= __('用户评分') ?></div>
-            <ul class="filter-list">
-                <li><a href="#" class="filter-item">
-                    <span class="label"><span class="stars">★★★★★</span> <?= __('及以上') ?></span>
-                    <span class="count">12</span>
-                </a></li>
-                <li><a href="#" class="filter-item">
-                    <span class="label"><span class="stars">★★★★☆</span> <?= __('及以上') ?></span>
-                    <span class="count">48</span>
-                </a></li>
-                <li><a href="#" class="filter-item">
-                    <span class="label"><span class="stars">★★★☆☆</span> <?= __('及以上') ?></span>
-                    <span class="count">96</span>
-                </a></li>
             </ul>
         </div>
     </div>
@@ -153,22 +116,22 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
 
 .<?= $wc ?> .filter-panel {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-lg, 10px);
-    padding: var(--weline-space-5, 20px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    padding: var(--weline-space-5);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .filter-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--weline-space-4, 15px);
-    padding-bottom: var(--weline-space-4, 15px);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin-bottom: var(--weline-space-4);
+    padding-bottom: var(--weline-space-4);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .filter-title {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
     color: var(--weline-theme-text);
 }
@@ -177,50 +140,15 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
     background: transparent;
     border: 0;
     padding: 0;
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-primary);
     cursor: pointer;
     text-decoration: underline;
-    text-underline-offset: 2px;
-}
-
-.<?= $wc ?> .filter-applied {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--weline-space-2, 8px);
-    margin-bottom: var(--weline-space-5, 20px);
-}
-
-.<?= $wc ?> .filter-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--weline-space-1, 4px);
-    padding: var(--weline-space-1, 4px) var(--weline-space-3, 10px);
-    border-radius: var(--weline-radius-round, 999px);
-    background: var(--weline-theme-surface-muted);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    font-size: var(--weline-font-size-sm, 13px);
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?> .filter-chip.is-active {
-    background: var(--weline-theme-primary-surface);
-    border-color: var(--weline-theme-primary);
-    color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?> .chip-remove {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    cursor: pointer;
-    color: inherit;
-    font-size: var(--weline-font-size-base, 16px);
-    line-height: 1;
+    text-underline-offset: var(--spacing-0_5);
 }
 
 .<?= $wc ?> .filter-group {
-    margin-bottom: var(--weline-space-5, 20px);
+    margin-bottom: var(--weline-space-5);
 }
 
 .<?= $wc ?> .filter-group:last-child {
@@ -228,9 +156,9 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
 }
 
 .<?= $wc ?> .filter-group-title {
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     font-weight: 600;
-    margin-bottom: var(--weline-space-3, 10px);
+    margin-bottom: var(--weline-space-3);
     color: var(--weline-theme-text);
 }
 
@@ -244,12 +172,12 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--weline-space-3, 12px);
-    padding: var(--weline-space-2, 8px) 0;
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-2) 0;
     color: var(--weline-theme-text-muted);
     text-decoration: none;
-    font-size: var(--weline-font-size-sm, 13px);
-    transition: color var(--weline-theme-transition-base, 0.2s ease);
+    font-size: var(--weline-font-size-sm);
+    transition: color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .filter-item:hover {
@@ -258,17 +186,12 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
 
 .<?= $wc ?> .filter-item .count {
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-xs, 12px);
-}
-
-.<?= $wc ?> .stars {
-    color: var(--weline-theme-warning);
-    letter-spacing: 1px;
+    font-size: var(--weline-font-size-xs);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 120px;
+    min-height: var(--size-panel-120);
 }
 </style>
 
@@ -281,7 +204,7 @@ if (is_string($hookContent) && trim($hookContent) !== '') {
         var target = event.target;
         if (!(target instanceof Element)) return;
 
-        var action = target.closest('.filter-clear, .filter-item, .chip-remove');
+        var action = target.closest('.filter-clear, .filter-item');
         if (!action || !root.contains(action)) return;
 
         event.preventDefault();

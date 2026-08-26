@@ -164,25 +164,25 @@ if (empty($testimonials)) {
 
 <style>
 .<?= $wc ?> {
-    padding: var(--weline-space-15, 60px) 0;
+    padding: var(--weline-space-15) 0;
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .testimonials-header {
     text-align: center;
-    margin-bottom: var(--weline-space-10, 40px);
+    margin-bottom: var(--weline-space-10);
 }
 
 .<?= $wc ?> .testimonials-title {
-    font-size: var(--weline-font-size-4xl, 32px);
+    font-size: var(--weline-font-size-4xl);
     font-weight: 700;
-    margin: 0 0 var(--weline-space-3, 10px);
+    margin: 0 0 var(--weline-space-3);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .testimonials-subtitle {
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     color: var(--weline-theme-text-muted);
     margin: 0;
 }
@@ -193,7 +193,7 @@ if (empty($testimonials)) {
 
 .<?= $wc ?> .testimonials-grid {
     display: grid;
-    gap: var(--weline-space-8, 30px);
+    gap: var(--weline-space-8);
 }
 
 .<?= $wc ?> .testimonials-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
@@ -202,30 +202,30 @@ if (empty($testimonials)) {
 
 .<?= $wc ?> .testimonial-card {
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-2xl, 16px);
-    padding: var(--weline-space-8, 30px);
+    border-radius: var(--weline-radius-2xl);
+    padding: var(--weline-space-8);
     position: relative;
     box-shadow: var(--weline-theme-shadow-sm);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .testimonial-card:hover {
     box-shadow: var(--weline-theme-shadow-md);
-    transform: translateY(-5px);
+    transform: translateY(var(--token-size-5px));
 }
 
 .<?= $wc ?> .testimonial-quote {
     position: absolute;
-    top: var(--weline-space-5, 20px);
-    right: var(--weline-space-6, 25px);
+    top: var(--weline-space-5);
+    right: var(--weline-space-6);
     color: var(--weline-theme-border);
 }
 
 .<?= $wc ?> .testimonial-rating {
-    margin-bottom: var(--weline-space-4, 15px);
+    margin-bottom: var(--weline-space-4);
     display: flex;
-    gap: 2px;
+    gap: var(--spacing-0_5);
 }
 
 .<?= $wc ?> .rating-star[data-state="filled"] {
@@ -237,36 +237,36 @@ if (empty($testimonials)) {
 }
 
 .<?= $wc ?> .testimonial-content {
-    font-size: var(--weline-font-size-sm, 15px);
+    font-size: var(--weline-font-size-sm);
     line-height: 1.7;
     color: var(--weline-theme-text-muted);
-    margin: 0 0 var(--weline-space-5, 20px);
+    margin: 0 0 var(--weline-space-5);
     font-style: italic;
 }
 
 .<?= $wc ?> .testimonial-author {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
+    gap: var(--weline-space-3);
 }
 
 .<?= $wc ?> .author-avatar,
 .<?= $wc ?> .author-avatar-media img {
-    width: 50px;
-    height: 50px;
+    width: var(--size-control-50);
+    height: var(--size-control-50);
     border-radius: 50%;
     object-fit: cover;
 }
 
 .<?= $wc ?> .author-name {
     margin: 0;
-    font-size: var(--weline-font-size-base, 16px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .author-position {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
 }
 
@@ -276,8 +276,8 @@ if (empty($testimonials)) {
 
 .<?= $wc ?>.layout-carousel .testimonials-grid {
     display: flex;
-    gap: var(--weline-space-8, 30px);
-    transition: transform var(--weline-theme-transition-base, 0.4s ease);
+    gap: var(--weline-space-8);
+    transition: transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>.layout-carousel .testimonial-card {
@@ -289,10 +289,10 @@ if (empty($testimonials)) {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 44px;
-    height: 44px;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
     background: var(--weline-theme-surface-raised);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     border-radius: 50%;
     cursor: pointer;
     display: flex;
@@ -300,7 +300,7 @@ if (empty($testimonials)) {
     justify-content: center;
     z-index: 2;
     color: var(--weline-theme-text);
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .carousel-arrow:hover {
@@ -309,25 +309,25 @@ if (empty($testimonials)) {
     border-color: var(--weline-theme-primary);
 }
 
-.<?= $wc ?> .carousel-prev { left: -22px; }
-.<?= $wc ?> .carousel-next { right: -22px; }
+.<?= $wc ?> .carousel-prev { left: var(--token-size-22px); }
+.<?= $wc ?> .carousel-next { right: var(--token-size-22px); }
 
 .<?= $wc ?> .carousel-dots {
     display: flex;
     justify-content: center;
-    gap: var(--weline-space-2, 8px);
-    margin-top: var(--weline-space-6, 24px);
+    gap: var(--weline-space-2);
+    margin-top: var(--weline-space-6);
 }
 
 .<?= $wc ?> .carousel-dot {
-    width: 10px;
-    height: 10px;
+    width: var(--spacing-2_5);
+    height: var(--spacing-2_5);
     border-radius: 50%;
     border: 0;
     padding: 0;
     background: var(--weline-theme-border);
     cursor: pointer;
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .carousel-dot.is-active {
@@ -337,12 +337,12 @@ if (empty($testimonials)) {
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-6, 24px) 0;
+    padding: var(--weline-space-6) 0;
 }
 
 .widget-preview-canvas .<?= $wc ?> .testimonials-title,
 .<?= $wc ?>.is-preview .testimonials-title {
-    font-size: var(--weline-font-size-xl, 20px);
+    font-size: var(--weline-font-size-xl);
 }
 
 @media (max-width: 992px) {
@@ -358,7 +358,7 @@ if (empty($testimonials)) {
     }
 
     .<?= $wc ?> .testimonials-title {
-        font-size: var(--weline-font-size-2xl, 24px);
+        font-size: var(--weline-font-size-2xl);
     }
 }
 </style>

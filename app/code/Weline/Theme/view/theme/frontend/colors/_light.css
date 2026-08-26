@@ -24,7 +24,11 @@
     --color-text-light: #f1f5f9;
     --color-text-light-secondary: #cbd5e1;
 
-    /* 背景色 */
+    /* 背景色：canvas=页面 body 白；primary=卡片/菜单表面 */
+    --color-bg-canvas: #ffffff;
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-canvas: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
     --color-bg-primary: #fff;
     --color-bg-secondary: #f8f9fa;
     --color-bg-tertiary: #e7e7e7;
@@ -66,6 +70,7 @@
 /* Canonical semantic contract. Brand overlays may replace only brand tokens. */
 [data-theme="light"],
 :root {
+    --color-text-amazon-body: #0f1111;
     --color-text: #172033;
     --color-text-primary: var(--color-text);
     --color-text-secondary: #475569;
@@ -74,7 +79,10 @@
     --color-text-disabled: #94a3b8;
     --color-text-placeholder: #64748b;
     --color-text-inverse: #ffffff;
-    --color-bg-canvas: #f1f5f9;
+    --color-bg-canvas: #ffffff;
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-canvas: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
     --color-bg-primary: #ffffff;
     --color-bg-secondary: #f8fafc;
     --color-bg-tertiary: #e2e8f0;
@@ -103,6 +111,12 @@
     --shadow-xs: 0 1px 1px rgb(15 23 42 / 0.05); --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.08); --shadow-md: 0 8px 24px rgb(15 23 42 / 0.10); --shadow-lg: 0 18px 44px rgb(15 23 42 / 0.14);
     --focus-ring-width: 3px; --focus-ring-color: rgb(37 99 235 / 0.35); --focus-ring: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
     --radius-sm: 0.25rem; --radius-md: 0.5rem; --radius-lg: 0.75rem; --radius-xl: 1rem;
-    --color-text-rgb: 23, 32, 51; --color-bg-canvas-rgb: 241, 245, 249; --color-emphasis-rgb: 23, 32, 51;
+    --color-text-rgb: 23, 32, 51; --color-bg-canvas-rgb: 255, 255, 255; --color-emphasis-rgb: 23, 32, 51;
     --color-success-rgb: 21, 128, 61; --color-warning-rgb: 161, 98, 7; --color-danger-rgb: 185, 28, 28; --color-info-rgb: 3, 105, 161;
+    --color-bg-overlay: rgb(15 23 42 / 0.42);
+    --color-success-focus-ring-color: rgba(21, 128, 61, 0.32);
+    --color-danger-focus-ring-color: rgba(185, 28, 28, 0.32);
+    --color-surface-hover: #f3f3f3;
+    --color-text-on-dark: #f8fafc;
+    --color-text-on-dark-muted: #cbd5e1;
 }

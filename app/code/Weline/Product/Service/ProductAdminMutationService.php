@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Product\Api\ProductIdentity;
+use Weline\Product\Api\ProductIdentityCutoverPolicyInterface;
+use Weline\Product\Api\ProductIdentityResolverInterface;
 use Weline\Product\Model\Shard\Category;
 use Weline\Product\Model\Shard\Media;
 use Weline\Product\Model\Shard\Offer;
@@ -22,18 +24,47 @@ final class ProductAdminMutationService
 {
     public function __construct(
         private readonly SkuRegistryService $skuRegistry,
+        private readonly ProductIdentityV2Service $v2Identities,
+        private readonly ProductIdentityResolverInterface $identityResolver,
+        private readonly ProductIdentityCutoverPolicyInterface $cutoverPolicy,
         private readonly ProductRepository $products,
         private readonly OfferRepository $offers,
         private readonly CategoryRepository $categories,
         private readonly MediaRepository $media,
+        private readonly StorefrontCatalogCacheCoordinator $catalogCache,
     ) {
     }
 
-    public function registerSku(string $sku, string $requestHash): ProductIdentity
-    {
-        return $this->skuRegistry->claimLocked(
-            $this->skuRegistry->normalizeSku($sku),
-            strtolower(trim($requestHash)),
+    public function registerSku(
+        string $sku,
+        string $requestHash,
+        int $ownerWebsiteId = 0,
+    ): ProductIdentity {
+        $this->assertWebsiteId($ownerWebsiteId);
+        $sku = $this->skuRegistry->normalizeSku($sku);
+        $requestHash = strtolower(trim($requestHash));
+        if ($this->cutoverPolicy->legacyWritesAllowed()) {
+            return $this->skuRegistry->claimLocked($sku, $requestHash);
+        }
+
+        $product = $this->v2Identities->createProduct(
+            $ownerWebsiteId,
+            'default',
+            'simple',
+            $requestHash,
+        );
+        $offer = $this->v2Identities->createOffer(
+            $product->globalProductUuid,
+            $sku,
+            $requestHash,
+        );
+        return new ProductIdentity(
+            registryId: $offer->registryId,
+            sku: $offer->sku,
+            globalProductUuid: $offer->globalProductUuid,
+            globalOfferUuid: $offer->globalOfferUuid,
+            requestHash: $requestHash,
+            refCount: 0,
         );
     }
 
@@ -50,7 +81,9 @@ final class ProductAdminMutationService
             Product::schema_fields_SKU => $identity->sku,
             Product::schema_fields_GLOBAL_PRODUCT_UUID => $identity->globalProductUuid,
         ]);
-        $this->skuRegistry->incrementRefCount($identity->registryId);
+        if ($this->cutoverPolicy->legacyWritesAllowed()) {
+            $this->skuRegistry->incrementRefCount($identity->registryId);
+        }
 
         return $product;
     }
@@ -72,7 +105,9 @@ final class ProductAdminMutationService
             Offer::schema_fields_PRODUCT_ID => (int)$product->getId(),
             Offer::schema_fields_GLOBAL_OFFER_UUID => $identity->globalOfferUuid,
         ]);
-        $this->skuRegistry->incrementRefCount($identity->registryId);
+        if ($this->cutoverPolicy->legacyWritesAllowed()) {
+            $this->skuRegistry->incrementRefCount($identity->registryId);
+        }
 
         return $offer;
     }
@@ -88,11 +123,33 @@ final class ProductAdminMutationService
             throw new \InvalidArgumentException(__('parent_id 不能为负'));
         }
 
-        return $this->categories->create($websiteId, [
+        $created = $this->categories->create($websiteId, [
             Category::schema_fields_PARENT_ID => $parentId > 0 ? $parentId : null,
             Category::schema_fields_PATH => $path,
             Category::schema_fields_STATUS => 'active',
         ]);
+        $this->catalogCache->notifyCategoryChanged($websiteId, 'category_created', (int)$created->getId());
+
+        return $created;
+    }
+
+    public function updateCategoryPath(int $websiteId, int $categoryId, string $path): Category
+    {
+        $this->assertWebsiteId($websiteId);
+        if ($categoryId <= 0) {
+            throw new \InvalidArgumentException(__('category_id 不能小于等于 0'));
+        }
+        $path = trim($path);
+        if ($path === '' || strlen($path) > 255 || !preg_match('#^/[a-z0-9/_-]+$#i', $path)) {
+            throw new \InvalidArgumentException(__('分类 path 必须是以 / 开头的安全路径'));
+        }
+
+        $updated = $this->categories->updateStructure($websiteId, $categoryId, [
+            Category::schema_fields_PATH => $path,
+        ]);
+        $this->catalogCache->notifyCategoryChanged($websiteId, 'category_updated', $categoryId);
+
+        return $updated;
     }
 
     public function createMedia(
@@ -141,7 +198,7 @@ final class ProductAdminMutationService
     private function requireIdentity(string $sku): ProductIdentity
     {
         $sku = $this->skuRegistry->normalizeSku($sku);
-        $identity = $this->skuRegistry->resolveBySku($sku);
+        $identity = $this->identityResolver->resolveBySku($sku);
         if ($identity === null) {
             throw new \InvalidArgumentException(__('SKU 尚未注册：%{1}', [$sku]));
         }

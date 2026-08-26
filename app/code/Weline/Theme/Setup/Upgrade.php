@@ -10,19 +10,26 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Backend\Setup\Ui\IconDataMigrator;
+use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\ProductPageLayoutNormalizer;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\Scoped\ThemeScopeMigrationService;
+use Weline\Theme\Service\WidgetDefaultInjectionService;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.1.1';
+    public const VERSION = '2.1.6';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
         $this->backfillDefaultAreaThemes();
         $this->relocateProductBestsellersFromSidebar();
+        $this->reassignProductRelatedProductsModule();
+        $this->reassignProductCrossSellModule();
+        $this->reassignCategoryRecommendedProducts();
+        $this->reassignProductListRecommendedProducts();
         $this->migrateSemanticIcons();
         $this->migrateScopedThemeInheritance();
     }
@@ -97,6 +104,157 @@ class Upgrade implements UpgradeInterface
         } catch (\Throwable $e) {
             throw new Exception(__(
                 '主题布局迁移失败（bestsellers 侧栏归位）：%{1}',
+                [$e->getMessage()]
+            ), 0, $e);
+        }
+    }
+
+    private function reassignProductRelatedProductsModule(): void
+    {
+        try {
+            ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
+                ->reassignRelatedProductsModuleInDatabase();
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '主题布局迁移失败（related-products 归属 Product）：%{1}',
+                [$e->getMessage()]
+            ), 0, $e);
+        }
+    }
+
+    private function reassignProductCrossSellModule(): void
+    {
+        try {
+            ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
+                ->reassignCrossSellModuleInDatabase();
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '主题布局迁移失败（cross-sell 归属 Product）：%{1}',
+                [$e->getMessage()]
+            ), 0, $e);
+        }
+    }
+
+    private function reassignCategoryRecommendedProducts(): void
+    {
+        try {
+            /** @var \Weline\Theme\Model\ThemeLayout $themeLayout */
+            $themeLayout = ObjectManager::getInstance(\Weline\Theme\Model\ThemeLayout::class);
+            $rows = $themeLayout->reset()
+                ->where(\Weline\Theme\Model\ThemeLayout::schema_fields_PAGE_TYPE, \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_CATEGORY)
+                ->where(\Weline\Theme\Model\ThemeLayout::schema_fields_SLOT_ID, 'category-recommendations')
+                ->select()
+                ->fetchArray();
+            if (!is_array($rows) || $rows === []) {
+                return;
+            }
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $layoutId = (int)($row[\Weline\Theme\Model\ThemeLayout::schema_fields_ID] ?? 0);
+                if ($layoutId <= 0) {
+                    continue;
+                }
+                $themeLayout->clearQuery()->clearData()->load($layoutId);
+                if (!$themeLayout->getLayoutId()) {
+                    continue;
+                }
+                $themeLayout
+                    ->setWidgetCode('recommended-products')
+                    ->setWidgetModule('Weline_Product')
+                    ->setWidgetType('product')
+                    ->setWidgetConfig([
+                        'title' => '推荐产品',
+                        'limit' => 8,
+                        'columns' => '4',
+                        'layout' => 'grid',
+                    ])
+                    ->save();
+            }
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '主题布局迁移失败（category recommended-products）：%{1}',
+                [$e->getMessage()]
+            ), 0, $e);
+        }
+    }
+
+    private function reassignProductListRecommendedProducts(): void
+    {
+        try {
+            /** @var ThemeLayout $themeLayout */
+            $themeLayout = ObjectManager::getInstance(ThemeLayout::class);
+            $rows = $themeLayout->reset()
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, ThemeLayout::PAGE_TYPE_PRODUCT_LIST)
+                ->where(ThemeLayout::schema_fields_SLOT_ID, 'list-recommendations')
+                ->select()
+                ->fetchArray();
+            if (is_array($rows)) {
+                foreach ($rows as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
+                    if ($layoutId <= 0) {
+                        continue;
+                    }
+                    $themeLayout->clearQuery()->clearData()->load($layoutId);
+                    if (!$themeLayout->getLayoutId()) {
+                        continue;
+                    }
+                    $themeLayout
+                        ->setWidgetCode('recommended-products')
+                        ->setWidgetModule('Weline_Product')
+                        ->setWidgetType('product')
+                        ->setWidgetConfig([
+                            'title' => '推荐产品',
+                            'limit' => 8,
+                            'columns' => '4',
+                            'layout' => 'grid',
+                        ])
+                        ->save();
+                }
+            }
+
+            ObjectManager::getInstance(\Weline\Widget\Service\WidgetRegistry::class)->refresh();
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeComponentCatalog::class)->clearCache();
+            /** @var WidgetDefaultInjectionService $injectionService */
+            $injectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+            /** @var WelineTheme $themeModel */
+            $themeModel = ObjectManager::getInstance(WelineTheme::class);
+            $themes = $themeModel->reset()->select()->fetchArray();
+            if (!is_array($themes)) {
+                return;
+            }
+
+            $identity = [
+                'layout_option' => 'default',
+                'scope' => 'default.default.default',
+                'locale_code' => '',
+                'target_type' => 'global',
+                'target_id' => 0,
+            ];
+            foreach ($themes as $themeRow) {
+                if (!is_array($themeRow)) {
+                    continue;
+                }
+                $themeId = (int)($themeRow[WelineTheme::schema_fields_ID] ?? 0);
+                if ($themeId <= 0) {
+                    continue;
+                }
+                $injectionService->initSlotDefaultInjections(
+                    $themeId,
+                    ThemeLayout::PAGE_TYPE_PRODUCT_LIST,
+                    $identity,
+                    'list-recommendations',
+                    PreviewContextService::AREA_FRONTEND,
+                    ThemeLayout::STATUS_PUBLISHED,
+                );
+            }
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '主题布局迁移失败（product_list recommended-products）：%{1}',
                 [$e->getMessage()]
             ), 0, $e);
         }

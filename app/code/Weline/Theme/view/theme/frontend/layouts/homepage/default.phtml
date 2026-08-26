@@ -81,7 +81,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-hero" weline-code="theme.homepage.homepage_hero">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::hero<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::hero<else/>
+                            <w:widget type="banner" name="hero-slider" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-featured"
@@ -91,7 +93,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_featured">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::featured<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::featured<else/>
+                            <w:widget type="product" name="featured-products" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-categories"
@@ -101,7 +105,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_categories">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/>
+                            <w:widget type="category" name="category-grid" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-promo"
@@ -111,7 +117,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-promo" weline-code="theme.homepage.homepage_promo">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::promo<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::promo<else/>
+                            <w:widget type="banner" name="promo-banner" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-new-arrivals"
@@ -121,7 +129,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_new_arrivals">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::new-arrivals<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::new-arrivals<else/>
+                            <w:widget type="product" name="new-arrivals" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-bestsellers"
@@ -131,7 +141,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_bestsellers">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::bestsellers<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::bestsellers<else/>
+                            <w:widget type="product" name="bestsellers" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-brands"
@@ -141,7 +153,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_brands">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
+                            <w:widget type="content" name="brand-logos" />
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="homepage-trust"
@@ -151,7 +165,9 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
                             position="content"
                             wrapper="section"
                             class="homepage-section" weline-code="theme.homepage.homepage_trust">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/></w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/>
+                            <w:widget type="content" name="trust-badges" />
+                        </w:hook>
                     </w:slot>
                 <?php endif; ?>
                 </w:hook>

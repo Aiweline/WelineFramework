@@ -26,7 +26,7 @@ The MCP is plain PHP 8.2-compatible code under the `LearningMcp` namespace. It u
 
 `prepare_project` resolves canonical Git identity, scans `app/code/*/*`, validates the three-document contract, refreshes the SQLite index, checks document conflicts, and records a process-memory readiness receipt. The receipt binds repository identity, revision, module inventory, document Hashes, and client session.
 
-`needs_repair` emits deterministic create-only operations. `repair_project_docs` requires an unexpired Bundle, the same session, an unchanged snapshot, and `authorized=true`; it creates missing documents transactionally, reindexes exact paths, and removes created files on failure.
+`needs_repair` emits deterministic create-only operations. `prepare_project` applies them automatically and returns `ready` with repair metadata. `repair_project_docs` requires an unexpired Bundle, the same session, and an unchanged snapshot; it creates missing documents transactionally, reindexes exact paths, and removes created files on failure.
 
 ## Knowledge retrieval
 
@@ -40,5 +40,6 @@ Before every guarded call, the service compares the readiness snapshot with curr
 
 - Global learning/event database: local user data directory.
 - Project code/document index: `indexes/{canonical-project-hash}/project.sqlite`.
+- Both SQLite connections enable a 30-second native busy timeout before WAL work, so concurrent STDIO processes wait without replaying application transactions.
 - Readiness and session directives: process memory only.
 - Edit journal and locks: local user data directory; never committed to the repository.

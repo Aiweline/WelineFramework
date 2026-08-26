@@ -16,9 +16,16 @@
  * @param.class {default="",name="额外CSS类",description="主内容额外 CSS 类"}
  */
 $meta = $this->getData('meta') ?? [];
+$searchQuery = trim((string)($this->getData('search_query') ?? ''));
+$searchType = trim((string)($this->getData('search_type') ?? 'all')) ?: 'all';
+$searchCategoryId = (int)($this->getData('search_category_id') ?? 0);
+$searchTypes = $this->getData('search_types') ?? [];
+$searchTypes = is_array($searchTypes) ? $searchTypes : [];
+$showSearchTypeFilter = $searchTypes !== [];
+$searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-layout__body--with-sidebar' : '');
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
@@ -48,7 +55,9 @@ $meta = $this->getData('meta') ?? [];
         <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::search::content-before</w:hook>
 
-        <main class="search-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="search-main" data-layout="search">
+        <main class="search-main <?= htmlspecialchars($meta['class'] ?? '') ?>"
+              id="main-content"
+              data-layout="search">
             <w:hook>Weline_Theme::frontend::layouts::search::main-before</w:hook>
             <w:slot id="content"
                     name="内容区"
@@ -57,50 +66,70 @@ $meta = $this->getData('meta') ?? [];
                     multiple="true"
                     position="content"
                     class="search-main__content-root-slot">
-            <div class="search-layout__grid">
-                <aside class="search-layout__filters">
-                    <w:slot id="search-filters"
-                            name="搜索筛选区"
-                            accept="layout-search-filters,layout-category-filters,category-filters,attribute-filter,price-filter"
-                            multiple="true"
-                            position="sidebar">
-                        <if condition="meta.filters">
-                            {{meta.filters}}
-                        <else/>
-                            <w:hook>Weline_Theme::frontend::layouts::search::filters</w:hook>
-                        </if>
-                    </w:slot>
-                </aside>
+                <div class="<?= htmlspecialchars($searchBodyClass, ENT_QUOTES, 'UTF-8') ?>">
+                    <aside class="search-layout__filters" aria-label="<?= htmlspecialchars((string)__('搜索筛选'), ENT_QUOTES, 'UTF-8') ?>">
+                        <?php if ($showSearchTypeFilter): ?>
+                            <?php
+                            echo $this->fetch('Weline_Search::templates/frontend/partials/type-filter.phtml', [
+                                'search_query' => $searchQuery,
+                                'search_type' => $searchType,
+                                'search_category_id' => $searchCategoryId,
+                                'search_types' => $searchTypes,
+                            ]);
+                            ?>
+                        <?php endif; ?>
+                        <?php if ($searchType === 'product'): ?>
+                            <w:hook>Weline_Search::frontend::search::filters::product</w:hook>
+                        <?php endif; ?>
+                        <w:slot id="search-filters"
+                                name="搜索筛选区"
+                                accept="layout-search-filters,layout-category-filters,category-filters,attribute-filter,price-filter"
+                                multiple="true"
+                                position="sidebar">
+                            <if condition="meta.filters">
+                                {{meta.filters}}
+                            <else/>
+                                <w:hook>Weline_Theme::frontend::layouts::search::filters</w:hook>
+                            </if>
+                        </w:slot>
+                    </aside>
 
-                <section class="search-layout__results" weline-code="theme.search.section_1">
-                    <w:slot id="search-results"
-                            name="搜索结果区"
-                            accept="layout-search-results,layout-product-list-grid,product-grid,product-list-view,search-results"
-                            reject="header,footer"
-                            multiple="true"
-                            position="content">
-                        <w:hook>Weline_Theme::frontend::layouts::search::results-before</w:hook>
-                        <if condition="meta.content">
-                            {{meta.content}}
-                        <elseif condition="content"/>
-                            {{content}}
-                        <else/>
-                            <w:hook>Weline_Theme::frontend::layouts::search::results</w:hook>
-                        </if>
-                        <w:hook>Weline_Theme::frontend::layouts::search::results-after</w:hook>
-                    </w:slot>
-                </section>
-            </div>
+                    <section class="search-layout__results" weline-code="theme.search.section_1">
+                        <w:slot id="search-results"
+                                name="搜索结果区"
+                                accept="layout-search-results,layout-product-list-grid,product-grid,product-list-view,search-results"
+                                reject="header,footer"
+                                multiple="true"
+                                position="content">
+                            <w:hook>Weline_Theme::frontend::layouts::search::results-before</w:hook>
+                            <if condition="meta.content">
+                                {{meta.content}}
+                            <elseif condition="content"/>
+                                {{content}}
+                            <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                            <elseif condition="contentTemplate"/>
+                                <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+                            <else/>
+                                <w:hook>Weline_Theme::frontend::layouts::search::results</w:hook>
+                            </if>
+                            <w:hook>Weline_Theme::frontend::layouts::search::results-after</w:hook>
+                        </w:slot>
+                    </section>
+                </div>
 
-            <w:slot id="search-recommendations"
-                    name="搜索推荐区"
-                    accept="layout-search-recommendations,bestsellers,recently-viewed,you-may-like,featured-products,product-carousel"
-                    multiple="true"
-                    position="content"
-                    wrapper="section"
-                    class="search-layout__recommendations" weline-code="theme.search.search_recommendations">
-                <w:hook>Weline_Theme::frontend::layouts::search::recommendations</w:hook>
-            </w:slot>
+                <w:slot id="search-recommendations"
+                        name="搜索推荐区"
+                        accept="layout-search-recommendations,bestsellers,recently-viewed,you-may-like,featured-products,product-carousel"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="search-layout__recommendations"
+                        weline-code="theme.search.search_recommendations">
+                    <w:hook>Weline_Theme::frontend::layouts::search::recommendations<else/>
+                        <w:widget type="product" name="bestsellers" />
+                    </w:hook>
+                </w:slot>
             </w:slot>
             <w:hook>Weline_Theme::frontend::layouts::search::main-after</w:hook>
         </main>
@@ -122,19 +151,31 @@ $meta = $this->getData('meta') ?? [];
 <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 
 <style>
-    .search-layout,
-    .weline-main-content {
-        min-height: 100vh;
+    .search-layout .search-main,
+    .search-layout .search-main__content-root-slot {
+        background: transparent;
+        color: inherit;
     }
 
-    .search-layout__grid {
+    .search-main {
+        min-height: 0;
+    }
+
+    .search-layout__body {
         display: grid;
-        grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-        gap: var(--weline-layout-spacing-xl, 2rem);
-        max-width: var(--weline-layout-content-max-width, 1440px);
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--weline-space-5, 1.25rem);
+        width: 100%;
+        max-width: var(--weline-layout-content-max-width, 90rem);
         margin: 0 auto;
-        padding: var(--weline-layout-spacing-xl, 2rem) var(--weline-layout-content-padding-inline, 1rem);
+        padding: var(--weline-space-5, 1.25rem) var(--weline-layout-content-padding-inline, 1rem) var(--weline-space-6, 1.5rem);
         box-sizing: border-box;
+        align-items: start;
+        color: inherit;
+    }
+
+    .search-layout__body--with-sidebar {
+        grid-template-columns: minmax(13.5rem, 17rem) minmax(0, 1fr);
     }
 
     .search-layout__filters,
@@ -142,17 +183,412 @@ $meta = $this->getData('meta') ?? [];
         min-width: 0;
     }
 
+    .search-layout__filters {
+        position: sticky;
+        top: calc(var(--theme-header-height, 4rem) + var(--weline-space-4, 1rem));
+        display: grid;
+        gap: var(--weline-space-4, 1rem);
+        align-content: start;
+        color: var(--weline-theme-body-text, #0f1111);
+        padding: var(--weline-space-4, 1rem);
+        border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+        border-radius: var(--weline-radius-lg, 12px);
+        background: var(--weline-theme-surface, var(--weline-chrome-bg-primary, #ffffff));
+        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.06));
+    }
+
+    .search-layout__results {
+        display: block;
+        padding: var(--weline-space-5, 1.25rem) var(--weline-space-6, 1.5rem);
+        border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+        border-radius: var(--weline-radius-lg, 12px);
+        background: var(--weline-chrome-bg-primary, #ffffff);
+        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.06));
+    }
+
     .search-layout__recommendations {
-        max-width: var(--weline-layout-content-max-width, 1440px);
-        margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, 1rem) var(--weline-layout-spacing-2xl, 3rem);
+        width: 100%;
+        max-width: var(--weline-layout-content-max-width, 90rem);
+        margin: var(--weline-space-2, 0.5rem) auto 0;
+        padding: 0 var(--weline-layout-content-padding-inline, 1rem) var(--weline-space-8, 2rem);
+        box-sizing: border-box;
+        color: inherit;
+    }
+
+    .search-layout__recommendations > .widget-wrapper,
+    .search-layout__recommendations > .weline-template-widget {
+        padding: var(--weline-space-5, 1.25rem) var(--weline-space-6, 1.5rem);
+        border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+        border-radius: var(--weline-radius-lg, 12px);
+        background: var(--weline-chrome-bg-primary, #ffffff);
+        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.06));
+        overflow: hidden;
         box-sizing: border-box;
     }
 
+    .search-layout__recommendations [weline-code="theme.widget.bestsellers"] {
+        padding: 0;
+        max-width: none;
+    }
+
+    .search-layout__recommendations .product-card {
+        background: var(--weline-chrome-bg-primary, #ffffff);
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+        border-color: var(--weline-theme-border-subtle, #e7e7e7);
+    }
+
+    .search-layout__recommendations .product-info,
+    .search-layout__recommendations .product-name a {
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    }
+
+    .search-layout__recommendations .product-rating,
+    .search-layout__recommendations .review-count,
+    .search-layout__recommendations .price-original {
+        color: var(--weline-theme-body-text-muted, #565959);
+    }
+
+    .search-layout__recommendations .price-current {
+        color: #b12704;
+    }
+
+    .search-layout__recommendations .btn-add-to-cart {
+        background: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+        border-color: #fcd200;
+        color: #0f1111;
+    }
+
+    .search-layout__recommendations .btn-add-to-cart:hover {
+        background: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+        border-color: #e7b92e;
+        color: #0f1111;
+    }
+
+    .storefront-search {
+        color: var(--weline-theme-body-text, #0f1111);
+    }
+
+    .storefront-search__header {
+        margin-bottom: var(--weline-space-5, 1.25rem);
+        padding-bottom: var(--weline-space-4, 1rem);
+        border-bottom: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+    }
+
+    .storefront-search__title {
+        margin: 0 0 var(--weline-space-2, 0.5rem);
+        font-size: clamp(1.35rem, 2vw, 1.75rem);
+        font-weight: 700;
+        line-height: 1.25;
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    }
+
+    .storefront-search__meta {
+        margin: 0 0 var(--weline-space-3, 0.75rem);
+        color: var(--weline-theme-body-text-secondary, var(--weline-theme-body-text-muted, #565959));
+        font-size: var(--weline-font-size-sm, 0.875rem);
+        line-height: 1.5;
+    }
+
+    .storefront-search__breadcrumb {
+        margin: 0;
+    }
+
+    .storefront-search__breadcrumb-list {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 0.15rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        font-size: var(--weline-font-size-sm, 0.875rem);
+        line-height: 1.45;
+        color: var(--weline-theme-body-text-secondary, #565959);
+    }
+
+    .storefront-search__breadcrumb-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-width: 0;
+    }
+
+    .storefront-search__breadcrumb-item:not(:last-child)::after {
+        content: "";
+        display: inline-block;
+        width: 0.35rem;
+        height: 0.35rem;
+        margin-inline: 0.2rem 0.1rem;
+        border-right: 1.5px solid currentColor;
+        border-top: 1.5px solid currentColor;
+        transform: rotate(45deg);
+        opacity: 0.45;
+    }
+
+    .storefront-search__breadcrumb-item a {
+        color: var(--weline-theme-body-link, #007185);
+        text-decoration: none;
+        border-radius: 0.25rem;
+    }
+
+    .storefront-search__breadcrumb-item a:hover {
+        text-decoration: underline;
+        color: var(--weline-theme-body-link-hover, #c45500);
+    }
+
+    .storefront-search__breadcrumb-item.is-current span {
+        color: var(--weline-theme-body-text-heading, #0f1111);
+        font-weight: 600;
+    }
+
+    .storefront-search__filter-panel,
+    .storefront-search__filter-group {
+        padding: var(--weline-space-4, 1rem);
+        border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+        border-radius: var(--weline-radius-lg, 12px);
+        background: var(--weline-chrome-bg-primary, #ffffff);
+        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.06));
+    }
+
+    .storefront-search__filter-panel--tree {
+        padding: var(--weline-space-4, 1rem) var(--weline-space-3, 0.75rem);
+    }
+
+    .storefront-search__filter-title {
+        margin: 0 0 var(--weline-space-3, 0.75rem);
+        padding: 0 var(--weline-space-2, 0.5rem) var(--weline-space-2, 0.5rem);
+        border-bottom: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+        font-size: var(--weline-font-size-sm, 0.875rem);
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        line-height: 1.3;
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    }
+
+    .storefront-search__type-tree {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.15rem;
+    }
+
+    .storefront-search__type-tree--nested {
+        margin-top: 0.15rem;
+        padding-left: 0.15rem;
+        border-left: 1px solid color-mix(in srgb, var(--weline-theme-border-subtle, #e7e7e7) 85%, transparent);
+        margin-left: 0.7rem;
+    }
+
+    .storefront-search__type-node {
+        min-width: 0;
+    }
+
+    .storefront-search__type-row {
+        display: grid;
+        grid-template-columns: 1.35rem minmax(0, 1fr);
+        align-items: center;
+        gap: 0.15rem;
+    }
+
+    .storefront-search__type-toggle,
+    .storefront-search__type-toggle-spacer {
+        width: 1.35rem;
+        height: 1.35rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .storefront-search__type-toggle {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0.35rem;
+        background: transparent;
+        color: var(--weline-theme-body-text-muted, #6b7280);
+        cursor: pointer;
+    }
+
+    .storefront-search__type-toggle:hover {
+        background: var(--weline-theme-surface-muted, #f1f5f9);
+        color: var(--weline-theme-body-link, #007185);
+    }
+
+    .storefront-search__type-toggle-icon {
+        width: 0.4rem;
+        height: 0.4rem;
+        border-right: 1.6px solid currentColor;
+        border-bottom: 1.6px solid currentColor;
+        transform: rotate(-45deg);
+        transition: transform 0.15s ease;
+    }
+
+    .storefront-search__type-node.is-open > .storefront-search__type-row .storefront-search__type-toggle-icon {
+        transform: rotate(45deg);
+    }
+
+    .storefront-search__type-option {
+        display: flex;
+        align-items: center;
+        gap: var(--weline-space-2, 0.5rem);
+        min-width: 0;
+        padding: 0.4rem 0.55rem;
+        border-radius: var(--weline-radius-md, 8px);
+        cursor: pointer;
+        color: var(--weline-theme-body-text, #0f1111);
+        font-size: var(--weline-font-size-sm, 0.875rem);
+        line-height: 1.35;
+        transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .storefront-search__type-option:hover {
+        background: var(--weline-theme-surface-muted, #f1f5f9);
+        color: var(--weline-theme-body-link, #007185);
+    }
+
+    .storefront-search__type-option.is-active {
+        background: color-mix(in srgb, var(--weline-theme-primary, #ff9900) 12%, #ffffff);
+        color: var(--weline-theme-body-text, #0f1111);
+        font-weight: 600;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary, #ff9900) 40%, transparent);
+    }
+
+    .storefront-search__type-option.is-active:hover {
+        color: var(--weline-theme-body-link, #007185);
+    }
+
+    .storefront-search__type-option-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .storefront-search__type-option input {
+        position: static;
+        opacity: 1;
+        pointer-events: auto;
+        margin: 0;
+        flex-shrink: 0;
+        width: 0.95rem;
+        height: 0.95rem;
+        accent-color: var(--weline-theme-primary, #ff9900);
+    }
+
+    .storefront-search__type-children[hidden] {
+        display: none !important;
+    }
+
+    .storefront-search__type-tree--nested .storefront-search__type-option {
+        font-size: var(--weline-font-size-xs, 0.8125rem);
+    }
+
+    .storefront-search__empty,
+    .storefront-search__error {
+        padding: var(--weline-space-10, 2.5rem) var(--weline-space-6, 1.5rem);
+        border-radius: var(--weline-radius-lg, 12px);
+        text-align: center;
+        color: var(--weline-theme-body-text-secondary, var(--weline-theme-body-text, #565959));
+        background: var(--weline-theme-surface-muted, #f8fafc);
+        border: 1px dashed var(--weline-theme-border-subtle, #e7e7e7);
+    }
+
+    .storefront-search__empty::before {
+        content: "🔍";
+        display: block;
+        margin-bottom: var(--weline-space-3, 0.75rem);
+        font-size: 1.75rem;
+        line-height: 1;
+    }
+
+    .storefront-search__error {
+        color: var(--weline-theme-danger, #dc2626);
+        text-align: left;
+        background: color-mix(in srgb, var(--weline-theme-danger, #dc2626) 6%, #ffffff);
+        border-style: solid;
+    }
+
+    .storefront-search__error::before {
+        content: none;
+    }
+
+    .storefront-search__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+        gap: var(--weline-space-4, 1rem);
+    }
+
+    .storefront-search__section + .storefront-search__section {
+        margin-top: var(--weline-space-6, 1.5rem);
+        padding-top: var(--weline-space-6, 1.5rem);
+        border-top: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+    }
+
+    .storefront-search__section-title {
+        margin: 0 0 var(--weline-space-3, 0.75rem);
+        font-size: var(--weline-font-size-lg, 1.125rem);
+        font-weight: 600;
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    }
+
+    .storefront-search__card {
+        padding: var(--weline-space-4, 1rem);
+        border: 1px solid var(--weline-theme-border, #e2e8f0);
+        border-radius: var(--weline-radius-lg, 12px);
+        background: var(--weline-theme-surface-raised, #fff);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .storefront-search__card:hover {
+        border-color: color-mix(in srgb, var(--weline-theme-primary, #ff9900) 45%, var(--weline-theme-border, #e2e8f0));
+        box-shadow: var(--weline-theme-shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.08));
+    }
+
+    .storefront-search__card h3 {
+        margin: 0;
+        font-size: var(--weline-font-size-base, 1rem);
+        color: var(--weline-theme-body-text, #0f1111);
+    }
+
+    .storefront-search__card a {
+        color: var(--weline-theme-body-text, #0f1111);
+        text-decoration: none;
+    }
+
+    .storefront-search__card a:hover {
+        color: var(--weline-theme-body-link-hover, var(--weline-theme-primary, #ff9900));
+    }
+
+    .storefront-search__section-more a {
+        color: var(--weline-theme-body-link, #007185);
+        font-size: var(--weline-font-size-sm, 0.875rem);
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .storefront-search__section-more a:hover {
+        text-decoration: underline;
+    }
+
     @media (max-width: 900px) {
-        .search-layout__grid {
+        .search-layout__body--with-sidebar {
             grid-template-columns: 1fr;
-            gap: var(--weline-layout-spacing-lg, 1.5rem);
+        }
+
+        .search-layout__filters {
+            position: static;
+        }
+
+        .search-layout__results {
+            padding: var(--weline-space-4, 1rem);
+        }
+
+        .search-layout__recommendations > .widget-wrapper,
+        .search-layout__recommendations > .weline-template-widget {
+            padding: var(--weline-space-4, 1rem);
         }
     }
 </style>

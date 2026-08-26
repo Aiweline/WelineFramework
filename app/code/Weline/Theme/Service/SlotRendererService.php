@@ -48,6 +48,9 @@ class SlotRendererService
     private ThemeLayoutService $layoutService;
     private WidgetRegistryInterface $widgetRegistry;
     private ThemePlaceableRegistryInterface $placeableRegistry;
+
+    /** @var array<string, string> Opaque script/style blocks parked during DOMDocument parse. */
+    private array $domOpaqueTokens = [];
     private ThemeComponentRenderer $componentRenderer;
     private Template $template;
 
@@ -413,10 +416,15 @@ class SlotRendererService
 
         libxml_use_internal_errors(true);
 
+        $this->domOpaqueTokens = [];
         $doc = new \DOMDocument();
+        // Protect script/style before libxml parse: raw "<" inside JS/CSS otherwise
+        // truncates tags and leaks source text into the visible DOM (preview content area).
+        $htmlForDom = $this->parkDomOpaqueBlocks($html);
         // 添加 UTF-8 声明避免编码问题
-        $wrappedHtml = '<?xml encoding="UTF-8"><div data-weline-slot-root="1">' . $html . '</div>';
+        $wrappedHtml = '<?xml encoding="UTF-8"><div data-weline-slot-root="1">' . $htmlForDom . '</div>';
         $doc->loadHTML($wrappedHtml, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $this->reparentPromotedSlotRootSiblings($doc);
 
         // 收集模板中存在的所有 slot ID
         $existingSlotIds = [];
@@ -492,8 +500,44 @@ class SlotRendererService
 
         // 移除 XML 声明
         $result = preg_replace('/<\?xml encoding="UTF-8"\?>/', '', (string)$result);
+        $result = $this->restoreDomOpaqueBlocks((string)$result);
+        $this->domOpaqueTokens = [];
 
         return (string)$result;
+    }
+
+    /**
+     * Park <script>/<style> bodies so DOMDocument cannot truncate on raw "<".
+     *
+     * Frontend widgets still ship inline assets with <?= and JS comparisons; until
+     * they are externalized (frontend_development.widget_external_js), slot DOM
+     * injection must not turn those sources into visible text nodes.
+     */
+    private function parkDomOpaqueBlocks(string $html): string
+    {
+        if ($html === '' || (!str_contains($html, '<script') && !str_contains($html, '<style'))) {
+            return $html;
+        }
+
+        return (string) preg_replace_callback(
+            '/<(script|style)\b([^>]*)>(.*?)<\/\1>/is',
+            function (array $match): string {
+                $token = '<!--WELINE_DOM_OPAQUE_' . count($this->domOpaqueTokens) . '_' . bin2hex(random_bytes(4)) . '-->';
+                $this->domOpaqueTokens[$token] = '<' . $match[1] . $match[2] . '>' . $match[3] . '</' . $match[1] . '>';
+
+                return $token;
+            },
+            $html,
+        );
+    }
+
+    private function restoreDomOpaqueBlocks(string $html): string
+    {
+        if ($this->domOpaqueTokens === [] || $html === '') {
+            return $html;
+        }
+
+        return strtr($html, $this->domOpaqueTokens);
     }
 
     /**
@@ -529,11 +573,162 @@ class SlotRendererService
             return null;
         }
 
+        // Cross-region header slots (notice bar + belt) produce a substring that starts
+        // mid-shell; DOMDocument then "repairs" it and drops header-container/header-belt.
+        [$minStart, $maxEnd] = $this->expandBoundsToEnclosingWelineHeader($html, $minStart, $maxEnd);
+
+        if ($maxEnd <= $minStart) {
+            return null;
+        }
+
+        if (($maxEnd - $minStart) >= (int)($htmlLength * 0.9)) {
+            return null;
+        }
+
+        // Header-area widgets + content-area widgets span across </header>. Narrowing that
+        // range yields a mid-document fragment; LIBXML_HTML_NOIMPLIED then promotes
+        // weline-main-content to a document sibling of the slot-root wrapper and the
+        // serializer drops it (category pages lose #category-layout-main).
+        if ($this->boundsCrossHtmlHeaderClose($html, $minStart, $maxEnd)) {
+            return null;
+        }
+
         return [
             'before' => \substr($html, 0, $minStart),
             'fragment' => \substr($html, $minStart, $maxEnd - $minStart),
             'after' => \substr($html, $maxEnd),
         ];
+    }
+
+    /**
+     * True when [minStart, maxEnd) includes a </header> close and continues past it —
+     * i.e. the fragment would mix header shell with following page main content.
+     */
+    private function boundsCrossHtmlHeaderClose(string $html, int $minStart, int $maxEnd): bool
+    {
+        if ($maxEnd <= $minStart) {
+            return false;
+        }
+
+        $offset = 0;
+        while (\preg_match('/<\/header\s*>/i', $html, $matches, \PREG_OFFSET_CAPTURE, $offset)) {
+            $closeStart = (int)$matches[0][1];
+            $closeEnd = $closeStart + \strlen($matches[0][0]);
+            if ($closeStart >= $maxEnd) {
+                break;
+            }
+            if ($closeStart >= $minStart && $closeEnd <= $maxEnd && $maxEnd > $closeEnd) {
+                return true;
+            }
+            $offset = $closeEnd;
+        }
+
+        return false;
+    }
+
+    /**
+     * LIBXML_HTML_NOIMPLIED may close the slot-root wrapper early and leave following
+     * nodes as document siblings. Move those siblings back under the slot-root so
+     * serialization does not drop main content.
+     */
+    private function reparentPromotedSlotRootSiblings(\DOMDocument $doc): void
+    {
+        $slotRoot = null;
+        foreach ($doc->childNodes as $child) {
+            if ($child instanceof \DOMElement && $child->getAttribute('data-weline-slot-root') === '1') {
+                $slotRoot = $child;
+                break;
+            }
+        }
+        if (!$slotRoot instanceof \DOMElement) {
+            return;
+        }
+
+        $sibling = $slotRoot->nextSibling;
+        while ($sibling !== null) {
+            $next = $sibling->nextSibling;
+            if (
+                $sibling instanceof \DOMElement
+                || $sibling instanceof \DOMComment
+                || ($sibling instanceof \DOMText && \trim($sibling->textContent) !== '')
+            ) {
+                $slotRoot->appendChild($sibling);
+            }
+            $sibling = $next;
+        }
+    }
+
+    /**
+     * When narrowing spans notice slots and belt slots, expand to the full weline-header
+     * shell so DOM parsing keeps header-container/header-belt intact.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function expandBoundsToEnclosingWelineHeader(string $html, int $minStart, int $maxEnd): array
+    {
+        $fragment = \substr($html, $minStart, $maxEnd - $minStart);
+        if ($fragment === false || $fragment === '') {
+            return [$minStart, $maxEnd];
+        }
+
+        $crossesHeaderShell = \str_contains($fragment, 'header-container')
+            || \str_contains($fragment, 'header-belt')
+            || \str_contains($fragment, 'header-site-notice');
+        if (!$crossesHeaderShell) {
+            return [$minStart, $maxEnd];
+        }
+
+        $headerBounds = $this->findEnclosingElementBoundsByClass($html, $minStart, 'header', 'weline-header');
+        if ($headerBounds === null) {
+            return [$minStart, $maxEnd];
+        }
+
+        return [
+            \min($minStart, $headerBounds[0]),
+            \max($maxEnd, $headerBounds[1]),
+        ];
+    }
+
+    /**
+     * @return array{0: int, 1: int}|null
+     */
+    private function findEnclosingElementBoundsByClass(
+        string $html,
+        int $position,
+        string $tagName,
+        string $classNeedle
+    ): ?array {
+        $tagPattern = \preg_quote($tagName, '/');
+        $classPattern = \preg_quote($classNeedle, '/');
+        $pattern = '/<' . $tagPattern . '\b[^>]*\bclass\s*=\s*(["\'])[^"\']*\b'
+            . $classPattern . '\b[^"\']*\1[^>]*>/i';
+
+        $candidateStart = null;
+        $offset = 0;
+        while (\preg_match($pattern, $html, $matches, \PREG_OFFSET_CAPTURE, $offset)) {
+            $start = (int)$matches[0][1];
+            if ($start > $position) {
+                break;
+            }
+            $candidateStart = $start;
+            $offset = $start + \strlen($matches[0][0]);
+        }
+
+        if ($candidateStart === null) {
+            return null;
+        }
+
+        if (!\preg_match($pattern, $html, $openMatches, 0, $candidateStart)) {
+            return null;
+        }
+
+        $openEnd = $candidateStart + \strlen($openMatches[0]);
+        $end = $this->findElementEndByTag($html, $tagName, $openEnd);
+        if ($end === null || $end <= $position) {
+            return null;
+        }
+
+        return [$candidateStart, $end];
     }
 
     /**
@@ -658,22 +853,44 @@ class SlotRendererService
 
         // 检查该插槽是否有配置的部件
         if (!isset($slotWidgets[$slotId]) || empty($slotWidgets[$slotId])) {
-            // 没有部件配置，保留原有内容（包括占位符）
+            // 没有部件配置，保留原有内容（包括占位符 / 模板内嵌 w:widget）
             // 不再移除占位符，让用户能看到插槽区域
             return;
         }
 
-        // 渲染该插槽的所有部件
-        $widgetsHtml = $this->traceCall(
-            'slot_renderer::renderSlotWidgets::' . substr($slotId, 0, 80),
-            fn() => $this->renderSlotWidgets($slotWidgets[$slotId]),
-            [
-                'slot_id' => $slotId,
-                'widgets' => \count($slotWidgets[$slotId]),
-            ]
-        );
-        if (empty($widgetsHtml)) {
-            return;
+        $layoutWidgets = $slotWidgets[$slotId];
+        $merger = ObjectManager::getInstance(TemplateInlineWidgetMerger::class);
+        $templateWidgets = $merger->extractTemplateWidgets($slot);
+        if ($templateWidgets !== []) {
+            $widgetsHtml = $this->traceCall(
+                'slot_renderer::renderCowMergedSlot::' . substr($slotId, 0, 80),
+                fn() => $this->renderCowMergedSlotHtml($merger->plan($templateWidgets, $layoutWidgets)),
+                [
+                    'slot_id' => $slotId,
+                    'templates' => \count($templateWidgets),
+                    'widgets' => \count($layoutWidgets),
+                ]
+            );
+            if ($widgetsHtml === '') {
+                return;
+            }
+            // CoW 合并结果整体替换槽内容（未覆盖的模板实例已编入 HTML）
+            $isExclusive = true;
+            $isAppend = false;
+            $isPrepend = false;
+        } else {
+            // 渲染该插槽的所有部件（无模板内嵌时的经典路径）
+            $widgetsHtml = $this->traceCall(
+                'slot_renderer::renderSlotWidgets::' . substr($slotId, 0, 80),
+                fn() => $this->renderSlotWidgets($layoutWidgets),
+                [
+                    'slot_id' => $slotId,
+                    'widgets' => \count($layoutWidgets),
+                ]
+            );
+            if (empty($widgetsHtml)) {
+                return;
+            }
         }
 
         // 创建新的内容片段
@@ -681,7 +898,8 @@ class SlotRendererService
         // 使用临时容器来解析 HTML
         $tempDoc = new \DOMDocument();
         libxml_use_internal_errors(true);
-        $tempDoc->loadHTML('<?xml encoding="utf-8"?><div>' . $widgetsHtml . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $widgetsHtmlForDom = $this->parkDomOpaqueBlocks($widgetsHtml);
+        $tempDoc->loadHTML('<?xml encoding="utf-8"?><div>' . $widgetsHtmlForDom . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         libxml_clear_errors();
         
         // 导入节点
@@ -704,7 +922,7 @@ class SlotRendererService
         // 原则：插槽的默认 HTML 只是"没有部件时的回退内容"，
         //       一旦有部件被分配给该插槽，默认内容就应该被替换掉。
         //       只有显式声明 append/prepend 的插槽才会同时保留默认内容和部件。
-        $isAreaContainerSlot = $slotId === 'footer' || $slotId === 'header';
+        $isAreaContainerSlot = ($slotId === 'footer' || $slotId === 'header') && !$isExclusive;
         if ($isPrepend) {
             // 前置模式：保留默认内容，部件插到前面
             if ($slot->firstChild) {
@@ -750,6 +968,29 @@ class SlotRendererService
             $widgetHtml = $this->renderWidget($widget);
             if ($widgetHtml) {
                 $html .= $widgetHtml;
+            }
+        }
+
+        return $html;
+    }
+
+    /**
+     * @param list<array{kind:string,html?:string,widget?:array<string,mixed>}> $plan
+     */
+    private function renderCowMergedSlotHtml(array $plan): string
+    {
+        $html = '';
+        foreach ($plan as $item) {
+            $kind = (string)($item['kind'] ?? '');
+            if ($kind === 'template') {
+                $html .= (string)($item['html'] ?? '');
+                continue;
+            }
+            if ($kind === 'layout' && isset($item['widget']) && is_array($item['widget'])) {
+                $widgetHtml = $this->renderWidget($item['widget']);
+                if ($widgetHtml) {
+                    $html .= $widgetHtml;
+                }
             }
         }
 
@@ -818,7 +1059,9 @@ class SlotRendererService
                 $renderConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $renderConfig);
                 $html = $this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
                     'area' => $renderArea,
-                    'preview_mode' => false,
+                    // Editor / live preview must keep PDP widgets visible even without a
+                    // storefront product identity (reviews shell, placeholders, …).
+                    'preview_mode' => !empty($renderConfig['editor_mode']) || $this->isEditorPreviewRequest(),
                     'editor_mode' => $renderConfig['editor_mode'] ?? false,
                 ]);
                 if ($layoutId) {
@@ -932,6 +1175,7 @@ class SlotRendererService
     {
         $attrs = [
             'data-layout-id' => (string)($widget['layout_id'] ?? ''),
+            'data-node-uid' => (string)($widget['node_uid'] ?? ''),
             'data-widget-code' => (string)($widget['widget_code'] ?? ''),
             'data-widget-module' => (string)($widget['widget_module'] ?? ''),
             'data-widget-type' => (string)($widget['widget_type'] ?? ''),
@@ -1003,8 +1247,19 @@ class SlotRendererService
     {
         try {
             $request = $this->template->getRequest();
-            return (string)$request->getParam('editor_mode', '') === '1'
-                || (string)$request->getParam('preview_mode', '') === 'live';
+            if ((string)$request->getParam('editor_mode', '') === '1'
+                || (string)$request->getParam('preview_mode', '') === 'live'
+                || (string)$request->getParam('interaction_mode', '') === 'edit'
+            ) {
+                return true;
+            }
+        } catch (\Throwable) {
+            // fall through to template flags
+        }
+
+        try {
+            return (bool)$this->template->getData('editor_mode')
+                || (bool)$this->template->getData('preview_mode');
         } catch (\Throwable) {
             return false;
         }
@@ -1422,32 +1677,13 @@ class SlotRendererService
         // 1. 按指定状态获取数据
         $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
         
-        // 2. 检查是否有部件配置；slot 结构来自模板，空布局时按 default_injections 自动补齐真实部件。
+        // 2. 检查是否有部件配置。空 slot 必须保持为空：default_injections 不得在渲染路径回填
+        // （仅主题初始化、「应用」tab / 显式初始化、草稿重置、部件首次入库、Dashboard view ready）。
         $hasWidgets = $this->hasWidgetsInLayout($layout);
         $hasNoWidgetPlacements = $this->layoutService->hasNoWidgetPlacements($themeId, $pageType, $status, $identity);
         
         // Published runtime must never read or auto-publish a draft. Empty
         // published layouts remain empty until an immutable Release is created.
-        
-        // 未显式标记“无部件”时，按部件 default_injections 为空白 slot 写入真实部件。
-        if (!$hasNoWidgetPlacements && !$hasTargetIdentity) {
-            $componentArea = $area === 'backend'
-                ? PreviewContextService::AREA_BACKEND
-                : PreviewContextService::AREA_FRONTEND;
-            /** @var WidgetDefaultInjectionService $defaultInjectionService */
-            $defaultInjectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-            $applied = $defaultInjectionService->applyMissingForLayout(
-                $themeId,
-                $pageType,
-                $identity,
-                $componentArea,
-                $status
-            );
-            if ($applied > 0) {
-                $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
-                $hasWidgets = $this->hasWidgetsInLayout($layout);
-            }
-        }
         
         // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据。
         // 已明确保存为“没有部件配置”的布局必须保持这个状态，只渲染 slot 默认内容。

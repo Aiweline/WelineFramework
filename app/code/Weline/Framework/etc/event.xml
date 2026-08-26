@@ -94,4 +94,13 @@
                   sort="10"/>
     </event>
 
+    <!-- 路由收集完成后收集 @Cdn/@Attack 中立注解规则 -->
+    <event name="Weline_Framework_Setup::after_route_collection">
+        <observer name="Weline_Framework_Router::collect_controller_annotation_rules"
+                  instance="Weline\Framework\Observer\CollectControllerAnnotationRules"
+                  disabled="false"
+                  shared="true"
+                  sort="120"/>
+    </event>
+
 </config>

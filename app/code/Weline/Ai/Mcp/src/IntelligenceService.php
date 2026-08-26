@@ -609,9 +609,15 @@ final class IntelligenceService
                     'include_mcp_infrastructure' => !$moduleScopedDiscovery || $moduleTargetsMcp,
                     'include_validation_role' => !$moduleScopedDiscovery,
                 ]);
+                $requestedKinds = self::strings($input['kinds'] ?? []);
+                $documentationRequested = (bool) ($input['include_docs'] ?? true)
+                    && ($requestedKinds === [] || in_array('doc', $requestedKinds, true));
+                $expectedRoles = $documentationRequested
+                    ? $inferredExpectedRoles
+                    : array_values(array_diff($inferredExpectedRoles, ['documentation']));
                 $discoveryRoles = $moduleScopedDiscovery
-                    ? Text::uniqueStrings(array_merge($inferredExpectedRoles, ['implementation']))
-                    : $inferredExpectedRoles;
+                    ? Text::uniqueStrings(array_merge($expectedRoles, ['implementation']))
+                    : $expectedRoles;
                 $roleDiscoveryLimit = min(24, max(2, count($discoveryRoles) * 2));
                 $indexer = new ProjectIndexer(
                     $index,
@@ -653,10 +659,11 @@ final class IntelligenceService
                         : [],
                     $roleCandidates,
                 )));
-                $expectedRoles = $inferredExpectedRoles;
-                if ($moduleScopedDiscovery) {
+                // Explicit paths are a bounded scope too; do not require roles that
+                // cannot exist inside the caller's materialization boundary.
+                if ($moduleScopedDiscovery || $paths !== []) {
                     $scopedExpectedRoles = array_values(array_intersect(
-                        $inferredExpectedRoles,
+                        $expectedRoles,
                         $availableRoles,
                     ));
                     if ($scopedExpectedRoles !== []) {
@@ -1063,7 +1070,9 @@ final class IntelligenceService
         array $taskContract,
         array $explicitPaths,
     ): array {
-        $forbiddenPatterns = $this->taskPathPatterns($taskContract['forbidden_scope'] ?? []);
+        // forbidden_scope is an apply-time write policy. Read-only dependency context
+        // must remain visible so planning and impact analysis can prove a safe edit.
+        $forbiddenPatterns = [];
         if ($explicitPaths !== []) {
             return ['roots' => [], 'forbidden_patterns' => $forbiddenPatterns];
         }
@@ -2290,7 +2299,7 @@ final class IntelligenceService
             }
             throw new ToolException(
                 'STATIC_KNOWLEDGE_PROJECTION_RETIRED',
-                'sync_module_knowledge apply mode was retired. Run prepare_project and explicitly authorize repair_project_docs when it returns needs_repair.',
+                'sync_module_knowledge apply mode was retired. Run prepare_project; missing module documents are auto-repaired during preparation.',
                 false,
                 ['replacement' => 'prepare_project', 'static_skill_files' => false],
             );

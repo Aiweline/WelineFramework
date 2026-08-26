@@ -42,7 +42,7 @@ $this->assign('title', $title);
         }
 
         .checkout-success-main {
-            width: min(960px, calc(100% - 40px));
+            width: min(var(--size-content-960), calc(100% - var(--size-control-md)));
             margin: 0 auto;
             padding: var(--weline-layout-spacing-3xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
         }
@@ -57,8 +57,8 @@ $this->assign('title', $title);
         }
 
         .success-icon {
-            width: 64px;
-            height: 64px;
+            width: var(--auth-icon-size);
+            height: var(--auth-icon-size);
             margin: 0 auto var(--weline-layout-spacing-lg);
             display: inline-flex;
             align-items: center;
@@ -92,7 +92,7 @@ $this->assign('title', $title);
         }
 
         .w-btn {
-            min-height: 42px;
+            min-height: var(--size-control-42);
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -120,8 +120,8 @@ $this->assign('title', $title);
 
         @media (max-width: 640px) {
             .checkout-success-main {
-                width: min(100% - 28px, 960px);
-                padding: 40px 0 56px;
+                width: min(100% - var(--size-control-xs), var(--size-content-960));
+                padding: var(--size-control-md) 0 var(--size-control-2xl);
             }
         }
     </style>

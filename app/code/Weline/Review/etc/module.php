@@ -14,5 +14,11 @@ return [
         'Weline_Msg' => '*',
         'Weline_Cron' => '*',
         'Weline_Ai' => '*',
+        'Weline_Seo' => '*',
+        'Weline_Theme' => '*',
+        'Weline_Widget' => '*',
+    ],
+    'provides' => [
+        \Weline\Review\Api\ReviewSeoFactsInterface::class => \Weline\Review\Service\ReviewService::class,
     ],
 ];

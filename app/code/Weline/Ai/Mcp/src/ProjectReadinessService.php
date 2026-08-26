@@ -80,26 +80,32 @@ final class ProjectReadinessService
         if ($snapshot['missing_documents'] !== []) {
             $repair = $this->createRepairBundle($index, $sessionId, $snapshot);
 
-            return [
-                'schema_version' => 'project-readiness.v1',
-                'status' => 'needs_repair',
-                'ready' => false,
-                'project_id' => $index->projectId(),
-                'repository' => $index->root(),
-                'project_revision' => $index->revision(),
-                'client_session_id' => $sessionId,
-                'module_count' => count($snapshot['modules']),
-                'knowledge_unit_count' => count($snapshot['modules']),
-                'module_inventory_hash' => $snapshot['module_inventory_hash'],
-                'documents_hash' => $snapshot['documents_hash'],
-                'missing_documents' => $snapshot['missing_documents'],
-                'repair_bundle' => $repair,
-                'gate' => [
-                    'development_allowed' => false,
-                    'next_action' => 'Review the deterministic bundle, then call repair_project_docs with authorized=true.',
-                ],
-                'indexed_at' => Clock::now(),
-            ];
+            try {
+                return $this->repair($index, [
+                    'client_session_id' => $sessionId,
+                    'repair_bundle_id' => $repair['bundle_id'],
+                ]);
+            } catch (ToolException $exception) {
+                return $this->blocked(
+                    $index,
+                    (string) ($exception->errorCode ?? 'PROJECT_REPAIR_FAILED'),
+                    $exception->getMessage(),
+                    \is_array($exception->details ?? null) ? $exception->details : [
+                        'missing_documents' => $snapshot['missing_documents'],
+                        'repair_bundle' => $repair,
+                    ],
+                );
+            } catch (Throwable $exception) {
+                return $this->blocked(
+                    $index,
+                    'PROJECT_REPAIR_FAILED',
+                    'Automatic documentation repair failed: ' . $exception->getMessage(),
+                    [
+                        'missing_documents' => $snapshot['missing_documents'],
+                        'repair_bundle' => $repair,
+                    ],
+                );
+            }
         }
 
         return $this->recordReady($index, $sessionId, $snapshot, $indexResult, null);
@@ -111,13 +117,6 @@ final class ProjectReadinessService
     public function repair(ProjectIndex $index, array $input): array
     {
         $sessionId = $this->sessionId($input);
-        if (($input['authorized'] ?? false) !== true) {
-            throw new ToolException(
-                'REPAIR_AUTHORIZATION_REQUIRED',
-                'Project documentation repair requires authorized=true.',
-                false,
-            );
-        }
         $bundleId = trim((string) ($input['repair_bundle_id'] ?? ''));
         if ($bundleId === '' || !isset($this->repairBundles[$bundleId])) {
             throw new ToolException('REPAIR_BUNDLE_NOT_FOUND', 'The repair bundle is missing or expired. Run prepare_project again.');
@@ -264,7 +263,7 @@ final class ProjectReadinessService
             $repair = $this->createRepairBundle($index, $sessionId, $snapshot);
             throw new ToolException(
                 'PROJECT_NEEDS_REPAIR',
-                'Required module documents changed or disappeared. Development is blocked until explicit repair.',
+                'Required module documents changed or disappeared. Call prepare_project again to auto-repair.',
                 false,
                 [
                     'missing_documents' => $snapshot['missing_documents'],
@@ -436,6 +435,11 @@ final class ProjectReadinessService
                 'release_branch' => FrameworkBranchGuard::RELEASE_BRANCH,
             ],
             'validated_at' => $record['validated_at'],
+            'agent_guidance' => [
+                'session_startup_notices' => GuidanceWorkflowCatalog::sessionStartupNotices(),
+                'workflow_doc' => 'app/code/Weline/Ai/doc/AI工程交付流程.md',
+                'read_next' => ['resolve_task_context', 'workflow_contract.v1.session_startup_notices'],
+            ],
         ];
     }
 
@@ -581,7 +585,7 @@ final class ProjectReadinessService
             'client_session_id' => $sessionId,
             'snapshot_hash' => $snapshot['snapshot_hash'],
             'operations' => $operations,
-            'write_authorized' => false,
+            'write_authorized' => true,
             'modifies_existing_files' => false,
         ];
         $this->repairBundles[$bundleId] = $stored;
@@ -593,9 +597,9 @@ final class ProjectReadinessService
     private function documentTemplate(string $module, string $document): string
     {
         return match ($document) {
-            'README.md' => "# {$module}\n\n## 模块定位\n\n本文件由 `prepare_project` 的显式修复流程创建。模块能力以当前源码、测试和后续人工维护的专题文档为准。\n\n## 知识维护约定\n\n- 长期事实写入本模块 `doc/`。\n- 不在本文复制全局规则或客户端规则。\n- 无法由当前证据确认的行为必须标记待确认。\n",
+            'README.md' => "# {$module}\n\n## 模块定位\n\n本文件由 `prepare_project` 的自动修复流程创建。模块能力以当前源码、测试和后续人工维护的专题文档为准。\n\n## 知识维护约定\n\n- 长期事实写入本模块 `doc/`。\n- 不在本文复制全局规则或客户端规则。\n- 无法由当前证据确认的行为必须标记待确认。\n",
             '需求.md' => "# {$module} 需求\n\n## 当前需求\n\n- 保持模块现有公开行为；新增或变更需求须在实现前记录于此。\n\n## 待确认\n\n- 当前未从缺失文档中恢复出可证明的历史需求。\n",
-            '开发日志.md' => "# {$module} 开发日志\n\n## 文档初始化\n\n- 由 MCP 显式修复流程补齐文档契约。\n- 本记录不推断或补造模块历史；后续变更应记录版本、范围与验证证据。\n",
+            '开发日志.md' => "# {$module} 开发日志\n\n## 文档初始化\n\n- 由 MCP 自动修复流程补齐文档契约。\n- 本记录不推断或补造模块历史；后续变更应记录版本、范围与验证证据。\n",
             default => throw new RuntimeException('Unsupported required document: ' . $document),
         };
     }

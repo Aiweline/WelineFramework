@@ -1,0 +1,113 @@
+.w-compare-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--weline-z-overlay, 900);
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(15, 17, 17, 0.94);
+    color: #fff;
+    box-shadow: 0 -8px 24px rgba(15, 17, 17, 0.18);
+}
+
+.w-compare-bar__inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: var(--weline-layout-content-max-width, 75rem);
+    margin: 0 auto;
+}
+
+.w-compare-bar__summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 4.5rem;
+    font-size: 0.8125rem;
+}
+
+.w-compare-bar__thumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.w-compare-bar__thumb {
+    width: 3rem;
+    height: 3rem;
+    object-fit: cover;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: #fff;
+}
+
+.w-compare-bar__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.w-product-quickview__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 1.5rem;
+}
+
+.w-product-quickview__image {
+    width: 100%;
+    max-height: 24rem;
+    object-fit: contain;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+}
+
+.w-product-quickview__name {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+    line-height: 1.35;
+}
+
+.w-product-quickview__rating,
+.w-product-quickview__desc {
+    margin: 0 0 0.75rem;
+    color: #565959;
+    font-size: 0.875rem;
+}
+
+.w-product-quickview__price {
+    margin: 0 0 1rem;
+    color: #b12704;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.w-product-quickview__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.w-product-quickview__loading {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: #565959;
+}
+
+.product-card .btn-wishlist.is-active,
+.product-card .btn-compare.is-active {
+    color: var(--weline-theme-primary, #ff9900);
+}
+
+@media (max-width: 768px) {
+    .w-compare-bar__inner {
+        flex-wrap: wrap;
+    }
+
+    .w-product-quickview__grid {
+        grid-template-columns: 1fr;
+    }
+}

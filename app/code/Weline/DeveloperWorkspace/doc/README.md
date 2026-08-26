@@ -14,13 +14,13 @@
 
 ## 浏览器文档页 API 契约
 
-- `/dev/tool/docs` 与 `/dev/tool/docs/api` 是独立页面，必须由后台 Header Base 配置并加载官方 `weline-api` / Theme runtime；页面代码只在需要时调用 `Weline.load('api')`。
+- `/dev/tool/docs` 与 `/dev/tool/docs/api` 是前台独立工具页：控制器 `layoutType=blank.full`，模板必须是内容片段（禁止自绘完整 HTML），由前端主题空白全屏布局提供 document shell、Theme head/body hooks，以及 Frontend Header Base（Theme head → `Weline_Frontend::templates/public/head.phtml`）；页面只追加 docs/api 专用 CSS/JS，并在需要时调用 `Weline.load('api')`。
 - 公开文档目录和搜索只调用 `developer_workspace.docsRequest`；该操作仅允许 `GET /dev/tool/docs/{tree|documents|document|search}`，并保留原 JSON 形状。
 - API 调用测试工作台属于框架开发基础设施：Frontend Worker 必须走 `Weline.Api.resource(provider)[operation](params)`；文档中已登记的 REST 路由必须走后台 runtime 的 `Weline.Api.request(url, options)`。两者均不得降级为原生 Ajax、XHR、`fetch`、axios 或 jQuery。
 - 调试客户端的功能基线包括 REST/Worker 请求编辑、示例导入、Token、沙盒/正式环境、语言货币、状态/耗时/大小/Header/Body 响应诊断、SDK 下载与指南；迁移 UI 时不得删减这些产品能力。
 - API 页面只使用原生 DOM 与 Weline UI 的 `w-*` 外壳；jQuery、jsTree、Bootstrap、Prism 和字体图标不属于运行时依赖。桌面分栏可调整，窄屏自动单列。
 - 通用 `adminRequest` 继续要求后台身份，禁止为了公开文档读取或任意 REST 代理而放宽鉴权。
-- 开发面板的 shell、session、document、routes、trace、DB explain 与 SEO crawl 必须经 `developer_workspace.panelRequest` 的固定路由/方法白名单；该 Query 操作仍由 `PanelAccessService` 执行 DEV 或生产 token-cookie 二次鉴权。
+- 开发面板的 shell、session、document、routes、trace、DB explain 与 SEO crawl 必须经 `developer_workspace.panelRequest` 的固定路由/方法白名单；该 Query 操作仍由 `PanelAccessService` 执行 DEV 或生产 token-cookie 二次鉴权。前台禁止对上述路径使用 `adminRequest`（否则无后台 Session 会 toast「Operation authorization requirements are not satisfied.」）。
 
 ## 统计信息
 

@@ -146,6 +146,15 @@ API密钥已删除,"The API key has been deleted."
 删除失败：%{1},"Delete failed: %{1}"
 使用统计,"Using statistics"
 个人设置,"Personal Settings"
+仅支持POST请求,仅支持POST请求
+请输入提示词,请输入提示词
+生成成功,生成成功
+获取成功,获取成功
+获取模型列表失败,获取模型列表失败
+请选择模型,"Please select a model"
+配置保存成功,配置保存成功
+保存配置失败,保存配置失败
+获取余额失败,获取余额失败
 AI聊天,"AI Chat"
 聊天历史已清空,"Chat history has been cleared."
 智能体代码不能为空。,"Agent code is required."
@@ -320,6 +329,10 @@ export,export
 "Export AI skill package","Export AI skill package"
 "Manage adapter skills","Manage adapter skills"
 "Manage manual adapter skill bindings","Manage manual adapter skill bindings"
+AI使用统计,AI使用统计
+AI使用量统计面板,AI使用量统计面板
+查看AI使用统计,查看AI使用统计
+查看AI使用量统计,查看AI使用量统计
 适配器ID不能为空,"Adapter ID cannot be empty."
 "成功扫描 %{count} 个适配器","Successfully scanned %{count} adapters"
 "适配器扫描失败: %{error}","Adapter scan failed: %{error}"
@@ -451,6 +464,11 @@ play,play
 获取受保护的模型列表,"Get a list of protected models"
 lock,lock
 批量设置默认模型,"Set default model in batches"
+"AI 使用统计","AI 使用统计"
+今日,今日
+总令牌,"Total Tokens"
+约花费,约花费
+详情,Details
 首页,"front page"
 聊天,Chat
 AI聊天助手,"AI Chat Assistant"
@@ -487,6 +505,18 @@ API密钥,"API Key"
 修改个人信息和偏好设置,"Modify personal information and preferences"
 最近活动,"Recent activities"
 暂无活动记录,"No activity records"
+统计面板,统计面板
+"AI 中心","AI Center"
+本周,本周
+本月,本月
+本年,本年
+统计区间,统计区间
+总请求数,"Total Request Count"
+总令牌数,"Total Token Count"
+按模型消耗排名,按模型消耗排名
+排名,排名
+模型,Model
+暂无数据,"No data yet"
 "前端 API 不可用，请刷新页面后重试。","The frontend API is unavailable. Refresh the page and try again."
 适配器上下文不可用。,"Adapter context unavailable."
 锁定,locking
@@ -533,7 +563,6 @@ API密钥,"API Key"
 绑定,binding
 操作,operate
 "AI Skills","AI Skills"
-"AI 中心","AI Center"
 "AI 技能","AI skills"
 管理模块、自定义、导入和适配器绑定的提示词技能。,"Prompt word skills for managing modules, customizations, imports, and adapter bindings."
 刷新目录,"refresh directory"
@@ -584,8 +613,6 @@ API密钥,"API Key"
 删除失败,"Deletion failed"
 网络错误,"Network error"
 返回列表,"Return to list"
-总请求数,"Total Request Count"
-总令牌数,"Total Token Count"
 总花费,"Total cost"
 成功率,"Success rate"
 开始日期,"start date"
@@ -593,17 +620,14 @@ API密钥,"API Key"
 筛选,filter
 重置,reset
 时间,time
-模型,Model
 用户,User
 请求类型,"Request type"
 输入令牌,"Enter the token"
 输出令牌,"Output tokens"
-总令牌,"Total Tokens"
 花费,Spent
 耗时,"Time taken"
 使用详情,"Usage details"
 加载失败，请重试,"Failed to load, please retry"
-暂无数据,"No data yet"
 失败,fail
 上一页,"Previous page"
 下一页,"Next page"
@@ -810,7 +834,6 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 创建时间,"creation time"
 更新时间,"Update time"
 适配器详情,"Adapter Details"
-详情,Details
 实例信息,"Instance Information"
 确认切换状态,"Confirm switch status"
 确定要切换适配器状态吗？,"Are you sure you want to switch the adapter status?"
@@ -818,7 +841,6 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 状态已切换,"Status Toggled"
 未知错误,"Unknown error"
 请稍后重试,"Please try again later"
-请选择模型,"Please select a model"
 保存成功！,"Save successful!"
 保存失败：,"Save failed:"
 确定要保存所有默认模型配置吗？,"Are you sure you want to save all default model configurations?"
@@ -1124,6 +1146,8 @@ API基础URL,"API Base URL"
 加载中…,loading…
 暂无本地供应商，请点击「添加本地供应商」,"There is currently no local supplier, please click ""Add local supplier"""
 "Base URL","Base URL"
+一键测试,"One-click test"
+连通性测试失败,"Connectivity test failed"
 确认删除该本地供应商？,"Are you sure you want to delete this local provider?"
 供应商代码,"supplier code"
 显示名称,"Display name"
@@ -1144,7 +1168,7 @@ API基础URL,"API Base URL"
 移除,Remove
 "请先填写 Base URL","Please fill in the Base URL first"
 请填写要测试的模型代码,"Please fill in the model code to be tested"
-连通性测试失败,"Connectivity test failed"
+提示：先选供应商，再搜索并点击选择模型,"Tip: Select the supplier first, then search and click to select the model"
 "模型不存在: %{code}","Model does not exist: %{code}"
 "模型 %{code} 缺少API密钥配置","Model %{code} is missing API key configuration"
 "模型 %{code} 缺少API基础URL配置","Model %{code} is missing API base URL configuration"
@@ -1288,6 +1312,7 @@ AI用量审计恢复,"AI usage audit recovery"
 "%{1} 同步失败：%{2}","%{1} Synchronization failed: %{2}"
 "模型收集完成，共 %{1} 个模型","Model collection completed, total %{1} models"
 已跳过模型收集,"Model collection skipped"
+请先设置默认测试模型或添加模型,"Please set a default test model or add a model first"
 ID,ID
 模型信息,"Model information"
 价格,price
@@ -1309,7 +1334,6 @@ ID,ID
 "本地服务通常可留空；若服务要求 Key 再填写","Local services can usually be left blank; if the service requires a Key, fill it in again"
 "例如 http://127.0.0.1:11434/v1","For example http://127.0.0.1:11434/v1"
 "连接失败时请确认本机服务已启动且 Base URL 可达。","When the connection fails, please confirm that the local service is started and the Base URL is reachable."
-提示：先选供应商，再搜索并点击选择模型,"Tip: Select the supplier first, then search and click to select the model"
 默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。,"The default model is used for automatic selection when the user does not specify a model. Only one default model can be set for each service type."
 以下模型被设置为默认模型，无法删除：,"The following model is set as the default model and cannot be deleted:"
 确认,confirm

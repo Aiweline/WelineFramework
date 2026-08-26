@@ -34,7 +34,7 @@ class CartQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'summary' => $this->success('Cart summary loaded.', $this->cartService->summary()),
+            'summary' => $this->success('Cart summary loaded.', $this->storefrontSummaryPayload()),
             'count' => $this->success('Cart count loaded.', $this->cartCountPayload()),
             'items', 'miniItems' => $this->success('Cart items loaded.', $this->cartItemsPayload($params)),
             'add' => $this->successFromSummary($this->cartService->add(
@@ -268,9 +268,20 @@ class CartQueryProvider implements QueryProviderInterface
     /**
      * @return array<string, mixed>
      */
+    private function storefrontSummaryPayload(): array
+    {
+        $summary = $this->cartService->storefrontSummary();
+        $summary['success'] = (bool)($summary['success'] ?? true);
+
+        return $summary;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function cartCountPayload(): array
     {
-        $summary = $this->cartService->summary();
+        $summary = $this->storefrontSummaryPayload();
 
         return [
             'success' => true,
@@ -286,7 +297,7 @@ class CartQueryProvider implements QueryProviderInterface
      */
     private function cartItemsPayload(array $params): array
     {
-        $summary = $this->cartService->summary();
+        $summary = $this->storefrontSummaryPayload();
         $items = \is_array($summary['items'] ?? null) ? $summary['items'] : [];
         $limit = \max(1, \min(50, (int)($params['limit'] ?? $params['max_items'] ?? 5)));
 

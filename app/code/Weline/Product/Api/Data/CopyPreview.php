@@ -10,6 +10,7 @@ final class CopyPreview
     /**
      * @param list<array<string, mixed>> $items
      * @param list<string> $warnings
+     * @param list<int> $targetStoreIds
      */
     public function __construct(
         public readonly string $draftId,
@@ -23,6 +24,7 @@ final class CopyPreview
         public readonly bool $inventoryWillCopyQty = false,
         public readonly array $items = [],
         public readonly array $warnings = [],
+        public readonly array $targetStoreIds = [],
     ) {
     }
 
@@ -31,6 +33,7 @@ final class CopyPreview
     {
         return [
             'draft_id' => $this->draftId,
+            'target_store_ids' => $this->targetStoreIds,
             'category_count' => $this->categoryCount,
             'product_count' => $this->productCount,
             'offer_count' => $this->offerCount,

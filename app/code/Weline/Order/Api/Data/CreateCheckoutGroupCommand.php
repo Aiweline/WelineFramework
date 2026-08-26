@@ -25,7 +25,10 @@ final class CreateCheckoutGroupCommand
      *   line_uuid?:string,
      *   reservation_uuid?:string,
      *   warehouse_id?:int,
-     *   warehouse_source?:string
+     *   warehouse_source?:string,
+     *   provider_code?:string,
+     *   global_offer_uuid?:string,
+     *   fulfillment_metadata?:array<string,mixed>
      * }> $lines
      * @param array<string, mixed> $shippingAddress
      * @param array<string, mixed> $options

@@ -624,6 +624,58 @@ class CdnRuleCollector
     }
 
     /**
+     * @param list<array<string, mixed>> $rules
+     */
+    public function applyAnnotationRules(array $rules): int
+    {
+        $applied = 0;
+        foreach ($rules as $rule) {
+            if (!is_array($rule)) {
+                continue;
+            }
+            $path = trim((string)($rule['path_pattern'] ?? ''));
+            if ($path === '') {
+                continue;
+            }
+            $cache = is_array($rule['cache'] ?? null) ? $rule['cache'] : null;
+            $attack = is_array($rule['attack'] ?? null) ? $rule['attack'] : null;
+            if ($cache === null && $attack === null) {
+                continue;
+            }
+
+            $expression = '(http.request.uri.path eq "' . addslashes($path) . '")';
+            $action = [];
+            if ($cache !== null) {
+                if (($cache['cache'] ?? null) === false) {
+                    $action['cache'] = false;
+                } elseif (is_string($cache['cache'] ?? null)) {
+                    $action['cache'] = ['ttl' => $cache['cache']];
+                }
+            }
+            if ($attack !== null && ($attack['enabled'] ?? true) !== false) {
+                $action['attack'] = $attack;
+            }
+
+            $payload = [
+                'expression' => $expression,
+                'action' => $action,
+                'description' => (string)($rule['description'] ?? ''),
+                'enabled' => true,
+                'trigger' => 'cron',
+            ];
+            $this->saveRule(
+                $payload,
+                (string)($rule['class'] ?? ''),
+                (string)($rule['method'] ?? ''),
+                (string)($rule['module'] ?? 'Weline_Framework'),
+            );
+            $applied++;
+        }
+
+        return $applied;
+    }
+
+    /**
      * 推送实时规则
      * 
      * @param ApiRule $apiRule 规则对象

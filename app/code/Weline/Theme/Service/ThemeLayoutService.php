@@ -553,13 +553,22 @@ class ThemeLayoutService
                     'widget_module' => (string)($data['widget_module'] ?? ''),
                     'widget_type' => (string)($data['widget_type'] ?? ''),
                     'widget_code' => (string)($data['widget_code'] ?? ''),
+                    'page_type' => $pageType,
+                    'target_type' => (string)($identity['target_type'] ?? $data['target_type'] ?? ''),
                     'config' => $config,
                 ]],
-            ], ['phase' => 'save']);
+            ], [
+                'phase' => 'save',
+                'page_type' => $pageType,
+                'layout_area' => (string)($data['area'] ?? ''),
+                'target_type' => (string)($identity['target_type'] ?? $data['target_type'] ?? ''),
+            ]);
         }
 
         // 如果是独占插槽，先删除该插槽/区域中相同类型的部件（仅限同状态）
-        if ($exclusive && !$layoutId) {
+        // 模板内嵌 CoW：带 template_ref 的物化不得清空同槽其他实例
+        $hasTemplateRef = trim((string)($config[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_REF] ?? '')) !== '';
+        if ($exclusive && !$layoutId && !$hasTemplateRef) {
             $this->removeExclusiveWidgets(
                 (int)$data['theme_id'],
                 $pageType,
@@ -1522,6 +1531,7 @@ class ThemeLayoutService
     public const SUB_SLOTS_MAP = [
         // Header 区域的子 slots
         'logo' => 'header',
+        'delivery' => 'header',
         'search' => 'header',
         'navigation' => 'header',
         'category-menu' => 'header',

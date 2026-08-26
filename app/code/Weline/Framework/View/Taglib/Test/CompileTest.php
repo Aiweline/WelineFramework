@@ -267,4 +267,23 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         // 应该包含动态 PHP 表达式
         self::assertStringContainsString('$title', $result);
     }
+
+    public function testNestedWidgetCompileDoesNotCorruptParentForeach(): void
+    {
+        $paths = [
+            BP . 'app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml',
+            BP . 'app/code/Weline/Theme/view/theme/frontend/widgets/container/header/default.phtml',
+        ];
+        foreach ($paths as $headerPath) {
+            self::assertFileExists($headerPath);
+            $content = (string)file_get_contents($headerPath);
+            $compiled = $this->taglib->compile($this->template, $content, $headerPath);
+            $tmp = tempnam(sys_get_temp_dir(), 'weline-header-compile-');
+            self::assertNotFalse($tmp);
+            file_put_contents($tmp, $compiled);
+            exec('php -l ' . escapeshellarg($tmp) . ' 2>&1', $output, $code);
+            @unlink($tmp);
+            self::assertSame(0, $code, $headerPath . "\n" . implode("\n", $output));
+        }
+    }
 }

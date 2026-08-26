@@ -1,0 +1,149 @@
+<?php
+/**
+ * P2 storefront search results.
+ *
+ * @var string $search_query
+ * @var string $search_type
+ * @var int $search_category_id
+ * @var list<array<string,mixed>> $search_types
+ * @var list<array{label:string,type:string,category_id:int}> $search_category_breadcrumb
+ * @var list<array<string,mixed>> $search_hits
+ * @var array<string,list<array<string,mixed>>> $search_sections
+ * @var int $search_hit_count
+ * @var string $search_error
+ * @var string $search_error_code
+ */
+$q = trim((string)($this->getData('search_query') ?? ''));
+$type = trim((string)($this->getData('search_type') ?? 'all')) ?: 'all';
+$categoryId = (int)($this->getData('search_category_id') ?? 0);
+$types = $this->getData('search_types') ?? [];
+$types = is_array($types) ? $types : [];
+$breadcrumb = $this->getData('search_category_breadcrumb') ?? [];
+$breadcrumb = is_array($breadcrumb) ? $breadcrumb : [];
+$hits = $this->getData('search_hits') ?? [];
+$hits = is_array($hits) ? $hits : [];
+$sections = $this->getData('search_sections') ?? [];
+$sections = is_array($sections) ? $sections : [];
+$hitCount = (int)($this->getData('search_hit_count') ?? count($hits));
+$error = trim((string)($this->getData('search_error') ?? ''));
+$errorCode = trim((string)($this->getData('search_error_code') ?? ''));
+$esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$typeLabels = $this->getData('search_type_labels') ?? [];
+$typeLabels = is_array($typeLabels) ? $typeLabels : [];
+if ($typeLabels === []) {
+    foreach ($types as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $code = trim((string)($row['code'] ?? ''));
+        if ($code === '') {
+            continue;
+        }
+        $typeLabels[$code] = (string)($row['label'] ?? $code);
+    }
+}
+$resolveTypeLabel = static function (string $code) use ($typeLabels): string {
+    $code = trim($code);
+    if ($code !== '' && isset($typeLabels[$code]) && $typeLabels[$code] !== '') {
+        return $typeLabels[$code];
+    }
+
+    return match ($code) {
+        'all' => (string)__('全部'),
+        'product' => (string)__('商品'),
+        default => $code,
+    };
+};
+$typeLabel = $resolveTypeLabel($type);
+if ($breadcrumb === []) {
+    $breadcrumb = [
+        [
+            'label' => $typeLabel,
+            'type' => $type,
+            'category_id' => 0,
+        ],
+    ];
+}
+?>
+<section class="storefront-search" data-testid="storefront-search" weline-code="search.search.section_1">
+    <header class="storefront-search__header">
+        <?php if ($q !== ''): ?>
+            <h1 class="storefront-search__title"><?= $esc((string)__('搜索：%{1}', [$q])) ?></h1>
+            <p class="storefront-search__meta">
+                <?= $esc((string)__('共 %{1} 条', [(string)$hitCount])) ?>
+            </p>
+            <nav class="storefront-search__breadcrumb" aria-label="<?= $esc((string)__('分类面包屑')) ?>">
+                <ol class="storefront-search__breadcrumb-list">
+                    <?php foreach ($breadcrumb as $index => $crumb): ?>
+                        <?php
+                        if (!is_array($crumb)) {
+                            continue;
+                        }
+                        $crumbLabel = trim((string)($crumb['label'] ?? ''));
+                        if ($crumbLabel === '') {
+                            continue;
+                        }
+                        $crumbType = trim((string)($crumb['type'] ?? $type)) ?: $type;
+                        $crumbCategoryId = (int)($crumb['category_id'] ?? 0);
+                        $isLast = $index === array_key_last($breadcrumb);
+                        $href = '/search?q=' . rawurlencode($q) . '&type=' . rawurlencode($crumbType);
+                        if ($crumbCategoryId > 0) {
+                            $href .= '&category_id=' . $crumbCategoryId;
+                        }
+                        ?>
+                        <li class="storefront-search__breadcrumb-item<?= $isLast ? ' is-current' : '' ?>">
+                            <?php if ($isLast): ?>
+                                <span aria-current="page"><?= $esc($crumbLabel) ?></span>
+                            <?php else: ?>
+                                <a href="<?= $esc($href) ?>"><?= $esc($crumbLabel) ?></a>
+                            <?php endif; ?>
+                        </li>
+                    <?php endforeach; ?>
+                </ol>
+            </nav>
+        <?php else: ?>
+            <h1 class="storefront-search__title"><?= __('搜索') ?></h1>
+            <p class="storefront-search__meta"><?= __('请输入关键词开始搜索') ?></p>
+        <?php endif; ?>
+    </header>
+
+    <?php if ($error !== ''): ?>
+        <div class="storefront-search__error" role="alert" data-error-code="<?= $esc($errorCode) ?>">
+            <?= $esc($error) ?>
+        </div>
+    <?php elseif ($q !== '' && $type === 'all' && $sections === []): ?>
+        <div class="storefront-search__empty" data-testid="storefront-search-empty"><?= $esc((string)__('未找到相关结果')) ?></div>
+    <?php elseif ($q !== '' && $type !== 'all' && $hits === []): ?>
+        <div class="storefront-search__empty" data-testid="storefront-search-empty"><?= $esc((string)__('未找到相关结果')) ?></div>
+    <?php else: ?>
+        <div class="storefront-search__results">
+            <?php if ($type === 'all'): ?>
+                <?php foreach ($sections as $sectionType => $sectionHits): ?>
+                    <?php if (!is_array($sectionHits) || $sectionHits === []) { continue; } ?>
+                    <?php $sectionLabel = $resolveTypeLabel((string)$sectionType); ?>
+                    <div class="storefront-search__section" data-section-type="<?= $esc((string)$sectionType) ?>">
+                        <h2 class="storefront-search__section-title"><?= $esc($sectionLabel) ?></h2>
+                        <div class="storefront-search__grid">
+                            <?php foreach ($sectionHits as $hit): ?>
+                                <?php if (!is_array($hit)) { continue; } ?>
+                                <?php include __DIR__ . '/partials/hit-card.phtml'; ?>
+                            <?php endforeach; ?>
+                        </div>
+                        <p class="storefront-search__section-more">
+                            <a href="/search?q=<?= rawurlencode($q) ?>&amp;type=<?= rawurlencode((string)$sectionType) ?>">
+                                <?= $esc((string)__('查看更多%{1}结果', [$sectionLabel])) ?> →
+                            </a>
+                        </p>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="storefront-search__grid">
+                    <?php foreach ($hits as $hit): ?>
+                        <?php if (!is_array($hit)) { continue; } ?>
+                        <?php include __DIR__ . '/partials/hit-card.phtml'; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+</section>

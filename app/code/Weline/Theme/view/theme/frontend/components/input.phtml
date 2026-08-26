@@ -92,19 +92,19 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
 <style>
 .<?= $wc ?> {
     display: grid;
-    gap: var(--weline-space-2, 8px);
-    margin-bottom: var(--weline-space-4, 16px);
+    gap: var(--weline-space-2);
+    margin-bottom: var(--weline-space-4);
 }
 
 .<?= $wc ?> .input-label {
     color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-sm, 13px);
-    font-weight: var(--weline-font-weight-medium, 500);
+    font-size: var(--weline-font-size-sm);
+    font-weight: var(--weline-font-weight-medium);
 }
 
 .<?= $wc ?> .required-mark {
     color: var(--weline-theme-danger);
-    margin-left: var(--weline-space-1, 4px);
+    margin-left: var(--weline-space-1);
 }
 
 .<?= $wc ?> .input-wrapper {
@@ -113,29 +113,29 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
 
 .<?= $wc ?> .input-icon {
     position: absolute;
-    left: var(--weline-space-3, 12px);
+    left: var(--weline-space-3);
     top: 50%;
     transform: translateY(-50%);
     color: var(--weline-theme-text-muted);
 }
 
 .<?= $wc ?> .input-wrapper:has(.input-icon) .input-control {
-    padding-left: calc(var(--weline-space-3, 12px) + 1.25rem);
+    padding-left: calc(var(--weline-space-3) + var(--weline-space-5));
 }
 
 .<?= $wc ?> .input-control {
     width: 100%;
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md, 8px);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
     color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-base, 15px);
+    font-size: var(--weline-font-size-base);
 }
 
 .<?= $wc ?> .input-control:focus {
-    outline: 2px solid color-mix(in srgb, var(--weline-theme-primary) 35%, transparent);
-    outline-offset: 1px;
+    outline: var(--spacing-0_5) solid color-mix(in srgb, var(--weline-theme-primary) 35%, transparent);
+    outline-offset: var(--spacing-px);
 }
 
 .<?= $wc ?> .input-control:disabled {
@@ -146,12 +146,12 @@ $rootClass = trim($wc . ' w-form-group' . ($error !== '' ? ' has-error' : ''));
 
 .<?= $wc ?> .input-help {
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-xs, 11px);
+    font-size: var(--weline-font-size-xs);
 }
 
 .<?= $wc ?> .input-error {
     color: var(--weline-theme-danger);
-    font-size: var(--weline-font-size-xs, 11px);
+    font-size: var(--weline-font-size-xs);
 }
 
 .<?= $wc ?>.has-error .input-control {

@@ -19,10 +19,12 @@ class Region extends FrontendController
     public function getList(): string
     {
         try {
+            $countryCode = strtoupper(trim((string)$this->request->getParam('country_code', '')));
+
             return $this->json([
                 'success' => true,
                 'message' => __('Get regions success'),
-                'data' => $this->regionService->getAllActiveList(),
+                'data' => $this->regionService->getAllActiveList($countryCode !== '' ? $countryCode : null),
             ]);
         } catch (\Throwable $throwable) {
             return $this->json([

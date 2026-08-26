@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\FileManager\Extends\Module\Weline_Widget\Integration;
+namespace Weline\FileManager\extends\module\Weline_Widget\Integration;
 
 use Weline\FileManager\Api\Data\FileAccessContext;
 use Weline\FileManager\Api\Data\ImageUsage;

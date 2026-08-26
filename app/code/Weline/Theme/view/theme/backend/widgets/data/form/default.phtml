@@ -285,45 +285,45 @@ $renderField = function($field) use ($formData, $layout) {
    ============================================ */
 
 .backend-data-form-container {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-md, 8px);
-    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+    background: var(--backend-color-card-bg);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius-md);
+    box-shadow: var(--backend-card-shadow);
     overflow: hidden;
 }
 
 /* 头部 */
 .backend-data-form-header {
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
 }
 
 .backend-data-form-title {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: var(--token-size-1-1rem);
     font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
+    color: var(--backend-color-text-primary);
 }
 
 /* 表单主体 */
 .backend-data-form-body {
-    padding: var(--backend-spacing-lg, 24px);
+    padding: var(--backend-spacing-lg);
 }
 
 /* 表单组 */
 .backend-form-group {
-    margin-bottom: var(--backend-spacing-md, 20px);
+    margin-bottom: var(--backend-spacing-md);
 }
 
 .backend-form-group--horizontal {
     display: flex;
     align-items: flex-start;
-    gap: var(--backend-spacing-md, 16px);
+    gap: var(--backend-spacing-md);
 }
 
 .backend-form-group--horizontal .backend-form-label {
-    flex: 0 0 150px;
-    padding-top: 8px;
+    flex: 0 0 var(--size-panel-150);
+    padding-top: var(--spacing-sm);
     text-align: right;
 }
 
@@ -334,15 +334,15 @@ $renderField = function($field) use ($formData, $layout) {
 /* 标签 */
 .backend-form-label {
     display: block;
-    margin-bottom: var(--backend-spacing-xs, 6px);
+    margin-bottom: var(--backend-spacing-xs);
     font-weight: 500;
-    font-size: 0.875rem;
-    color: var(--backend-color-text-primary, #212529);
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-primary);
 }
 
 .backend-form-required {
-    color: var(--backend-color-danger, #f46a6a);
-    margin-left: 2px;
+    color: var(--backend-color-danger);
+    margin-left: var(--spacing-0_5);
 }
 
 /* 控件容器 */
@@ -353,34 +353,34 @@ $renderField = function($field) use ($formData, $layout) {
 /* 输入控件 */
 .backend-form-control {
     width: 100%;
-    padding: var(--backend-spacing-sm, 10px) var(--backend-spacing-md, 14px);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius, 6px);
-    background: var(--backend-color-input-bg, #fff);
-    color: var(--backend-color-text-primary, #212529);
-    font-size: 0.9375rem;
+    padding: var(--backend-spacing-sm) var(--backend-spacing-md);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
+    border-radius: var(--backend-border-radius);
+    background: var(--backend-color-input-bg);
+    color: var(--backend-color-text-primary);
+    font-size: var(--font-size-sm);
     transition: all 0.2s ease;
 }
 
 .backend-form-control:focus {
     outline: none;
-    border-color: var(--backend-color-primary, #556ee6);
-    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.1));
+    border-color: var(--backend-color-primary);
+    box-shadow: var(--backend-focus-ring);
 }
 
 .backend-form-control:disabled {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
+    background: var(--backend-color-bg-secondary);
     cursor: not-allowed;
     opacity: 0.7;
 }
 
 .backend-form-control::placeholder {
-    color: var(--backend-color-text-tertiary, #adb5bd);
+    color: var(--backend-color-text-tertiary);
 }
 
 /* 文本域 */
 .backend-form-textarea {
-    min-height: 100px;
+    min-height: var(--token-size-100px);
     resize: vertical;
 }
 
@@ -389,8 +389,8 @@ $renderField = function($field) use ($formData, $layout) {
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 12px center;
-    padding-right: 40px;
+    background-position: right var(--weline-space-3) center;
+    padding-right: var(--size-control-md);
 }
 
 /* 复选框 & 单选框 */
@@ -398,37 +398,37 @@ $renderField = function($field) use ($formData, $layout) {
 .backend-form-radio {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm, 8px);
+    gap: var(--backend-spacing-sm);
     cursor: pointer;
-    font-size: 0.9375rem;
-    color: var(--backend-color-text-primary, #212529);
+    font-size: var(--font-size-sm);
+    color: var(--backend-color-text-primary);
 }
 
 .backend-form-checkbox input,
 .backend-form-radio input {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--backend-color-primary, #556ee6);
+    width: var(--font-size-lg);
+    height: var(--font-size-lg);
+    accent-color: var(--backend-color-primary);
 }
 
 .backend-form-radio-group {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--backend-spacing-md, 16px);
+    gap: var(--backend-spacing-md);
 }
 
 /* 提示文字 */
 .backend-form-hint {
-    margin-top: var(--backend-spacing-xs, 4px);
-    font-size: 0.8125rem;
-    color: var(--backend-color-text-tertiary, #adb5bd);
+    margin-top: var(--backend-spacing-xs);
+    font-size: var(--font-size-13);
+    color: var(--backend-color-text-tertiary);
 }
 
 /* 错误信息 */
 .backend-form-error {
-    margin-top: var(--backend-spacing-xs, 4px);
-    font-size: 0.8125rem;
-    color: var(--backend-color-danger, #f46a6a);
+    margin-top: var(--backend-spacing-xs);
+    font-size: var(--font-size-13);
+    color: var(--backend-color-danger);
     display: none;
 }
 
@@ -437,12 +437,12 @@ $renderField = function($field) use ($formData, $layout) {
 }
 
 .backend-form-control.is-invalid {
-    border-color: var(--backend-color-danger, #f46a6a);
+    border-color: var(--backend-color-danger);
 }
 
 /* 字段集 */
 .backend-form-fieldset {
-    margin: 0 0 var(--backend-spacing-lg, 24px);
+    margin: 0 0 var(--backend-spacing-lg);
     padding: 0;
     border: none;
 }
@@ -450,14 +450,14 @@ $renderField = function($field) use ($formData, $layout) {
 .backend-form-legend {
     display: flex;
     align-items: center;
-    gap: var(--backend-spacing-sm, 8px);
+    gap: var(--backend-spacing-sm);
     width: 100%;
-    padding: var(--backend-spacing-sm, 12px) 0;
-    margin-bottom: var(--backend-spacing-md, 16px);
-    font-size: 1rem;
+    padding: var(--backend-spacing-sm) 0;
+    margin-bottom: var(--backend-spacing-md);
+    font-size: var(--font-size-base);
     font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    color: var(--backend-color-text-primary);
+    border-bottom: var(--border-width-thin) solid var(--backend-color-border-light);
 }
 
 .backend-form-fieldset--collapsible .backend-form-legend {
@@ -465,7 +465,7 @@ $renderField = function($field) use ($formData, $layout) {
 }
 
 .backend-form-fieldset--collapsible .backend-form-legend:hover {
-    color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-primary);
 }
 
 .backend-form-fieldset-icon {
@@ -484,21 +484,21 @@ $renderField = function($field) use ($formData, $layout) {
 /* 表单底部 */
 .backend-data-form-footer {
     display: flex;
-    gap: var(--backend-spacing-sm, 12px);
-    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
-    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
+    gap: var(--backend-spacing-sm);
+    padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    border-top: var(--border-width-thin) solid var(--backend-color-border-light);
+    background: var(--backend-color-bg-secondary);
 }
 
 /* 按钮 */
 .backend-form-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--backend-spacing-xs, 6px);
-    padding: var(--backend-spacing-sm, 10px) var(--backend-spacing-lg, 20px);
+    gap: var(--backend-spacing-xs);
+    padding: var(--backend-spacing-sm) var(--backend-spacing-lg);
     border: none;
-    border-radius: var(--backend-border-radius, 6px);
-    font-size: 0.9375rem;
+    border-radius: var(--backend-border-radius);
+    font-size: var(--font-size-sm);
     font-weight: 500;
     cursor: pointer;
     text-decoration: none;
@@ -506,23 +506,23 @@ $renderField = function($field) use ($formData, $layout) {
 }
 
 .backend-form-btn--primary {
-    background: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-text-inverse, #fff);
+    background: var(--backend-color-primary);
+    color: var(--backend-color-text-inverse);
 }
 
 .backend-form-btn--primary:hover {
-    background: var(--backend-color-primary-hover, #4857d4);
+    background: var(--backend-color-primary-hover);
 }
 
 .backend-form-btn--secondary {
-    background: var(--backend-color-card-bg, #fff);
-    color: var(--backend-color-text-secondary, #6c757d);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    background: var(--backend-color-card-bg);
+    color: var(--backend-color-text-secondary);
+    border: var(--border-width-thin) solid var(--backend-color-border-default);
 }
 
 .backend-form-btn--secondary:hover {
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-primary, #212529);
+    background: var(--backend-color-bg-tertiary);
+    color: var(--backend-color-text-primary);
 }
 
 /* 内联布局 */
@@ -530,7 +530,7 @@ $renderField = function($field) use ($formData, $layout) {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: var(--backend-spacing-md, 16px);
+    gap: var(--backend-spacing-md);
 }
 
 .backend-data-form--inline .backend-form-group {

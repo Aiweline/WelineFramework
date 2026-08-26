@@ -57,20 +57,33 @@ final class ProductCopyService
 
     private int $seq = 1000;
 
+    /** @var (\Closure(string, int, int): bool)|null */
+    private readonly ?\Closure $copyAuthorization;
+
     public function __construct(
         private readonly ?InventoryCatalogCopyCapabilityInterface $inventory = null,
         bool $useMemory = false,
         private readonly ?ProductCopyOperationRepository $operations = null,
         private readonly ?ProductCopyDurableCatalogAdapter $catalogAdapter = null,
+        ?callable $copyAuthorization = null,
     ) {
+        $this->copyAuthorization = $copyAuthorization === null
+            ? null
+            : \Closure::fromCallable($copyAuthorization);
         if ($useMemory) {
             $this->book = [];
         }
     }
 
-    public static function forTesting(?InventoryCatalogCopyCapabilityInterface $inventory = null): self
-    {
-        return new self($inventory ?? InventoryCatalogCopyCapability::forTesting(), useMemory: true);
+    public static function forTesting(
+        ?InventoryCatalogCopyCapabilityInterface $inventory = null,
+        ?callable $copyAuthorization = null,
+    ): self {
+        return new self(
+            $inventory ?? InventoryCatalogCopyCapability::forTesting(),
+            useMemory: true,
+            copyAuthorization: $copyAuthorization ?? static fn(string $_uuid, int $_source, int $_target): bool => true,
+        );
     }
 
     public function inventory(): ?InventoryCatalogCopyCapabilityInterface
@@ -102,10 +115,12 @@ final class ProductCopyService
         ?int $offerId = null,
         int $priceMinor = 0,
         array $mediaIds = [],
+        ?string $globalProductUuid = null,
     ): void {
         $this->ensureWebsite($websiteId);
         $this->book[$websiteId]['products'][$productId] = [
             'product_id' => $productId,
+            'global_product_uuid' => trim((string)$globalProductUuid) ?: ('product-' . $websiteId . '-' . $productId),
             'sku' => $sku,
             'name' => $name,
             'offer_ids' => $offerId !== null ? [$offerId] : [],
@@ -189,10 +204,12 @@ final class ProductCopyService
         }
         $draft->categoryIds = $this->normalizePositiveIds($draft->categoryIds);
         $draft->excludedCategoryIds = $this->normalizePositiveIds($draft->excludedCategoryIds);
+        $draft->targetStoreIds = $draft->selectedTargetStoreIds();
 
-        if ($draft->targetWebsiteId < 0 || $draft->targetStoreId <= 0) {
-            throw new \InvalidArgumentException(__('target website_id>=0 且 target store_id>0'));
+        if ($draft->targetWebsiteId < 0 || $draft->targetStoreIds === []) {
+            throw new \InvalidArgumentException(__('target website_id>=0 且至少选择一个 target Store'));
         }
+        $draft->targetStoreId = $draft->targetStoreIds[0];
 
         if ($draft->entry === CopyDraft::ENTRY_BLANK) {
             $draft->sourceWebsiteId = null;
@@ -205,7 +222,7 @@ final class ProductCopyService
                 throw new \InvalidArgumentException(__('source website_id 须 >=0'));
             }
             $draft->sourceStoreId = 0;
-        } else { // store_inherit
+        } else {
             if ($draft->sourceWebsiteId === null
                 || $draft->sourceWebsiteId < 0
                 || $draft->sourceStoreId === null
@@ -214,7 +231,7 @@ final class ProductCopyService
                 throw new \InvalidArgumentException(__('store_inherit 需要 source website/store'));
             }
             if ($draft->sourceWebsiteId === $draft->targetWebsiteId
-                && $draft->sourceStoreId === $draft->targetStoreId
+                && in_array($draft->sourceStoreId, $draft->targetStoreIds, true)
             ) {
                 throw new \InvalidArgumentException(__('source 与 target Store 不能相同'));
             }
@@ -270,7 +287,8 @@ final class ProductCopyService
                 default => null,
             };
         }
-        $willCopyQty = in_array(CopyDraft::PKG_INVENTORY, $draft->fieldPackages, true) && $draft->inventoryCopyQty;
+        $willCopyQty = in_array(CopyDraft::PKG_INVENTORY, $draft->fieldPackages, true)
+            && $draft->inventoryCopyQty;
 
         return new CopyPreview(
             draftId: $draftId,
@@ -284,6 +302,7 @@ final class ProductCopyService
             inventoryWillCopyQty: $willCopyQty,
             items: $plan['products'],
             warnings: $plan['warnings'],
+            targetStoreIds: $draft->selectedTargetStoreIds(),
         );
     }
 
@@ -322,6 +341,17 @@ final class ProductCopyService
             );
         }
 
+        try {
+            $this->buildPlan($draft);
+        } catch (ProductV2ConflictException $exception) {
+            return new CopyCommitResult(
+                draftId: $draftId,
+                success: false,
+                errorCode: $exception->errorCode,
+                message: $exception->getMessage(),
+            );
+        }
+
         // Per-target transaction: snapshot + apply; on failure restore (TEST: one target)
         $targetWid = $draft->targetWebsiteId;
         $snapshot = $this->snapshotWebsite($targetWid);
@@ -341,7 +371,7 @@ final class ProductCopyService
             ];
 
             if ($draft->entry === CopyDraft::ENTRY_BLANK) {
-                $audit[] = ['op' => 'blank', 'target_store_id' => $draft->targetStoreId];
+                $audit[] = ['op' => 'blank', 'target_store_ids' => $draft->selectedTargetStoreIds()];
                 $draft->state = CopyDraft::STATE_COMMITTED;
                 $this->drafts[$draftId] = $draft;
                 return $this->recordCommitReceipt(
@@ -384,22 +414,53 @@ final class ProductCopyService
                 }
 
                 if ($action === 'skip') {
+                    $targetPid = (int)$row['target_product_id'];
+                    foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                        $this->selectStoreProduct($targetWid, $targetStoreId, $targetPid, true);
+                    }
+                    foreach ($srcProduct['offer_ids'] as $srcOid) {
+                        if (!$this->isSourceOfferSelected($draft, (int)$srcOid)) {
+                            continue;
+                        }
+                        $tgtOid = $this->mapOffer(
+                            $draft,
+                            (int)$srcOid,
+                            $targetPid,
+                            createIfMissing: false,
+                            copySelectedPrice: false,
+                        );
+                        if ($tgtOid !== null) {
+                            foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                                $this->selectStoreOffer($targetWid, $targetStoreId, $tgtOid, true);
+                            }
+                            $this->applyInventory($draft, (int)$srcOid, $tgtOid, $requestHash, $counts, $audit);
+                        }
+                    }
                     $counts['products_skipped']++;
-                    $audit[] = ['op' => 'product_skip', 'source_product_id' => $srcPid, 'target_product_id' => $row['target_product_id']];
+                    $audit[] = [
+                        'op' => 'product_skip',
+                        'source_product_id' => $srcPid,
+                        'target_product_id' => $targetPid,
+                        'target_store_ids' => $draft->selectedTargetStoreIds(),
+                    ];
                     continue;
                 }
 
                 if ($action === 'update') {
                     $targetPid = (int)$row['target_product_id'];
                     $this->applyFieldPackages($draft, $srcPid, $targetPid, update: true);
-                    $this->selectStoreProduct($targetWid, $draft->targetStoreId, $targetPid, true);
+                    foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                        $this->selectStoreProduct($targetWid, $targetStoreId, $targetPid, true);
+                    }
                     foreach ($srcProduct['offer_ids'] as $srcOid) {
                         if (!$this->isSourceOfferSelected($draft, (int)$srcOid)) {
                             continue;
                         }
                         $tgtOid = $this->mapOffer($draft, (int)$srcOid, $targetPid, createIfMissing: false);
                         if ($tgtOid !== null) {
-                            $this->selectStoreOffer($targetWid, $draft->targetStoreId, $tgtOid, true);
+                            foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                                $this->selectStoreOffer($targetWid, $targetStoreId, $tgtOid, true);
+                            }
                             $this->applyInventory($draft, (int)$srcOid, $tgtOid, $requestHash, $counts, $audit);
                         }
                     }
@@ -424,6 +485,7 @@ final class ProductCopyService
                     $targetPid = ++$this->seq;
                     $this->book[$targetWid]['products'][$targetPid] = [
                         'product_id' => $targetPid,
+                        'global_product_uuid' => (string)$srcProduct['global_product_uuid'],
                         'sku' => (string)$srcProduct['sku'],
                         'name' => (string)$srcProduct['name'],
                         'offer_ids' => [],
@@ -433,7 +495,9 @@ final class ProductCopyService
                 }
 
                 $this->applyFieldPackages($draft, $srcPid, $targetPid, update: false);
-                $this->selectStoreProduct($targetWid, $draft->targetStoreId, $targetPid, true);
+                foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                    $this->selectStoreProduct($targetWid, $targetStoreId, $targetPid, true);
+                }
 
                 foreach ($srcProduct['offer_ids'] as $srcOid) {
                     if (!$this->isSourceOfferSelected($draft, (int)$srcOid)) {
@@ -444,7 +508,9 @@ final class ProductCopyService
                         if ($draft->sourceWebsiteId !== $targetWid) {
                             $counts['offers_created']++;
                         }
-                        $this->selectStoreOffer($targetWid, $draft->targetStoreId, $tgtOid, true);
+                        foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                            $this->selectStoreOffer($targetWid, $targetStoreId, $tgtOid, true);
+                        }
                         $this->applyInventory($draft, (int)$srcOid, $tgtOid, $requestHash, $counts, $audit);
                     }
                 }
@@ -490,11 +556,16 @@ final class ProductCopyService
                 : $operation();
         } catch (\Throwable $e) {
             $this->restoreWebsite($targetWid, $snapshot);
+            $errorCode = $e instanceof ProductV2ConflictException
+                ? $e->errorCode
+                : 'copy_commit_failed';
             return new CopyCommitResult(
                 draftId: $draftId,
                 success: false,
-                errorCode: 'copy_commit_failed',
-                message: (string)__('复制提交失败'),
+                errorCode: $errorCode,
+                message: $e instanceof ProductV2ConflictException
+                    ? $e->getMessage()
+                    : (string)__('复制提交失败'),
             );
         }
     }
@@ -664,6 +735,8 @@ final class ProductCopyService
         $products = [];
         foreach (array_keys($productIds) as $pid) {
             $p = $this->book[$srcWid]['products'][$pid];
+            $productUuid = trim((string)($p['global_product_uuid'] ?? ''));
+            $this->assertCopyAuthorized($productUuid, $srcWid, $draft->targetWebsiteId);
             foreach ($p['offer_ids'] as $oid) {
                 if ($this->isSourceOfferSelected($draft, (int)$oid)) {
                     $offers[] = (int)$oid;
@@ -687,6 +760,7 @@ final class ProductCopyService
             }
             $products[] = [
                 'source_product_id' => (int)$pid,
+                'global_product_uuid' => $productUuid,
                 'sku' => (string)$p['sku'],
                 'action' => $action,
                 'target_product_id' => $targetPid,
@@ -700,6 +774,38 @@ final class ProductCopyService
             'links' => $links,
             'warnings' => [],
         ];
+    }
+
+    private function assertCopyAuthorized(
+        string $productUuid,
+        int $sourceWebsiteId,
+        int $targetWebsiteId,
+    ): void {
+        if ($sourceWebsiteId === $targetWebsiteId) {
+            return;
+        }
+        if ($productUuid === '') {
+            throw new ProductV2ConflictException(
+                'product_copy_identity_missing',
+                (string)__('待复制商品缺少全局身份'),
+            );
+        }
+
+        $allowed = $this->copyAuthorization !== null
+            ? (bool)($this->copyAuthorization)($productUuid, $sourceWebsiteId, $targetWebsiteId)
+            : ObjectManager::getInstance(ProductGovernanceService::class)
+                ->canCopy($productUuid, $targetWebsiteId);
+        if (!$allowed) {
+            throw new ProductV2ConflictException(
+                'product_copy_not_authorized',
+                (string)__('目标 Website 未获得该商品的复制授权'),
+                [
+                    'global_product_uuid' => $productUuid,
+                    'source_website_id' => $sourceWebsiteId,
+                    'target_website_id' => $targetWebsiteId,
+                ],
+            );
+        }
     }
 
     /** @return list<int> */
@@ -782,8 +888,13 @@ final class ProductCopyService
         unset($update);
     }
 
-    private function mapOffer(CopyDraft $draft, int $srcOid, int $targetPid, bool $createIfMissing): ?int
-    {
+    private function mapOffer(
+        CopyDraft $draft,
+        int $srcOid,
+        int $targetPid,
+        bool $createIfMissing,
+        bool $copySelectedPrice = true,
+    ): ?int {
         $srcWid = (int)$draft->sourceWebsiteId;
         $tgtWid = $draft->targetWebsiteId;
         $src = $this->book[$srcWid]['offers'][$srcOid] ?? null;
@@ -791,13 +902,18 @@ final class ProductCopyService
             return null;
         }
         if ($srcWid === $tgtWid) {
-            $this->copyPrice($draft, $srcOid, $srcOid);
+            if ($copySelectedPrice) {
+                $this->copyPrice($draft, $srcOid, $srcOid);
+            }
             return $srcOid;
         }
-        // find existing mapped offer by sku on target product
-        foreach ($this->book[$tgtWid]['offers'] as $oid => $o) {
-            if ((int)$o['product_id'] === $targetPid && (string)$o['sku'] === (string)$src['sku']) {
-                $this->copyPrice($draft, $srcOid, (int)$oid);
+        foreach ($this->book[$tgtWid]['offers'] as $oid => $offer) {
+            if ((int)$offer['product_id'] === $targetPid
+                && (string)$offer['sku'] === (string)$src['sku']
+            ) {
+                if ($copySelectedPrice) {
+                    $this->copyPrice($draft, $srcOid, (int)$oid);
+                }
                 return (int)$oid;
             }
         }
@@ -811,7 +927,9 @@ final class ProductCopyService
             'sku' => $src['sku'],
         ];
         $this->book[$tgtWid]['products'][$targetPid]['offer_ids'][] = $newOid;
-        $this->copyPrice($draft, $srcOid, $newOid);
+        if ($copySelectedPrice) {
+            $this->copyPrice($draft, $srcOid, $newOid);
+        }
         return $newOid;
     }
 
@@ -821,15 +939,17 @@ final class ProductCopyService
             return;
         }
         $sourceWebsiteId = (int)$draft->sourceWebsiteId;
-        $sourceStoreId = $draft->entry === CopyDraft::ENTRY_STORE_INHERIT
-            ? (int)$draft->sourceStoreId
-            : 0;
-        $price = $this->book[$sourceWebsiteId]['prices'][$sourceOfferId][$sourceStoreId]
-            ?? $this->book[$sourceWebsiteId]['prices'][$sourceOfferId][0]
+        $websitePrice = $this->book[$sourceWebsiteId]['prices'][$sourceOfferId][0]
             ?? ['cleared' => false, 'value' => 0];
-        $this->book[$draft->targetWebsiteId]['prices'][$targetOfferId][$draft->targetStoreId] = $price;
+        $effectivePrice = $draft->entry === CopyDraft::ENTRY_STORE_INHERIT
+            ? ($this->book[$sourceWebsiteId]['prices'][$sourceOfferId][(int)$draft->sourceStoreId]
+                ?? $websitePrice)
+            : $websitePrice;
+        foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+            $this->book[$draft->targetWebsiteId]['prices'][$targetOfferId][$targetStoreId] = $effectivePrice;
+        }
         if ($sourceWebsiteId !== $draft->targetWebsiteId) {
-            $this->book[$draft->targetWebsiteId]['prices'][$targetOfferId][0] = $price;
+            $this->book[$draft->targetWebsiteId]['prices'][$targetOfferId][0] = $websitePrice;
         }
     }
 
@@ -852,28 +972,32 @@ final class ProductCopyService
         $srcStore = $draft->entry === CopyDraft::ENTRY_STORE_INHERIT ? (int)$draft->sourceStoreId : 0;
         $qty = 0;
         if ($draft->inventoryCopyQty) {
-            $avail = $this->inventory->getAvailability($srcWid, $srcStore, $srcOid);
-            $qty = $avail->onHandMinor;
-            $counts['inventory_copied']++;
-        } else {
-            $counts['inventory_zeroed']++;
+            $qty = $this->inventory->getAvailability($srcWid, $srcStore, $srcOid)->onHandMinor;
         }
-        $idem = 'copy:' . $draft->draftId . ':offer:' . $tgtOid;
-        $this->inventory->ensureStock($draft->targetWebsiteId, $draft->targetStoreId, $tgtOid);
-        $this->inventory->setOnHand(
-            $draft->targetWebsiteId,
-            $draft->targetStoreId,
-            $tgtOid,
-            $qty,
-            $idem,
-            hash('sha256', $requestHash . ':' . $idem),
-        );
-        $audit[] = [
-            'op' => 'inventory',
-            'offer_id' => $tgtOid,
-            'on_hand_minor' => $qty,
-            'copied' => $draft->inventoryCopyQty,
-        ];
+        foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+            if ($draft->inventoryCopyQty) {
+                $counts['inventory_copied']++;
+            } else {
+                $counts['inventory_zeroed']++;
+            }
+            $idem = 'copy:' . $draft->draftId . ':store:' . $targetStoreId . ':offer:' . $tgtOid;
+            $this->inventory->ensureStock($draft->targetWebsiteId, $targetStoreId, $tgtOid);
+            $this->inventory->setOnHand(
+                $draft->targetWebsiteId,
+                $targetStoreId,
+                $tgtOid,
+                $qty,
+                $idem,
+                hash('sha256', $requestHash . ':' . $idem),
+            );
+            $audit[] = [
+                'op' => 'inventory',
+                'store_id' => $targetStoreId,
+                'offer_id' => $tgtOid,
+                'on_hand_minor' => $qty,
+                'copied' => $draft->inventoryCopyQty,
+            ];
+        }
     }
 
     private function selectStoreProduct(int $websiteId, int $storeId, int $productId, bool $selected): void
@@ -892,9 +1016,7 @@ final class ProductCopyService
     {
         return implode(':', [
             (int)$draft->sourceWebsiteId,
-            (int)($draft->sourceStoreId ?? 0),
             $sourceProductId,
-            $draft->targetStoreId,
         ]);
     }
 

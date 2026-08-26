@@ -48,7 +48,7 @@ $this->assign('meta', $meta);
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no">
@@ -128,8 +128,12 @@ $this->assign('title', $title);
                                         {{meta.filter_sidebar}}
                                     <elseif condition="filter_sidebar"/>
                                         {{filter_sidebar}}
+                                    <else/>
+                                        <?php
+                                        // 必须运行时 getHook：禁止 w:widget 在布局编译期把 filters-sidebar 输出写死（会串分类）。
+                                        echo $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar', true);
+                                        ?>
                                     </if>
-                                    <w:widget type="sidebar" name="category-filters"/>
                                     <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
                                 </w:slot>
                             </div>
@@ -148,6 +152,7 @@ $this->assign('title', $title);
                                 position="content"
                                 class="category-layout__products">
                             <w:hook>
+                                Weline_Product::frontend::layouts::category::products-content
                                 WeShop_Catalog::frontend::layouts::category::products-content
                                 <else/>
                                 <if condition="meta.content">
@@ -217,7 +222,7 @@ $this->assign('title', $title);
 
             <w:slot id="category-recommendations"
                     name="分类推荐区"
-                    accept="layout-category-recommendations,featured-products,bestsellers,new-arrivals,category-grid,product-carousel"
+                    accept="layout-category-recommendations,recommended-products,featured-products,bestsellers,new-arrivals,product-carousel"
                     multiple="true"
                     position="content"
                     wrapper="section"
@@ -252,33 +257,42 @@ $this->assign('title', $title);
        BEM 命名规范
        ======================================== */
 
-    /* ---- 页面主体 ---- */
+    .category-layout__recommendations {
+        width: 100%;
+        max-width: var(--weline-layout-content-max-width, 1400px);
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline, 1.5rem) var(--spacing-5, 1.25rem);
+        box-sizing: border-box;
+    }
+
+    /* ---- 页面主体（壳层背景由主题 frontend.css body-bg 控制，布局勿覆盖） ---- */
+    /* 本页未必加载完整 spacing token；所有间距给 rem 兜底，避免 gap/padding/max-width 塌成 normal/0/none */
     .category-layout__main {
         width: 100%;
-        padding: var(--spacing-4, 2rem) 0 var(--spacing-6, 3rem);
+        padding: var(--spacing-3, 0.75rem) 0 var(--spacing-5, 1.25rem);
     }
 
     .category-layout__container {
         width: 100%;
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+        max-width: var(--weline-layout-content-max-width, 1400px);
         margin: 0 auto;
         display: grid;
-        grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
-        gap: var(--spacing-6, 1.5rem);
-        align-items: flex-start;
-        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: var(--spacing-4, 1rem);
+        align-items: start;
+        padding: 0 var(--weline-layout-content-padding-inline, 1.5rem);
         box-sizing: border-box;
     }
 
-    /* ---- 筛选侧边栏 ---- */
+    /* ---- 筛选侧边栏（Amazon 密度：轻边框、少阴影） ---- */
     .category-layout__sidebar {
-        background-color: var(--color-bg-primary);
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-        border-radius: var(--radius-lg, 12px);
-        box-shadow: var(--weline-theme-shadow-sm);
+        background-color: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
         position: sticky;
-        top: calc(var(--header-height, 70px) + var(--spacing-4, 1rem));
-        max-height: calc(100vh - var(--header-height, 70px) - var(--spacing-8, 4rem));
+        top: calc(var(--header-height, 64px) + var(--spacing-3, 0.75rem));
+        max-height: calc(100vh - var(--header-height, 64px) - var(--spacing-6, 1.5rem));
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -287,7 +301,7 @@ $this->assign('title', $title);
         display: none;
         align-items: center;
         justify-content: space-between;
-        padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
+        padding: var(--spacing-4) var(--spacing-5);
         border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         background-color: var(--color-bg-primary);
         position: sticky;
@@ -296,19 +310,19 @@ $this->assign('title', $title);
     }
 
     .category-layout__sidebar-title {
-        font-size: var(--font-size-lg, 1.125rem);
-        font-weight: var(--font-weight-semibold, 600);
+        font-size: var(--font-size-lg);
+        font-weight: var(--font-weight-semibold);
         margin: 0;
         color: var(--color-text-primary);
     }
 
     .category-layout__sidebar-close {
-        width: 36px;
-        height: 36px;
+        width: var(--size-control-sm);
+        height: var(--size-control-sm);
         padding: 0;
         background: none;
         border: none;
-        border-radius: var(--radius-md, 8px);
+        border-radius: var(--radius-md);
         cursor: pointer;
         color: var(--color-text-secondary);
         display: flex;
@@ -323,22 +337,22 @@ $this->assign('title', $title);
     }
 
     .category-layout__sidebar-content {
-        padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
+        padding: 0;
     }
 
     /* ---- 筛选切换按钮（移动端） ---- */
     .category-layout__filter-toggle {
         display: none;
         align-items: center;
-        gap: var(--spacing-2, 0.5rem);
-        padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
+        gap: var(--spacing-2);
+        padding: var(--spacing-2) var(--spacing-4);
         background-color: var(--color-bg-primary);
         border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-        border-radius: var(--radius-full, 9999px);
+        border-radius: var(--radius-full);
         cursor: pointer;
         color: var(--color-text-primary);
-        font-size: var(--font-size-sm, 0.875rem);
-        font-weight: var(--font-weight-medium, 500);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
         box-shadow: var(--weline-theme-shadow-md);
         transition: all 0.2s ease;
     }
@@ -355,20 +369,20 @@ $this->assign('title', $title);
     }
 
     .category-layout__filter-icon {
-        width: 18px;
-        height: 18px;
+        width: var(--font-size-lg);
+        height: var(--font-size-lg);
         flex-shrink: 0;
     }
 
     .category-layout__filter-badge {
-        min-width: 18px;
-        height: 18px;
-        padding: 0 4px;
+        min-width: var(--font-size-lg);
+        height: var(--font-size-lg);
+        padding: 0 var(--spacing-xs);
         background-color: var(--color-error);
         color: var(--color-text-light);
-        border-radius: var(--radius-full, 9999px);
+        border-radius: var(--radius-full);
         font-size: var(--weline-layout-font-size-xs);
-        font-weight: var(--font-weight-semibold, 600);
+        font-weight: var(--font-weight-semibold);
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -379,7 +393,7 @@ $this->assign('title', $title);
         position: fixed;
         inset: 0;
         background-color: color-mix(in srgb, var(--weline-theme-text) 50%, transparent);
-        z-index: var(--z-index-overlay, 998);
+        z-index: var(--z-index-overlay);
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -398,16 +412,16 @@ $this->assign('title', $title);
     .category-layout__pagination {
         display: flex;
         justify-content: center;
-        margin-top: var(--spacing-6, 2rem);
+        margin-top: var(--spacing-6);
     }
 
     .category-pagination {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-4, 1rem);
-        padding: 0.75rem 1rem;
+        gap: var(--spacing-4);
+        padding: var(--weline-space-3) var(--spacing-md);
         border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-        border-radius: var(--radius-lg, 12px);
+        border-radius: var(--radius-lg);
         background: var(--color-bg-primary);
         box-shadow: var(--weline-theme-shadow-sm);
     }
@@ -416,13 +430,13 @@ $this->assign('title', $title);
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 5rem;
-        padding: 0.5rem 0.9rem;
+        min-width: var(--spacing-5rem);
+        padding: var(--spacing-sm) var(--spacing-0_9);
         border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--weline-layout-radius-full);
         color: var(--color-text-primary);
-        font-size: var(--font-size-sm, 0.875rem);
-        font-weight: var(--font-weight-semibold, 600);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
         text-decoration: none;
         transition: border-color 0.2s ease, color 0.2s ease;
     }
@@ -439,7 +453,7 @@ $this->assign('title', $title);
 
     .category-pagination__status {
         color: var(--color-text-secondary);
-        font-size: var(--font-size-sm, 0.875rem);
+        font-size: var(--font-size-sm);
         white-space: nowrap;
     }
 
@@ -448,7 +462,7 @@ $this->assign('title', $title);
     }
 
     .category-layout__products > * + * {
-        margin-top: var(--spacing-8, 2.75rem);
+        margin-top: var(--spacing-8);
     }
 
     /* ---- 占位符 ---- */
@@ -457,8 +471,8 @@ $this->assign('title', $title);
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: var(--spacing-4, 1rem);
-        padding: var(--spacing-8, 4rem) var(--spacing-4, 1.5rem);
+        gap: var(--spacing-4);
+        padding: var(--spacing-8) var(--spacing-4);
         text-align: center;
         color: var(--color-text-tertiary);
     }
@@ -468,15 +482,15 @@ $this->assign('title', $title);
     }
 
     .category-layout__placeholder-text {
-        font-size: var(--font-size-sm, 0.875rem);
+        font-size: var(--font-size-sm);
     }
 
     /* ---- 筛选栏内部样式（通用） ---- */
     .category-filter-mock {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-3, 0.75rem);
-        font-size: var(--font-size-sm, 0.875rem);
+        gap: var(--spacing-3);
+        font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
     }
 
@@ -484,17 +498,17 @@ $this->assign('title', $title);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: var(--spacing-1, 0.25rem);
+        margin-bottom: var(--spacing-1);
     }
 
     .category-filter-title {
-        font-size: var(--font-size-sm, 0.875rem);
-        font-weight: var(--font-weight-semibold, 600);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
         color: var(--color-text-primary);
     }
 
     .category-filter-clear {
-        font-size: var(--font-size-xs, 0.8rem);
+        font-size: var(--font-size-xs);
         color: var(--color-link);
         text-decoration: none;
         transition: color 0.2s ease;
@@ -508,21 +522,21 @@ $this->assign('title', $title);
     .category-filter-applied {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-1, 0.25rem);
-        margin-bottom: var(--spacing-1, 0.25rem);
+        gap: var(--spacing-1);
+        margin-bottom: var(--spacing-1);
     }
 
     .filter-chip {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-1, 0.25rem);
-        padding: 2px var(--spacing-2, 0.5rem);
-        border-radius: var(--radius-full, 9999px);
+        gap: var(--spacing-1);
+        padding: var(--spacing-0_5) var(--spacing-2);
+        border-radius: var(--radius-full);
         background-color: var(--color-accent-light);
         color: var(--color-accent);
         border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-accent-medium);
-        font-size: var(--font-size-xs, 0.75rem);
-        font-weight: var(--font-weight-medium, 500);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
         transition: all 0.2s ease;
     }
 
@@ -545,33 +559,33 @@ $this->assign('title', $title);
     }
 
     .category-filter-group {
-        padding-top: var(--spacing-3, 0.75rem);
-        margin-top: var(--spacing-3, 0.75rem);
+        padding-top: var(--spacing-3);
+        margin-top: var(--spacing-3);
         border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
     }
 
     .category-filter-group-title {
-        font-size: var(--font-size-sm, 0.875rem);
-        font-weight: var(--font-weight-semibold, 600);
-        margin-bottom: var(--spacing-1, 0.25rem);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        margin-bottom: var(--spacing-1);
         color: var(--color-text-primary);
     }
 
     .category-filter-list {
         list-style: none;
         padding: 0;
-        margin: var(--spacing-1, 0.25rem) 0 0;
+        margin: var(--spacing-1) 0 0;
     }
 
     .category-filter-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--spacing-1, 0.25rem) 0;
+        padding: var(--spacing-1) 0;
         color: var(--color-text-primary);
         text-decoration: none;
         cursor: pointer;
-        border-radius: var(--radius-sm, 4px);
+        border-radius: var(--radius-sm);
         transition: background-color 0.2s ease;
     }
 
@@ -582,22 +596,22 @@ $this->assign('title', $title);
     .category-filter-item__label {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-2, 0.5rem);
-        font-size: var(--font-size-sm, 0.875rem);
+        gap: var(--spacing-2);
+        font-size: var(--font-size-sm);
     }
 
     .category-filter-item__stars {
         color: var(--color-warning);
-        font-size: var(--font-size-xs, 0.8rem);
+        font-size: var(--font-size-xs);
     }
 
     .category-filter-item__count {
-        font-size: var(--font-size-xs, 0.75rem);
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
     }
 
-    /* ---- 响应式设计 ---- */
-    @media screen and (max-width: 992px) {
+    /* ---- 响应式设计：仅平板及以下收成抽屉，桌面保持侧栏+网格 ---- */
+    @media screen and (max-width: 900px) {
         .category-layout__container {
             grid-template-columns: 1fr;
             padding: 0 var(--spacing-4, 1rem);
@@ -608,24 +622,26 @@ $this->assign('title', $title);
             position: fixed;
             bottom: var(--spacing-6, 1.5rem);
             right: var(--spacing-4, 1rem);
-            z-index: var(--z-index-sticky, 997);
+            z-index: var(--z-index-sticky, 100);
         }
 
         .category-layout__sidebar {
             position: fixed;
             top: 0;
             left: 0;
-            width: min(85%, 360px);
+            width: min(85%, var(--size-panel-360));
             height: 100vh;
             max-height: 100vh;
             border-radius: var(--border-radius-none);
             border: none;
             border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-            z-index: var(--z-index-drawer, 999);
+            background-color: var(--color-bg-primary);
+            z-index: var(--z-index-drawer);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
             display: flex;
             flex-direction: column;
+            box-shadow: var(--weline-theme-shadow-md);
         }
 
         .category-layout__sidebar.is-open {
@@ -640,6 +656,7 @@ $this->assign('title', $title);
             flex: 1;
             overflow-y: auto;
             overscroll-behavior: contain;
+            padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
         }
 
         .category-layout__overlay {
@@ -649,7 +666,7 @@ $this->assign('title', $title);
 
     @media screen and (max-width: 768px) {
         .category-layout__main {
-            padding: var(--spacing-3, 1rem) 0 var(--spacing-8, 4rem);
+            padding: var(--spacing-3, 0.75rem) 0 var(--spacing-8, 2rem);
         }
 
         .category-layout__container {
@@ -658,7 +675,7 @@ $this->assign('title', $title);
         }
 
         .category-layout__products > * + * {
-            margin-top: var(--spacing-6, 1.75rem);
+            margin-top: var(--spacing-6, 1.5rem);
         }
 
         .category-layout__filter-toggle {
@@ -669,7 +686,7 @@ $this->assign('title', $title);
 
     @media screen and (max-width: 480px) {
         .category-layout__main {
-            padding: var(--spacing-2, 0.5rem) 0 var(--spacing-7, 3.5rem);
+            padding: var(--spacing-2, 0.5rem) 0 var(--spacing-7, 1.75rem);
         }
 
         .category-layout__container {
@@ -683,8 +700,8 @@ $this->assign('title', $title);
 
         .category-layout__filter-toggle {
             bottom: var(--spacing-4, 1rem);
-            right: var(--spacing-2, 0.5rem);
-            padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+            right: var(--spacing-2);
+            padding: var(--spacing-2) var(--spacing-3);
         }
 
         .category-layout__filter-label {
@@ -693,6 +710,40 @@ $this->assign('title', $title);
     }
     </style>
 
+    <script>
+    (function () {
+        var root = document.getElementById('category-layout-main');
+        if (!root) return;
+        var sidebar = root.querySelector('[data-sidebar]');
+        var overlay = root.querySelector('[data-overlay]');
+        var toggle = root.querySelector('[data-filter-toggle]');
+        var closeBtn = root.querySelector('[data-sidebar-close]');
+        if (!sidebar || !toggle) return;
+
+        function setOpen(open) {
+            sidebar.classList.toggle('is-open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (overlay) {
+                overlay.hidden = !open;
+                overlay.classList.toggle('is-visible', open);
+            }
+            document.documentElement.classList.toggle('category-filter-drawer-open', open);
+        }
+
+        toggle.addEventListener('click', function () {
+            setOpen(!sidebar.classList.contains('is-open'));
+        });
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function () { setOpen(false); });
+        }
+        if (overlay) {
+            overlay.addEventListener('click', function () { setOpen(false); });
+        }
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') setOpen(false);
+        });
+    })();
+    </script>
 
     <w:hook>seo::footer</w:hook>
 </body>

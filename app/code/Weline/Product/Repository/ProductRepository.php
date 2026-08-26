@@ -233,6 +233,138 @@ final class ProductRepository extends AbstractWebsiteShardRepository
         return $reloaded;
     }
 
+    /**
+     * Versioned Website projection update. Business callers may only change
+     * catalog fields; lifecycle uses transition().
+     *
+     * @param array<string, mixed> $fields
+     */
+    public function updateVersioned(
+        int $websiteId,
+        int $productId,
+        int $expectedVersion,
+        array $fields,
+    ): Product {
+        $allowed = [
+            Product::schema_fields_SKU,
+            'product_code',
+            'owner_website_id',
+            'provider_code',
+            'product_type',
+            'identity_version',
+            'source_website_id',
+            'source_version',
+        ];
+        foreach (array_keys($fields) as $field) {
+            if (!in_array((string)$field, $allowed, true)) {
+                throw new \InvalidArgumentException('product_projection_field_forbidden');
+            }
+        }
+        return $this->mutateVersioned($websiteId, $productId, $expectedVersion, $fields);
+    }
+
+    public function transition(
+        int $websiteId,
+        int $productId,
+        int $expectedVersion,
+        string $targetStatus,
+    ): Product {
+        $targetStatus = strtolower(trim($targetStatus));
+        $product = $this->findById($websiteId, $productId)
+            ?? throw new \InvalidArgumentException('product_website_projection_not_found');
+        $currentStatus = (string)$product->getData(Product::schema_fields_STATUS);
+        $allowed = [
+            'draft' => ['published', 'archived'],
+            'published' => ['disabled'],
+            'disabled' => ['published', 'archived'],
+            'archived' => [],
+        ];
+        if (!in_array($targetStatus, $allowed[$currentStatus] ?? [], true)) {
+            throw new CatalogConflictException(
+                'product_lifecycle_transition_invalid',
+                __('非法商品状态转换：%{1} → %{2}', [$currentStatus, $targetStatus]),
+                ['from' => $currentStatus, 'to' => $targetStatus],
+            );
+        }
+        return $this->mutateVersioned(
+            $websiteId,
+            $productId,
+            $expectedVersion,
+            [Product::schema_fields_STATUS => $targetStatus],
+        );
+    }
+
+    /** @param array<string, mixed> $fields */
+    private function mutateVersioned(
+        int $websiteId,
+        int $productId,
+        int $expectedVersion,
+        array $fields,
+    ): Product {
+        $connection = $this->newModel($websiteId)->getConnection();
+
+        return $this->projectionMutations->execute(
+            $connection,
+            $websiteId,
+            ProductSearchProjectionMutationCoordinatorInterface::TARGET_PRODUCT,
+            $productId,
+            null,
+            fn(): Product => $this->mutateVersionedCurrent(
+                $websiteId,
+                $productId,
+                $expectedVersion,
+                $fields,
+            ),
+        );
+    }
+
+    /** @param array<string, mixed> $fields */
+    private function mutateVersionedCurrent(
+        int $websiteId,
+        int $productId,
+        int $expectedVersion,
+        array $fields,
+    ): Product {
+        $this->assertWebsite($websiteId);
+        if ($expectedVersion < 0) {
+            throw new \InvalidArgumentException('product_publish_version_invalid');
+        }
+        $product = $this->findById($websiteId, $productId)
+            ?? throw new \InvalidArgumentException('product_website_projection_not_found');
+        $actual = (int)$product->getData(Product::schema_fields_PUBLISH_VERSION);
+        if ($actual !== $expectedVersion) {
+            throw new CatalogConflictException(
+                'publish_version_conflict',
+                __('Product 版本已变化，请刷新后重试'),
+                ['website_id' => $websiteId, 'product_id' => $productId, 'expected' => $expectedVersion, 'actual' => $actual],
+            );
+        }
+        $next = $expectedVersion + 1;
+        $writerToken = $this->newCasToken();
+        $previousToken = (string)$product->getData(Product::schema_fields_CAS_TOKEN);
+        $this->newModel($websiteId)->clear()->getQuery()
+            ->where(Product::schema_fields_ID, $productId)
+            ->where(Product::schema_fields_PUBLISH_VERSION, $expectedVersion)
+            ->where(Product::schema_fields_CAS_TOKEN, $previousToken)
+            ->update(array_merge($fields, [
+                Product::schema_fields_PUBLISH_VERSION => $next,
+                Product::schema_fields_CAS_TOKEN => $writerToken,
+                Product::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+            ]))->fetch();
+        $updated = $this->findById($websiteId, $productId);
+        if ($updated === null
+            || (int)$updated->getData(Product::schema_fields_PUBLISH_VERSION) !== $next
+            || !hash_equals($writerToken, (string)$updated->getData(Product::schema_fields_CAS_TOKEN))
+        ) {
+            throw new CatalogConflictException(
+                'publish_version_conflict',
+                __('Product 更新 CAS 失败'),
+                ['website_id' => $websiteId, 'product_id' => $productId, 'expected' => $expectedVersion],
+            );
+        }
+        return $updated;
+    }
+
     protected function newModel(int $websiteId): AbstractWebsiteShardModel
     {
         if ($this->modelFactory !== null) {

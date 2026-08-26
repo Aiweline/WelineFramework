@@ -1,0 +1,247 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$catalogs = is_array($this->getData('categories_tree')) ? $this->getData('categories_tree') : [];
+$category = $this->getData('category');
+$websiteId = max(0, (int)($this->getData('website_id') ?? 0));
+$error = (string)($this->getData('error') ?? '');
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$catalogValue = static function (mixed $row, string $key, mixed $default = ''): mixed {
+    if (is_array($row)) {
+        return $row[$key] ?? $default;
+    }
+    if (is_object($row) && method_exists($row, 'getData')) {
+        $value = $row->getData($key);
+        return $value === null ? $default : $value;
+    }
+    return $default;
+};
+$selectedId = is_array($category)
+    ? max(0, (int)($category['category_id'] ?? $category['id'] ?? 0))
+    : max(0, (int)($this->getData('selected_category_id') ?? 0));
+$isNew = (int)($this->getData('is_new_category') ?? 0) === 1 || (int)($this->request->getGet('new') ?? 0) === 1;
+$editing = $isNew || $selectedId > 0;
+$parentId = $isNew
+    ? max(0, (int)($this->getData('create_parent_id') ?? (int)($this->request->getGet('pid') ?? 0)))
+    : max(0, (int)$catalogValue($category, 'parent_id', 0));
+$isActive = $isNew || (int)$catalogValue($category, 'is_active', 1) === 1;
+$categoryCode = $isNew ? '' : (string)$catalogValue($category, 'code', '');
+$categoryPath = $isNew ? '' : (string)$catalogValue($category, 'path', '');
+$flatCatalogs = [];
+$flatten = function (array $nodes, int $depth = 0, array $ancestors = []) use (&$flatten, &$flatCatalogs): void {
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $id = max(0, (int)($node['category_id'] ?? $node['id'] ?? 0));
+        if ($id === 0) {
+            continue;
+        }
+        $flatCatalogs[] = [
+            'id' => $id,
+            'name' => (string)($node['name'] ?? ''),
+            'path' => (string)($node['path'] ?? ''),
+            'code' => (string)($node['code'] ?? ''),
+            'depth' => $depth,
+            'ancestors' => $ancestors,
+        ];
+        $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
+        if ($children !== []) {
+            $flatten($children, $depth + 1, [...$ancestors, $id]);
+        }
+    }
+};
+$flatten($catalogs);
+$catalogPageUrl = function (array $params = []) use ($websiteId): string {
+    $params = ['website_id' => $websiteId, ...$params];
+
+    return (string)$this->getBackendUrl('*/backend/catalog/categories', $params);
+};
+$renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $catalogPageUrl): void {
+    if ($nodes === []) {
+        return;
+    }
+    echo '<ul class="w-tree" data-category-tree-list>';
+    $count = count($nodes);
+    foreach (array_values($nodes) as $index => $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $id = max(0, (int)($node['category_id'] ?? $node['id'] ?? 0));
+        if ($id === 0) {
+            continue;
+        }
+        $name = (string)($node['name'] ?? '');
+        $pid = max(0, (int)($node['parent_id'] ?? $node['pid'] ?? 0));
+        $level = max(1, (int)($node['level'] ?? 1));
+        $path = (string)($node['path'] ?? '');
+        $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
+        $rowState = $selectedId === $id ? 'selected' : 'idle';
+        echo '<li class="w-catalog-tree__item" data-category-node data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '">';
+        echo '<div class="w-drop-indicator w-drop-indicator--before" data-drop-zone="before" hidden aria-hidden="true"></div>';
+        echo '<div class="w-tree__row w-catalog-tree__row w-catalog-tree__row--draggable" draggable="true" data-state="' . $rowState . '" data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '" data-position="' . max(1, $index + 1) . '">';
+        echo '<button class="w-catalog-tree__handle" type="button" tabindex="-1" aria-hidden="true" data-drag-handle><w-icon name="menu" size="sm"></w-icon></button>';
+        echo '<a class="w-catalog-tree__link" href="' . $escape($catalogPageUrl(['id' => $id])) . '"' . ($selectedId === $id ? ' aria-current="page"' : '') . '>';
+        echo '<w-icon name="folder" size="sm"></w-icon><span>' . $escape($name) . '</span>';
+        if ($path !== '') {
+            echo '<span class="w-badge" data-tone="neutral">' . $escape($path) . '</span>';
+        }
+        echo '</a>';
+        echo '</div>';
+        echo '<div class="w-drop-indicator w-drop-indicator--inside" data-drop-zone="inside" hidden aria-hidden="true"></div>';
+        if ($children !== []) {
+            $renderTree($children);
+        }
+        echo '<div class="w-drop-indicator w-drop-indicator--after" data-drop-zone="after" hidden aria-hidden="true"></div>';
+        echo '<a class="w-catalog-tree__add" href="' . $escape($catalogPageUrl(['new' => 1, 'pid' => $id])) . '"><w-icon name="plus" size="sm"></w-icon>' . $escape(__('添加子分类')) . '</a>';
+        echo '</li>';
+    }
+    echo '</ul>';
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-catalogs.css)">
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-category-admin.css)?v=20260826-v1">
+
+<section
+    class="w-backend-page w-catalog-admin w-product-category-admin"
+    data-catalog-admin
+    data-website-id="<?= $escape($websiteId) ?>"
+    data-text-save-success="<?= $escape(__('分类已保存')) ?>"
+    data-text-save-failed="<?= $escape(__('分类保存失败')) ?>"
+    data-text-delete-title="<?= $escape(__('删除分类')) ?>"
+    data-text-delete-message="<?= $escape(__('删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？')) ?>"
+    data-text-delete-success="<?= $escape(__('分类已删除')) ?>"
+    data-text-delete-failed="<?= $escape(__('分类删除失败')) ?>"
+    data-text-reorder-success="<?= $escape(__('分类顺序已保存')) ?>"
+    data-text-reorder-failed="<?= $escape(__('分类排序失败')) ?>"
+    data-text-drop-child="<?= $escape(__('挂靠为子分类')) ?>"
+    data-text-drop-before="<?= $escape(__('插入到上方')) ?>"
+    data-text-drop-after="<?= $escape(__('插入到下方')) ?>"
+>
+    <header class="w-backend-page__heading">
+        <div class="w-stack">
+            <h1><w:icon name="tree" size="md"></w:icon><?= $escape(__('商品分类')) ?></h1>
+            <p class="w-text" data-tone="muted"><?= $escape(__('左侧树形列表支持拖拽排序与挂靠；右侧编辑名称、父级与启用状态')) ?></p>
+        </div>
+        <nav class="w-cluster" aria-label="<?= $escape(__('分类管理操作')) ?>">
+            <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                <label class="w-visually-hidden" for="product-website-id"><lang>Website</lang></label>
+                <div class="w-product-admin__website-select" style="min-inline-size:12rem;">
+                    <w:websites:website:select
+                        id="product-website-id"
+                        name="website_id"
+                        value="productWebsiteSelectValue"
+                        display="productWebsiteSelectDisplay"
+                        options="websiteOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        clearable="false"
+                        placeholder="@lang(选择 Website)"
+                    />
+                </div>
+                <button class="w-button" type="submit" data-tone="neutral"><lang>切换</lang></button>
+            </form>
+            <a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加顶级分类')) ?></a>
+            <a class="w-button" data-tone="neutral" href="@admin-url('*/backend/catalog/products')"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回商品')) ?></a>
+        </nav>
+    </header>
+
+    <?php if ($error !== ''): ?>
+        <div class="w-alert" data-tone="danger" role="alert"><?= $escape($error) ?></div>
+    <?php endif; ?>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <div class="w-catalog-admin__layout">
+        <aside class="w-card w-catalog-admin__tree-card" aria-labelledby="catalog-tree-heading">
+            <header class="w-card__header"><h2 class="w-card__title" id="catalog-tree-heading"><w:icon name="folder" size="sm"></w:icon><?= $escape(__('分类树')) ?></h2></header>
+            <div class="w-card__body">
+                <?php if ($catalogs !== []): ?>
+                    <nav class="w-catalog-tree w-product-category-dnd-tree" aria-label="<?= $escape(__('商品分类树')) ?>" data-category-dnd-tree>
+                        <?php $renderTree($catalogs); ?>
+                    </nav>
+                <?php else: ?>
+                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('暂无分类')) ?></p><a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><?= $escape(__('添加分类')) ?></a></div>
+                <?php endif; ?>
+            </div>
+        </aside>
+
+        <main class="w-card w-catalog-admin__editor" aria-labelledby="catalog-editor-heading">
+            <header class="w-card__header">
+                <h2 class="w-card__title" id="catalog-editor-heading">
+                    <w:icon name="<?= $isNew ? 'plus' : 'edit' ?>" size="sm"></w:icon>
+                    <?= $escape($isNew ? __('添加分类') : ($selectedId > 0 ? __('编辑分类') : __('分类信息'))) ?>
+                </h2>
+            </header>
+            <div class="w-card__body">
+                <?php if (!$editing): ?>
+                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('请从左侧选择分类，或添加一个新分类')) ?></p></div>
+                <?php else: ?>
+                    <form class="w-form w-catalog-form" method="post" action="@backend-url('*/backend/catalog/category-post')" data-catalog-form>
+                        <input type="hidden" name="website_id" value="<?= $escape($websiteId) ?>">
+                        <input type="hidden" name="id" value="<?= $selectedId ?>">
+                        <label class="w-field">
+                            <span class="w-field__label"><?= $escape(__('分类名称')) ?></span>
+                            <input class="w-input" type="text" name="name" maxlength="120" required value="<?= $escape($isNew ? '' : $catalogValue($category, 'name', '')) ?>" data-category-name-input>
+                        </label>
+
+                        <label class="w-field">
+                            <span class="w-field__label"><?= $escape(__('分类 Code')) ?></span>
+                            <input class="w-input w-code-input" type="text" name="code" maxlength="120" required
+                                   value="<?= $escape($categoryCode) ?>"
+                                   pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                                   data-category-code-input
+                                   placeholder="scifi">
+                            <span class="w-field__hint"><?= $escape(__('URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新')) ?></span>
+                        </label>
+
+                        <div class="w-field">
+                            <span class="w-field__label"><?= $escape(__('分类路径')) ?></span>
+                            <code data-category-path-preview><?= $escape($categoryPath !== '' ? $categoryPath : '/') ?></code>
+                            <span class="w-field__hint"><?= $escape(__('根据父分类与 Code 自动生成；子分类路径会随父级变化')) ?></span>
+                        </div>
+
+                        <label class="w-field">
+                            <span class="w-field__label"><?= $escape(__('父分类')) ?></span>
+                            <select class="w-select" name="pid" data-category-parent-select>
+                                <option value="0" data-path="" <?= $parentId === 0 ? 'selected' : '' ?>><?= $escape(__('顶级分类')) ?></option>
+                                <?php foreach ($flatCatalogs as $option): ?>
+                                    <?php
+                                    $optionId = (int)$option['id'];
+                                    $isSelf = !$isNew && $optionId === $selectedId;
+                                    $isDescendant = !$isNew && in_array($selectedId, $option['ancestors'], true);
+                                    if ($isSelf || $isDescendant) { continue; }
+                                    ?>
+                                    <option value="<?= $optionId ?>"
+                                            data-path="<?= $escape($option['path']) ?>"
+                                            <?= $optionId === $parentId ? 'selected' : '' ?>>
+                                        <?= $escape(str_repeat('— ', (int)$option['depth']) . $option['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+
+                        <label class="w-switch">
+                            <input type="hidden" name="is_active" value="0">
+                            <input type="checkbox" name="is_active" value="1" <?= $isActive ? 'checked' : '' ?>>
+                            <span><?= $escape(__('启用分类')) ?></span>
+                        </label>
+
+                        <footer class="w-catalog-form__actions w-cluster" data-justify="between">
+                            <div>
+                                <?php if (!$isNew && $selectedId > 0): ?>
+                                    <button class="w-button" type="button" data-tone="danger" data-catalog-delete="<?= $selectedId ?>"><w:icon name="trash" size="sm"></w:icon><?= $escape(__('删除')) ?></button>
+                                <?php endif; ?>
+                            </div>
+                            <div class="w-cluster">
+                                <a class="w-button" data-tone="neutral" href="<?= $escape($catalogPageUrl()) ?>"><?= $escape(__('取消')) ?></a>
+                                <button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存')) ?></button>
+                            </div>
+                        </footer>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </main>
+    </div>
+</section>
+
+<script type="module" src="@static(Weline_Product::js/backend/product-category-admin.js)?v=20260826-v2"></script>

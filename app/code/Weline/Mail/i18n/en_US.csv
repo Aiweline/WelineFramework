@@ -12,6 +12,7 @@
 主题,Subject
 正文,Body
 请先登录,"Please sign in first"
+只能使用本人已启用的企业邮箱账号,"You may only use your own active enterprise mailbox"
 操作成功,"Operation succeeded"
 操作失败,"Operation failed"
 请选择或输入邮箱域名,"Please select or enter your email domain name"
@@ -20,17 +21,45 @@
 "真实邮箱域名必须先从 Websites 域名候选中选择","The real email domain name must first be selected from the Websites domain name candidates"
 邮箱域名已存在,"Email domain name already exists"
 邮箱域名已创建，可在域名列表中开启或继续创建邮箱账号,"The email domain name has been created. You can open it in the domain name list or continue to create an email account."
-请选择邮箱域名,"Please select your email domain name"
-邮箱域名不存在,"Email domain name does not exist"
-邮箱地址不能为空,"Email address cannot be empty"
-邮箱地址格式不正确,"Email address format is incorrect"
-邮箱地址必须属于所选域名,"Email address must belong to the selected domain name"
-邮箱账号已存在,"Email account already exists"
-邮箱账号已创建,"Email account has been created"
+无效的请求方法,无效的请求方法
+邮箱账号操作失败,邮箱账号操作失败
 域名状态参数无效,"Domain name status parameter is invalid"
+邮箱域名不存在,"Email domain name does not exist"
 邮箱域名状态已更新,"Email domain status has been updated"
+邮件发送失败,邮件发送失败
+"邮箱域名 ID 无效。","邮箱域名 ID 无效。"
+"应用前必须确认邮件主机将以 DNS-only 暴露源站公网 IP。","Before applying, confirm that the DNS-only mail host exposes its public origin IP."
+邮箱域名不存在。,邮箱域名不存在。
+"CDN 模块返回了无效的 DNS 结果。","CDN 模块返回了无效的 DNS 结果。"
+"Cloudflare DNS 配置失败。","Cloudflare DNS 配置失败。"
+"Cloudflare DNS 已同步。","Cloudflare DNS 已同步。"
+"Cloudflare DNS 预览完成。","Cloudflare DNS 预览完成。"
+"Cloudflare DNS 配置失败：%{1}","Cloudflare DNS 配置失败：%{1}"
+企业邮箱管理,"Enterprise Mail"
+mail,mail
+"管理企业邮箱、用户账号、邮件与 DNS","管理企业邮箱、用户账号、邮件与 DNS"
+管理企业邮箱账号,管理企业邮箱账号
+users,users
+开通、暂停及重置企业邮箱账号,开通、暂停及重置企业邮箱账号
+开通或重置邮箱密码,开通或重置邮箱密码
+key,key
+"在 Stalwart 中开通账号或安全重置密码","在 Stalwart 中开通账号或安全重置密码"
+使用企业邮箱代发,使用企业邮箱代发
+send,send
+管理员使用已启用的企业邮箱账号发送邮件,管理员使用已启用的企业邮箱账号发送邮件
+"配置 Cloudflare 邮箱 DNS","配置 Cloudflare 邮箱 DNS"
+cloud,cloud
+"预览并同步当前企业邮箱域名 DNS","预览并同步当前企业邮箱域名 DNS"
 我的邮箱,"My Mail"
-申请和管理企业邮箱账号,"Apply for and manage business mailboxes"
+查看企业邮箱收件箱,"View enterprise mailbox"
+我的企业邮箱,"My enterprise mailbox"
+这里只显示与你当前账号绑定且已启用的邮箱。,"Only active mailboxes explicitly linked to your current account are shown."
+当前邮箱,"Current mailbox"
+邮件列表,"Message list"
+收件箱暂无邮件。,"The inbox is empty."
+发件人,Sender
+含附件,"Has attachments"
+选择一封邮件查看正文。,"Select a message to read it."
 待同步,"Pending sync"
 已启用,Active
 已暂停,Suspended
@@ -52,9 +81,21 @@
 收取测试邮件,"Receive test message"
 发送测试邮件,"Send test message"
 收件箱,Inbox
-收件箱暂无邮件。,"Inbox has no messages."
 已发送,Sent
 暂无已发送邮件。,"No sent messages yet."
+邮件夹,邮件夹
+刷新,刷新
+写邮件,写邮件
+发件账号,发件账号
+发送邮件,发送邮件
+这个邮件夹暂无邮件。,"This folder is empty."
+（无主题）,"(No subject)"
+企业邮箱收件箱,"Enterprise mailbox"
+"直接查看 Stalwart 中真实投递的邮件；域名、DNS 和账号配置已移到独立设置页。","View messages actually delivered to Stalwart. Domain, DNS, and account configuration is now on a separate settings page."
+邮箱与域名设置,"Mailbox and domain settings"
+刷新收件箱,"Refresh inbox"
+尚无已启用的企业邮箱账号，请先到设置页创建账号。,"No active enterprise mailbox exists. Create one on the settings page first."
+"最近 %{1} 封收件","Latest %{1} messages"
 企业邮箱,"Business email"
 系统服务,"System services"
 "已开启 %{1} 个","%{1} opened"
@@ -91,6 +132,56 @@
 暂无邮箱域名,"No email domain name yet"
 开启,"turn on"
 停用,deactivate
+"Cloudflare 一键配置邮箱 DNS","One-click Cloudflare mail DNS"
+"mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云 / DNS-only）。这会公开邮件服务器源站 IP；SMTP、IMAP、POP 不能走 Cloudflare 橙云代理。","The mail host A/AAAA must use DNS-only. This exposes the mail server origin IP; SMTP, IMAP, and POP cannot use Cloudflare proxy."
+"连接或重新授权 Cloudflare","Connect or reauthorize Cloudflare"
+"公网源站 IP（可留空保留现有 A/AAAA）","Public origin IP (leave blank to preserve existing A/AAAA)"
+"Stalwart 实际 DKIM 选择器","Actual Stalwart DKIM selector"
+"Stalwart 实际 DKIM 公钥或完整 TXT 值","Actual Stalwart DKIM public key or full TXT value"
+"只处理当前域名的 mail A/AAAA、根 MX、根 SPF、当前选择器 DKIM 和 DMARC；smtp CNAME 与其他记录保持不变。重复记录会在预览中列出。","Only the current domain's mail A/AAAA, root MX, root SPF, current-selector DKIM, and DMARC are managed; smtp CNAME and unrelated records remain unchanged. Duplicates appear in the preview."
+"PTR/rDNS 仍需到云服务器厂商配置，Cloudflare 无法代配。","PTR/rDNS must still be configured with the server provider; Cloudflare cannot configure it."
+"我确认 mail 主机必须为 DNS-only，源站公网 IP 将对外可见。","I confirm the mail host must be DNS-only and its public origin IP will be visible."
+"预览 Cloudflare DNS 变更","Preview Cloudflare DNS changes"
+确认并一键应用,"Confirm and apply"
+每个域名的企业邮箱配置,"Enterprise mailbox setup for each domain"
+"开通域名后，请展开对应域名，按实际域名和主机名配置 DNS 与客户端。","After enabling a domain, expand it and configure DNS and client access using its actual domain and host name."
+"开通邮箱域名后，这里会自动生成该域名的 DNS 和客户端配置清单。","After you enable a mailbox domain, its DNS and client configuration checklist will appear here automatically."
+展开或收起此域名配置,"Expand or collapse this domain setup"
+"Fake 测试域名无需配置公网 DNS，仅用于本地业务冒烟。","Fake test domains do not require public DNS and are only for local smoke checks."
+"1. 配置必需 DNS","1. Configure required DNS"
+邮箱地址使用邮箱域，例如：,"Mail addresses use the mailbox domain, for example:"
+邮件服务使用独立主机名，例如：,"The mail service uses a separate host name, for example:"
+类型,type
+主机,Host
+建议值,"Recommended value"
+配置要求,Requirement
+"服务器公网 IPv4","Server public IPv4"
+"必需：邮件服务主机名指向服务器公网 IPv4。","Required: point the mail service host name to the server's public IPv4 address."
+"服务器公网 IPv6（仅完整支持时）","Server public IPv6 (only with complete support)"
+"条件配置：仅当邮件服务、防火墙和 PTR 均完整支持 IPv6 时添加；否则不要配置。","Conditional: add this only when the mail service, firewall, and PTR fully support IPv6; otherwise leave it unset."
+"必需：邮箱域的 MX 优先级可用 10；MX 目标必须直接解析 A/AAAA，不要使用 CNAME。","Required: priority 10 is suitable for the mailbox-domain MX; its target must resolve directly through A/AAAA, not CNAME."
+"必需：邮箱域发布 SPF TXT，授权 MX 主机发信。","Required: publish an SPF TXT record on the mailbox domain to authorize its MX hosts."
+"必需：示例主机以 default 为选择器；请以邮件引擎实际生成的选择器和公钥发布 DKIM TXT。","Required: the example uses the default selector; publish the DKIM TXT with the selector and public key generated by the mail engine."
+"建议分阶段：先使用 p=none 观察报告，确认无误后升级为 quarantine 或 reject。","Stage the policy: begin with p=none to review reports, then move to quarantine or reject after validation."
+"服务器公网 IP","Server public IP"
+"必需：在 VPS/云厂商控制台设置 PTR/rDNS，并确保主机名正向解析回同一公网 IP。","Required: set PTR/rDNS in the VPS or cloud console and ensure the host name resolves forward to the same public IP."
+"2. 配置客户端主机名、证书与端口","2. Configure client host names, certificates, and ports"
+"smtp 子域名不是必须项。客户端可以直接使用邮件服务主机名：","An smtp subdomain is optional. Clients can use the mail service host name directly:"
+如需客户端友好别名，可配置以下任一方式：,"For a client-friendly alias, configure either option:"
+"与邮件服务主机相同的公网 IPv4","The same public IPv4 address as the mail service host"
+"无论使用哪个名称，TLS 证书都必须覆盖客户端实际连接的主机名。","Whichever name you use, the TLS certificate must cover the host name clients actually connect to."
+端口,Port
+用途,Purpose
+加密与注意事项,"Encryption and notes"
+服务器接收入站邮件（MTA）,"Server inbound mail (MTA)"
+"服务器间 SMTP；不要作为普通客户端发信端口。","Server-to-server SMTP; do not use it as the normal client submission port."
+客户端提交发信,"Client message submission"
+STARTTLS（推荐）,"STARTTLS (recommended)"
+客户端提交发信（可选）,"Client message submission (optional)"
+"隐式 TLS","Implicit TLS"
+客户端收信,"Client mail retrieval"
+"配置完成后，请使用下方 DNS 检测，并执行真实收发验收。","After configuration, use the DNS checker below and complete real send/receive acceptance."
+"检测此域名 DNS","Check DNS for this domain"
 创建邮箱账号,"Create an email account"
 请选择域名,"Please select a domain name"
 管理员,administrator
@@ -101,15 +192,23 @@
 域名邮箱列表管理,"Domain name mailbox list management"
 按域名筛选,"Filter by domain name"
 全部域名,"All domain names"
-邮箱,Mail
+邮箱,Mailbox
 名称,name
 容量,capacity
 暂无邮箱账号,"No email account yet"
 "DNS 检测","DNS detection"
+域名邮箱配置与收发验收指南,"Domain mailbox configuration and delivery acceptance guide"
+"按顺序完成 DNS、客户端入口和真实收发验收。","Complete DNS, client access, and real delivery acceptance in order."
+展开或收起配置指南,"Expand or collapse the setup guide"
+"3. 执行真实收发验收","3. Run real delivery acceptance"
+"创建两个测试邮箱账号 A 和 B，验证 A→B 与 B→A 均能收到。","Create test mailboxes A and B, then verify both A→B and B→A delivery."
+"向 QQ、Gmail 或 Outlook 等外部邮箱发送，并从外部邮箱回复。","Send to an external mailbox such as QQ, Gmail, or Outlook, then reply from that mailbox."
+"检查外部收件邮件头，确认 SPF、DKIM 和 DMARC 均为 pass。","Inspect external message headers and confirm SPF, DKIM, and DMARC all report pass."
+"未登录 SMTP 时尝试向外域转发，必须被拒绝，以确认服务器不是开放中继。","Attempt external relay without SMTP authentication; it must be rejected to confirm the server is not an open relay."
+测试中文主题、正文和附件，确认内容、编码与附件均完整。,"Test a Chinese subject, body, and attachment; confirm content, encoding, and attachment integrity."
+"验证 587 STARTTLS、可选 465 和 993 的证书链、主机名及加密连接。","Verify certificate chains, host names, and encrypted connections on 587 STARTTLS, optional 465, and 993."
+"全部通过后再逐步提高发信额度；DNS 或 DKIM 未通过时不要开放大批量发信。","Increase sending limits gradually only after all checks pass; do not enable bulk sending while DNS or DKIM is failing."
 检测,Detection
-类型,type
-主机,Host
-建议值,"Recommended value"
 存在,exist
 未检测到,"not detected"
 客户端配置,"Client configuration"
@@ -118,7 +217,6 @@
 "显示最近 20 封 fake 模式写入的收件箱和发件箱邮件，用于后台冒烟核对。","Shows the latest 20 fake-mode Inbox and Sent messages for backend smoke verification."
 账号ID,"Account ID"
 邮件箱,mailbox
-发件人,Sender
 投递状态,"Delivery status"
 时间,Time
 "暂无 fake 邮件记录","No fake mail records yet"
@@ -127,11 +225,58 @@
 未开通,"Not activated"
 可开通,"Can be opened"
 手动测试域名,"Manually test domain names"
+"查看真实邮件、管理用户邮箱、代发邮件，并指导每个域名完成 DNS。","查看真实邮件、管理用户邮箱、代发邮件，并指导每个域名完成 DNS。"
+"Stalwart 管理连接正常","Stalwart management connected"
+"Stalwart 管理连接待配置","Stalwart management connection required"
+企业邮箱管理导航,"Enterprise mail navigation"
+用户与账号,"Users & Accounts"
+"域名与 DNS","Domains & DNS"
+使用当前邮箱发送邮件,使用当前邮箱发送邮件
+开通企业邮箱账号,开通企业邮箱账号
+邮箱账号前缀,邮箱账号前缀
+"系统用户 ID","系统用户 ID"
+"初始密码（真实邮箱至少 12 位）","初始密码（真实邮箱至少 12 位）"
+开通邮箱,开通邮箱
+系统用户,系统用户
+查看邮件,查看邮件
+开通/重置密码,"Provision / Reset password"
+新密码,新密码
+确认更新,确认更新
+"mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云、DNS-only），否则会隐藏源站 IP，SMTP/IMAP 无法工作。smtp 子域名可选；若配置也必须 DNS-only。","mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云、DNS-only），否则会隐藏源站 IP，SMTP/IMAP 无法工作。smtp 子域名可选；若配置也必须 DNS-only。"
+新增邮箱域名,新增邮箱域名
+网站域名,网站域名
+邮件主机,邮件主机
+创建邮箱域名,创建邮箱域名
+"源站公网 IP","源站公网 IP"
+"填写 Stalwart 实际公钥","填写 Stalwart 实际公钥"
+可选,可选
+"TLS 证书必须有效，但不要求购买商业证书：可由 Stalwart/ACME 自动申请 Let’s Encrypt，也可使用自有证书。","TLS 证书必须有效，但不要求购买商业证书：可由 Stalwart/ACME 自动申请 Let’s Encrypt，也可使用自有证书。"
+"Cloudflare 一键 DNS 配置","One-click Cloudflare DNS"
+"DKIM 选择器","DKIM 选择器"
+"DKIM 公钥（只填公钥正文）","DKIM 公钥（只填公钥正文）"
+"我确认 mail 主机必须 DNS-only，源站公网 IP 将可见","我确认 mail 主机必须 DNS-only，源站公网 IP 将可见"
+预览变更,预览变更
+"应用 DNS","应用 DNS"
+暂停域名,暂停域名
+启用域名,启用域名
+邮箱地址必须属于所选域名,"Email address must belong to the selected domain name"
+邮箱账号已存在,"Email account already exists"
+请先启用邮箱域名,请先启用邮箱域名
+邮箱账号已开通,"Mailbox provisioned"
+"邮箱账号开通失败，请检查 Stalwart 管理连接","邮箱账号开通失败，请检查 Stalwart 管理连接"
+邮箱账号状态参数无效,邮箱账号状态参数无效
+邮箱账号不存在,"Mailbox account does not exist"
+"请先通过“开通/重置密码”在 Stalwart 中开通该账号","请先通过“开通/重置密码”在 Stalwart 中开通该账号"
+"无法确认 Stalwart 账号状态，请检查管理连接","无法确认 Stalwart 账号状态，请检查管理连接"
+邮箱账号状态已更新,邮箱账号状态已更新
+"Fake 邮箱不需要 Stalwart 密码","Fake 邮箱不需要 Stalwart 密码"
+"邮箱已在 Stalwart 中开通，密码已更新","Mailbox provisioned in Stalwart and password updated"
+"邮箱开通或密码重置失败，请检查 Stalwart 管理连接","邮箱开通或密码重置失败，请检查 Stalwart 管理连接"
 "下载 stalwart-x86_64-pc-windows-msvc.zip","Download stalwart-x86_64-pc-windows-msvc.zip"
 "解压 stalwart.exe 到 C:\Program Files\Stalwart\bin","Unzip stalwart.exe to C:\Program Files\Stalwart\bin"
 "安装 NSSM 并注册 Stalwart Windows 服务","Install NSSM and register the Stalwart Windows service"
 "生成 etc\config.json 并设置服务自启动","Generate etc\config.json and set the service to start automatically"
-"启动服务后读取 8080/admin 初始化状态","Read 8080/admin initialization status after starting the service"
+"启动服务后读取 18080/admin 初始化状态","启动服务后读取 18080/admin 初始化状态"
 "下载 Stalwart Linux 二进制","Download Stalwart Linux binaries"
 "创建 /opt/stalwart/{bin,etc,data,logs}","Create /opt/stalwart/{bin,etc,data,logs}"
 "生成 Stalwart 配置文件","Generate Stalwart configuration file"
@@ -142,12 +287,13 @@
 "SMTP Submission 587 端口","SMTP Submission port 587"
 "IMAP 143 端口","IMAP port 143"
 "IMAPS 993 端口","IMAPS port 993"
-"Stalwart Admin 8080 端口","Stalwart Admin port 8080"
+"Stalwart Admin/JMAP 18080 端口","Stalwart Admin/JMAP 18080 端口"
 "NSSM Windows 服务包装器","NSSM Windows Service Wrapper"
 "systemd 服务管理","systemd service management"
 安装脚本不存在：%{1},"Installation script does not exist: %{1}"
 "真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。","The real installation script has been prepared, but to avoid accidentally modifying system services, please first execute the framework dependency installation entry through env:install stalwart-mail-server -y."
 不支持的服务动作：%{1},"Unsupported service action: %{1}"
+邮件已提交发送,"Message submitted"
 "127.0.0.1:%{1} 可连接","127.0.0.1:%{1} is connectable"
 "邮箱账号只能使用小写字母、数字、点、下划线和短横线，长度为 2 到 63 位。","Mailbox names may only use lowercase letters, numbers, dots, underscores, and hyphens, and must be 2 to 63 characters long."
 请选择已开启的邮箱域名,"Please choose an enabled mail domain"
@@ -157,13 +303,20 @@
 邮箱账号已启用，可在测试邮箱中收发信。,"Mailbox account is active. You can send and receive messages in the test mailbox."
 邮箱账号申请已提交，管理员同步邮件服务后即可使用。,"Your mailbox application has been submitted. It can be used after an administrator syncs it to the mail service."
 不支持的邮箱账号状态,"Unsupported mailbox account status"
-邮箱账号不存在,"Mailbox account does not exist"
 邮箱账号已暂停,"Mailbox account has been suspended"
 邮箱账号已恢复启用,"Mailbox account has been restored to active"
 邮箱账号已恢复为待同步状态,"Mailbox account has been restored to pending sync"
 "由邮件引擎生成 DKIM 公钥后填写","Fill in the DKIM public key generated by the mail engine."
+邮箱域名格式无效。,邮箱域名格式无效。
+邮件服务主机名必须属于当前邮箱域名。,邮件服务主机名必须属于当前邮箱域名。
+"DKIM 选择器格式无效。","DKIM 选择器格式无效。"
+"源站 IP 必须是可公开路由的 IPv4 或 IPv6。","源站 IP 必须是可公开路由的 IPv4 或 IPv6。"
+"必须填写 Stalwart 实际生成的 DKIM 公钥，禁止填写私钥或示例值。","Enter the actual DKIM public key generated by Stalwart; private keys and examples are forbidden."
+"DKIM TXT 缺少有效的 p= 公钥。","DKIM TXT 缺少有效的 p= 公钥。"
+"DKIM 公钥不是有效的 Base64 公钥。","DKIM 公钥不是有效的 Base64 公钥。"
 请选择已启用的自建邮箱账号,"Please choose an active self-hosted mailbox account"
-"真实自建邮箱账号请通过 SMTP 协议发送","Real self-hosted mailbox accounts should be sent through the SMTP protocol"
+真实自建邮箱账号必须通过已鉴权的邮箱界面发送,真实自建邮箱账号必须通过已鉴权的邮箱界面发送
+企业邮箱发送失败，请检查邮件服务状态,企业邮箱发送失败，请检查邮件服务状态
 请选择已启用的测试邮箱账号,"Please choose an active test mailbox account"
 收件邮箱格式不正确,"Recipient email format is invalid"
 主题和正文不能为空,"Subject and body are required"
@@ -209,3 +362,11 @@
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","Check if MX/SPF/DKIM/DMARC records exist"
 邮件服务主机名,"Mail service host name"
 """Mail 查询器不支持的操作：%{1}""","""Operation not supported by Mail query: %{1}"""
+请选择邮箱域名,"Please select your email domain name"
+邮箱地址不能为空,"Email address cannot be empty"
+邮箱地址格式不正确,"Email address format is incorrect"
+邮箱账号已创建,"Email account has been created"
+申请和管理企业邮箱账号,"Apply for and manage business mailboxes"
+"启动服务后读取 8080/admin 初始化状态","Read 8080/admin initialization status after starting the service"
+"Stalwart Admin 8080 端口","Stalwart Admin port 8080"
+"真实自建邮箱账号请通过 SMTP 协议发送","Real self-hosted mailbox accounts should be sent through the SMTP protocol"

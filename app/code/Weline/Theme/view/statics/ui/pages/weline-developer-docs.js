@@ -193,6 +193,75 @@ async function copyCodeText(text) {
     return ok;
 }
 
+function isAsciiDiagram(source) {
+    return /[\u2500-\u257F\u2580-\u259F]/.test(String(source || ''));
+}
+
+function ensureCodeFullscreenDialog() {
+    let dialog = document.querySelector('[data-docs-code-fs]');
+    if (dialog instanceof HTMLDialogElement) return dialog;
+
+    dialog = document.createElement('dialog');
+    dialog.className = 'w-docs-code-fs';
+    dialog.dataset.docsCodeFs = 'true';
+    dialog.setAttribute('aria-label', text.fullscreen || '全屏查看');
+
+    const bar = document.createElement('div');
+    bar.className = 'w-docs-code-fs__bar w-cluster';
+    bar.dataset.justify = 'between';
+    bar.dataset.align = 'center';
+
+    const lang = document.createElement('span');
+    lang.className = 'w-docs-code-fs__lang w-text';
+    lang.dataset.tone = 'muted';
+    lang.dataset.docsCodeFsLang = 'true';
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'w-button';
+    closeButton.dataset.tone = 'quiet';
+    closeButton.dataset.size = 'sm';
+    closeButton.dataset.docsCodeFsClose = 'true';
+    closeButton.textContent = text.fullscreenClose || '关闭';
+
+    bar.append(lang, closeButton);
+
+    const body = document.createElement('div');
+    body.className = 'w-docs-code-fs__scroll';
+    body.dataset.docsCodeFsBody = 'true';
+
+    dialog.append(bar, body);
+    document.body.append(dialog);
+
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+    });
+    closeButton.addEventListener('click', () => dialog.close());
+    return dialog;
+}
+
+function openCodeFullscreen(wrap) {
+    if (!(wrap instanceof Element)) return;
+    const sourcePre = wrap.querySelector('pre');
+    if (!sourcePre) return;
+    const dialog = ensureCodeFullscreenDialog();
+    const langNode = dialog.querySelector('[data-docs-code-fs-lang]');
+    const body = dialog.querySelector('[data-docs-code-fs-body]');
+    if (!(body instanceof Element)) return;
+    const displayLang = String(wrap.dataset.language || '').replace(/^php-template$/, 'php');
+    if (langNode) {
+        langNode.textContent = displayLang || (text.fullscreen || '全屏查看');
+        langNode.hidden = !displayLang;
+    }
+    body.replaceChildren(sourcePre.cloneNode(true));
+    const clonedPre = body.querySelector('pre');
+    if (clonedPre) {
+        clonedPre.classList.add('w-docs-code-fs__pre');
+    }
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+}
+
 function enhanceCodeBlocks(root) {
     if (!(root instanceof Element)) return;
     syncHighlightTheme();
@@ -209,6 +278,8 @@ function enhanceCodeBlocks(root) {
         const wrap = document.createElement('div');
         wrap.className = 'w-docs-code';
         if (resolvedLanguage) wrap.dataset.language = resolvedLanguage;
+        const sourceText = code instanceof HTMLElement ? (code.textContent || '') : (pre.textContent || '');
+        if (isAsciiDiagram(sourceText)) wrap.dataset.diagram = '1';
 
         const bar = document.createElement('div');
         bar.className = 'w-docs-code__bar w-cluster';
@@ -222,6 +293,18 @@ function enhanceCodeBlocks(root) {
         langLabel.textContent = displayLang || '';
         langLabel.hidden = !displayLang;
 
+        const actions = document.createElement('div');
+        actions.className = 'w-docs-code__actions w-cluster';
+        actions.dataset.align = 'center';
+
+        const fullscreenButton = document.createElement('button');
+        fullscreenButton.type = 'button';
+        fullscreenButton.className = 'w-button';
+        fullscreenButton.dataset.tone = 'quiet';
+        fullscreenButton.dataset.size = 'sm';
+        fullscreenButton.dataset.docsFullscreen = 'true';
+        fullscreenButton.textContent = text.fullscreen || '全屏';
+
         const copyButton = document.createElement('button');
         copyButton.type = 'button';
         copyButton.className = 'w-button';
@@ -230,7 +313,8 @@ function enhanceCodeBlocks(root) {
         copyButton.dataset.docsCopy = 'true';
         copyButton.textContent = text.copy || '复制';
 
-        bar.append(langLabel, copyButton);
+        actions.append(fullscreenButton, copyButton);
+        bar.append(langLabel, actions);
         pre.replaceWith(wrap);
         wrap.append(bar, pre);
     });
@@ -238,9 +322,19 @@ function enhanceCodeBlocks(root) {
 }
 
 document.addEventListener('click', (event) => {
-    const button = event.target instanceof Element
-        ? event.target.closest('[data-docs-copy="true"]')
-        : null;
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    const fullscreenButton = target.closest('[data-docs-fullscreen="true"]');
+    if (fullscreenButton) {
+        const wrap = fullscreenButton.closest('.w-docs-code');
+        if (!wrap) return;
+        event.preventDefault();
+        openCodeFullscreen(wrap);
+        return;
+    }
+
+    const button = target.closest('[data-docs-copy="true"]');
     if (!button) return;
     const wrap = button.closest('.w-docs-code');
     const code = wrap?.querySelector('code') || wrap?.querySelector('pre');
@@ -412,6 +506,259 @@ function selectCatalogMarker() {
     });
 }
 
+
+const tocState = {
+    scrollRoot: null,
+    onScroll: null,
+    host: null,
+    activeId: null,
+    lockUntil: 0,
+};
+
+function isMobileViewport() {
+    return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function docsScrollRoot() {
+    return contentRoot?.closest('.w-docs-browser__body')
+        || document.querySelector('.w-docs-browser__body')
+        || null;
+}
+
+function slugifyHeading(text, index) {
+    let id = String(text || '')
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\u4e00-\u9fa5-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    if (!id || document.getElementById(id)) id = `heading-${index}`;
+    return id;
+}
+
+function ensureTocHost() {
+    const browser = document.querySelector('.w-docs-browser');
+    if (!browser) return null;
+    let host = browser.querySelector('[data-docs-toc-host]');
+    if (host) return host;
+    host = document.createElement('div');
+    host.className = 'w-docs-toc-host';
+    host.dataset.docsTocHost = 'true';
+    browser.append(host);
+    return host;
+}
+
+function clearDocumentToc() {
+    if (tocState.onScroll) {
+        const target = tocState.scrollRoot || window;
+        target.removeEventListener('scroll', tocState.onScroll);
+    }
+    tocState.scrollRoot = null;
+    tocState.onScroll = null;
+    tocState.activeId = null;
+    tocState.lockUntil = 0;
+    const host = tocState.host || document.querySelector('[data-docs-toc-host]');
+    if (host) host.replaceChildren();
+    tocState.host = host;
+    document.body.classList.remove('w-docs-toc-open');
+}
+
+function scrollToDocsHeading(headingId) {
+    const heading = document.getElementById(headingId);
+    if (!heading) return;
+    tocState.lockUntil = Date.now() + 4000;
+    setActiveDocsTocItem(headingId);
+    heading.style.scrollMarginTop = '1.5rem';
+    heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const url = new URL(window.location.href);
+    url.hash = '#' + encodeURIComponent(headingId);
+    window.history.replaceState({ ...state, searchKeyword: state.searchKeyword || '' }, '', url);
+    heading.classList.add('w-docs-heading-highlight');
+    window.setTimeout(() => heading.classList.remove('w-docs-heading-highlight'), 1600);
+    if (isMobileViewport()) {
+        const panel = document.querySelector('[data-docs-toc]');
+        const toggle = document.querySelector('[data-docs-toc-toggle]');
+        if (panel) {
+            panel.hidden = true;
+            panel.classList.remove('is-open');
+        }
+        if (toggle) toggle.hidden = false;
+        document.body.classList.remove('w-docs-toc-open');
+    }
+}
+
+function setActiveDocsTocItem(headingId) {
+    const panel = document.querySelector('[data-docs-toc]');
+    if (!panel) return;
+    const id = String(headingId || '');
+    tocState.activeId = id || null;
+    const items = panel.querySelectorAll('[data-docs-toc-item]');
+    items.forEach((item) => {
+        const active = id !== '' && item.getAttribute('data-id') === id;
+        item.classList.toggle('is-active', Boolean(active));
+        if (active) {
+            const list = panel.querySelector('[data-docs-toc-list]');
+            if (list instanceof HTMLElement) {
+                const top = item.offsetTop;
+                if (top < list.scrollTop) list.scrollTop = Math.max(0, top - 12);
+                else if (top + item.offsetHeight > list.scrollTop + list.clientHeight) {
+                    list.scrollTop = top - list.clientHeight + item.offsetHeight + 12;
+                }
+            }
+        }
+    });
+}
+
+function updateActiveDocsTocItem() {
+    const panel = document.querySelector('[data-docs-toc]');
+    if (!panel) return;
+    const scrollRoot = tocState.scrollRoot;
+    const rootTop = scrollRoot instanceof HTMLElement
+        ? scrollRoot.getBoundingClientRect().top
+        : 0;
+    const offset = rootTop + 28;
+    const headings = Array.from(document.querySelectorAll('.w-docs-article__content h1, .w-docs-article__content h2, .w-docs-article__content h3, .w-docs-article__content h4, .w-docs-article__content h5, .w-docs-article__content h6'));
+    let current = headings[0] || null;
+    for (let i = headings.length - 1; i >= 0; i -= 1) {
+        if (headings[i].getBoundingClientRect().top <= offset) {
+            current = headings[i];
+            break;
+        }
+    }
+    if (tocState.lockUntil && Date.now() < tocState.lockUntil && tocState.activeId) {
+        // Keep the clicked item until spy agrees — avoid the unlock gap that briefly
+        // falls back to the previous heading (lockedTop <= offset+8 but still > offset).
+        if (current && current.id === tocState.activeId) {
+            tocState.lockUntil = 0;
+        } else {
+            setActiveDocsTocItem(tocState.activeId);
+            return;
+        }
+    }
+    if (!headings.length) return;
+    setActiveDocsTocItem(current?.id || '');
+}
+
+function toggleDocumentToc() {
+    const panel = document.querySelector('[data-docs-toc]');
+    const toggle = document.querySelector('[data-docs-toc-toggle]');
+    if (!panel) return;
+    const show = panel.hidden;
+    panel.hidden = !show;
+    if (show) {
+        panel.classList.add('is-open');
+        if (toggle) toggle.hidden = true;
+        if (isMobileViewport()) document.body.classList.add('w-docs-toc-open');
+    } else {
+        panel.classList.remove('is-open');
+        if (toggle) toggle.hidden = false;
+        document.body.classList.remove('w-docs-toc-open');
+    }
+}
+
+function refreshDocumentToc(contentRootEl) {
+    clearDocumentToc();
+    const host = ensureTocHost();
+    tocState.host = host;
+    if (!host || !(contentRootEl instanceof HTMLElement)) return;
+
+    const headings = Array.from(contentRootEl.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+        .filter((node) => String(node.textContent || '').trim());
+    if (!headings.length) return;
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'w-docs-toc-toggle w-button';
+    toggle.dataset.docsTocToggle = 'true';
+    toggle.dataset.tone = 'primary';
+    toggle.dataset.size = 'sm';
+    toggle.hidden = true;
+    toggle.setAttribute('aria-label', text.tocShow || '显示目录');
+    toggle.title = text.tocShow || '显示目录';
+    toggle.textContent = text.toc || '目录';
+
+    const panel = document.createElement('nav');
+    panel.className = 'w-docs-toc';
+    panel.dataset.docsToc = 'true';
+    panel.setAttribute('aria-label', text.toc || '目录');
+
+    const header = document.createElement('div');
+    header.className = 'w-docs-toc__header';
+    const title = document.createElement('strong');
+    title.textContent = text.toc || '目录';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'w-docs-toc__close';
+    close.dataset.docsTocToggle = 'true';
+    close.setAttribute('aria-label', text.tocHide || '隐藏目录');
+    close.textContent = '×';
+    header.append(title, close);
+
+    const list = document.createElement('ul');
+    list.className = 'w-docs-toc__list';
+    list.dataset.docsTocList = 'true';
+
+    headings.forEach((heading, index) => {
+        const level = Number(String(heading.tagName || 'H2').slice(1)) || 2;
+        const label = String(heading.textContent || '').trim();
+        let id = heading.id;
+        if (!id) {
+            id = slugifyHeading(label, index);
+            heading.id = id;
+        }
+        const item = document.createElement('li');
+        item.className = 'w-docs-toc__item';
+        item.dataset.docsTocItem = 'true';
+        item.dataset.level = String(level);
+        item.dataset.id = id;
+        const link = document.createElement('a');
+        link.href = '#' + encodeURIComponent(id);
+        link.textContent = label;
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            scrollToDocsHeading(id);
+        });
+        item.append(link);
+        list.append(item);
+    });
+
+    if (!list.children.length) return;
+
+    panel.append(header, list);
+    host.append(toggle, panel);
+
+    if (isMobileViewport()) {
+        panel.hidden = true;
+        panel.classList.remove('is-open');
+        toggle.hidden = false;
+    } else {
+        panel.hidden = false;
+        panel.classList.add('is-open');
+        toggle.hidden = true;
+    }
+
+    const scrollRoot = docsScrollRoot();
+    tocState.scrollRoot = scrollRoot;
+    let ticking = false;
+    tocState.onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(() => {
+            updateActiveDocsTocItem();
+            ticking = false;
+        });
+    };
+    (scrollRoot || window).addEventListener('scroll', tocState.onScroll, { passive: true });
+    updateActiveDocsTocItem();
+
+    if (window.location.hash) {
+        window.setTimeout(() => {
+            const raw = decodeURIComponent(String(window.location.hash || '').slice(1));
+            if (raw) scrollToDocsHeading(raw);
+        }, 40);
+    }
+}
+
 function documentList(documents, heading = text.documents || '文档') {
     const wrapper = document.createElement('section');
     wrapper.className = 'w-stack';
@@ -459,6 +806,7 @@ async function loadDocuments(catalogId, updateHistory = true) {
     setBusy(contentRoot);
     try {
         const documents = await request(`/docs/documents?catalog_id=${encodeURIComponent(state.catalogId)}`);
+        clearDocumentToc();
         contentRoot.replaceChildren(documents.length ? documentList(documents) : empty(text.emptyCatalog || '该分类下暂无文档'));
         if (updateHistory) updateUrl();
     } catch (error) {
@@ -493,6 +841,7 @@ async function loadDocument(documentId, updateHistory = true) {
         enhanceCodeBlocks(body);
         article.append(title, meta, body);
         contentRoot.replaceChildren(article);
+        refreshDocumentToc(body);
         contextBadge.textContent = String(doc.title || text.documents || '文档');
         if (updateHistory) updateUrl();
     } catch (error) {
@@ -500,30 +849,65 @@ async function loadDocument(documentId, updateHistory = true) {
     }
 }
 
-async function search(keyword) {
+const SEARCH_QUERY_KEYS = ['search', 'keyword', 'q', 'module'];
+
+function readUrlSearchKeyword(url = new URL(window.location.href)) {
+    const params = url.searchParams;
+    for (const key of SEARCH_QUERY_KEYS) {
+        const value = String(params.get(key) || '').trim();
+        if (value) return value;
+    }
+    return '';
+}
+
+function clearUrlSearchParams(url) {
+    SEARCH_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
+}
+
+async function search(keyword, updateHistory = true) {
     const query = String(keyword || '').trim();
     if (!query) {
+        if (updateHistory) {
+            state.searchKeyword = '';
+            updateUrl();
+        }
         if (state.catalogId) await loadDocuments(state.catalogId, false);
-        else contentRoot.replaceChildren(empty(text.chooseCatalog || '请选择分类查看文档'));
+        else {
+            clearDocumentToc();
+            contentRoot.replaceChildren(empty(text.chooseCatalog || '请选择分类查看文档'));
+        }
         return;
     }
     setBusy(contentRoot);
     try {
         const result = await request(`/docs/search?keyword=${encodeURIComponent(query)}&include_catalogs=1`);
         const documents = Array.isArray(result) ? result : (Array.isArray(result.documents) ? result.documents : []);
+        clearDocumentToc();
         contentRoot.replaceChildren(documents.length ? documentList(documents, `“${query}”`) : empty(text.emptySearch || '没有找到匹配的文档', 'search'));
         backButton.hidden = true;
         contextBadge.textContent = '搜索';
+        state.searchKeyword = query;
+        state.catalogId = 0;
+        state.documentId = 0;
+        if (updateHistory) updateUrl({ search: query });
     } catch (error) {
         contentRoot.replaceChildren(empty(error.message || text.requestFailed, 'warning'));
     }
 }
 
-function updateUrl() {
+function updateUrl(options = {}) {
     const url = new URL(window.location.href);
-    if (state.catalogId) url.searchParams.set('catalog_id', String(state.catalogId)); else url.searchParams.delete('catalog_id');
-    if (state.documentId) url.searchParams.set('id', String(state.documentId)); else url.searchParams.delete('id');
-    window.history.pushState({ ...state }, '', url);
+    const searchKeyword = String(options.search ?? state.searchKeyword ?? '').trim();
+    clearUrlSearchParams(url);
+    if (searchKeyword) {
+        url.searchParams.set('search', searchKeyword);
+        url.searchParams.delete('catalog_id');
+        url.searchParams.delete('id');
+    } else {
+        if (state.catalogId) url.searchParams.set('catalog_id', String(state.catalogId)); else url.searchParams.delete('catalog_id');
+        if (state.documentId) url.searchParams.set('id', String(state.documentId)); else url.searchParams.delete('id');
+    }
+    window.history.pushState({ ...state, searchKeyword }, '', url);
 }
 
 let searchTimer = 0;
@@ -534,12 +918,25 @@ searchInput?.addEventListener('input', () => {
 
 treeRoot?.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-catalog-id]');
-    if (trigger) loadDocuments(Number(trigger.dataset.catalogId));
+    if (trigger) {
+        state.searchKeyword = '';
+        if (searchInput) searchInput.value = '';
+        loadDocuments(Number(trigger.dataset.catalogId));
+    }
 });
 
 contentRoot?.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-document-id]');
-    if (trigger) loadDocument(Number(trigger.dataset.documentId));
+    if (trigger) {
+        state.searchKeyword = '';
+        loadDocument(Number(trigger.dataset.documentId));
+    }
+});
+
+document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-docs-toc-toggle]')) {
+        toggleDocumentToc();
+    }
 });
 
 backButton?.addEventListener('click', () => state.catalogId && loadDocuments(state.catalogId));
@@ -548,11 +945,30 @@ window.addEventListener('popstate', () => {
     const url = new URL(window.location.href);
     state.catalogId = Number(url.searchParams.get('catalog_id') || 0);
     state.documentId = Number(url.searchParams.get('id') || 0);
+    const keyword = readUrlSearchKeyword(url);
+    state.searchKeyword = keyword;
+    if (keyword) {
+        if (searchInput) searchInput.value = keyword;
+        search(keyword, false);
+        return;
+    }
+    if (searchInput) searchInput.value = '';
     if (state.documentId) loadDocument(state.documentId, false);
     else if (state.catalogId) loadDocuments(state.catalogId, false);
+    else contentRoot?.replaceChildren(empty(text.chooseCatalog || '请选择分类查看文档'));
 });
 
 loadTree();
-if (state.documentId) loadDocument(state.documentId, false);
-else if (state.catalogId) loadDocuments(state.catalogId, false);
-else contentRoot?.replaceChildren(empty(text.chooseCatalog || '请选择分类查看文档'));
+const bootSearch = readUrlSearchKeyword();
+if (bootSearch) {
+    state.searchKeyword = bootSearch;
+    if (searchInput) searchInput.value = bootSearch;
+    search(bootSearch, false);
+} else if (state.documentId) {
+    loadDocument(state.documentId, false);
+} else if (state.catalogId) {
+    loadDocuments(state.catalogId, false);
+} else {
+    clearDocumentToc();
+    contentRoot?.replaceChildren(empty(text.chooseCatalog || '请选择分类查看文档'));
+}

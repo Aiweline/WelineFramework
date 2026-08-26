@@ -95,6 +95,8 @@
         const editorTitleEl = modalEl.querySelector('[data-w-appearance-editor-title]');
         const nameInput = modalEl.querySelector('[data-w-appearance-name]');
         const tokensEl = modalEl.querySelector('[data-w-appearance-tokens]');
+        const tokenSearchEl = modalEl.querySelector('[data-w-appearance-token-search]');
+        const tokenCountEl = modalEl.querySelector('[data-w-appearance-token-count]');
 
         const openPanel = () => {
             return ui().drawer.open(modalEl);
@@ -112,6 +114,59 @@
         let appearanceState = null;
         let scopedWorkspace = null;
         const draft = { panel: 'color', base_file: '', disk_key: '', tokens: {}, mode: '' };
+        let previewTokenTimer = 0;
+
+        const getPreviewDocument = () => {
+            const frame = document.getElementById('previewFrame');
+            if (!(frame instanceof HTMLIFrameElement)) return null;
+            try {
+                return frame.contentDocument || frame.contentWindow?.document || null;
+            } catch (_error) {
+                return null;
+            }
+        };
+
+        /** 编辑中即时把 Token 写进预览 iframe，不等待保存/整页刷新。 */
+        const applyAppearancePreviewTokens = (tokens) => {
+            const doc = getPreviewDocument();
+            if (!doc || !doc.documentElement) return false;
+            const map = tokens && typeof tokens === 'object' ? tokens : {};
+            const root = doc.documentElement;
+            const lines = [];
+            Object.entries(map).forEach(([name, value]) => {
+                const token = String(name || '').trim();
+                const cssValue = String(value ?? '').trim();
+                if (!token.startsWith('--') || !cssValue) return;
+                root.style.setProperty(token, cssValue);
+                lines.push(`  ${token}: ${cssValue};`);
+            });
+            let styleEl = doc.querySelector('style[data-theme-scoped-preview-appearance]');
+            if (!(styleEl instanceof HTMLStyleElement)) {
+                styleEl = doc.createElement('style');
+                styleEl.setAttribute('data-theme-scoped-preview-appearance', '1');
+                (doc.head || doc.documentElement).appendChild(styleEl);
+            }
+            styleEl.textContent = lines.length
+                ? `:root {\n${lines.join('\n')}\n}`
+                : '';
+            return true;
+        };
+
+        const scheduleAppearancePreviewTokens = () => {
+            window.clearTimeout(previewTokenTimer);
+            previewTokenTimer = window.setTimeout(() => {
+                applyAppearancePreviewTokens(draft.tokens);
+            }, 80);
+        };
+
+        const refreshLayoutPreview = () => {
+            const editor = window.Weline?.Theme?.Editor;
+            if (typeof editor?.refreshPreview === 'function') {
+                editor.refreshPreview();
+                return;
+            }
+            applyAppearancePreviewTokens(draft.tokens);
+        };
 
         const identity = () => {
             const themeSelect = document.getElementById('themeSelect');
@@ -168,10 +223,43 @@
             return disks.find((item) => String(item.key || '').replace(/^_+/, '') === needle) || null;
         };
 
+        const loadDiskTokens = async (panel, disk) => {
+            if (!disk || typeof disk !== 'object') {
+                return {};
+            }
+            if (Array.isArray(disk.tokens) && disk.tokens.length > 0) {
+                return collectInheritTokens(panel, disk);
+            }
+            const ref = String(disk.ref || '').trim();
+            if (!ref) {
+                return {};
+            }
+            const url = apiUrl('apiThemeDiskTokens', {
+                ...identity(),
+                panel,
+                ref,
+            });
+            const loaded = await requestJson(url, { method: 'GET' });
+            const tokensJson = loaded?.data?.tokens_json;
+            if (typeof tokensJson === 'string' && tokensJson.trim() !== '') {
+                try {
+                    const parsed = JSON.parse(tokensJson);
+                    if (Array.isArray(parsed)) {
+                        disk.tokens = parsed;
+                    }
+                } catch (_error) {
+                    // ignore malformed token payload
+                }
+            } else if (Array.isArray(loaded?.data?.tokens)) {
+                disk.tokens = loaded.data.tokens;
+            }
+            return collectInheritTokens(panel, disk);
+        };
+
         /** Meta 只存 delta：编辑时用「原生可继承基线 + 已存 delta」合成完整可编辑表。 */
-        const resolveEditableTokens = (panel, baseFile, deltaTokens) => {
+        const resolveEditableTokens = async (panel, baseFile, deltaTokens) => {
             const baseDisk = findCatalogDisk(panel, baseFile);
-            const base = baseDisk ? collectInheritTokens(panel, baseDisk) : {};
+            const base = baseDisk ? await loadDiskTokens(panel, baseDisk) : {};
             const delta = deltaTokens && typeof deltaTokens === 'object' ? deltaTokens : {};
             return { ...base, ...delta };
         };
@@ -187,9 +275,34 @@
             return btn;
         };
 
+        const tokenSearchQuery = () => {
+            if (!(tokenSearchEl instanceof HTMLInputElement)) return '';
+            return String(tokenSearchEl.value || '').trim().toLowerCase();
+        };
+
+        const matchesTokenSearch = (name, value, query) => {
+            if (!query) return true;
+            return String(name || '').toLowerCase().includes(query)
+                || String(value || '').toLowerCase().includes(query);
+        };
+
+        const updateTokenCount = (shown, total, filtered) => {
+            if (!(tokenCountEl instanceof HTMLElement)) return;
+            if (!total) {
+                tokenCountEl.hidden = true;
+                tokenCountEl.textContent = '';
+                return;
+            }
+            tokenCountEl.hidden = false;
+            tokenCountEl.textContent = filtered
+                ? `显示 ${shown} / ${total}`
+                : `${total} 个变量`;
+        };
+
         const renderTokenEditor = () => {
             if (!(tokensEl instanceof HTMLElement)) return;
             tokensEl.replaceChildren();
+            const query = tokenSearchQuery();
             const entries = Object.entries(draft.tokens);
             if (!entries.length) {
                 const empty = document.createElement('p');
@@ -200,11 +313,24 @@
                         ? '该原生盘没有可继承的品牌/功能色 Token'
                         : '该原生盘没有可继承的变量 Token');
                 tokensEl.append(empty);
+                updateTokenCount(0, 0, false);
                 return;
             }
-            entries.forEach(([name, value]) => {
+            const matched = query
+                ? entries.filter(([name, value]) => matchesTokenSearch(name, value, query))
+                : entries;
+            if (!matched.length) {
+                const empty = document.createElement('p');
+                empty.className = 'w-theme-disk-empty';
+                empty.textContent = '没有匹配的变量';
+                tokensEl.append(empty);
+                updateTokenCount(0, entries.length, true);
+                return;
+            }
+            matched.forEach(([name, value]) => {
                 const card = document.createElement('div');
                 card.className = 'w-theme-disk-token';
+                card.dataset.tokenName = name;
                 const label = document.createElement('div');
                 label.className = 'w-theme-disk-token__label';
                 label.textContent = name;
@@ -221,6 +347,7 @@
                     if (colorInput && looksLikeColorValue(textInput.value)) {
                         colorInput.value = toColorInputValue(textInput.value);
                     }
+                    scheduleAppearancePreviewTokens();
                 });
                 let colorInput = null;
                 if (looksLikeColorValue(text) || draft.panel === 'color') {
@@ -232,6 +359,7 @@
                     colorInput.addEventListener('input', () => {
                         draft.tokens[name] = colorInput.value;
                         textInput.value = colorInput.value;
+                        scheduleAppearancePreviewTokens();
                     });
                     controls.append(colorInput);
                 }
@@ -239,9 +367,11 @@
                 card.append(label, controls);
                 tokensEl.append(card);
             });
+            updateTokenCount(matched.length, entries.length, !!query);
+            scheduleAppearancePreviewTokens();
         };
 
-        const startInheritEdit = (disk) => {
+        const startInheritEdit = async (disk) => {
             const panel = panelSelect instanceof HTMLSelectElement && panelSelect.value
                 ? panelSelect.value
                 : draft.panel;
@@ -249,7 +379,7 @@
             draft.mode = 'inherit';
             draft.base_file = String(disk.key || '');
             draft.disk_key = '';
-            draft.tokens = collectInheritTokens(panel, disk);
+            draft.tokens = await loadDiskTokens(panel, disk);
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = `${disk.name || disk.key}-自定义`;
             }
@@ -258,7 +388,7 @@
             renderAppearance();
         };
 
-        const startCustomEdit = (disk) => {
+        const startCustomEdit = async (disk) => {
             const panel = panelSelect instanceof HTMLSelectElement && panelSelect.value
                 ? panelSelect.value
                 : draft.panel;
@@ -266,7 +396,7 @@
             draft.mode = 'custom';
             draft.base_file = String(disk.base_file || '');
             draft.disk_key = String(disk.disk_key || '');
-            draft.tokens = resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
+            draft.tokens = await resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = String(disk.name || disk.disk_key || '');
             }
@@ -279,7 +409,7 @@
         };
 
         /** 当前已选用的盘直接展开右侧编辑，无需再点「编辑 / 继承编辑」。 */
-        const openActiveEditor = () => {
+        const openActiveEditor = async () => {
             if (!appearanceState) {
                 setEditorVisible(false);
                 return;
@@ -297,7 +427,7 @@
                     String(item.ref || '') === active
                     || `custom:${String(item.disk_key || '')}` === active);
                 if (current) {
-                    startCustomEdit(current);
+                    await startCustomEdit(current);
                     return;
                 }
                 setEditorVisible(false);
@@ -306,7 +436,7 @@
             const panelCatalog = appearanceState.catalog?.panels?.[draft.panel] || { disks: [] };
             const native = (panelCatalog.disks || []).find((item) => String(item.ref || '') === active);
             if (native && native.palette_role !== 'mode') {
-                startInheritEdit(native);
+                await startInheritEdit(native);
                 return;
             }
             setEditorVisible(false);
@@ -434,6 +564,7 @@
                         }], 'appearance_disk_selected');
                         toast('色盘选择已保存', 'success');
                         await loadAppearance();
+                        refreshLayoutPreview();
                     } catch (error) {
                         toast(error instanceof Error ? error.message : String(error), 'error');
                     }
@@ -489,6 +620,7 @@
                         }], 'appearance_disk_selected');
                         toast('色盘选择已保存', 'success');
                         await loadAppearance();
+                        refreshLayoutPreview();
                     } catch (error) {
                         toast(error instanceof Error ? error.message : String(error), 'error');
                     }
@@ -563,7 +695,7 @@
             draft.tokens = {};
             setEditorVisible(false);
             renderAppearance();
-            openActiveEditor();
+            await openActiveEditor();
         };
 
         const saveAppearance = async (asNew) => {
@@ -585,9 +717,8 @@
             });
             draft.disk_key = String(result?.data?.disk_key || draft.disk_key || '');
             const savedKey = draft.disk_key;
-            const baseTokens = draft.base_file
-                ? collectInheritTokens(draft.panel, findCatalogDisk(draft.panel, draft.base_file) || {})
-                : {};
+            const baseDisk = draft.base_file ? findCatalogDisk(draft.panel, draft.base_file) : null;
+            const baseTokens = baseDisk ? await loadDiskTokens(draft.panel, baseDisk) : {};
             const deltaTokens = Object.fromEntries(Object.entries(draft.tokens).filter(([token, value]) =>
                 !Object.prototype.hasOwnProperty.call(baseTokens, token)
                     || String(baseTokens[token]) !== String(value)));
@@ -611,6 +742,7 @@
             toast(String(result?.message || '主题盘已保存'), 'success');
             // loadAppearance → openActiveEditor：保存后继续展开当前已选用盘
             await loadAppearance();
+            refreshLayoutPreview();
         };
 
         const openAndLoad = async () => {
@@ -643,6 +775,12 @@
                 });
         });
 
+        if (tokenSearchEl instanceof HTMLInputElement) {
+            tokenSearchEl.addEventListener('input', () => {
+                renderTokenEditor();
+            });
+        }
+
         if (panelSelect instanceof HTMLSelectElement) {
             panelSelect.addEventListener('change', () => {
                 draft.panel = panelSelect.value || 'color';
@@ -650,6 +788,9 @@
                 draft.disk_key = '';
                 draft.tokens = {};
                 draft.mode = '';
+                if (tokenSearchEl instanceof HTMLInputElement) {
+                    tokenSearchEl.value = '';
+                }
                 setEditorVisible(false);
                 renderAppearance();
                 openActiveEditor();

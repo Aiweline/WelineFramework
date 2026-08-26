@@ -4,7 +4,7 @@
  *
  * @hook-priority 100
  * @hook-sort-order 1
- * @hook-solo false
+ * @hook-solo true
  */
 /** @var \Weline\Framework\View\Template $this */
 
@@ -41,8 +41,8 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     <a href="#" class="location-link" title="<?= __('Select delivery address') ?>" data-action="select-location">
         <w:icon name="pin" size="sm"></w:icon>
         <div class="location-text">
-            <span class="location-line-1"><?= __('Deliver to') ?></span>
-            <span class="location-line-2" data-location-display><?= htmlspecialchars((string)$displayText, ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="w-text-muted location-line-1"><?= __('Deliver to') ?></span>
+            <span class="w-text location-line-2" data-location-display><?= htmlspecialchars((string)$displayText, ENT_QUOTES, 'UTF-8') ?></span>
         </div>
         <w:icon name="chevron-down" size="sm"></w:icon>
     </a>
@@ -79,7 +79,7 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
         </div>
         <p class="location-selector-message" data-location-message role="status" aria-live="polite" hidden></p>
         <div class="location-selector-footer">
-            <button type="button" class="w-button" data-action="close-selector" data-w-close="" data-tone="quiet" data-size="sm"><?= __('Close') ?></button>
+            <button type="button" class="w-button" data-action="close-selector" data-w-close="" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('Close') ?></button>
         </div>
     </div>
 </div>
@@ -115,10 +115,14 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     }
 
     function initLocationSelector() {
-        var selector = document.querySelector('[data-geo-location-selector]');
-        if (!selector) {
+        document.querySelectorAll('[data-geo-location-selector]').forEach(bindLocationSelector);
+    }
+
+    function bindLocationSelector(selector) {
+        if (!(selector instanceof Element) || selector.getAttribute('data-location-bound') === '1') {
             return;
         }
+        selector.setAttribute('data-location-bound', '1');
 
         var link = selector.querySelector('[data-action="select-location"]');
         var dropdown = selector.querySelector('.location-selector-dropdown');
@@ -168,6 +172,7 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 
         link.addEventListener('click', function (event) {
             event.preventDefault();
+            event.stopPropagation();
             dropdown.hidden = !dropdown.hidden;
             if (!dropdown.hidden) {
                 clearLocationMessage();
@@ -343,12 +348,12 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     text-decoration: none;
     color: inherit;
     padding: 8px 12px;
-    border-radius: 6px;
-    transition: background-color 0.2s ease;
+    border-radius: var(--weline-radius-md, 6px);
+    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
 }
 
 .geo-location-selector .location-link:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
 .geo-location-selector .location-text {
@@ -359,7 +364,7 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 
 .geo-location-selector .location-line-1 {
     font-size: 12px;
-    color: #666;
+    opacity: 0.75;
 }
 
 .geo-location-selector .location-line-2 {
@@ -371,17 +376,19 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     white-space: nowrap;
 }
 
+/* 弹层挂在暗色 header 内，必须自带 surface/text，切断继承的浅色字 */
 .geo-location-selector .location-selector-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     margin-top: 8px;
     min-width: 280px;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
+    background: var(--weline-theme-surface-raised, #fff);
+    color: var(--weline-theme-text, #111);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border, #ddd);
+    border-radius: var(--weline-radius-lg, 8px);
+    box-shadow: var(--weline-theme-shadow-lg, 0 4px 12px rgba(0, 0, 0, 0.15));
+    z-index: 1100;
     padding: 16px;
 }
 
@@ -393,7 +400,7 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     margin: 0 0 16px;
     font-size: 16px;
     font-weight: 600;
-    color: #111;
+    color: var(--weline-theme-text, #111);
 }
 
 .geo-location-selector .location-option {
@@ -403,16 +410,18 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     gap: 12px;
     padding: 12px;
     margin-bottom: 8px;
-    background: #f8f9fa;
-    border: 1px solid #eee;
-    border-radius: 6px;
+    background: var(--weline-theme-surface-muted, #f8f9fa);
+    color: var(--weline-theme-text, #111);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border, #eee);
+    border-radius: var(--weline-radius-md, 6px);
     cursor: pointer;
     text-align: left;
-    transition: background-color 0.2s ease;
+    font: inherit;
+    transition: background-color var(--weline-theme-transition-base, 0.2s ease);
 }
 
 .geo-location-selector .location-option:hover {
-    background: #e9ecef;
+    background: color-mix(in srgb, var(--weline-theme-primary, #0d6efd) 10%, var(--weline-theme-surface-muted, #f8f9fa));
 }
 
 .geo-location-selector .location-option.loading {
@@ -425,9 +434,10 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     gap: 8px;
     margin-top: 12px;
     padding: 12px;
-    background: #f8f9fa;
-    border: 1px solid #eee;
-    border-radius: 6px;
+    background: var(--weline-theme-surface-muted, #f8f9fa);
+    color: var(--weline-theme-text, #111);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border, #eee);
+    border-radius: var(--weline-radius-md, 6px);
 }
 
 .geo-location-selector .location-manual-form[hidden] {
@@ -436,21 +446,23 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 
 .geo-location-selector .location-manual-label {
     font-size: 12px;
-    color: #555;
+    color: var(--weline-theme-text-muted, #555);
 }
 
 .geo-location-selector .location-manual-input {
     width: 100%;
     min-height: 38px;
     padding: 8px 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border, #ddd);
+    border-radius: var(--weline-radius-sm, 4px);
+    background: var(--weline-theme-surface-raised, #fff);
+    color: var(--weline-theme-text, #111);
     font: inherit;
 }
 
 .geo-location-selector .location-manual-input:focus {
-    outline: 2px solid rgba(13, 110, 253, 0.2);
-    border-color: #86b7fe;
+    outline: 2px solid color-mix(in srgb, var(--weline-theme-primary, #0d6efd) 25%, transparent);
+    border-color: var(--weline-theme-primary, #0d6efd);
 }
 
 .geo-location-selector .location-manual-actions {
@@ -462,28 +474,29 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 .geo-location-selector .location-action-primary,
 .geo-location-selector .location-action-secondary {
     padding: 6px 12px;
-    border-radius: 4px;
-    border: 1px solid #ddd;
+    border-radius: var(--weline-radius-sm, 4px);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border, #ddd);
     cursor: pointer;
+    font: inherit;
 }
 
 .geo-location-selector .location-action-primary {
-    border-color: #0d6efd;
-    background: #0d6efd;
-    color: #fff;
+    border-color: var(--weline-theme-primary, #0d6efd);
+    background: var(--weline-theme-primary, #0d6efd);
+    color: var(--weline-theme-on-primary, #fff);
 }
 
 .geo-location-selector .location-action-secondary {
-    background: #fff;
-    color: #111;
+    background: var(--weline-theme-surface-raised, #fff);
+    color: var(--weline-theme-text, #111);
 }
 
 .geo-location-selector .location-selector-message {
     margin: 10px 0 0;
     padding: 8px 10px;
-    border-radius: 4px;
-    background: #eef5ff;
-    color: #084298;
+    border-radius: var(--weline-radius-sm, 4px);
+    background: color-mix(in srgb, var(--weline-theme-primary, #0d6efd) 12%, var(--weline-theme-surface-raised, #fff));
+    color: var(--weline-theme-text, #111);
     font-size: 13px;
     line-height: 1.45;
 }
@@ -493,18 +506,15 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 }
 
 .geo-location-selector .location-selector-message.error {
-    background: #f8d7da;
-    color: #842029;
+    background: color-mix(in srgb, var(--weline-theme-danger, #dc3545) 12%, var(--weline-theme-surface-raised, #fff));
 }
 
 .geo-location-selector .location-selector-message.warning {
-    background: #fff3cd;
-    color: #664d03;
+    background: color-mix(in srgb, var(--weline-theme-warning, #ffc107) 18%, var(--weline-theme-surface-raised, #fff));
 }
 
 .geo-location-selector .location-selector-message.success {
-    background: #d1e7dd;
-    color: #0f5132;
+    background: color-mix(in srgb, var(--weline-theme-success, #198754) 12%, var(--weline-theme-surface-raised, #fff));
 }
 
 .geo-location-selector .location-selector-footer {
@@ -512,12 +522,8 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
     text-align: right;
 }
 
-.geo-location-selector .btn-close {
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    background: #fff;
-    border-radius: 4px;
-    cursor: pointer;
+.geo-location-selector .location-selector-footer .w-button {
+    color: var(--weline-theme-text, #111);
 }
 
 @media (max-width: 768px) {

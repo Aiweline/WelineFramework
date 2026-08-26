@@ -1,0 +1,63 @@
+﻿"万能分类后台 Resource 不支持操作：%{1}","万能分类后台 Resource 不支持操作：%{1}"
+万能分类后台,万能分类后台
+维护分类树、保存、删除与拖拽排序。,"Maintain category tree, save, delete, and drag reorder."
+读取分类详情,"Read category details"
+保存分类,"Save category"
+删除分类,"Delete category"
+拖拽排序分类,"Reorder categories by drag and drop"
+万能分类,"Universal Catalog"
+"Catalog hub facade for multi-space category trees.","Catalog hub facade for multi-space category trees."
+分类读取失败：%{1},"Failed to load categories: %{1}"
+分类保存失败,"Failed to save category"
+分类已保存,"Category saved"
+分类已删除,"Category deleted"
+分类顺序已保存,"Category order saved"
+分类不存在,"Category not found"
+"website_id 必须是非负整数","website_id must be a non-negative integer"
+tree,tree
+维护多空间分类树,维护多空间分类树
+save,save
+保存分类结构,保存分类结构
+trash,trash
+删除分类结构,删除分类结构
+分类排序,分类排序
+查看分类,查看分类
+查看分类详情,查看分类详情
+空间,空间
+Website,Website
+切换,切换
+添加子分类,添加子分类
+删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？,删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？
+分类删除失败,"Failed to delete category"
+分类排序失败,"Failed to reorder categories"
+挂靠为子分类,挂靠为子分类
+插入到上方,插入到上方
+插入到下方,插入到下方
+"Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠","Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠"
+分类管理操作,分类管理操作
+产品分类,"Product Categories"
+添加顶级分类,添加顶级分类
+返回商品,返回商品
+分类树,分类树
+暂无分类,暂无分类
+添加分类,添加分类
+编辑分类,编辑分类
+分类信息,分类信息
+请从左侧选择分类，或添加一个新分类,请从左侧选择分类，或添加一个新分类
+分类名称,分类名称
+"分类 Code","分类 Code"
+"URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新","URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新"
+分类路径,分类路径
+"根据父分类与 Code 自动生成；子分类路径会随父级变化","根据父分类与 Code 自动生成；子分类路径会随父级变化"
+父分类,父分类
+顶级分类,顶级分类
+启用分类,启用分类
+删除,删除
+取消,取消
+保存,保存
+未注册的分类空间：%{1},"Unregistered catalog space: %{1}"
+"分类空间 space 不能为空","Catalog space cannot be empty"
+分类接口不支持该操作：%{1},"Catalog operation not supported: %{1}"
+"分类结构只能在 Website 范围维护","Category structure can only be maintained at website scope"
+"展示选择只能在 Store/Channel 范围配置","Display selection can only be configured at store/channel scope"
+"""万能分类后台 Resource 不支持操作：%{1}""","Catalog admin resource does not support operation: %{1}"

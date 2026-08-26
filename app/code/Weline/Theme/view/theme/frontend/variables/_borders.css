@@ -12,10 +12,14 @@
 
 :root {
     /* ========== 边框宽度 ========== */
+    --border-width: 1px;
+    --border-width-0: 0;
+    --border-width-2: 2px;
     --border-width-none: 0;
     --border-width-thin: 1px;
     --border-width-medium: 2px;
     --border-width-thick: 3px;
+    --border-style: solid;
 
     /* ========== 边框圆角 ========== */
     --border-radius-none: 0;
@@ -35,4 +39,29 @@
     --border-input: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
     --border-button: var(--border-width-thin) var(--border-style-solid) var(--color-primary-border);
     --border-card: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
+
+    /* ========== 圆角别名（兼容历史 --radius-*） ========== */
+    --radius-none: var(--border-radius-none);
+    --radius-sm: var(--border-radius-sm);
+    --radius-md: var(--border-radius-md);
+    --radius-lg: var(--border-radius-lg);
+    --radius-xl: var(--border-radius-xl);
+    --radius-2xl: var(--border-radius-2xl);
+    --radius-full: var(--border-radius-full);
+    --radius-pill: var(--border-radius-full);
+
+    /* ========== foundation 圆角别名 ========== */
+    --weline-radius-sm: var(--radius-sm);
+    --weline-radius-md: var(--radius-md);
+    --weline-radius-lg: var(--radius-lg);
+    --weline-radius-xl: var(--radius-xl);
+    --weline-radius-2xl: var(--radius-2xl);
+    --weline-radius-round: var(--radius-full);
+
+    /* ========== weshop 圆角桥接 ========== */
+    --weshop-border-radius-sm: var(--radius-sm);
+    --weshop-border-radius-md: var(--radius-md);
+    --weshop-border-radius-lg: var(--radius-lg);
+    --weshop-border-radius-xl: var(--radius-xl);
+    --weshop-border-radius-full: var(--radius-full);
 }

@@ -1,0 +1,15 @@
+<?php
+/**
+ * Ensure Theme storefront image fallback is present on Product surfaces.
+ *
+ * @hook-priority 45
+ * @hook-sort-order 45
+ */
+$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
+if ($isBackend) {
+    return;
+}
+?>
+<script src="@static(Weline_Theme::js/storefront-image-fallback.js)?v=20260825-imgph3"
+        defer
+        data-no-extract="true"></script>

@@ -1,0 +1,23 @@
+<?php
+/**
+ * Global storefront image placeholder (single static SVG src — never data:image).
+ *
+ * @hook-priority 40
+ * @hook-sort-order 40
+ */
+$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
+if ($isBackend) {
+    return;
+}
+
+$placeholderSrc = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
+$placeholderSrcJson = json_encode($placeholderSrc, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+?>
+<script>
+window.Weline = window.Weline || {};
+window.Weline.Theme = window.Weline.Theme || {};
+window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?>;
+</script>
+<script src="@static(Weline_Theme::js/storefront-image-fallback.js)?v=20260825-imgph3"
+        defer
+        data-no-extract="true"></script>

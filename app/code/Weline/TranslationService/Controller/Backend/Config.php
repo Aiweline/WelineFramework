@@ -170,7 +170,7 @@ class Config extends \Weline\Framework\App\Controller\BackendPageController
         }
 
         try {
-            $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
+            $adapter = $this->providerFactory->createProvider($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
             if (!$adapter) {
                 return $this->json(['success' => false, 'message' => __('未找到渠道适配器')]);
             }

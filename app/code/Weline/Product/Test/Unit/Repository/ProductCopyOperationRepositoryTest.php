@@ -50,6 +50,7 @@ final class ProductCopyOperationRepositoryTest extends TestCase
             $draft->sourceStoreId = 0;
             $draft->targetWebsiteId = 7;
             $draft->targetStoreId = 3;
+            $draft->targetStoreIds = [3, 4];
             $draft->categoryIds = [10, 11];
             $draft->excludedCategoryIds = [12];
             $draft->fieldPackages = [CopyDraft::PKG_IDENTITY, CopyDraft::PKG_PRICE];

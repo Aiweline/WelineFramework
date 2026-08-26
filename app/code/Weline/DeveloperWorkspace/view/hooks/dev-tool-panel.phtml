@@ -4367,13 +4367,7 @@ const DevToolPanel = (function() {
             content.innerHTML = '<div class="dev-tool-empty">无法构建 API 地址（请从后台打开本页）</div>';
             return Promise.resolve();
         }
-        return Weline.adminRequest('developer_workspace', url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
+        return devToolFetchJson(url)
             .then(data => {
                 if (data && Number(data.code) === 200) {
                     state.allRouteModules = data.data || [];
@@ -4542,21 +4536,22 @@ const DevToolPanel = (function() {
         return '';
     }
 
-    function devToolFetchJson(url) {
+    function devToolFetchJson(url, options) {
+        options = options || {};
         var call = (window.Weline && typeof window.Weline.developerWorkspaceRequest === 'function')
             ? window.Weline.developerWorkspaceRequest
-            : (window.Weline && typeof window.Weline.adminRequest === 'function'
-                ? function(u, o){ return window.Weline.adminRequest('developer_workspace', u, o); }
-                : null);
+            : null;
         if (!call) {
             return Promise.reject(new Error('开发面板请求桥接不可用。'));
         }
-        return call(url, {
-            method: 'GET',
-            headers: {
+        var headers = Object.assign({
                 'Accept': 'application/json',
                 'X-Weline-Dev-Tool': '1'
-            }
+            }, options.headers || {});
+        return call(url, {
+            method: options.method || 'GET',
+            headers: headers,
+            body: options.body
         }).then(function(data) {
             // The QueryProvider bridge returns a fetch-compatible Response-like object.
             // Detect the response contract by capability because it intentionally is
@@ -5372,9 +5367,10 @@ const DevToolPanel = (function() {
             });
         }
 
-        return Weline.adminRequest('developer_workspace', url.href, {
+        return fetch(url.href, {
             method: 'HEAD',
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            cache: 'no-store'
         }).then(function(response) {
             var fpc = (response.headers.get('X-Weline-FPC') || '').trim();
             var hitHeader = (response.headers.get('X-Wls-Performance-Fpc-Hit') || '').trim();
@@ -5506,13 +5502,7 @@ const DevToolPanel = (function() {
             return;
         }
 
-        Weline.adminRequest('developer_workspace', url)
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error(response.status === 404 ? '请求链路不存在或已过期，请刷新页面重试' : ('HTTP ' + response.status));
-                }
-                return response.json();
-            })
+        return devToolFetchJson(url)
             .then(function(data) {
                 if (!data || Number(data.code) !== 200) {
                     throw new Error((data && (data.msg || data.message)) || 'trace load failed');
@@ -6147,8 +6137,7 @@ const DevToolPanel = (function() {
                     resultEl.style.display = 'block';
                     resultEl.innerHTML = '<span style="color:#888;">执行中…</span>';
                     target.disabled = true;
-                    Weline.adminRequest('developer_workspace', url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
-                        .then(function(r) { return r.json(); })
+                    devToolFetchJson(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
                         .then(function(data) {
                             target.disabled = false;
                             if (data && data.code === 200 && data.data && Array.isArray(data.data.rows)) {

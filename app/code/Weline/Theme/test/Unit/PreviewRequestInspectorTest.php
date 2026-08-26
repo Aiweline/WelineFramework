@@ -16,6 +16,20 @@ class PreviewRequestInspectorTest extends TestCase
 
         $this->assertFalse($inspector->shouldUseStoredPreviewContext());
         $this->assertFalse($inspector->shouldAllowPreviewTokenCookie());
+        $this->assertFalse($inspector->isEditorMode());
+    }
+
+    public function testIsEditorModeDetectsQueryFlag(): void
+    {
+        $on = new PreviewRequestInspector($this->createRequest('/theme/frontend/theme-preview/content', [
+            'editor_mode' => '1',
+        ]));
+        $this->assertTrue($on->isEditorMode());
+
+        $truthy = new PreviewRequestInspector($this->createRequest('/theme/frontend/theme-preview/content', [
+            'editor_mode' => 'true',
+        ]));
+        $this->assertTrue($truthy->isEditorMode());
     }
 
     public function testPreviewShellRouteAllowsStoredPreviewContextButBlocksCookieTokenOnThemeEditor(): void

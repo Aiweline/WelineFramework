@@ -205,12 +205,22 @@ class DefaultLayoutSeeder
 
             // ==================== 产品详情页默认布局 ====================
             ThemeLayout::PAGE_TYPE_PRODUCT => [
+                // 产品主要信息（Product 拥有）
+                [
+                    'area' => ThemeLayout::AREA_CONTENT,
+                    'slot_id' => 'product-main',
+                    'widget_code' => 'product-info',
+                    'widget_module' => 'Weline_Product',
+                    'widget_type' => 'product',
+                    'config' => [],
+                    'sort_order' => 0,
+                ],
                 // 相关产品推荐
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
                     'slot_id' => 'product-related-products',
                     'widget_code' => 'related-products',
-                    'widget_module' => 'Weline_Theme',
+                    'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
                         'title' => '相关产品',
@@ -252,17 +262,17 @@ class DefaultLayoutSeeder
 
             // ==================== 产品列表页默认布局 ====================
             ThemeLayout::PAGE_TYPE_PRODUCT_LIST => [
-                // 推荐产品区域 - 特色产品
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
                     'slot_id' => 'list-recommendations',
-                    'widget_code' => 'featured-products',
-                    'widget_module' => 'Weline_Theme',
+                    'widget_code' => 'recommended-products',
+                    'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
                         'title' => '推荐产品',
-                        'limit' => 4,
-                        'columns' => 4,
+                        'limit' => 8,
+                        'columns' => '4',
+                        'layout' => 'grid',
                     ],
                     'sort_order' => 0,
                 ],
@@ -270,17 +280,18 @@ class DefaultLayoutSeeder
 
             // ==================== 分类页默认布局 ====================
             ThemeLayout::PAGE_TYPE_CATEGORY => [
-                // 相关分类
+                // 推荐产品
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
                     'slot_id' => 'category-recommendations',
-                    'widget_code' => 'category-grid',
-                    'widget_module' => 'Weline_Theme',
-                    'widget_type' => 'category',
+                    'widget_code' => 'recommended-products',
+                    'widget_module' => 'Weline_Product',
+                    'widget_type' => 'product',
                     'config' => [
-                        'title' => '相关分类',
-                        'limit' => 6,
-                        'columns' => 3,
+                        'title' => '推荐产品',
+                        'limit' => 8,
+                        'columns' => '4',
+                        'layout' => 'grid',
                     ],
                     'sort_order' => 0,
                 ],
@@ -293,7 +304,7 @@ class DefaultLayoutSeeder
                     'area' => ThemeLayout::AREA_CONTENT,
                     'slot_id' => 'cart-recommendations',
                     'widget_code' => 'cross-sell',
-                    'widget_module' => 'Weline_Theme',
+                    'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
                         'title' => '您可能还需要',

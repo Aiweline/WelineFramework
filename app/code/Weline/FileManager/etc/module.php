@@ -20,9 +20,9 @@ return [
         \Weline\FileManager\Api\FileAssetLibraryInterface::class => \Weline\FileManager\Service\FileAssetLibrary::class,
         \Weline\FileManager\Api\FileAccessPolicyInterface::class => \Weline\FileManager\Service\FileAccessPolicy::class,
         \Weline\FileManager\Api\LayoutContentValidatorInterface::class => \Weline\FileManager\Service\LayoutContentValidator::class,
-        'theme.layout_content_validator.file_assets' => \Weline\FileManager\Extends\Module\Weline_Theme\Integration\FileAssetLayoutContentValidator::class,
-        'theme.layout_value_hydrator.file_image' => \Weline\FileManager\Extends\Module\Weline_Theme\Integration\FileImageLayoutValueHydrator::class,
-        \Weline\Widget\Api\Param\FileImagePreviewResolverInterface::class => \Weline\FileManager\Extends\Module\Weline_Widget\Integration\WidgetFileImagePreviewResolver::class,
+        'theme.layout_content_validator.file_assets' => \Weline\FileManager\extends\module\Weline_Theme\Integration\FileAssetLayoutContentValidator::class,
+        'theme.layout_value_hydrator.file_image' => \Weline\FileManager\extends\module\Weline_Theme\Integration\FileImageLayoutValueHydrator::class,
+        \Weline\Widget\Api\Param\FileImagePreviewResolverInterface::class => \Weline\FileManager\extends\module\Weline_Widget\Integration\WidgetFileImagePreviewResolver::class,
         'wls_panel.operation_definition.Weline_FileManager' => \Weline\FileManager\Integration\Server\WlsPanelOperationDefinitionProvider::class,
     ],
 ];

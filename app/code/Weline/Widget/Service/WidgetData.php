@@ -32,7 +32,7 @@ class WidgetData
         'blog', 'product', 'category', 'search', 'filter', 'map',
         'video', 'audio', 'social', 'newsletter', 'faq', 'timeline',
         'stats', 'counter', 'progress', 'chart', 'table', 'calendar',
-        'chat', 'comment'
+        'chat', 'comment', 'notice', 'notice-rights'
     ];
     
     /**

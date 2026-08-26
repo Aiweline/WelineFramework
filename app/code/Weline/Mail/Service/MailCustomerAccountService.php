@@ -183,6 +183,68 @@ class MailCustomerAccountService
         return false;
     }
 
+    public function resolveFrontendCustomerId(mixed $user = null): int
+    {
+        if (is_object($user) && method_exists($user, 'getId')) {
+            $customerId = (int)$user->getId();
+            if ($customerId > 0) {
+                return $customerId;
+            }
+        }
+
+        try {
+            $session = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession();
+            $sessionUser = method_exists($session, 'getUser') ? $session->getUser() : null;
+            if (is_object($sessionUser) && method_exists($sessionUser, 'getId')) {
+                $customerId = (int)$sessionUser->getId();
+                if ($customerId > 0) {
+                    return $customerId;
+                }
+            }
+            if (method_exists($session, 'getUserId')) {
+                $customerId = (int)$session->getUserId();
+                if ($customerId > 0) {
+                    return $customerId;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return list<\Weline\Mail\Model\MailAccount>
+     */
+    public function getActiveAccountsForCustomer(int $customerId): array
+    {
+        if ($customerId <= 0) {
+            return [];
+        }
+
+        /** @var \Weline\Mail\Model\MailAccount $accountModel */
+        $accountModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Mail\Model\MailAccount::class
+        );
+        $accounts = $accountModel->clear()
+            ->order(\Weline\Mail\Model\MailAccount::schema_fields_EMAIL, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        return array_values(array_filter(
+            $accounts,
+            static fn($account): bool => (int)$account->getData('customer_id') === $customerId
+                && (string)$account->getData('status') === 'active'
+                && trim((string)$account->getData('email')) !== ''
+        ));
+    }
+
+    public function hasActiveAccountForCustomer(int $customerId): bool
+    {
+        return $this->getActiveAccountsForCustomer($customerId) !== [];
+    }
+
     private function isDomainReadyForApply(MailDomain $domain, bool $fakeMode): bool
     {
         if ($this->isFakeDomain($domain)) {

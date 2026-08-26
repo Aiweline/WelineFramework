@@ -38,14 +38,14 @@ $this->assign('title', $title);
         }
 
         .checkout-main.one-page {
-            width: min(1180px, calc(100% - 40px));
+            width: min(var(--size-content-1180), calc(100% - var(--size-control-md)));
             margin: 0 auto;
             padding: var(--weline-layout-spacing-3xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
         }
 
         .checkout-content-wrapper {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+            grid-template-columns: minmax(0, 1fr) minmax(var(--layout-sidebar-width), var(--size-panel-360));
             gap: var(--weline-layout-spacing-lg);
             align-items: start;
         }
@@ -59,7 +59,7 @@ $this->assign('title', $title);
         }
 
         .checkout-form {
-            min-height: 420px;
+            min-height: var(--token-size-420px);
         }
 
         .checkout-summary.sticky {
@@ -109,8 +109,8 @@ $this->assign('title', $title);
 
         @media (max-width: 900px) {
             .checkout-main.one-page {
-                width: min(100% - 28px, 1180px);
-                padding: 28px 0 56px;
+                width: min(100% - var(--size-control-xs), var(--size-content-1180));
+                padding: var(--spacing-7) 0 var(--size-control-2xl);
             }
 
             .checkout-content-wrapper {

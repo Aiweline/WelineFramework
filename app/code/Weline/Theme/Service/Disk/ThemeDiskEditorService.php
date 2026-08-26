@@ -22,7 +22,7 @@ class ThemeDiskEditorService
     {
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
-        $catalog = $this->catalogService->getCatalog($area, $theme);
+        $catalog = $this->catalogService->getCatalog($area, $theme, false);
         $state = $this->catalogService->getActiveAndCustom($area, $scope);
 
         return [

@@ -57,12 +57,15 @@ class Widget implements TaglibInterface
     public static function attr(): array
     {
         return [
-            'type' => true,          // 部件类型（必需）
-            'name' => true,          // 部件名称（必需）
+            'type' => false,         // 部件类型（与 code 二选一体系：type+name 或 code）
+            'name' => false,         // 部件名称
+            'code' => false,         // 部件代码（可与 type 组合；缺省 name 时等同 name）
+            'module' => false,       // 可选模块名（标记用）
             'params' => false,       // 部件参数，JSON 格式（可选）
             'block-class' => false,  // 覆盖 Block 类（可选）
             'template' => false,     // 覆盖模板路径（可选）
-            'id' => false            // 部件实例 ID（可选）
+            'id' => false,           // 部件实例 ID（可选）
+            'ref' => false,          // 稳定模板引用（slot 内 CoW 用；缺省自动生成）
         ];
     }
 
@@ -93,12 +96,19 @@ class Widget implements TaglibInterface
                 return '';
             }
 
-            // 获取必需属性
-            $type = $attributes['type'] ?? '';
-            $name = $attributes['name'] ?? '';
+            // 获取必需属性（支持 type+name，或 code 作为 name 别名）
+            $type = (string)($attributes['type'] ?? '');
+            $name = (string)($attributes['name'] ?? '');
+            $code = (string)($attributes['code'] ?? '');
+            if ($name === '' && $code !== '') {
+                $name = $code;
+            }
+            if ($code === '' && $name !== '') {
+                $code = $name;
+            }
 
-            if (empty($type) || empty($name)) {
-                return '<!-- Widget 错误: type 和 name 属性是必需的 -->';
+            if ($type === '' || $name === '') {
+                return '<!-- Widget 错误: type 与 name（或 code）属性是必需的 -->';
             }
 
             // 获取可选属性
@@ -106,6 +116,8 @@ class Widget implements TaglibInterface
             $blockClass = $attributes['block-class'] ?? $attributes['blockClass'] ?? '';
             $template = $attributes['template'] ?? '';
             $widgetId = $attributes['id'] ?? '';
+            $moduleAttr = (string)($attributes['module'] ?? '');
+            $templateRef = trim((string)($attributes['ref'] ?? ''));
 
             // 解析参数
             $params = [];
@@ -149,7 +161,12 @@ class Widget implements TaglibInterface
                     $html = self::wrapWidgetContainer($html, $widgetId, $type, $name, $params);
                 }
 
-                return $html;
+                $module = $moduleAttr !== '' ? $moduleAttr : (string)($widget['module'] ?? '');
+                if ($templateRef === '') {
+                    $templateRef = self::buildTemplateRef($type, $code !== '' ? $code : $name, $module, $params);
+                }
+
+                return self::wrapTemplateInlineWidget($html, $templateRef, $type, $code !== '' ? $code : $name, $module, $params);
             } catch (\Throwable $e) {
                 w_log_error("Widget 标签渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
                 return "<!-- Widget 错误: " . htmlspecialchars($e->getMessage()) . " -->";
@@ -416,6 +433,57 @@ class Widget implements TaglibInterface
             $paramsJson,
             $html
         );
+    }
+
+    /**
+     * 标记为模板内嵌默认部件（slot 内 CoW：未改动不落布局，改动后按 template_ref 覆盖）。
+     *
+     * @param array<string,mixed> $params
+     */
+    private static function wrapTemplateInlineWidget(
+        string $html,
+        string $templateRef,
+        string $type,
+        string $code,
+        string $module,
+        array $params
+    ): string {
+        $paramsJson = htmlspecialchars(json_encode($params, JSON_UNESCAPED_UNICODE) ?: '{}', ENT_QUOTES, 'UTF-8');
+        return sprintf(
+            '<div class="weline-template-widget widget-wrapper"'
+            . ' data-weline-template-widget="1"'
+            . ' data-template-ref="%s"'
+            . ' data-widget-type="%s"'
+            . ' data-widget-code="%s"'
+            . ' data-widget-name="%s"'
+            . ' data-widget-module="%s"'
+            . ' data-config=\'%s\''
+            . ' data-widget-params=\'%s\'>%s</div>',
+            htmlspecialchars($templateRef, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($type, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($code, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($code, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($module, ENT_QUOTES, 'UTF-8'),
+            $paramsJson,
+            $paramsJson,
+            $html
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private static function buildTemplateRef(string $type, string $code, string $module, array $params): string
+    {
+        $fingerprint = sha1(json_encode([
+            'module' => $module,
+            'type' => $type,
+            'code' => $code,
+            'params' => $params,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
+
+        $slug = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $type . '-' . $code) ?: 'widget';
+        return 'tpl:' . strtolower($slug) . ':' . substr($fingerprint, 0, 12);
     }
 
     /**

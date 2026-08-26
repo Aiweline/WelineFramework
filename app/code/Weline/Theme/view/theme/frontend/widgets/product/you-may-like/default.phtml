@@ -19,14 +19,19 @@
  * @param limit {default=8,type="number",label="显示数量"}
  * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
  * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
 
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('you-may-like');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
 $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
@@ -70,12 +75,13 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
             <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
                 <?php foreach ($products as $product): ?>
                     <?php
+                    $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0);
                     // 确保所有产品字段都是字符串，避免null值
                     $productUrl = (string)($product['url'] ?? '');
                     $productImage = (string)($product['image'] ?? '');
                     $productName = (string)($product['name'] ?? '');
                     ?>
-                    <div class="product-card">
+                    <div class="product-card" data-product-id="<?= $actionProductId ?>">
                         <div class="product-image-wrapper">
                             <a href="<?= htmlspecialchars($productUrl) ?>" class="product-image-link">
                                 <img src="<?= htmlspecialchars($productImage) ?>" 
@@ -89,14 +95,12 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
                                 <?= $product['match_score'] ?>% <?= __('匹配') ?>
                             </div>
                             
-                            <div class="product-actions">
-                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
-                                    <w:icon name="heart" size="sm"></w:icon>
-                                </button>
-                                <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
-                                    <w:icon name="eye" size="sm"></w:icon>
-                                </button>
-                            </div>
+                            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                                'product_id' => $actionProductId,
+                                'show_wishlist' => $shopperActions['show_wishlist'],
+                                'show_compare' => $shopperActions['show_compare'],
+                                'show_quickview' => $shopperActions['show_quickview'],
+                            ]) ?>
                         </div>
                         
                         <div class="product-info">
@@ -145,39 +149,39 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 
 /* -- 部件容器 -- */
 .<?= $wc ?> {
-    padding: 40px 0;
+    padding: var(--size-control-md) 0;
 }
 
 /* -- 头部区域 -- */
 .<?= $wc ?> .widget-header {
     text-align: center;
-    margin-bottom: 32px;
+    margin-bottom: var(--spacing-xl);
     position: relative;
 }
 
 .<?= $wc ?> .widget-header::after {
     content: '';
     display: block;
-    width: 60px;
-    height: 3px;
-    margin: 16px auto 0;
+    width: var(--spacing-15);
+    height: var(--border-radius-sm);
+    margin: var(--spacing-md) auto 0;
     background: linear-gradient(90deg, var(--weline-theme-primary), var(--weline-theme-primary-hover), var(--weline-theme-info));
-    border-radius: 3px;
+    border-radius: var(--border-radius-sm);
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: 28px;
+    font-size: var(--font-size-3xl);
     font-weight: 700;
     color: var(--weline-theme-text);
-    margin: 0 0 8px 0;
+    margin: 0 0 var(--spacing-sm) 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 
 .<?= $wc ?> .widget-title i {
-    font-size: 26px;
+    font-size: var(--token-size-26px);
     background: linear-gradient(135deg, var(--weline-theme-primary), var(--weline-theme-info));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -185,7 +189,7 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 }
 
 .<?= $wc ?> .widget-subtitle {
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     color: var(--weline-theme-text-muted);
     margin: 0;
 }
@@ -193,7 +197,7 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 /* -- 产品网格 -- */
 .<?= $wc ?> .products-grid {
     display: grid;
-    gap: 20px;
+    gap: var(--weline-space-5);
 }
 
 .<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
@@ -204,14 +208,14 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 /* -- 产品卡片 -- */
 .<?= $wc ?> .product-card {
     background: var(--weline-theme-surface-raised);
-    border: 1px solid var(--weline-theme-border);
-    border-radius: 12px;
+    border: var(--border-width-thin) solid var(--weline-theme-border);
+    border-radius: var(--border-radius-xl);
     overflow: hidden;
     transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 .<?= $wc ?> .product-card:hover {
-    transform: translateY(-6px);
+    transform: translateY(var(--token-size-6px));
     box-shadow: var(--weline-theme-shadow-lg);
     border-color: color-mix(in srgb, var(--weline-theme-primary) 30%, transparent);
 }
@@ -244,19 +248,19 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 /* -- 匹配度徽章 -- */
 .<?= $wc ?> .match-badge {
     position: absolute;
-    bottom: 12px;
-    left: 12px;
+    bottom: var(--weline-space-3);
+    left: var(--weline-space-3);
     background: linear-gradient(135deg, color-mix(in srgb, var(--weline-theme-primary) 92%, transparent), color-mix(in srgb, var(--weline-theme-primary-hover) 92%, transparent));
     color: var(--weline-theme-on-primary);
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-size: 12px;
+    padding: var(--spacing-1_5) var(--weline-space-3);
+    border-radius: var(--token-size-20px);
+    font-size: var(--font-size-xs);
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--spacing-1_5);
     z-index: 2;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(var(--spacing-xs));
     box-shadow: var(--weline-theme-shadow-sm);
     animation: matchPulse 3s ease-in-out infinite;
 }
@@ -267,20 +271,20 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 }
 
 .<?= $wc ?> .match-badge i {
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
 }
 
 /* -- 产品操作按钮 -- */
 .<?= $wc ?> .product-actions {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: var(--weline-space-3);
+    right: var(--weline-space-3);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-sm);
     z-index: 2;
     opacity: 0;
-    transform: translateX(8px);
+    transform: translateX(var(--spacing-sm));
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -290,8 +294,8 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 }
 
 .<?= $wc ?> .action-btn {
-    width: 36px;
-    height: 36px;
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
     border-radius: 50%;
     border: none;
     background: var(--weline-theme-surface-raised);
@@ -300,7 +304,7 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: var(--font-size-base);
     color: var(--weline-theme-text-muted);
     transition: all 0.25s ease;
 }
@@ -323,12 +327,12 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 
 /* -- 产品信息区域 -- */
 .<?= $wc ?> .product-info {
-    padding: 16px;
+    padding: var(--spacing-md);
 }
 
 .<?= $wc ?> .product-name {
-    margin: 0 0 10px 0;
-    font-size: 14px;
+    margin: 0 0 var(--spacing-2_5) 0;
+    font-size: var(--font-size-sm);
     font-weight: 500;
     line-height: 1.4;
 }
@@ -351,17 +355,17 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 .<?= $wc ?> .product-rating {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-2_5);
 }
 
 .<?= $wc ?> .product-rating .stars {
     display: flex;
-    gap: 2px;
+    gap: var(--spacing-0_5);
 }
 
 .<?= $wc ?> .product-rating .stars i {
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-warning);
 }
 
@@ -370,7 +374,7 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 }
 
 .<?= $wc ?> .review-count {
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     color: var(--weline-theme-text-muted);
 }
 
@@ -378,42 +382,42 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 .<?= $wc ?> .product-price {
     display: flex;
     align-items: baseline;
-    gap: 8px;
-    margin-bottom: 14px;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-3_5);
 }
 
 .<?= $wc ?> .price-original {
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
     text-decoration: line-through;
 }
 
 .<?= $wc ?> .price-current {
-    font-size: 20px;
+    font-size: var(--font-size-xl);
     font-weight: 700;
     color: var(--weline-theme-danger);
 }
 
 .<?= $wc ?> .price-current::first-letter {
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     font-weight: 600;
 }
 
 /* -- 加入购物车按钮 -- */
 .<?= $wc ?> .btn-add-to-cart {
     width: 100%;
-    padding: 10px 0;
+    padding: var(--spacing-2_5) 0;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--border-radius-lg);
     background: linear-gradient(135deg, var(--weline-theme-primary), var(--weline-theme-primary-hover));
     color: var(--weline-theme-on-primary);
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: var(--spacing-1_5);
     transition: all 0.3s ease;
     box-shadow: var(--weline-theme-shadow-sm);
 }
@@ -421,7 +425,7 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 .<?= $wc ?> .btn-add-to-cart:hover {
     background: linear-gradient(135deg, var(--weline-theme-primary-hover), var(--weline-theme-primary));
     box-shadow: var(--weline-theme-shadow-md);
-    transform: translateY(-1px);
+    transform: translateY(var(--spacing-neg-px));
 }
 
 .<?= $wc ?> .btn-add-to-cart:active {
@@ -430,7 +434,7 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 }
 
 .<?= $wc ?> .btn-add-to-cart i {
-    font-size: 17px;
+    font-size: var(--token-size-17px);
 }
 
 /* -- 响应式 -- */
@@ -449,31 +453,31 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
     }
 
     .<?= $wc ?> .widget-title {
-        font-size: 22px;
+        font-size: var(--font-size-2_5xl);
     }
 
     .<?= $wc ?> .product-info {
-        padding: 12px;
+        padding: var(--weline-space-3);
     }
 
     .<?= $wc ?> .products-grid {
-        gap: 12px;
+        gap: var(--weline-space-3);
     }
 }
 
 @media (max-width: 480px) {
     .<?= $wc ?> .products-grid {
         grid-template-columns: repeat(2, 1fr) !important;
-        gap: 10px;
+        gap: var(--spacing-2_5);
     }
 
     .<?= $wc ?> .price-current {
-        font-size: 16px;
+        font-size: var(--font-size-base);
     }
 
     .<?= $wc ?> .btn-add-to-cart {
-        font-size: 12px;
-        padding: 8px 0;
+        font-size: var(--font-size-xs);
+        padding: var(--spacing-sm) 0;
     }
 }
 </style>

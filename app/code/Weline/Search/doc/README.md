@@ -1,30 +1,15 @@
 # Weline_Search
 
-`Weline_Search` 是 Product current projection 的 Website 分片、可重建搜索
-投影。Product 始终是商品目录事实源。
+`Weline_Search` S1 起为**无 Product 硬依赖的万能搜索枢纽**；业务通过 `Searcher` 扩展注册（如 `ProductSearchProvider`），Product 模块 `requires Weline_Search`。
 
-当前已实现范围是 `TASK-P3C-001`、`TASK-P3C-002` 与
-`TASK-MIG-P3C`：
+## S1 验收要点
 
-- `search.website` durable registry 与 v2 shard schema；
-- family checkpoint 固定使用 Website `0` 的稳定模板，新增 Website 只展开实际分片 DDL；
-- staging generation 全量构建与 source-watermark fencing；
-- Product ResourceChange → scoped Queue → durable incremental apply；
-- Website/Store/Channel 精确隔离和幂等重放；
-- storefront 只接受 `q`，完整 Scope 由服务端 `RequestContext` 冻结；
-- mode off 读取 Product current，索引异常时显式
-  `product_direct_degraded`，并返回 watermark/hash/count 防假空证据；
-- durable per-Website degrade marker 与“Search incremental ==
-  Product current”恢复门。
-- registry full clone preflight、不可变 checkpoint/journal、shadow 全量
-  重建与增量精确追平；
-- fresh-process verify、canonical shadow report、per-Website 持久 alias
-  CAS、精确 Website/Store/Channel allowlist；
-- rollback 恢复 Product direct，同时保留 Search generation 与 checkpoint。
+- 唯一前台入口：`GET /search?q=&type=`；页头 `<w:search />`
+- QueryBin `search.search` / `hotWords` / `types` 与 GET 共用 `SearchParamGuard`
+- 默认引擎 `mysql`；可选 `wls_memory`；`redis`/`elasticsearch` 未配置 fail-closed
+- Scoped 分析表：`search_query_log`、`search_query_daily`、`search_top_query_daily`、`search_hot_word`、`search_slow_log`、`search_slow_daily`
+- 后台：搜索报告 + 性能慢日志（`<w:scope>` 切换）
+- `@Cdn` + `@Attack` → `Weline_Framework::controller_annotation_rules_collected`；Cdn/WLS 各自监听
 
-详细设计与验证见 [`search-index.md`](search-index.md)；代码与文档上下文由
-`prepare_project` 就绪后的 `resolve_task_context` 动态返回。
+历史 P3C 投影索引能力仍保留，详见 [`search-index.md`](search-index.md)。
 
-`TASK-MIG-P3C` 已完成工程验收，`GATE-P3C=GO` 已由独立任务重跑
-TEST-P3C-01..04 后签署；P3A/P3B/P3C 聚合复验后 `GATE-P3=GO`。
-本文档不把 P3 Gate 解释为生产 `mode=on` 或 `PG-8` 完成。

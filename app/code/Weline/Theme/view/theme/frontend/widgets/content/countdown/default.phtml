@@ -92,13 +92,13 @@ $style = $this->getData('style') ?? 'boxes';
 <style>
 .<?= $wc ?> {
     text-align: center;
-    padding: var(--weline-space-8, 30px);
+    padding: var(--weline-space-8);
 }
 
 .<?= $wc ?> .countdown-title {
-    font-size: var(--weline-font-size-xl, 20px);
+    font-size: var(--weline-font-size-xl);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-5, 20px);
+    margin: 0 0 var(--weline-space-5);
     color: var(--weline-theme-text);
 }
 
@@ -106,7 +106,7 @@ $style = $this->getData('style') ?? 'boxes';
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-2, 10px);
+    gap: var(--weline-space-2);
 }
 
 .<?= $wc ?>.style-boxes .time-unit {
@@ -115,26 +115,26 @@ $style = $this->getData('style') ?? 'boxes';
     align-items: center;
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
-    padding: var(--weline-space-4, 15px) var(--weline-space-5, 20px);
-    border-radius: var(--weline-radius-lg, 10px);
-    min-width: 70px;
+    padding: var(--weline-space-4) var(--weline-space-5);
+    border-radius: var(--weline-radius-lg);
+    min-width: var(--layout-header-height);
 }
 
 .<?= $wc ?>.style-boxes .time-value {
-    font-size: var(--weline-font-size-3xl, 32px);
+    font-size: var(--weline-font-size-3xl);
     font-weight: 700;
     line-height: 1;
-    font-family: var(--weline-font-mono, monospace);
+    font-family: var(--weline-font-mono);
 }
 
 .<?= $wc ?>.style-boxes .time-label {
-    font-size: var(--weline-font-size-sm, 12px);
-    margin-top: var(--weline-space-1, 5px);
+    font-size: var(--weline-font-size-sm);
+    margin-top: var(--weline-space-1);
     opacity: 0.9;
 }
 
 .<?= $wc ?>.style-boxes .time-separator {
-    font-size: var(--weline-font-size-2xl, 28px);
+    font-size: var(--weline-font-size-2xl);
     font-weight: 700;
     color: var(--weline-theme-primary);
 }
@@ -142,25 +142,25 @@ $style = $this->getData('style') ?? 'boxes';
 .<?= $wc ?>.style-inline .time-unit {
     display: inline-flex;
     align-items: baseline;
-    gap: 3px;
+    gap: var(--spacing-1_5);
 }
 
 .<?= $wc ?>.style-inline .time-value {
-    font-size: var(--weline-font-size-3xl, 36px);
+    font-size: var(--weline-font-size-3xl);
     font-weight: 700;
     color: var(--weline-theme-danger);
-    font-family: var(--weline-font-mono, monospace);
+    font-family: var(--weline-font-mono);
 }
 
 .<?= $wc ?>.style-inline .time-label {
-    font-size: var(--weline-font-size-base, 14px);
+    font-size: var(--weline-font-size-base);
     color: var(--weline-theme-text-muted);
 }
 
 .<?= $wc ?>.style-inline .time-separator {
-    font-size: var(--weline-font-size-2xl, 28px);
+    font-size: var(--weline-font-size-2xl);
     color: var(--weline-theme-border);
-    margin: 0 var(--weline-space-1, 5px);
+    margin: 0 var(--weline-space-1);
 }
 
 .<?= $wc ?>.style-circle .time-unit {
@@ -168,36 +168,36 @@ $style = $this->getData('style') ?? 'boxes';
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 80px;
-    height: 80px;
+    width: var(--sidebar-collapsed-width);
+    height: var(--sidebar-collapsed-width);
     background: var(--weline-theme-surface-raised);
-    border: 3px solid var(--weline-theme-primary);
+    border: var(--border-width-thick) solid var(--weline-theme-primary);
     border-radius: 50%;
 }
 
 .<?= $wc ?>.style-circle .time-value {
-    font-size: var(--weline-font-size-2xl, 28px);
+    font-size: var(--weline-font-size-2xl);
     font-weight: 700;
     color: var(--weline-theme-primary);
     line-height: 1;
-    font-family: var(--weline-font-mono, monospace);
+    font-family: var(--weline-font-mono);
 }
 
 .<?= $wc ?>.style-circle .time-label {
-    font-size: var(--weline-font-size-xs, 10px);
+    font-size: var(--weline-font-size-xs);
     color: var(--weline-theme-text-muted);
-    margin-top: 2px;
+    margin-top: var(--spacing-0_5);
 }
 
 .<?= $wc ?>.style-circle .time-separator {
-    font-size: var(--weline-font-size-xl, 24px);
+    font-size: var(--weline-font-size-xl);
     color: var(--weline-theme-border);
 }
 
 .<?= $wc ?> .countdown-expired {
-    font-size: var(--weline-font-size-lg, 18px);
+    font-size: var(--weline-font-size-lg);
     color: var(--weline-theme-text-muted);
-    padding: var(--weline-space-5, 20px);
+    padding: var(--weline-space-5);
 }
 
 .<?= $wc ?> .countdown-expired.is-hidden {
@@ -210,26 +210,26 @@ $style = $this->getData('style') ?? 'boxes';
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-4, 16px);
+    padding: var(--weline-space-4);
 }
 
 @media (max-width: 480px) {
     .<?= $wc ?>.style-boxes .time-unit {
-        padding: var(--weline-space-2, 10px) var(--weline-space-3, 12px);
-        min-width: 50px;
+        padding: var(--weline-space-2) var(--weline-space-3);
+        min-width: var(--size-control-50);
     }
 
     .<?= $wc ?>.style-boxes .time-value {
-        font-size: var(--weline-font-size-2xl, 24px);
+        font-size: var(--weline-font-size-2xl);
     }
 
     .<?= $wc ?>.style-circle .time-unit {
-        width: 60px;
-        height: 60px;
+        width: var(--spacing-15);
+        height: var(--spacing-15);
     }
 
     .<?= $wc ?>.style-circle .time-value {
-        font-size: var(--weline-font-size-xl, 20px);
+        font-size: var(--weline-font-size-xl);
     }
 }
 </style>

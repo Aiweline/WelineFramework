@@ -1,0 +1,125 @@
+{
+  "country_code": "CN",
+  "country_name": "中国",
+  "regions": [
+    {
+      "code": "BJ",
+      "name": "北京市",
+      "type": "province",
+      "postal_code": "100000",
+      "children": [
+        {"code": "BJ-BJ", "name": "北京市", "type": "city", "postal_code": "100000", "children": [
+          {"code": "CY", "name": "朝阳区", "type": "district", "postal_code": "100020"},
+          {"code": "HD", "name": "海淀区", "type": "district", "postal_code": "100080"},
+          {"code": "DC", "name": "东城区", "type": "district", "postal_code": "100010"},
+          {"code": "XC", "name": "西城区", "type": "district", "postal_code": "100032"}
+        ]}
+      ]
+    },
+    {
+      "code": "SH",
+      "name": "上海市",
+      "type": "province",
+      "postal_code": "200000",
+      "children": [
+        {"code": "SH-SH", "name": "上海市", "type": "city", "postal_code": "200000", "children": [
+          {"code": "PD", "name": "浦东新区", "type": "district", "postal_code": "200120"},
+          {"code": "XH", "name": "徐汇区", "type": "district", "postal_code": "200030"},
+          {"code": "HP", "name": "黄浦区", "type": "district", "postal_code": "200001"},
+          {"code": "JA", "name": "静安区", "type": "district", "postal_code": "200040"}
+        ]}
+      ]
+    },
+    {
+      "code": "GD",
+      "name": "广东省",
+      "type": "province",
+      "postal_code": "510000",
+      "children": [
+        {"code": "GZ", "name": "广州市", "type": "city", "postal_code": "510000", "children": [
+          {"code": "TH", "name": "天河区", "type": "district", "postal_code": "510630"},
+          {"code": "YH", "name": "越秀区", "type": "district", "postal_code": "510030"},
+          {"code": "PY", "name": "番禺区", "type": "district", "postal_code": "511400"}
+        ]},
+        {"code": "SZ", "name": "深圳市", "type": "city", "postal_code": "518000", "children": [
+          {"code": "NS", "name": "南山区", "type": "district", "postal_code": "518052"},
+          {"code": "FT", "name": "福田区", "type": "district", "postal_code": "518000"},
+          {"code": "LH", "name": "罗湖区", "type": "district", "postal_code": "518001"},
+          {"code": "BA", "name": "宝安区", "type": "district", "postal_code": "518101"}
+        ]},
+        {"code": "DG", "name": "东莞市", "type": "city", "postal_code": "523000"},
+        {"code": "FS", "name": "佛山市", "type": "city", "postal_code": "528000"},
+        {"code": "ZH", "name": "珠海市", "type": "city", "postal_code": "519000"}
+      ]
+    },
+    {
+      "code": "ZJ",
+      "name": "浙江省",
+      "type": "province",
+      "postal_code": "310000",
+      "children": [
+        {"code": "HZ", "name": "杭州市", "type": "city", "postal_code": "310000"},
+        {"code": "NB", "name": "宁波市", "type": "city", "postal_code": "315000"},
+        {"code": "WZ", "name": "温州市", "type": "city", "postal_code": "325000"}
+      ]
+    },
+    {
+      "code": "JS",
+      "name": "江苏省",
+      "type": "province",
+      "postal_code": "210000",
+      "children": [
+        {"code": "NJ", "name": "南京市", "type": "city", "postal_code": "210000"},
+        {"code": "SZ-JS", "name": "苏州市", "type": "city", "postal_code": "215000"},
+        {"code": "WX", "name": "无锡市", "type": "city", "postal_code": "214000"}
+      ]
+    },
+    {
+      "code": "SC",
+      "name": "四川省",
+      "type": "province",
+      "postal_code": "610000",
+      "children": [
+        {"code": "CD", "name": "成都市", "type": "city", "postal_code": "610000"}
+      ]
+    },
+    {
+      "code": "HB",
+      "name": "湖北省",
+      "type": "province",
+      "postal_code": "430000",
+      "children": [
+        {"code": "WH", "name": "武汉市", "type": "city", "postal_code": "430000"}
+      ]
+    },
+    {
+      "code": "HN",
+      "name": "湖南省",
+      "type": "province",
+      "postal_code": "410000",
+      "children": [
+        {"code": "CS", "name": "长沙市", "type": "city", "postal_code": "410000"}
+      ]
+    },
+    {
+      "code": "FJ",
+      "name": "福建省",
+      "type": "province",
+      "postal_code": "350000",
+      "children": [
+        {"code": "XM", "name": "厦门市", "type": "city", "postal_code": "361000"},
+        {"code": "FZ", "name": "福州市", "type": "city", "postal_code": "350000"}
+      ]
+    },
+    {
+      "code": "SD",
+      "name": "山东省",
+      "type": "province",
+      "postal_code": "250000",
+      "children": [
+        {"code": "QD", "name": "青岛市", "type": "city", "postal_code": "266000"},
+        {"code": "JN", "name": "济南市", "type": "city", "postal_code": "250000"}
+      ]
+    }
+  ]
+}

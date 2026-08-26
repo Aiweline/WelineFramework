@@ -38,6 +38,10 @@ class ThemeSlotDefinition
             'max' => $this->meta['max'] ?? null,
             'min' => $this->meta['min'] ?? null,
             'required' => (bool)($this->meta['required'] ?? false),
+            'has_template_widgets' => (bool)($this->meta['has_template_widgets'] ?? false),
+            'template_widgets' => is_array($this->meta['template_widgets'] ?? null)
+                ? $this->meta['template_widgets']
+                : [],
             'source_path' => $this->sourcePath,
             'meta' => $this->meta,
         ];

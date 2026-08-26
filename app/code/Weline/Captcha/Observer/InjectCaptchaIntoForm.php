@@ -35,9 +35,25 @@ final class InjectCaptchaIntoForm implements ObserverInterface
             return;
         }
 
+        $formId = (string)($attributes['id'] ?? '');
+        $intent = (string)($attributes['intent'] ?? 'generic');
+        if ($mode === 'lazy') {
+            // Marker only — storefront JS loads /captcha/frontend/challenge on first open.
+            $event->setData(
+                'html',
+                (string)$event->getData('html')
+                . '<div class="weline-captcha-lazy-host"'
+                . ' data-weline-captcha-lazy="1"'
+                . ' data-form-id="' . \htmlspecialchars($formId, \ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-intent="' . \htmlspecialchars($intent, \ENT_QUOTES, 'UTF-8') . '"'
+                . '></div>'
+            );
+            return;
+        }
+
         $html = $this->captcha->renderChallenge([
-            'form_id' => (string)($attributes['id'] ?? ''),
-            'intent' => (string)($attributes['intent'] ?? 'generic'),
+            'form_id' => $formId,
+            'intent' => $intent,
             'required' => $mode === 'required',
         ]);
         $event->setData('html', (string)$event->getData('html') . $html);

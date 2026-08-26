@@ -190,6 +190,10 @@ try {
     [, $literalCredentialCount] = LearningMcp\Redactor::string('password: actual-secret-value');
     check($literalCredentialCount === 1, 'credential detector still rejects a literal sensitive assignment');
     $store = new Store($config);
+    check(
+        (int) $store->database()->query('PRAGMA busy_timeout')->fetchColumn() === 30_000,
+        'global learning SQLite waits thirty seconds for a concurrent writer',
+    );
     check($store->schemaVersion() === Store::SCHEMA_VERSION, 'global migrations reach current schema version');
     check(Store::SCHEMA_VERSION === 3, 'data lifecycle migration advances global schema to version 3');
     check(
@@ -834,6 +838,13 @@ try {
     );
     $fixtureResolved = ProjectResolver::resolve($fixtureRoot);
     $fixtureIndex = new ProjectIndex($config, $fixtureResolved);
+    $projectDatabaseProperty = (new ReflectionClass($fixtureIndex))->getProperty('database');
+    $projectDatabase = $projectDatabaseProperty->getValue($fixtureIndex);
+    check(
+        $projectDatabase instanceof PDO
+            && (int) $projectDatabase->query('PRAGMA busy_timeout')->fetchColumn() === 30_000,
+        'project index SQLite waits thirty seconds for a concurrent writer',
+    );
     $fixtureIndexer = new ProjectIndexer($fixtureIndex, $config);
     $fixtureFull = $fixtureIndexer->index(['mode' => 'full']);
     check(
@@ -1205,6 +1216,89 @@ try {
         ($lateIndexedBundle['status'] ?? '') !== 'CONTEXT_TARGET_NOT_FOUND'
             && ($lateIndexedBundle['missing_symbols'] ?? ['missing']) === [],
         'symbol-only request refreshes a current-but-incomplete index before target-not-found',
+    );
+    $forbiddenReadBundle = $batchFixtureIntelligence->call('get_edit_bundle', [
+        'repository' => $batchFixtureRoot,
+        'task' => 'Read one explicit dependency that remains forbidden for edits',
+        'paths' => ['src/Batch/BatchFile00.php'],
+        'symbols' => ['BatchFile00::value'],
+        'task_contract' => [
+            'goal' => 'Materialize forbidden write targets as read-only planning context',
+            'known_paths' => ['src/Batch/BatchFile00.php'],
+            'known_symbols' => ['BatchFile00::value'],
+            'allowed_scope' => ['src/Batch/**'],
+            'forbidden_scope' => ['src/Batch/BatchFile00.php'],
+        ],
+        'include_docs' => false,
+        'include_skills' => false,
+    ]);
+    check(
+        ($forbiddenReadBundle['status'] ?? '') !== 'CONTEXT_TARGET_NOT_FOUND'
+            && ($forbiddenReadBundle['missing_paths'] ?? ['missing']) === []
+            && ($forbiddenReadBundle['missing_symbols'] ?? ['missing']) === [],
+        'get_edit_bundle keeps forbidden write targets available as read-only context',
+    );
+    mkdir($batchFixtureRoot . '/src/Batch/doc', 0700, true);
+    file_put_contents(
+        $batchFixtureRoot . '/src/Batch/doc/README.md',
+        "# Context batch documentation
+",
+    );
+    $roleProbe = new ProjectRetriever(
+        $fixtureIndex,
+        new SparseVectorizer($config),
+        $config,
+    );
+    check(
+        !in_array(
+            'documentation',
+            $roleProbe->expectedContextRolesForTask(
+                'MCP retrieval service documentation',
+                ['include_docs' => false],
+            ),
+            true,
+        )
+            && in_array(
+                'documentation',
+                $roleProbe->expectedContextRolesForTask(
+                    'MCP retrieval service documentation',
+                    ['include_docs' => true],
+                ),
+                true,
+            ),
+        'include_docs controls the inferred documentation role and child search eligibility',
+    );
+    $boundedExplicitBundle = $batchFixtureIntelligence->call('get_edit_bundle', [
+        'repository' => $batchFixtureRoot,
+        'task' => 'Update configuration entrypoint provider query and phtml template in one bounded file',
+        'paths' => ['src/Batch/BatchFile00.php'],
+        'task_contract' => [
+            'goal' => 'Close explicit-path context without unavailable architecture roles',
+            'known_paths' => ['src/Batch/BatchFile00.php'],
+            'allowed_scope' => ['src/Batch/BatchFile00.php'],
+        ],
+        'kinds' => ['code'],
+        'include_docs' => true,
+        'include_skills' => false,
+    ]);
+    $boundedRoleDiscovery = (array) (
+        $boundedExplicitBundle['server_aggregation']['role_discovery'] ?? []
+    );
+    check(
+        ($boundedExplicitBundle['ready_for_edit'] ?? false) === true
+            && ($boundedExplicitBundle['continuation_needed'] ?? true) === false
+            && ($boundedExplicitBundle['context_completeness']['missing_roles'] ?? ['missing']) === []
+            && in_array(
+                'documentation',
+                (array) ($boundedRoleDiscovery['inferred_expected_roles'] ?? []),
+                true,
+            )
+            && !in_array(
+                'documentation',
+                (array) ($boundedRoleDiscovery['expected_roles'] ?? []),
+                true,
+            ),
+        'explicit code-only scope does not repeat context batches for filtered documentation',
     );
     check(
         !in_array('src/Batch/NoiseConsumer.php', $plannedBatchPaths, true)
@@ -2405,6 +2499,21 @@ SH);
         str_starts_with($healthUsageLine, 'Weline：已调用 health')
             && (($healthStructured['_weline_mcp']['usage_line'] ?? '') === $healthUsageLine),
         'tools/call emits Weline usage_line receipt in content[0]',
+    );
+    $stdioIdle = $runner->run(
+        [PHP_BINARY, __DIR__ . '/stdio-idle-socket.php'],
+        $root,
+        '',
+        15,
+    );
+    $stdioIdleResult = json_decode(trim($stdioIdle['stdout']), true);
+    check(
+        $stdioIdle['exit_code'] === 0
+            && (
+                ($stdioIdleResult['survived'] ?? false) === true
+                || ($stdioIdleResult['skipped'] ?? false) === true
+            ),
+        'stdio MCP survives socket idle longer than default_socket_timeout',
     );
 
     if ($mode === 'full') {

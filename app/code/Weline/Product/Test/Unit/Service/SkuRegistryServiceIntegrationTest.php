@@ -12,6 +12,7 @@ use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Database\Service\DatabaseTransactionRunner;
 use Weline\Framework\Database\Transaction\TransactionCoordinator;
+use Weline\Product\Api\ProductIdentityCutoverPolicyInterface;
 use Weline\Product\Model\SkuAlias;
 use Weline\Product\Model\SkuRegistry;
 use Weline\Product\Service\SkuIdentityConflictException;
@@ -83,9 +84,21 @@ final class SkuRegistryServiceIntegrationTest extends TestCase
             $model->__init();
             return $model;
         };
+        $policy = new class implements ProductIdentityCutoverPolicyInterface {
+            public function mode(): string
+            {
+                return self::MODE_LEGACY;
+            }
+
+            public function legacyWritesAllowed(): bool
+            {
+                return true;
+            }
+        };
         $service = new SkuRegistryService(
             $connectionFactory,
             new DatabaseTransactionRunner(new TransactionCoordinator()),
+            $policy,
             $registryFactory,
             $aliasFactory,
         );

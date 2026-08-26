@@ -153,7 +153,7 @@ $mediaHtml = $src !== ''
 <style>
 .<?= $wc ?> {
     display: block;
-    max-width: var(--wc-image-max, 100%);
+    max-width: var(--wc-image-max);
     margin: 0;
     color: var(--weline-theme-text-muted);
 }
@@ -167,22 +167,22 @@ $mediaHtml = $src !== ''
 }
 
 .<?= $wc ?>[data-shadow="sm"] .image-frame {
-    box-shadow: var(--weline-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+    box-shadow: var(--weline-shadow-sm);
 }
 
 .<?= $wc ?>[data-shadow="md"] .image-frame {
-    box-shadow: var(--weline-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+    box-shadow: var(--weline-shadow-md);
 }
 
 .<?= $wc ?>[data-shadow="lg"] .image-frame {
-    box-shadow: var(--weline-shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.16));
+    box-shadow: var(--weline-shadow-lg);
 }
 
 .<?= $wc ?> .image-frame {
     overflow: hidden;
-    border-radius: var(--wc-image-radius, var(--weline-radius-md, 8px));
+    border-radius: var(--wc-image-radius);
     background: var(--weline-theme-surface-muted);
-    aspect-ratio: var(--wc-image-ratio, 16 / 9);
+    aspect-ratio: var(--wc-image-ratio);
 }
 
 .<?= $wc ?>.w-builder-image--auto .image-frame {
@@ -200,27 +200,27 @@ $mediaHtml = $src !== ''
 .<?= $wc ?>.w-builder-image--cover .image-media,
 .<?= $wc ?>.w-builder-image--cover img {
     object-fit: cover;
-    object-position: var(--wc-image-object-position, center);
+    object-position: var(--wc-image-object-position);
 }
 
 .<?= $wc ?>.w-builder-image--contain .image-media,
 .<?= $wc ?>.w-builder-image--contain img {
     object-fit: contain;
-    object-position: var(--wc-image-object-position, center);
+    object-position: var(--wc-image-object-position);
 }
 
 .<?= $wc ?> .image-placeholder {
     display: grid;
     place-items: center;
-    min-height: 12rem;
-    padding: var(--weline-space-4, 16px);
+    min-height: var(--token-size-12rem);
+    padding: var(--weline-space-4);
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .image-caption {
-    margin-top: var(--weline-space-2, 8px);
-    font-size: var(--weline-font-size-sm, 13px);
+    margin-top: var(--weline-space-2);
+    font-size: var(--weline-font-size-sm);
     text-align: center;
 }
 </style>

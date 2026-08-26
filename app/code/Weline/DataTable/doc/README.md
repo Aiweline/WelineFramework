@@ -49,6 +49,7 @@
 
 - `app/code/Weline/DataTable/doc/API参考文档.md`
 - `app/code/Weline/DataTable/doc/使用指南.md`
+- `app/code/Weline/DataTable/doc/本地模式与列悬浮.md`（**AI：local / 勾选 / 悬浮操作必读**）
 - `app/code/Weline/DataTable/doc/实施总结.md`
 - `app/code/Weline/DataTable/doc/快速入门指南.md`
 - `app/code/Weline/DataTable/doc/故障排查文档.md`

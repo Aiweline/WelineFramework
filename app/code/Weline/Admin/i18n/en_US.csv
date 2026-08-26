@@ -129,19 +129,25 @@ AJAX分配角色,"AJAX assign role"
 暗黑模式,"Dark Mode"
 界面设置,"Interface settings"
 退出登录,"Log out"
-后台登录,"Backend login"
-"登录 %{name} 管理面板","Login to %{name} Admin Panel"
-安全管理入口,"Security management entrance"
-管理员,Administrator
-请输入管理员账号,"Please enter the admin account"
-密码,Password
-请输入密码,"Enter password"
-验证码,"Verification code"
-请输入验证码,"Please enter the verification code"
-刷新验证码,"Refresh verification code"
-在受信任设备上记住我,"Remember me on trusted devices"
-登录,"Log in"
-登录中…,Login...
+"搜索 ...","Search ..."
+头像,Avatar
+资料,Profile
+我的钱包,"My Wallet"
+设置,Settings
+锁定屏幕,"Lock Screen"
+退出,Logout
+通知,Notification
+全部已读,"Mark All as Read"
+暂无通知,"No notifications"
+管理订阅,"Manage subscriptions"
+确定删除该菜单吗？,"Are you sure you want to delete this menu?"
+删除后不可恢复！,"Cannot be recovered after deletion!"
+取消,Cancel
+确定,Confirm
+删除!,Delete!
+删除成功,"Deletion successful"
+知道了,"Got it"
+主题模式切换失败,"Theme mode switch failed"
 网站维护,"Website Maintenance"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -169,7 +175,9 @@ AJAX分配角色,"AJAX assign role"
 请输入用户名,"Please enter the username"
 邮箱,Email
 请输入有效邮箱,"Please enter a valid email"
+密码,Password
 留空则不修改密码,"Leave empty to keep current password"
+请输入密码,"Enter password"
 保存,Save
 保存中...,Saving...
 编辑,Edit
@@ -180,19 +188,17 @@ AJAX分配角色,"AJAX assign role"
 编辑管理员,"Edit Administrator"
 保存成功,"Saved successfully"
 确定要删除用户「%{1}」吗？此操作不可恢复。,"Are you sure you want to delete user ""%{1}""? This action cannot be undone."
-删除成功,"Deletion successful"
 确定要激活此用户吗？,"Are you sure you want to activate this user?"
 确定要禁用此用户吗？禁用后该用户将无法登录。,"Are you sure you want to disable this user? Once disabled, this user will not be able to log in."
 操作成功,"Operation successful"
 网络错误，请检查网络后重试,"Network error, please check your network and try again"
 请填写必填项,"Please fill in the required fields"
 确认删除,"Confirm Delete"
-取消,Cancel
 激活用户,"Activate User"
 禁用用户,"Disable User"
-确定,Confirm
 角色归配,"Role Assignment"
 系统,System
+管理员,Administrator
 返回列表,"Back to List"
 选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。,"Roles are saved automatically after selection. You cannot modify your own role."
 当前角色,"Current Role"
@@ -304,6 +310,11 @@ Cms内容管理,"CMS Content Management"
 后台菜单,"Backend menu"
 "Weline 管理后台","Weline management background"
 加载中,loading
+"响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
+返回首页,"Return to Home"
+网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The website may be undergoing system upgrades, or most of the content is being changed. Our developers are maintaining or upgrading data to provide better services."
+大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only take a few minutes or even seconds."
+如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have questions about the website, please contact:"
 关闭,closure
 系统维护,"System maintenance"
 面板,Dashboard
@@ -328,10 +339,29 @@ Cms内容管理,"CMS Content Management"
 一月,January
 十二月,December
 订单统计,"Order Statistics"
-通知,Notification
 区域营收,"Regional Revenue"
 查看更多,"View More"
 最近成交,"Recent Transactions"
+后台登录,"Backend login"
+"登录 %{name} 管理面板","Login to %{name} Admin Panel"
+安全管理入口,"Security management entrance"
+请输入管理员账号,"Please enter the admin account"
+验证码,"Verification code"
+请输入验证码,"Please enter the verification code"
+刷新验证码,"Refresh verification code"
+在受信任设备上记住我,"Remember me on trusted devices"
+登录,"Log in"
+登录中…,Login...
+安全后台入口,"Secure backend entrance"
+内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。,"Content, configuration, permissions and publishing actions are all completed in the unified backend. Please only log in from trusted devices and network environments."
+连续异常登录会自动提高验证强度。,"Continuous abnormal logins will automatically increase the verification strength."
+配置、权限与模块维护在同一工作台闭环处理。,"Configuration, permissions and module maintenance are processed in a closed loop on the same workbench."
+仅在可信环境保存登录状态。,"Save login status only in trusted environments."
+管理员登录,"Administrator login"
+访问后台前需要验证身份,"Identity verification is required before accessing the backend"
+点击刷新验证码,"Click to refresh the verification code."
+记住我,"Remember Me"
+仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
 "WelineFramework Admin","WelineFramework Admin"
 WelineFramework,WelineFramework
 记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
@@ -347,31 +377,11 @@ WelineFramework,WelineFramework
 警告！,Warning!
 异常警告！,"Exception warning!"
 操作成功！,"Operation successful!"
-确定删除该菜单吗？,"Are you sure you want to delete this menu?"
-删除后不可恢复！,"Cannot be recovered after deletion!"
-删除!,Delete!
-知道了,"Got it"
-主题模式切换失败,"Theme mode switch failed"
-网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The website may be undergoing system upgrades, or most of the content is being changed. Our developers are maintaining or upgrading data to provide better services."
-大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only take a few minutes or even seconds."
-如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have questions about the website, please contact:"
-"搜索 ...","Search ..."
-头像,Avatar
-资料,Profile
-我的钱包,"My Wallet"
-设置,Settings
-锁定屏幕,"Lock Screen"
-退出,Logout
-全部已读,"Mark All as Read"
-暂无通知,"No notifications"
-管理订阅,"Manage subscriptions"
 常用菜单,"Frequently Used Menus"
 确认操作,"Confirm operation"
 请重试,"Please try again"
 加载失败,"Load failed"
 输入,Input
-"响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
-返回首页,"Return to Home"
 布局预设配置包,"Layout Preset Configuration Package"
 选择布局预设,"Select Layout Preset"
 默认布局,"Default Layout"
@@ -411,20 +421,10 @@ RTL模式,"RTL Mode"
 欢迎回来,"Welcome back"
 输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,"Enter the admin account to proceed with backend tasks, configuration changes, and permission operations."
 安全验证已启用,"Security verification enabled"
-点击刷新验证码,"Click to refresh the verification code."
-记住我,"Remember Me"
-仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
 登录中,"Logging in"
 管理员账号由超级管理员统一开通与维护,"Admin accounts are created and maintained uniformly by the super admin"
 如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,"To reset your password, unlock your account, or supplement backend permissions, please contact an existing super administrator."
 "若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。","If no custom admin logo is configured, the login page will automatically fall back to the built-in Weline logo."
-安全后台入口,"Secure backend entrance"
-内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。,"Content, configuration, permissions and publishing actions are all completed in the unified backend. Please only log in from trusted devices and network environments."
-连续异常登录会自动提高验证强度。,"Continuous abnormal logins will automatically increase the verification strength."
-配置、权限与模块维护在同一工作台闭环处理。,"Configuration, permissions and module maintenance are processed in a closed loop on the same workbench."
-仅在可信环境保存登录状态。,"Save login status only in trusted environments."
-管理员登录,"Administrator login"
-访问后台前需要验证身份,"Identity verification is required before accessing the backend"
 "Toggle light/dark mode","Toggle light/dark mode"
 主题色系切换,"Theme color switch"
 用户不存在！,"User does not exist!"

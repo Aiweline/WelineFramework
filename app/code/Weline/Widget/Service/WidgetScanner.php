@@ -50,7 +50,7 @@ class WidgetScanner
         'blog', 'product', 'category', 'search', 'filter', 'map',
         'video', 'audio', 'social', 'newsletter', 'faq', 'timeline',
         'stats', 'counter', 'progress', 'chart', 'table', 'calendar',
-        'chat', 'comment', 'container'  // container 类型用于 header-container, footer-container 等容器部件
+        'chat', 'comment', 'container', 'notice', 'notice-rights'  // notice：页头店铺通知；notice-rights：通知条右侧入口
     ];
 
     /**
@@ -520,8 +520,14 @@ class WidgetScanner
                 return null;
             }
             
-            // 合并：模板解析结果 + 覆盖属性
+            // 合并：模板解析结果 + 覆盖属性（params 按字段合并，避免 widget.php 覆盖掉 autoplay 等模板参数）
             $mergedConfig = array_merge($templateConfig, $overrides);
+            if (isset($templateConfig['params'], $overrides['params'])
+                && is_array($templateConfig['params'])
+                && is_array($overrides['params'])
+            ) {
+                $mergedConfig['params'] = array_merge($templateConfig['params'], $overrides['params']);
+            }
             
             // 确保 module 正确
             if (empty($mergedConfig['module'])) {

@@ -5,7 +5,7 @@
 - Secret-shaped files, credentials, private keys, generated output, dependencies, caches and runtime data are excluded from indexing and editing.
 - Document conflict checks reject unresolved merge markers and credential-shaped content. Session directives reject credential-like values and are never persisted.
 - Readiness is bound to the canonical project and client session. A revision, module inventory, or required-document Hash change invalidates the receipt.
-- Document repair is deterministic, create-only, explicitly authorized, snapshot-bound, transactionally reindexed, and rollback-safe.
+- Document repair is deterministic, create-only, snapshot-bound, transactionally reindexed, rollback-safe, and applied automatically by `prepare_project`.
 - Static repository knowledge projection is disabled at configuration load. Legacy queued projection jobs terminate with a no-write receipt.
 - Compact editing accepts structured operations only, uses per-file kernel locks, validates guards and Hashes, journals preimages, runs fixed validation profiles, and restores safe preimages on failure.
 - Analyzer input is redacted and bounded. Candidate experiences never become project rules automatically.

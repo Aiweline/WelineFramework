@@ -6,8 +6,10 @@ namespace Weline\CustomerService\Extends\Module\Weline_Framework\Query;
 use Weline\CustomerService\Model\ChatMessage;
 use Weline\CustomerService\Model\CustomerServiceConfig;
 use Weline\CustomerService\Model\ServiceAgent;
+use Weline\CustomerService\Service\BindCaptchaGuard;
 use Weline\CustomerService\Service\ChatService;
 use Weline\CustomerService\Service\EmailBindingService;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -17,6 +19,8 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly ChatService $chatService,
         private readonly EmailBindingService $emailBindingService,
+        private readonly BindCaptchaGuard $bindCaptchaGuard,
+        private readonly Request $request,
         private readonly SessionFactory $sessionFactory
     ) {
     }
@@ -281,6 +285,14 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             ];
         }
 
+        if (!$this->bindCaptchaGuard->verify($params, $this->request)) {
+            return [
+                'success' => false,
+                'message' => (string)__('Captcha verification failed or expired. Please try again.'),
+                'captcha_error' => true,
+            ];
+        }
+
         if (!$this->emailBindingService->sendVerificationEmail($email, $sessionToken)) {
             $detail = trim($this->emailBindingService->getLastErrorMessage());
             return [
@@ -395,6 +407,10 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                     'params' => [
                         'email' => ['type' => 'string', 'required' => true, 'max_length' => 190],
                         'session_token' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'captcha_provider' => ['type' => 'string', 'required' => false, 'max_length' => 32],
+                        'captcha_token' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'captcha_response' => ['type' => 'string', 'required' => false, 'max_length' => 512],
+                        'captcha_action' => ['type' => 'string', 'required' => false, 'max_length' => 100],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Send guest chat bind-email verification',

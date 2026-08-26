@@ -11,9 +11,9 @@ namespace Weline\Framework\Database\Connection\Adapter\Pgsql\Table;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Database\Connection\Adapter\Pgsql\PgsqlIndexName;
 use Weline\Framework\Database\Connection\Api\Sql\AbstractTable;
 use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
-use Weline\Framework\Database\Helper\Standar;
 
 class Create extends AbstractTable implements CreateInterface
 {
@@ -264,17 +264,10 @@ class Create extends AbstractTable implements CreateInterface
 
     public function addIndex(string $type, string $name, array|string $column, string $comment = '', string $index_method = ''): CreateInterface
     {
-        $name = Standar::getIndexName($this->table, $name);
-        // 确保索引名称去除反引号，使用双引号
-        $name = trim(str_replace(['`', '"'], '', $name));
-        
-        // PostgreSQL 标识符长度限制为 63 字符，超过则截断并使用哈希确保唯一性
-        if (strlen($name) > 63) {
-            $originalName = $name;
-            // 保留前 50 个字符，加上 8 位哈希值（共 58 字符，留出余量）
-            $hash = substr(md5($originalName), 0, 8);
-            $name = substr($name, 0, 55) . '_' . $hash;
-        }
+        // CREATE and incremental Schema DDL must share one physical-name
+        // mapping. Otherwise a cold install can create a legacy 55+hash index,
+        // fail to recognize it, and add a second canonical 54+hash index.
+        $name = PgsqlIndexName::canonicalPhysical($this->table, $name);
         
         $type = strtoupper($type);
         // PostgreSQL: USING 必须在列列表之前；BTREE 为默认，可省略

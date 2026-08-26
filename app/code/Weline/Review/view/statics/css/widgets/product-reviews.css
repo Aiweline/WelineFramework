@@ -1,0 +1,563 @@
+.weline-review {
+    --wr-bg: var(--color-bg-primary, #fff);
+    --wr-bg-soft: var(--color-bg-secondary, #f8fafc);
+    --wr-ink: var(--color-text-primary, #111827);
+    --wr-muted: var(--color-text-secondary, #6b7280);
+    --wr-border: var(--color-border-light, #e5e7eb);
+    --wr-accent: var(--color-accent, #3b82f6);
+    --wr-accent-hover: var(--color-accent-hover, #2563eb);
+    --wr-accent-soft: var(--color-accent-light, rgba(59, 130, 246, 0.08));
+    --wr-star: var(--color-warning, #f59e0b);
+    --wr-success: var(--color-success, #15803d);
+    --wr-danger: var(--color-error, #b91c1c);
+    --wr-radius: var(--radius-md, 0.5rem);
+    margin: var(--spacing-6, 1.5rem) 0 0;
+    padding: var(--spacing-6, 1.5rem);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg);
+    color: var(--wr-ink);
+    box-sizing: border-box;
+}
+
+.weline-review *,
+.weline-review *::before,
+.weline-review *::after {
+    box-sizing: border-box;
+}
+
+.weline-review__heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--spacing-4, 1rem);
+    padding-bottom: var(--spacing-4, 1rem);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+}
+
+.weline-review__kicker,
+.weline-review__form-kicker {
+    margin: 0;
+    color: var(--wr-accent);
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: var(--font-weight-bold, 700);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.weline-review__heading h2,
+.weline-review__form h3 {
+    margin: var(--spacing-2, 0.5rem) 0 0;
+    color: var(--wr-ink);
+    font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+    font-weight: var(--font-weight-semibold, 600);
+    line-height: 1.25;
+}
+
+.weline-review__intro {
+    max-width: 42rem;
+    margin: var(--spacing-2, 0.5rem) 0 0;
+    color: var(--wr-muted);
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.65;
+}
+
+.weline-review__summary {
+    min-width: 7.5rem;
+    text-align: right;
+}
+
+.weline-review__summary strong {
+    display: block;
+    color: var(--wr-ink);
+    font-size: var(--font-size-2xl, 1.5rem);
+    line-height: 1.1;
+}
+
+.weline-review__summary span {
+    display: block;
+    margin-top: var(--spacing-1, 0.25rem);
+    color: var(--wr-muted);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.weline-review__media-capabilities {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-2, 0.5rem);
+    margin-top: var(--spacing-4, 1rem);
+}
+
+.weline-review__media-capabilities span {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2, 0.5rem);
+    min-height: 3.25rem;
+    padding: var(--spacing-3, 0.75rem) var(--spacing-4, 1rem);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg-soft);
+    color: var(--wr-muted);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.weline-review__media-capabilities b {
+    display: inline-grid;
+    place-items: center;
+    min-width: 2.5rem;
+    height: 1.5rem;
+    border-radius: var(--radius-sm, 0.25rem);
+    background: var(--wr-accent);
+    color: var(--color-text-light, #fff);
+    font-size: var(--font-size-xs, 0.75rem);
+    letter-spacing: 0.04em;
+}
+
+.weline-review__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+    gap: var(--spacing-6, 1.5rem);
+    margin-top: var(--spacing-5, 1.25rem);
+}
+
+.weline-review__items {
+    display: grid;
+    gap: var(--spacing-3, 0.75rem);
+}
+
+.weline-review__item,
+.weline-review__empty {
+    margin: 0;
+    padding: var(--spacing-4, 1rem);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg-soft);
+}
+
+.weline-review__item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-3, 0.75rem);
+}
+
+.weline-review__stars {
+    color: var(--wr-star);
+    font-size: var(--font-size-lg, 1.125rem);
+    letter-spacing: 0.06em;
+}
+
+.weline-review__meta {
+    color: var(--wr-muted);
+    font-size: var(--font-size-xs, 0.75rem);
+}
+
+.weline-review__item h3 {
+    margin: var(--spacing-3, 0.75rem) 0 var(--spacing-2, 0.5rem);
+    color: var(--wr-ink);
+    font-size: var(--font-size-lg, 1.125rem);
+}
+
+.weline-review__item-copy,
+.weline-review__empty {
+    margin: 0;
+    color: var(--wr-muted);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+.weline-review__media {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-2, 0.5rem);
+    margin-top: var(--spacing-4, 1rem);
+}
+
+.weline-review__media figure {
+    position: relative;
+    margin: 0;
+    overflow: hidden;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--color-bg-tertiary, #f3f4f6);
+    aspect-ratio: 4 / 3;
+}
+
+.weline-review__media img,
+.weline-review__media video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.weline-review__media video {
+    background: #000;
+}
+
+.weline-review__media-label {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: var(--radius-sm, 0.25rem);
+    background: rgba(17, 24, 39, 0.78);
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: var(--font-weight-bold, 700);
+    letter-spacing: 0.06em;
+}
+
+.weline-review__score-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-2, 0.5rem);
+    margin-top: var(--spacing-3, 0.75rem);
+}
+
+.weline-review__score {
+    padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg);
+}
+
+.weline-review__score-label {
+    display: block;
+    color: var(--wr-muted);
+    font-size: var(--font-size-xs, 0.75rem);
+}
+
+.weline-review__score-stars {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--wr-star);
+    font-size: var(--font-size-sm, 0.875rem);
+    letter-spacing: 0.04em;
+}
+
+.weline-review__form {
+    display: grid;
+    align-content: start;
+    gap: var(--spacing-3, 0.75rem);
+    padding: var(--spacing-5, 1.25rem);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-top: 3px solid var(--wr-accent);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg-soft);
+}
+
+.weline-review__form h3 {
+    margin-bottom: var(--spacing-1, 0.25rem);
+}
+
+.weline-review__dynamic-fields {
+    display: grid;
+    gap: var(--spacing-3, 0.75rem);
+}
+
+.weline-review__field {
+    display: grid;
+    gap: var(--spacing-2, 0.5rem);
+}
+
+.weline-review__field > label {
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--wr-ink);
+}
+
+.weline-review__required {
+    color: var(--wr-danger);
+}
+
+.weline-review__field input:not([type=checkbox]):not([type=file]):not([type=radio]),
+.weline-review__field select,
+.weline-review__field textarea {
+    width: 100%;
+    min-height: 2.75rem;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg);
+    color: var(--wr-ink);
+    font: inherit;
+}
+
+.weline-review__field input:not([type=checkbox]):not([type=file]):not([type=radio]),
+.weline-review__field select {
+    padding: 0 var(--spacing-3, 0.75rem);
+}
+
+.weline-review__field textarea {
+    min-height: 8rem;
+    padding: var(--spacing-3, 0.75rem);
+    resize: vertical;
+}
+
+.weline-review__field input:not([type=radio]):focus,
+.weline-review__field select:focus,
+.weline-review__field textarea:focus {
+    outline: 2px solid var(--wr-accent-soft);
+    border-color: var(--wr-accent);
+}
+
+.weline-review__checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2, 0.5rem);
+    min-height: 2.75rem;
+}
+
+.weline-review__checkbox input {
+    width: 1.15rem;
+    height: 1.15rem;
+    accent-color: var(--wr-accent);
+}
+
+.weline-review__rating-stars {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 2.75rem;
+}
+
+.weline-review__rating-choice {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid transparent;
+    border-radius: var(--wr-radius);
+    background: transparent;
+    color: var(--color-text-disabled, #9ca3af);
+    cursor: pointer;
+    font-size: 1.65rem;
+    line-height: 1;
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.weline-review__rating-choice input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.weline-review__rating-choice:hover,
+.weline-review__rating-choice.is-preview,
+.weline-review__rating-choice.is-filled {
+    color: var(--wr-star);
+}
+
+.weline-review__rating-choice.is-current,
+.weline-review__rating-choice:has(input:focus-visible) {
+    border-color: var(--wr-accent);
+    background: var(--wr-bg);
+    color: var(--wr-star);
+    outline: 2px solid var(--wr-accent-soft);
+    outline-offset: 1px;
+}
+
+.weline-review__upload {
+    position: relative;
+    display: grid;
+    grid-template-columns: 3rem 1fr auto;
+    align-items: center;
+    gap: var(--spacing-3, 0.75rem);
+    min-height: 4.25rem;
+    padding: var(--spacing-3, 0.75rem);
+    border: 1px dashed var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg);
+    cursor: pointer;
+}
+
+.weline-review__upload:hover,
+.weline-review__upload:focus-within {
+    border-color: var(--wr-accent);
+}
+
+.weline-review__upload input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.weline-review__upload-icon {
+    display: grid;
+    place-items: center;
+    height: 2.75rem;
+    border-radius: var(--radius-sm, 0.25rem);
+    background: var(--wr-ink);
+    color: var(--color-text-light, #fff);
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: var(--font-weight-bold, 700);
+}
+
+.weline-review__upload-copy strong {
+    display: block;
+    color: var(--wr-ink);
+}
+
+.weline-review__upload-copy small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--wr-muted);
+}
+
+.weline-review__upload-action {
+    padding: 0.4rem 0.65rem;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-accent);
+    border-radius: var(--wr-radius);
+    color: var(--wr-accent);
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: var(--font-weight-bold, 700);
+}
+
+.weline-review__preview {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-2, 0.5rem);
+}
+
+.weline-review__preview:empty {
+    display: none;
+}
+
+.weline-review__preview-item {
+    position: relative;
+    overflow: hidden;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-ink);
+    aspect-ratio: 1;
+}
+
+.weline-review__preview-item img,
+.weline-review__preview-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.weline-review__preview-kind {
+    position: absolute;
+    top: 0.35rem;
+    left: 0.35rem;
+    padding: 0.2rem 0.35rem;
+    border-radius: var(--radius-sm, 0.25rem);
+    background: var(--wr-accent);
+    color: var(--color-text-light, #fff);
+    font-size: 0.5625rem;
+    font-weight: var(--font-weight-bold, 700);
+}
+
+.weline-review__form > button {
+    min-height: 2.85rem;
+    margin-top: 0.25rem;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-accent);
+    border-radius: var(--wr-radius);
+    background: var(--wr-accent);
+    color: var(--color-text-light, #fff);
+    font: inherit;
+    font-weight: var(--font-weight-semibold, 600);
+    cursor: pointer;
+}
+
+.weline-review__form > button:hover {
+    background: var(--wr-accent-hover);
+    border-color: var(--wr-accent-hover);
+}
+
+.weline-review__form > button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+.weline-review__notice,
+.weline-review__message,
+.weline-review__form-loading {
+    margin: 0;
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.6;
+}
+
+.weline-review__notice,
+.weline-review__form-loading {
+    color: var(--wr-muted);
+}
+
+.weline-review__message {
+    min-height: 1.25rem;
+    color: var(--wr-success);
+    font-weight: var(--font-weight-semibold, 600);
+}
+
+.weline-review__message.is-error {
+    color: var(--wr-danger);
+}
+
+.weline-review.is-preview .weline-review__form > button {
+    pointer-events: none;
+}
+
+@media (max-width: 1024px) {
+    .weline-review__layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .weline-review {
+        padding: var(--spacing-4, 1rem);
+    }
+
+    .weline-review__heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .weline-review__summary {
+        text-align: left;
+    }
+
+    .weline-review__media-capabilities {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 560px) {
+    .weline-review__form {
+        padding: var(--spacing-4, 1rem);
+    }
+
+    .weline-review__media,
+    .weline-review__score-list,
+    .weline-review__preview {
+        grid-template-columns: 1fr;
+    }
+
+    .weline-review__upload {
+        grid-template-columns: 2.75rem 1fr;
+    }
+
+    .weline-review__upload-action {
+        grid-column: 1 / -1;
+        text-align: center;
+    }
+
+    .weline-review__rating-choice {
+        width: 2.25rem;
+        height: 2.35rem;
+        font-size: 1.45rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .weline-review__rating-choice {
+        transition: none;
+    }
+}

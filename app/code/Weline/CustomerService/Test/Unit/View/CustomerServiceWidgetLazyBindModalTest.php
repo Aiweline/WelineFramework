@@ -42,7 +42,17 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $this->assertStringContainsString("wrapper.querySelector('#cs-bind-modal')", $content);
         $this->assertStringContainsString('document.body.appendChild(modal)', $content);
         $this->assertStringContainsString('const modal = ensureBindModal();', $content);
-        $this->assertStringContainsString("const emailInput = modal.querySelector('#cs-bind-email');", $content);
+        $this->assertStringContainsString("const emailInput = form.querySelector('#cs-bind-email');", $content);
+        $this->assertStringContainsString('cs-bind-modal-open', $content);
+        $this->assertStringContainsString('setBindModalOpen(true)', $content);
+        $this->assertStringContainsString('setBindModalOpen(false)', $content);
+        $this->assertStringContainsString('mountBindForm', $content);
+        $this->assertStringContainsString('captcha_provider', $content);
+        $this->assertStringContainsString('refreshBindCaptcha', $content);
+        $this->assertStringContainsString('bindCaptchaChallengeUrl', $content);
+        $this->assertStringContainsString('function notifyAlert(', $content);
+        $this->assertStringContainsString('cs-notice-alert', $content);
+        $this->assertStringContainsString("notify('error'", $content);
     }
 
     public function testWidgetStylesheetReliesOnTheCanonicalStaticAssetVersion(): void

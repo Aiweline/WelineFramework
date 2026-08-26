@@ -43,6 +43,12 @@ final class ProductCatalogTemplateContractTest extends TestCase
                 return '/USD/' . ltrim($path, '/');
             }
 
+            /** @param array<string, mixed> $data */
+            public function fetch(string $template, array $data = []): string
+            {
+                return '';
+            }
+
             public function render(string $template): string
             {
                 ob_start();

@@ -157,22 +157,27 @@ final class MigrationCloneService
             'createdb_failed',
         );
 
-        $dumpArgs = ['pg_dump', '-h', $host, '-p', $port, '-U', $user, '-d', $sourceDb, '--no-owner', '--no-acl'];
-        if ($mode === self::MODE_SCHEMA) {
-            $dumpArgs[] = '--schema-only';
-        }
-
-        $dump = $this->execCapture($dumpArgs, $env, 'pg_dump_failed');
-        // Large schema dumps deadlock if fed via pipe while stdout/stderr are unread.
-        // Persist dump then restore with -f so psql owns file I/O.
-        $tmpFile = \tempnam(\sys_get_temp_dir(), 'mig_schema_');
+        // Full clones can be hundreds of megabytes. Let pg_dump stream directly
+        // into a temporary file instead of retaining the dump in PHP memory.
+        $tmpFile = \tempnam(\sys_get_temp_dir(), 'mig_dump_');
         if ($tmpFile === false) {
             throw new \RuntimeException('psql_restore_failed:tempnam');
         }
         try {
-            if (\file_put_contents($tmpFile, $dump) === false) {
-                throw new \RuntimeException('psql_restore_failed:write_dump');
+            $dumpArgs = [
+                'pg_dump',
+                '-h', $host,
+                '-p', $port,
+                '-U', $user,
+                '-d', $sourceDb,
+                '--no-owner',
+                '--no-acl',
+                '--file', $tmpFile,
+            ];
+            if ($mode === self::MODE_SCHEMA) {
+                $dumpArgs[] = '--schema-only';
             }
+            $this->execOrFail($dumpArgs, $env, 'pg_dump_failed');
             $this->execOrFail(
                 [
                     'psql',

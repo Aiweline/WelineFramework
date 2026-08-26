@@ -36,6 +36,17 @@ final class ProductCopyQueryProviderTest extends TestCase
             ['scopeOptions', 'createDraft', 'getDraft', 'preview', 'commit', 'cancel'],
             $names,
         );
+        $createDraft = array_values(array_filter(
+            $descriptor['operations'],
+            static fn(array $operation): bool => $operation['name'] === 'createDraft',
+        ))[0];
+        $params = [];
+        foreach ($createDraft['params'] as $param) {
+            $params[$param['name']] = $param;
+        }
+        self::assertFalse($params['target_store_id']['required']);
+        self::assertSame('array', $params['target_store_ids']['type']);
+        self::assertFalse($params['target_store_ids']['required']);
     }
 
     public function testBlankDraftPreviewCommitAndScopeOptionsUseOneBoundary(): void
@@ -44,7 +55,14 @@ final class ProductCopyQueryProviderTest extends TestCase
         $options = $provider->execute('scopeOptions');
         self::assertTrue($options['success']);
         self::assertSame([0, 1], array_column($options['websites'], 'website_id'));
-        self::assertSame([1, 2], array_column($options['stores'], 'store_id'));
+        self::assertSame([1, 2, 4], array_column($options['stores'], 'store_id'));
+
+        $defaultStores = $provider->execute('createDraft', [
+            'entry' => CopyDraft::ENTRY_BLANK,
+            'target_website_id' => 1,
+        ]);
+        self::assertSame([2, 4], $defaultStores['draft']['target_store_ids']);
+        self::assertSame(2, $defaultStores['draft']['target_store_id']);
 
         $created = $provider->execute('createDraft', [
             'entry' => CopyDraft::ENTRY_BLANK,
@@ -56,6 +74,7 @@ final class ProductCopyQueryProviderTest extends TestCase
         ]);
         self::assertTrue($created['success']);
         $draft = $created['draft'];
+        self::assertSame([1], $draft['target_store_ids']);
         self::assertSame([], $draft['category_ids']);
         self::assertFalse($draft['include_products']);
         self::assertNull($draft['source_website_id']);
@@ -63,6 +82,7 @@ final class ProductCopyQueryProviderTest extends TestCase
 
         $preview = $provider->execute('preview', ['draft_id' => $draft['draft_id']]);
         self::assertTrue($preview['success']);
+        self::assertSame([1], $preview['preview']['target_store_ids']);
         self::assertSame(0, $preview['preview']['product_count']);
 
         $result = $provider->execute('commit', [
@@ -74,6 +94,7 @@ final class ProductCopyQueryProviderTest extends TestCase
 
         $loaded = $provider->execute('getDraft', ['draft_id' => $draft['draft_id']]);
         self::assertSame(CopyDraft::STATE_COMMITTED, $loaded['draft']['state']);
+        self::assertSame([1], $loaded['draft']['target_store_ids']);
     }
 
     public function testScopeValidationRejectsMismatchedAndArchivedStores(): void
@@ -113,7 +134,8 @@ final class ProductCopyQueryProviderTest extends TestCase
             ]);
             self::fail('Source Store ownership mismatch must fail closed.');
         } catch (\InvalidArgumentException $exception) {
-            self::assertStringContainsString('来源 Store', $exception->getMessage());
+            self::assertStringContainsString('来源', $exception->getMessage());
+            self::assertStringContainsString('不属于', $exception->getMessage());
         }
 
         $this->expectException(\InvalidArgumentException::class);
@@ -132,6 +154,7 @@ final class ProductCopyQueryProviderTest extends TestCase
             1 => new StoreSummary(1, 0, 'default', 'Default', 'normal', true, true, 'active', null),
             2 => new StoreSummary(2, 1, 'default', 'Second', 'normal', true, true, 'active', null),
             3 => new StoreSummary(3, 1, 'old', 'Archived', 'normal', false, false, 'tombstone', '2026-07-27 00:00:00'),
+            4 => new StoreSummary(4, 1, 'outlet', 'Outlet', 'normal', true, true, 'active', null),
         ];
         $storeCatalog = $this->createStub(StoreCatalogInterface::class);
         $storeCatalog->method('all')->willReturn(array_values($stores));

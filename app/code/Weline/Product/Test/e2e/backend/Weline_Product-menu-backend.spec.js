@@ -103,8 +103,10 @@ moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => 
       await submit(page, 'product-offer-create-form');
 
       await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:categories', CAPABILITIES[3]);
-      await page.locator('[data-testid="product-category-create-form"] [name="path"]').fill(data.category_path);
-      await submit(page, 'product-category-create-form');
+      await page.locator('[data-catalog-admin] a[data-tone="primary"]').first().click();
+      await page.locator('[data-catalog-form] [name="name"]').fill(data.category_name || data.category_path.replace(/^\//, '').split('/').pop());
+      await page.locator('[data-catalog-form] button[type="submit"]').click();
+      await page.waitForLoadState('networkidle');
 
       await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:media', CAPABILITIES[4]);
       await page.locator('[data-testid="product-media-create-form"] [name="sku"]').fill(data.sku);

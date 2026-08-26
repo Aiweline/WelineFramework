@@ -3204,39 +3204,71 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     $wlsReadyGateStage('tls_session_cache_check_done');
     $readyGateSharedRuntimeConnectionWarmupCompleted = true;
     $wlsReadyGateStage('homepage_fpc_retry_begin');
-    [$homepageFpcProof, $dynamicFirstRenderProof]
-        = \Weline\Server\Service\Runtime\WorkerReadyGateRetry::run(
-            static function () use ($runtime, $wlsReadyGateStage): array {
-                $wlsReadyGateStage('homepage_fpc_runtime_begin');
-                $homepage = $runtime->runReadyGateWorkerBootstrapWarmup();
-                $wlsReadyGateStage('homepage_fpc_runtime_done', [
-                    'http_status' => (int)($homepage['http_status'] ?? 0),
-                    'hit' => (bool)($homepage['hit'] ?? false),
-                    'reason' => (string)($homepage['reason'] ?? ''),
-                ]);
-                $dynamic = $runtime->readyGateDynamicFirstRenderProof();
-                $wlsReadyGateStage('dynamic_first_render_proof_done');
-                return [$homepage, $dynamic];
-            },
-            $workerId,
-            static function (
-                int $attempt,
-                \Throwable $throwable,
-                int $delay,
-            ) use ($workerId, $wlsReadyGateStage): void {
-                $wlsReadyGateStage('homepage_fpc_retry', [
-                    'attempt' => $attempt,
-                    'delay_us' => $delay,
-                    'error' => $throwable::class,
-                    'message' => $throwable->getMessage(),
-                ]);
-                WlsLogger::warning_(
-                    '[WorkerWarmup] transient database contention; retrying READY gate '
-                    . "worker={$workerId}, attempt={$attempt}, delay_us={$delay}, "
-                    . 'error=' . $throwable::class
-                );
-            },
+    $homepageFpcProof = [
+        'hit' => false,
+        'fpc_status' => '',
+        'source' => '',
+        'full_uri' => '',
+        'reason' => 'homepage-fpc:not-run',
+        'http_status' => 0,
+    ];
+    $dynamicFirstRenderProof = [];
+    try {
+        [$homepageFpcProof, $dynamicFirstRenderProof]
+            = \Weline\Server\Service\Runtime\WorkerReadyGateRetry::run(
+                static function () use ($runtime, $wlsReadyGateStage): array {
+                    $wlsReadyGateStage('homepage_fpc_runtime_begin');
+                    $homepage = $runtime->runReadyGateWorkerBootstrapWarmup();
+                    $wlsReadyGateStage('homepage_fpc_runtime_done', [
+                        'http_status' => (int)($homepage['http_status'] ?? 0),
+                        'hit' => (bool)($homepage['hit'] ?? false),
+                        'reason' => (string)($homepage['reason'] ?? ''),
+                    ]);
+                    $dynamic = $runtime->readyGateDynamicFirstRenderProof();
+                    $wlsReadyGateStage('dynamic_first_render_proof_done');
+                    return [$homepage, $dynamic];
+                },
+                $workerId,
+                static function (
+                    int $attempt,
+                    \Throwable $throwable,
+                    int $delay,
+                ) use ($workerId, $wlsReadyGateStage): void {
+                    $wlsReadyGateStage('homepage_fpc_retry', [
+                        'attempt' => $attempt,
+                        'delay_us' => $delay,
+                        'error' => $throwable::class,
+                        'message' => $throwable->getMessage(),
+                    ]);
+                    WlsLogger::warning_(
+                        '[WorkerWarmup] transient database contention; retrying READY gate '
+                        . "worker={$workerId}, attempt={$attempt}, delay_us={$delay}, "
+                        . 'error=' . $throwable::class
+                    );
+                },
+            );
+    } catch (\Throwable $warmupError) {
+        // Business warmup failure is normal: keep Worker alive and still READY.
+        $wlsReadyGateStage('homepage_fpc_fail_open', [
+            'error' => $warmupError::class,
+            'message' => $warmupError->getMessage(),
+        ]);
+        WlsLogger::warning_(
+            '[WorkerWarmup] ready-gate business warmup failed open worker='
+            . $workerId
+            . ' error=' . $warmupError::class
+            . ' message=' . $warmupError->getMessage()
         );
+        $homepageFpcProof = [
+            'hit' => false,
+            'fpc_status' => '',
+            'source' => '',
+            'full_uri' => '',
+            'reason' => 'homepage-fpc:exception:' . $warmupError::class . ':fail-open',
+            'http_status' => 0,
+        ];
+        $dynamicFirstRenderProof = [];
+    }
     $wlsReadyGateStage('homepage_fpc_retry_done', [
         'http_status' => (int)($homepageFpcProof['http_status'] ?? 0),
         'hit' => (bool)($homepageFpcProof['hit'] ?? false),

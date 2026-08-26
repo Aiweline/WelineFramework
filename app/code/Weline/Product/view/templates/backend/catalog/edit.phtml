@@ -2,47 +2,1326 @@
 /**
  * @var \Weline\Framework\View\Template $this
  * @var int $website_id
- * @var int $product_id
- * @var string $product_sku
+ * @var string $global_product_uuid
+ * @var array<string,mixed> $snapshot
+ * @var string $product_admin_state_json
  */
 $escape = static fn(mixed $value): string => htmlspecialchars(
-    is_scalar($value) || $value === null ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE),
+    is_scalar($value) || $value === null
+        ? (string)$value
+        : (json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
     ENT_QUOTES | ENT_SUBSTITUTE,
     'UTF-8',
 );
-$defaultLabel = __('商品编辑');
-$websiteText = (string)$website_id;
-$currentSku = (string)$product_sku;
+$identity = is_array($snapshot['identity'] ?? null) ? $snapshot['identity'] : [];
+$product = is_array($snapshot['product'] ?? null) ? $snapshot['product'] : [];
+$offers = is_array($snapshot['offers'] ?? null) ? $snapshot['offers'] : [];
+$attributes = is_array($snapshot['attributes'] ?? null) ? $snapshot['attributes'] : [];
+$attributeCatalog = is_array($snapshot['attribute_catalog'] ?? null) ? $snapshot['attribute_catalog'] : [];
+$catalogSets = array_is_list($attributeCatalog)
+    ? $attributeCatalog
+    : ($attributeCatalog['sets'] ?? $attributeCatalog['attribute_sets'] ?? []);
+$catalogSets = is_array($catalogSets) ? $catalogSets : [];
+$productEntityId = (int)($product['id'] ?? $product['product_id'] ?? 0);
+$attributeRowsByCode = [];
+foreach ($attributes as $attributeRow) {
+    if (!is_array($attributeRow)
+        || (string)($attributeRow['entity_type'] ?? 'product') !== 'product'
+        || (int)($attributeRow['store_id'] ?? 0) !== 0
+        || (string)($attributeRow['locale'] ?? '') !== ''
+    ) {
+        continue;
+    }
+    $attributeCode = (string)($attributeRow['attribute_code'] ?? '');
+    if ($attributeCode !== '' && !isset($attributeRowsByCode[$attributeCode])) {
+        $attributeRowsByCode[$attributeCode] = $attributeRow;
+    }
+}
+$prices = is_array($snapshot['prices'] ?? null) ? $snapshot['prices'] : [];
+$stores = is_array($snapshot['stores'] ?? null) ? $snapshot['stores'] : [];
+$categories = is_array($snapshot['categories'] ?? null) ? $snapshot['categories'] : [];
+$categoryAssignments = is_array($snapshot['category_assignments'] ?? null)
+    ? $snapshot['category_assignments']
+    : [];
+$storeCategoryOverrides = is_array($snapshot['store_category_overrides'] ?? null)
+    ? $snapshot['store_category_overrides']
+    : [];
+$media = is_array($snapshot['media_assignments'] ?? null)
+    ? $snapshot['media_assignments']
+    : (is_array($snapshot['media'] ?? null) ? $snapshot['media'] : []);
+$storeMediaOverrides = is_array($snapshot['store_media_overrides'] ?? null)
+    ? $snapshot['store_media_overrides']
+    : [];
+$assignedCategoryIds = [];
+$categoryPositions = [];
+foreach ($categoryAssignments as $assignment) {
+    $categoryId = (int)($assignment['category_id'] ?? 0);
+    if ($categoryId > 0 && !empty($assignment['selected'])) {
+        $assignedCategoryIds[$categoryId] = true;
+        $categoryPositions[$categoryId] = (int)($assignment['position'] ?? 0);
+    }
+}
+$categoryOverridesByStore = [];
+foreach ($storeCategoryOverrides as $override) {
+    $storeId = (int)($override['store_id'] ?? 0);
+    $categoryId = (int)($override['category_id'] ?? 0);
+    if ($storeId > 0 && $categoryId > 0) {
+        $categoryOverridesByStore[$storeId][$categoryId] = $override;
+    }
+}
+$mediaOverridesByStore = [];
+foreach ($storeMediaOverrides as $override) {
+    $storeId = (int)($override['store_id'] ?? 0);
+    $assetId = (string)($override['asset_id'] ?? '');
+    if ($storeId > 0 && $assetId !== '') {
+        $mediaOverridesByStore[$storeId][$assetId] = $override;
+    }
+}
+$provider = is_array($snapshot['provider'] ?? null) ? $snapshot['provider'] : [];
+$providerFields = is_array($snapshot['provider_fields'] ?? null)
+    ? array_values(array_filter($snapshot['provider_fields'], 'is_array'))
+    : [];
+$providerUnknownFields = is_array($snapshot['provider_unknown_fields'] ?? null)
+    ? $snapshot['provider_unknown_fields']
+    : [];
+$inventory = is_array($snapshot['inventory'] ?? null) ? $snapshot['inventory'] : [];
+$inventoryRows = is_array($inventory['rows'] ?? null) ? $inventory['rows'] : [];
+$inventoryErrors = is_array($inventory['errors'] ?? null) ? $inventory['errors'] : [];
+$inventoryEditable = !empty($inventory['editable']);
+$diagnostics = is_array($snapshot['diagnostics'] ?? null) ? $snapshot['diagnostics'] : [];
+$diagnosticGroups = is_array($diagnostics['groups'] ?? null) ? $diagnostics['groups'] : [];
+$auditEvents = is_array($snapshot['audit'] ?? null) ? $snapshot['audit'] : [];
+$auditActionLabels = [
+    'product.identity.created' => __('创建商品身份'),
+    'offer.identity.created' => __('创建销售规格身份'),
+    'offer.sku.renamed' => __('重命名 SKU'),
+    'offer.identity.status_changed' => __('变更销售规格状态'),
+    'product.lifecycle.published' => __('发布商品'),
+    'product.lifecycle.disabled' => __('下架商品'),
+    'product.lifecycle.archived' => __('归档商品'),
+    'product.type.changed' => __('转换商品类型'),
+    'product.share.granted' => __('授权 Website 复制'),
+    'product.share.revoked' => __('撤销 Website 复制授权'),
+    'product.ownership.transfer_requested' => __('发起归属转让'),
+    'product.ownership.transferred' => __('确认归属转让'),
+];
+$permissions = is_array($snapshot['permissions'] ?? null) ? $snapshot['permissions'] : [];
+$productStatus = (string)($product['status'] ?? 'draft');
+$canEditBusiness = !empty($permissions['edit_business']) && $productStatus !== 'archived';
+$canPublish = in_array($productStatus, ['draft', 'disabled'], true);
+$canDisable = $productStatus === 'published';
+$canArchive = in_array($productStatus, ['draft', 'disabled'], true);
+$websiteOptions = is_array($website_options ?? null)
+    ? array_values(array_filter($website_options, 'is_array'))
+    : [];
+$governanceWebsiteOptions = array_values(array_filter(
+    $websiteOptions,
+    static fn(array $option): bool => (int)($option['website_id'] ?? -1) !== (int)$website_id,
+));
+$canGovernance = $canEditBusiness;
+$offerMatrix = is_array($snapshot['offer_matrix'] ?? null) ? $snapshot['offer_matrix'] : [];
+$variantAxes = is_array($offerMatrix['axes'] ?? null) ? $offerMatrix['axes'] : [];
+$variantRows = is_array($offerMatrix['rows'] ?? null) ? $offerMatrix['rows'] : [];
+$isConfigurable = (string)($identity['product_type'] ?? '') === 'configurable';
+$canEditStructure = !empty($permissions['edit_structure'])
+    && !empty($offerMatrix['can_edit_structure']);
+$name = '';
+$typeConfiguration = [];
+foreach ($attributes as $row) {
+    if ((string)($row['entity_type'] ?? '') !== 'product'
+        || (int)($row['store_id'] ?? 0) !== 0
+        || !empty($row['cleared'])
+    ) {
+        continue;
+    }
+    if ((string)($row['attribute_code'] ?? '') === 'name' && $name === '') {
+        $name = (string)($row['value'] ?? '');
+    }
+    if ((string)($row['attribute_code'] ?? '') === 'type_configuration'
+        && is_array($row['value'] ?? null)
+    ) {
+        $typeConfiguration = $row['value'];
+    }
+}
+$priceByOffer = [];
+foreach ($prices as $priceRow) {
+    if ((int)($priceRow['store_id'] ?? 0) !== 0) {
+        continue;
+    }
+    $priceByOffer[(string)($priceRow['global_offer_uuid'] ?? '')] = $priceRow;
+}
+$attributesJson = json_encode(
+    array_values(array_filter(
+        $attributes,
+        static fn(array $row): bool => (string)($row['attribute_code'] ?? '') !== 'name'
+            && (string)($row['attribute_code'] ?? '') !== 'type_configuration',
+    )),
+    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+) ?: '[]';
+$providerUnknownFieldsJson = json_encode(
+    $providerUnknownFields,
+    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+) ?: '{}';
 ?>
-<div class="w-container" data-testid="product-edit-workbench">
-    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260825-v7">
+<div class="w-container w-product-admin w-product-editor"
+     data-product-admin="editor"
+     data-edit-business="<?= $canEditBusiness ? '1' : '0' ?>"
+     data-testid="product-edit-workbench">
+    <script type="application/json" id="product-admin-state" data-no-extract="true"><?= $product_admin_state_json ?></script>
+
+    <header class="w-product-editor__header">
         <div>
-            <h4 style="--w-mb:var(--weline-space-1);"><?= $escape($defaultLabel) ?></h4>
-            <div class="w-text" data-tone="muted"><lang>网站 ID：</lang><?= $escape($websiteText) ?> · <lang>商品 ID：</lang><?= $escape($product_id) ?></div>
+            <a class="w-product-editor__back" href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>">
+                ← <lang>返回商品列表</lang>
+            </a>
+            <div class="w-product-editor__title-row">
+                <h1><?= $escape($name !== '' ? $name : __('未命名商品草稿')) ?></h1>
+                <span class="w-status" data-status="<?= $escape($product['status'] ?? 'draft') ?>">
+                    <?= $escape($product['status'] ?? 'draft') ?>
+                </span>
+            </div>
+            <p>
+                <strong><?= $escape($identity['product_code'] ?? '') ?></strong>
+                · <?= $escape($identity['product_type'] ?? '') ?>
+                · <lang>归属 Website</lang> #<?= $escape($identity['owner_website_id'] ?? '') ?>
+            </p>
         </div>
-        <a href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>" class="w-button" data-tone="neutral" data-variant="outline">
-            <w:icon name="arrow-left" size="sm"></w:icon> <lang>返回商品列表</lang>
-        </a>
+        <div class="w-product-editor__actions">
+            <button class="w-button" type="button" data-product-command="validate"><lang>校验</lang></button>
+            <?php if ($canPublish): ?>
+                <button class="w-button" type="button" data-tone="primary" data-product-command="publish"><lang>发布</lang></button>
+            <?php elseif ($canDisable): ?>
+                <button class="w-button" type="button" data-tone="warning" data-product-command="disable"><lang>下架</lang></button>
+            <?php endif; ?>
+            <?php if ($canArchive): ?>
+                <button class="w-button" type="button" data-tone="danger" data-product-command="archive"><lang>归档</lang></button>
+            <?php endif; ?>
+        </div>
+    </header>
+
+    <div class="w-product-editor__meta">
+        <span><lang>全局 UUID</lang> <code><?= $escape($global_product_uuid) ?></code></span>
+        <span><lang>身份版本</lang> <?= $escape($identity['version'] ?? 0) ?></span>
+        <span><lang>本地版本</lang> <?= $escape($product['publish_version'] ?? 0) ?></span>
+        <span><?= !empty($permissions['is_owner']) ? __('归属站可编辑结构') : __('复制站仅编辑经营数据') ?></span>
     </div>
 
-    <div class="w-card" style="--w-mb:var(--weline-space-4);">
-        <div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/save-product')" class="w-grid" data-testid="product-edit-form" csrf="auto" style="--w-gap:var(--weline-space-4);">
-                <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <input type="hidden" name="product_id" value="<?= $escape($product_id) ?>">
-
-                <div style="--w-span-md:6;">
-                    <label class="w-field__label"><lang>当前 SKU</lang></label>
-                    <input class="w-input" value="<?= $escape($currentSku) ?>" disabled>
-                </div>
-                <div style="--w-span-md:6;">
-                    <label class="w-field__label"><lang>新 SKU</lang></label>
-                    <input class="w-input" name="sku" value="<?= $escape($currentSku) ?>" required maxlength="128">
-                </div>
-                <div class="w-cluster" data-justify="end" style="--w-span-md:12;--w-gap:var(--weline-space-2);">
-                    <button type="submit" class="w-button" data-tone="primary"><w:icon name="save" size="sm"></w:icon> <lang>保存商品</lang></button>
-                </div>
-            </w:form>
+    <?php if (!$canEditBusiness): ?>
+        <div class="w-alert" data-tone="neutral">
+            <strong><lang>归档商品为只读</lang></strong>
+            <span><lang>历史身份、SKU 与经营快照会永久保留，不能重新发布或继续修改。</lang></span>
         </div>
-    </div>
+    <?php endif; ?>
+
+    <nav class="w-product-tabs" aria-label="@lang(商品编辑区)">
+        <?php foreach ([
+            'overview' => '概览',
+            'basic' => '基础信息',
+            'attributes' => '动态属性',
+            'offers' => '规格与价格',
+            'taxonomy' => '分类与媒体',
+            'stores' => 'Store',
+            'fulfillment' => '库存与配送',
+            'type' => '类型配置',
+            'diagnostics' => '发布诊断',
+            'governance' => '跨站治理',
+            'audit' => '审计',
+        ] as $tab => $label): ?>
+            <button type="button" data-product-tab="<?= $tab ?>" <?= $tab === 'overview' ? 'aria-current="page"' : '' ?>><?= $label ?></button>
+        <?php endforeach; ?>
+    </nav>
+
+    <form id="product-editor-form" data-testid="product-edit-form" novalidate>
+        <div class="w-product-editor__panel" data-product-panel="overview">
+            <div class="w-product-overview-grid">
+                <article class="w-card">
+                    <div class="w-card__header"><h2><lang>商品健康度</lang></h2></div>
+                    <div class="w-card__body">
+                        <strong class="w-product-health" data-valid="<?= !empty($diagnostics['valid']) ? '1' : '0' ?>">
+                            <?= !empty($diagnostics['valid']) ? __('可以发布') : __('需要完善') ?>
+                        </strong>
+                        <p><?= count($diagnostics['errors'] ?? []) ?> <lang>项阻断</lang> · <?= count($diagnostics['warnings'] ?? []) ?> <lang>项提醒</lang></p>
+                    </div>
+                </article>
+                <article class="w-card">
+                    <div class="w-card__header"><h2><lang>销售规格</lang></h2></div>
+                    <div class="w-card__body"><strong class="w-product-kpi"><?= count($offers) ?></strong><span> Offer</span></div>
+                </article>
+                <article class="w-card">
+                    <div class="w-card__header"><h2><lang>可见 Store</lang></h2></div>
+                    <div class="w-card__body"><strong class="w-product-kpi"><?= count(array_filter($stores, static fn(array $store): bool => !empty($store['product_selected']))) ?></strong></div>
+                </article>
+                <article class="w-card">
+                    <div class="w-card__header"><h2><lang>媒体</lang></h2></div>
+                    <div class="w-card__body"><strong class="w-product-kpi"><?= count($media) ?></strong></div>
+                </article>
+            </div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="basic" hidden>
+            <div class="w-card"><div class="w-card__body w-product-form-grid">
+                <div class="w-field w-product-form-grid__wide">
+                    <label class="w-field__label" for="product-edit-name"><lang>商品名称</lang></label>
+                    <input class="w-input" id="product-edit-name" name="name" maxlength="255" value="<?= $escape($name) ?>" required>
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="product-edit-locale"><lang>语言</lang></label>
+                    <input class="w-input" id="product-edit-locale" name="locale" maxlength="32" placeholder="zh_Hans_CN">
+                </div>
+                <div class="w-field">
+                    <label class="w-field__label" for="product-edit-currency"><lang>币种</lang></label>
+                    <input class="w-input" id="product-edit-currency" name="currency" value="CNY" maxlength="8" required>
+                </div>
+            </div></div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="attributes" hidden>
+            <div class="w-card"><div class="w-card__header">
+                <div><h2><lang>商品属性值</lang></h2><p><lang>EAV 管理属性定义；这里填写本商品的实际值和继承方式。</lang></p></div>
+            </div><div class="w-card__body">
+                <div class="w-product-eav" id="product-eav-editor" data-testid="product-eav-editor" data-product-id="<?= $escape($productEntityId) ?>">
+                    <?php if ($catalogSets !== []): ?>
+                        <?php
+                        $firstSet = reset($catalogSets);
+                        $selectedSetId = is_array($firstSet)
+                            ? (string)($firstSet['attribute_set_id'] ?? $firstSet['set_id'] ?? $firstSet['id'] ?? $firstSet['code'] ?? '0')
+                            : '0';
+                        ?>
+                        <div class="w-product-eav__toolbar">
+                            <div class="w-field">
+                                <label class="w-field__label" for="product-attribute-set"><lang>属性集</lang></label>
+                                <select class="w-select" id="product-attribute-set" data-eav-set-selector>
+                                    <?php foreach ($catalogSets as $setIndex => $attributeSet): ?>
+                                        <?php
+                                        if (!is_array($attributeSet)) {
+                                            continue;
+                                        }
+                                        $setId = (string)($attributeSet['attribute_set_id'] ?? $attributeSet['set_id'] ?? $attributeSet['id'] ?? $attributeSet['code'] ?? $setIndex);
+                                        $setLabel = (string)($attributeSet['label'] ?? $attributeSet['name'] ?? $attributeSet['code'] ?? $setId);
+                                        ?>
+                                        <option value="<?= $escape($setId) ?>"<?= $setId === $selectedSetId ? ' selected' : '' ?>><?= $escape($setLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <p class="w-field__help"><lang>切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。</lang></p>
+                        </div>
+
+                        <?php foreach ($catalogSets as $setIndex => $attributeSet): ?>
+                            <?php
+                            if (!is_array($attributeSet)) {
+                                continue;
+                            }
+                            $setId = (string)($attributeSet['attribute_set_id'] ?? $attributeSet['set_id'] ?? $attributeSet['id'] ?? $attributeSet['code'] ?? $setIndex);
+                            $groups = is_array($attributeSet['groups'] ?? null) ? $attributeSet['groups'] : [];
+                            ?>
+                            <div class="w-product-eav__set" data-eav-set-panel="<?= $escape($setId) ?>"<?= $setId === $selectedSetId ? '' : ' hidden' ?>>
+                                <?php foreach ($groups as $groupIndex => $group): ?>
+                                    <?php
+                                    if (!is_array($group)) {
+                                        continue;
+                                    }
+                                    $groupId = (string)($group['attribute_group_id'] ?? $group['group_id'] ?? $group['id'] ?? $group['code'] ?? $groupIndex);
+                                    $groupLabel = (string)($group['label'] ?? $group['name'] ?? $group['code'] ?? $groupId);
+                                    $groupAttributes = is_array($group['attributes'] ?? null) ? $group['attributes'] : [];
+                                    ?>
+                                    <fieldset class="w-product-eav__group">
+                                        <legend><?= $escape($groupLabel) ?></legend>
+                                        <div class="w-product-eav__grid">
+                                            <?php foreach ($groupAttributes as $attributeIndex => $attribute): ?>
+                                                <?php
+                                                if (!is_array($attribute)) {
+                                                    continue;
+                                                }
+                                                $code = (string)($attribute['attribute_code'] ?? $attribute['code'] ?? '');
+                                                if ($code === '') {
+                                                    continue;
+                                                }
+                                                $label = (string)($attribute['label'] ?? $attribute['name'] ?? $code);
+                                                $valueType = strtolower((string)($attribute['value_type'] ?? $attribute['input_type'] ?? $attribute['frontend_input'] ?? 'string'));
+                                                $controlType = match ($valueType) {
+                                                    'number', 'integer', 'int', 'decimal', 'float' => 'number',
+                                                    'boolean', 'bool', 'toggle' => 'boolean',
+                                                    'date', 'datetime' => 'date',
+                                                    'select', 'dropdown' => 'select',
+                                                    'multiselect', 'multi_select', 'multiple' => 'multiselect',
+                                                    'json' => 'json',
+                                                    default => 'string',
+                                                };
+                                                $existingRow = is_array($attributeRowsByCode[$code] ?? null) ? $attributeRowsByCode[$code] : null;
+                                                $fieldValue = $existingRow['value'] ?? null;
+                                                $scopeState = (string)($existingRow['scope_state'] ?? (!empty($existingRow['cleared']) ? 'cleared' : 'explicit'));
+                                                if (!in_array($scopeState, ['explicit', 'cleared', 'inherit'], true)) {
+                                                    $scopeState = 'explicit';
+                                                }
+                                                $fieldId = 'product-eav-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $setId . '-' . $groupId . '-' . $code . '-' . $attributeIndex);
+                                                $options = is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
+                                                $selectedValues = is_array($fieldValue) ? array_map('strval', $fieldValue) : [(string)$fieldValue];
+                                                $inputDisabled = $scopeState !== 'explicit';
+                                                $required = !empty($attribute['required']) || !empty($attribute['is_required']);
+                                                ?>
+                                                <div class="w-product-eav__field"
+                                                     data-eav-field
+                                                     data-attribute-code="<?= $escape($code) ?>"
+                                                     data-value-type="<?= $escape($controlType) ?>"
+                                                     data-entity-type="<?= $escape($existingRow['entity_type'] ?? 'product') ?>"
+                                                     data-entity-id="<?= $escape($existingRow['entity_id'] ?? $productEntityId) ?>"
+                                                     data-store-id="<?= $escape($existingRow['store_id'] ?? 0) ?>"
+                                                     data-locale="<?= $escape($existingRow['locale'] ?? '') ?>"
+                                                     data-existing-row="<?= $existingRow === null ? '0' : '1' ?>"
+                                                     data-required="<?= $required ? '1' : '0' ?>">
+                                                    <div class="w-product-eav__field-heading">
+                                                        <label class="w-field__label" for="<?= $escape($fieldId) ?>"><?= $escape($label) ?><?= $required ? ' *' : '' ?></label>
+                                                        <code><?= $escape($code) ?></code>
+                                                    </div>
+                                                    <select class="w-select w-product-eav__state" data-eav-state aria-label="<?= $escape($label) ?> 取值方式">
+                                                        <option value="explicit"<?= $scopeState === 'explicit' ? ' selected' : '' ?>><lang>本站填写</lang></option>
+                                                        <option value="cleared"<?= $scopeState === 'cleared' ? ' selected' : '' ?>><lang>明确清空</lang></option>
+                                                        <option value="inherit"<?= $scopeState === 'inherit' ? ' selected' : '' ?>><lang>继承默认</lang></option>
+                                                    </select>
+                                                    <?php if ($controlType === 'boolean'): ?>
+                                                        <label class="w-product-eav__checkbox" for="<?= $escape($fieldId) ?>">
+                                                            <input id="<?= $escape($fieldId) ?>" type="checkbox" data-eav-input<?= filter_var($fieldValue, FILTER_VALIDATE_BOOL) ? ' checked' : '' ?><?= $inputDisabled ? ' disabled' : '' ?>>
+                                                            <span><lang>启用</lang></span>
+                                                        </label>
+                                                    <?php elseif ($controlType === 'select' || $controlType === 'multiselect'): ?>
+                                                        <select class="w-select" id="<?= $escape($fieldId) ?>" data-eav-input<?= $controlType === 'multiselect' ? ' multiple size="5"' : '' ?><?= $inputDisabled ? ' disabled' : '' ?>>
+                                                            <?php if ($controlType === 'select'): ?><option value=""><lang>请选择</lang></option><?php endif; ?>
+                                                            <?php foreach ($options as $optionIndex => $option): ?>
+                                                                <?php
+                                                                $option = is_array($option) ? $option : ['value' => $option, 'label' => $option];
+                                                                $optionValue = (string)($option['value'] ?? $option['option_id'] ?? $option['code'] ?? $optionIndex);
+                                                                $optionLabel = (string)($option['label'] ?? $option['name'] ?? $option['code'] ?? $optionValue);
+                                                                ?>
+                                                                <option value="<?= $escape($optionValue) ?>"<?= in_array($optionValue, $selectedValues, true) ? ' selected' : '' ?>><?= $escape($optionLabel) ?></option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                    <?php elseif ($controlType === 'json'): ?>
+                                                        <textarea class="w-textarea w-code-input" id="<?= $escape($fieldId) ?>" rows="5" data-eav-input<?= $inputDisabled ? ' disabled' : '' ?>><?= $escape(is_array($fieldValue) ? (json_encode($fieldValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') : $fieldValue) ?></textarea>
+                                                    <?php else: ?>
+                                                        <input class="w-input"
+                                                               id="<?= $escape($fieldId) ?>"
+                                                               type="<?= $controlType === 'number' ? 'number' : ($controlType === 'date' ? 'date' : 'text') ?>"
+                                                               value="<?= $escape($fieldValue) ?>"
+                                                               data-eav-input
+                                                               <?= $controlType === 'number' ? 'step="any"' : '' ?>
+                                                               <?= $inputDisabled ? 'disabled' : '' ?>>
+                                                    <?php endif; ?>
+                                                    <p class="w-field__help" data-eav-state-help><lang>本站填写会保存当前值；清空和继承不会把零值误判为缺失。</lang></p>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </fieldset>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="w-alert" data-tone="warning"><lang>当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。</lang></div>
+                    <?php endif; ?>
+
+                    <details class="w-product-eav__advanced" data-testid="product-eav-advanced">
+                        <summary><lang>高级：完整属性行 JSON</lang></summary>
+                        <div class="w-product-eav__advanced-body">
+                            <label class="w-field__label" for="product-edit-attributes"><lang>属性行 JSON</lang></label>
+                            <textarea class="w-textarea w-code-input" id="product-edit-attributes" rows="18"><?= $escape($attributesJson) ?></textarea>
+                            <p class="w-field__help"><lang>这里保留未知属性、Offer 属性以及 Store/locale 覆盖。保存时只合并当前可视化属性，不会自动删除其他行。</lang></p>
+                        </div>
+                    </details>
+                </div>
+            </div></div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="offers" hidden>
+            <?php if ($isConfigurable): ?>
+                <div class="w-card w-product-variant"
+                     data-product-offer-matrix
+                     data-can-edit-structure="<?= $canEditStructure ? '1' : '0' ?>">
+                    <div class="w-card__header">
+                        <div>
+                            <h2><lang>多规格 Offer 矩阵</lang></h2>
+                            <p><lang>规格轴决定组合；移除规格值会在保存时停用对应 Offer，SKU 与历史身份不会删除。</lang></p>
+                        </div>
+                        <span class="w-status" data-status="<?= $canEditStructure ? 'published' : 'disabled' ?>">
+                            <?= $canEditStructure ? __('归属站可编辑') : __('复制站结构只读') ?>
+                        </span>
+                    </div>
+                    <div class="w-card__body w-product-variant__body">
+                        <div class="w-product-variant__toolbar">
+                            <label class="w-field">
+                                <span class="w-field__label"><lang>SKU 前缀</lang></span>
+                                <input class="w-input"
+                                       data-product-variant-sku-prefix
+                                       value="<?= $escape($offerMatrix['sku_prefix'] ?? '') ?>"
+                                       <?= $canEditStructure ? '' : 'readonly' ?>
+                                       required>
+                                <span class="w-field__help"><lang>新组合将按“前缀-规格值”生成人类可读 SKU，可在矩阵中逐条修改。</lang></span>
+                            </label>
+                            <div class="w-product-variant__actions">
+                                <button class="w-button" type="button"
+                                        data-product-variant-axis-add
+                                        <?= $canEditStructure ? '' : 'disabled' ?>><lang>添加规格轴</lang></button>
+                                <button class="w-button" type="button" data-tone="primary"
+                                        data-product-variant-generate
+                                        <?= $canEditStructure ? '' : 'disabled' ?>><lang>重新生成矩阵</lang></button>
+                            </div>
+                        </div>
+
+                        <div class="w-product-variant__axes" data-product-variant-axes>
+                            <?php foreach ($variantAxes as $axis): ?>
+                                <?php
+                                $optionValues = [];
+                                foreach (($axis['options'] ?? []) as $option) {
+                                    $optionValues[] = is_array($option)
+                                        ? (string)($option['value'] ?? '')
+                                        : (string)$option;
+                                }
+                                ?>
+                                <div class="w-product-variant__axis" data-product-variant-axis>
+                                    <input class="w-input"
+                                           data-variant-axis-code
+                                           value="<?= $escape($axis['code'] ?? '') ?>"
+                                           placeholder="@lang(规格轴代码，例如 color)"
+                                           <?= $canEditStructure ? '' : 'readonly' ?>>
+                                    <input class="w-input"
+                                           data-variant-axis-options
+                                           value="<?= $escape(implode(', ', array_filter($optionValues))) ?>"
+                                           placeholder="@lang(规格值，以逗号分隔)"
+                                           <?= $canEditStructure ? '' : 'readonly' ?>>
+                                    <button class="w-button" type="button"
+                                            data-product-variant-axis-remove
+                                            <?= $canEditStructure ? '' : 'disabled' ?>><lang>移除</lang></button>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div class="w-product-variant__impact" data-product-variant-impact>
+                            <p class="w-text" data-tone="muted"><lang>当前变更不会停用已有 Offer。</lang></p>
+                        </div>
+                        <p class="w-field__help" data-product-variant-status>
+                            <?= count($variantRows) ?> <lang>个 Offer 组合；显式零价有效，留空表示清除基础价。</lang>
+                        </p>
+
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-testid="product-edit-offers">
+                                <thead><tr><th><lang>规格组合</lang></th><th>SKU</th><th><lang>状态</lang></th><th><lang>基础价（分）</lang></th></tr></thead>
+                                <tbody data-product-variant-rows>
+                                <?php foreach ($variantRows as $row): ?>
+                                    <?php
+                                    $combination = is_array($row['combination'] ?? null) ? $row['combination'] : [];
+                                    $combinationParts = [];
+                                    foreach ($combination as $axisCode => $optionValue) {
+                                        $combinationParts[] = (string)$axisCode . '=' . (string)$optionValue;
+                                    }
+                                    $combinationJson = json_encode(
+                                        $combination,
+                                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                                    ) ?: '{}';
+                                    $offerUuid = (string)($row['global_offer_uuid'] ?? '');
+                                    $amountValue = ($row['scope_state'] ?? 'cleared') === 'explicit'
+                                        && array_key_exists('amount_minor', $row)
+                                        ? $row['amount_minor']
+                                        : '';
+                                    ?>
+                                    <tr data-variant-offer-row
+                                        data-combination="<?= $escape($combinationJson) ?>"
+                                        data-combination-key="<?= $escape($row['combination_key'] ?? '') ?>"
+                                        data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+                                        data-offer-version="<?= $escape($row['offer_version'] ?? 0) ?>"
+                                        data-identity-version="<?= $escape($row['identity_version'] ?? 0) ?>"
+                                        data-existing-status="<?= $escape($row['status'] ?? 'draft') ?>">
+                                        <td><strong><?= $escape(implode(' / ', $combinationParts)) ?></strong><small><?= $escape($row['combination_key'] ?? '') ?></small></td>
+                                        <td>
+                                            <input class="w-input" data-variant-sku
+                                                   value="<?= $escape($row['sku'] ?? '') ?>"
+                                                   <?= $canEditStructure ? '' : 'readonly' ?>
+                                                   required>
+                                            <small><?= $escape($offerUuid) ?></small>
+                                        </td>
+                                        <td><span class="w-status" data-status="<?= $escape($row['status'] ?? 'draft') ?>"><?= $escape($row['status'] ?? 'draft') ?></span></td>
+                                        <td>
+                                            <input class="w-input" type="number" min="0" step="1"
+                                                   data-variant-price
+                                                   data-offer-price="<?= $escape($offerUuid) ?>"
+                                                   value="<?= $escape($amountValue) ?>"
+                                                   placeholder="@lang(未配置)">
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="w-card"><div class="w-card__header">
+                    <div><h2><lang>Offer 与基础价</lang></h2><p><lang>SKU 和规格结构仅归属站可改；显式零价有效。</lang></p></div>
+                </div><div class="w-table-wrap">
+                    <table class="w-table" data-testid="product-edit-offers">
+                        <thead><tr><th>SKU</th><th><lang>组合</lang></th><th><lang>状态</lang></th><th><lang>基础价（分）</lang></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($offers as $offer): ?>
+                            <?php
+                            $offerUuid = (string)($offer['global_offer_uuid'] ?? '');
+                            $price = $priceByOffer[$offerUuid] ?? [];
+                            ?>
+                            <tr>
+                                <td><strong><?= $escape($offer['sku'] ?? '') ?></strong><small><?= $escape($offerUuid) ?></small></td>
+                                <td><code><?= $escape($offer['combination_key'] ?? '-') ?></code></td>
+                                <td><?= $escape($offer['status'] ?? '') ?></td>
+                                <td>
+                                    <input class="w-input" type="number" min="0" step="1"
+                                           data-offer-price="<?= $escape($offerUuid) ?>"
+                                           value="<?= !empty($price['cleared']) ? '' : $escape($price['amount_minor'] ?? '') ?>"
+                                           placeholder="@lang(未配置)">
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div></div>
+            <?php endif; ?>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="taxonomy" hidden>
+            <div class="w-product-taxonomy-stack">
+                <div class="w-card">
+                    <div class="w-card__header w-product-section-heading">
+                        <div>
+                            <h2><lang>Website 分类</lang></h2>
+                            <p><lang>这里是本站目录事实。Store 默认继承，只在下面保存加入或排除差异。</lang></p>
+                        </div>
+                        <?php if ($categories !== []): ?>
+                            <label class="w-product-inline-search">
+                                <span class="w-field__label"><lang>查找分类</lang></span>
+                                <input class="w-input" type="search" data-product-category-search placeholder="@lang(输入名称或路径)">
+                            </label>
+                        <?php endif; ?>
+                    </div>
+                    <div class="w-card__body">
+                        <div class="w-product-category-list" data-product-category-assignments>
+                            <?php foreach ($categories as $category): ?>
+                                <?php
+                                $categoryId = (int)($category['category_id'] ?? 0);
+                                $categoryName = (string)($category['name'] ?? $category['path'] ?? ('#' . $categoryId));
+                                $categoryPath = (string)($category['path'] ?? '');
+                                ?>
+                                <div class="w-product-category-row"
+                                     data-product-category-row
+                                     data-search-text="<?= $escape(strtolower($categoryName . ' ' . $categoryPath)) ?>">
+                                    <label class="w-product-check">
+                                        <input type="checkbox"
+                                               data-product-category-id="<?= $escape($categoryId) ?>"
+                                               <?= isset($assignedCategoryIds[$categoryId]) ? 'checked' : '' ?>>
+                                        <span>
+                                            <strong><?= $escape($categoryName) ?></strong>
+                                            <small><?= $escape($categoryPath !== '' ? $categoryPath : ('ID ' . $categoryId)) ?></small>
+                                        </span>
+                                    </label>
+                                    <label class="w-product-position">
+                                        <span><lang>排序</lang></span>
+                                        <input class="w-input" type="number" min="0" step="1"
+                                               data-product-category-position
+                                               value="<?= $escape($categoryPositions[$categoryId] ?? 0) ?>">
+                                    </label>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php if ($categories === []): ?>
+                                <div class="w-alert" data-tone="warning">
+                                    <lang>当前 Website 还没有分类。请先建立分类目录，再回到商品选择。</lang>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-card">
+                    <div class="w-card__header">
+                        <div>
+                            <h2><lang>Store 分类差异</lang></h2>
+                            <p><lang>“继承”不会保存覆盖；“加入/排除”只影响对应 Store。</lang></p>
+                        </div>
+                    </div>
+                    <div class="w-card__body w-product-store-overrides" data-product-store-category-overrides>
+                        <?php foreach ($stores as $store): ?>
+                            <?php $storeId = (int)($store['store_id'] ?? 0); ?>
+                            <details class="w-product-store-override">
+                                <summary>
+                                    <strong><?= $escape($store['name'] ?? '') ?></strong>
+                                    <small><?= $escape($store['code'] ?? '') ?> · ID <?= $escape($storeId) ?></small>
+                                </summary>
+                                <div class="w-product-store-override__rows">
+                                    <?php foreach ($categories as $category): ?>
+                                        <?php
+                                        $categoryId = (int)($category['category_id'] ?? 0);
+                                        $override = $categoryOverridesByStore[$storeId][$categoryId] ?? null;
+                                        $overrideState = $override === null
+                                            ? 'inherit'
+                                            : (!empty($override['selected']) ? 'include' : 'exclude');
+                                        ?>
+                                        <div class="w-product-override-row"
+                                             data-product-store-category-row
+                                             data-store-id="<?= $escape($storeId) ?>"
+                                             data-category-id="<?= $escape($categoryId) ?>">
+                                            <span>
+                                                <strong><?= $escape($category['name'] ?? ('#' . $categoryId)) ?></strong>
+                                                <small><?= $escape($category['path'] ?? '') ?></small>
+                                            </span>
+                                            <select class="w-select" data-product-category-override-state
+                                                    aria-label="<?= $escape(($store['name'] ?? '') . ' · ' . ($category['name'] ?? $categoryId)) ?>">
+                                                <option value="inherit"<?= $overrideState === 'inherit' ? ' selected' : '' ?>><lang>继承 Website</lang></option>
+                                                <option value="include"<?= $overrideState === 'include' ? ' selected' : '' ?>><lang>加入</lang></option>
+                                                <option value="exclude"<?= $overrideState === 'exclude' ? ' selected' : '' ?>><lang>排除</lang></option>
+                                            </select>
+                                            <input class="w-input" type="number" min="0" step="1"
+                                                   data-product-category-override-position
+                                                   value="<?= $escape($override['position'] ?? 0) ?>"
+                                                   aria-label="@lang(Store 分类排序)">
+                                        </div>
+                                    <?php endforeach; ?>
+                                    <?php if ($categories === []): ?>
+                                        <p class="w-text" data-tone="muted"><lang>没有可覆盖的分类。</lang></p>
+                                    <?php endif; ?>
+                                </div>
+                            </details>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <div class="w-card" data-testid="product-edit-media">
+                    <div class="w-card__header w-product-section-heading">
+                        <div>
+                            <h2><lang>Website 图片媒体</lang></h2>
+                            <p><lang>从受权限保护的媒体库选择 FileAsset。主图不是统一必填，由产品 Provider 决定。</lang></p>
+                        </div>
+                        <button class="w-button" type="button" data-tone="primary" data-product-media-picker-open>
+                            <lang>从媒体库添加</lang>
+                        </button>
+                    </div>
+                    <div class="w-card__body">
+                        <div class="w-table-wrap">
+                            <table class="w-table w-product-media-table" data-product-media-assignments>
+                                <thead>
+                                <tr>
+                                    <th><lang>资源</lang></th>
+                                    <th><lang>角色</lang></th>
+                                    <th><lang>排序</lang></th>
+                                    <th><lang>操作</lang></th>
+                                </tr>
+                                </thead>
+                                <tbody data-product-media-rows>
+                                <?php foreach ($media as $item): ?>
+                                    <?php $assetId = (string)($item['asset_id'] ?? ''); ?>
+                                    <?php if ($assetId !== ''): ?>
+                                        <tr data-product-media-row
+                                            data-asset-id="<?= $escape($assetId) ?>"
+                                            data-mime-type="<?= $escape($item['mime_type'] ?? '') ?>"
+                                            data-asset-visibility="<?= $escape($item['asset_visibility'] ?? '') ?>">
+                                            <td>
+                                                <strong class="w-product-asset-name"><?= $escape($assetId) ?></strong>
+                                                <small><?= $escape($item['mime_type'] ?? '') ?> · <?= $escape($item['asset_visibility'] ?? '') ?></small>
+                                            </td>
+                                            <td>
+                                                <select class="w-select" data-product-media-role aria-label="@lang(媒体角色)">
+                                                    <option value="gallery"<?= ($item['role'] ?? 'gallery') === 'gallery' ? ' selected' : '' ?>><lang>图集</lang></option>
+                                                    <option value="main"<?= ($item['role'] ?? '') === 'main' ? ' selected' : '' ?>><lang>主图</lang></option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input class="w-input" type="number" min="0" step="1"
+                                                       data-product-media-position
+                                                       value="<?= $escape($item['position'] ?? 0) ?>"
+                                                       aria-label="@lang(媒体排序)">
+                                            </td>
+                                            <td>
+                                                <button class="w-button" type="button" data-tone="danger" data-product-media-remove>
+                                                    <lang>移除</lang>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="w-text" data-tone="muted" data-product-media-empty<?= count(array_filter($media, static fn(array $row): bool => (string)($row['asset_id'] ?? '') !== '')) > 0 ? ' hidden' : '' ?>>
+                            <lang>暂无 FileAsset 图片。可先保存没有图片的草稿。</lang>
+                        </p>
+                        <?php if (array_filter($media, static fn(array $row): bool => !empty($row['legacy'])) !== []): ?>
+                            <div class="w-alert" data-tone="warning">
+                                <lang>检测到旧 path/blob 媒体。它们会继续兼容读取，但不会由本编辑器覆盖或重新写入；请逐步替换为 FileAsset。</lang>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="w-card">
+                    <div class="w-card__header">
+                        <div>
+                            <h2><lang>Store 图片差异</lang></h2>
+                            <p><lang>Store 可以隐藏、显示、调整角色和排序；删除覆盖后自动恢复 Website 设置。</lang></p>
+                        </div>
+                    </div>
+                    <div class="w-card__body w-product-store-overrides" data-product-store-media-overrides>
+                        <?php foreach ($stores as $store): ?>
+                            <?php $storeId = (int)($store['store_id'] ?? 0); ?>
+                            <details class="w-product-store-override">
+                                <summary>
+                                    <strong><?= $escape($store['name'] ?? '') ?></strong>
+                                    <small><?= $escape($store['code'] ?? '') ?> · ID <?= $escape($storeId) ?></small>
+                                </summary>
+                                <div class="w-product-store-override__rows">
+                                    <?php foreach ($media as $item): ?>
+                                        <?php
+                                        $assetId = (string)($item['asset_id'] ?? '');
+                                        if ($assetId === '') {
+                                            continue;
+                                        }
+                                        $override = $mediaOverridesByStore[$storeId][$assetId] ?? null;
+                                        $mediaState = $override === null
+                                            ? 'inherit'
+                                            : (!empty($override['hidden']) ? 'hide' : 'show');
+                                        ?>
+                                        <div class="w-product-override-row w-product-media-override-row"
+                                             data-product-store-media-row
+                                             data-store-id="<?= $escape($storeId) ?>"
+                                             data-asset-id="<?= $escape($assetId) ?>">
+                                            <span>
+                                                <strong><?= $escape($assetId) ?></strong>
+                                                <small><?= $escape($item['mime_type'] ?? '') ?></small>
+                                            </span>
+                                            <select class="w-select" data-product-media-override-state aria-label="@lang(Store 媒体覆盖)">
+                                                <option value="inherit"<?= $mediaState === 'inherit' ? ' selected' : '' ?>><lang>继承 Website</lang></option>
+                                                <option value="show"<?= $mediaState === 'show' ? ' selected' : '' ?>><lang>显示</lang></option>
+                                                <option value="hide"<?= $mediaState === 'hide' ? ' selected' : '' ?>><lang>隐藏</lang></option>
+                                            </select>
+                                            <select class="w-select" data-product-media-override-role aria-label="@lang(Store 媒体角色)">
+                                                <?php $mediaRole = (string)($override['role'] ?? $item['role'] ?? 'gallery'); ?>
+                                                <option value="gallery"<?= $mediaRole === 'gallery' ? ' selected' : '' ?>><lang>图集</lang></option>
+                                                <option value="main"<?= $mediaRole === 'main' ? ' selected' : '' ?>><lang>主图</lang></option>
+                                            </select>
+                                            <input class="w-input" type="number" min="0" step="1"
+                                                   data-product-media-override-position
+                                                   value="<?= $escape($override['position'] ?? $item['position'] ?? 0) ?>"
+                                                   aria-label="@lang(Store 媒体排序)">
+                                        </div>
+                                    <?php endforeach; ?>
+                                    <?php if (array_filter($media, static fn(array $row): bool => (string)($row['asset_id'] ?? '') !== '') === []): ?>
+                                        <p class="w-text" data-tone="muted"><lang>先为 Website 添加图片并保存，再配置 Store 差异。</lang></p>
+                                    <?php endif; ?>
+                                </div>
+                            </details>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
+            <dialog class="w-product-media-picker" data-product-media-picker-dialog aria-labelledby="product-media-picker-title">
+                <div class="w-product-media-picker__surface">
+                    <header>
+                        <div>
+                            <h2 id="product-media-picker-title"><lang>选择商品图片</lang></h2>
+                            <p><lang>只会接收媒体库返回的 FileAsset 身份，不保存文件路径。</lang></p>
+                        </div>
+                        <button class="w-button" type="button" data-product-media-picker-close aria-label="@lang(关闭)">
+                            <lang>关闭</lang>
+                        </button>
+                    </header>
+                    <iframe title="@lang(媒体库)"
+                            src="about:blank"
+                            data-product-media-picker-frame
+                            data-src="@backend-url('media/backend/manager/iframe')?target=product-media-picker&multi=1&usage=1&ext=jpg,png,gif,webp"></iframe>
+                </div>
+            </dialog>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="stores" hidden>
+            <div class="w-card"><div class="w-card__header">
+                <div><h2><lang>Store 可见性</lang></h2><p><lang>Website 保存目录事实；Store 默认继承并可显式覆盖。</lang></p></div>
+            </div><div class="w-card__body w-product-store-picker__items">
+                <?php foreach ($stores as $store): ?>
+                    <label class="w-product-check">
+                        <input type="checkbox" name="store_ids[]" value="<?= $escape($store['store_id'] ?? '') ?>"
+                               <?= !empty($store['product_selected']) ? 'checked' : '' ?>>
+                        <span><strong><?= $escape($store['name'] ?? '') ?></strong><small><?= $escape($store['code'] ?? '') ?> · ID <?= $escape($store['store_id'] ?? '') ?></small></span>
+                    </label>
+                <?php endforeach; ?>
+            </div></div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="fulfillment" hidden>
+            <div class="w-card">
+                <div class="w-card__header">
+                    <div>
+                        <h2><lang>库存与配送</lang></h2>
+                        <p><lang>按 Store 和 Offer 维护可售库存；预留量与可售量由 Inventory 实时计算。</lang></p>
+                    </div>
+                </div>
+                <div class="w-card__body">
+                    <dl class="w-product-definition-list">
+                        <div><dt><lang>跟踪库存</lang></dt><dd><?= !empty($provider['capabilities']['inventory']) ? __('是') : __('否') ?></dd></div>
+                        <div><dt><lang>需要配送</lang></dt><dd><?= !empty($provider['capabilities']['shipping']) ? __('是') : __('否') ?></dd></div>
+                        <div><dt><lang>数字交付</lang></dt><dd><?= !empty($provider['capabilities']['digital_delivery']) ? __('是') : __('否') ?></dd></div>
+                    </dl>
+
+                    <?php if (!empty($inventory['enabled'])): ?>
+                        <?php foreach ($inventoryErrors as $error): ?>
+                            <div class="w-alert" data-tone="warning">
+                                <strong><?= $escape($error['code'] ?? 'product_inventory_unavailable') ?></strong>
+                                <?= $escape($error['message'] ?? __('库存暂时不可用')) ?>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <?php if (empty($inventory['capability_available'])): ?>
+                            <div class="w-product-empty">
+                                <strong><lang>库存能力暂不可用</lang></strong>
+                                <p><lang>可以继续编辑商品其他信息；库存不会被改写。</lang></p>
+                            </div>
+                        <?php elseif ($inventoryRows === []): ?>
+                            <div class="w-product-empty">
+                                <strong><lang>暂无可维护库存</lang></strong>
+                                <p><lang>请先为商品选择活动 Store，并确保至少有一个启用的 Offer。</lang></p>
+                            </div>
+                        <?php else: ?>
+                            <div class="w-table-wrap" aria-live="polite">
+                                <table class="w-table w-product-inventory-table" data-testid="product-edit-inventory">
+                                    <thead>
+                                    <tr>
+                                        <th><lang>Store</lang></th>
+                                        <th><lang>Offer / SKU</lang></th>
+                                        <th><lang>策略</lang></th>
+                                        <th><lang>现货数量</lang></th>
+                                        <th><lang>已预留</lang></th>
+                                        <th><lang>可售数量</lang></th>
+                                        <th><lang>可购买</lang></th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($inventoryRows as $row): ?>
+                                        <?php
+                                        $availableMinor = (int)($row['available_minor'] ?? 0);
+                                        $availableLabel = $availableMinor === PHP_INT_MAX
+                                            ? __('不限')
+                                            : (string)$availableMinor;
+                                        ?>
+                                        <tr data-inventory-row
+                                            data-store-id="<?= $escape($row['store_id'] ?? 0) ?>"
+                                            data-offer-id="<?= $escape($row['offer_id'] ?? 0) ?>"
+                                            data-global-offer-uuid="<?= $escape($row['global_offer_uuid'] ?? '') ?>">
+                                            <td>
+                                                <strong><?= $escape($row['store_name'] ?? '') ?></strong>
+                                                <small><?= $escape($row['store_code'] ?? '') ?> · #<?= $escape($row['store_id'] ?? '') ?></small>
+                                            </td>
+                                            <td>
+                                                <strong><?= $escape($row['sku'] ?? '') ?></strong>
+                                                <small>#<?= $escape($row['offer_id'] ?? '') ?></small>
+                                            </td>
+                                            <td><code data-inventory-strategy><?= $escape($row['strategy'] ?? '') ?></code></td>
+                                            <td>
+                                                <input class="w-input" type="number" min="0" step="1"
+                                                       data-inventory-on-hand
+                                                       value="<?= $escape($row['on_hand_minor'] ?? 0) ?>"
+                                                       aria-label="@lang(现货数量)"
+                                                       <?= $inventoryEditable ? '' : 'disabled' ?>>
+                                            </td>
+                                            <td><span data-inventory-reserved><?= $escape($row['reserved_minor'] ?? 0) ?></span></td>
+                                            <td><span data-inventory-available><?= $escape($availableLabel) ?></span></td>
+                                            <td>
+                                                <span class="w-status"
+                                                      data-inventory-sellable
+                                                      data-status="<?= !empty($row['sellable']) ? 'published' : 'disabled' ?>">
+                                                    <?= !empty($row['sellable']) ? __('是') : __('否') ?>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                        <p class="w-field__help"><lang>零库存允许发布，但前台购物车会拒绝购买；保存失败时商品与库存会一起回滚。</lang></p>
+                    <?php else: ?>
+                        <div class="w-product-empty">
+                            <strong><lang>该产品类型不跟踪库存</lang></strong>
+                            <p><lang>虚拟、下载等类型由 Provider 决定履约方式，不会写入库存数量。</lang></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="type" hidden>
+            <div class="w-card">
+                <div class="w-card__header">
+                    <div>
+                        <h2><?= $escape($provider['label'] ?? $identity['product_type'] ?? '') ?></h2>
+                        <p><lang>Provider 专属配置</lang></p>
+                    </div>
+                </div>
+                <div class="w-card__body">
+                    <div class="w-product-provider" data-testid="product-provider-editor">
+                        <?php if ($providerFields === []): ?>
+                            <div class="w-product-empty w-product-provider__empty">
+                                <strong><lang>没有额外类型字段</lang></strong>
+                                <p><lang>该 Provider 的规格、价格、库存等信息由对应编辑区管理。</lang></p>
+                            </div>
+                        <?php else: ?>
+                            <div class="w-product-provider__grid">
+                                <?php foreach ($providerFields as $field): ?>
+                                    <?php
+                                    $fieldCode = (string)($field['code'] ?? '');
+                                    $fieldType = (string)($field['type'] ?? 'string');
+                                    $fieldId = 'product-provider-field-' . trim(
+                                        (string)preg_replace('/[^a-z0-9_-]+/i', '-', $fieldCode),
+                                        '-',
+                                    );
+                                    $fieldLabel = (string)($field['label'] ?? $fieldCode);
+                                    $fieldHelp = (string)($field['help'] ?? '');
+                                    $fieldValue = $field['value'] ?? null;
+                                    $fieldOptions = is_array($field['options'] ?? null)
+                                        ? $field['options']
+                                        : [];
+                                    $fieldRequired = !empty($field['required']);
+                                    $fieldReadonly = !empty($field['readonly']);
+                                    $fieldHelpId = $fieldHelp !== '' ? $fieldId . '-help' : '';
+                                    $fieldRows = max(4, (int)($field['rows'] ?? ($fieldType === 'json' ? 10 : 5)));
+                                    $fieldJson = json_encode(
+                                        $fieldValue,
+                                        JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                                    );
+                                    $fieldJson = is_string($fieldJson) ? $fieldJson : 'null';
+                                    $selectedValues = is_array($fieldValue)
+                                        ? array_map('strval', $fieldValue)
+                                        : [];
+                                    ?>
+                                    <div class="w-product-provider__field"
+                                         data-provider-field
+                                         data-provider-code="<?= $escape($fieldCode) ?>"
+                                         data-provider-label="<?= $escape($fieldLabel) ?>"
+                                         data-provider-type="<?= $escape($fieldType) ?>"
+                                         data-provider-required="<?= $fieldRequired ? '1' : '0' ?>">
+                                        <div class="w-product-provider__field-heading">
+                                            <label class="w-field__label" for="<?= $escape($fieldId) ?>">
+                                                <?= $escape($fieldLabel) ?>
+                                                <?php if ($fieldRequired): ?>
+                                                    <span aria-hidden="true">*</span>
+                                                    <span class="w-sr-only"><lang>必填</lang></span>
+                                                <?php endif; ?>
+                                            </label>
+                                            <code><?= $escape($fieldCode) ?></code>
+                                        </div>
+
+                                        <?php if ($fieldType === 'boolean'): ?>
+                                            <select class="w-select" id="<?= $escape($fieldId) ?>" data-provider-input
+                                                    <?= $fieldRequired ? ' required' : '' ?>
+                                                    <?= $fieldReadonly ? ' disabled' : '' ?>
+                                                    <?= $fieldHelpId !== '' ? ' aria-describedby="' . $escape($fieldHelpId) . '"' : '' ?>>
+                                                <option value="1"<?= (bool)$fieldValue ? ' selected' : '' ?>><lang>是</lang></option>
+                                                <option value="0"<?= !(bool)$fieldValue ? ' selected' : '' ?>><lang>否</lang></option>
+                                            </select>
+                                        <?php elseif ($fieldType === 'select' || $fieldType === 'multiselect'): ?>
+                                            <select class="w-select" id="<?= $escape($fieldId) ?>" data-provider-input
+                                                    <?= $fieldType === 'multiselect' ? ' multiple' : '' ?>
+                                                    <?= $fieldRequired ? ' required' : '' ?>
+                                                    <?= $fieldReadonly ? ' disabled' : '' ?>
+                                                    <?= $fieldHelpId !== '' ? ' aria-describedby="' . $escape($fieldHelpId) . '"' : '' ?>>
+                                                <?php if ($fieldType === 'select' && !$fieldRequired): ?>
+                                                    <option value=""><lang>请选择</lang></option>
+                                                <?php endif; ?>
+                                                <?php foreach ($fieldOptions as $option): ?>
+                                                    <?php
+                                                    $optionValue = (string)($option['value'] ?? '');
+                                                    $optionSelected = $fieldType === 'multiselect'
+                                                        ? in_array($optionValue, $selectedValues, true)
+                                                        : (string)$fieldValue === $optionValue;
+                                                    ?>
+                                                    <option value="<?= $escape($optionValue) ?>"<?= $optionSelected ? ' selected' : '' ?>>
+                                                        <?= $escape($option['label'] ?? $optionValue) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        <?php elseif ($fieldType === 'text' || $fieldType === 'json'): ?>
+                                            <textarea class="w-textarea<?= $fieldType === 'json' ? ' w-code-input' : '' ?>"
+                                                      id="<?= $escape($fieldId) ?>"
+                                                      rows="<?= $escape($fieldRows) ?>"
+                                                      data-provider-input
+                                                      <?= $fieldRequired ? ' required' : '' ?>
+                                                      <?= $fieldReadonly ? ' readonly' : '' ?>
+                                                      <?= $fieldHelpId !== '' ? ' aria-describedby="' . $escape($fieldHelpId) . '"' : '' ?>
+                                                      placeholder="<?= $escape($field['placeholder'] ?? '') ?>"><?= $escape($fieldType === 'json' ? $fieldJson : $fieldValue) ?></textarea>
+                                        <?php else: ?>
+                                            <input class="w-input"
+                                                   id="<?= $escape($fieldId) ?>"
+                                                   type="<?= in_array($fieldType, ['integer', 'decimal'], true) ? 'number' : 'text' ?>"
+                                                   data-provider-input
+                                                   value="<?= $escape($fieldValue) ?>"
+                                                   <?= $fieldType === 'integer' ? ' step="1"' : '' ?>
+                                                   <?= $fieldType === 'decimal' ? ' step="' . $escape($field['step'] ?? 'any') . '"' : '' ?>
+                                                   <?= array_key_exists('min', $field) ? ' min="' . $escape($field['min']) . '"' : '' ?>
+                                                   <?= array_key_exists('max', $field) ? ' max="' . $escape($field['max']) . '"' : '' ?>
+                                                   <?= $fieldRequired ? ' required' : '' ?>
+                                                   <?= $fieldReadonly ? ' readonly' : '' ?>
+                                                   <?= $fieldHelpId !== '' ? ' aria-describedby="' . $escape($fieldHelpId) . '"' : '' ?>
+                                                   placeholder="<?= $escape($field['placeholder'] ?? '') ?>">
+                                        <?php endif; ?>
+
+                                        <?php if ($fieldHelp !== ''): ?>
+                                            <p class="w-field__help" id="<?= $escape($fieldHelpId) ?>"><?= $escape($fieldHelp) ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <details class="w-product-provider__advanced"<?= $providerUnknownFields !== [] ? ' open' : '' ?>>
+                            <summary><lang>高级：扩展字段兼容区</lang></summary>
+                            <div class="w-product-provider__advanced-body">
+                                <label class="w-field__label" for="product-edit-type-config"><lang>未声明的扩展字段 JSON</lang></label>
+                                <textarea class="w-textarea w-code-input"
+                                          id="product-edit-type-config"
+                                          rows="12"
+                                          data-provider-unknown><?= $escape($providerUnknownFieldsJson) ?></textarea>
+                                <p class="w-field__help"><lang>这里只保存 Provider schema 未声明的兼容字段；上方可视化字段会在保存时安全合并，不会删除扩展数据。</lang></p>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="diagnostics" hidden>
+            <div class="w-card">
+                <div class="w-card__header"><h2><lang>发布诊断</lang></h2></div>
+                <div class="w-card__body w-product-diagnostics"
+                     id="product-diagnostics"
+                     data-testid="product-publish-diagnostics"
+                     role="status"
+                     aria-live="polite">
+                    <?php if ($diagnosticGroups !== []): ?>
+                        <?php foreach ($diagnosticGroups as $group): ?>
+                            <?php
+                            $scopeLabel = implode(' · ', array_values(array_filter([
+                                (string)($group['store_label'] ?? ''),
+                                (string)($group['locale'] ?? ''),
+                                (string)($group['currency'] ?? ''),
+                                (string)($group['offer_label'] ?? ''),
+                            ], static fn(string $part): bool => $part !== '')));
+                            ?>
+                            <section class="w-product-diagnostic-group"
+                                     data-diagnostic-group
+                                     data-severity="<?= $escape($group['severity'] ?? 'ready') ?>">
+                                <header class="w-product-diagnostic-group__header">
+                                    <h3><?= $escape($scopeLabel !== '' ? $scopeLabel : __('商品级诊断')) ?></h3>
+                                    <span><?= count($group['errors'] ?? []) ?> <lang>项阻断</lang> · <?= count($group['warnings'] ?? []) ?> <lang>项提醒</lang></span>
+                                </header>
+                                <div class="w-product-diagnostic-group__issues">
+                                    <?php foreach ($group['errors'] ?? [] as $issue): ?>
+                                        <div class="w-alert" data-tone="danger"><strong><?= $escape($issue['code'] ?? '') ?></strong> <?= $escape($issue['message'] ?? '') ?><?php if (!empty($issue['path'])): ?><small><?= $escape($issue['path']) ?></small><?php endif; ?></div>
+                                    <?php endforeach; ?>
+                                    <?php foreach ($group['warnings'] ?? [] as $issue): ?>
+                                        <div class="w-alert" data-tone="warning"><strong><?= $escape($issue['code'] ?? '') ?></strong> <?= $escape($issue['message'] ?? '') ?><?php if (!empty($issue['path'])): ?><small><?= $escape($issue['path']) ?></small><?php endif; ?></div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($diagnostics['errors'] ?? [] as $issue): ?>
+                            <div class="w-alert" data-tone="danger"><strong><?= $escape($issue['code'] ?? '') ?></strong> <?= $escape($issue['message'] ?? '') ?></div>
+                        <?php endforeach; ?>
+                        <?php foreach ($diagnostics['warnings'] ?? [] as $issue): ?>
+                            <div class="w-alert" data-tone="warning"><strong><?= $escape($issue['code'] ?? '') ?></strong> <?= $escape($issue['message'] ?? '') ?></div>
+                        <?php endforeach; ?>
+                        <?php if (!empty($diagnostics['valid'])): ?><div class="w-alert" data-tone="success"><lang>当前数据通过 Provider 发布校验。</lang></div><?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="governance" hidden>
+            <div class="w-card">
+                <div class="w-card__header">
+                    <div>
+                        <h2><lang>跨站分享与归属</lang></h2>
+                        <p><lang>分享只决定目标 Website 能否复制；复制后的经营数据独立，不会自动同步。</lang></p>
+                    </div>
+                    <span class="w-status" data-status="<?= !empty($permissions['is_owner']) ? 'published' : 'disabled' ?>">
+                        <?= !empty($permissions['is_owner']) ? __('当前为归属站') : __('当前为复制站') ?>
+                    </span>
+                </div>
+                <div class="w-card__body" data-testid="product-edit-governance">
+                    <div class="w-alert" data-tone="neutral">
+                        <strong><lang>身份不会被复制成两份</lang></strong>
+                        <span><lang>跨站复制保留同一全局商品与 Offer 身份；名称、价格、库存、媒体和 Store 选择在目标站独立维护。</lang></span>
+                    </div>
+
+                    <?php if (!empty($permissions['is_owner'])): ?>
+                        <?php if ($governanceWebsiteOptions === []): ?>
+                            <div class="w-alert" data-tone="warning">
+                                <strong><lang>没有其他 Website</lang></strong>
+                                <span><lang>创建或启用其他 Website 后，才能授权复制或发起归属转让。</lang></span>
+                            </div>
+                        <?php else: ?>
+                            <div class="w-form-grid">
+                                <label class="w-field" for="product-governance-website">
+                                    <span class="w-field__label"><lang>目标 Website</lang></span>
+                                    <select class="w-select"
+                                            id="product-governance-website"
+                                            data-governance-control
+                                            <?= $canGovernance ? '' : 'disabled' ?>>
+                                        <?php foreach ($governanceWebsiteOptions as $option): ?>
+                                            <option value="<?= $escape($option['website_id'] ?? '') ?>">
+                                                <?= $escape($option['label'] ?? $option['name'] ?? $option['code'] ?? '') ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <span class="w-field__help"><lang>默认主站商品可供获授权子站复制；其他站商品只有显式授权目标可见。</lang></span>
+                                </label>
+                                <div class="w-field">
+                                    <span class="w-field__label"><lang>复制授权</lang></span>
+                                    <div class="w-product-editor__actions">
+                                        <button class="w-button"
+                                                type="button"
+                                                data-product-governance
+                                                data-governance-action="share"
+                                                data-allowed="1"
+                                                <?= $canGovernance ? '' : 'disabled' ?>><lang>允许复制</lang></button>
+                                        <button class="w-button"
+                                                type="button"
+                                                data-tone="warning"
+                                                data-product-governance
+                                                data-governance-action="share"
+                                                data-allowed="0"
+                                                <?= $canGovernance ? '' : 'disabled' ?>><lang>撤销授权</lang></button>
+                                    </div>
+                                    <span class="w-field__help">
+                                        <lang>撤销只停止后续复制，不会下架目标站已经存在的独立投影。</lang>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="w-form-grid">
+                                <div class="w-field">
+                                    <span class="w-field__label"><lang>归属转让</lang></span>
+                                    <button class="w-button"
+                                            type="button"
+                                            data-tone="danger"
+                                            data-product-governance
+                                            data-governance-action="transfer_initiate"
+                                            <?= $canGovernance ? '' : 'disabled' ?>><lang>向目标 Website 发起转让</lang></button>
+                                    <span class="w-field__help"><lang>发起后不会立即变更归属；目标 Website 必须使用转让编号确认，版本不一致时会拒绝。</lang></span>
+                                </div>
+                                <div class="w-field">
+                                    <span class="w-field__label"><lang>待确认转让编号</lang></span>
+                                    <output id="product-governance-transfer-result"
+                                            class="w-code-input"
+                                            role="status"
+                                            aria-live="polite"><lang>发起后显示在这里</lang></output>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <div class="w-alert" data-tone="neutral">
+                            <strong><lang>复制站只能维护经营数据</lang></strong>
+                            <span><lang>SKU、商品类型与规格结构仍由归属 Website 管理；本站可以维护名称、属性、分类、媒体、价格、库存和 Store 可见性。</lang></span>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="w-form-grid">
+                        <label class="w-field" for="product-governance-transfer-uuid">
+                            <span class="w-field__label"><lang>确认归属转让</lang></span>
+                            <input class="w-input"
+                                   id="product-governance-transfer-uuid"
+                                   type="text"
+                                   maxlength="64"
+                                   autocomplete="off"
+                                   placeholder="@lang(粘贴 transfer_uuid)"
+                                   data-governance-control
+                                   <?= $canGovernance ? '' : 'disabled' ?>>
+                            <span class="w-field__help"><lang>只能由转让指定的目标 Website 确认；确认前请核对当前 Website。</lang></span>
+                        </label>
+                        <div class="w-field">
+                            <span class="w-field__label"><lang>双方确认</lang></span>
+                            <button class="w-button"
+                                    type="button"
+                                    data-tone="primary"
+                                    data-product-governance
+                                    data-governance-action="transfer_confirm"
+                                    <?= $canGovernance ? '' : 'disabled' ?>><lang>确认接收归属</lang></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="audit" hidden>
+            <div class="w-card">
+                <div class="w-card__header">
+                    <div>
+                        <h2><lang>审计记录</lang></h2>
+                        <p><lang>身份、SKU、分享、转让和生命周期事件只追加、不覆盖。</lang></p>
+                    </div>
+                </div>
+                <div class="w-card__body" data-testid="product-edit-audit">
+                    <div class="w-product-audit__summary" aria-label="@lang(当前身份概要)">
+                        <div><span><lang>全局身份版本</lang></span><strong>v<?= $escape($identity['version'] ?? 0) ?></strong></div>
+                        <div><span><lang>归属 Website</lang></span><strong>#<?= $escape($identity['owner_website_id'] ?? '') ?></strong></div>
+                        <div><span><lang>本地投影版本</lang></span><strong>v<?= $escape($product['publish_version'] ?? 0) ?></strong></div>
+                        <div><span><lang>最近更新</lang></span><strong><?= $escape($product['updated_at'] ?? '-') ?></strong></div>
+                    </div>
+                    <?php if ($auditEvents === []): ?>
+                        <p class="w-text" data-tone="muted"><lang>当前商品还没有身份或治理审计事件。</lang></p>
+                    <?php else: ?>
+                        <ol class="w-product-audit__timeline" data-product-audit-timeline>
+                            <?php foreach ($auditEvents as $event): ?>
+                                <?php
+                                $action = (string)($event['action'] ?? '');
+                                $payloadJson = json_encode(
+                                    $event['payload'] ?? [],
+                                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                                ) ?: '{}';
+                                ?>
+                                <li class="w-product-audit__event" data-product-audit-event>
+                                    <article>
+                                        <header>
+                                            <div>
+                                                <strong><?= $escape($auditActionLabels[$action] ?? $action) ?></strong>
+                                                <code><?= $escape($action) ?></code>
+                                            </div>
+                                            <time datetime="<?= $escape($event['created_at'] ?? '') ?>"><?= $escape($event['created_at'] ?? '') ?></time>
+                                        </header>
+                                        <dl>
+                                            <div><dt><lang>Website</lang></dt><dd>#<?= $escape($event['website_id'] ?? '') ?></dd></div>
+                                            <div><dt><lang>版本</lang></dt><dd>v<?= $escape($event['before_version'] ?? 0) ?> → v<?= $escape($event['after_version'] ?? 0) ?></dd></div>
+                                            <?php if (!empty($event['global_offer_uuid'])): ?>
+                                                <div><dt>Offer UUID</dt><dd><code><?= $escape($event['global_offer_uuid']) ?></code></dd></div>
+                                            <?php endif; ?>
+                                        </dl>
+                                        <?php if (!empty($event['payload']) || !empty($event['payload_corrupt'])): ?>
+                                            <details>
+                                                <summary><lang>查看事件详情</lang></summary>
+                                                <?php if (!empty($event['payload_corrupt'])): ?>
+                                                    <p class="w-text" data-tone="warning"><lang>这条历史事件的详情无法解析，主审计记录仍然有效。</lang></p>
+                                                <?php else: ?>
+                                                    <pre><?= $escape($payloadJson) ?></pre>
+                                                <?php endif; ?>
+                                            </details>
+                                        <?php endif; ?>
+                                    </article>
+                                </li>
+                            <?php endforeach; ?>
+                        </ol>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-product-editor__savebar">
+            <div id="product-editor-status" role="status" aria-live="polite"></div>
+            <?php if ($canEditBusiness): ?>
+                <button class="w-button" type="submit" data-tone="primary"><lang>保存草稿</lang></button>
+            <?php else: ?>
+                <span class="w-status" data-status="archived"><lang>只读归档</lang></span>
+            <?php endif; ?>
+        </div>
+    </form>
 </div>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260825-v6" defer data-no-extract="true"></script>

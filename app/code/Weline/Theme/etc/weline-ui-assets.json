@@ -271,6 +271,16 @@
       "source_root": "app/code/Weline/I18n/view/statics",
       "sources": ["js/language-switcher.js"]
     },
+    "mega-menu-css": {
+      "type": "css",
+      "output": "components/weline-mega-menu.css",
+      "sources": ["css/components/mega-menu.css"]
+    },
+    "mega-menu-js": {
+      "type": "js",
+      "output": "components/weline-mega-menu.js",
+      "sources": ["js/components/mega-menu.js"]
+    },
     "online-translation-collector-js": {
       "type": "js",
       "output": "components/weline-online-translation-collector.js",
@@ -312,6 +322,18 @@
       "output": "pages/weline-customer-account-recovery.js",
       "source_root": "app/code/Weline/Customer/view/statics",
       "sources": ["js/account-recovery.js"]
+    },
+    "customer-account-login-css": {
+      "type": "css",
+      "output": "pages/weline-customer-account-login.css",
+      "source_root": "app/code/Weline/Customer/view/statics",
+      "sources": ["css/account-login.css"]
+    },
+    "customer-account-login-js": {
+      "type": "js",
+      "output": "pages/weline-customer-account-login.js",
+      "source_root": "app/code/Weline/Customer/view/statics",
+      "sources": ["js/account-login.js"]
     },
     "seo-embed-css": {
       "type": "css",
@@ -419,6 +441,7 @@
     "datatable-form-js": ["data-table-form"],
     "language-select-js": ["language-select"],
     "language-switcher-js": ["language-switcher"],
+    "mega-menu-js": ["mega-menu"],
     "online-translation-collector-js": ["online-translation-collector"],
     "scope-persistence-js": ["scope-persistence"],
     "file-picker-js": ["file-preview", "file-picker"],
@@ -450,6 +473,11 @@
       "owner": "Weline_I18n",
       "components": ["language-switcher"],
       "bundles": ["language-switcher-js"]
+    },
+    "mega-menu": {
+      "owner": "Weline_Theme",
+      "components": ["mega-menu"],
+      "bundles": ["mega-menu-css", "mega-menu-js"]
     },
     "online-translation-collector": {
       "owner": "Weline_I18n",

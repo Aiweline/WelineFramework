@@ -1,0 +1,43 @@
+{
+  "country_code": "TW",
+  "country_name": "中国台湾",
+  "regions": [
+    {
+      "code": "TPE",
+      "name": "台北市",
+      "type": "province",
+      "children": [
+        {"code": "TPE-Z", "name": "中正区", "type": "city"},
+        {"code": "TPE-D", "name": "大安区", "type": "city"},
+        {"code": "TPE-S", "name": "信义区", "type": "city"}
+      ]
+    },
+    {
+      "code": "NWT",
+      "name": "新北市",
+      "type": "province",
+      "children": [
+        {"code": "NWT-B", "name": "板桥区", "type": "city"},
+        {"code": "NWT-Z", "name": "中和区", "type": "city"}
+      ]
+    },
+    {
+      "code": "TXG",
+      "name": "台中市",
+      "type": "province",
+      "children": [
+        {"code": "TXG-W", "name": "西屯区", "type": "city"},
+        {"code": "TXG-N", "name": "北屯区", "type": "city"}
+      ]
+    },
+    {
+      "code": "KHH",
+      "name": "高雄市",
+      "type": "province",
+      "children": [
+        {"code": "KHH-Z", "name": "左营区", "type": "city"},
+        {"code": "KHH-Q", "name": "前镇区", "type": "city"}
+      ]
+    }
+  ]
+}

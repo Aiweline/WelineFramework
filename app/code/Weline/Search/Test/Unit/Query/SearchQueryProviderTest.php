@@ -8,11 +8,20 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Search\Api\SearchProviderInterface;
+use Weline\Search\Dto\SearchHit;
+use Weline\Search\Dto\SearchRequest;
+use Weline\Search\Dto\SearchResult;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Search\Extends\Module\Weline_Framework\Query\SearchQueryProvider;
-use Weline\Search\Service\ArrayProductDirectCatalogReader;
-use Weline\Search\Service\SearchIndexBuilder;
-use Weline\Search\Service\SearchQueryException;
-use Weline\Search\Service\SearchQueryService;
+use Weline\Search\Service\HotWordsService;
+use Weline\Search\Test\Unit\Support\NoopSearchAnalytics;
+use Weline\Search\Service\SearchEngineResolver;
+use Weline\Search\Service\SearchExpression;
+use Weline\Search\Service\SearchHubService;
+use Weline\Search\Service\SearchParamGuard;
+use Weline\Search\Service\SearchProviderRegistry;
+use Weline\Search\Model\SearchHotWord;
 
 final class SearchQueryProviderTest extends TestCase
 {
@@ -31,91 +40,95 @@ final class SearchQueryProviderTest extends TestCase
         $_SERVER = $this->server;
     }
 
-    public function testDescriptorPublishesOnlyReadOnlySearch(): void
+    public function testDescriptorPublishesSearchHotWordsAndTypes(): void
     {
         $provider = $this->provider();
         $operations = $provider->getDescriptor()['operations'];
+        $names = \array_column($operations, 'name');
 
-        self::assertCount(1, $operations);
-        self::assertSame('search', $operations[0]['name']);
-        self::assertSame('read', $operations[0]['mode']);
-        self::assertTrue($operations[0]['frontend']);
-        self::assertSame(['q'], \array_column($operations[0]['params'], 'name'));
-        self::assertSame('string', $operations[0]['params'][0]['type']);
-        self::assertFalse($operations[0]['params'][0]['required']);
-        self::assertSame(255, $operations[0]['params'][0]['max_length']);
+        self::assertSame(['search', 'hotWords', 'types'], $names);
     }
 
-    public function testProviderUsesFrozenZeroWebsiteScopeAndRejectsClientScope(): void
+    public function testProviderRejectsUnknownParams(): void
     {
         $this->installScope();
-        $provider = $this->provider();
-
-        $result = $provider->execute('search', ['q' => 'P3C']);
-        self::assertTrue($result['success']);
-        self::assertSame(0, $result['website_id']);
-        self::assertSame(11, $result['store_id']);
-        self::assertSame(21, $result['channel_id']);
-        self::assertSame('zh_Hans_CN', $result['locale']);
-        self::assertSame('CNY', $result['currency']);
-        self::assertSame(1, $result['hit_count']);
-
-        $rejected = $provider->execute('search', [
+        $result = $this->provider()->execute('search', [
             'q' => 'P3C',
             'website_id' => 99,
         ]);
-        self::assertFalse($rejected['success']);
-        self::assertSame(SearchQueryException::ERROR_SCOPE, $rejected['error_code']);
-        self::assertSame(['website_id'], $rejected['context']['unknown_params']);
+        self::assertFalse($result['success']);
+        self::assertSame(SearchParamGuard::ERROR_PARAMS, $result['error_code']);
     }
 
-    public function testProviderFailsClosedWithoutFrozenChannelScope(): void
+    public function testProviderSearchReturnsHitsFromHub(): void
     {
-        $result = $this->provider()->execute('search', []);
-
-        self::assertFalse($result['success']);
-        self::assertSame(SearchQueryException::ERROR_SCOPE, $result['error_code']);
+        $this->installScope();
+        $result = $this->provider()->execute('search', ['q' => 'P3C', 'type' => 'product']);
+        self::assertTrue($result['success']);
+        self::assertSame(1, $result['hit_count']);
     }
 
     private function provider(): SearchQueryProvider
     {
-        $direct = ArrayProductDirectCatalogReader::forTesting([
-            [
-                'website_id' => 0,
-                'store_id' => 11,
-                'channel_id' => 21,
-                'entity_id' => 'p3c-002',
-                'sku' => 'P3C-002',
-                'title' => 'P3C 搜索商品',
-                'document_version' => 1,
-            ],
+        $product = new class implements SearchProviderInterface {
+            public function code(): string { return 'product'; }
+            public function label(): string { return 'product'; }
+            public function sortOrder(): int { return 10; }
+            public function expression(SearchRequest $request): SearchExpression {
+                return SearchExpression::of($request);
+            }
+            public function allowedClientParams(): array { return []; }
+            public function hitTemplate(): string { return ''; }
+            public function execute(SearchRequest $request, SearchExpression $expression): SearchResult {
+                return new SearchResult(
+                    ok: true,
+                    type: 'product',
+                    hits: [new SearchHit('product', 'product', 'p3c-002', 'P3C 搜索商品', 'product/p3c-002')],
+                    hitCount: 1,
+                );
+            }
+            public function documentsForIndex(SearchRequest $request): array { return []; }
+        };
+        $registry = $this->createMock(SearchProviderRegistry::class);
+        $registry->method('all')->willReturn(['product' => $product]);
+        $registry->method('get')->willReturnCallback(static fn (string $code) => $code === 'product' ? $product : null);
+        $registry->method('listTypes')->willReturn([
+            ['code' => 'all', 'label' => '全部', 'children' => []],
+            ['code' => 'product', 'label' => '商品', 'children' => []],
         ]);
 
-        return new SearchQueryProvider(SearchQueryService::forTesting(
-            SearchIndexBuilder::forTesting(),
-            $direct,
-        ));
+        $analytics = new NoopSearchAnalytics();
+        $hub = new SearchHubService(
+            new SearchParamGuard(),
+            $registry,
+            SearchEngineResolver::forTesting('mysql'),
+            $analytics,
+        );
+        return new SearchQueryProvider(
+            $hub,
+            new HotWordsService(
+                new class extends SearchHotWord {
+                    public function reset(): static { return $this; }
+                    public function where(...$args): static { return $this; }
+                    public function order(...$args): static { return $this; }
+                    public function limit(...$args): static { return $this; }
+                    public function select(): static { return $this; }
+                    public function fetchArray(): array { return []; }
+                },
+                $this->createMock(StorefrontScopeHotCache::class),
+            ),
+            new SearchParamGuard(),
+        );
     }
 
     private function installScope(): void
     {
         RequestContext::setWelineWebsiteId(0);
-        RequestContext::setWelineWebsiteCode('default');
         RequestContext::setWelineStoreId(11);
-        RequestContext::setWelineStoreCode('default');
-        RequestContext::setWelineStoreMode(ScopeIdentity::MODE_NORMAL);
         RequestContext::setWelineChannelId(21);
-        RequestContext::setWelineChannelCode('default');
-        RequestContext::installScopeIdentity(ScopeIdentity::channel(
-            0,
-            'default',
-            'default',
-            'default',
-            ScopeIdentity::MODE_NORMAL,
-        ));
+        RequestContext::installScopeIdentity(ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL));
         RequestContext::setWelineUserLang('zh_Hans_CN');
         RequestContext::setWelineUserCurrency('CNY');
-        RequestContext::setWelineTimezone('Asia/Shanghai');
         RequestContext::setStorefrontRoutePath('/');
     }
 }

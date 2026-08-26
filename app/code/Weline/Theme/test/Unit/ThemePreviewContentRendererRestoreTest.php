@@ -72,4 +72,40 @@ class ThemePreviewContentRendererRestoreTest extends TestCore
         $this->assertSame('', $payload['content']);
         $this->assertSame([], $payload['meta']);
     }
+
+    public function testBuildContentHtmlExcludesHeaderChromeSlots(): void
+    {
+        $layoutService = $this->createMock(ThemeLayoutService::class);
+        $slotRenderer = $this->createMock(SlotRendererService::class);
+        $pageTypeResolver = new ThemePageTypeResolver();
+        $renderer = new ThemePreviewContentRenderer(
+            $layoutService,
+            $slotRenderer,
+            $pageTypeResolver,
+        );
+
+        $method = new \ReflectionMethod(ThemePreviewContentRenderer::class, 'buildContentHtml');
+        $method->setAccessible(true);
+        $html = (string)$method->invoke(
+            $renderer,
+            ThemeLayout::PAGE_TYPE_CMS,
+            ['content', 'delivery', 'search', 'category-menu', 'navigation', 'logo'],
+            [
+                'content' => '<div class="widget-wrapper" data-widget-code="ad-banner">banner</div>',
+                'delivery' => '<div class="widget-wrapper" data-widget-code="checkout-delivery-context">delivery</div>',
+                'search' => '<div class="widget-wrapper" data-widget-code="header-search">search</div>',
+                'category-menu' => '<div class="widget-wrapper" data-widget-code="category-menu">cats</div>',
+                'navigation' => '<div class="widget-wrapper" data-widget-code="main-nav">nav</div>',
+                'logo' => '<div class="widget-wrapper" data-widget-code="logo">logo</div>',
+            ],
+            [],
+        );
+
+        $this->assertStringContainsString('ad-banner', $html);
+        $this->assertStringNotContainsString('checkout-delivery-context', $html);
+        $this->assertStringNotContainsString('header-search', $html);
+        $this->assertStringNotContainsString('category-menu', $html);
+        $this->assertStringNotContainsString('main-nav', $html);
+        $this->assertStringNotContainsString('data-widget-code="logo"', $html);
+    }
 }

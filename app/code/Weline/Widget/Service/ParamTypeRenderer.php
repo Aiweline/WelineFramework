@@ -14,6 +14,7 @@ use Weline\Widget\Ui\ParamType\DatetimeType;
 use Weline\Widget\Ui\ParamType\IconType;
 use Weline\Widget\Ui\ParamType\ImageType;
 use Weline\Widget\Ui\ParamType\MediaImageType;
+use Weline\Widget\Ui\ParamType\NavTreeType;
 use Weline\Widget\Ui\ParamType\NumberType;
 use Weline\Widget\Ui\ParamType\RangeType;
 use Weline\Widget\Ui\ParamType\QuerySelectType;
@@ -49,6 +50,7 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         'file'     => ImageType::class,
         'array'    => ArrayType::class,
         'list'     => ArrayType::class,
+        'nav_tree' => NavTreeType::class,
         'textarea' => TextareaType::class,
         'html'     => TextareaType::class,
         'richtext' => TextareaType::class,
@@ -118,12 +120,14 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         $groupsHtml = $this->renderGroups($layoutId, $params, $config);
         return FormRenderer::open([
                 'class' => 'w-param-form',
+                'method' => 'post',
                 'data-layout-id' => (string)$layoutId,
                 'data-auto-save' => '1',
                 'intent' => 'widget.parameters',
             ]) . '
                 ' . $groupsHtml . '
                 <div class="w-param-actions">
+                    <button type="submit" class="w-button w-param-btn-save-widget" data-tone="primary">' . __('保存配置') . '</button>
                     <button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>
                 </div>
             ' . FormRenderer::close();
@@ -133,6 +137,7 @@ class ParamTypeRenderer implements ParamFormRendererInterface
     {
         $formClass = trim((string)($options['class'] ?? 'w-param-form')) ?: 'w-param-form';
         $autoSave = array_key_exists('auto_save', $options) ? (bool)$options['auto_save'] : true;
+        $showSaveButton = array_key_exists('save_button', $options) ? (bool)$options['save_button'] : true;
         $showDeleteButton = array_key_exists('delete_button', $options) ? (bool)$options['delete_button'] : true;
         $actionsHtml = (string)($options['actions_html'] ?? '');
 
@@ -141,11 +146,15 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         if ($showDeleteButton) {
             $actionsHtml = '<button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>' . $actionsHtml;
         }
+        if ($showSaveButton) {
+            $actionsHtml = '<button type="submit" class="w-button w-param-btn-save-widget" data-tone="primary">' . __('保存配置') . '</button>' . $actionsHtml;
+        }
 
         $actionsBlock = $actionsHtml !== '' ? '<div class="w-param-actions">' . $actionsHtml . '</div>' : '';
 
         return FormRenderer::open([
                 'class' => $formClass,
+                'method' => 'post',
                 'data-layout-id' => (string)$layoutId,
                 'data-auto-save' => $autoSave ? '1' : '0',
                 'intent' => 'widget.parameters',
@@ -257,6 +266,14 @@ class ParamTypeRenderer implements ParamFormRendererInterface
 
     private function resolveUiType(array $param): string
     {
+        $canonical = trim((string)($param['type'] ?? ''));
+        if ($canonical !== '') {
+            $normalized = $this->normalizeType($canonical);
+            if (isset(self::DEFAULT_TYPE_CLASSES[$normalized])) {
+                return $normalized;
+            }
+        }
+
         foreach (['ui_type', 'input', 'ui', 'type'] as $key) {
             $value = trim((string)($param[$key] ?? ''));
             if ($value !== '') {

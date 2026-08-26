@@ -23,7 +23,16 @@ final class McpServer
      */
     public function run($input, $output): void
     {
-        while (($line = fgets($input)) !== false) {
+        $this->prepareStdio($input, $output);
+        while (true) {
+            $line = fgets($input);
+            if ($line === false) {
+                if ($this->stdioEnded($input)) {
+                    break;
+                }
+                usleep(20_000);
+                continue;
+            }
             if (trim($line) === '') {
                 continue;
             }
@@ -621,6 +630,34 @@ final class McpServer
         }
 
         return $summary;
+    }
+
+    /**
+     * Cursor/Electron STDIO is a Unix socketpair. PHP's default_socket_timeout
+     * (60s) makes fgets() return false on idle, which must not be treated as EOF.
+     *
+     * @param resource $input
+     * @param resource $output
+     */
+    private function prepareStdio($input, $output): void
+    {
+        @ini_set('default_socket_timeout', '-1');
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+        if (is_resource($input)) {
+            @stream_set_blocking($input, true);
+            @stream_set_timeout($input, 365 * 24 * 3600);
+        }
+        if (is_resource($output) && $output !== $input) {
+            @stream_set_blocking($output, true);
+        }
+    }
+
+    /** @param resource $input */
+    private function stdioEnded($input): bool
+    {
+        return !is_resource($input) || feof($input);
     }
 
     /** @param resource $output

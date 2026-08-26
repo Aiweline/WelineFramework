@@ -32,12 +32,35 @@
 选择图片添加,"Select and Add Image"
 拖拽或使用方向键排序,"Drag or use arrow keys to sort"
 删除,delete
+缩略图加载中…,缩略图加载中…
 设为透明,"Set to Transparent"
-编辑多语言,"Edit multilingual"
+导航树,导航树
+页面,页面
+分类,分类
+添加自定义,添加自定义
+编辑,编辑
+暂无节点：点击左侧页面/分类添加，或拖入右侧、添加自定义,暂无节点：点击左侧页面/分类添加，或拖入右侧、添加自定义
+名称,名称
+链接,链接
+自定义,自定义
+描述,Description
+图片,图片
+引用,引用
+保存,Save
+取消,Cancel
+拖拽行调整顺序与层级：行上缘=前、中间=子项、下缘=后（最多三级）,拖拽行调整顺序与层级：行上缘=前、中间=子项、下缘=后（最多三级）
+点击添加到菜单树,点击添加到菜单树
+拖入成为子项,拖入成为子项
+拖放到此处追加到末尾,拖放到此处追加到末尾
 多语言,Multilingual
+名称翻译,名称翻译
+描述翻译,描述翻译
+已填描述,已填描述
+已设图片,已设图片
+编辑多语言,"Edit multilingual"
 多语言配置,"Multilingual Configuration"
-关闭多语言配置,"Turn off multi-language configuration"
 AI翻译,"AI Translate"
+关闭多语言配置,"Turn off multi-language configuration"
 保存多语言,"Save Multilingual"
 启用,Enable
 普通部件首次入库后,"After common parts are put into storage for the first time"
@@ -114,7 +137,6 @@ puzzle,puzzle
 预览失败,"Preview failed"
 确定要删除这个部件吗？,"Are you sure you want to delete this widget?"
 确认删除,"Confirm deletion"
-取消,Cancel
 选择一个部件进行配置,"Select a widget to configure"
 请填写页面标题和标识,"Please fill in page title and handle"
 "Page preview","Page preview"
@@ -138,10 +160,8 @@ puzzle,puzzle
 重置筛选,"Reset Filter"
 没有找到部件,"No widgets found"
 部件名称,"Widget Name"
-描述,Description
 操作,Actions
 详情,Details
-保存,Save
 页面标题,"Page Title"
 页面标识,"Page Handle"
 部件库,"Widget Library"
@@ -175,6 +195,7 @@ FAQ部件,"FAQ widget"
 "AI 生成结果缺少 template_content","AI generated results are missing template_content"
 "AI 生成了不支持的参数类型：%{1}","AI generated unsupported parameter type: %{1}"
 "AI 生成模板包含不允许的逻辑：%{1}","AI generated template contains disallowed logic: %{1}"
+保存配置,保存配置
 基本信息,"Basic information"
 样式设置,"Style settings"
 链接配置,"Link Configuration"
@@ -196,6 +217,9 @@ FAQ部件,"FAQ widget"
 位置：generated/param_schemas.php,"Location: generated/param_schemas.php"
 "✖ 写入 ParamSchema 注册表失败。","✖ Writing to ParamSchema registry failed."
 刷新失败：%{1},"Refresh Failed: %{1}"
+添加轮播项,"Add Slide"
+暂无节点，可从左侧拖入或添加自定义,暂无节点，可从左侧拖入或添加自定义
+拖拽调整顺序与层级（最多三级）,拖拽调整顺序与层级（最多三级）
 点击选择图片或输入URL,"Click to select an image or enter a URL."
 上传图片,"Upload pictures"
 上传,upload

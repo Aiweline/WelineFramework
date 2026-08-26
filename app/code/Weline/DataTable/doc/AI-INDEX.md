@@ -55,6 +55,7 @@
 - `app/code/Weline/DataTable/doc/API参考文档.md`
 - `app/code/Weline/DataTable/doc/README.md`
 - `app/code/Weline/DataTable/doc/使用指南.md`
+- `app/code/Weline/DataTable/doc/本地模式与列悬浮.md`（**特殊用法 / AI 硬约束**）
 - `app/code/Weline/DataTable/doc/实施总结.md`
 - `app/code/Weline/DataTable/doc/快速入门指南.md`
 - `app/code/Weline/DataTable/doc/故障排查文档.md`
@@ -65,8 +66,15 @@
 ## 开发前门禁
 
 - 先声明本次任务命中的模块、代码面和应读文档；没有命中文档时先补读源码，不要按通用经验猜。
+- **改 `w:d-table` / local / 勾选 / 操作列悬浮 / 主图列前，必读** [`本地模式与列悬浮.md`](本地模式与列悬浮.md)；默认 api CRUD，勿把商品 catalog 的 local 范例当万能模板。
 - 涉及浏览器前后端业务请求时，只能使用 `Weline.Api.resource()`、`Weline.Api.graph()` 或 `Weline.Api.stream()`。
 - 涉及跨模块读数据时，先查 `php bin/w query:help <provider|Weline_DataTable> [operation]` 或对应 `w_query` 帮助。
 - 涉及模板、主题、slot、widget、taglib 或 `view/theme` 时，必须先读 `app/code/Weline/Theme/doc/AI-INDEX.md`。
 - 禁止直接修改 `generated/`、`view/tpl/`、`routes.xml` 或复制旧文档里的过时路径。
 - 如果本文件与源码冲突，以源码为准，并在同次任务中修正模块文档。
+
+## 人工维护：特殊用法硬约束
+
+- 专题契约：[`本地模式与列悬浮.md`](本地模式与列悬浮.md)
+- 使用指南分流：[`使用指南.md`](使用指南.md) 文首「AI / 开发者分流」
+- 业务只读范例：`app/code/Weline/Product/view/templates/backend/catalog/index.phtml`（勿无脑复制）

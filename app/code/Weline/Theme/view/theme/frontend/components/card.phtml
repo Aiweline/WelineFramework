@@ -162,13 +162,13 @@ $rootClass = trim($wc . ' w-card card w-builder-card w-builder-card--' . $varian
     position: relative;
     display: flex;
     flex-direction: column;
-    min-height: var(--wc-card-min-height, auto);
-    padding: var(--wc-card-padding, var(--weline-space-5, 20px));
-    border-radius: var(--wc-card-radius, var(--weline-radius-lg, 12px));
-    background-color: var(--wc-card-bg, var(--weline-theme-surface-raised));
+    min-height: var(--wc-card-min-height);
+    padding: var(--wc-card-padding);
+    border-radius: var(--wc-card-radius);
+    background-color: var(--wc-card-bg);
     background-size: cover;
     background-position: center;
-    color: var(--wc-card-color, var(--weline-theme-text));
+    color: var(--wc-card-color);
     text-align: left;
     overflow: hidden;
 }
@@ -182,29 +182,29 @@ $rootClass = trim($wc . ' w-card card w-builder-card w-builder-card--' . $varian
 }
 
 .<?= $wc ?>[data-shadow="sm"] {
-    box-shadow: var(--weline-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+    box-shadow: var(--weline-shadow-sm);
 }
 
 .<?= $wc ?>[data-shadow="md"] {
-    box-shadow: var(--weline-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+    box-shadow: var(--weline-shadow-md);
 }
 
 .<?= $wc ?>[data-shadow="lg"] {
-    box-shadow: var(--weline-shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.16));
+    box-shadow: var(--weline-shadow-lg);
 }
 
 .<?= $wc ?>.w-builder-card--outline {
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     box-shadow: none;
 }
 
 .<?= $wc ?>.w-builder-card--soft {
-    background-color: var(--wc-card-bg, var(--weline-theme-surface-muted));
+    background-color: var(--wc-card-bg);
 }
 
 .<?= $wc ?>.w-builder-card--solid {
-    background-color: var(--wc-card-bg, var(--weline-theme-primary));
-    color: var(--wc-card-color, var(--weline-theme-on-primary));
+    background-color: var(--wc-card-bg);
+    color: var(--wc-card-color);
 }
 
 .<?= $wc ?> .card-background,
@@ -230,24 +230,24 @@ $rootClass = trim($wc . ' w-card card w-builder-card w-builder-card--' . $varian
 
 .<?= $wc ?> .card-title {
     margin: 0;
-    font-size: var(--weline-font-size-lg, 17px);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-size: var(--weline-font-size-lg);
+    font-weight: var(--weline-font-weight-semibold);
 }
 
 .<?= $wc ?> .card-subtitle {
-    margin: var(--weline-space-1, 4px) 0 0;
+    margin: var(--weline-space-1) 0 0;
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .card-body {
     flex: 1;
-    margin-top: var(--weline-space-4, 16px);
+    margin-top: var(--weline-space-4);
 }
 
 .<?= $wc ?> .card-footer {
-    margin-top: var(--weline-space-4, 16px);
-    padding-top: var(--weline-space-4, 16px);
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin-top: var(--weline-space-4);
+    padding-top: var(--weline-space-4);
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 </style>

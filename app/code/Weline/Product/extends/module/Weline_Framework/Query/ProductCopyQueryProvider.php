@@ -55,7 +55,7 @@ final class ProductCopyQueryProvider implements QueryProviderInterface
         return [
             'provider' => $this->getProviderName(),
             'name' => (string)__('Store 商品复制'),
-            'description' => (string)__('后台创建复制草稿、预览并幂等提交 Product 目录到目标 Store。'),
+            'description' => (string)__('后台创建复制草稿、预览并幂等提交 Product 目录到目标 Website 的所选 Stores。'),
             'module' => 'Weline_Product',
             'operations' => [
                 $this->operation('scopeOptions', (string)__('读取可复制 Website/Store 选项'), 'read', []),
@@ -63,7 +63,8 @@ final class ProductCopyQueryProvider implements QueryProviderInterface
                     ['name' => 'draft_id', 'type' => 'string|null', 'required' => false, 'max_length' => 96],
                     ['name' => 'entry', 'type' => 'string', 'required' => true, 'max_length' => 32],
                     ['name' => 'target_website_id', 'type' => 'int', 'required' => true, 'min' => 0, 'max' => self::MAX_ID],
-                    ['name' => 'target_store_id', 'type' => 'int', 'required' => true, 'min' => 1, 'max' => self::MAX_ID],
+                    ['name' => 'target_store_id', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => self::MAX_ID],
+                    ['name' => 'target_store_ids', 'type' => 'array', 'required' => false, 'max_items' => 500],
                     ['name' => 'source_website_id', 'type' => 'int|null', 'required' => false, 'min' => 0, 'max' => self::MAX_ID],
                     ['name' => 'source_store_id', 'type' => 'int|null', 'required' => false, 'min' => 1, 'max' => self::MAX_ID],
                     ['name' => 'category_ids', 'type' => 'array', 'required' => false, 'max_items' => 2000],
@@ -119,7 +120,24 @@ final class ProductCopyQueryProvider implements QueryProviderInterface
         $draft->draftId = $this->optionalString($params, 'draft_id');
         $draft->entry = $this->requiredString($params, 'entry');
         $draft->targetWebsiteId = $this->nonNegativeInt($params, 'target_website_id');
-        $draft->targetStoreId = $this->positiveInt($params, 'target_store_id');
+        if (array_key_exists('target_store_ids', $params)) {
+            $draft->targetStoreIds = $this->positiveIntList($params, 'target_store_ids');
+        } elseif (array_key_exists('target_store_id', $params)) {
+            $draft->targetStoreIds = [$this->positiveInt($params, 'target_store_id')];
+        } else {
+            foreach ($this->storeCatalog->all() as $store) {
+                if ($store->websiteId === $draft->targetWebsiteId
+                    && $store->lifecycleStatus === 'active'
+                    && $store->tombstonedAt === null
+                ) {
+                    $draft->targetStoreIds[] = $store->id;
+                }
+            }
+        }
+        if ($draft->targetStoreIds === []) {
+            throw new \InvalidArgumentException((string)__('至少选择一个活动目标 Store'));
+        }
+        $draft->targetStoreId = $draft->targetStoreIds[0];
         $draft->sourceWebsiteId = $this->nullableNonNegativeInt($params, 'source_website_id');
         $draft->sourceStoreId = $this->nullablePositiveInt($params, 'source_store_id');
         $draft->categoryIds = $this->positiveIntList($params, 'category_ids');
@@ -192,11 +210,17 @@ final class ProductCopyQueryProvider implements QueryProviderInterface
         if (!isset($websiteIds[$draft->targetWebsiteId])) {
             throw new \InvalidArgumentException((string)__('目标 Website 不存在'));
         }
-        $this->assertStoreBelongsToWebsite(
-            $draft->targetStoreId,
-            $draft->targetWebsiteId,
-            (string)__('目标 Store'),
-        );
+        $targetStoreIds = $draft->selectedTargetStoreIds();
+        if ($targetStoreIds === []) {
+            throw new \InvalidArgumentException((string)__('至少选择一个活动目标 Store'));
+        }
+        foreach ($targetStoreIds as $targetStoreId) {
+            $this->assertStoreBelongsToWebsite(
+                $targetStoreId,
+                $draft->targetWebsiteId,
+                (string)__('目标 Store'),
+            );
+        }
 
         if ($draft->entry === CopyDraft::ENTRY_BLANK) {
             return;

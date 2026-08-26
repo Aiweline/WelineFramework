@@ -111,6 +111,11 @@ return [
         'description' => __('在渲染页头 Logo 之后触发，允许其他模块在 Logo 结束处注入内容。'),
         'doc' => 'frontend/partials/header/logo-after.md',
     ],
+    'Weline_Theme::frontend::partials::header::delivery' => [
+        'name' => __('页头配送地址槽'),
+        'description' => __('在 header delivery 空槽内触发；结账配送上下文由 Checkout default_injections 注入，本 Hook 供扩展覆盖或附加内容。'),
+        'doc' => 'frontend/partials/header/delivery.md',
+    ],
     'Weline_Theme::frontend::partials::header::announcement' => [
         'name' => __('页头公告内容'),
         'description' => __('覆盖或注入页头公告区域，允许业务模块提供全站促销、配送或运营提示。'),
@@ -572,6 +577,12 @@ return [
         'description' => __('在产品列表筛选区域之前触发。'),
         'doc' => 'frontend/layouts/product_list/filters-before.md',
     ],
+    'Weline_Theme::frontend::layouts::product-list::filters-sidebar' => [
+        'name' => __('产品列表筛选侧栏'),
+        'description' => __('在商品列表页左侧渲染分类与价格等筛选侧栏。必须运行时 getHook，禁止布局编译期写死。'),
+        'doc' => 'frontend/layouts/product_list/filters-sidebar.md',
+        'slot' => true,
+    ],
     'Weline_Theme::frontend::layouts::product-list::filters-after' => [
         'name' => __('产品列表筛选之后'),
         'description' => __('在产品列表筛选区域之后触发。'),
@@ -964,6 +975,23 @@ return [
         'name' => __('账户侧边栏内容'),
         'description' => __('在账户页面的侧边栏内容区域注入内容，允许其他模块添加自定义内容。'),
         'doc' => 'frontend/account/sidebar-content.md',
+    ],
+
+    // ==================== Help / Order tracking layouts ====================
+    'Weline_Theme::frontend::layouts::help::extras' => [
+        'name' => __('帮助中心扩展区'),
+        'description' => __('在帮助中心主内容扩展槽注入额外说明、活动或业务模块内容。'),
+        'doc' => 'frontend/layouts/help/extras.md',
+    ],
+    'Weline_Theme::frontend::layouts::order-tracking::result' => [
+        'name' => __('订单跟踪查询结果'),
+        'description' => __('在订单跟踪页查询结果区注入真实物流轨迹或业务模块查询结果。'),
+        'doc' => 'frontend/layouts/order-tracking/result.md',
+    ],
+    'Weline_Theme::frontend::layouts::order-tracking::extras' => [
+        'name' => __('订单跟踪扩展区'),
+        'description' => __('在订单跟踪页底部扩展槽注入额外提示或业务部件。'),
+        'doc' => 'frontend/layouts/order-tracking/extras.md',
     ],
 
     // ==================== Theme Backend Partials - Topbar ====================

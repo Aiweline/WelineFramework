@@ -57,16 +57,17 @@ php bin/w setup:upgrade
 
 Cloudflare API Token 权限说明见：`doc/Cloudflare-API-Token-Permissions.md`。
 
-### 2.1 配置 Cloudflare OAuth（一键授权，可选）
+### 2.1 配置 Cloudflare OAuth（一键授权，推荐）
 
-若使用 OAuth 一键授权（而非手工填 API Token）：
+平台管理员在 Cloudflare 创建一次机密 OAuth Client，回调 URL 使用：
 
-1. 打开系统配置 → 模块 **Weline_Cdn** → **Cloudflare OAuth 应用**
-2. 在 Cloudflare 按 **Weline 必选** 创建 OAuth Client（响应类型 **Code**，授权类型 **Authorization Code**，认证方法 **Client Secret Post/Basic**）
-3. 回调 URL 填：`https://{域名}/{后台key}/cdn/backend/oauth/callback`
-4. 将 Client ID / Secret / Scopes 填回本站配置
+https://{域名}/{后台key}/cdn/backend/oauth/callback
 
-字段组合、错误选型与排错见：`doc/Cloudflare-OAuth-Client-Setup.md`。
+服务器通过 WELINE_CLOUDFLARE_OAUTH_CLIENT_ID 和 WELINE_CLOUDFLARE_OAUTH_CLIENT_SECRET 保存客户端配置；最小 scopes 为 zone.read、dns.write、offline_access。企业邮箱用户随后只需在每域名面板点击“连接或重新授权 Cloudflare”。授权 state 为一次性、会话绑定且只存哈希；用户令牌通过 Cdn Account 的 secret_ref 加密边界保存并自动刷新。
+
+邮箱 DNS 写命令只管理当前域名的 mail A/AAAA（强制 DNS-only）、根 MX、根 SPF、实际 DKIM 选择器和 DMARC。它会先预览，检测 Email Routing 锁定记录，明确确认后才写入；失败时反向回滚并报告残留变更。smtp CNAME、其他 TXT 和其他域名不会被删除。PTR/rDNS 不属于 Cloudflare DNS，仍需云服务器厂商配置。
+
+详细字段与安全边界见：doc/Cloudflare-OAuth-Client-Setup.md。
 
 ### 3. 添加域名
 

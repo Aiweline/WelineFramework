@@ -92,6 +92,65 @@ class WidgetDefaultInjectionService
     }
 
     /**
+     * All default_injections declared for the layout identity, including already-applied ones.
+     * Used by Theme Editor「应用」so application widgets like Review remain visible after apply.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function getDeclaredForLayout(
+        int $themeId,
+        string $pageType,
+        array $identity = [],
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        string $keyword = ''
+    ): array {
+        $theme = $this->loadTheme($themeId);
+        if (!$theme) {
+            return [];
+        }
+
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        $identity = $this->normalizeIdentity($identity);
+        $status = $this->layoutService->hasDraft($themeId, $pageType, $identity)
+            ? ThemeLayout::STATUS_DRAFT
+            : ThemeLayout::STATUS_PUBLISHED;
+        $items = $this->collectDeclarations($theme, $componentArea, $pageType, $identity);
+        $keyword = mb_strtolower(trim($keyword));
+        $declared = [];
+
+        foreach ($items as $item) {
+            if ($keyword !== '' && !$this->matchesKeyword($item, $keyword)) {
+                continue;
+            }
+            if (!$this->matchesDashboardDefaultViewFilter($item, $identity)) {
+                continue;
+            }
+            $applied = $this->widgetExists($themeId, $item['page_type'], $item['identity'], $status, $item);
+            $item['status'] = $status;
+            $item['injection_status'] = $applied ? 'applied' : 'missing';
+            $item['applied'] = $applied;
+            $declared[] = $item;
+        }
+
+        usort($declared, static function (array $left, array $right): int {
+            $leftMissing = (($left['injection_status'] ?? '') === 'missing') ? 0 : 1;
+            $rightMissing = (($right['injection_status'] ?? '') === 'missing') ? 0 : 1;
+            if ($leftMissing !== $rightMissing) {
+                return $leftMissing <=> $rightMissing;
+            }
+            $leftRequired = !empty($left['required']) ? 0 : 1;
+            $rightRequired = !empty($right['required']) ? 0 : 1;
+            if ($leftRequired !== $rightRequired) {
+                return $leftRequired <=> $rightRequired;
+            }
+
+            return ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0));
+        });
+
+        return $declared;
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     public function applyInjectionByKey(
@@ -229,6 +288,222 @@ class WidgetDefaultInjectionService
         return $applied;
     }
 
+    /**
+     * 草稿重置后清除 user_deleted 决策并重新补齐 default_injections。
+     *
+     * @param array<string,mixed> $identity
+     * @return array{cleared_user_deleted:int,applied_defaults:int}
+     */
+    public function restoreDefaultInjectionsAfterDraftReset(
+        int $themeId,
+        array $identity,
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        ?string $pageType = null,
+    ): array {
+        $cleared = $this->clearUserDeletedDecisions($themeId, $identity, $componentArea, $pageType);
+        $applied = ($pageType === null || trim($pageType) === '')
+            ? $this->applyMissingForAllPageTypes($themeId, $identity, $componentArea)
+            : $this->applyMissingForLayout($themeId, $pageType, $identity, $componentArea);
+
+        return [
+            'cleared_user_deleted' => $cleared,
+            'applied_defaults' => $applied,
+        ];
+    }
+
+    /**
+     * 编辑器 slot 工具条「初始化」：清除该 slot 的 user_deleted，并按 default_injections 显式回填。
+     *
+     * @param array<string,mixed> $identity
+     * @return array{cleared_user_deleted:int,applied_defaults:int,items:list<array<string,mixed>>}
+     */
+    public function initSlotDefaultInjections(
+        int $themeId,
+        string $pageType,
+        array $identity,
+        string $slotId,
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        string $status = ThemeLayout::STATUS_DRAFT,
+    ): array {
+        $result = [
+            'cleared_user_deleted' => 0,
+            'applied_defaults' => 0,
+            'items' => [],
+        ];
+        $slotId = trim($slotId);
+        $pageType = trim($pageType);
+        if ($themeId <= 0 || $pageType === '' || $slotId === '') {
+            return $result;
+        }
+
+        $theme = $this->loadTheme($themeId);
+        if (!$theme) {
+            return $result;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        $result['cleared_user_deleted'] = $this->clearUserDeletedDecisionsForSlot(
+            $themeId,
+            $identity,
+            $slotId,
+            $componentArea,
+            $pageType
+        );
+
+        foreach ($this->collectDeclarations($theme, $componentArea, $pageType, $identity) as $item) {
+            if (trim((string)($item['slot_id'] ?? '')) !== $slotId) {
+                continue;
+            }
+            if ($this->widgetExists($themeId, $pageType, $identity, $status, $item)) {
+                continue;
+            }
+            $exclusive = (bool)($item['exclusive'] ?? false);
+            $area = trim((string)($item['area'] ?? ThemeLayout::AREA_CONTENT));
+            if ($area === '') {
+                $area = ThemeLayout::AREA_CONTENT;
+            }
+            if (($exclusive || in_array($slotId, self::EXCLUSIVE_SLOTS, true))
+                && $this->slotHasWidget($themeId, $pageType, $identity, $status, $slotId, $area)
+            ) {
+                continue;
+            }
+            if ($this->slotHasTemplateInlineWidgets($themeId, $slotId, $componentArea)) {
+                continue;
+            }
+
+            try {
+                $layoutId = $this->saveInjection($themeId, $item, $status);
+                $this->markInitialHandled($themeId, $item, self::SOURCE_MANUAL_APPLY, true);
+                $item['layout_id'] = $layoutId;
+                $item['status'] = $status;
+                $result['items'][] = $item;
+                $result['applied_defaults']++;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    public function clearUserDeletedDecisionsForSlot(
+        int $themeId,
+        array $identity,
+        string $slotId,
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        ?string $pageType = null,
+    ): int {
+        if ($themeId <= 0) {
+            return 0;
+        }
+
+        $slotId = trim($slotId);
+        if ($slotId === '') {
+            return 0;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        $pageType = $pageType !== null ? trim($pageType) : null;
+
+        try {
+            $query = (clone $this->defaultInjectionRecord)->clearQuery()->clearData()
+                ->where(ThemeWidgetDefaultInjection::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_COMPONENT_AREA, $componentArea)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE, $identity['locale_code'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SOURCE, self::SOURCE_USER_DELETED)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SLOT_ID, $slotId);
+            if ($pageType !== null && $pageType !== '') {
+                $query->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, $pageType);
+            }
+
+            $rows = $query->select()->fetchArray();
+            $count = 0;
+            foreach (\is_array($rows) ? $rows : [] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $recordId = (int)($row[ThemeWidgetDefaultInjection::schema_fields_ID] ?? 0);
+                if ($recordId <= 0) {
+                    continue;
+                }
+                $record = clone $this->defaultInjectionRecord;
+                $record->clearQuery()->clearData()->load($recordId);
+                if ($record->getId() > 0) {
+                    $record->delete()->fetch();
+                    $count++;
+                }
+            }
+
+            return $count;
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    public function clearUserDeletedDecisions(
+        int $themeId,
+        array $identity,
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        ?string $pageType = null,
+    ): int {
+        if ($themeId <= 0) {
+            return 0;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        $pageType = $pageType !== null ? trim($pageType) : null;
+
+        try {
+            $query = (clone $this->defaultInjectionRecord)->clearQuery()->clearData()
+                ->where(ThemeWidgetDefaultInjection::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_COMPONENT_AREA, $componentArea)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_LOCALE_CODE, $identity['locale_code'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SOURCE, self::SOURCE_USER_DELETED);
+            if ($pageType !== null && $pageType !== '') {
+                $query->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, $pageType);
+            }
+
+            $rows = $query->select()->fetchArray();
+            $count = 0;
+            foreach (\is_array($rows) ? $rows : [] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $recordId = (int)($row[ThemeWidgetDefaultInjection::schema_fields_ID] ?? 0);
+                if ($recordId <= 0) {
+                    continue;
+                }
+                $record = clone $this->defaultInjectionRecord;
+                $record->clearQuery()->clearData()->load($recordId);
+                if ($record->getId() > 0) {
+                    $record->delete()->fetch();
+                    $count++;
+                }
+            }
+
+            return $count;
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
     public function applyMissingForLayout(
         int $themeId,
         string $pageType,
@@ -246,7 +521,7 @@ class WidgetDefaultInjectionService
         $applied = 0;
 
         foreach ($this->collectDeclarations($theme, $componentArea, $pageType, $identity) as $item) {
-            if (!$this->injectionTargetNeedsFill($themeId, $pageType, $identity, $status, $item)) {
+            if (!$this->injectionTargetNeedsFill($themeId, $pageType, $identity, $status, $item, $componentArea)) {
                 continue;
             }
             $this->saveInjection($themeId, $item, $status);
@@ -1108,13 +1383,27 @@ class WidgetDefaultInjectionService
         string $pageType,
         array $identity,
         string $status,
-        array $item
+        array $item,
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
     ): bool {
         if ($this->hasUserDeletedDecision($themeId, $item)) {
             return false;
         }
 
         $slotId = trim((string)($item['slot_id'] ?? ''));
+        $area = trim((string)($item['area'] ?? ThemeLayout::AREA_CONTENT));
+        // Layout region (header/content/footer) is not frontend/backend.
+        // Template inline lookup must use the caller component area; dashboard
+        // layout regions still resolve against the backend catalog.
+        $componentArea = str_starts_with(strtolower($area), 'dashboard')
+            ? PreviewContextService::AREA_BACKEND
+            : $this->normalizeComponentArea($componentArea);
+
+        // 模板内嵌 w:widget 优先于 default_injections：有直嵌则不落库注入
+        if ($slotId !== '' && $this->slotHasTemplateInlineWidgets($themeId, $slotId, $componentArea)) {
+            return false;
+        }
+
         $exclusive = (bool)($item['exclusive'] ?? false);
         if ($slotId !== '') {
             if ($exclusive || in_array($slotId, self::EXCLUSIVE_SLOTS, true)) {
@@ -1124,7 +1413,7 @@ class WidgetDefaultInjectionService
                     $identity,
                     $status,
                     $slotId,
-                    trim((string)($item['area'] ?? ThemeLayout::AREA_CONTENT))
+                    $area
                 );
             }
 
@@ -1132,6 +1421,39 @@ class WidgetDefaultInjectionService
         }
 
         return !$this->widgetExists($themeId, $pageType, $identity, $status, $item);
+    }
+
+    private function slotHasTemplateInlineWidgets(int $themeId, string $slotId, string $componentArea): bool
+    {
+        $theme = $this->loadTheme($themeId);
+        if (!$theme || $slotId === '') {
+            return false;
+        }
+
+        try {
+            /** @var ThemeResourceCatalog $catalog */
+            $catalog = ObjectManager::getInstance(ThemeResourceCatalog::class);
+            foreach ($catalog->getSlots($componentArea, $theme) as $slot) {
+                if ((string)($slot['id'] ?? '') !== $slotId) {
+                    continue;
+                }
+                if (!empty($slot['has_template_widgets'])) {
+                    return true;
+                }
+                $meta = is_array($slot['meta'] ?? null) ? $slot['meta'] : [];
+                if (!empty($meta['has_template_widgets'])) {
+                    return true;
+                }
+                $widgets = $slot['template_widgets'] ?? ($meta['template_widgets'] ?? []);
+                if (is_array($widgets) && $widgets !== []) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
 
     private function resolveLayoutArea(array $injection, ThemeComponentDefinition $definition, string $slotId): string

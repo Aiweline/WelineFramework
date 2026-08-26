@@ -27,6 +27,26 @@ final class InjectCaptchaIntoFormTest extends TestCase
         self::assertSame('', $event->getData('html'));
     }
 
+    public function testLazyModeInjectsHostWithoutRenderingChallenge(): void
+    {
+        $captcha = $this->createMock(CaptchaManagerInterface::class);
+        $captcha->expects(self::never())->method('renderChallenge');
+        $observer = new InjectCaptchaIntoForm($captcha);
+        $event = $this->formEvent([
+            'id' => 'checkout-delivery-quick-add-form',
+            'method' => 'post',
+            'intent' => 'checkout.save_delivery_address',
+            'captcha' => 'lazy',
+        ]);
+
+        $observer->execute($event);
+
+        $html = (string)$event->getData('html');
+        self::assertStringContainsString('data-weline-captcha-lazy="1"', $html);
+        self::assertStringContainsString('data-intent="checkout.save_delivery_address"', $html);
+        self::assertStringContainsString('data-form-id="checkout-delivery-quick-add-form"', $html);
+    }
+
     public function testRequiredModeInjectsChallengeWithFormContext(): void
     {
         $captcha = $this->createMock(CaptchaManagerInterface::class);

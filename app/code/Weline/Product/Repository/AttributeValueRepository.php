@@ -61,11 +61,99 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         mixed $value,
         bool $isRequired = false,
     ): void {
-        $this->upsert($websiteId, $storeId, $entityType, $entityId, $attributeCode, $locale, [
-            AttributeValue::schema_fields_VALUE_TEXT => $value === null ? null : (string)$value,
+        $this->writeTyped(
+            $websiteId,
+            $storeId,
+            $entityType,
+            $entityId,
+            $attributeCode,
+            $locale,
+            'string',
+            $value,
+            $isRequired,
+        );
+    }
+
+    public function writeTyped(
+        int $websiteId,
+        int $storeId,
+        string $entityType,
+        int $entityId,
+        string $attributeCode,
+        string $locale,
+        string $valueType,
+        mixed $value,
+        bool $isRequired = false,
+    ): void {
+        $valueType = strtolower(trim($valueType));
+        if (!in_array($valueType, ['string', 'number', 'boolean', 'date', 'select', 'multiselect', 'json'], true)) {
+            throw new \InvalidArgumentException('product_attribute_value_type_invalid');
+        }
+
+        $fields = [
+            AttributeValue::schema_fields_VALUE_TEXT => null,
+            'value_type' => $valueType,
+            'value_string' => null,
+            'value_number' => null,
+            'value_boolean' => null,
+            'value_date' => null,
+            'value_json' => null,
+            'scope_state' => 'explicit',
             AttributeValue::schema_fields_CLEARED => 0,
             AttributeValue::schema_fields_IS_REQUIRED => $isRequired ? 1 : 0,
-        ]);
+        ];
+        if ($valueType === 'string') {
+            if (!is_scalar($value) && $value !== null) {
+                throw new \InvalidArgumentException('product_attribute_string_invalid');
+            }
+            $fields['value_string'] = $value === null ? '' : (string)$value;
+            $fields[AttributeValue::schema_fields_VALUE_TEXT] = $fields['value_string'];
+        } elseif ($valueType === 'number') {
+            $number = trim((string)$value);
+            if (!preg_match('/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/', $number)) {
+                throw new \InvalidArgumentException('product_attribute_number_invalid');
+            }
+            $fields['value_number'] = $number;
+            $fields[AttributeValue::schema_fields_VALUE_TEXT] = $number;
+        } elseif ($valueType === 'boolean') {
+            $normalized = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($normalized === null) {
+                throw new \InvalidArgumentException('product_attribute_boolean_invalid');
+            }
+            $fields['value_boolean'] = $normalized ? 1 : 0;
+            $fields[AttributeValue::schema_fields_VALUE_TEXT] = $normalized ? '1' : '0';
+        } elseif ($valueType === 'date') {
+            try {
+                $date = new \DateTimeImmutable((string)$value);
+            } catch (\Throwable) {
+                throw new \InvalidArgumentException('product_attribute_date_invalid');
+            }
+            $fields['value_date'] = $date->format('Y-m-d H:i:s');
+            $fields[AttributeValue::schema_fields_VALUE_TEXT] = $fields['value_date'];
+        } else {
+            if ($valueType === 'select' && !is_scalar($value) && $value !== null) {
+                throw new \InvalidArgumentException('product_attribute_select_invalid');
+            }
+            if ($valueType === 'multiselect' && !is_array($value)) {
+                throw new \InvalidArgumentException('product_attribute_multiselect_invalid');
+            }
+            $encoded = json_encode(
+                $value,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            );
+            $fields['value_json'] = $encoded;
+            $fields[AttributeValue::schema_fields_VALUE_TEXT] = $encoded;
+        }
+
+        $this->upsert(
+            $websiteId,
+            $storeId,
+            $entityType,
+            $entityId,
+            $attributeCode,
+            $locale,
+            $fields,
+        );
     }
 
     public function writeCleared(
@@ -79,6 +167,12 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
     ): void {
         $this->upsert($websiteId, $storeId, $entityType, $entityId, $attributeCode, $locale, [
             AttributeValue::schema_fields_VALUE_TEXT => null,
+            'value_string' => null,
+            'value_number' => null,
+            'value_boolean' => null,
+            'value_date' => null,
+            'value_json' => null,
+            'scope_state' => 'cleared',
             AttributeValue::schema_fields_CLEARED => 1,
             AttributeValue::schema_fields_IS_REQUIRED => $isRequired ? 1 : 0,
         ]);
@@ -101,6 +195,21 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         if ($model !== null) {
             $model->delete();
         }
+    }
+
+    public function purgeEntity(int $websiteId, string $entityType, int $entityId): void
+    {
+        $this->assertWebsite($websiteId);
+        $entityType = trim($entityType);
+        if ($entityType === '' || $entityId <= 0) {
+            return;
+        }
+        $model = $this->newModel($websiteId);
+        $model->clear()
+            ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
+            ->where(AttributeValue::schema_fields_ENTITY_ID, $entityId)
+            ->delete()
+            ->fetch();
     }
 
     /**
@@ -192,14 +301,18 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
             ->fetchArray();
         $rows = [];
         foreach ($raw as $item) {
+            $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
+                || (int)($item[AttributeValue::schema_fields_CLEARED] ?? 0) === 1;
             $rows[] = [
                 'store_id' => (int)($item[AttributeValue::schema_fields_STORE_ID] ?? 0),
                 'entity_type' => (string)($item[AttributeValue::schema_fields_ENTITY_TYPE] ?? ''),
                 'entity_id' => (int)($item[AttributeValue::schema_fields_ENTITY_ID] ?? 0),
                 'attribute_code' => (string)($item[AttributeValue::schema_fields_ATTRIBUTE_CODE] ?? ''),
                 'locale' => (string)($item[AttributeValue::schema_fields_LOCALE] ?? ''),
-                'value' => $item[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
-                'cleared' => (int)($item[AttributeValue::schema_fields_CLEARED] ?? 0) === 1,
+                'value_type' => (string)($item['value_type'] ?? 'string'),
+                'value' => $cleared ? null : $this->decodeTypedValue($item),
+                'scope_state' => $cleared ? 'cleared' : (string)($item['scope_state'] ?? 'explicit'),
+                'cleared' => $cleared,
                 'is_required' => (int)($item[AttributeValue::schema_fields_IS_REQUIRED] ?? 0) === 1,
             ];
         }
@@ -290,15 +403,46 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
             ->fetchArray();
         $rows = [];
         foreach ($raw as $item) {
+            $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
+                || (int)($item[AttributeValue::schema_fields_CLEARED] ?? 0) === 1;
             $rows[] = [
                 'store_id' => (int)($item[AttributeValue::schema_fields_STORE_ID] ?? 0),
                 'locale' => (string)($item[AttributeValue::schema_fields_LOCALE] ?? ''),
-                'cleared' => (int)($item[AttributeValue::schema_fields_CLEARED] ?? 0) === 1,
-                'value' => $item[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
+                'cleared' => $cleared,
+                'value' => $cleared ? null : $this->decodeTypedValue($item),
+                'value_type' => (string)($item['value_type'] ?? 'string'),
+                'scope_state' => $cleared ? 'cleared' : (string)($item['scope_state'] ?? 'explicit'),
                 'is_required' => (int)($item[AttributeValue::schema_fields_IS_REQUIRED] ?? 0) === 1,
             ];
         }
         return $rows;
+    }
+
+    /** @param array<string, mixed> $row */
+    private function decodeTypedValue(array $row): mixed
+    {
+        $type = (string)($row['value_type'] ?? 'string');
+        return match ($type) {
+            'number' => $row['value_number'] ?? $row[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
+            'boolean' => isset($row['value_boolean']) ? (bool)$row['value_boolean'] : null,
+            'date' => $row['value_date'] ?? $row[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
+            'select', 'multiselect', 'json' => $this->decodeJsonValue(
+                $row['value_json'] ?? $row[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
+            ),
+            default => $row['value_string'] ?? $row[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
+        };
+    }
+
+    private function decodeJsonValue(mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            return json_decode((string)$value, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $value;
+        }
     }
 
     protected function newModel(int $websiteId): AbstractWebsiteShardModel

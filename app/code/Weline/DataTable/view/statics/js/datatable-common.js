@@ -137,10 +137,22 @@ function safeImageUrl(value) {
     if (typeof value !== 'string' || value.trim() === '') return '';
     try {
         const url = new URL(value, window.location.origin);
-        return ['http:', 'https:', 'blob:'].includes(url.protocol) ? url.href : '';
+        return ['http:', 'https:', 'blob:', 'data:'].includes(url.protocol) ? url.href : '';
     } catch (_error) {
         return '';
     }
+}
+
+const IMAGE_PLACEHOLDER = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">'
+    + '<rect width="96" height="96" rx="8" fill="#e5e7eb"/>'
+    + '<rect x="28" y="30" width="40" height="32" rx="4" fill="#9ca3af" opacity="0.55"/>'
+    + '<circle cx="48" cy="24" r="8" fill="#9ca3af" opacity="0.35"/>'
+    + '</svg>',
+);
+
+function imagePlaceholder() {
+    return IMAGE_PLACEHOLDER;
 }
 
 function safeCssLength(value) {
@@ -151,16 +163,36 @@ function safeCssLength(value) {
 
 function fieldValueNode(value, field) {
     if (field.type === 'image') {
-        const src = safeImageUrl(String(value || ''));
-        if (src) {
-            const image = document.createElement('img');
-            image.src = src;
-            image.alt = field.label;
-            image.loading = 'lazy';
-            image.width = 48;
-            image.height = 48;
-            return image;
-        }
+        const placeholder = imagePlaceholder();
+        const src = safeImageUrl(String(value || '')) || placeholder;
+        const image = document.createElement('img');
+        image.src = src;
+        image.alt = field.label || '';
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.width = 48;
+        image.height = 48;
+        image.setAttribute(
+            'data-testid',
+            src === placeholder
+                ? (field.name === 'main_image' ? 'product-main-image-placeholder' : 'datatable-image-placeholder')
+                : (field.name === 'main_image' ? 'product-main-image' : 'datatable-image'),
+        );
+        image.dataset.imagePlaceholder = placeholder;
+        image.style.objectFit = 'cover';
+        image.style.borderRadius = '4px';
+        image.style.display = 'block';
+        image.style.background = 'var(--weline-color-surface-muted,#f3f4f6)';
+        image.addEventListener('error', () => {
+            if (image.dataset.fallbackApplied === '1') return;
+            image.dataset.fallbackApplied = '1';
+            image.src = placeholder;
+            image.setAttribute(
+                'data-testid',
+                field.name === 'main_image' ? 'product-main-image-placeholder' : 'datatable-image-placeholder',
+            );
+        });
+        return image;
     }
     if (typeof value === 'boolean') {
         const badge = document.createElement('span');
@@ -225,6 +257,7 @@ export {
     downloadPayload,
     fieldMap,
     fieldValueNode,
+    imagePlaceholder,
     mergeFields,
     normalizeField,
     normalizePagination,
@@ -233,6 +266,7 @@ export {
     request,
     responsePayload,
     safeCssLength,
+    safeImageUrl,
     translate,
     valueFor,
 };

@@ -47,7 +47,7 @@ class TranslationQueryProvider implements QueryProviderInterface
             if (!$provider->getId()) {
                 return ['success' => false, 'message' => (string)__('渠道不存在')];
             }
-            $adapter = ObjectManager::getInstance(ProviderFactory::class)->create(
+            $adapter = ObjectManager::getInstance(ProviderFactory::class)->createProvider(
                 (string)$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)
             );
             if (!$adapter) {

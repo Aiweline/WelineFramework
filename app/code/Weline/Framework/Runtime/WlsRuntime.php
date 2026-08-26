@@ -296,9 +296,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $this->assertGeneratedRouteFilesReady();
         $this->logReadyGateWarmupStep('route_assert_done', $workerId, $startedAt);
 
-        // Homepage process FPC is the non-optional business READY gate. It is
-        // deliberately independent from optional registry/backend/dynamic
-        // warmups and their fail-open switches.
+        // Homepage process FPC is a best-effort business warmup. Failure (or an
+        // uncatchable template compile fatal during in-process render) must not
+        // block Worker READY / WLS startup; default is fail-open + defer render.
         $this->readyGateHomepageFpcProof = $this->runRequiredHomepageProcessFpcReadyGate(
             $workerId,
             $startedAt
@@ -475,11 +475,47 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
+     * Homepage Process-FPC READY gate is best-effort by default.
+     *
+     * Default fail-open (`wls.worker.ready_gate_homepage_fail_open=1`) skips
+     * in-process homepage render before READY: template E_COMPILE_ERROR cannot
+     * be caught and would otherwise kill the Worker and trip WLS_STARTUP_FAIL_FAST.
+     * Real FPC pull/build continues in deferred warmup after READY.
+     *
+     * Set fail-open to 0 only when operators explicitly want strict admission.
+     *
      * @return array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int}
      */
     private function runRequiredHomepageProcessFpcReadyGate(int $workerId, float $startedAt): array
     {
         $this->logReadyGateWarmupStep('homepage_fpc_begin', $workerId, $startedAt);
+        if ($this->isHomepageReadyGateFailOpen()) {
+            $this->logReadyGateWarmupStep(
+                'homepage_fpc_deferred_before_ready reason=fail-open-default',
+                $workerId,
+                $startedAt
+            );
+
+            return [
+                'hit' => false,
+                'fpc_status' => '',
+                'source' => '',
+                'full_uri' => '',
+                'reason' => 'homepage-fpc:deferred-after-ready:fail-open',
+                'http_status' => 0,
+            ];
+        }
+
+        return $this->runStrictHomepageProcessFpcReadyGate($workerId, $startedAt);
+    }
+
+    /**
+     * Strict in-process homepage Process-FPC proof (fail-open disabled only).
+     *
+     * @return array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int}
+     */
+    private function runStrictHomepageProcessFpcReadyGate(int $workerId, float $startedAt): array
+    {
         $hosts = $this->resolveHomepageProcessFpcReadyHosts();
         $maxAttempts = (int)Env::get('wls.worker.ready_gate_homepage_attempts', 3);
         $maxAttempts = \max(1, \min(5, $maxAttempts));
@@ -576,28 +612,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
         }
         if (!$hit) {
-            $failOpenRaw = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
-            if ($failOpenRaw === false || \trim((string)$failOpenRaw) === '') {
-                $failOpenRaw = Env::get('wls.worker.ready_gate_homepage_fail_open', '0');
-            }
-            $failOpen = \in_array(
-                \strtolower(\trim((string)$failOpenRaw)),
-                ['1', 'true', 'yes', 'on'],
-                true
-            );
-            if ($failOpen) {
-                $this->logReadyGateWarmupStep(
-                    'homepage_fpc_fail_open fpc=' . ($fpcStatus !== '' ? $fpcStatus : 'missing')
-                    . ' status=' . $proof['http_status']
-                    . ' reason=' . $reason,
-                    $workerId,
-                    $startedAt
-                );
-                $proof['hit'] = false;
-                $proof['reason'] = $reason . ':fail-open';
-
-                return $proof;
-            }
             throw new \RuntimeException(
                 'READY gate homepage process FPC proof failed worker=' . $workerId
                 . ' fpc=' . ($fpcStatus !== '' ? $fpcStatus : 'missing')
@@ -612,7 +626,26 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $workerId,
             $startedAt
         );
+
         return $proof;
+    }
+
+    /**
+     * Default true: homepage warmup failure is normal and must not block READY.
+     * Set wls.worker.ready_gate_homepage_fail_open=0 (or env) for strict gate.
+     */
+    private function isHomepageReadyGateFailOpen(): bool
+    {
+        $failOpenRaw = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
+        if ($failOpenRaw === false || \trim((string)$failOpenRaw) === '') {
+            $failOpenRaw = Env::get('wls.worker.ready_gate_homepage_fail_open', '1');
+        }
+
+        return \in_array(
+            \strtolower(\trim((string)$failOpenRaw)),
+            ['1', 'true', 'yes', 'on'],
+            true
+        );
     }
 
     /**
@@ -5920,6 +5953,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $language, 'WlsRuntime parseUrlLangCurrency');
             WelineEnv::setServer('WELINE_URL_PATH_LANG', $language, 'WlsRuntime parseUrlLangCurrency');
+        } else {
+            // Drop stale worker locale when the path omits a language segment so
+            // State::getLang() can honor Cookie/default on /USD/help.
+            try {
+                WelineEnv::remove('user.lang');
+            } catch (\Throwable) {
+            }
         }
     }
     

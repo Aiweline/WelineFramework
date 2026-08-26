@@ -41,7 +41,7 @@ $textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--w
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         style="--wc-newsletter-bg:<?= $esc($bgColor) ?>;--wc-newsletter-text:<?= $esc($textColor) ?>;">
+         style="--wc-newsletter-bg: <?= $esc($bgColor) ?>;--wc-newsletter-text: <?= $esc($textColor) ?>;">
     <div class="newsletter-icon">
         <w:icon name="mail" size="sm"></w:icon>
     </div>
@@ -63,79 +63,79 @@ $textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--w
 
 <style>
 .<?= $wc ?> {
-    background: var(--wc-newsletter-bg, var(--weline-theme-primary));
-    border-radius: var(--weline-radius-lg, 12px);
-    padding: var(--weline-space-6, 25px);
+    background: var(--wc-newsletter-bg);
+    border-radius: var(--weline-radius-lg);
+    padding: var(--weline-space-6);
     text-align: center;
-    color: var(--wc-newsletter-text, var(--weline-theme-on-primary));
+    color: var(--wc-newsletter-text);
 }
 
 .<?= $wc ?> .newsletter-icon {
-    width: 60px;
-    height: 60px;
-    background: color-mix(in srgb, var(--wc-newsletter-text, var(--weline-theme-on-primary)) 20%, transparent);
+    width: var(--spacing-15);
+    height: var(--spacing-15);
+    background: color-mix(in srgb, var(--wc-newsletter-text) 20%, transparent);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto var(--weline-space-4, 15px);
+    margin: 0 auto var(--weline-space-4);
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-lg, 18px);
+    font-size: var(--weline-font-size-lg);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-3, 10px);
+    margin: 0 0 var(--weline-space-3);
 }
 
 .<?= $wc ?> .widget-description {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     opacity: 0.9;
-    margin: 0 0 var(--weline-space-5, 20px);
+    margin: 0 0 var(--weline-space-5);
 }
 
 .<?= $wc ?> .newsletter-form {
     display: flex;
     flex-direction: column;
-    gap: var(--weline-space-3, 10px);
+    gap: var(--weline-space-3);
 }
 
 .<?= $wc ?> .newsletter-input {
     width: 100%;
-    padding: var(--weline-space-3, 12px) var(--weline-space-4, 15px);
+    padding: var(--weline-space-3) var(--weline-space-4);
     border: none;
-    border-radius: var(--weline-radius-md, 8px);
-    font-size: var(--weline-font-size-sm, 14px);
+    border-radius: var(--weline-radius-md);
+    font-size: var(--weline-font-size-sm);
     outline: none;
 }
 
 .<?= $wc ?> .newsletter-submit {
     width: 100%;
-    padding: var(--weline-space-3, 12px);
+    padding: var(--weline-space-3);
     border: none;
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
     color: var(--weline-theme-primary);
     font-weight: 600;
     cursor: pointer;
-    transition: transform var(--weline-theme-transition-base, 0.2s ease);
+    transition: transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .newsletter-submit:hover {
-    transform: translateY(-2px);
+    transform: translateY(var(--spacing-neg-0_5));
 }
 
 .<?= $wc ?> .newsletter-privacy {
-    font-size: var(--weline-font-size-xs, 11px);
+    font-size: var(--weline-font-size-xs);
     opacity: 0.8;
-    margin: var(--weline-space-4, 15px) 0 0;
+    margin: var(--weline-space-4) 0 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-4, 15px);
+    padding: var(--weline-space-4);
 }
 </style>

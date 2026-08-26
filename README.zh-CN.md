@@ -2,7 +2,7 @@
 
 ![WelineFramework 封面](./docs/assets/readme/weline-framework-cover.zh-CN.png)
 
-**使用清晰模块边界、自动生成路由、属性驱动 ORM、主题扩展和 WLS 长运行服务构建模块化 PHP 业务系统。**
+**WelineFramework** 是 PHP 8.4+ 模块化业务框架。招牌运行时 **WLS** 让应用**常驻内存**——HTTP Worker、Session Server、Memory Server 与热重载——同时传统 FPM 仍是一等部署路径。
 
 [官网](https://www.aiweline.com) ·
 [开发者入口](./docs/weline/开发者入口.md) ·
@@ -15,6 +15,7 @@
 ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4?logo=php&logoColor=white)
 ![Composer 2.7+](https://img.shields.io/badge/Composer-2.7%2B-885630?logo=composer&logoColor=white)
 ![Runtime FPM + WLS](https://img.shields.io/badge/runtime-FPM%20%2B%20WLS-0f766e)
+![WLS in-memory](https://img.shields.io/badge/WLS-in--memory%20runtime-0f766e)
 ![i18n first](https://img.shields.io/badge/i18n-first-2563eb)
 ![License proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)
 
@@ -28,9 +29,17 @@
 
 ---
 
-WelineFramework 是面向复杂业务系统的 PHP 8.4+ 框架。它把模块生命周期、自动路由、ORM Schema、事件/Hook、后台 ACL、主题模板、国际化、CLI 运维和 WLS 长运行服务放进同一套工程模型，让团队可以把业务能力做成可安装、可升级、可扩展、可验证的模块。
+WelineFramework 把模块生命周期、自动路由、属性驱动 ORM、事件/Hook、后台 ACL、主题、i18n 与 CLI 放进同一套工程模型，让业务能力以可安装、可升级的模块交付。
 
-> WLS 边界：`php bin/w server:start` 启动的是 Weline 框架内置长运行服务器 WLS。它用于 HTTP Worker、Session Server、Memory Server、Maintenance Worker、Dispatcher/Gateway、热重载和运行时治理；它是框架运行时，不是通用 HTTP 调试入口。传统 FPM 部署仍然是一等部署路径。
+### WLS 与 FPM
+
+| | **WLS**（招牌能力） | **FPM**（同样一等） |
+|---|---|---|
+| 模型 | 长驻内存的框架运行时 | 经典请求 / 进程模型 |
+| 启动 | `php bin/w server:start` | Nginx/Apache + php-fpm |
+| 能力 | HTTP Worker、Session/Memory、维护 Worker、热重载、运行时治理 | 熟悉的传统 PHP 部署 |
+
+> WLS 是**框架运行时**，不是通用 HTTP 调试入口。需要常驻 Worker 与进程内服务时用 WLS；需要经典栈时用 FPM。
 
 ## 快速开始
 
@@ -59,7 +68,7 @@ php bin/w command:upgrade
 
 - **模块原生**：模块独立维护注册、配置、权限、菜单、事件、Hook、模板资源和安装升级。
 - **约定驱动**：Controller 由框架发现并生成路由，Model 通过 PHP 属性声明表、字段和索引。
-- **运行时友好**：传统 FPM 部署与 WLS 长运行服务并存，覆盖 Worker、Session、Memory、Maintenance 和热重载。
+- **WLS 常驻内存运行时**：Worker、Session/Memory 与热重载让应用常驻进程；需要时仍可走经典 FPM。
 - **开发者可运维**：`bin/w` 覆盖安装、升级、缓存、模块、迁移、路由、WLS、队列、邮局、SMTP 和诊断。
 
 ## 继续阅读

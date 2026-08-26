@@ -26,7 +26,7 @@ final class WidgetI18n
         return $resolver->translate(
             $key,
             $lang,
-            ['Weline_Theme', 'Weline_I18n', 'WeShop_Product', 'WeShop_Catalog'],
+            ['Weline_Theme', 'Weline_I18n', 'Weline_Product', 'WeShop_Product', 'WeShop_Catalog'],
         );
     }
 

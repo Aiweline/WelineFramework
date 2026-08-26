@@ -46,7 +46,7 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
                 }
                 $config = is_array($widget['config'] ?? null) ? $widget['config'] : [];
                 $this->assertNoDynamicImageMarkup($config, 0, $nodes);
-                $definitions = $this->definitions($widget);
+                $definitions = $this->definitions($widget, $context);
                 foreach ($definitions as $key => $definition) {
                     if (!is_array($definition) || !array_key_exists($key, $config)) {
                         continue;
@@ -57,8 +57,8 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
         }
     }
 
-    /** @param array<string,mixed> $widget @return array<string,mixed> */
-    private function definitions(array $widget): array
+    /** @param array<string,mixed> $widget @param array<string,mixed> $context @return array<string,mixed> */
+    private function definitions(array $widget, array $context = []): array
     {
         $module = trim((string)($widget['widget_module'] ?? ''));
         $code = trim((string)($widget['widget_code'] ?? ''));
@@ -66,17 +66,46 @@ final class WidgetImageContentContractValidator implements LayoutContentValidato
         if ($module === '' || $code === '') {
             throw new \RuntimeException((string)__('主题布局包含缺少身份的部件，禁止保存或发布。'));
         }
-        $definitions = $this->widgetConfig->getParamDefinitions($module, $code, 'frontend');
-        if ($definitions !== []) {
-            return $definitions;
+
+        $registryArea = $this->resolveWidgetRegistryArea($widget, $context);
+        $candidateAreas = array_values(array_unique([
+            $registryArea,
+            $registryArea === 'frontend' ? 'backend' : 'frontend',
+        ]));
+
+        foreach ($candidateAreas as $area) {
+            $definitions = $this->widgetConfig->getParamDefinitions($module, $code, $area);
+            if ($definitions !== []) {
+                return $definitions;
+            }
+            $definition = $this->placeables->find($module, $type, $code, null, $area);
+            if ($definition !== null) {
+                return $definition->params ?: $definition->configSchema;
+            }
         }
-        $definition = $this->placeables->find($module, $type, $code, null, 'frontend');
-        if ($definition === null) {
-            throw new \RuntimeException((string)__('主题部件 %{1} 未注册，禁止保存或发布。', [
-                $module . '::' . $type . '::' . $code,
-            ]));
+
+        throw new \RuntimeException((string)__('主题部件 %{1} 未注册，禁止保存或发布。', [
+            $module . '::' . $type . '::' . $code,
+        ]));
+    }
+
+    /**
+     * @param array<string,mixed> $widget
+     * @param array<string,mixed> $context
+     */
+    private function resolveWidgetRegistryArea(array $widget, array $context): string
+    {
+        $pageType = trim((string)($context['page_type'] ?? $widget['page_type'] ?? ''));
+        $layoutArea = trim((string)($context['layout_area'] ?? ''));
+        $targetType = trim((string)($context['target_type'] ?? $widget['target_type'] ?? ''));
+
+        if ($pageType === 'dashboard'
+            || (string)($widget['page_type'] ?? '') === 'dashboard'
+            || $targetType === 'website') {
+            return 'backend';
         }
-        return $definition->params ?: $definition->configSchema;
+
+        return $layoutArea === 'backend' ? 'backend' : 'frontend';
     }
 
     /** @param array<string,mixed> $definition */

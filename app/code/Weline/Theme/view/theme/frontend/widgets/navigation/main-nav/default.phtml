@@ -13,13 +13,14 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {navigation}
  * @widget.supports {["layout-header-navigation","layout-global-header-navigation"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"navigation","area":"header","sort_order":0}]}
  * @widget.exclusive {true}
  *
  * @param menu_style {default="horizontal",type="select",label="菜单样式",options={horizontal:"水平",vertical:"垂直",mega:"Mega菜单"}}
  * @param show_icons {default=false,type="bool",label="显示图标"}
  * @param max_depth {default=3,type="number",label="最大层级"}
- * @param menu_items {default=[],type="array",label="菜单项",description="菜单项数组，每项包含label、url、icon、children"}
+ * @param menu_items {default=[],type="array",label="菜单项(兼容)",description="旧版混合列表；若同时配置 category_items/shortcut_items 则忽略"}
+ * @param category_items {default=[],type="array",label="左侧分类菜单",description="跟在「全部」后的分类项，可含 children"}
+ * @param shortcut_items {default=[],type="array",label="右侧快捷入口",description="今日特价～客户服务等营销/服务入口，小屏换到第二行"}
  */
 
 use Weline\Theme\Helper\WidgetUiScope;
@@ -35,24 +36,57 @@ if (!in_array($menuStyle, ['horizontal', 'vertical', 'mega'], true)) {
 }
 $showIcons = (bool)($this->getData('show_icons') ?? false);
 $maxDepth = (int)($this->getData('max_depth') ?? 3);
+
+$defaultShortcuts = [
+    ['label' => __('今日特价'), 'url' => '/deals'],
+    ['label' => __('会员视频'), 'url' => '/video'],
+    ['label' => __('礼品心愿单'), 'url' => '/registry'],
+    ['label' => __('礼品卡'), 'url' => '/gift-cards'],
+    ['label' => __('客户服务'), 'url' => '/help'],
+];
+$defaultCategories = [
+    ['label' => __('电子产品'), 'url' => '/category/electronics', 'children' => [
+        ['label' => __('手机通讯'), 'url' => '/category/electronics/phones'],
+        ['label' => __('电脑办公'), 'url' => '/category/electronics/computers'],
+        ['label' => __('智能设备'), 'url' => '/category/electronics/smart-devices'],
+    ]],
+    ['label' => __('服装鞋帽'), 'url' => '/category/fashion'],
+    ['label' => __('家居生活'), 'url' => '/category/home'],
+];
+
+$categoryItems = $this->getData('category_items');
+$shortcutItems = $this->getData('shortcut_items');
 $menuItems = $this->getData('menu_items') ?? [];
 
-if (empty($menuItems)) {
-    $menuItems = [
-        ['label' => __('首页'), 'url' => '/', 'icon' => 'home'],
-        ['label' => __('商品'), 'url' => '/products', 'icon' => 'pin', 'children' => [
-            ['label' => __('新品上架'), 'url' => '/products/new'],
-            ['label' => __('热销商品'), 'url' => '/products/bestsellers'],
-            ['label' => __('特价促销'), 'url' => '/products/sale'],
-        ]],
-        ['label' => __('分类'), 'url' => '/categories', 'icon' => 'grid', 'children' => [
-            ['label' => __('电子产品'), 'url' => '/category/electronics'],
-            ['label' => __('服装鞋帽'), 'url' => '/category/fashion'],
-            ['label' => __('家居生活'), 'url' => '/category/home'],
-        ]],
-        ['label' => __('关于我们'), 'url' => '/about', 'icon' => 'info'],
-        ['label' => __('联系我们'), 'url' => '/contact', 'icon' => 'mail'],
-    ];
+$shortcutUrlSet = [];
+foreach ($defaultShortcuts as $s) {
+    $shortcutUrlSet[(string)($s['url'] ?? '')] = true;
+}
+
+// 优先显式分组；否则从旧版 menu_items 拆分；全空则用默认两组
+if ($categoryItems !== null || $shortcutItems !== null) {
+    $categoryItems = is_array($categoryItems) ? $categoryItems : [];
+    $shortcutItems = is_array($shortcutItems) ? $shortcutItems : [];
+} elseif (is_array($menuItems) && $menuItems !== []) {
+    $categoryItems = [];
+    $shortcutItems = [];
+    foreach ($menuItems as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $url = (string)($item['url'] ?? '');
+        $group = (string)($item['group'] ?? '');
+        $hasChildren = !empty($item['children']) && is_array($item['children']);
+        if ($group === 'shortcut' || (!$hasChildren && isset($shortcutUrlSet[$url]))) {
+            $shortcutItems[] = $item;
+        } else {
+            $categoryItems[] = $item;
+        }
+    }
+} else {
+    // main-nav 挂在右侧「导航」槽：默认只出快捷入口；分类由左侧 category-menu 槽负责
+    $categoryItems = [];
+    $shortcutItems = $defaultShortcuts;
 }
 
 $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false) use (&$renderMenuItem, $esc) {
@@ -85,18 +119,40 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>">
-    <nav class="main-nav" aria-label="<?= __('主导航') ?>">
-        <ul class="nav-menu">
-            <?php foreach ($menuItems as $item): ?>
-                <?php $renderMenuItem($item, 0, $maxDepth, $showIcons); ?>
-            <?php endforeach; ?>
-        </ul>
+    <nav class="main-nav main-nav-split" aria-label="<?= __('主导航') ?>">
+        <?php if ($categoryItems !== []): ?>
+            <ul class="nav-menu nav-menu-primary" aria-label="<?= __('分类菜单') ?>">
+                <?php foreach ($categoryItems as $item): ?>
+                    <?php $renderMenuItem($item, 0, $maxDepth, $showIcons); ?>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+        <?php if ($shortcutItems !== []): ?>
+            <ul class="nav-menu nav-menu-shortcuts" aria-label="<?= __('快捷导航') ?>">
+                <?php foreach ($shortcutItems as $item): ?>
+                    <?php $renderMenuItem($item, 0, $maxDepth, $showIcons); ?>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
     </nav>
 </section>
 
 <style>
 .<?= $wc ?> {
     position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+}
+
+.<?= $wc ?> .main-nav-split {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    column-gap: var(--weline-space-2);
+    row-gap: 0;
 }
 
 .<?= $wc ?>.nav-style-horizontal .nav-menu {
@@ -105,7 +161,20 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
     list-style: none;
     margin: 0;
     padding: 0;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
+}
+
+/* 左侧分类：紧跟「全部」 */
+.<?= $wc ?> .nav-menu-primary {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* 右侧快捷：今日特价～客服；宽屏靠右，窄屏整行换到第二行 */
+.<?= $wc ?> .nav-menu-shortcuts {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
 }
 
 .<?= $wc ?>.nav-style-horizontal .nav-item {
@@ -117,14 +186,14 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
     display: flex;
     align-items: center;
     flex-wrap: nowrap;
-    gap: var(--weline-space-2, 6px);
-    padding: var(--weline-space-3, 10px) var(--weline-space-4, 15px);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-3) var(--weline-space-4);
     color: var(--weline-theme-text);
     text-decoration: none;
     font-weight: 500;
     white-space: nowrap;
-    transition: color var(--weline-theme-transition-base, 0.2s ease), background-color var(--weline-theme-transition-base, 0.2s ease);
-    border-radius: var(--weline-radius-sm, 4px);
+    transition: color var(--weline-theme-transition-base), background-color var(--weline-theme-transition-base);
+    border-radius: var(--weline-radius-sm);
 }
 
 .<?= $wc ?> .nav-link span {
@@ -132,6 +201,33 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 }
 
 .<?= $wc ?> .nav-link:hover {
+    color: var(--weline-theme-primary);
+    background-color: var(--weline-theme-primary-surface);
+}
+
+/* Amazon 深色次级顶栏内：浅色链接，避免 foundation 主色压暗 */
+.weline-header .header-main-nav .<?= $wc ?> .nav-link,
+.header-main-nav .<?= $wc ?> .nav-link {
+    color: var(--color-bg-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    padding: var(--spacing-sm) var(--spacing-0_65);
+    border-radius: var(--border-radius-sm);
+}
+
+.weline-header .header-main-nav .<?= $wc ?> .nav-link:hover,
+.header-main-nav .<?= $wc ?> .nav-link:hover {
+    color: var(--color-bg-primary);
+    background-color: var(--color-on-dark-12);
+}
+
+.weline-header .header-main-nav .<?= $wc ?> .dropdown-menu .nav-link,
+.header-main-nav .<?= $wc ?> .dropdown-menu .nav-link {
+    color: var(--weline-theme-text);
+}
+
+.weline-header .header-main-nav .<?= $wc ?> .dropdown-menu .nav-link:hover,
+.header-main-nav .<?= $wc ?> .dropdown-menu .nav-link:hover {
     color: var(--weline-theme-primary);
     background-color: var(--weline-theme-primary-surface);
 }
@@ -144,17 +240,17 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
     position: absolute;
     top: 100%;
     left: 0;
-    min-width: 200px;
+    min-width: var(--size-panel-200);
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
     box-shadow: var(--weline-theme-shadow-md);
     list-style: none;
-    padding: var(--weline-space-2, 8px) 0;
+    padding: var(--weline-space-2) 0;
     margin: 0;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(10px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transform: translateY(var(--spacing-2_5));
+    transition: all var(--weline-theme-transition-base);
     z-index: 1000;
 }
 
@@ -165,7 +261,7 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 }
 
 .<?= $wc ?>.nav-style-horizontal .dropdown-menu .nav-link {
-    padding: var(--weline-space-3, 10px) var(--weline-space-5, 20px);
+    padding: var(--weline-space-3) var(--weline-space-5);
     border-radius: 0;
 }
 
@@ -181,26 +277,26 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 }
 
 .<?= $wc ?>.nav-style-vertical .nav-link {
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?>.nav-style-vertical .dropdown-menu {
     list-style: none;
-    padding-left: var(--weline-space-5, 20px);
+    padding-left: var(--weline-space-5);
     margin: 0;
 }
 
 .<?= $wc ?>.nav-style-mega .dropdown-menu {
-    min-width: 600px;
-    padding: var(--weline-space-5, 20px);
+    min-width: var(--token-size-600px);
+    padding: var(--weline-space-5);
     display: flex;
     flex-wrap: wrap;
-    gap: var(--weline-space-5, 20px);
+    gap: var(--weline-space-5);
 }
 
 .<?= $wc ?>.nav-style-mega .dropdown-menu .nav-item {
     flex: 1;
-    min-width: 150px;
+    min-width: var(--size-panel-150);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
@@ -210,33 +306,49 @@ $renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false
 
 .widget-preview-canvas .<?= $wc ?> .nav-link,
 .<?= $wc ?>.is-preview .nav-link {
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
-    font-size: var(--weline-font-size-xs, 12px);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    font-size: var(--weline-font-size-xs);
 }
 
 @media (max-width: 992px) {
+    .<?= $wc ?> .main-nav-split {
+        width: 100%;
+    }
+
+    .<?= $wc ?> .nav-menu-shortcuts {
+        flex: 1 1 100%;
+        margin-left: 0;
+        order: 2;
+    }
+
+    .<?= $wc ?> .nav-menu-primary {
+        flex: 1 1 auto;
+        order: 1;
+    }
+
     .<?= $wc ?> .main-nav {
         width: 100%;
         min-width: 0;
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-    }
-
-    .<?= $wc ?> .main-nav::-webkit-scrollbar {
-        display: none;
+        overflow-x: visible;
+        overflow-y: visible;
     }
 
     .<?= $wc ?>.nav-style-horizontal .nav-menu {
+        flex-wrap: nowrap;
         width: max-content;
-        min-width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
         gap: 0;
+        scrollbar-width: none;
+    }
+
+    .<?= $wc ?>.nav-style-horizontal .nav-menu::-webkit-scrollbar {
+        display: none;
     }
 
     .<?= $wc ?> .nav-link {
-        padding: 0.5rem 0.75rem;
-        font-size: 0.8125rem;
+        padding: var(--spacing-sm) var(--weline-space-3);
+        font-size: var(--font-size-13);
     }
 
     .<?= $wc ?>.nav-style-horizontal .dropdown-menu {

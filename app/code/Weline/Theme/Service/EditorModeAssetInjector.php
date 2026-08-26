@@ -59,7 +59,8 @@ HTML;
         }
 
         return htmlspecialchars(
-            $this->template->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative),
+            $this->template->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative)
+                . '?v=20260826-slot-toolbar-resolve-v1',
             ENT_QUOTES,
             'UTF-8',
         );

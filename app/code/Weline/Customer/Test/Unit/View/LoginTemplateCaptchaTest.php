@@ -18,5 +18,10 @@ final class LoginTemplateCaptchaTest extends TestCase
         self::assertMatchesRegularExpression('/<w:form\b[^>]*\bid="loginForm"[^>]*>/', $source);
         self::assertMatchesRegularExpression('/<w:form\b[^>]*\bcaptcha="required"[^>]*>/', $source);
         self::assertMatchesRegularExpression('/<w:form\b[^>]*\bintent="customer\.login"[^>]*>/', $source);
+        self::assertStringContainsString('data-weline-form-captcha-slot', $source);
+        self::assertMatchesRegularExpression(
+            '/data-weline-form-captcha-slot[\s\S]*<button type="submit" id="loginBtn"/',
+            $source
+        );
     }
 }

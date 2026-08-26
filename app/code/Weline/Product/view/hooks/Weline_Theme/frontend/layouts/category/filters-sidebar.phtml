@@ -1,0 +1,390 @@
+<?php
+/**
+ * @hook-priority 200
+ * @hook-sort-order 1
+ *
+ * Amazon-style category filters (department tree + price).
+ * Show all siblings along the way; expand only the active path; collapse other branches.
+ */
+
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Service\StorefrontCategoryListingFilter;
+use Weline\Product\Service\StorefrontCategoryTreeIndex;
+use Weline\Product\Service\StorefrontCategoryViewService;
+
+/** @var \Weline\Framework\View\Template $this */
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$category = $this->getData('storefront_category');
+$category = is_array($category) ? $category : [];
+$children = $this->getData('storefront_category_children');
+$children = is_array($children) ? $children : [];
+$siblings = $this->getData('storefront_category_siblings');
+$siblings = is_array($siblings) ? $siblings : [];
+$tree = $this->getData('storefront_category_tree');
+$tree = is_array($tree) ? $tree : [];
+$activePathIds = $this->getData('storefront_category_active_path_ids');
+$activePathIds = is_array($activePathIds) ? array_values(array_map('intval', $activePathIds)) : [];
+$breadcrumbs = $this->getData('storefront_category_breadcrumbs');
+$breadcrumbs = is_array($breadcrumbs) ? $breadcrumbs : [];
+$offers = $this->getData('storefront_offers_unfiltered');
+if (!is_array($offers) || $offers === []) {
+    $offers = $this->getData('storefront_offers');
+}
+$offers = is_array($offers) ? $offers : [];
+
+/** @var Request $request */
+$request = ObjectManager::getInstance(Request::class);
+/** @var StorefrontCategoryListingFilter $listingFilter */
+$listingFilter = ObjectManager::getInstance(StorefrontCategoryListingFilter::class);
+
+if ($category === []) {
+    $publicPath = trim(str_replace('\\', '/', (string)$request->getParam('path', '')), '/');
+    if ($publicPath === '') {
+        $themeRoute = trim(str_replace('\\', '/', (string)$request->getParam('theme_public_route', '')), '/');
+        if (str_starts_with(strtolower($themeRoute), 'category/')) {
+            $publicPath = substr($themeRoute, strlen('category/'));
+        }
+    }
+    if ($publicPath === '') {
+        try {
+            $ctxPath = (string)(\Weline\Framework\Context::current()->query('path') ?? '');
+            $publicPath = trim(str_replace('\\', '/', $ctxPath), '/');
+        } catch (\Throwable) {
+            $publicPath = '';
+        }
+    }
+    if ($publicPath === '') {
+        $uri = (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? '');
+        $path = trim(str_replace('\\', '/', (string)(parse_url($uri, PHP_URL_PATH) ?: '')), '/');
+        if (str_starts_with(strtolower($path), 'category/')) {
+            $publicPath = substr($path, strlen('category/'));
+        }
+    }
+
+    /** @var StorefrontCategoryViewService $categoryView */
+    $categoryView = ObjectManager::getInstance(StorefrontCategoryViewService::class);
+    $page = $categoryView->resolvePage($publicPath) ?? $categoryView->synthesizePageFromPublicPath($publicPath);
+    if ($page === null) {
+        return;
+    }
+    $category = $page['category'];
+    $children = $page['children'];
+    $siblings = is_array($page['siblings'] ?? null) ? $page['siblings'] : [];
+    $tree = is_array($page['tree'] ?? null) ? $page['tree'] : [];
+    $activePathIds = is_array($page['active_path_ids'] ?? null)
+        ? array_values(array_map('intval', $page['active_path_ids']))
+        : [];
+    $breadcrumbs = $page['breadcrumbs'];
+    if ($offers === []) {
+        /** @var StorefrontCatalogViewService $catalog */
+        $catalog = ObjectManager::getInstance(StorefrontCatalogViewService::class);
+        $offers = $catalog->publishedOffersForProductIds($page['product_ids'], 120);
+    }
+}
+
+if ($tree === []) {
+    try {
+        /** @var StorefrontCategoryTreeIndex $treeIndex */
+        $treeIndex = ObjectManager::getInstance(StorefrontCategoryTreeIndex::class);
+        $websiteId = max(0, (int)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteId());
+        $tree = $treeIndex->nestedRoots($websiteId);
+        $currentId = (int)($category['id'] ?? 0);
+        if ($activePathIds === [] && $currentId > 0) {
+            $activePathIds = $treeIndex->activePathIds($websiteId, $currentId);
+        }
+    } catch (\Throwable) {
+        $tree = [];
+    }
+}
+
+$categoryUrl = trim((string)($category['url'] ?? ''));
+if ($categoryUrl === '') {
+    $path = trim(str_replace('\\', '/', (string)($category['path'] ?? '')), '/');
+    $categoryUrl = $path !== '' ? '/category/' . $path : '/categories';
+}
+
+$currentId = (int)($category['id'] ?? 0);
+$currentPath = strtolower(trim(str_replace('\\', '/', (string)($category['path'] ?? '')), '/'));
+$activePathIdSet = array_fill_keys($activePathIds, true);
+$rootDepartmentsUrl = '/categories';
+
+$activePrice = $listingFilter->normalizePriceBucket((string)$request->getParam('price', ''));
+$activeSort = $listingFilter->normalizeSort((string)$request->getParam('sort', ''));
+$priceBuckets = $listingFilter->priceBucketsWithCounts($offers);
+
+$baseParams = [];
+if ($activeSort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
+    $baseParams['sort'] = $activeSort;
+}
+$clearUrl = $listingFilter->buildListingUrl($categoryUrl, []);
+$hasActiveFilters = $activePrice !== '';
+
+$renderDeptNodes = null;
+$renderDeptNodes = static function (array $nodes, int $depth) use (
+    &$renderDeptNodes,
+    $escape,
+    $currentId,
+    $currentPath,
+    $activePathIdSet,
+): void {
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $nodeId = (int)($node['id'] ?? 0);
+        $nodePath = strtolower(trim(str_replace('\\', '/', (string)($node['path'] ?? '')), '/'));
+        $nodeUrl = trim((string)($node['url'] ?? ''));
+        $nodeName = trim((string)($node['name'] ?? ''));
+        if ($nodeName === '') {
+            continue;
+        }
+        $isCurrent = ($currentId > 0 && $nodeId === $currentId)
+            || ($currentPath !== '' && $nodePath !== '' && $nodePath === $currentPath);
+        $onPath = $isCurrent || ($nodeId > 0 && isset($activePathIdSet[$nodeId]));
+        $pad = (int)(12 + ($depth * 12));
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+        ?>
+        <li class="<?= $isCurrent ? 'is-current' : ($onPath ? 'is-active-path' : '') ?>">
+            <?php if ($isCurrent): ?>
+                <span
+                    class="amz-filter__dept-current"
+                    style="padding-left: <?= $pad ?>px"
+                    data-testid="storefront-category-dept-current"
+                ><?= $escape($nodeName) ?></span>
+            <?php elseif ($nodeUrl !== ''): ?>
+                <a
+                    class="amz-filter__dept-node<?= $onPath ? ' is-active-path' : '' ?>"
+                    href="<?= $escape($nodeUrl) ?>"
+                    style="padding-left: <?= $pad ?>px"
+                    data-testid="storefront-category-dept-node"
+                ><?= $escape($nodeName) ?></a>
+            <?php else: ?>
+                <span class="amz-filter__dept-node" style="padding-left: <?= $pad ?>px"><?= $escape($nodeName) ?></span>
+            <?php endif; ?>
+        </li>
+        <?php
+        // Collapse branches that are not on the active path.
+        if ($children !== [] && $onPath) {
+            $renderDeptNodes($children, $depth + 1);
+        }
+    }
+};
+?>
+<aside class="amz-filter" data-category-filter-panel="1" data-hook-source="Weline_Product">
+    <?php if ($hasActiveFilters): ?>
+        <div class="amz-filter__clear-row">
+            <a class="amz-filter__clear" href="<?= $escape($clearUrl) ?>"><?= __('清除筛选条件') ?></a>
+        </div>
+    <?php endif; ?>
+
+    <section class="amz-filter__section" weline-code="product-category-department-filters">
+        <h3 class="amz-filter__heading"><?= __('部门') ?></h3>
+        <ul class="amz-filter__dept" data-testid="storefront-category-dept-tree">
+            <li>
+                <a class="amz-filter__dept-root" href="<?= $escape($rootDepartmentsUrl) ?>" data-testid="storefront-category-dept-root">
+                    <span aria-hidden="true">‹</span>
+                    <?= __('全部类目') ?>
+                </a>
+            </li>
+            <?php if ($tree !== []): ?>
+                <?php $renderDeptNodes($tree, 0); ?>
+            <?php else: ?>
+                <?php
+                // Fallback when catalog tree is empty: keep path + leaf siblings.
+                $ancestors = [];
+                if ($breadcrumbs !== []) {
+                    $crumbList = array_values($breadcrumbs);
+                    $lastIndex = count($crumbList) - 1;
+                    for ($i = 0; $i < $lastIndex; $i++) {
+                        $crumb = $crumbList[$i];
+                        if (!is_array($crumb)) {
+                            continue;
+                        }
+                        $label = trim((string)($crumb['label'] ?? ''));
+                        $url = trim((string)($crumb['url'] ?? ''));
+                        if ($label === '' || $url === '') {
+                            continue;
+                        }
+                        $ancestors[] = ['label' => $label, 'url' => $url, 'depth' => $i];
+                    }
+                }
+                $currentDepth = count($ancestors);
+                foreach ($ancestors as $ancestor):
+                ?>
+                    <li>
+                        <a
+                            class="amz-filter__dept-node is-active-path"
+                            href="<?= $escape($ancestor['url']) ?>"
+                            style="padding-left: <?= (int)(12 + ((int)$ancestor['depth'] * 12)) ?>px"
+                        ><?= $escape($ancestor['label']) ?></a>
+                    </li>
+                <?php endforeach; ?>
+                <?php
+                $deptSiblings = $siblings !== [] ? $siblings : [[
+                    'id' => $currentId,
+                    'path' => $currentPath,
+                    'name' => $category['name'] ?? __('分类'),
+                    'url' => $categoryUrl,
+                ]];
+                foreach ($deptSiblings as $sibling):
+                    if (!is_array($sibling)) {
+                        continue;
+                    }
+                    $siblingId = (int)($sibling['id'] ?? 0);
+                    $siblingPath = strtolower(trim(str_replace('\\', '/', (string)($sibling['path'] ?? '')), '/'));
+                    $siblingUrl = trim((string)($sibling['url'] ?? ''));
+                    $isCurrent = ($currentId > 0 && $siblingId === $currentId)
+                        || ($currentPath !== '' && $siblingPath !== '' && $siblingPath === $currentPath);
+                    if ($isCurrent):
+                ?>
+                    <li>
+                        <span
+                            class="amz-filter__dept-current"
+                            style="padding-left: <?= (int)(12 + ($currentDepth * 12)) ?>px"
+                            data-testid="storefront-category-dept-current"
+                        ><?= $escape($sibling['name'] ?? ($category['name'] ?? __('分类'))) ?></span>
+                    </li>
+                    <?php foreach ($children as $child): ?>
+                        <?php
+                        $childUrl = trim((string)($child['url'] ?? ''));
+                        if ($childUrl === '') {
+                            continue;
+                        }
+                        ?>
+                        <li>
+                            <a
+                                class="amz-filter__dept-node"
+                                href="<?= $escape($childUrl) ?>"
+                                style="padding-left: <?= (int)(24 + ($currentDepth * 12)) ?>px"
+                            ><?= $escape($child['name'] ?? '') ?></a>
+                        </li>
+                    <?php endforeach; ?>
+                <?php elseif ($siblingUrl !== ''): ?>
+                    <li>
+                        <a
+                            class="amz-filter__dept-node"
+                            href="<?= $escape($siblingUrl) ?>"
+                            style="padding-left: <?= (int)(12 + ($currentDepth * 12)) ?>px"
+                            data-testid="storefront-category-dept-node"
+                        ><?= $escape($sibling['name'] ?? '') ?></a>
+                    </li>
+                <?php
+                    endif;
+                endforeach;
+                ?>
+            <?php endif; ?>
+        </ul>
+    </section>
+
+    <section class="amz-filter__section" weline-code="product-category-price-filters">
+        <h3 class="amz-filter__heading"><?= __('价格') ?></h3>
+        <ul class="amz-filter__price">
+            <?php foreach ($priceBuckets as $bucket): ?>
+                <?php if ((int)$bucket['count'] <= 0) { continue; } ?>
+                <?php
+                $isActive = $activePrice === $bucket['code'];
+                $href = $listingFilter->buildListingUrl(
+                    $categoryUrl,
+                    array_merge($baseParams, $isActive ? [] : ['price' => $bucket['code']])
+                );
+                ?>
+                <li>
+                    <a
+                        href="<?= $escape($href) ?>"
+                        class="amz-filter__price-item<?= $isActive ? ' is-active' : '' ?>"
+                        aria-current="<?= $isActive ? 'true' : 'false' ?>"
+                    >
+                        <span class="amz-filter__radio" aria-hidden="true"></span>
+                        <span class="amz-filter__price-label"><?= $escape($bucket['label']) ?></span>
+                        <span class="amz-filter__price-count"><?= (int)$bucket['count'] ?></span>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+</aside>
+<style>
+.amz-filter {
+    color: #0f1111;
+    font-size: 13px;
+    line-height: 1.35;
+}
+.amz-filter__clear-row { margin-bottom: 12px; }
+.amz-filter__clear {
+    color: #c45500;
+    text-decoration: none;
+    font-weight: 600;
+}
+.amz-filter__clear:hover { text-decoration: underline; }
+.amz-filter__section + .amz-filter__section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+}
+.amz-filter__heading {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+}
+.amz-filter__dept,
+.amz-filter__price {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.amz-filter__dept-root,
+.amz-filter__dept-node {
+    display: block;
+    padding: 4px 0;
+    color: #2162a1;
+    text-decoration: none;
+}
+.amz-filter__dept-root { font-weight: 600; }
+.amz-filter__dept-node.is-active-path { font-weight: 600; }
+.amz-filter__dept-root:hover,
+.amz-filter__dept-node:hover { color: #c45500; text-decoration: underline; }
+.amz-filter__dept-current {
+    display: block;
+    padding: 4px 0;
+    font-weight: 700;
+    color: #0f1111;
+}
+.amz-filter__price-item {
+    display: inline-grid;
+    grid-template-columns: 1rem auto auto;
+    align-items: center;
+    justify-content: start;
+    gap: 8px;
+    max-width: 100%;
+    padding: 5px 0;
+    color: #0f1111;
+    text-decoration: none;
+}
+.amz-filter__price-item:hover { color: #c45500; }
+.amz-filter__radio {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #879596;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+.amz-filter__price-item.is-active .amz-filter__radio {
+    border-color: #e47911;
+    box-shadow: inset 0 0 0 3px #e47911;
+}
+.amz-filter__price-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.amz-filter__price-count {
+    color: #565959;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+</style>

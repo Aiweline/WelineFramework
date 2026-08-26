@@ -52,6 +52,7 @@ use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\StoreOfferRepository;
 use Weline\Product\Repository\StoreProductRepository;
 use Weline\Product\Service\CatalogOverlayResolver;
+use Weline\Product\Service\ProductCategoryAttributeService;
 use Weline\Product\Service\ProductCopyDurableCatalogAdapter;
 use Weline\Product\Service\ProductCopyService;
 use Weline\Product\Service\ProductShardProvisioner;
@@ -218,6 +219,7 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
             $draft->sourceStoreId = 3;
             $draft->targetWebsiteId = 7;
             $draft->targetStoreId = 4;
+            $draft->targetStoreIds = [4, 6];
             $draft->categoryIds = [$environment['root_category_id']];
             $draft->fieldPackages = [
                 CopyDraft::PKG_IDENTITY,
@@ -240,7 +242,7 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
             self::assertSame(2, $result->counts['categories_created']);
             self::assertSame(1, $result->counts['products_created']);
             self::assertSame(1, $result->counts['offers_created']);
-            self::assertSame(1, $result->counts['inventory_zeroed']);
+            self::assertSame(2, $result->counts['inventory_zeroed']);
 
             $targetProduct = $environment['products']->findByGlobalUuid(
                 7,
@@ -305,10 +307,42 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
                 4,
                 (int)$targetOffer->getId(),
             ));
-            self::assertSame(
-                0,
-                $inventory->getAvailability(7, 4, (int)$targetOffer->getId())->onHandMinor,
-            );
+            foreach ([4, 6] as $targetStoreId) {
+                self::assertTrue($environment['store_products']->isSelected(
+                    7,
+                    $targetStoreId,
+                    (int)$targetProduct->getId(),
+                ));
+                self::assertTrue($environment['store_offers']->isSelected(
+                    7,
+                    $targetStoreId,
+                    (int)$targetOffer->getId(),
+                ));
+                self::assertTrue($environment['attributes']->read(
+                    7,
+                    $targetStoreId,
+                    'product',
+                    (int)$targetProduct->getId(),
+                    'title',
+                )->isCleared());
+                self::assertSame(
+                    1250,
+                    $environment['prices']->read(
+                        7,
+                        $targetStoreId,
+                        (int)$targetOffer->getId(),
+                        'CNY',
+                    )->value,
+                );
+                self::assertSame(
+                    0,
+                    $inventory->getAvailability(
+                        7,
+                        $targetStoreId,
+                        (int)$targetOffer->getId(),
+                    )->onHandMinor,
+                );
+            }
             $targetCategories = $environment['categories']->listAll(7);
             self::assertCount(2, $targetCategories);
             self::assertNotContains(
@@ -329,6 +363,7 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
             $supplement->draftId = '';
             $supplement->state = CopyDraft::STATE_DRAFT;
             $supplement->targetStoreId = 5;
+            $supplement->targetStoreIds = [5];
             $supplement->fieldPackages = [CopyDraft::PKG_IDENTITY];
             $supplement->duplicatePolicy = CopyDraft::POLICY_SKIP;
             $supplement = $service->createDraft($supplement);
@@ -366,6 +401,7 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
             $draft->sourceStoreId = 3;
             $draft->targetWebsiteId = 7;
             $draft->targetStoreId = 8;
+            $draft->targetStoreIds = [8, 9];
             $draft->categoryIds = [$environment['root_category_id']];
             $draft->fieldPackages = [
                 CopyDraft::PKG_IDENTITY,
@@ -397,15 +433,62 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
         }
     }
 
+    public function testDurableCopyAuthorizationRejectsBeforeTargetWrite(): void
+    {
+        $environment = $this->environment(
+            copyAuthorization: static fn(string $_uuid, int $_source, int $_target): bool => false,
+        );
+        try {
+            $this->seedCatalog($environment);
+            $draft = new CopyDraft();
+            $draft->entry = CopyDraft::ENTRY_SITE_PULL;
+            $draft->sourceWebsiteId = 0;
+            $draft->targetWebsiteId = 7;
+            $draft->targetStoreId = 4;
+            $draft->categoryIds = [$environment['root_category_id']];
+            $created = $environment['service']->createDraft($draft);
+
+            try {
+                $environment['service']->preview($created->draftId);
+                self::fail('Expected product_copy_not_authorized');
+            } catch (\Weline\Product\Service\ProductV2ConflictException $exception) {
+                self::assertSame('product_copy_not_authorized', $exception->errorCode);
+            }
+
+            $result = $environment['service']->commit(
+                $created->draftId,
+                hash('sha256', 'durable-copy-auth-denied'),
+            );
+            self::assertFalse($result->success);
+            self::assertSame('product_copy_not_authorized', $result->errorCode);
+            self::assertCount(0, $environment['products']->listAll(7));
+            self::assertSame(
+                CopyDraft::STATE_DRAFT,
+                $environment['service']->getDraft($created->draftId)?->state,
+            );
+        } finally {
+            $this->cleanupEnvironment($environment);
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function environment(int $failInventoryWrite = 0): array
+    private function environment(
+        int $failInventoryWrite = 0,
+        ?callable $copyAuthorization = null,
+    ): array
     {
         $pgsqlDatabase = trim((string)getenv('WELINE_PRODUCT_COPY_TEST_PGSQL_DATABASE'));
         $pgsql = $pgsqlDatabase !== '';
+        $pgsqlSchema = '';
         if ($pgsql) {
             self::assertContains('pgsql', PDO::getAvailableDrivers());
+            self::assertMatchesRegularExpression(
+                '/^mig_clone_[a-z0-9_]+$/D',
+                $pgsqlDatabase,
+                'PostgreSQL copy tests only run against a registered migration clone namespace',
+            );
             $path = '';
             $connection = ConnectionFactory::getInstance(new ConfigProvider([
                 'type' => 'pgsql',
@@ -431,110 +514,139 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
             ]));
         }
         $connector = $connection->getConnector();
-        $this->createRegistryTable($connector, $pgsql);
-        $this->createOperationTable($connector, $pgsql);
-        $provisioner = $this->createProvisioner($connection);
-        $websiteZero = $provisioner->provisionWebsite(0);
-        self::assertTrue($websiteZero->isReady(), $websiteZero->errorMessage ?? $websiteZero->status);
-        $websiteSeven = $provisioner->provisionWebsite(7);
-        self::assertTrue($websiteSeven->isReady(), $websiteSeven->errorMessage ?? $websiteSeven->status);
-        $transactions = new DatabaseTransactionRunner(new TransactionCoordinator());
-        $tokens = $this->tokenFactory();
+        try {
+            if ($pgsql) {
+                $pgsqlSchema = 'product_copy_test_' . bin2hex(random_bytes(8));
+                $connector->query('CREATE SCHEMA "' . $pgsqlSchema . '"')->fetch();
+                $connector->query('SET search_path TO "' . $pgsqlSchema . '"')->fetch();
+            }
+            $this->createRegistryTable($connector, $pgsql);
+            $this->createOperationTable($connector, $pgsql);
+            $provisioner = $this->createProvisioner($connection);
+            $websiteZero = $provisioner->provisionWebsite(0);
+            self::assertTrue($websiteZero->isReady(), $websiteZero->errorMessage ?? $websiteZero->status);
+            $websiteSeven = $provisioner->provisionWebsite(7);
+            self::assertTrue($websiteSeven->isReady(), $websiteSeven->errorMessage ?? $websiteSeven->status);
+            $transactions = new DatabaseTransactionRunner(new TransactionCoordinator());
+            $tokens = $this->tokenFactory();
 
-        $categories = new CategoryRepository(
-            $provisioner,
-            $this->modelFactory($connection, Category::class),
-        );
-        $products = new ProductRepository(
-            $provisioner,
-            $this->modelFactory($connection, Product::class),
-            $tokens,
-        );
-        $offers = new OfferRepository(
-            $provisioner,
-            $this->modelFactory($connection, Offer::class),
-            $tokens,
-        );
-        $categoryLinks = new CategoryLinkRepository(
-            $provisioner,
-            $this->modelFactory($connection, CategoryLink::class),
-        );
-        $attributes = new AttributeValueRepository(
-            $provisioner,
-            new CatalogOverlayResolver(),
-            $this->modelFactory($connection, AttributeValue::class),
-        );
-        $prices = new PriceRepository(
-            $provisioner,
-            new CatalogOverlayResolver(),
-            $this->modelFactory($connection, Price::class),
-        );
-        $media = new MediaRepository(
-            $provisioner,
-            $connection,
-            $transactions,
-            $this->modelFactory($connection, Media::class),
-            $tokens,
-        );
-        $storeProducts = new StoreProductRepository(
-            $provisioner,
-            $this->modelFactory($connection, StoreProduct::class),
-        );
-        $storeOffers = new StoreOfferRepository(
-            $provisioner,
-            $this->modelFactory($connection, StoreOffer::class),
-        );
-        $sequence = 0;
-        $operations = new ProductCopyOperationRepository(
-            function () use ($connection): ProductCopyOperation {
-                $model = new ProductCopyOperation();
-                $model->setConnection($connection);
-                $model->__init();
-                return $model;
-            },
-            static function () use (&$sequence): string {
-                $sequence++;
-                return str_pad(dechex($sequence), 64, '0', STR_PAD_LEFT);
-            },
-        );
-        $inventory = new TestInventoryCatalogCopyCapability($failInventoryWrite);
-        $adapter = new ProductCopyDurableCatalogAdapter(
-            $connection,
-            $transactions,
-            $categories,
-            $products,
-            $offers,
-            $categoryLinks,
-            $attributes,
-            $prices,
-            $media,
-            $storeProducts,
-            $storeOffers,
-            $inventory,
-        );
-        $service = new ProductCopyService(
-            operations: $operations,
-            catalogAdapter: $adapter,
-        );
+            $categories = new CategoryRepository(
+                $provisioner,
+                $this->modelFactory($connection, Category::class),
+            );
+            $products = new ProductRepository(
+                $provisioner,
+                $this->modelFactory($connection, Product::class),
+                $tokens,
+            );
+            $offers = new OfferRepository(
+                $provisioner,
+                $this->modelFactory($connection, Offer::class),
+                $tokens,
+            );
+            $categoryLinks = new CategoryLinkRepository(
+                $provisioner,
+                $this->modelFactory($connection, CategoryLink::class),
+            );
+            $attributes = new AttributeValueRepository(
+                $provisioner,
+                new CatalogOverlayResolver(),
+                $this->modelFactory($connection, AttributeValue::class),
+            );
+            $prices = new PriceRepository(
+                $provisioner,
+                new CatalogOverlayResolver(),
+                $this->modelFactory($connection, Price::class),
+            );
+            $media = new MediaRepository(
+                $provisioner,
+                $connection,
+                $transactions,
+                $this->modelFactory($connection, Media::class),
+                $tokens,
+            );
+            $storeProducts = new StoreProductRepository(
+                $provisioner,
+                $this->modelFactory($connection, StoreProduct::class),
+            );
+            $storeOffers = new StoreOfferRepository(
+                $provisioner,
+                $this->modelFactory($connection, StoreOffer::class),
+            );
+            $sequence = 0;
+            $operations = new ProductCopyOperationRepository(
+                function () use ($connection): ProductCopyOperation {
+                    $model = new ProductCopyOperation();
+                    $model->setConnection($connection);
+                    $model->__init();
+                    return $model;
+                },
+                static function () use (&$sequence): string {
+                    $sequence++;
+                    return str_pad(dechex($sequence), 64, '0', STR_PAD_LEFT);
+                },
+            );
+            $inventory = new TestInventoryCatalogCopyCapability($failInventoryWrite);
+            $adapter = new ProductCopyDurableCatalogAdapter(
+                $connection,
+                $transactions,
+                $categories,
+                $products,
+                $offers,
+                $categoryLinks,
+                $attributes,
+                new ProductCategoryAttributeService($attributes),
+                $prices,
+                $media,
+                $storeProducts,
+                $storeOffers,
+                $inventory,
+                copyAuthorization: $copyAuthorization
+                    ?? static fn(string $_uuid, int $_source, int $_target): bool => true,
+            );
+            $service = new ProductCopyService(
+                operations: $operations,
+                catalogAdapter: $adapter,
+            );
 
-        return [
-            'path' => $path,
-            'pgsql' => $pgsql,
-            'connection' => $connection,
-            'connector' => $connector,
-            'categories' => $categories,
-            'products' => $products,
-            'offers' => $offers,
-            'category_links' => $categoryLinks,
-            'attributes' => $attributes,
-            'prices' => $prices,
-            'media' => $media,
-            'store_products' => $storeProducts,
-            'store_offers' => $storeOffers,
-            'operations' => $operations,
-            'inventory' => $inventory,
-            'service' => $service,
-        ];
+            return [
+                'path' => $path,
+                'pgsql' => $pgsql,
+                'pgsql_schema' => $pgsqlSchema,
+                'connection' => $connection,
+                'connector' => $connector,
+                'categories' => $categories,
+                'products' => $products,
+                'offers' => $offers,
+                'category_links' => $categoryLinks,
+                'attributes' => $attributes,
+                'prices' => $prices,
+                'media' => $media,
+                'store_products' => $storeProducts,
+                'store_offers' => $storeOffers,
+                'operations' => $operations,
+                'inventory' => $inventory,
+                'service' => $service,
+            ];
+        } catch (Throwable $exception) {
+            if ($pgsql && preg_match('/^product_copy_test_[a-f0-9]{16}$/D', $pgsqlSchema)) {
+                try {
+                    $connector->query('DROP SCHEMA IF EXISTS "' . $pgsqlSchema . '" CASCADE')->fetch();
+                } catch (Throwable) {
+                    // Preserve the setup failure; the clone remains disposable.
+                }
+            }
+            try {
+                $connector->close();
+                $connection->close();
+            } catch (Throwable) {
+                // Preserve the original setup failure.
+            }
+            if ($path !== '') {
+                @unlink($path);
+            }
+            throw $exception;
+        }
     }
 
     /** @param array<string, mixed> $environment */
@@ -542,25 +654,15 @@ final class ProductCopyDurableCatalogAdapterTest extends TestCase
     {
         $path = (string)($environment['path'] ?? '');
         $pgsql = (bool)($environment['pgsql'] ?? false);
+        $pgsqlSchema = (string)($environment['pgsql_schema'] ?? '');
         $connector = $environment['connector'] ?? null;
         $connection = $environment['connection'] ?? null;
 
         if ($pgsql && $connector instanceof ConnectorInterface) {
-            foreach ([7, 0] as $websiteId) {
-                foreach (array_reverse(ProductShardSchemaCatalog::ENTITIES) as $entity) {
-                    $connector->query(
-                        'DROP TABLE IF EXISTS '
-                        . ProductShardKey::tableName((string)$websiteId, $entity)
-                        . ' CASCADE',
-                    )->fetch();
-                }
+            if (!preg_match('/^product_copy_test_[a-f0-9]{16}$/D', $pgsqlSchema)) {
+                throw new \RuntimeException('Refusing to clean an unrecognized Product copy test schema');
             }
-            $connector->query(
-                'DROP TABLE IF EXISTS product_copy_operation CASCADE',
-            )->fetch();
-            $connector->query(
-                'DROP TABLE IF EXISTS product_shard_registry CASCADE',
-            )->fetch();
+            $connector->query('DROP SCHEMA IF EXISTS "' . $pgsqlSchema . '" CASCADE')->fetch();
         }
 
         if ($connector instanceof ConnectorInterface) {

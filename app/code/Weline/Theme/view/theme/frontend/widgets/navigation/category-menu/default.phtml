@@ -12,8 +12,8 @@
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {category-menu}
- * @widget.supports {["layout-header-category-menu","layout-header-categories","layout-header-navigation"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"category-menu","area":"header","sort_order":0}]}
+ * @widget.supports {["layout-header-category-menu","layout-header-categories"]}
+ * @widget.exclusive {true}
  *
  * @param title {default="全部分类",type="string",label="标题"}
  * @param max_depth {default=3,type="number",label="最大层级"}
@@ -39,6 +39,7 @@ if (!in_array($style, ['flyout', 'accordion'], true)) {
     $style = 'flyout';
 }
 
+// 未配置分类数据时：Amazon 风格可用默认树（与 header partial 顶部分类对齐）
 $categories = [
     [
         'id' => 1,
@@ -49,17 +50,18 @@ $categories = [
         'children' => [
             [
                 'id' => 11,
-                'name' => __('手机'),
-                'url' => '/category/phones',
+                'name' => __('手机通讯'),
+                'url' => '/category/electronics/phones',
                 'count' => 45,
                 'children' => [
-                    ['id' => 111, 'name' => 'iPhone', 'url' => '/category/iphone', 'count' => 15],
-                    ['id' => 112, 'name' => 'Android', 'url' => '/category/android', 'count' => 30],
+                    ['id' => 111, 'name' => __('智能手机'), 'url' => '/category/electronics/phones/smartphones', 'count' => 15],
+                    ['id' => 112, 'name' => __('功能手机'), 'url' => '/category/electronics/phones/feature-phones', 'count' => 10],
+                    ['id' => 113, 'name' => __('充电器'), 'url' => '/category/electronics/phones/chargers', 'count' => 20],
                 ],
             ],
-            ['id' => 12, 'name' => __('电脑'), 'url' => '/category/computers', 'count' => 38],
-            ['id' => 13, 'name' => __('平板'), 'url' => '/category/tablets', 'count' => 22],
-            ['id' => 14, 'name' => __('配件'), 'url' => '/category/accessories', 'count' => 51],
+            ['id' => 12, 'name' => __('电脑办公'), 'url' => '/category/electronics/computers', 'count' => 38],
+            ['id' => 13, 'name' => __('智能设备'), 'url' => '/category/electronics/smart-devices', 'count' => 22],
+            ['id' => 14, 'name' => __('影音娱乐'), 'url' => '/category/electronics/av', 'count' => 51],
         ],
     ],
     [
@@ -69,15 +71,29 @@ $categories = [
         'icon' => 'circle',
         'count' => 243,
         'children' => [
-            ['id' => 21, 'name' => __('男装'), 'url' => '/category/mens', 'count' => 89],
-            ['id' => 22, 'name' => __('女装'), 'url' => '/category/womens', 'count' => 112],
-            ['id' => 23, 'name' => __('童装'), 'url' => '/category/kids', 'count' => 42],
+            ['id' => 21, 'name' => __('男装'), 'url' => '/category/fashion/mens', 'count' => 89],
+            ['id' => 22, 'name' => __('女装'), 'url' => '/category/fashion/womens', 'count' => 112],
+            ['id' => 23, 'name' => __('童装'), 'url' => '/category/fashion/kids', 'count' => 42],
+            ['id' => 24, 'name' => __('鞋靴箱包'), 'url' => '/category/fashion/shoes-bags', 'count' => 60],
         ],
     ],
-    ['id' => 3, 'name' => __('家居生活'), 'url' => '/category/home', 'icon' => 'home', 'count' => 178],
+    [
+        'id' => 3,
+        'name' => __('家居生活'),
+        'url' => '/category/home',
+        'icon' => 'home',
+        'count' => 178,
+        'children' => [
+            ['id' => 31, 'name' => __('家具'), 'url' => '/category/home/furniture', 'count' => 40],
+            ['id' => 32, 'name' => __('厨具'), 'url' => '/category/home/kitchen', 'count' => 55],
+            ['id' => 33, 'name' => __('家纺'), 'url' => '/category/home/textile', 'count' => 33],
+        ],
+    ],
     ['id' => 4, 'name' => __('美妆个护'), 'url' => '/category/beauty', 'icon' => 'heart', 'count' => 134],
     ['id' => 5, 'name' => __('食品生鲜'), 'url' => '/category/food', 'icon' => 'circle', 'count' => 89],
     ['id' => 6, 'name' => __('运动户外'), 'url' => '/category/sports', 'icon' => 'circle', 'count' => 112],
+    ['id' => 7, 'name' => __('图书文具'), 'url' => '/category/books', 'icon' => 'book', 'count' => 76],
+    ['id' => 8, 'name' => __('母婴用品'), 'url' => '/category/baby', 'icon' => 'heart', 'count' => 98],
 ];
 
 $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false) use (&$renderSubmenu, $esc) {
@@ -150,15 +166,15 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
 .<?= $wc ?> .menu-trigger {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 10px);
-    padding: var(--weline-space-3, 12px) var(--weline-space-5, 20px);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-5);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     border: none;
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
     font-weight: 600;
     cursor: pointer;
-    transition: background var(--weline-theme-transition-base, 0.2s ease);
+    transition: background var(--weline-theme-transition-base);
     width: 100%;
 }
 
@@ -168,7 +184,7 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
 
 .<?= $wc ?> .menu-trigger w-icon:last-child {
     margin-left: auto;
-    transition: transform var(--weline-theme-transition-base, 0.2s ease);
+    transition: transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>.menu-open .menu-trigger w-icon:last-child {
@@ -179,14 +195,14 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
     position: absolute;
     top: 100%;
     left: 0;
-    width: 280px;
+    width: var(--layout-sidebar-width);
     background: var(--weline-theme-surface-raised);
-    border-radius: 0 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px);
+    border-radius: 0 0 var(--weline-radius-md) var(--weline-radius-md);
     box-shadow: var(--weline-theme-shadow-lg);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-10px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transform: translateY(var(--spacing-neg-2_5));
+    transition: all var(--weline-theme-transition-base);
     z-index: 1000;
 }
 
@@ -200,7 +216,7 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
 .<?= $wc ?> .category-menu-list {
     list-style: none;
     margin: 0;
-    padding: var(--weline-space-3, 10px) 0;
+    padding: var(--weline-space-3) 0;
 }
 
 .<?= $wc ?> .menu-item {
@@ -211,11 +227,11 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
 .<?= $wc ?> .submenu-link {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
-    padding: var(--weline-space-3, 12px) var(--weline-space-5, 20px);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-5);
     color: var(--weline-theme-text);
     text-decoration: none;
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .menu-link:hover,
@@ -226,11 +242,11 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
 
 .<?= $wc ?> .item-name {
     flex: 1;
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .item-count {
-    font-size: var(--weline-font-size-xs, 12px);
+    font-size: var(--weline-font-size-xs);
     color: var(--weline-theme-text-muted);
 }
 
@@ -238,17 +254,17 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
     position: absolute;
     top: 0;
     left: 100%;
-    width: 250px;
+    width: var(--token-size-250px);
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
     box-shadow: var(--weline-theme-shadow-lg);
     list-style: none;
     margin: 0;
-    padding: var(--weline-space-3, 10px) 0;
+    padding: var(--weline-space-3) 0;
     opacity: 0;
     visibility: hidden;
-    transform: translateX(-10px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transform: translateX(var(--spacing-neg-2_5));
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>.menu-style-flyout .menu-item:hover > .submenu,
@@ -270,15 +286,15 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
     opacity: 1;
     visibility: visible;
     transform: none;
-    transition: max-height var(--weline-theme-transition-base, 0.3s ease);
+    transition: max-height var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>.menu-style-accordion .menu-item.expanded > .submenu {
-    max-height: 500px;
+    max-height: var(--token-size-500px);
 }
 
 .<?= $wc ?>.menu-style-accordion .submenu-link {
-    padding-left: var(--weline-space-12, 52px);
+    padding-left: var(--weline-space-12);
 }
 
 .widget-preview-canvas .<?= $wc ?>,

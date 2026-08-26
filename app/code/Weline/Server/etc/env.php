@@ -71,5 +71,10 @@ return [
             // 额外目录必须显式 enrollment；默认只授权 app/etc/ssl。
             'certificate_roots' => [],
         ],
+        'worker' => [
+            // 首页 Process-FPC READY 门禁默认 fail-open：预热失败属正常，不得拖垮 Worker READY / WLS 启动。
+            // 设为 0/false 才启用严格 in-process 首页证明（可能因模板编译致命错误杀死进程）。
+            'ready_gate_homepage_fail_open' => true,
+        ],
     ],
 ];

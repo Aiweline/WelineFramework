@@ -541,9 +541,206 @@ function renderExamples(api, article) {
     article.append(wrapper);
 }
 
+
+const apiTocState = { scrollRoot: null, onScroll: null, host: null };
+
+function apiIsMobileViewport() {
+    return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function apiSlugifyHeading(text, index) {
+    let id = String(text || '')
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\u4e00-\u9fa5-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    if (!id || document.getElementById(id)) id = `api-heading-${index}`;
+    return id;
+}
+
+function ensureApiTocHost() {
+    if (!root) return null;
+    let host = root.querySelector('[data-api-toc-host]');
+    if (host) return host;
+    host = create('div', {className: 'w-api-toc-host', attrs: {'data-api-toc-host': 'true'}});
+    root.append(host);
+    return host;
+}
+
+function clearApiToc() {
+    if (apiTocState.onScroll) {
+        const target = apiTocState.scrollRoot || window;
+        target.removeEventListener('scroll', apiTocState.onScroll);
+    }
+    apiTocState.scrollRoot = null;
+    apiTocState.onScroll = null;
+    const host = apiTocState.host || root?.querySelector('[data-api-toc-host]');
+    if (host) host.replaceChildren();
+    apiTocState.host = host;
+    document.body.classList.remove('w-api-toc-open');
+}
+
+function scrollToApiHeading(headingId) {
+    const heading = document.getElementById(headingId);
+    if (!heading) return;
+    heading.style.scrollMarginTop = '1.25rem';
+    heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    heading.classList.add('w-api-heading-highlight');
+    window.setTimeout(() => heading.classList.remove('w-api-heading-highlight'), 1600);
+    if (apiIsMobileViewport()) {
+        const panel = root?.querySelector('[data-api-toc]');
+        const toggle = root?.querySelector('[data-api-toc-toggle]');
+        if (panel) {
+            panel.hidden = true;
+            panel.classList.remove('is-open');
+        }
+        if (toggle) toggle.hidden = false;
+        document.body.classList.remove('w-api-toc-open');
+    }
+}
+
+function updateActiveApiTocItem() {
+    const panel = root?.querySelector('[data-api-toc]');
+    if (!panel || !detailRoot) return;
+    const headings = Array.from(detailRoot.querySelectorAll('.w-api-detail h1, .w-api-detail h2, .w-api-detail h3'));
+    const items = panel.querySelectorAll('[data-api-toc-item]');
+    if (!headings.length || !items.length) return;
+    const offset = 88;
+    let current = headings[0];
+    for (let i = headings.length - 1; i >= 0; i -= 1) {
+        if (headings[i].getBoundingClientRect().top <= offset) {
+            current = headings[i];
+            break;
+        }
+    }
+    items.forEach((item) => {
+        const active = current && item.getAttribute('data-id') === current.id;
+        item.classList.toggle('is-active', Boolean(active));
+        if (active) {
+            const list = panel.querySelector('[data-api-toc-list]');
+            if (list instanceof HTMLElement) {
+                const top = item.offsetTop;
+                if (top < list.scrollTop) list.scrollTop = Math.max(0, top - 12);
+                else if (top + item.offsetHeight > list.scrollTop + list.clientHeight) {
+                    list.scrollTop = top - list.clientHeight + item.offsetHeight + 12;
+                }
+            }
+        }
+    });
+}
+
+function toggleApiToc() {
+    const panel = root?.querySelector('[data-api-toc]');
+    const toggle = root?.querySelector('[data-api-toc-toggle]');
+    if (!panel) return;
+    const show = panel.hidden;
+    panel.hidden = !show;
+    if (show) {
+        panel.classList.add('is-open');
+        if (toggle) toggle.hidden = true;
+        if (apiIsMobileViewport()) document.body.classList.add('w-api-toc-open');
+    } else {
+        panel.classList.remove('is-open');
+        if (toggle) toggle.hidden = false;
+        document.body.classList.remove('w-api-toc-open');
+    }
+}
+
+function refreshApiToc() {
+    clearApiToc();
+    const host = ensureApiTocHost();
+    apiTocState.host = host;
+    if (!host || !detailRoot) return;
+    const article = detailRoot.querySelector('.w-api-detail');
+    if (!article) return;
+    const headings = Array.from(article.querySelectorAll('h1, h2, h3'))
+        .filter((node) => String(node.textContent || '').trim());
+    if (headings.length < 2) return;
+
+    const toggle = create('button', {
+        className: 'w-api-toc-toggle w-button',
+        text: t('toc', '目录'),
+        attrs: {
+            type: 'button',
+            'data-tone': 'primary',
+            'data-size': 'sm',
+            'aria-label': t('tocShow', '显示目录'),
+            title: t('tocShow', '显示目录'),
+        },
+        dataset: {apiTocToggle: 'true'},
+    });
+    toggle.hidden = true;
+
+    const panel = create('nav', {
+        className: 'w-api-toc',
+        attrs: {'aria-label': t('toc', '目录')},
+        dataset: {apiToc: 'true'},
+    });
+    const close = create('button', {
+        className: 'w-api-toc__close',
+        text: '×',
+        attrs: {type: 'button', 'aria-label': t('tocHide', '隐藏目录')},
+        dataset: {apiTocToggle: 'true'},
+    });
+    const header = create('div', {className: 'w-api-toc__header'}, [
+        create('strong', {text: t('toc', '目录')}),
+        close,
+    ]);
+    const list = create('ul', {className: 'w-api-toc__list', dataset: {apiTocList: 'true'}});
+    headings.forEach((heading, index) => {
+        const level = Number(String(heading.tagName || 'H2').slice(1)) || 2;
+        const label = String(heading.textContent || '').trim();
+        let id = heading.id;
+        if (!id) {
+            id = apiSlugifyHeading(label, index);
+            heading.id = id;
+        }
+        const item = create('li', {
+            className: 'w-api-toc__item',
+            attrs: {'data-level': String(level), 'data-id': id},
+            dataset: {apiTocItem: 'true'},
+        });
+        const link = create('a', {text: label, attrs: {href: '#' + encodeURIComponent(id)}});
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            scrollToApiHeading(id);
+        });
+        item.append(link);
+        list.append(item);
+    });
+    panel.append(header, list);
+    host.append(toggle, panel);
+
+    if (apiIsMobileViewport()) {
+        panel.hidden = true;
+        panel.classList.remove('is-open');
+        toggle.hidden = false;
+    } else {
+        panel.hidden = false;
+        panel.classList.add('is-open');
+        toggle.hidden = true;
+    }
+
+    const scrollRoot = detailRoot instanceof HTMLElement ? detailRoot : null;
+    apiTocState.scrollRoot = scrollRoot;
+    let ticking = false;
+    apiTocState.onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(() => {
+            updateActiveApiTocItem();
+            ticking = false;
+        });
+    };
+    if (scrollRoot) scrollRoot.addEventListener('scroll', apiTocState.onScroll, { passive: true });
+    updateActiveApiTocItem();
+}
+
 function renderDetail(api) {
     if (!detailRoot) return;
     if (!api) {
+        clearApiToc();
         detailRoot.replaceChildren(emptyState(t('chooseApi'), 'code'));
         return;
     }
@@ -601,6 +798,7 @@ function renderDetail(api) {
     }
     renderExamples(api, article);
     detailRoot.replaceChildren(article);
+    refreshApiToc();
 }
 
 function responseShell() {
@@ -1428,6 +1626,10 @@ function setupResizer(handle) {
 }
 
 document.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-api-toc-toggle]')) {
+        toggleApiToc();
+        return;
+    }
     const apiTrigger = event.target.closest('[data-api-id]');
     if (apiTrigger) {
         const api = apis.find((item) => String(item.id || '') === apiTrigger.dataset.apiId);

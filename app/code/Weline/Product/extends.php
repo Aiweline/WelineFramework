@@ -6,6 +6,13 @@ return [
     'type' => 'module',
     'documentation' => 'doc/provider-guide.md',
     'extends' => [
+        'CatalogSpace' => [
+            'path' => 'extends/module/Weline_Catalog/Space',
+            'interface' => \Weline\Catalog\Api\CatalogSpaceProviderInterface::class,
+            'description' => 'Product catalog space provider for Weline_Catalog hub.',
+            'required' => false,
+            'multiple' => false,
+        ],
         'ProductProvider' => [
             'path' => 'extends/module/Weline_Product/ProductProvider',
             'type' => ['module'],

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Catalog::commerce:universal-catalog:categories" name="commerce_universal_catalog_categories"
+          title="万能分类" action="weline_catalog/backend/category/index?space=product&amp;scope_level=website"
+          parent="Weline_Backend::commerce:catalog:group" icon="tree" order="35"/>
+</menus>

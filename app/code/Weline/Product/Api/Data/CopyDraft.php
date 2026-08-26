@@ -56,15 +56,38 @@ final class CopyDraft
 
     public string $duplicatePolicy = self::POLICY_SKIP;
 
+    /** @var list<int> Target Store ids; empty falls back to targetStoreId for legacy callers. */
+    public array $targetStoreIds = [];
+
+    /** @return list<int> */
+    public function selectedTargetStoreIds(): array
+    {
+        $values = $this->targetStoreIds !== []
+            ? $this->targetStoreIds
+            : [$this->targetStoreId];
+        $selected = [];
+        foreach ($values as $value) {
+            $storeId = (int)$value;
+            if ($storeId > 0) {
+                $selected[$storeId] = $storeId;
+            }
+        }
+        return array_values($selected);
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {
+        $targetStoreIds = $this->selectedTargetStoreIds();
         return [
             'draft_id' => $this->draftId,
             'entry' => $this->entry,
             'state' => $this->state,
             'target_website_id' => $this->targetWebsiteId,
-            'target_store_id' => $this->targetStoreId,
+            'target_store_id' => $this->targetStoreId > 0
+                ? $this->targetStoreId
+                : ($targetStoreIds[0] ?? 0),
+            'target_store_ids' => $targetStoreIds,
             'source_website_id' => $this->sourceWebsiteId,
             'source_store_id' => $this->sourceStoreId,
             'category_ids' => $this->categoryIds,

@@ -22,7 +22,7 @@ class ThemeTokenCatalogService
     /**
      * @return array{panels: array<string, array>, disks: list<array>}
      */
-    public function getCatalog(string $area, ?WelineTheme $theme = null): array
+    public function getCatalog(string $area, ?WelineTheme $theme = null, bool $includeDiskTokens = true): array
     {
         $area = ThemeDiskKeys::normalizeArea($area);
         if ($theme) {
@@ -32,13 +32,13 @@ class ThemeTokenCatalogService
 
         $disks = [];
         foreach ($this->resourceCatalog->getResources('colors', $area, $theme) as $resource) {
-            $disk = $this->mapCssResource($resource, 'colors');
+            $disk = $this->mapCssResource($resource, 'colors', $includeDiskTokens);
             if ($disk !== null) {
                 $disks[] = $disk;
             }
         }
         foreach ($this->resourceCatalog->getResources('variables', $area, $theme) as $resource) {
-            $disk = $this->mapCssResource($resource, 'variables');
+            $disk = $this->mapCssResource($resource, 'variables', $includeDiskTokens);
             if ($disk !== null) {
                 $disks[] = $disk;
             }
@@ -63,6 +63,37 @@ class ThemeTokenCatalogService
             'panels' => $panels,
             'disks' => $disks,
         ];
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    public function getDiskTokensForRef(
+        string $area,
+        ?WelineTheme $theme,
+        string $panel,
+        string $ref,
+    ): array {
+        $area = ThemeDiskKeys::normalizeArea($area);
+        $panel = ThemeDiskKeys::normalizePanel($panel);
+        $ref = trim($ref);
+        if ($ref === '') {
+            throw new \InvalidArgumentException((string)__('无效的盘引用'));
+        }
+
+        foreach ($this->getCatalog($area, $theme, false)['panels'][$panel]['disks'] ?? [] as $disk) {
+            if (!\is_array($disk) || (string)($disk['ref'] ?? '') !== $ref) {
+                continue;
+            }
+            $path = (string)($disk['path'] ?? '');
+            if ($path === '') {
+                throw new \InvalidArgumentException((string)__('主题盘不存在'));
+            }
+
+            return CssVariableParser::parseFile($path);
+        }
+
+        throw new \InvalidArgumentException((string)__('主题盘不存在'));
     }
 
     /**
@@ -120,7 +151,7 @@ class ThemeTokenCatalogService
         ];
     }
 
-    private function mapCssResource(array $resource, string $diskKind): ?array
+    private function mapCssResource(array $resource, string $diskKind, bool $includeDiskTokens = true): ?array
     {
         $path = (string)($resource['file_path'] ?? $resource['path'] ?? '');
         $value = (string)($resource['value'] ?? '');
@@ -148,6 +179,8 @@ class ThemeTokenCatalogService
             $panel = ThemeDiskKeys::PANEL_COLOR;
         }
 
+        $parsedTokens = CssVariableParser::parseFile($path);
+
         return [
             'key' => $value,
             'ref' => ThemeDiskKeys::fileRef($value),
@@ -161,7 +194,8 @@ class ThemeTokenCatalogService
             'logical_key' => (string)($resource['logical_key'] ?? ''),
             'layer_type' => (string)($resource['layer_type'] ?? ''),
             'module_name' => (string)($resource['module_name'] ?? ''),
-            'tokens' => CssVariableParser::parseFile($path),
+            'token_count' => \count($parsedTokens),
+            'tokens' => $includeDiskTokens ? $parsedTokens : [],
         ];
     }
 }

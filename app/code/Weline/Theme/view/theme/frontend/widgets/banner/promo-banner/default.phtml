@@ -12,9 +12,8 @@
  * @widget.position {["content", "header"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-homepage-promo","layout-homepage-hero","layout-cms-hero","layout-default-content"]}
- * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-promo","area":"content","sort_order":0}]}
  *
- * @param background_image {default="",type="image",label="背景图片"}
+ * @param background_image {default="",type="media_image",label="背景图片",description="从媒体库选择背景图"}
  * @param background_color {default="var(--weline-theme-danger-surface)",type="color",label="背景颜色"}
  * @param text {default="限时特惠！全场满300减50",type="string",label="促销文字"}
  * @param text_color {default="var(--weline-theme-danger)",type="color",label="文字颜色"}
@@ -103,12 +102,12 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--weline-space-3, 12px) var(--weline-space-12, 48px);
-    background-color: var(--wc-promo-bg, var(--weline-theme-danger-surface));
+    padding: var(--weline-space-3) var(--weline-space-12);
+    background-color: var(--wc-promo-bg);
     background-size: cover;
     background-position: center;
-    color: var(--wc-promo-text, var(--weline-theme-danger));
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    color: var(--wc-promo-text);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .promo-content {
@@ -117,7 +116,7 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-4, 15px);
+    gap: var(--weline-space-4);
     flex-wrap: wrap;
 }
 
@@ -138,10 +137,10 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
 .<?= $wc ?> .promo-link {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-4, 15px);
+    gap: var(--weline-space-4);
     color: inherit;
     text-decoration: none;
-    transition: opacity var(--weline-theme-transition-base, 0.2s ease);
+    transition: opacity var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .promo-link:hover {
@@ -149,7 +148,7 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
 }
 
 .<?= $wc ?> .promo-text {
-    font-size: var(--weline-font-size-base, 15px);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
 }
 
@@ -161,40 +160,40 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
 .<?= $wc ?> .promo-countdown {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
-    padding: var(--weline-space-1, 4px) var(--weline-space-3, 12px);
-    background: color-mix(in srgb, var(--wc-promo-text, var(--weline-theme-danger)) 12%, transparent);
-    border-radius: var(--weline-radius-round, 999px);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-1) var(--weline-space-3);
+    background: color-mix(in srgb, var(--wc-promo-text) 12%, transparent);
+    border-radius: var(--weline-radius-round);
 }
 
 .<?= $wc ?> .countdown-label {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .countdown-timer {
     display: flex;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
 }
 
 .<?= $wc ?> .time-part {
     display: flex;
     align-items: baseline;
-    gap: 2px;
+    gap: var(--spacing-0_5);
 }
 
 .<?= $wc ?> .time-value {
     font-weight: 700;
-    font-size: var(--weline-font-size-base, 15px);
-    font-family: var(--weline-font-mono, monospace);
+    font-size: var(--weline-font-size-base);
+    font-family: var(--weline-font-mono);
 }
 
 .<?= $wc ?> .time-label {
-    font-size: var(--weline-font-size-xs, 11px);
+    font-size: var(--weline-font-size-xs);
 }
 
 .<?= $wc ?> .promo-close {
     position: absolute;
-    right: var(--weline-space-4, 15px);
+    right: var(--weline-space-4);
     top: 50%;
     transform: translateY(-50%);
     display: flex;
@@ -204,9 +203,9 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     border: 0;
     color: inherit;
     cursor: pointer;
-    padding: var(--weline-space-1, 4px);
+    padding: var(--weline-space-1);
     opacity: 0.65;
-    transition: opacity var(--weline-theme-transition-base, 0.2s ease);
+    transition: opacity var(--weline-theme-transition-base);
     z-index: 3;
 }
 
@@ -220,23 +219,23 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 48px;
-    padding: var(--weline-space-2, 8px) var(--weline-space-9, 36px) var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    min-height: var(--size-control-xl);
+    padding: var(--weline-space-2) var(--weline-space-9) var(--weline-space-2) var(--weline-space-3);
 }
 
 .widget-preview-canvas .<?= $wc ?> .promo-text,
 .<?= $wc ?>.is-preview .promo-text {
-    font-size: var(--weline-font-size-xs, 11px);
+    font-size: var(--weline-font-size-xs);
     line-height: 1.3;
 }
 
 @media (max-width: 768px) {
     .<?= $wc ?> {
-        padding: var(--weline-space-2, 10px) var(--weline-space-10, 40px) var(--weline-space-2, 10px) var(--weline-space-4, 15px);
+        padding: var(--weline-space-2) var(--weline-space-10) var(--weline-space-2) var(--weline-space-4);
     }
 
     .<?= $wc ?> .promo-text {
-        font-size: var(--weline-font-size-sm, 13px);
+        font-size: var(--weline-font-size-sm);
     }
 }
 </style>

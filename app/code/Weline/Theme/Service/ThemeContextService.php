@@ -349,6 +349,10 @@ class ThemeContextService implements ThemeContextProviderInterface
             $theme->_cache->delete('theme_parent_' . $themeId);
             $this->clearActivationRuntimeCaches($theme, $normalizedArea);
 
+            if ($normalizedArea === null || $normalizedArea === self::AREA_FRONTEND) {
+                $this->ensureStorefrontHomepageLayoutSeeded($themeId);
+            }
+
             return [
                 'success' => true,
                 'status' => 'success',
@@ -362,6 +366,24 @@ class ThemeContextService implements ThemeContextProviderInterface
                 'status' => 'error',
                 'message' => (string)__('激活失败：%{1}', [$throwable->getMessage()]),
             ];
+        }
+    }
+
+    /**
+     * Ensure storefront homepage layout exists for the activated theme.
+     * Does not overwrite an existing draft/published homepage layout.
+     */
+    private function ensureStorefrontHomepageLayoutSeeded(int $themeId): void
+    {
+        if ($themeId <= 0) {
+            return;
+        }
+
+        try {
+            /** @var DefaultLayoutSeeder $seeder */
+            $seeder = ObjectManager::getInstance(DefaultLayoutSeeder::class);
+            $seeder->seedDefaultLayout($themeId, 'homepage', false);
+        } catch (\Throwable) {
         }
     }
 

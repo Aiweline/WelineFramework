@@ -14,7 +14,7 @@
    编辑模式基础样式
    ======================================== */
 body.editor-mode {
-    /* The iframe receives the storefront contract; editor chrome only aliases it. */
+    /* The iframe receives the storefront contract; most chrome still aliases it. */
     --editor-mode-surface: var(--weline-theme-surface);
     --editor-mode-surface-subtle: var(--weline-theme-surface-subtle);
     --editor-mode-surface-muted: var(--weline-theme-surface-muted);
@@ -38,8 +38,21 @@ body.editor-mode {
         --weline-theme-success-subtle,
         color-mix(in srgb, var(--editor-mode-selection-active) 18%, transparent)
     );
-    --editor-mode-selection-gradient: linear-gradient(135deg, var(--editor-mode-selection) 0%, var(--editor-mode-selection-hover) 100%);
-    --editor-mode-selection-shadow: var(--weline-theme-focus-ring);
+    --editor-mode-selection-gradient: linear-gradient(135deg, #34d399 0%, #fbbf24 100%);
+    --editor-mode-selection-fg: #0f172a;
+    --editor-mode-selection-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+    /* 插槽工具条专用绿色（区别于部件与绿-琥珀渐变） */
+    --editor-mode-slot-toolbar-gradient: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+    --editor-mode-slot-toolbar-fg: #ffffff;
+    --editor-mode-slot-toolbar-border: color-mix(in srgb, #16a34a 55%, rgba(15, 23, 42, 0.14));
+    /* 编辑器悬浮 chrome：不跟随店铺暗色表面，保证在深色页头上也清晰可读 */
+    --editor-mode-chrome-bg: #ffffff;
+    --editor-mode-chrome-fg: #0f172a;
+    --editor-mode-chrome-muted: #475569;
+    --editor-mode-chrome-border: rgba(15, 23, 42, 0.14);
+    --editor-mode-chrome-shadow:
+        0 10px 28px rgba(15, 23, 42, 0.32),
+        0 0 0 1px rgba(255, 255, 255, 0.72);
     /* 防止选中文字干扰编辑 */
     -webkit-user-select: none;
     user-select: none;
@@ -182,26 +195,30 @@ body.editor-mode [data-wslot] {
 }
 
 /* Selection/drag affordances are semantic editor tokens, independent of page chrome. */
-/* 普通子插槽 hover - 仅显示虚线 */
-body.editor-mode [data-wslot]:hover {
+/* 选择 hover：仅 data-w-slot-hover-target 高亮，避免 CSS :hover 落在子槽而工具条挂在外层 */
+body.editor-mode [data-wslot][data-w-slot-hover-target="true"] {
     outline-color: var(--editor-mode-selection);
+    overflow: visible;
+    z-index: 100;
 }
 
-/* 整体 header/footer 区域 - 使用 box-shadow 模拟内边框 */
-body.editor-mode header[data-wslot="header"],
-body.editor-mode footer[data-wslot="footer"] {
+/* 整体 header/footer 区域容器（partial 内 w:slot 包裹层） */
+body.editor-mode .weline-header-slot[data-wslot="header"],
+body.editor-mode .weline-footer-slot[data-wslot="footer"] {
     outline: none;
     box-shadow: inset 0 0 0 2px transparent;
     transition: box-shadow 0.2s ease;
 }
 
-body.editor-mode header[data-wslot="header"]:hover,
-body.editor-mode footer[data-wslot="footer"]:hover {
+body.editor-mode .weline-header-slot[data-wslot="header"][data-w-slot-hover-target="true"],
+body.editor-mode .weline-footer-slot[data-wslot="footer"][data-w-slot-hover-target="true"],
+body.editor-mode .weline-header-slot[data-wslot="header"].slot-active,
+body.editor-mode .weline-footer-slot[data-wslot="footer"].slot-active {
     box-shadow: inset 0 0 0 3px var(--editor-mode-selection);
 }
 
-body.editor-mode header[data-wslot="header"].slot-active,
-body.editor-mode footer[data-wslot="footer"].slot-active {
+body.editor-mode .weline-header-slot[data-wslot="header"].slot-active,
+body.editor-mode .weline-footer-slot[data-wslot="footer"].slot-active {
     box-shadow: inset 0 0 0 3px var(--editor-mode-selection-active);
 }
 
@@ -223,19 +240,89 @@ body.editor-mode [data-wslot].slot-active {
 }
 
 /* ========================================
-   插槽工具栏（选择 + 信息按钮）
+   插槽工具栏（选择 + 信息按钮）— anchored-float 贴边
    ======================================== */
 .slot-toolbar {
     position: absolute;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
     display: none;
     align-items: center;
-    gap: 4px;
+    flex-wrap: nowrap;
+    gap: 2px;
     z-index: 10000;
     pointer-events: auto !important;
+    padding: 3px;
+    border: 1px solid var(--editor-mode-slot-toolbar-border, color-mix(in srgb, #16a34a 55%, rgba(15, 23, 42, 0.14)));
+    border-radius: 8px;
+    background: var(--editor-mode-chrome-bg, #ffffff);
+    box-shadow: var(--editor-mode-chrome-shadow, 0 10px 28px rgba(15, 23, 42, 0.32));
+    color: var(--editor-mode-chrome-fg, #0f172a);
 }
 
-body.editor-mode [data-wslot]:hover > .slot-toolbar {
-    display: flex;
+.slot-toolbar[data-w-floating-positioned],
+.slot-toolbar[data-w-floating-positioned="true"] {
+    position: fixed;
+    inset: auto;
+    inset-block-start: auto;
+    inset-inline-end: auto;
+    top: max(var(--w-floating-top, 0px), var(--w-floating-viewport-top, .5rem));
+    left: max(var(--w-floating-left, 0px), var(--w-floating-viewport-left, .5rem));
+    margin: 0;
+    translate: none;
+    max-inline-size: min(
+        var(--w-floating-max-inline-size, calc(100dvw - 1rem)),
+        calc(
+            var(--w-floating-viewport-right, calc(100dvw - .5rem))
+            - max(var(--w-floating-left, 0px), var(--w-floating-viewport-left, .5rem))
+        )
+    );
+    transform-origin: var(--w-floating-transform-origin, bottom);
+}
+
+.slot-toolbar[data-w-floating-positioned="pending"] {
+    visibility: hidden;
+}
+
+/* 禁止 :hover{display:none}：mousemove 清目标瞬间会被压成隐藏，悬停永不稳、移开才闪。
+   只由 data-w-slot-hover-target / .slot-hover-target 控制显示（对齐部件 .show-actions）。 */
+body.editor-mode [data-wslot].slot-hover-target > .slot-toolbar,
+body.editor-mode [data-wslot].slot-hover-target > .widget-hover-actions[data-slot-hover-actions="1"],
+body.editor-mode [data-w-slot-hover-target="true"] > .slot-toolbar,
+body.editor-mode [data-w-slot-hover-target="true"] > .widget-hover-actions[data-slot-hover-actions="1"] {
+    display: flex !important;
+    visibility: visible !important;
+}
+
+/* anchored-float 定位后 hover 结束仍须隐藏，避免 fixed 条常驻 */
+body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-hover-target) > .slot-toolbar,
+body.editor-mode [data-wslot]:not([data-w-slot-hover-target="true"]):not(.slot-hover-target) > .widget-hover-actions[data-slot-hover-actions="1"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.slot-toolbar-kind {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 6px 4px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--editor-mode-slot-toolbar-fg, #ffffff);
+    background: color-mix(in srgb, #15803d 88%, #000 12%);
+    border-radius: 5px 0 0 5px;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.slot-toolbar > .slot-select-btn,
+.slot-toolbar > .slot-init-btn,
+.slot-toolbar > .slot-info-btn,
+.slot-toolbar > .slot-penetrate-btn {
+    flex-shrink: 0;
 }
 
 .slot-select-btn {
@@ -243,21 +330,21 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
-    background: var(--editor-mode-selection-gradient);
-    color: var(--editor-mode-on-primary);
+    background: var(--editor-mode-slot-toolbar-gradient, linear-gradient(135deg, #22c55e 0%, #15803d 100%));
+    color: var(--editor-mode-slot-toolbar-fg, #ffffff);
     font-size: 11px;
     font-weight: 600;
     border: none;
-    border-radius: 4px 0 0 4px;
+    border-radius: 0;
     cursor: pointer;
     white-space: nowrap;
-    box-shadow: var(--editor-mode-selection-shadow);
+    box-shadow: none;
     pointer-events: auto !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.15s ease, filter 0.15s ease;
 }
 
 .slot-select-btn:hover {
-    box-shadow: var(--editor-mode-selection-shadow);
+    filter: brightness(1.04);
 }
 
 .slot-select-btn:active {
@@ -265,6 +352,38 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
 }
 
 .slot-select-btn svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+}
+
+/* 初始化默认部件 */
+.slot-init-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    background: var(--editor-mode-slot-toolbar-gradient, linear-gradient(135deg, #22c55e 0%, #15803d 100%));
+    color: var(--editor-mode-slot-toolbar-fg, #ffffff);
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 1px 0 0 color-mix(in srgb, var(--editor-mode-slot-toolbar-fg, #ffffff) 28%, transparent);
+    cursor: pointer;
+    pointer-events: auto !important;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: none;
+    transition: filter 0.15s ease;
+}
+
+.slot-init-btn:hover {
+    filter: brightness(1.04);
+}
+
+.slot-init-btn svg {
     width: 12px;
     height: 12px;
     fill: currentColor;
@@ -278,45 +397,163 @@ body.editor-mode [data-wslot]:hover > .slot-toolbar {
     width: 24px;
     height: 24px;
     padding: 0;
-    background: var(--editor-mode-selection-gradient);
-    color: var(--editor-mode-on-primary);
+    background: var(--editor-mode-slot-toolbar-gradient, linear-gradient(135deg, #22c55e 0%, #15803d 100%));
+    color: var(--editor-mode-slot-toolbar-fg, #ffffff);
     border: none;
-    border-radius: 0 4px 4px 0;
+    border-radius: 0 5px 5px 0;
     cursor: pointer;
     pointer-events: auto !important;
-    box-shadow: var(--editor-mode-selection-shadow);
-    transition: background 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: none;
+    transition: filter 0.15s ease;
 }
 
 .slot-info-btn:hover {
-    background: var(--editor-mode-selection-gradient);
-    box-shadow: var(--editor-mode-selection-shadow);
+    filter: brightness(1.04);
 }
 
 .slot-info-btn svg {
     width: 14px;
     height: 14px;
+    fill: currentColor;
+}
+
+.slot-penetrate-btn {
+    display: flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--editor-mode-chrome-fg, #0f172a) 8%, transparent);
+    color: var(--editor-mode-chrome-fg, #0f172a);
+    cursor: pointer;
+    pointer-events: auto !important;
+}
+
+.slot-penetrate-btn:hover {
+    background: color-mix(in srgb, var(--editor-mode-chrome-fg, #0f172a) 14%, transparent);
+}
+
+.slot-penetrate-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
 }
 
 /* ========================================
    插槽信息卡片
    ======================================== */
-.slot-info-card {
+.slot-info-card,
+.slot-select-tree {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
     min-width: 220px;
     max-width: 300px;
-    background: var(--editor-mode-surface);
+    background: var(--editor-mode-chrome-bg, #ffffff);
+    border: 1px solid var(--editor-mode-chrome-border, rgba(15, 23, 42, 0.14));
     border-radius: 8px;
-    box-shadow: var(--editor-mode-shadow);
+    box-shadow: var(--editor-mode-chrome-shadow, 0 10px 28px rgba(15, 23, 42, 0.32));
     padding: 12px;
     z-index: 10001;
     pointer-events: auto !important;
     font-size: 12px;
     line-height: 1.5;
-    color: var(--editor-mode-text-secondary);
+    color: var(--editor-mode-chrome-muted, #475569);
     animation: sic-fadein 0.15s ease;
+}
+
+.slot-select-tree {
+    min-width: 260px;
+    max-width: min(340px, calc(100vw - 24px));
+    max-height: min(360px, calc(100vh - 48px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.slot-select-tree-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--editor-mode-border);
+}
+
+.slot-select-tree-header strong {
+    font-size: 13px;
+    color: var(--editor-mode-text);
+}
+
+.slot-select-tree-header span {
+    font-size: 11px;
+    color: var(--editor-mode-text-secondary);
+}
+
+.slot-select-tree-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: auto;
+    max-height: 280px;
+    margin: 0 -4px;
+    padding: 0 4px;
+}
+
+.slot-select-tree-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0;
+    padding: 6px 8px 6px calc(8px + (var(--slot-tree-depth, 0) * 12px));
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--editor-mode-text);
+    text-align: left;
+    cursor: pointer;
+    pointer-events: auto !important;
+}
+
+.slot-select-tree-item:hover {
+    background: var(--editor-mode-selection-subtle);
+    border-color: color-mix(in srgb, var(--editor-mode-selection) 28%, transparent);
+}
+
+.slot-select-tree-item.is-active {
+    background: var(--editor-mode-selection-active-subtle);
+    border-color: color-mix(in srgb, var(--editor-mode-selection-active) 40%, transparent);
+}
+
+.slot-select-tree-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.slot-select-tree-id {
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-family: monospace;
+    color: var(--editor-mode-text-secondary);
+    background: var(--editor-mode-surface-subtle);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+.slot-select-tree-meta {
+    flex: 0 0 auto;
+    font-size: 10px;
+    color: var(--editor-mode-text-secondary);
+    white-space: nowrap;
 }
 
 @keyframes sic-fadein {
@@ -441,8 +678,8 @@ body.editor-mode [data-wslot]::before {
     position: absolute;
     top: 2px;
     left: 2px;
-    background: var(--editor-mode-selection-gradient);
-    color: var(--editor-mode-on-primary);
+    background: var(--editor-mode-slot-toolbar-gradient, linear-gradient(135deg, #22c55e 0%, #15803d 100%));
+    color: var(--editor-mode-slot-toolbar-fg, #ffffff);
     font-size: 10px;
     font-weight: 600;
     padding: 3px 10px;
@@ -456,7 +693,11 @@ body.editor-mode [data-wslot]::before {
     box-shadow: var(--editor-mode-selection-shadow);
 }
 
-body.editor-mode [data-wslot]:hover::before,
+body.editor-mode [data-w-slot-hover-target="true"]::before {
+    /* hover chrome 只走 .slot-toolbar（anchored-float），不对齐部件的槽名标签 */
+    opacity: 0 !important;
+}
+
 body.editor-mode [data-wslot].drag-over::before {
     opacity: 1;
 }
@@ -641,13 +882,43 @@ body.editor-mode [data-wslot][data-w-drop-position="invalid"] .w-theme-preview-d
         transition: none !important;
     }
 }
+
+/* ========================================
+   选中目标：默认 / 插槽 / 部件
+   ======================================== */
+/* 插槽模式：只隐藏「部件」操作条，勿误伤插槽复用的 .widget-hover-actions */
+html[data-w-editor-selection-target="slot"] .widget-wrapper > .widget-hover-actions:not([data-slot-hover-actions="1"]),
+html[data-w-editor-selection-target="slot"] .weline-template-widget > .widget-hover-actions:not([data-slot-hover-actions="1"]) {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+html[data-w-editor-selection-target="slot"] body.editor-mode [data-wslot].slot-mode-hit-area {
+    outline: 1px dashed color-mix(in srgb, var(--editor-mode-selection, #2563eb) 55%, transparent);
+    outline-offset: 2px;
+    min-block-size: 48px;
+    box-sizing: border-box;
+}
+
+html[data-w-editor-selection-target="widget"] body.editor-mode .slot-toolbar,
+html[data-w-editor-selection-target="widget"] body.editor-mode [data-wslot] > .widget-hover-actions[data-slot-hover-actions="1"],
+html[data-w-editor-selection-target="widget"] body.editor-mode .slot-select-tree,
+html[data-w-editor-selection-target="widget"] body.editor-mode .slot-info-card,
+html[data-w-editor-selection-target="widget"] body.editor-mode [data-w-slot-hover-target="true"]::before {
+    display: none !important;
+}
+
+html[data-w-editor-link-block="1"] body.editor-mode a[href]:not([data-editor-interactive]):not(.slot-toolbar a):not(.widget-hover-actions a) {
+    cursor: default;
+}
 }
 
 /* Weline UI source: ui/css/pages/theme-preview.css */
 @layer reset, tokens, base, layout, components, utilities, page;
 
 @layer page {
-    [data-w-editor-preview="true"] [data-wslot] {
+    /* 薄适配器：仅无完整 editor-mode 引擎时生效；full 引擎由 editor-mode.css + data-w-slot-hover-target 接管 */
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot] {
         position: relative;
         min-block-size: 2.5rem;
         outline: 1px dashed color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
@@ -655,9 +926,9 @@ body.editor-mode [data-wslot][data-w-drop-position="invalid"] .w-theme-preview-d
         transition: outline-color var(--weline-motion-fast), box-shadow var(--weline-motion-fast);
     }
 
-    [data-w-editor-preview="true"] [data-wslot]:hover,
-    [data-w-editor-preview="true"] [data-wslot]:focus-within,
-    [data-w-editor-preview="true"] [data-wslot][data-state="selected"] {
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:hover,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:focus-within,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot][data-state="selected"] {
         outline-color: var(--weline-theme-primary);
         box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--weline-theme-primary) 18%, transparent);
     }
@@ -685,9 +956,9 @@ body.editor-mode [data-wslot][data-w-drop-position="invalid"] .w-theme-preview-d
         transition: opacity var(--weline-motion-fast), translate var(--weline-motion-fast);
     }
 
-    [data-wslot]:hover > .w-theme-preview-slot-action,
-    [data-wslot]:focus-within > .w-theme-preview-slot-action,
-    [data-wslot][data-state="selected"] > .w-theme-preview-slot-action {
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:hover > .w-theme-preview-slot-action,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot]:focus-within > .w-theme-preview-slot-action,
+    [data-w-editor-preview="true"]:not([data-w-editor-preview-engine="full"]) [data-wslot][data-state="selected"] > .w-theme-preview-slot-action {
         opacity: 1;
         translate: 0;
     }

@@ -1,14 +1,15 @@
-﻿确认,确认
+﻿"w-check: debounce method is missing.","w-check: debounce method is missing."
+"w-check: jQuery is missing.","w-check：缺少 jQuery。"
+"w-check: w-check-type is required.","w-check：w-check-type 为必填项。"
+"w-check: w-check-id-field is required.","w-check：w-check-id-field 为必填项。"
+确认,确认
 取消,取消
 "缺少 data-provider / data-operation",缺少数据提供者/数据操作
 删除成功,删除成功
 删除失败,删除失败
 删除请求失败,删除请求失败
 确认删除吗？,确认删除吗？
-"""w-check: debounce method is missing.""",“w-check：缺少去抖方法。”
-"w-check: jQuery is missing.","w-check：缺少 jQuery。"
-"w-check: w-check-type is required.","w-check：w-check-type 为必填项。"
-"w-check: w-check-id-field is required.","w-check：w-check-id-field 为必填项。"
 "w-auto-complete: debounce method is missing.",w-auto-complete：缺少反跳方法。
 "w-auto-complete: jQuery UI autocomplete is missing.","w-auto-complete：缺少 jQuery UI 自动完成功能。"
+"""w-check: debounce method is missing.""",“w-check：缺少去抖方法。”
 "element w-url is missing.","缺少 w-url 元素。"

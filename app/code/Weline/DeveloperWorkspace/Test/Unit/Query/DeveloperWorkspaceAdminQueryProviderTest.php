@@ -37,6 +37,21 @@ final class DeveloperWorkspaceAdminQueryProviderTest extends TestCase
         self::assertStringContainsString('Unsupported panel path', $response['body']);
     }
 
+    public function testDevToolPanelFrameworkApisPreferPanelRequestBridge(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/view/hooks/dev-tool-panel.phtml');
+
+        self::assertIsString($source);
+        self::assertStringContainsString('function loadRoutes(type)', $source);
+        self::assertStringContainsString('return devToolFetchJson(url)', $source);
+        self::assertStringContainsString("return fetch(url.href, {", $source);
+        self::assertStringNotContainsString("return Weline.adminRequest('developer_workspace', url)", $source);
+        self::assertStringNotContainsString("Weline.adminRequest('developer_workspace', url.href", $source);
+        self::assertStringNotContainsString("Weline.adminRequest('developer_workspace', url, { method: 'POST'", $source);
+        self::assertStringContainsString('developerWorkspaceRequest', $source);
+        self::assertStringContainsString('panelRequest', $source);
+    }
+
     public function testPublicDocumentationOperationRejectsWritesAndNonDocumentationPaths(): void
     {
         $provider = new DeveloperWorkspaceAdminQueryProvider();

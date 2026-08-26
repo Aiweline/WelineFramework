@@ -1,8 +1,15 @@
 {
-  "mcpServers": {
-    "weline_project_intelligence": {
-      "command": "php",
-      "args": ["app/code/Weline/Ai/Mcp/bin/learning-mcp"]
+    "mcpServers": {
+        "weline_project_intelligence": {
+            "command": "/opt/homebrew/bin/php",
+            "args": [
+                "/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/bin/learning-mcp",
+                "--config",
+                "/Users/weline/.learning-mcp/config.yaml"
+            ],
+            "cwd": "/Users/weline/Project/Official/框架",
+            "startup_timeout_sec": 120,
+            "tool_timeout_sec": 180
+        }
     }
-  }
 }

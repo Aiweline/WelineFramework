@@ -69,27 +69,144 @@ const CustomerServiceWidget = (function() {
         return interpolateTranslation(text, params);
     }
 
-    function notify(type, message) {
+    function notifyAlert(type, message, options) {
+        const text = String(message || '').trim();
+        if (!text) {
+            return Promise.resolve(false);
+        }
+
+        options = options && typeof options === 'object' ? options : {};
+        const tone = type === 'success' ? 'success' : (type === 'warning' ? 'warning' : (type === 'info' ? 'info' : 'error'));
+        const title = String(options.title || (
+            tone === 'success' ? __('提示') :
+            tone === 'warning' ? __('请注意') :
+            tone === 'info' ? __('提示') :
+            __('操作失败')
+        ));
+        const confirmText = String(options.confirmText || __('知道了'));
+
+        const existing = document.getElementById('cs-notice-alert');
+        if (existing && existing.parentNode) {
+            existing.parentNode.removeChild(existing);
+        }
+
+        return new Promise(function (resolve) {
+            const overlay = document.createElement('div');
+            overlay.id = 'cs-notice-alert';
+            overlay.className = 'cs-notice-alert cs-notice-alert--' + tone;
+            overlay.setAttribute('role', 'alertdialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-labelledby', 'cs-notice-alert-title');
+            overlay.setAttribute('aria-describedby', 'cs-notice-alert-message');
+            overlay.innerHTML = [
+                '<section class="cs-notice-alert__dialog">',
+                '<header class="cs-notice-alert__header">',
+                '<h2 class="cs-notice-alert__title" id="cs-notice-alert-title"></h2>',
+                '</header>',
+                '<div class="cs-notice-alert__body" id="cs-notice-alert-message"></div>',
+                '<footer class="cs-notice-alert__actions">',
+                '<button type="button" class="w-button cs-btn cs-btn-primary cs-notice-alert__confirm" data-cs-notice-confirm></button>',
+                '</footer>',
+                '</section>'
+            ].join('');
+
+            overlay.querySelector('.cs-notice-alert__title').textContent = title;
+            overlay.querySelector('.cs-notice-alert__body').textContent = text;
+            const confirmButton = overlay.querySelector('[data-cs-notice-confirm]');
+            confirmButton.textContent = confirmText;
+
+            const close = function () {
+                overlay.classList.remove('is-open');
+                setTimeout(function () {
+                    if (overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                    resolve(true);
+                }, 160);
+            };
+
+            confirmButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                close();
+            });
+            overlay.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' || event.key === 'Escape') {
+                    event.preventDefault();
+                    close();
+                }
+            });
+
+            document.body.appendChild(overlay);
+            requestAnimationFrame(function () {
+                overlay.classList.add('is-open');
+                confirmButton.focus();
+            });
+        });
+    }
+
+    function notify(type, message, options) {
+        const text = String(message || '').trim();
+        if (!text) {
+            return;
+        }
+
+        // Bind / form feedback must require an explicit confirm click.
+        // Soft toasts are easy to miss on mobile and Motortheme may not expose UI.toast.
+        if (type === 'error' || type === 'warning' || type === 'success' || (options && options.requireConfirm)) {
+            notifyAlert(type, text, options);
+            return;
+        }
+
         const themeNotice = window.Weline && window.Weline.Theme && window.Weline.Theme.Notice
             ? window.Weline.Theme.Notice
-            : null;
+            : (window.Weline && window.Weline.Toast ? window.Weline.Toast : null);
 
-        if (themeNotice && typeof themeNotice[type] === 'function') {
-            themeNotice[type](message);
-            return;
+        try {
+            if (themeNotice && typeof themeNotice[type] === 'function') {
+                themeNotice[type](text);
+                return;
+            }
+
+            if (themeNotice && typeof themeNotice.show === 'function') {
+                themeNotice.show(text, type);
+                return;
+            }
+
+            const uiToast = window.Weline && window.Weline.UI && window.Weline.UI.toast
+                ? window.Weline.UI.toast
+                : null;
+            if (uiToast && typeof uiToast.show === 'function') {
+                uiToast.show(text, {tone: type || 'info'});
+                return;
+            }
+        } catch (error) {
+            console.error('CustomerService notify fallback', error);
         }
 
-        if (themeNotice && typeof themeNotice.toast === 'function') {
-            themeNotice.toast({ type: type, message: message });
-            return;
-        }
+        notifyAlert(type || 'info', text, options);
+    }
 
-        if (window.Weline && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
-            window.Weline.UI.toast.show(message, {tone: type || 'info'});
-            return;
+    function extractErrorMessage(error, fallback) {
+        if (!error) {
+            return fallback;
         }
-
-        console[type === 'error' ? 'error' : 'log'](message);
+        if (typeof error === 'string' && error.trim() !== '') {
+            return error.trim();
+        }
+        const direct = String(error.message || error.error || '').trim();
+        if (direct && direct.indexOf('Unknown frontend worker param') === -1) {
+            return direct;
+        }
+        const nested = error.data && (error.data.message || error.data.error);
+        if (nested) {
+            return String(nested).trim();
+        }
+        const responseMessage = error.response && error.response.message;
+        if (responseMessage) {
+            return String(responseMessage).trim();
+        }
+        return direct || fallback;
     }
 
     let config = {
@@ -99,7 +216,9 @@ const CustomerServiceWidget = (function() {
         isLoggedIn: false,
         showGuestBindPrompt: false,
         supportedLocales: [],
-        widgetTranslations: {}
+        widgetTranslations: {},
+        bindCaptchaEnabled: false,
+        bindCaptchaChallengeUrl: ''
     };
 
     function getCustomerServiceApi() {
@@ -928,6 +1047,108 @@ const CustomerServiceWidget = (function() {
         return template.innerHTML;
     }
 
+    function activateTrustedScripts(root) {
+        if (!root || !root.querySelectorAll) {
+            return;
+        }
+
+        root.querySelectorAll('script').forEach(function (oldScript) {
+            const script = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(function (attribute) {
+                script.setAttribute(attribute.name, attribute.value);
+            });
+            script.textContent = oldScript.textContent || '';
+            oldScript.replaceWith(script);
+        });
+    }
+
+    function resetBindFormRuntime(form) {
+        if (!form) {
+            return;
+        }
+
+        delete form.dataset.welineFormMounted;
+        delete form.dataset.csBindFormBound;
+        delete form.dataset.welineCaptchaVerified;
+        delete form.dataset.welineCaptchaBound;
+        delete form.dataset.welineCaptchaPending;
+    }
+
+    async function refreshBindCaptcha(modal) {
+        if (!modal || !config.bindCaptchaChallengeUrl) {
+            return false;
+        }
+
+        const slot = modal.querySelector('[data-weline-form-captcha-slot]');
+        if (!slot) {
+            return false;
+        }
+
+        try {
+            const response = await fetch(config.bindCaptchaChallengeUrl, {
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json'
+                }
+            });
+            const data = await response.json();
+            if (!data || data.success !== true || !data.html) {
+                return false;
+            }
+
+            slot.innerHTML = data.html;
+            const form = modal.querySelector('#cs-bind-form');
+            resetBindFormRuntime(form);
+            mountBindForm(modal);
+            return true;
+        } catch (error) {
+            console.error('CustomerService: bind captcha refresh failed', error);
+            return false;
+        }
+    }
+
+    function mountBindForm(modal) {
+        const form = modal ? modal.querySelector('#cs-bind-form') : null;
+        if (!form || form.dataset.csBindFormBound === '1') {
+            return form;
+        }
+
+        activateTrustedScripts(modal);
+        if (window.Weline && window.Weline.Form && typeof window.Weline.Form.mount === 'function') {
+            window.Weline.Form.mount(form);
+        } else if (window.WelineFormRuntime && typeof window.WelineFormRuntime.mount === 'function') {
+            window.WelineFormRuntime.mount(form);
+        }
+
+        bindBindFormSubmit(form);
+        form.dataset.csBindFormBound = '1';
+        return form;
+    }
+
+    function bindBindFormSubmit(form) {
+        if (!form || form.dataset.csBindSubmitBound === '1') {
+            return;
+        }
+
+        form.dataset.csBindSubmitBound = '1';
+        form.addEventListener('weline:form:verification-error', function () {
+            notify('error', __('人机验证加载失败，请稍后重试'));
+        });
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (form.dataset.welineCaptchaPending === '1') {
+                return;
+            }
+
+            sendBindEmail(form);
+        });
+    }
+
+    function setBindModalOpen(isOpen) {
+        document.body.classList.toggle('cs-bind-modal-open', isOpen);
+    }
+
     function bindBindModalActions(modal) {
         if (!modal || modal.getAttribute('data-cs-bind-events') === '1') {
             return;
@@ -935,13 +1156,27 @@ const CustomerServiceWidget = (function() {
 
         modal.setAttribute('data-cs-bind-events', '1');
         modal.querySelectorAll('[data-cs-bind-close]').forEach(button => {
-            button.addEventListener('click', closeBindModal);
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeBindModal();
+            });
         });
 
-        const sendButton = modal.querySelector('[data-cs-bind-send]');
-        if (sendButton) {
-            sendButton.addEventListener('click', sendBindEmail);
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeBindModal();
+            }
+        });
+
+        const dialog = modal.querySelector('.w-modal-dialog, .cs-modal-content');
+        if (dialog) {
+            dialog.addEventListener('click', function (event) {
+                event.stopPropagation();
+            });
         }
+
+        mountBindForm(modal);
     }
 
     /**
@@ -974,6 +1209,7 @@ const CustomerServiceWidget = (function() {
 
         document.body.appendChild(modal);
         bindBindModalActions(modal);
+        mountBindForm(modal);
         return modal;
     }
 
@@ -987,7 +1223,12 @@ const CustomerServiceWidget = (function() {
 
         const modal = ensureBindModal();
         if (modal) {
+            if (config.bindCaptchaEnabled) {
+                refreshBindCaptcha(modal);
+            }
             modal.style.display = 'flex';
+            modal.classList.add('w-open', 'show');
+            setBindModalOpen(true);
         }
     }
 
@@ -1010,19 +1251,26 @@ const CustomerServiceWidget = (function() {
         const modal = document.getElementById('cs-bind-modal');
         if (modal) {
             modal.style.display = 'none';
+            modal.classList.remove('w-open', 'show');
         }
+        setBindModalOpen(false);
     }
     
     /**
      * 閸欐垿鈧胶绮︾€规岸鍋栨禒?
      */
-    async function sendBindEmail() {
-        const modal = ensureBindModal();
-        if (!modal) {
+    async function sendBindEmail(formOrModal) {
+        const modal = formOrModal instanceof HTMLFormElement
+            ? formOrModal.closest('#cs-bind-modal')
+            : ensureBindModal();
+        const form = formOrModal instanceof HTMLFormElement
+            ? formOrModal
+            : modal ? modal.querySelector('#cs-bind-form') : null;
+        if (!modal || !form) {
             return;
         }
 
-        const emailInput = modal.querySelector('#cs-bind-email');
+        const emailInput = form.querySelector('#cs-bind-email');
         if (!emailInput) {
             return;
         }
@@ -1030,33 +1278,63 @@ const CustomerServiceWidget = (function() {
         const email = emailInput.value.trim();
         
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            notify('warning', __('请输入有效的邮箱地址'));
+            notify('warning', __('请输入有效的邮箱地址'), {title: __('请注意')});
             return;
         }
         
         if (!state.sessionToken) {
             const sessionReady = await ensureSessionReady();
             if (!sessionReady || !state.sessionToken) {
-                notify('error', __('会话未初始化，请刷新页面重试'));
+                notify('error', __('会话未初始化，请刷新页面重试'), {title: __('发送失败')});
                 return;
             }
         }
+
+        const formData = new FormData(form);
+        const payload = {
+            email: email,
+            session_token: state.sessionToken,
+            captcha_provider: String(formData.get('captcha_provider') || ''),
+            captcha_token: String(formData.get('captcha_token') || ''),
+            captcha_response: String(formData.get('captcha_response') || ''),
+            captcha_action: String(formData.get('captcha_action') || '')
+        };
+
+        const submitButton = form.querySelector('[data-cs-bind-send]');
+        if (submitButton) {
+            submitButton.disabled = true;
+        }
         
         try {
-            const data = await (await getCustomerServiceApi()).sendVerification({
-                email: email,
-                session_token: state.sessionToken
-            }, {silent: true});
+            const data = await (await getCustomerServiceApi()).sendVerification(payload, {silent: true});
             
             if (data.success) {
-                notify('success', __('验证邮件已发送，请查收您的邮箱'));
+                notify('success', __('验证邮件已发送，请查收您的邮箱'), {
+                    title: __('发送成功')
+                });
                 closeBindModal();
             } else {
-                notify('error', data.message || __('发送失败，请稍后重试'));
+                delete form.dataset.welineCaptchaVerified;
+                notify('error', data.message || __('发送失败，请稍后重试'), {
+                    title: __('发送失败')
+                });
+                if (data.captcha_error && payload.captcha_provider === 'local_image') {
+                    await refreshBindCaptcha(modal);
+                }
             }
         } catch (error) {
             console.error('Failed to send bind email:', error);
-            notify('error', __('发送失败，请稍后重试'));
+            delete form.dataset.welineCaptchaVerified;
+            notify('error', extractErrorMessage(error, __('发送失败，请稍后重试')), {
+                title: __('发送失败')
+            });
+            if (payload.captcha_provider === 'local_image') {
+                await refreshBindCaptcha(modal);
+            }
+        } finally {
+            if (submitButton) {
+                submitButton.disabled = false;
+            }
         }
     }
     

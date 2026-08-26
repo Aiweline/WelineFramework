@@ -171,6 +171,7 @@ $apiDeleteWidgetSafe = $escape($this->getUrl('theme/backend/theme-editor/remove-
 $apiWidgetsSafe = $escape($this->getUrl('theme/backend/theme-editor/widgets'));
 $apiDefaultInjectionsSafe = $escape($this->getUrl('theme/backend/theme-editor/default-injections'));
 $apiApplyDefaultInjectionSafe = $escape($this->getUrl('theme/backend/theme-editor/apply-default-injection'));
+$apiInitSlotDefaultsSafe = $escape($this->getUrl('theme/backend/theme-editor/init-slot-defaults'));
 $apiPublishSafe = $escape($this->getUrl('theme/backend/theme-editor/publish'));
 $apiPreviewSafe = $escape($this->getUrl('theme/backend/theme-editor/preview'));
 $apiRenderWidgetSafe = $escape($this->getUrl('theme/backend/theme-editor/render-widget'));
@@ -181,6 +182,7 @@ $apiLayoutOptionsSafe = $escape($this->getUrl('theme/backend/theme-editor/layout
 $apiSaveLayoutSelectionSafe = $escape($this->getUrl('theme/backend/theme-editor/save-layout-selection'));
 $apiSaveLayoutConfigSafe = $escape($this->getUrl('theme/backend/theme-editor/save-layout-config'));
 $apiAiTranslateConfigSafe = $escape($this->getUrl('theme/backend/theme-editor/ai-translate-config'));
+$apiWidgetFieldI18nSafe = $escape($this->getUrl('theme/backend/theme-editor/widget-field-i18n'));
 $apiVirtualThemeAiCatalogSafe = $escape($this->getUrl('theme/backend/virtual-theme/ai-catalog'));
 $apiVirtualThemeCreateDraftSafe = $escape($this->getUrl('theme/backend/virtual-theme/create-draft'));
 $apiVirtualThemeBlockActionSafe = $escape($this->getUrl('theme/backend/virtual-theme/block-action'));
@@ -195,6 +197,7 @@ $apiVersionsSafe = $escape($this->getUrl('theme/backend/theme-editor/versions'))
 $apiSaveVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/save-version'));
 $apiSwitchVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/switch-version'));
 $apiRestoreOriginalSafe = $escape($this->getUrl('theme/backend/theme-editor/restore-original'));
+$apiResetDraftResourcesSafe = $escape($this->getUrl('theme/backend/theme-editor/reset-draft-resources'));
 $apiPublishVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/publish-version'));
 $apiDeleteVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/delete-version'));
 $apiRenameVersionSafe = $escape($this->getUrl('theme/backend/theme-editor/rename-version'));
@@ -208,6 +211,7 @@ $apiRequestTakeoverSafe = $escape($this->getUrl('theme/backend/theme-editor/requ
 $apiCheckTakeoverRequestSafe = $escape($this->getUrl('theme/backend/theme-editor/check-takeover-request'));
 $apiForceTakeoverSafe = $escape($this->getUrl('theme/backend/theme-editor/force-takeover'));
 $apiThemeTokensSafe = $escape($this->getUrl('theme/backend/theme-editor/theme-tokens'));
+$apiThemeDiskTokensSafe = $escape($this->getUrl('theme/backend/theme-editor/theme-disk-tokens'));
 $apiDiskSaveSafe = $escape($this->getUrl('theme/backend/theme-editor/disk-save'));
 $apiDiskSaveAsSafe = $escape($this->getUrl('theme/backend/theme-editor/disk-save-as'));
 $apiDiskSelectSafe = $escape($this->getUrl('theme/backend/theme-editor/disk-select'));
@@ -235,9 +239,12 @@ $contentStructureHtml = (string)($structureWidgetsHtml['content'] ?? '');
 $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 
 ?>
-<css>Weline_Theme::ui/pages/weline-theme-editor.css?v=20260824-interaction-mode</css>
-<css>Weline_Theme::ui/pages/weline-theme-editor-widget-config.css</css>
+<css>Weline_Theme::ui/pages/weline-theme-editor.css?v=20260825-syntax-fix-v1</css>
+<css>Weline_Theme::ui/pages/weline-theme-editor-widget-config.css?v=20260825-config-panel-v3</css>
 <css>Weline_Theme::ui/pages/weline-theme-editor-widget-param.css</css>
+<!-- Critical path: discover editor JS while HTML continues parsing (avoid late bottom-of-page waterfall). -->
+<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260826-slot-toolbar-resolve-v1" fetchpriority="high">
+<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260824-nav-tree-dnd">
 
 <div class="<?= $editorShellClassSafe ?>" id="themeEditor"
      data-theme-id="<?= $themeIdSafe ?>"
@@ -272,6 +279,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-widgets="<?= $apiWidgetsSafe ?>"
      data-api-default-injections="<?= $apiDefaultInjectionsSafe ?>"
      data-api-apply-default-injection="<?= $apiApplyDefaultInjectionSafe ?>"
+     data-api-init-slot-defaults="<?= $apiInitSlotDefaultsSafe ?>"
      data-api-publish="<?= $apiPublishSafe ?>"
      data-api-preview="<?= $apiPreviewSafe ?>"
      data-api-render-widget="<?= $apiRenderWidgetSafe ?>"
@@ -282,6 +290,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-save-layout-selection="<?= $apiSaveLayoutSelectionSafe ?>"
      data-api-save-layout-config="<?= $apiSaveLayoutConfigSafe ?>"
      data-api-ai-translate-config="<?= $apiAiTranslateConfigSafe ?>"
+     data-api-widget-field-i18n="<?= $apiWidgetFieldI18nSafe ?>"
      data-api-virtual-theme-ai-catalog="<?= $apiVirtualThemeAiCatalogSafe ?>"
      data-api-virtual-theme-create-draft="<?= $apiVirtualThemeCreateDraftSafe ?>"
      data-api-virtual-theme-block-action="<?= $apiVirtualThemeBlockActionSafe ?>"
@@ -296,6 +305,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-save-version="<?= $apiSaveVersionSafe ?>"
      data-api-switch-version="<?= $apiSwitchVersionSafe ?>"
      data-api-restore-original="<?= $apiRestoreOriginalSafe ?>"
+     data-api-reset-draft-resources="<?= $apiResetDraftResourcesSafe ?>"
      data-api-publish-version="<?= $apiPublishVersionSafe ?>"
      data-api-delete-version="<?= $apiDeleteVersionSafe ?>"
      data-api-rename-version="<?= $apiRenameVersionSafe ?>"
@@ -309,13 +319,14 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-check-takeover-request="<?= $apiCheckTakeoverRequestSafe ?>"
      data-api-force-takeover="<?= $apiForceTakeoverSafe ?>"
      data-api-theme-tokens="<?= $apiThemeTokensSafe ?>"
+     data-api-theme-disk-tokens="<?= $apiThemeDiskTokensSafe ?>"
      data-api-disk-save="<?= $apiDiskSaveSafe ?>"
      data-api-disk-save-as="<?= $apiDiskSaveAsSafe ?>"
      data-api-disk-select="<?= $apiDiskSelectSafe ?>"
      data-api-disk-delete="<?= $apiDiskDeleteSafe ?>"
      data-api-scoped-workspace="<?= $apiScopedWorkspaceSafe ?>"
      data-api-publish-scoped-workspace="<?= $apiPublishScopedWorkspaceSafe ?>"
-     data-editor-overlay-css="@static(Weline_Theme::ui/pages/weline-theme-editor-overlay.css)?v=20260824-interaction-mode">
+     data-editor-overlay-css="@static(Weline_Theme::ui/pages/weline-theme-editor-overlay.css)?v=20260826-slot-toolbar-resolve-v1">
     <!-- 顶部工具栏 -->
     <div class="editor-toolbar">
         <div class="toolbar-left">
@@ -376,7 +387,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         <?php echo $layoutOptionsHtml; ?>
                     </select>
                 </label>
-                <label class="toolbar-select-field toolbar-select-field-language">
+                <label class="toolbar-select-field toolbar-select-field-language" data-w-toolbar-overflow-pin>
                     <span class="toolbar-select-label">@lang{语言}</span>
                     <select id="editorLangSwitcher" class="w-select" title="@lang{配置语言}" aria-label="@lang{配置语言}">
                         <?php echo $localeOptionsHtml; ?>
@@ -433,16 +444,16 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             </div>
 
             <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
-                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="btnPreview" title="@lang{后台预览}">
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="btnPreview" title="@lang{后台预览}" aria-label="@lang{预览}">
                     <w:icon name="eye" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{预览}</span>
                 </button>
-                <button type="button" class="w-button" data-tone="info" data-variant="outline" id="btnFrontendPreview" title="@lang{在真实前端页面中预览，可查看完整效果}">
+                <button type="button" class="w-button" data-tone="info" data-variant="outline" id="btnFrontendPreview" title="@lang{在真实前端页面中预览，可查看完整效果}" aria-label="@lang{前端预览}">
                     <w:icon name="external-link" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{前端预览}</span>
                 </button>
-                <button type="button" class="w-button" data-tone="primary" data-variant="outline" id="btnSave" title="@lang{保存当前布局为新版本}">
+                <button type="button" class="w-button" data-tone="primary" data-variant="outline" id="btnSave" title="@lang{保存当前布局为新版本}" aria-label="@lang{保存版本}">
                     <w:icon name="save" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{保存版本}</span>
                 </button>
-                <button type="button" class="w-button" data-tone="warning" id="btnThemeDiskAppearance" title="@lang{主题级颜色与变量盘}">
+                <button type="button" class="w-button" data-tone="warning" id="btnThemeDiskAppearance" title="@lang{主题级颜色与变量盘}" aria-label="@lang{全局外观}">
                     <w:icon name="palette" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{全局外观}</span>
                 </button>
             </div>
@@ -450,7 +461,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                 <w:icon name="upload" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{发布}</span>
             </button>
             <div class="w-toolbar-overflow__more" data-w-toolbar-overflow-more hidden>
-                <button type="button" class="w-button" id="themeEditorToolbarMore" data-tone="neutral" data-variant="outline" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorToolbarOverflowMenu" aria-expanded="false" title="@lang{更多}">
+                <button type="button" class="w-button" id="themeEditorToolbarMore" data-tone="neutral" data-variant="outline" data-w-toolbar-overflow-toggle aria-haspopup="true" aria-controls="themeEditorToolbarOverflowMenu" aria-expanded="false" title="@lang{更多}" aria-label="@lang{更多}">
                     <w:icon name="more-horizontal" size="sm"></w:icon>
                     <span class="w-theme-editor-toolbar-button-text">@lang{更多}</span>
                 </button>
@@ -493,6 +504,39 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                         data-interaction-mode="edit"
                         aria-pressed="true"
                         title="@lang{编辑：恢复插槽标记与配置面板}">@lang{编辑}</button>
+                <button type="button"
+                        class="preview-interaction-tab preview-interaction-reset"
+                        id="btnResetDraftResources"
+                        data-theme-editor-action="open-reset-draft-modal"
+                        title="@lang{重置当前编辑版本的选中草稿配置（不删除版本历史）}">@lang{重置}</button>
+            </div>
+            <div class="preview-selection-target" role="group" aria-label="@lang{选中目标}">
+                <button type="button"
+                        class="preview-interaction-tab active"
+                        data-theme-editor-action="set-selection-target"
+                        data-selection-target="default"
+                        aria-pressed="true"
+                        title="@lang{默认：按指针混合命中（现行为）}">@lang{默认}</button>
+                <button type="button"
+                        class="preview-interaction-tab"
+                        data-theme-editor-action="set-selection-target"
+                        data-selection-target="slot"
+                        aria-pressed="false"
+                        title="@lang{插槽：优先选中插槽，空槽可点}">@lang{插槽}</button>
+                <button type="button"
+                        class="preview-interaction-tab"
+                        data-theme-editor-action="set-selection-target"
+                        data-selection-target="widget"
+                        aria-pressed="false"
+                        title="@lang{部件：优先选中部件}">@lang{部件}</button>
+            </div>
+            <div class="preview-link-block" role="group" aria-label="@lang{链接拦截}">
+                <button type="button"
+                        class="preview-interaction-tab"
+                        id="btnLinkBlock"
+                        data-theme-editor-action="toggle-link-block"
+                        aria-pressed="false"
+                        title="@lang{禁链：阻止 a 标签跳转，便于点选链接区域}">@lang{禁链}</button>
             </div>
             <div class="preview-actions w-toolbar-overflow" data-w-component="toolbar-overflow" data-w-placement="bottom-end" data-state="closed">
                 <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
@@ -594,9 +638,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                              data-area="header"
                              data-slot="header"
                              data-slot-name="@lang{头部区域}"
-                             data-slot-multiple="true">
+                             data-slot-exclusive="true"
+                             data-slot-multiple="false">
                             <div class="area-label"><w:icon name="monitor" size="sm"></w:icon> @lang{Header}</div>
-                            <div class="area-description">@lang{拖入头部部件（Logo、导航、搜索等）}</div>
+                            <div class="area-description">@lang{拖入 Header 容器部件可整段替换默认页头}</div>
                             <div class="area-widgets header-slot-widgets" data-area="header">
                                 <?php echo $headerStructureHtml; ?>
                             </div>
@@ -630,9 +675,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                              data-area="footer"
                              data-slot="footer"
                              data-slot-name="@lang{底部区域}"
-                             data-slot-multiple="true">
+                             data-slot-exclusive="true"
+                             data-slot-multiple="false">
                             <div class="area-label"><w:icon name="layout-footer" size="sm"></w:icon> @lang{Footer}</div>
-                            <div class="area-description">@lang{拖入底部部件（链接、版权、社交等）}</div>
+                            <div class="area-description">@lang{拖入 Footer 容器部件可整段替换默认页脚}</div>
                             <div class="area-widgets footer-slot-widgets" data-area="footer">
                                 <?php echo $footerStructureHtml; ?>
                             </div>
@@ -687,6 +733,44 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
         </div>
     </div>
 </div>
+
+<!-- 重置当前编辑草稿：仅清 draft patches / draft layout，不删版本历史。 -->
+<dialog class="w-dialog w-theme-editor-dialog w-theme-editor-reset-draft-dialog" id="themeEditorResetDraftModal"
+        aria-labelledby="themeEditorResetDraftTitle" data-w-component="dialog" data-state="closed"
+        data-size="md" data-w-closable="true" data-w-backdrop="dismissible">
+    <header class="w-dialog__header">
+        <h2 class="w-dialog__title" id="themeEditorResetDraftTitle">
+            <w:icon name="refresh" size="sm"></w:icon> @lang{重置当前编辑版本}
+        </h2>
+        <button type="button" class="w-button" data-w-action="dialog.close" data-w-close
+                data-tone="quiet" data-size="sm" aria-label="@lang{关闭}"><w:icon name="close" size="sm"></w:icon></button>
+    </header>
+    <div class="w-dialog__body w-theme-editor-dialog__body">
+        <p class="w-theme-editor-reset-draft__hint">@lang{仅清理当前主题、当前作用域与当前编辑草稿上的物化配置，不会删除版本历史或已发布内容。}</p>
+        <fieldset class="w-theme-editor-reset-draft__resources">
+            <legend>@lang{资源类型}</legend>
+            <label><input type="checkbox" name="reset_resource" value="layout" checked> @lang{布局信息}</label>
+            <label><input type="checkbox" name="reset_resource" value="meta" checked> @lang{部件元数据}</label>
+            <label><input type="checkbox" name="reset_resource" value="appearance" checked> @lang{外观盘}</label>
+            <label><input type="checkbox" name="reset_resource" value="theme_binding"> @lang{主题绑定}</label>
+            <label><input type="checkbox" name="reset_resource" value="i18n"> @lang{翻译信息}</label>
+        </fieldset>
+        <fieldset class="w-theme-editor-reset-draft__layout-scope">
+            <legend>@lang{布局范围}</legend>
+            <label><input type="radio" name="reset_layout_scope" value="current_layout" checked> @lang{仅当前页面类型}</label>
+            <label><input type="radio" name="reset_layout_scope" value="all_layouts"> @lang{当前主题与作用域下全部页面类型草稿}</label>
+        </fieldset>
+        <details class="w-theme-editor-reset-draft__danger">
+            <summary>@lang{高危：重置所有}</summary>
+            <p class="w-theme-editor-reset-draft__danger-hint">@lang{将勾选当前范围内全部资源类型（含翻译与主题绑定）并清空当前编辑草稿物化。仍不会删除版本历史。}</p>
+            <button type="button" class="w-button" data-tone="danger" data-variant="solid" data-size="sm" id="btnResetDraftAllResources">@lang{重置所有}</button>
+        </details>
+    </div>
+    <footer class="w-dialog__footer">
+        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="btnResetDraftCancel" data-w-action="dialog.close">@lang{取消}</button>
+        <button type="button" class="w-button" data-tone="warning" data-variant="solid" data-size="sm" id="btnResetDraftConfirm">@lang{确认重置}</button>
+    </footer>
+</dialog>
 
 <!-- 部件配置对话框：业务表单与保存流程不变，仅切换为 Weline UI 壳。 -->
 <dialog class="w-dialog w-theme-editor-dialog" id="widgetConfigModal"
@@ -770,8 +854,8 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 
 <!-- Weline UI 2.0 theme editor route style block 1 extracted -->
 
-<!-- Widget owns the source; the Theme Editor route owns the compiled loading boundary. -->
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260823-image-thumb"></script>
+<!-- Widget param types are secondary; load async so they never block editor shell boot. -->
+<script type="module" async src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260824-nav-tree-dnd"></script>
 
 <!-- 全局外观（整盘）：左右分栏，左侧选盘 / 右侧编辑 / 底栏保存 -->
 <aside id="themeDiskAppearanceModal" class="w-drawer w-theme-disk-appearance-panel" hidden
@@ -806,10 +890,17 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             <div class="w-theme-disk-appearance-editor" data-w-appearance-editor hidden>
                 <div class="w-theme-disk-appearance-editor__head">
                     <h6 class="w-theme-disk-appearance-editor__title" data-w-appearance-editor-title>@lang{编辑我的盘}</h6>
-                    <label class="w-field w-theme-disk-field--compact">
-                        <span class="w-field__label">@lang{名称}</span>
-                        <input type="text" class="w-input" data-size="sm" id="themeDiskAppearanceName" data-w-appearance-name maxlength="80">
-                    </label>
+                    <div class="w-theme-disk-appearance-editor__filters">
+                        <label class="w-field w-theme-disk-field--compact">
+                            <span class="w-field__label">@lang{名称}</span>
+                            <input type="text" class="w-input" data-size="sm" id="themeDiskAppearanceName" data-w-appearance-name maxlength="80">
+                        </label>
+                        <label class="w-field w-theme-disk-field--compact">
+                            <span class="w-field__label">@lang{搜索}</span>
+                            <input type="search" class="w-input w-theme-disk-appearance-token-search" data-size="sm" id="themeDiskAppearanceTokenSearch" data-w-appearance-token-search placeholder="@lang{搜索变量名或色值}" autocomplete="off" spellcheck="false">
+                        </label>
+                    </div>
+                    <p class="w-theme-disk-appearance-token-count" data-w-appearance-token-count hidden></p>
                 </div>
                 <div class="w-theme-disk-appearance-tokens" data-w-appearance-tokens></div>
             </div>
@@ -825,4 +916,5 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
     </div>
 </aside>
 
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260824-interaction-mode"></script>
+<!-- Editor shell first: execute before async widget-param; modulepreload already warmed the fetch. -->
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260826-slot-toolbar-resolve-v1"></script>

@@ -1,6 +1,8 @@
 # Theme 开发总指南
 
 > 适用范围：WelineFramework 当前主题开发、布局开发、部件开发、主题覆盖、前端请求链路、Taglib 与可视化编辑器相关开发。
+>
+> MCP / AI 侧将本指南视为 **`frontend_development`（前端开发规范）** 表面；其中「前台 section 身份属性（`weline-code`）」只是规范条目之一，不是独立技能名。
 
 ## 1. 先读什么
 
@@ -17,6 +19,7 @@
    - 部件：`app/code/Weline/Theme/doc/部件开发指南.md`
    - Slot 属性：`app/code/Weline/Theme/doc/widget-slot-attributes.md`
    - **前台 section `weline-code`（强约束）**：`app/code/Weline/Theme/doc/frontend-section-weline-code.md`
+   - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：`app/code/Weline/Theme/doc/theme-css-variables-only.md`（审计清单：`theme-hardcoded-visual-audit.md`）
    - Theme.js：`app/code/Weline/Theme/doc/Theme.js使用指南.md`
    - 浏览器业务请求：`app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
    - Taglib：`app/code/Weline/Taglib/doc/README.md`
@@ -239,8 +242,9 @@ component 负责：
 
 重点规则：
 
+- **硬规则（布局内嵌归属）**：Theme `view/theme/**/{layouts,partials}/**/*.phtml` 中，仅允许归属 `Weline_Theme` 的 `<w:widget>` / `fetch(...Weline_Theme::.../widgets/...)` 做 slot 嵌套；其他模块部件必须用空 `<w:slot>` + 该模块 `default_injections`（应用注入）。本地/升级门禁：`php bin/w frontend:check-theme-layout-widgets`
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
-- `default_injections` 只表示“建议默认放在哪里”
+- `default_injections` 只表示“建议默认放在哪里”（非 Theme 开箱内容的唯一合法路径）
 - Dashboard 注入可选 `default_view`（`DashboardView.code`）：声明后才在对应视图身份就绪时自动挂载；删除后写 `user_deleted`，手动“应用”可恢复
 - Theme 监听 `Weline_Dashboard::layout_identity_ready`，只匹配 `default_view === view_code` 做一次性补齐
 - `accept="*"` 表示接受所有部件

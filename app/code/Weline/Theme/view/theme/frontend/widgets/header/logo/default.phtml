@@ -13,15 +13,17 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {logo}
  * @widget.supports {["layout-header-logo","layout-global-header-logo"]}
- * @widget.default_injections {[{"layout_type":"*","layout_option":"default","slot":"logo","area":"header","sort_order":0}]}
  * @widget.exclusive {true}
  *
  * @param logo_image {default="",type="image",label="Logo图片",description="Logo图片URL，留空使用文字"}
- * @param logo_text {default="WeShop",type="string",label="Logo文字"}
+ * @param logo_text {default="Weline",type="string",label="Logo文字"}
  * @param logo_link {default="/",type="string",label="Logo链接"}
  * @param logo_height {default=40,type="number",label="Logo高度(px)"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\LegacyMediaUrl;
+use Weline\Theme\Helper\SiteBrand;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('logo');
@@ -29,14 +31,30 @@ $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
-$logoImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('logo_image') ?? '');
+$logoImage = LegacyMediaUrl::sanitize($this->getData('logo_image') ?? '');
 $logoImageFileHtml = (string)($this->getData('logo_image_file_html') ?? '');
-$logoText = $this->getData('logo_text') ?? 'WeShop';
-$logoLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('logo_link') ?? '/');
+$logoText = $this->getData('logo_text') ?? 'Weline';
+$logoLink = LegacyMediaUrl::sanitize($this->getData('logo_link') ?? '/');
 if ($logoLink === '') {
     $logoLink = '/';
 }
 $logoHeight = max(16, min(400, (int)($this->getData('logo_height') ?? 40)));
+
+if ($logoImage === '' && $logoImageFileHtml === '') {
+    $defaultLogoUrl = '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
+    try {
+        $siteBrand = ObjectManager::getInstance(SiteBrand::class);
+        if ($siteBrand instanceof SiteBrand) {
+            $resolved = $siteBrand->resolveFrontendLogoUrl($this);
+            if (is_string($resolved) && $resolved !== '') {
+                $defaultLogoUrl = $resolved;
+            }
+        }
+    } catch (\Throwable) {
+        // keep Theme module default mark
+    }
+    $logoImage = $defaultLogoUrl;
+}
 ?>
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -47,13 +65,13 @@ $logoHeight = max(16, min(400, (int)($this->getData('logo_height') ?? 40)));
     <a href="<?= $esc($logoLink) ?>" class="logo-link" title="<?= $esc((string)$logoText) ?>">
         <?php if ($logoImageFileHtml !== ''): ?>
             <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
-        <?php elseif ($logoImage !== ''): ?>
+        <?php else: ?>
             <img src="<?= $esc($logoImage) ?>"
                  alt="<?= $esc((string)$logoText) ?>"
                  class="logo-image"
-                 style="height: var(--wc-logo-height); width: auto;">
-        <?php else: ?>
-            <span class="logo-text"><?= $esc((string)$logoText) ?></span>
+                 style="height: var(--wc-logo-height); width: auto;"
+                 onerror="this.style.display='none'; if(this.nextElementSibling){this.nextElementSibling.style.display='inline-block';}">
+            <span class="logo-text" style="display: none;"><?= $esc((string)$logoText) ?></span>
         <?php endif; ?>
     </a>
 </section>
@@ -72,31 +90,31 @@ $logoHeight = max(16, min(400, (int)($this->getData('logo_height') ?? 40)));
 }
 
 .<?= $wc ?> .logo-image {
-    max-width: 200px;
+    max-width: var(--size-panel-200);
     object-fit: contain;
 }
 
 .<?= $wc ?> .logo-image--asset img {
     display: block;
-    height: var(--wc-logo-height, 40px);
+    height: var(--wc-logo-height);
     width: auto;
-    max-width: 200px;
+    max-width: var(--size-panel-200);
     object-fit: contain;
 }
 
 .<?= $wc ?> .logo-text {
-    font-size: var(--weline-font-size-xl, 1.5rem);
+    font-size: var(--weline-font-size-xl);
     font-weight: 700;
     color: var(--weline-theme-text);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 36px;
+    min-height: var(--size-control-sm);
 }
 
 .widget-preview-canvas .<?= $wc ?> .logo-text,
 .<?= $wc ?>.is-preview .logo-text {
-    font-size: var(--weline-font-size-base, 15px);
+    font-size: var(--weline-font-size-base);
 }
 </style>

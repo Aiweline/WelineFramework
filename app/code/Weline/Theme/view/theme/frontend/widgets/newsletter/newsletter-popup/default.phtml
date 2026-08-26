@@ -135,9 +135,9 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
     left: 50%;
     transform: translate(-50%, -50%);
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-xl, 16px);
+    border-radius: var(--weline-radius-xl);
     overflow: hidden;
-    max-width: 500px;
+    max-width: var(--token-size-500px);
     width: 90%;
     box-shadow: var(--weline-theme-shadow-lg);
     animation: npSlideUp 0.4s ease;
@@ -161,10 +161,10 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
 
 .<?= $wc ?> .popup-close {
     position: absolute;
-    top: var(--weline-space-4, 15px);
-    right: var(--weline-space-4, 15px);
-    width: 36px;
-    height: 36px;
+    top: var(--weline-space-4);
+    right: var(--weline-space-4);
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
     background: color-mix(in srgb, var(--weline-theme-overlay) 10%, transparent);
     border: none;
     border-radius: 50%;
@@ -173,7 +173,7 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
     align-items: center;
     justify-content: center;
     z-index: 10;
-    transition: all var(--weline-theme-transition-base, 0.3s);
+    transition: all var(--weline-theme-transition-base);
     color: var(--weline-theme-text-muted);
 }
 
@@ -203,19 +203,19 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
 
 .<?= $wc ?> .popup-body {
     flex: 1;
-    padding: var(--weline-space-10, 40px) var(--weline-space-8, 30px);
+    padding: var(--weline-space-10) var(--weline-space-8);
     text-align: center;
 }
 
 .<?= $wc ?> .popup-icon {
-    width: 60px;
-    height: 60px;
+    width: var(--spacing-15);
+    height: var(--spacing-15);
     background: linear-gradient(135deg, var(--weline-theme-primary), var(--weline-theme-primary-hover));
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto var(--weline-space-5, 20px);
+    margin: 0 auto var(--weline-space-5);
     color: var(--weline-theme-on-primary);
 }
 
@@ -224,32 +224,32 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
 }
 
 .<?= $wc ?> .popup-title {
-    font-size: var(--weline-font-size-2xl, 24px);
+    font-size: var(--weline-font-size-2xl);
     font-weight: 700;
-    margin: 0 0 var(--weline-space-2, 10px);
+    margin: 0 0 var(--weline-space-2);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .popup-description {
-    font-size: var(--weline-font-size-base, 15px);
+    font-size: var(--weline-font-size-base);
     color: var(--weline-theme-text-muted);
-    margin: 0 0 var(--weline-space-6, 25px);
+    margin: 0 0 var(--weline-space-6);
     line-height: 1.6;
 }
 
 .<?= $wc ?> .popup-form {
     display: flex;
     flex-direction: column;
-    gap: var(--weline-space-2, 10px);
+    gap: var(--weline-space-2);
 }
 
 .<?= $wc ?> .popup-input {
-    padding: var(--weline-space-3, 14px) var(--weline-space-5, 20px);
-    border: 2px solid var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg, 10px);
-    font-size: var(--weline-font-size-base, 15px);
+    padding: var(--weline-space-3) var(--weline-space-5);
+    border: var(--border-width-medium) solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    font-size: var(--weline-font-size-base);
     outline: none;
-    transition: border-color var(--weline-theme-transition-base, 0.3s);
+    transition: border-color var(--weline-theme-transition-base);
     background: var(--weline-theme-surface);
     color: var(--weline-theme-text);
 }
@@ -259,30 +259,30 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
 }
 
 .<?= $wc ?> .popup-submit {
-    padding: var(--weline-space-3, 14px) var(--weline-space-8, 30px);
+    padding: var(--weline-space-3) var(--weline-space-8);
     background: linear-gradient(135deg, var(--weline-theme-primary), var(--weline-theme-primary-hover));
     color: var(--weline-theme-on-primary);
     border: none;
-    border-radius: var(--weline-radius-lg, 10px);
-    font-size: var(--weline-font-size-base, 16px);
+    border-radius: var(--weline-radius-lg);
+    font-size: var(--weline-font-size-base);
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--weline-theme-transition-base, 0.3s);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .popup-submit:hover {
-    transform: translateY(-2px);
+    transform: translateY(var(--spacing-neg-0_5));
     box-shadow: var(--weline-theme-shadow-md);
 }
 
 .<?= $wc ?> .popup-note {
-    font-size: var(--weline-font-size-xs, 12px);
+    font-size: var(--weline-font-size-xs);
     color: var(--weline-theme-text-muted);
-    margin: var(--weline-space-4, 15px) 0 0;
+    margin: var(--weline-space-4) 0 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
 }
 
 .<?= $wc ?>.editor-preview-mode,
@@ -310,7 +310,7 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    border-radius: var(--weline-radius-lg, 12px) !important;
+    border-radius: var(--weline-radius-lg) !important;
     box-shadow: var(--weline-theme-shadow-sm) !important;
     animation: none !important;
 }
@@ -336,43 +336,43 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
 .<?= $wc ?>.editor-preview-mode .popup-body,
 .widget-preview-canvas .<?= $wc ?> .popup-body,
 .<?= $wc ?>.is-preview .popup-body {
-    padding: var(--weline-space-6, 24px) var(--weline-space-5, 20px) !important;
+    padding: var(--weline-space-6) var(--weline-space-5) !important;
 }
 
 .<?= $wc ?>.editor-preview-mode .popup-icon,
 .widget-preview-canvas .<?= $wc ?> .popup-icon,
 .<?= $wc ?>.is-preview .popup-icon {
-    width: 48px !important;
-    height: 48px !important;
-    margin-bottom: var(--weline-space-4, 16px) !important;
+    width: var(--size-control-xl) !important;
+    height: var(--size-control-xl) !important;
+    margin-bottom: var(--weline-space-4) !important;
 }
 
 .<?= $wc ?>.editor-preview-mode .popup-title,
 .widget-preview-canvas .<?= $wc ?> .popup-title,
 .<?= $wc ?>.is-preview .popup-title {
-    font-size: var(--weline-font-size-lg, 18px) !important;
-    margin-bottom: var(--weline-space-2, 8px) !important;
+    font-size: var(--weline-font-size-lg) !important;
+    margin-bottom: var(--weline-space-2) !important;
 }
 
 .<?= $wc ?>.editor-preview-mode .popup-description,
 .widget-preview-canvas .<?= $wc ?> .popup-description,
 .<?= $wc ?>.is-preview .popup-description {
-    font-size: var(--weline-font-size-sm, 14px) !important;
-    margin-bottom: var(--weline-space-4, 16px) !important;
+    font-size: var(--weline-font-size-sm) !important;
+    margin-bottom: var(--weline-space-4) !important;
 }
 
 .<?= $wc ?>.editor-preview-mode .popup-input,
 .widget-preview-canvas .<?= $wc ?> .popup-input,
 .<?= $wc ?>.is-preview .popup-input {
-    padding: var(--weline-space-2, 10px) var(--weline-space-3, 14px) !important;
-    font-size: var(--weline-font-size-sm, 14px) !important;
+    padding: var(--weline-space-2) var(--weline-space-3) !important;
+    font-size: var(--weline-font-size-sm) !important;
 }
 
 .<?= $wc ?>.editor-preview-mode .popup-submit,
 .widget-preview-canvas .<?= $wc ?> .popup-submit,
 .<?= $wc ?>.is-preview .popup-submit {
-    padding: var(--weline-space-2, 10px) var(--weline-space-5, 20px) !important;
-    font-size: var(--weline-font-size-sm, 14px) !important;
+    padding: var(--weline-space-2) var(--weline-space-5) !important;
+    font-size: var(--weline-font-size-sm) !important;
 }
 
 @media (max-width: 576px) {
@@ -382,15 +382,15 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
 
     .<?= $wc ?> .popup-image {
         flex: none;
-        height: 150px;
+        height: var(--size-panel-150);
     }
 
     .<?= $wc ?> .popup-body {
-        padding: var(--weline-space-8, 30px) var(--weline-space-5, 20px);
+        padding: var(--weline-space-8) var(--weline-space-5);
     }
 
     .<?= $wc ?> .popup-title {
-        font-size: var(--weline-font-size-xl, 20px);
+        font-size: var(--weline-font-size-xl);
     }
 }
 </style>

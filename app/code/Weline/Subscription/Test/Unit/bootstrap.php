@@ -73,6 +73,7 @@ spl_autoload_register(static function (string $class) use ($codeRoot): void {
         'Weline\\Queue\\' => $codeRoot . '/Queue/',
         'Weline\\Order\\' => $codeRoot . '/Order/',
         'Weline\\Payment\\' => $codeRoot . '/Payment/',
+        'Weline\\Product\\' => $codeRoot . '/Product/',
         'Weline\\Websites\\' => $codeRoot . '/Websites/',
     ];
     foreach ($map as $prefix => $base) {

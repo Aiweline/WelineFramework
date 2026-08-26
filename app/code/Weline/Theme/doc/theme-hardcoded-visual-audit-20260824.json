@@ -1,0 +1,17 @@
+{
+  "schema": "theme-hardcoded-visual-audit.v1",
+  "note": "after REQ-THEME-0007 full tokenize; business CSS/PHTML excludes variables/colors/comments/data-url",
+  "totals": {
+    "hard_color": 0,
+    "hard_size": 0,
+    "var_fallback": 0
+  },
+  "hard_file_count": 0,
+  "hard_top": [],
+  "baseline_20260824_pre": {
+    "hard_color": 511,
+    "hard_size": 1415,
+    "var_fallback_color": 303,
+    "hard_file_count": 96
+  }
+}

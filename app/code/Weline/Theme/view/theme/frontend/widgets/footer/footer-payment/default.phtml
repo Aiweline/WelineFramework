@@ -68,18 +68,18 @@ $paymentIcons = [
 .<?= $wc ?> {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-4, 15px);
+    gap: var(--weline-space-4);
     flex-wrap: wrap;
 }
 
 .<?= $wc ?> .payment-label {
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     color: color-mix(in srgb, var(--weline-theme-on-primary) 70%, transparent);
 }
 
 .<?= $wc ?> .payment-icons {
     display: flex;
-    gap: var(--weline-space-3, 10px);
+    gap: var(--weline-space-3);
     flex-wrap: wrap;
 }
 
@@ -87,11 +87,11 @@ $paymentIcons = [
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 45px;
-    height: 30px;
+    width: var(--token-size-45px);
+    height: var(--spacing-7);
     background: color-mix(in srgb, var(--weline-theme-on-primary) 10%, transparent);
-    border-radius: var(--weline-radius-sm, 4px);
-    transition: background var(--weline-theme-transition-base, 0.2s ease);
+    border-radius: var(--weline-radius-sm);
+    transition: background var(--weline-theme-transition-base);
     color: color-mix(in srgb, var(--weline-theme-on-primary) 80%, transparent);
 }
 
@@ -101,6 +101,6 @@ $paymentIcons = [
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
 }
 </style>

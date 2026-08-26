@@ -26,7 +26,12 @@ final class LocalImageCaptcha implements VerificationProviderInterface
         $result = clone $this->results;
         $result->clearData()
             ->setData(CaptchaResult::schema_fields_TOKEN, $token)
-            ->setData(CaptchaResult::schema_fields_CODE, \password_hash(\strtoupper($answer), PASSWORD_DEFAULT))
+            // Short-lived 6-char challenges must not use PASSWORD_DEFAULT (often bcrypt cost 10–12,
+            // 100–400ms). Cost 5 keeps verify resistant enough for a 5-minute one-shot token.
+            ->setData(
+                CaptchaResult::schema_fields_CODE,
+                \password_hash(\strtoupper($answer), \PASSWORD_BCRYPT, ['cost' => 5])
+            )
             ->setData(CaptchaResult::schema_fields_TYPE, $this->code())
             ->setData(CaptchaResult::schema_fields_EXPIRES_AT, \date('Y-m-d H:i:s', \time() + 300))
             ->setData(CaptchaResult::schema_fields_CREATED_AT, \date('Y-m-d H:i:s'))

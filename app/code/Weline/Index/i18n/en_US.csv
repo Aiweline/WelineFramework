@@ -6,6 +6,7 @@
 "Provides storefront contact form operations.","Provides storefront contact form operations."
 "Submit storefront contact form.","Submit storefront contact form."
 "Weline 首页 sitemap URL 提供器","Weline homepage sitemap URL provider"
+首页,Home
 保存成功,"Saved successfully"
 保存失败!,"Save Failed!"
 保存成功!,"Saved successfully!"
@@ -15,7 +16,6 @@
 多语言多站点,"Multilingual multi-site"
 常驻运行时,"Persistent runtime"
 "启动框架内置 HTTPS 服务，默认首页可通过 %{url} 访问。","Start the built-in HTTPS service; the default homepage is available at %{url}."
-首页,Home
 """Unsupported contact operation: %{1}""","Unsupported contact operation: %{1}"
 """﻿""""Unsupported contact operation: %{1}""""""","Unsupported contact operation: %{1}"
 首页导航,"Home navigation"

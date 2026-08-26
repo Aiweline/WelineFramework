@@ -109,10 +109,10 @@ $triggerHtml = $trigger !== '' ? $trigger : '{{trigger}}';
 .<?= $wc ?> .dropdown-trigger {
     display: inline-flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md, 8px);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
     color: var(--weline-theme-text);
     cursor: pointer;
@@ -120,15 +120,15 @@ $triggerHtml = $trigger !== '' ? $trigger : '{{trigger}}';
 
 .<?= $wc ?> .dropdown-panel {
     position: absolute;
-    top: calc(100% + var(--weline-space-1, 4px));
+    top: calc(100% + var(--weline-space-1));
     left: 0;
     z-index: 20;
-    min-width: 12rem;
-    padding: var(--weline-space-1, 4px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md, 8px);
+    min-width: var(--token-size-12rem);
+    padding: var(--weline-space-1);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface-raised);
-    box-shadow: var(--weline-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+    box-shadow: var(--weline-shadow-md);
 }
 
 .<?= $wc ?>.is-right .dropdown-panel {
@@ -139,9 +139,9 @@ $triggerHtml = $trigger !== '' ? $trigger : '{{trigger}}';
 .<?= $wc ?> .dropdown-item {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
-    border-radius: var(--weline-radius-sm, 6px);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border-radius: var(--weline-radius-sm);
     color: var(--weline-theme-text);
     text-decoration: none;
 }
@@ -153,16 +153,16 @@ $triggerHtml = $trigger !== '' ? $trigger : '{{trigger}}';
 
 .<?= $wc ?> .dropdown-header {
     margin: 0;
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
+    padding: var(--weline-space-2) var(--weline-space-3);
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-xs, 11px);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-size: var(--weline-font-size-xs);
+    font-weight: var(--weline-font-weight-semibold);
     text-transform: uppercase;
 }
 
 .<?= $wc ?> .dropdown-divider {
-    height: 1px;
-    margin: var(--weline-space-1, 4px) 0;
+    height: var(--spacing-px);
+    margin: var(--weline-space-1) 0;
     background: var(--weline-theme-border);
 }
 </style>

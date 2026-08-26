@@ -67,6 +67,7 @@ CDN账户列表,CDN账户列表
 "删除本 Scope 覆盖，恢复父级/Global 绑定","删除本 Scope 覆盖，恢复父级/Global 绑定"
 "解析 Scope COW 媒体 URL","解析 Scope COW 媒体 URL"
 "解析 Scope 授权账户（脱敏，无 credentials）","解析 Scope 授权账户（脱敏，无 credentials）"
+"预览或同步当前企业邮箱域名的 Cloudflare DNS","预览或同步当前企业邮箱域名的 Cloudflare DNS"
 适配器代码和账户名称不能为空,适配器代码和账户名称不能为空
 "未找到 CDN 适配器：%{1}","未找到 CDN 适配器：%{1}"
 账户不存在：%{1},账户不存在：%{1}
@@ -89,6 +90,7 @@ CDN账户列表,CDN账户列表
 适配器不存在,适配器不存在
 账户凭证为空,账户凭证为空
 账户配置有效,账户配置有效
+"邮箱 DNS 参数格式无效。","邮箱 DNS 参数格式无效。"
 id属性不能为空,id属性不能为空
 搜索CDN账户...,搜索CDN账户...
 请选择CDN账户,请选择CDN账户
@@ -241,6 +243,9 @@ Slowloris,斯洛洛里斯
 开始时间,开始时间
 结束时间,结束时间
 创建时间,创建时间
+"Cloudflare OAuth 授权失败：%{1}","Cloudflare OAuth 授权失败：%{1}"
+"Cloudflare OAuth 授权已取消。","Cloudflare OAuth 授权已取消。"
+"Cloudflare OAuth 授权成功。","Cloudflare OAuth 授权成功。"
 加载账户列表失败：%{1},加载账户列表失败：%{1}
 账户名称不能为空,账户名称不能为空
 账户保存成功,账户保存成功
@@ -464,7 +469,45 @@ URL,网址
 确定执行,确定执行
 执行失败,执行失败
 确定要删除此URL吗？,确定要删除此URL吗？
+"Cloudflare 账户未配置可用令牌。","Cloudflare 账户未配置可用令牌。"
+"Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。","Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。"
+"Cloudflare OAuth 令牌交换失败。","Cloudflare OAuth 令牌交换失败。"
+"Cloudflare 网络请求初始化失败。","Cloudflare 网络请求初始化失败。"
+"Cloudflare 网络请求失败（cURL %{1}）。","Cloudflare 网络请求失败（cURL %{1}）。"
+"Cloudflare 返回了无法解析的响应（HTTP %{1}）。","Cloudflare 返回了无法解析的响应（HTTP %{1}）。"
+"Cloudflare 返回了无效响应。","Cloudflare 返回了无效响应。"
+"Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。","Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。"
+"Cloudflare API 拒绝请求（代码 %{1}）。","Cloudflare API 拒绝请求（代码 %{1}）。"
+"Cloudflare OAuth 请求失败（代码 %{1}）。","Cloudflare OAuth 请求失败（代码 %{1}）。"
+邮箱域名不能为空。,邮箱域名不能为空。
+"DNS-only 主机名不属于当前邮箱域名。","DNS-only 主机名不属于当前邮箱域名。"
+"邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。","邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。"
+"邮件 A/AAAA 必须保持 DNS-only；Cloudflare 代理不支持 SMTP、IMAP 或 POP。","邮件 A/AAAA 必须保持 DNS-only；Cloudflare 代理不支持 SMTP、IMAP 或 POP。"
+"PTR/rDNS 必须在服务器或云厂商控制台配置，Cloudflare DNS 不能代配。","PTR/rDNS 必须在服务器或云厂商控制台配置，Cloudflare DNS 不能代配。"
+"邮件主机 %{1} 当前是 CNAME；请先人工确认后改为 A/AAAA。","邮件主机 %{1} 当前是 CNAME；请先人工确认后改为 A/AAAA。"
+"邮件主机 %{1} 没有 A/AAAA；请输入公网源站 IP 后再预览。","邮件主机 %{1} 没有 A/AAAA；请输入公网源站 IP 后再预览。"
+"邮件主机 %{1} 的 CNAME 与 A/AAAA 冲突，自动配置已停止。","邮件主机 %{1} 的 CNAME 与 A/AAAA 冲突，自动配置已停止。"
+"Cloudflare Email Routing 已锁定 %{1} %{2}；请先在 Cloudflare 中解除托管，再执行一键配置。","Cloudflare Email Routing 已锁定 %{1} %{2}；请先在 Cloudflare 中解除托管，再执行一键配置。"
+"邮箱 DNS 计划包含不支持的记录类型：%{1}","邮箱 DNS 计划包含不支持的记录类型：%{1}"
+"邮箱 DNS 记录缺少 type、name 或 content。","邮箱 DNS 记录缺少 type、name 或 content。"
+"请先连接 Cloudflare 账户。","请先连接 Cloudflare 账户。"
+"Cloudflare DNS 预览完成：%{1} 项变更。","Cloudflare DNS 预览完成：%{1} 项变更。"
+"Cloudflare DNS 无需变更。","Cloudflare DNS 无需变更。"
+"Cloudflare DNS 写入后校验未收敛。","Cloudflare DNS 写入后校验未收敛。"
+"Cloudflare DNS 写入失败，已尝试回滚。","Cloudflare DNS 写入失败，已尝试回滚。"
+"Cloudflare DNS 已同步。","Cloudflare DNS 已同步。"
+"Cloudflare 账户中找不到唯一的活动域名 %{1}。","Cloudflare 账户中找不到唯一的活动域名 %{1}。"
+"Cloudflare DNS 列表响应无效。","Cloudflare DNS 列表响应无效。"
+"Cloudflare DNS 记录分页超过安全上限。","Cloudflare DNS 记录分页超过安全上限。"
+"Cloudflare OAuth 未返回授权码。","Cloudflare OAuth 未返回授权码。"
+"Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。","Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。"
+"Cloudflare OAuth 授权已过期，请重新连接。","Cloudflare OAuth 授权已过期，请重新连接。"
+"由 Cloudflare OAuth 管理；令牌会自动刷新。","由 Cloudflare OAuth 管理；令牌会自动刷新。"
+"Cloudflare OAuth 账户保存失败。","Cloudflare OAuth 账户保存失败。"
+"Cloudflare OAuth 缺少必需 scope：%{1}","Cloudflare OAuth 缺少必需 scope：%{1}"
 未配置账户凭据,未配置账户凭据
+"Cloudflare OAuth state 无效或已过期，请重新连接。","Cloudflare OAuth state 无效或已过期，请重新连接。"
+"Cloudflare OAuth 回调地址不匹配。","Cloudflare OAuth 回调地址不匹配。"
 域名不存在：%{1},域名不存在：%{1}
 域名未启用,域名未启用
 无效的清理模式：%{1},无效的清理模式：%{1}

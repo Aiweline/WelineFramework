@@ -35,6 +35,14 @@ final class CodeGenerator
     private array $tagCallbacks = [];
 
     /**
+     * OwnsChildCompilationInterface 标签名（含 w: 前缀变体）
+     * 运行期代码生成必须把原始子源码交给父回调，禁止先 compile 子标签。
+     *
+     * @var array<string, true>
+     */
+    private array $ownsChildCompilationTags = [];
+
+    /**
      * PHP 提取器（用于恢复占位符）
      */
     private ?PhpExtractor $phpExtractor = null;
@@ -50,9 +58,37 @@ final class CodeGenerator
     public function reset(): void
     {
         $this->tagCallbacks = [];
+        $this->ownsChildCompilationTags = [];
         $this->phpExtractor = null;
         $this->sourceMap = null;
         $this->currentLine = 1;
+    }
+
+    /**
+     * 标记标签自行编译子内容（OwnsChildCompilationInterface）
+     */
+    public function markOwnsChildCompilation(string $name): void
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return;
+        }
+        $this->ownsChildCompilationTags[$name] = true;
+    }
+
+    /**
+     * 标签是否自行建立上下文后再编译子标签
+     */
+    public function ownsChildCompilation(string $name): bool
+    {
+        if (isset($this->ownsChildCompilationTags[$name])) {
+            return true;
+        }
+        if (str_starts_with($name, 'w:')) {
+            return isset($this->ownsChildCompilationTags[substr($name, 2)]);
+        }
+
+        return isset($this->ownsChildCompilationTags['w:' . $name]);
     }
 
     /**
@@ -882,6 +918,16 @@ final class CodeGenerator
                 "\$this->getTaglib()->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, '', '', {$rawAttributes}, '')"
             );
         }
+
+        // OwnsChildCompilation：禁止先编译子标签（否则 t-header 等会在父上下文建立前执行）
+        if ($this->ownsChildCompilation($node->name)) {
+            $rawChildren = $this->rawOwnedChildSource($node);
+            return ExprBuilder::wrapEcho(
+                "\$this->getTaglib()->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, "
+                . var_export($rawChildren, true)
+                . ", '', {$rawAttributes}, '')"
+            );
+        }
         
         // 检查是否有预合并的静态子内容
         if (str_starts_with($node->rawContent, '__STATIC_CHILDREN__')) {
@@ -903,6 +949,25 @@ final class CodeGenerator
         );
 
         return $code;
+    }
+
+    /**
+     * 还原 OwnsChildCompilation 父标签应接收的原始子源码
+     */
+    private function rawOwnedChildSource(TagNode $node): string
+    {
+        $raw = (string)$node->rawContent;
+        if (str_starts_with($raw, '__STATIC_CHILDREN__')) {
+            $raw = substr($raw, 19);
+        } elseif (str_starts_with($raw, '__INLINE_OPTIMIZED__')) {
+            $raw = substr($raw, 19);
+        }
+
+        if ($raw !== '' && $this->phpExtractor !== null) {
+            $raw = $this->phpExtractor->restore($raw);
+        }
+
+        return $raw;
     }
 
     /**

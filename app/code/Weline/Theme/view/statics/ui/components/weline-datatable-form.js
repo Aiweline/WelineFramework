@@ -7,7 +7,7 @@ import {
     responsePayload,
     translate,
     valueFor,
-} from './datatable-common.js?v=6b1e4ac74b27';
+} from './datatable-common.js?v=7b95dac7b647';
 
 const Weline = window.Weline = window.Weline || {};
 

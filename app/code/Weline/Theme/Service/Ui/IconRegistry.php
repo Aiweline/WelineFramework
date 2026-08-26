@@ -75,7 +75,7 @@ final class IconRegistry
         'briefcase' => '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M3 12h18M10 12v2h4v-2"/>',
         'chart' => '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
         'credit-card' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
-        'cart' => '<path d="M3 4h2l2.5 11h10L20 7H6M9 20h.01M17 20h.01"/>',
+        'cart' => '<path d="M3 4h1.5l1.2 6.2a2 2 0 0 0 2 1.8h9.1a2 2 0 0 0 1.95-1.55L20 7H6.2"/><circle cx="9" cy="19" r="1.4" fill="currentColor" stroke="none"/><circle cx="17" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
         'store' => '<path d="M4 10v11h16V10M3 10l2-6h14l2 6M8 21v-6h8v6"/><path d="M3 10c0 2 3 2 4.5 0 1.5 2 4.5 2 6 0 1.5 2 4.5 2 6 0 1.5 2 4.5 2 4.5 0" transform="scale(.89) translate(1.5)"/>',
         'box' => '<path d="m4 7 8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10"/>',
         'truck' => '<path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',

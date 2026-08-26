@@ -68,8 +68,8 @@ $rawContent = (string)$this->getData('content');
     .cms-page-blank {
         min-height: 100vh;
         margin: 0;
-        background: var(--weline-layout-surface-primary, #fff);
-        color: var(--weline-layout-text-primary, #111827);
+        background: var(--weline-layout-surface-primary);
+        color: var(--weline-layout-text-primary);
     }
 
     .cms-page-blank__main {
@@ -83,22 +83,22 @@ $rawContent = (string)$this->getData('content');
     }
 
     .cms-page-blank__placeholder {
-        min-height: 360px;
+        min-height: var(--size-panel-360);
         display: grid;
         place-items: center;
-        gap: 8px;
-        padding: 48px 16px;
-        color: var(--weline-layout-text-secondary, #667085);
+        gap: var(--spacing-sm);
+        padding: var(--size-control-xl) var(--spacing-md);
+        color: var(--weline-layout-text-secondary);
         text-align: center;
     }
 
     .cms-page-blank__placeholder-title {
-        color: var(--weline-layout-text-primary, #111827);
+        color: var(--weline-layout-text-primary);
         font-weight: 700;
     }
 
     .cms-page-blank__placeholder-hint {
-        font-size: 14px;
+        font-size: var(--font-size-sm);
     }
     </style>
 

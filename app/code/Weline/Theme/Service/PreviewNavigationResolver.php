@@ -97,15 +97,20 @@ final class PreviewNavigationResolver
         $params = $this->previewContextService->toQueryParams($responseContext);
         $params['theme_id'] = $themeId;
         $params['layout_type'] = $pageType;
+        $params['page_type'] = $pageType;
         $params['layout_option'] = 'default';
         $params['editor_mode'] = '1';
         $params['status'] = $responseContext['status'];
         $params['editor_area'] = $editorArea;
         $params['preview_mode'] = $responseContext['preview_mode'];
+        $publicRoute = \trim((string)($candidate['path'] ?? ''), '/');
+        if ($publicRoute !== '' && !\str_starts_with($publicRoute, 'theme/')) {
+            $params['theme_public_route'] = \strtolower($publicRoute);
+        }
 
         return $this->buildResponse(
             'internal-editor',
-            $this->url->getBackendUrl('theme/backend/theme-editor/layout-preview', $params),
+            $this->url->getBackendUrl('theme/backend/theme-editor', $params),
             PreviewContextService::TARGET_TYPE_LAYOUT,
             $pageType,
             $pageType,

@@ -297,6 +297,32 @@ if (UI) {
             return label;
         };
 
+        const compareModeField = (values) => {
+            const field = document.createElement('label');
+            field.className = 'w-field';
+            const label = document.createElement('span');
+            label.className = 'w-field__label';
+            label.textContent = String(fieldNames.compare_mode || 'compare_mode');
+            field.append(label);
+            const control = document.createElement('select');
+            control.className = 'w-select';
+            control.name = 'compare_mode';
+            [
+                ['none', fieldNames.compare_mode_none || 'none'],
+                ['diff', fieldNames.compare_mode_diff || 'diff'],
+                ['higher_better', fieldNames.compare_mode_higher_better || 'higher_better'],
+                ['lower_better', fieldNames.compare_mode_lower_better || 'lower_better'],
+            ].forEach(([value, textValue]) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = String(textValue);
+                control.append(option);
+            });
+            control.value = String(values.compare_mode || 'none');
+            field.append(control);
+            return field;
+        };
+
         const typeOptions = async () => {
             const options = await request('types');
             return Array.isArray(options) ? options : [];
@@ -368,6 +394,7 @@ if (UI) {
                 switches.className = 'w-eav-manager__switches';
                 ['basic_is_enable', 'frontend_is_filterable', 'frontend_is_searchable', 'frontend_is_visible', 'data_is_multiple', 'data_has_option']
                     .forEach((name) => switches.append(switchField(name, values)));
+                switches.append(compareModeField(values));
                 fields.append(switches);
             }
             form.append(fields);
