@@ -29,11 +29,7 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
-        $redirectUrl = $this->getUrl('customer/account/index');
-        if ($fakeMode) {
-            $redirectUrl .= '?mail_fake=1';
-        }
-        return $this->redirect($redirectUrl . '#mail');
+        return $this->redirectToMailbox($fakeMode ? ['mail_fake' => 1] : []);
     }
 
     public function postSuspend(): string
@@ -66,7 +62,7 @@ class Mail extends FrontendController
         }
         if (!$owned) {
             $this->getMessageManager()->addError(__('只能使用本人已启用的企业邮箱账号'));
-            return $this->redirect($this->getUrl('customer/account/index') . '#mail');
+            return $this->redirectToMailbox();
         }
 
         /** @var \Weline\Mail\Service\MailSmtpAccountService $smtpService */
@@ -79,13 +75,10 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
-        $query = \http_build_query([
+        return $this->redirectToMailbox([
             'mail_account' => $accountId,
             'mail_folder' => 'sent',
         ]);
-        return $this->redirect(
-            $this->getUrl('customer/account/index') . '?' . $query . '#mail'
-        );
     }
 
     public function postReceiveTest(): string
@@ -103,7 +96,7 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
-        return $this->redirect($this->getUrl('customer/account/index') . '#mail');
+        return $this->redirectToMailbox();
     }
 
     private function changeStatus(string $status): string
@@ -122,7 +115,18 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
-        return $this->redirect($this->getUrl('customer/account/index') . '#mail');
+        return $this->redirectToMailbox();
+    }
+
+    private function redirectToMailbox(array $params = []): string
+    {
+        $url = $this->getUrl('customer/account/index');
+        if ($params !== []) {
+            $url .= '?' . \http_build_query($params);
+        }
+
+        $this->request->getResponse()->redirect($url . '#mail');
+        return '';
     }
 
     private function addResultMessage(array $result): void
