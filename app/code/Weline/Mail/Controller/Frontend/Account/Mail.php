@@ -29,7 +29,11 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
-        return $this->redirect($fakeMode ? 'customer/account/index?mail_fake=1#mail' : 'customer/account/index#mail');
+        $redirectUrl = $this->getUrl('customer/account/index');
+        if ($fakeMode) {
+            $redirectUrl .= '?mail_fake=1';
+        }
+        return $this->redirect($redirectUrl . '#mail');
     }
 
     public function postSuspend(): string
@@ -62,7 +66,7 @@ class Mail extends FrontendController
         }
         if (!$owned) {
             $this->getMessageManager()->addError(__('只能使用本人已启用的企业邮箱账号'));
-            return $this->redirect('customer/account/index#mail');
+            return $this->redirect($this->getUrl('customer/account/index') . '#mail');
         }
 
         /** @var \Weline\Mail\Service\MailSmtpAccountService $smtpService */
@@ -75,8 +79,12 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
+        $query = \http_build_query([
+            'mail_account' => $accountId,
+            'mail_folder' => 'sent',
+        ]);
         return $this->redirect(
-            'customer/account/index?mail_account=' . $accountId . '&mail_folder=sent#mail'
+            $this->getUrl('customer/account/index') . '?' . $query . '#mail'
         );
     }
 
@@ -95,7 +103,7 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
-        return $this->redirect('customer/account/index#mail');
+        return $this->redirect($this->getUrl('customer/account/index') . '#mail');
     }
 
     private function changeStatus(string $status): string
@@ -114,7 +122,7 @@ class Mail extends FrontendController
         );
 
         $this->addResultMessage($result);
-        return $this->redirect('customer/account/index#mail');
+        return $this->redirect($this->getUrl('customer/account/index') . '#mail');
     }
 
     private function addResultMessage(array $result): void
