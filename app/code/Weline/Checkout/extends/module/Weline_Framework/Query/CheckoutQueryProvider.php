@@ -8,6 +8,7 @@ use Weline\Cart\Api\CartScopeResolverInterface;
 use Weline\Cart\Api\CheckoutCartSnapshotInterface;
 use Weline\Cart\Service\CartV2ConflictException;
 use Weline\Cart\Service\CartV2Service;
+use Weline\Checkout\Service\CheckoutDeliveryContextService;
 use Weline\Checkout\Service\CheckoutGroupSubmitService;
 use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Checkout\Service\CheckoutOrderPaymentService;
@@ -46,6 +47,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
         private readonly CheckoutGroupSubmitService $checkoutGroupSubmitService,
         private readonly CheckoutOrderPaymentService $checkoutOrderPaymentService,
         private readonly CheckoutPaymentRecoveryStateService $paymentRecoveryState,
+        private readonly CheckoutDeliveryContextService $deliveryContextService,
         ?CheckoutCartSnapshotInterface $checkoutCartSnapshots = null,
         ?CustomerAccountFacadeInterface $customerAccounts = null,
         ?CartScopeResolverInterface $cartScopeResolver = null,
@@ -64,6 +66,11 @@ class CheckoutQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getData' => $this->getData($params),
+            'getDeliveryContext' => $this->deliveryContext($params),
+            'getDeliveryCaptchaChallenge' => $this->deliveryCaptchaChallenge($params),
+            'setDeliveryCountry' => $this->deliveryCountry($params),
+            'selectDeliveryAddress' => $this->deliverySelect($params),
+            'saveDeliveryAddress' => $this->deliverySave($params),
             'placeOrder', 'createOrder' => $this->placeOrder($params),
             'freezeQuote' => $this->freezeQuote($params),
             'submitV2' => $this->submitV2($params),
@@ -505,6 +512,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'requires_guest_email' => !empty($identity['requires_guest_email']),
             ],
             'default_shipping_address' => $this->customerAddressPrefill(),
+            'delivery' => $this->deliveryContextForBin($this->deliveryContextService->getContext($params)),
             'cart' => [
                 'subtotal' => (float)($cart['subtotal'] ?? 0),
                 'grand_total' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
@@ -543,32 +551,160 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function customerAddressPrefill(): array
     {
+        $fromCustomer = [];
         try {
             $identity = $this->customerAccounts()->current();
-            if ($identity === null || $identity->getId() <= 0) {
-                return [];
+            if ($identity !== null && $identity->getId() > 0) {
+                $address = ObjectManager::getInstance(DeliveryAddressService::class)
+                    ->getDefaultByCustomer($identity->getId());
+                if ($address instanceof DeliveryAddress) {
+                    $fromCustomer = [
+                        'address_id' => (int)$address->getData(DeliveryAddress::schema_fields_ID),
+                        'name' => trim((string)$address->getData(DeliveryAddress::schema_fields_CONTACT_NAME)),
+                        'phone' => trim((string)$address->getData(DeliveryAddress::schema_fields_CONTACT_PHONE)),
+                        'email' => trim($identity->getEmail()),
+                        'country_code' => strtoupper(trim((string)$address->getData(DeliveryAddress::schema_fields_COUNTRY_CODE))),
+                        'province' => trim((string)$address->getData(DeliveryAddress::schema_fields_PROVINCE)),
+                        'city' => trim((string)$address->getData(DeliveryAddress::schema_fields_CITY)),
+                        'address1' => trim((string)$address->getData(DeliveryAddress::schema_fields_STREET)),
+                        'postal_code' => trim((string)$address->getData(DeliveryAddress::schema_fields_POSTAL_CODE)),
+                    ];
+                } else {
+                    $fromCustomer = ['email' => trim($identity->getEmail())];
+                }
             }
-
-            $address = ObjectManager::getInstance(DeliveryAddressService::class)
-                ->getDefaultByCustomer($identity->getId());
-            if (!$address instanceof DeliveryAddress) {
-                return ['email' => trim($identity->getEmail())];
-            }
-
-            return [
-                'address_id' => (int)$address->getData(DeliveryAddress::schema_fields_ID),
-                'name' => trim((string)$address->getData(DeliveryAddress::schema_fields_CONTACT_NAME)),
-                'phone' => trim((string)$address->getData(DeliveryAddress::schema_fields_CONTACT_PHONE)),
-                'email' => trim($identity->getEmail()),
-                'country_code' => strtoupper(trim((string)$address->getData(DeliveryAddress::schema_fields_COUNTRY_CODE))),
-                'province' => trim((string)$address->getData(DeliveryAddress::schema_fields_PROVINCE)),
-                'city' => trim((string)$address->getData(DeliveryAddress::schema_fields_CITY)),
-                'address1' => trim((string)$address->getData(DeliveryAddress::schema_fields_STREET)),
-                'postal_code' => trim((string)$address->getData(DeliveryAddress::schema_fields_POSTAL_CODE)),
-            ];
         } catch (\Throwable) {
-            return [];
+            $fromCustomer = [];
         }
+
+        try {
+            $fromHeader = $this->deliveryContextService->checkoutFormAddress();
+        } catch (\Throwable) {
+            $fromHeader = [];
+        }
+
+        $merged = $fromCustomer;
+        foreach ($fromHeader as $key => $value) {
+            if ($value !== '' && $value !== 0 && $value !== '0') {
+                $merged[$key] = $value;
+            }
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function deliveryContext(array $params): array
+    {
+        try {
+            return $this->ok(
+                (string)__('配送信息已加载'),
+                $this->deliveryContextForBin($this->deliveryContextService->getContext($params))
+            );
+        } catch (\Throwable $e) {
+            return $this->ok((string)__('配送信息加载失败，请稍后重试或手动填写地址。'), [
+                'country_code' => strtoupper(substr(preg_replace('/[^A-Za-z]/', '', (string)($params['country_code'] ?? 'CN')) ?: 'CN', 0, 2)),
+                'country_name' => '',
+                'addresses' => [],
+                'selected' => null,
+                'is_logged_in' => false,
+                'can_auto_detect' => false,
+                'display_text' => (string)__('选择国家/地址'),
+                'checkout_address' => [],
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Lazy captcha HTML for header quick-add (must not SSR LocalImageCaptcha on every page).
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function deliveryCaptchaChallenge(array $params): array
+    {
+        $intent = trim((string)($params['intent'] ?? \Weline\Checkout\Service\DeliveryAddressCaptchaGuard::INTENT));
+        if (preg_match('/\A[A-Za-z0-9_.:-]{1,80}\z/D', $intent) !== 1) {
+            $intent = \Weline\Checkout\Service\DeliveryAddressCaptchaGuard::INTENT;
+        }
+        $formId = trim((string)($params['form_id'] ?? \Weline\Checkout\Service\DeliveryAddressCaptchaGuard::FORM_ID));
+        if (preg_match('/\A[A-Za-z0-9_-]{0,80}\z/D', $formId) !== 1) {
+            $formId = \Weline\Checkout\Service\DeliveryAddressCaptchaGuard::FORM_ID;
+        }
+
+        /** @var \Weline\Captcha\Api\CaptchaManagerInterface $captcha */
+        $captcha = ObjectManager::getInstance(\Weline\Captcha\Api\CaptchaManagerInterface::class);
+        $html = $captcha->renderChallenge([
+            'form_id' => $formId,
+            'intent' => $intent,
+            'required' => true,
+        ]);
+
+        return $this->ok((string)__('验证码已就绪'), [
+            'html' => $html,
+        ]);
+    }
+
+    /**
+     * QueryBin 二进制协议列表上限为 200；完整国家目录仅由 SSR 注入，接口响应不再回传。
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function deliveryContextForBin(array $context): array
+    {
+        unset($context['countries']);
+
+        return $context;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function deliveryCountry(array $params): array
+    {
+        return $this->ok(
+            (string)__('配送国家已更新'),
+            $this->deliveryContextForBin($this->deliveryContextService->setCountry($params))
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function deliverySelect(array $params): array
+    {
+        return $this->ok(
+            (string)__('配送地址已选择'),
+            $this->deliveryContextForBin($this->deliveryContextService->selectAddress($params))
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function deliverySave(array $params): array
+    {
+        /** @var \Weline\Checkout\Service\DeliveryAddressCaptchaGuard $captchaGuard */
+        $captchaGuard = ObjectManager::getInstance(\Weline\Checkout\Service\DeliveryAddressCaptchaGuard::class);
+        $captchaPayload = is_array($params['address'] ?? null)
+            ? array_merge($params, (array)$params['address'])
+            : $params;
+        if (!$captchaGuard->verify($captchaPayload)) {
+            throw new \InvalidArgumentException((string)__('验证码校验失败，请重试。'));
+        }
+
+        return $this->ok(
+            (string)__('配送地址已保存'),
+            $this->deliveryContextForBin($this->deliveryContextService->saveAddress($params))
+        );
     }
 
     private function htmlRenderer(): \Weline\Checkout\Service\CheckoutHtmlRenderer
@@ -931,6 +1067,76 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load checkout cart, shipping and payment options',
+                ],
+                [
+                    'name' => 'getDeliveryContext',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 2,
+                    'params' => [
+                        'country_code' => ['type' => 'string', 'required' => false, 'max_length' => 8],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Load header delivery country and addresses',
+                ],
+                [
+                    'name' => 'getDeliveryCaptchaChallenge',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        'intent' => ['type' => 'string', 'required' => false, 'max_length' => 80],
+                        'form_id' => ['type' => 'string', 'required' => false, 'max_length' => 80],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Lazy-load captcha HTML for header delivery quick-add',
+                ],
+                [
+                    'name' => 'setDeliveryCountry',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        'country_code' => ['type' => 'string', 'required' => true, 'max_length' => 8],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Set delivery country for header and checkout',
+                ],
+                [
+                    'name' => 'selectDeliveryAddress',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        'id' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Select one saved delivery address',
+                ],
+                [
+                    'name' => 'saveDeliveryAddress',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        'address' => ['type' => 'array', 'required' => true],
+                        'captcha_provider' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'captcha_token' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'captcha_response' => ['type' => 'string', 'required' => false, 'max_length' => 8192],
+                        'captcha_action' => ['type' => 'string', 'required' => false, 'max_length' => 100],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Save delivery address for customer or guest',
                 ],
                 [
                     'name' => 'placeOrder',

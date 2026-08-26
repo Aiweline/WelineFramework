@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Controller\Backend;
 
+use Weline\Eav\Api\Metadata\CompareMode;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Option;
@@ -414,6 +415,14 @@ class Manager extends BackendController
             $attribute->setData('frontend_is_filterable', $this->request->getPost('frontend_is_filterable') ? 1 : 0);
             $attribute->setData('frontend_is_searchable', $this->request->getPost('frontend_is_searchable') ? 1 : 0);
             $attribute->setData('frontend_is_visible', $this->request->getPost('frontend_is_visible') ? 1 : 0);
+            $postedCompareMode = $this->request->getPost('compare_mode');
+            if ($postedCompareMode !== null && $postedCompareMode !== '' && !CompareMode::isValid($postedCompareMode)) {
+                throw new \InvalidArgumentException(__('无效的可比模式'));
+            }
+            $attribute->setData(
+                EavAttribute::schema_fields_compare_mode,
+                CompareMode::normalize($postedCompareMode ?? CompareMode::NONE),
+            );
             // 数据配置组
             $attribute->setData('data_is_multiple', $this->request->getPost('data_is_multiple') ? 1 : 0);
             $attribute->setData('data_has_option', $this->request->getPost('data_has_option') ? 1 : 0);

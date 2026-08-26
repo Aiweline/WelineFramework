@@ -1418,12 +1418,13 @@ lock,lock
 选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
 "已选择 %{1} 个域名","%{1} domains selected"
 "Store 商品复制向导","Store Product Copy Wizard"
-"三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","The three entries share ProductCopyService; mandatory preview before submission. The inventory defaults to 0, and you need to explicitly check it to copy the quantity."
+"目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
 持久化事务模式,"Persistence transaction model"
 复制范围,"copy range"
 入口,Entrance
 "目标 Website","Target Website"
 "目标 Store","Target Store"
+"默认选中该 Website 下全部活动 Store；取消勾选即可排除，至少保留一个。","默认选中该 Website 下全部活动 Store；取消勾选即可排除，至少保留一个。"
 "来源 Website","Source Website"
 "来源 Store","Source Store"
 "分类 ID","Category ID"
@@ -1438,14 +1439,14 @@ lock,lock
 预览与提交结果,"Preview and submit results"
 "正在加载 Website/Store 选项…","Loading Website/Store options…"
 分类,Classification
-商品,commodity
+商品,Products
 Offer,Offer
 "创建 / 跳过 / 更新",Create/Skip/Update
 复制库存数量,"Copy stock quantity"
 契约要点,"Key points of the contract"
 "分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。","Category tree: The hook parent includes descendants by default; excluded_category_ids cancels the complete subtree; include_products controls whether to include products."
 "库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。","Inventory: Default on_hand=0 when including inventory package; quantity is copied only when inventory_copy_qty=true."
-"跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。","Cross-Website: Create the target website directory (new UUID for classification) first, and then write the Store overlay; do not increase the source Store overlay."
+"跨 Website：目录只建一次，所选 Store 在同一目标 Website 事务内整体写入；任一失败则全部回滚。","跨 Website：目录只建一次，所选 Store 在同一目标 Website 事务内整体写入；任一失败则全部回滚。"
 "同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。","Repeated copying from the same source: skip by default; update_selected_fields only updates the checked field package and does not delete unselected fields."
 详细契约见,"See the detailed contract"
 复制服务暂不可用，请刷新页面后重试,"The replication service is temporarily unavailable, please refresh the page and try again."
@@ -1460,7 +1461,7 @@ Offer,Offer
 正在取消草稿…,"Canceling draft…"
 草稿已取消,"Draft canceled"
 取消草稿失败,"Cancel draft failed"
-"请选择目标 Website 与 Store","Please select the target Website and Store"
+"请选择目标 Website，并至少保留一个目标 Store","请选择目标 Website，并至少保留一个目标 Store"
 "当前入口需要选择来源 Website 与 Store","The current entry needs to select the source Website and Store"
 "当前入口需要选择来源 Website","The current entry needs to select the source Website"
 "该 Website 没有可用 Store","There is no Store available for this Website"
@@ -3137,6 +3138,9 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+"三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","The three entries share ProductCopyService; mandatory preview before submission. The inventory defaults to 0, and you need to explicitly check it to copy the quantity."
+"跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。","Cross-Website: Create the target website directory (new UUID for classification) first, and then write the Store overlay; do not increase the source Store overlay."
+"请选择目标 Website 与 Store","Please select the target Website and Store"
 编辑授权包,"Edit license package"
 网站功能授权配置,"Website function authorization configuration"
 "为子站设定可用菜单与 ACL 上限；进入该站后台仅能使用这些权限","Set the available menus and ACL upper limit for the subsite; only these permissions can be used when entering the backend of the site"

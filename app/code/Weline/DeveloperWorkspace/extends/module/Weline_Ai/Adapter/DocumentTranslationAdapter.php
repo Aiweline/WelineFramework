@@ -15,12 +15,12 @@ class DocumentTranslationAdapter implements ScenarioAdapterInterface
 
     public function getName(): string
     {
-        return 'DeveloperWorkspace Document Translation';
+        return (string)__('开发者工作区文档翻译');
     }
 
     public function getDescription(): string
     {
-        return 'Translates DeveloperWorkspace Markdown/API docs while preserving format, code, URLs, identifiers, and protected tokens.';
+        return (string)__('翻译开发者工作区的 Markdown/API 文档，同时保留格式、代码、URL、标识符和受保护令牌。');
     }
 
     public function getVersion(): string

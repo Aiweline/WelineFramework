@@ -89,14 +89,14 @@ $fieldId = 'field-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $name);
 <style>
 .<?= $wc ?> {
     display: grid;
-    gap: var(--weline-space-2, 8px);
-    margin-bottom: var(--weline-space-4, 16px);
+    gap: var(--weline-space-2);
+    margin-bottom: var(--weline-space-4);
 }
 
 .<?= $wc ?> .field-label {
     color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-sm, 13px);
-    font-weight: var(--weline-font-weight-medium, 500);
+    font-size: var(--weline-font-size-sm);
+    font-weight: var(--weline-font-weight-medium);
 }
 
 .<?= $wc ?> .field-control,
@@ -104,31 +104,31 @@ $fieldId = 'field-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $name);
 .<?= $wc ?> .w-textarea,
 .<?= $wc ?> .w-select {
     width: 100%;
-    padding: var(--weline-space-2, 8px) var(--weline-space-3, 12px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-md, 8px);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
     color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-base, 15px);
+    font-size: var(--weline-font-size-base);
 }
 
 .<?= $wc ?> .field-control:focus,
 .<?= $wc ?> .w-form-control:focus,
 .<?= $wc ?> .w-textarea:focus,
 .<?= $wc ?> .w-select:focus {
-    outline: 2px solid color-mix(in srgb, var(--weline-theme-primary) 35%, transparent);
-    outline-offset: 1px;
+    outline: var(--spacing-0_5) solid color-mix(in srgb, var(--weline-theme-primary) 35%, transparent);
+    outline-offset: var(--spacing-px);
 }
 
 .<?= $wc ?> .field-options {
     display: grid;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
 }
 
 .<?= $wc ?> .field-option {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
     color: var(--weline-theme-text);
 }
 </style>

@@ -992,7 +992,24 @@ if ($controlPort > 0 || $supervisorEnabled) {
             && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
         ) {
             \Weline\Server\Log\WlsLogger::info_("[WorkerWarmup] EventBuffer READY-gate warmup start worker={$workerId}");
-            $homepageFpcProof = $runtime->runReadyGateWorkerBootstrapWarmup();
+            try {
+                $homepageFpcProof = $runtime->runReadyGateWorkerBootstrapWarmup();
+            } catch (\Throwable $warmupError) {
+                \Weline\Server\Log\WlsLogger::warning_(
+                    '[WorkerWarmup] EventBuffer ready-gate business warmup failed open worker='
+                    . $workerId
+                    . ' error=' . $warmupError::class
+                    . ' message=' . $warmupError->getMessage()
+                );
+                $homepageFpcProof = [
+                    'hit' => false,
+                    'fpc_status' => '',
+                    'source' => '',
+                    'full_uri' => '',
+                    'reason' => 'homepage-fpc:exception:' . $warmupError::class . ':fail-open',
+                    'http_status' => 0,
+                ];
+            }
             \Weline\Server\Service\Runtime\WorkerReadinessState::markBusinessHomepageHot($homepageFpcProof);
             \Weline\Server\Service\Runtime\WorkerReadinessState::markDynamicFirstRenderProof(
                 $runtime->readyGateDynamicFirstRenderProof()

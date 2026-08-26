@@ -68,6 +68,7 @@ EAV 核心表由 `SchemaRegistry` 统一编排，入口在：
 - `frontend_is_visible`
 - `frontend_is_filterable`
 - `frontend_is_searchable`
+- `compare_mode`：`none`（不参与对比优劣）、`diff`（仅标差异）、`higher_better`（数值越大越优）、`lower_better`（数值越小越优）；由 `Weline\Eav\Api\Metadata\CompareMode` 约束，`AttributeMetadata::$compareMode` 对外暴露。
 - `data_is_multiple`
 - `data_has_option`
 

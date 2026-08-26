@@ -38,7 +38,7 @@ class ThemePreviewContentRenderer
     private const CONTENT_SLOT_PRIORITY = [
         ThemeLayout::PAGE_TYPE_HOME => ['content', 'main-content', 'homepage-promo', 'homepage-brands', 'homepage-benefits'],
         ThemeLayout::PAGE_TYPE_PRODUCT_LIST => ['list-recommendations', 'content'],
-        ThemeLayout::PAGE_TYPE_PRODUCT => ['product-related', 'product-sidebar', 'content'],
+        ThemeLayout::PAGE_TYPE_PRODUCT => ['product-main', 'product-reviews', 'product-related', 'product-related-products', 'product-sidebar', 'content'],
         ThemeLayout::PAGE_TYPE_CATEGORY => ['category-related', 'content'],
         ThemeLayout::PAGE_TYPE_CART => ['cart-recommendations', 'content'],
         ThemeLayout::PAGE_TYPE_SEARCH => ['search-main', 'search-recommendations', 'content'],
@@ -49,10 +49,36 @@ class ThemePreviewContentRenderer
         'checkout_success' => ['content'],
         'promotion' => ['promotion-main', 'content'],
         'customer_service' => ['customer-service-main', 'content'],
+        'help' => ['help-topics', 'help-faq', 'help-extras', 'help-sidebar', 'content'],
+        'order_tracking' => ['order-tracking-form', 'order-tracking-content', 'order-tracking-sidebar', 'order-tracking-extras', 'content'],
         'review' => ['review-main', 'content'],
         'qa' => ['qa-main', 'content'],
         'rma' => ['rma-main', 'content'],
         ThemeLayout::PAGE_TYPE_DEFAULT => ['default-content', 'content', 'main-content'],
+    ];
+
+    /**
+     * Header/footer chrome slots belong to partials; dumping them into preview
+     * content duplicates Amazon header search/nav and breaks exclusive slots.
+     *
+     * @var array<string,true>
+     */
+    private const CHROME_SLOT_IDS = [
+        'header' => true,
+        'top-bar' => true,
+        'logo' => true,
+        'delivery' => true,
+        'search' => true,
+        'language' => true,
+        'currency' => true,
+        'user-area' => true,
+        'all-menu' => true,
+        'category-menu' => true,
+        'navigation' => true,
+        'footer' => true,
+        'footer-links' => true,
+        'footer-social' => true,
+        'footer-copyright' => true,
     ];
 
     private readonly ThemeLayoutVersionService $versionService;
@@ -167,8 +193,8 @@ class ThemePreviewContentRenderer
             }
         }
 
-        // Default widgets are suggestions in the editor application tab. Layouts with no
-        // widget placements keep rendering the template slots until the user applies one.
+        // Default widgets are suggestions for theme init / editor「应用」tab / explicit slot init.
+        // Empty layouts and empty slots stay empty on preview/render; never auto-fill here.
         return [[], $pageType, $requestedStatus, false];
     }
 
@@ -399,7 +425,7 @@ class ThemePreviewContentRenderer
 
         foreach (self::CONTENT_SLOT_PRIORITY[$layoutType] ?? [] as $slotId) {
             $html = trim((string)($slotHtml[$slotId] ?? ''));
-            if ($html === '' || isset($consumed[$slotId]) || isset($added[$slotId])) {
+            if ($html === '' || isset($consumed[$slotId]) || isset($added[$slotId]) || $this->isChromeSlotId($slotId)) {
                 continue;
             }
             $added[$slotId] = true;
@@ -408,7 +434,7 @@ class ThemePreviewContentRenderer
 
         foreach ($orderedSlotIds as $slotId) {
             $html = trim((string)($slotHtml[$slotId] ?? ''));
-            if ($html === '' || isset($consumed[$slotId]) || isset($added[$slotId])) {
+            if ($html === '' || isset($consumed[$slotId]) || isset($added[$slotId]) || $this->isChromeSlotId($slotId)) {
                 continue;
             }
             $added[$slotId] = true;
@@ -416,6 +442,22 @@ class ThemePreviewContentRenderer
         }
 
         return implode(PHP_EOL, $contentParts);
+    }
+
+    private function isChromeSlotId(string $slotId): bool
+    {
+        $slotId = trim($slotId);
+        if ($slotId === '') {
+            return false;
+        }
+        if (isset(self::CHROME_SLOT_IDS[$slotId])) {
+            return true;
+        }
+
+        // Component-instance chrome (for example search:279) stays out of content dump.
+        $base = preg_replace('/:[1-9][0-9]*$/', '', $slotId) ?: $slotId;
+
+        return isset(self::CHROME_SLOT_IDS[$base]);
     }
 
     /**

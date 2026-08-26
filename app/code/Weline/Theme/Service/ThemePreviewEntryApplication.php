@@ -34,6 +34,7 @@ final class ThemePreviewEntryApplication
         string $status = 'draft',
         string $editorArea = 'frontend',
         string $previewMode = 'default',
+        ?string $themePublicRoute = null,
     ): array {
         if ($themeId <= 0) {
             return ['ok' => false, 'message' => __('请选择主题')];
@@ -180,6 +181,10 @@ final class ThemePreviewEntryApplication
         $params['page_type'] = $layoutType;
         $params['layout_type'] = $layoutType;
         $params['layout_option'] = $layoutOption;
+        $publicRoute = \trim(\str_replace('\\', '/', (string)($themePublicRoute ?? '')), '/');
+        if ($publicRoute !== '') {
+            $params['theme_public_route'] = $publicRoute;
+        }
         $params['_t'] = \time();
 
         return [

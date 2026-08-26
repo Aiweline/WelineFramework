@@ -16,6 +16,10 @@ final class ProductStorefrontTemplateContractTest extends TestCase
 
         self::assertStringContainsString('$this->layoutType = \'product_list\'', $controller);
         self::assertStringContainsString("setGet('page_type', 'products')", $controller);
+        self::assertStringContainsString("assign('showToolbar', false)", $controller);
+        self::assertStringContainsString('StorefrontCategoryListingFilter', $controller);
+        self::assertStringContainsString("assign('storefront_offers_unfiltered'", $controller);
+        self::assertStringContainsString("assign('storefront_listing_sort_options'", $controller);
     }
 
     public function testProductControllerDoesNotReachIntoCartConcreteServices(): void
@@ -52,7 +56,7 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringNotContainsString('href="/cart"', $template);
     }
 
-    public function testCatalogCardsLinkToTheLocaleAwareProductDetailRoute(): void
+    public function testCatalogCardsUseWholeItemHitLinkToProductDetail(): void
     {
         $template = (string)file_get_contents(
             BP . 'app/code/Weline/Product/view/templates/frontend/catalog/index.phtml',
@@ -62,9 +66,55 @@ final class ProductStorefrontTemplateContractTest extends TestCase
             "\$this->getUrl('product/' . \$productSlug)",
             $template,
         );
-        self::assertStringContainsString('class="product-storefront__media-link"', $template);
-        self::assertStringContainsString('class="product-storefront__title-link"', $template);
+        self::assertStringContainsString(
+            "\$this->getUrl('product/' . \$productId)",
+            $template,
+        );
+        self::assertStringContainsString('class="product-storefront__card-hit"', $template);
+        self::assertStringContainsString('data-testid="storefront-product-card-link"', $template);
+        self::assertStringNotContainsString('class="product-storefront__title-link"', $template);
         self::assertStringNotContainsString('href="/product/', $template);
+    }
+
+    public function testProductListLayoutUsesRuntimeFiltersSidebarHook(): void
+    {
+        $layout = (string)file_get_contents(
+            BP . 'app/code/Weline/Theme/view/theme/frontend/layouts/product_list/default.phtml',
+        );
+
+        self::assertStringContainsString(
+            "getHook('Weline_Theme::frontend::layouts::product-list::filters-sidebar', true)",
+            $layout,
+        );
+        self::assertStringNotContainsString(
+            'data-placeholder="list-filters"',
+            $layout,
+        );
+        self::assertStringContainsString('grid-template-columns: 240px minmax(0, 1fr)', $layout);
+        self::assertStringContainsString('max-width: var(--weline-layout-content-max-width, 1400px)', $layout);
+    }
+
+    public function testProductsFiltersSidebarPrefersCurrentListingPath(): void
+    {
+        $hook = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/view/hooks/Weline_Theme/frontend/layouts/product-list/filters-sidebar.phtml',
+        );
+
+        self::assertStringContainsString('categories|products|product-list', $hook);
+        self::assertStringContainsString("\$listingUrl = '/products'", $hook);
+    }
+
+    public function testProductsFiltersSidebarExposesCategoryAndPriceContracts(): void
+    {
+        $hook = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/view/hooks/Weline_Theme/frontend/layouts/product-list/filters-sidebar.phtml',
+        );
+
+        self::assertStringContainsString('data-testid="storefront-products-filter"', $hook);
+        self::assertStringContainsString('storefront-products-dept-root', $hook);
+        self::assertStringContainsString('storefront-products-price-filter', $hook);
+        self::assertStringContainsString('childrenOf($websiteId, 0)', $hook);
+        self::assertStringContainsString('priceBucketsWithCounts', $hook);
     }
 
     public function testBrowserCartMutationDoesNotSubmitAClientOwnedScope(): void

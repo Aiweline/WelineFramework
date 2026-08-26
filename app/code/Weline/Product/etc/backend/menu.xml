@@ -6,14 +6,11 @@
           title="商品" action="weline_product/backend/catalog/products"
           parent="Weline_Backend::commerce:catalog:group" icon="box" order="10"/>
     <menu source="Weline_Product::commerce:catalog:offers" name="commerce_catalog_offers"
-          title="销售报价" action="weline_product/backend/catalog/offers"
+          title="销售规格（高级维护）" action="weline_product/backend/catalog/offers"
           parent="Weline_Backend::commerce:catalog:group" icon="tag" order="20"/>
     <menu source="Weline_Product::commerce:catalog:sku-registry" name="commerce_catalog_sku_registry"
-          title="SKU 注册表" action="weline_product/backend/catalog/skuregistry"
+          title="SKU 身份（高级维护）" action="weline_product/backend/catalog/skuregistry"
           parent="Weline_Backend::commerce:catalog:group" icon="code" order="30"/>
-    <menu source="Weline_Product::commerce:catalog:categories" name="commerce_catalog_categories"
-          title="商品分类" action="weline_product/backend/catalog/categories"
-          parent="Weline_Backend::commerce:catalog:group" icon="file" order="40"/>
     <menu source="Weline_Product::commerce:catalog:media" name="commerce_catalog_media"
           title="商品媒体" action="weline_product/backend/catalog/media"
           parent="Weline_Backend::commerce:catalog:group" icon="image" order="50"/>

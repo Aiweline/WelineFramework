@@ -1418,12 +1418,13 @@ lock,锁
 选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。
 "已选择 %{1} 个域名","已选择 %{1} 个域名"
 "Store 商品复制向导","Store 商品复制向导"
-"三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
+"目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
 持久化事务模式,持久化事务模式
 复制范围,复制范围
 入口,入口
 "目标 Website",目标网站
 "目标 Store",目标店
+"默认选中该 Website 下全部活动 Store；取消勾选即可排除，至少保留一个。","默认选中该 Website 下全部活动 Store；取消勾选即可排除，至少保留一个。"
 "来源 Website",来源网站
 "来源 Store",来源商店
 "分类 ID","分类 ID"
@@ -1445,7 +1446,7 @@ Offer,提供
 契约要点,契约要点
 "分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。","分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。"
 "库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。","库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。"
-"跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。","跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。"
+"跨 Website：目录只建一次，所选 Store 在同一目标 Website 事务内整体写入；任一失败则全部回滚。","跨 Website：目录只建一次，所选 Store 在同一目标 Website 事务内整体写入；任一失败则全部回滚。"
 "同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。","同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。"
 详细契约见,详细契约见
 复制服务暂不可用，请刷新页面后重试,复制服务暂不可用，请刷新页面后重试
@@ -1460,7 +1461,7 @@ Offer,提供
 正在取消草稿…,正在取消草稿…
 草稿已取消,草稿已取消
 取消草稿失败,取消草稿失败
-"请选择目标 Website 与 Store","请选择目标 Website 与 Store"
+"请选择目标 Website，并至少保留一个目标 Store","请选择目标 Website，并至少保留一个目标 Store"
 "当前入口需要选择来源 Website 与 Store","当前入口需要选择来源 Website 与 Store"
 "当前入口需要选择来源 Website","当前入口需要选择来源 Website"
 "该 Website 没有可用 Store","该 Website 没有可用 Store"
@@ -3137,6 +3138,9 @@ download,下载
 "发现 %{1} 条非法域名记录：","发现 %{1} 条非法域名记录："
 "已删除 %{1} 条非法记录","已删除 %{1} 条非法记录"
 "处理完成：%d 条非法记录","处理完成：%d 条非法记录"
+"三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
+"跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。","跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。"
+"请选择目标 Website 与 Store","请选择目标 Website 与 Store"
 编辑授权包,编辑授权包
 网站功能授权配置,网站功能授权配置
 "为子站设定可用菜单与 ACL 上限；进入该站后台仅能使用这些权限","为子站设定可用菜单与 ACL 上限；进入该站后台仅能使用这些权限"

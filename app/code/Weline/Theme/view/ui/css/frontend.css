@@ -1,10 +1,60 @@
 @layer reset, tokens, base, layout, components, utilities, page;
 
 @layer base {
-    [data-w-area="frontend"] body { background: var(--weline-theme-canvas); color: var(--weline-theme-text); }
+    /* Page canvas: prefer body-bg token; do not require data-w-area (some layouts omit it). */
+    body {
+        background: var(--weline-theme-body-bg, var(--weline-chrome-body-bg, var(--color-bg-canvas, var(--weline-theme-canvas, #ffffff))));
+        color: var(--weline-theme-body-text, #0f1111);
+    }
+
+    [data-w-area="frontend"] body {
+        background: var(--weline-theme-body-bg, var(--weline-chrome-body-bg, var(--color-bg-canvas, var(--weline-theme-canvas, #ffffff))));
+        color: var(--weline-theme-body-text, #0f1111);
+    }
+
+    [data-surface="body"],
+    .w-surface-body {
+        --w-surface-fg: var(--weline-theme-body-text, #0f1111);
+        --w-surface-fg-muted: var(--weline-theme-body-text-muted, #666666);
+        --w-surface-fg-subtle: var(--weline-theme-body-text-secondary, #565959);
+        /* Menus/panels stay on surface (primary), not page canvas */
+        --w-surface-bg: var(--weline-theme-surface, var(--weline-chrome-bg-primary, #ffffff));
+        color: var(--w-surface-fg);
+        background-color: var(--w-surface-bg);
+    }
+
+    [data-surface="body"] h1,
+    [data-surface="body"] h2,
+    [data-surface="body"] h3,
+    [data-surface="body"] h4,
+    [data-surface="body"] h5,
+    [data-surface="body"] h6,
+    .w-surface-body h1,
+    .w-surface-body h2,
+    .w-surface-body h3,
+    .w-surface-body h4,
+    .w-surface-body h5,
+    .w-surface-body h6 {
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    }
 }
 
 @layer layout {
+    /* Page shell: canvas from theme body-bg; layouts must not repaint body/main. */
+    .weline-page-wrapper {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: transparent;
+    }
+    .weline-main-content {
+        flex: 1 0 auto;
+        width: 100%;
+        min-width: 0;
+        min-height: 80vh;
+        background-color: var(--weline-theme-body-bg, var(--weline-chrome-body-bg, var(--color-bg-canvas, var(--weline-theme-canvas, #ffffff))));
+        color: var(--weline-theme-body-text, #0f1111);
+    }
     .w-frontend-shell { display: flex; min-height: 100vh; flex-direction: column; }
     .w-frontend-main { flex: 1 0 auto; min-width: 0; }
     .w-frontend-page { display: grid; gap: var(--weline-space-6); padding-block: var(--weline-space-8); }

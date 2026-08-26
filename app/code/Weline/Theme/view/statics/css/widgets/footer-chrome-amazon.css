@@ -1,0 +1,205 @@
+/**
+ * Amazon footer chrome — aligns with partials/footer $colors fallbacks.
+ */
+.weline-footer {
+    margin-top: auto;
+    background-color: var(--weline-chrome-footer-bg, #232f3e);
+    color: var(--weline-chrome-text-light, #ffffff);
+    font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.5;
+}
+
+.weline-footer :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--weline-chrome-text-light, #ffffff);
+}
+
+.weline-footer a {
+    color: var(--weline-theme-footer-link, #dddddd);
+    text-decoration: none;
+}
+
+.weline-footer a:hover,
+.weline-footer a:focus-visible {
+    color: var(--weline-chrome-text-light, #ffffff);
+    text-decoration: underline;
+}
+
+.weline-footer .footer-nav {
+    padding: var(--weline-space-10, 2.5rem) 0;
+    background: var(--weline-chrome-footer-bg, #232f3e);
+}
+
+.weline-footer .footer-container {
+    width: 100%;
+    max-width: var(--weline-theme-container-max, var(--weline-layout-content-max-width, 1440px));
+    margin: 0 auto;
+    padding: 0 var(--weline-layout-content-padding-inline, 1.25rem);
+    box-sizing: border-box;
+}
+
+.weline-footer .footer-content {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--weline-space-8, 2rem) var(--weline-space-6, 1.5rem);
+}
+
+.weline-footer .footer-section__title {
+    font-size: var(--font-size-base, 1rem);
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 0 0 var(--spacing-4_5, 1.125rem);
+}
+
+.weline-footer .footer-section__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3_5, 0.875rem);
+}
+
+.weline-footer .footer-section__list a {
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.5;
+    color: var(--weline-theme-footer-link, #dddddd);
+}
+
+.weline-footer .footer-back-to-top {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-2, 0.5rem);
+    width: 100%;
+    margin: 0;
+    padding: var(--weline-space-4, 1rem) var(--weline-space-6, 1.5rem);
+    min-height: var(--size-control-md, 2.5rem);
+    border: 0;
+    background: var(--weline-chrome-footer-back-top-bg, #37475a);
+    color: var(--weline-chrome-text-light, #ffffff);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.weline-footer .footer-back-to-top__icon {
+    width: var(--weline-space-4, 1rem);
+    height: var(--weline-space-4, 1rem);
+    flex-shrink: 0;
+}
+
+.weline-footer .footer-back-to-top:hover,
+.weline-footer .footer-back-to-top:focus-visible {
+    background: var(--weline-chrome-footer-back-top-bg-hover, #485769);
+    color: var(--weline-chrome-text-light, #ffffff);
+    outline: none;
+}
+
+.weline-footer .footer-locale {
+    padding: var(--weline-space-8, 2rem) 0;
+    background: var(--weline-chrome-footer-bg, #232f3e);
+}
+
+.weline-footer .footer-locale__inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--weline-space-5, 1.25rem) var(--weline-space-8, 2rem);
+}
+
+.weline-footer .footer-locale__controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--weline-space-4, 1rem);
+}
+
+/* footer-locale 为 inverse surface：语言/货币触发器须跟顶栏一样走浅色字 */
+.weline-footer .footer-locale .w-language-switcher__trigger,
+.weline-footer .footer-locale .w-currency-switcher__trigger {
+    color: var(--w-surface-fg, var(--weline-chrome-text-light, #ffffff));
+    border-color: transparent;
+    background: transparent;
+}
+
+.weline-footer .footer-locale .w-language-switcher__trigger:hover,
+.weline-footer .footer-locale .w-currency-switcher__trigger:hover {
+    background: var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
+    color: var(--w-surface-fg, var(--weline-chrome-text-light, #ffffff));
+}
+
+.weline-footer .footer-locale .w-language-switcher__trigger .w-icon,
+.weline-footer .footer-locale .w-currency-switcher__trigger .w-icon {
+    color: inherit;
+}
+
+.weline-footer .footer-locale__chip {
+    border-color: var(--weline-chrome-footer-locale-chip-border, #848688);
+    color: var(--w-surface-fg-muted, var(--weline-chrome-text-light-secondary, #dddddd));
+}
+
+.weline-footer .footer-bottom-band {
+    padding: var(--weline-space-8, 2rem) 0 var(--weline-space-10, 2.5rem);
+    background: var(--weline-chrome-footer-bg-deep, #131a22);
+}
+
+.weline-footer .footer-social-media {
+    margin-bottom: var(--weline-space-5, 1.25rem);
+}
+
+.weline-footer .footer-social-media__inner,
+.weline-footer .footer-social-media .social-list {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-4, 1rem) var(--weline-space-6, 1.5rem);
+}
+
+.weline-footer .footer-social-link,
+.weline-footer .footer-social-media .social-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1_5, 0.375rem);
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.weline-footer .footer-legal__links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-3, 0.75rem) var(--weline-space-5, 1.25rem);
+    margin-bottom: var(--weline-space-4, 1rem);
+}
+
+.weline-footer .footer-legal__links a {
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.weline-footer .footer-legal__copy {
+    margin: var(--weline-space-4, 1rem) 0 0;
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+    .weline-footer .footer-content {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .weline-footer .footer-nav {
+        padding: var(--weline-space-8, 2rem) 0 var(--weline-space-6, 1.5rem);
+    }
+
+    .weline-footer .footer-content {
+        grid-template-columns: 1fr;
+    }
+}

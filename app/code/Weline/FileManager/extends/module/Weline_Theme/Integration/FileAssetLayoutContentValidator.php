@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\FileManager\Extends\Module\Weline_Theme\Integration;
+namespace Weline\FileManager\extends\module\Weline_Theme\Integration;
 
 use Weline\FileManager\Api\LayoutContentValidatorInterface as FileManagerLayoutContentValidatorInterface;
 use Weline\Theme\Api\Layout\LayoutContentValidatorInterface;

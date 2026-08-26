@@ -24,6 +24,11 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('class="cs-chat-footer w-panel-footer"', $content);
         $this->assertStringContainsString('class="cs-modal w-modal"', $content);
         $this->assertStringContainsString('class="w-modal-dialog w-modal-sm"', $content);
+        $this->assertStringContainsString('id="cs-bind-form"', $content);
+        $this->assertStringContainsString('data-weline-form="1"', $content);
+        $this->assertStringContainsString('data-weline-form-intent="customerservice.bind_email"', $content);
+        $this->assertStringContainsString('data-weline-form-captcha-slot', $content);
+        $this->assertStringContainsString('BindCaptchaGuard', $content);
     }
 
     public function testFrontendStylesUseThemePanelAndResponsiveChat(): void
@@ -37,6 +42,12 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('@media (max-width: 720px)', $content);
         $this->assertStringContainsString('position: fixed', $content);
         $this->assertStringContainsString('.customer-service-widget.is-open .cs-chat-button', $content);
+        $this->assertStringContainsString('cs-bind-modal-open', $content);
+        $this->assertStringContainsString('#cs-bind-modal.cs-modal', $content);
+        $this->assertStringContainsString('calc(var(--weline-z-overlay) + 350)', $content);
+        $this->assertStringContainsString('body.cs-bind-modal-open #customer-service-widget .cs-chat-window', $content);
+        $this->assertStringContainsString('.cs-notice-alert', $content);
+        $this->assertStringContainsString('.cs-notice-alert.is-open', $content);
     }
 
     public function testFrontendStylesPinSurfaceBackgroundForMessageInput(): void

@@ -1,0 +1,16 @@
+﻿心愿单接口不支持操作：%{1},"Wishlist operation is not supported: %{1}"
+心愿单,Wishlist
+产品卡片收藏按钮：添加、移除、列表与计数。,"Product card wishlist actions: add"
+我的收藏,"My Favorites"
+收藏,Favorites
+查看已收藏的商品,"View saved products"
+"共 %{1} 件商品","%{1} item(s) in wishlist"
+收藏夹暂无商品,"Your wishlist is empty"
+去逛逛,去逛逛
+加入购物车,"Add to Cart"
+移除,Remove
+加入收藏失败，请稍后重试,加入收藏失败，请稍后重试
+已加入购物车,"Added to cart"
+"无效的商品 ID","Invalid product ID"
+已加入收藏,"Added to wishlist"
+已从收藏移除,"Removed from wishlist"

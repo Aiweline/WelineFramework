@@ -12,21 +12,38 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["homepage", "cms_page", "category", "product"]}
  * @widget.supports {["layout-homepage-bestsellers","layout-product-bestsellers","layout-search-recommendations","layout-product-list-recommendations","layout-cms-content","layout-default-content"]}
- * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"homepage-bestsellers","area":"content","sort_order":0},{"layout_type":"product","layout_option":"default","slot":"product-bestsellers","area":"content","sort_order":0},{"layout_type":"search","layout_option":"default","slot":"search-recommendations","area":"content","sort_order":0}]}
  * @widget.compatible {true}
+ *
+ * @param title {default="热销产品",type="string",label="标题"}
+ * @param subtitle {default="最受欢迎的商品",type="string",label="副标题"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param period {default="month",type="select",label="统计周期",options={week:"近7天",month:"近30天",year:"近一年",all:"全部"}}
+ * @param show_sales_count {default=false,type="bool",label="显示销量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
+ * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",masonry:"瀑布流"}}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\ThemeDemoCatalog;
+use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('bestsellers');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
 $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $titleSource = trim((string)($this->getData('title') ?? '')) ?: '热销产品';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
+    $titleSource = '热销产品';
+}
 $subtitleSource = trim((string)($this->getData('subtitle') ?? '')) ?: '最受欢迎的商品';
 $widgetTitle = WidgetI18n::label($titleSource, '热销产品');
 $widgetSubtitle = WidgetI18n::label($subtitleSource, '最受欢迎的商品');
@@ -35,35 +52,35 @@ $period = (string)($this->getData('period') ?? 'month');
 $showSalesCount = (bool)($this->getData('show_sales_count') ?? false);
 $columns = (string)($this->getData('columns') ?? '4');
 $layout = (string)($this->getData('layout') ?? 'grid');
+$allowedColumns = ['2', '3', '4', '5', '6'];
+if (!in_array($columns, $allowedColumns, true)) {
+    $columns = '4';
+}
+if (!in_array($layout, ['grid', 'masonry'], true)) {
+    $layout = 'grid';
+}
+$masonryAspectRatios = ['3 / 4', '1 / 1', '4 / 5', '1 / 1', '5 / 6', '3 / 4'];
 
-$products = ThemeDemoCatalog::products($limit, 10);
+$products = [];
+try {
+    $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards($limit);
+} catch (\Throwable) {
+    $products = [];
+}
+if ($products === []) {
+    $products = ThemeDemoCatalog::products($limit, 10);
+}
 foreach ($products as $index => &$product) {
+    $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+    $product['id'] = $productId;
     $product['rank'] = $index + 1;
-    $product['sales_count'] = 240 + (($index + 1) * 173);
+    $route = trim((string)($product['url'] ?? ''));
+    $product['url'] = str_starts_with($route, 'http://') || str_starts_with($route, 'https://')
+        ? $route
+        : $this->getUrl(ltrim($route, '/'));
+    $product['sales_count'] = (int)($product['sales_count'] ?? max(20, (int)($product['review_count'] ?? 0)) * 8 + (($index + 1) * 37));
 }
 unset($product);
-
-$realProducts = [];
-try {
-    $recommendationService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Product\Service\ProductRecommendationService::class);
-    $realProducts = $recommendationService->getRecommendations([], $limit);
-} catch (\Throwable) {
-    $realProducts = [];
-}
-if ($realProducts !== []) {
-    $products = $realProducts;
-    foreach ($products as $index => &$product) {
-        $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
-        $handle = trim((string)($product['handle'] ?? ''));
-        $product['id'] = $productId;
-        $product['rank'] = $index + 1;
-        $product['url'] = $handle !== ''
-            ? $this->getUrl('product/' . $handle)
-            : $this->getUrl('weshop/product/view', ['id' => $productId]);
-        $product['sales_count'] = (int)($product['sales_count'] ?? max(20, (int)($product['review_count'] ?? 0)) * 8 + (($index + 1) * 37));
-    }
-    unset($product);
-}
 
 ?>
 
@@ -72,27 +89,39 @@ if ($realProducts !== []) {
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>">
     <?php if ($titleSource !== '' || $subtitleSource !== ''): ?>
-        <div class="widget-header">
-            <?php if ($titleSource !== ''): ?>
-                <h2 class="widget-title">
-                    <w:icon name="fire" size="sm"></w:icon>
-                    <?= htmlspecialchars($widgetTitle, ENT_QUOTES, 'UTF-8') ?>
-                </h2>
-            <?php endif; ?>
-            <?php if ($subtitleSource !== ''): ?>
-                <p class="widget-subtitle"><?= htmlspecialchars($widgetSubtitle, ENT_QUOTES, 'UTF-8') ?></p>
-            <?php endif; ?>
-        </div>
+        <header class="widget-header">
+            <div class="widget-header__inner">
+                <div class="widget-header__badge" aria-hidden="true">
+                    <w:icon name="fire" size="md"></w:icon>
+                </div>
+                <div class="widget-header__copy">
+                    <?php if ($titleSource !== ''): ?>
+                        <h2 class="widget-title"><?= htmlspecialchars($widgetTitle, ENT_QUOTES, 'UTF-8') ?></h2>
+                    <?php endif; ?>
+                    <?php if ($subtitleSource !== ''): ?>
+                        <p class="widget-subtitle"><?= htmlspecialchars($widgetSubtitle, ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </header>
     <?php endif; ?>
 
-    <div class="products-container layout-<?= htmlspecialchars($layout, ENT_QUOTES, 'UTF-8') ?>">
+    <div class="products-container layout-<?= htmlspecialchars($layout, ENT_QUOTES, 'UTF-8') ?>"
+         data-columns="<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>">
         <div class="products-wrapper">
-            <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?>">
-                <?php foreach ($products as $product): ?>
-                    <article class="product-card">
+            <div class="products-grid columns-<?= htmlspecialchars($columns, ENT_QUOTES, 'UTF-8') ?> layout-<?= htmlspecialchars($layout, ENT_QUOTES, 'UTF-8') ?>">
+                <?php foreach ($products as $index => $product): ?>
+                    <?php $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0); ?>
+                    <article class="product-card"
+                             data-product-id="<?= $actionProductId ?>"
+                             <?php if ($layout === 'masonry'): ?>
+                             style="--product-aspect: <?= htmlspecialchars($masonryAspectRatios[$index % count($masonryAspectRatios)], ENT_QUOTES, 'UTF-8') ?>"
+                             <?php endif; ?>>
                         <div class="product-image-wrapper">
                             <?php if ((int)$product['rank'] <= 3): ?>
-                                <span class="rank-badge rank-<?= (int)$product['rank'] ?>"><?= (int)$product['rank'] ?></span>
+                                <span class="rank-badge rank-<?= (int)$product['rank'] ?>" aria-label="<?= htmlspecialchars(__('排名') . ' ' . (int)$product['rank'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <span class="rank-badge__num"><?= (int)$product['rank'] ?></span>
+                                </span>
                             <?php endif; ?>
                             <a href="<?= htmlspecialchars((string)$product['url'], ENT_QUOTES, 'UTF-8') ?>" class="product-image-link">
                                 <img src="<?= htmlspecialchars((string)$product['image'], ENT_QUOTES, 'UTF-8') ?>"
@@ -100,17 +129,10 @@ if ($realProducts !== []) {
                                      class="product-image"
                                      loading="lazy">
                             </a>
-                            <div class="product-badges">
-                                <span class="w-badge badge-hot">HOT</span>
-                            </div>
-                            <div class="product-actions">
-                                <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" type="button" title="<?= __('加入收藏') ?>">
-                                    <w:icon name="heart" size="sm"></w:icon>
-                                </button>
-                                <button class="action-btn btn-quickview" type="button" title="<?= __('快速查看') ?>">
-                                    <w:icon name="eye" size="sm"></w:icon>
-                                </button>
-                            </div>
+                            <?= $this->fetch(
+                                'Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml',
+                                ProductCardShopperActionParams::fetchDictionary($actionProductId, $shopperActions, true)
+                            ) ?>
                         </div>
 
                         <div class="product-info">
@@ -119,28 +141,29 @@ if ($realProducts !== []) {
                                     <?= htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8') ?>
                                 </a>
                             </h3>
-                            <?php if ($showSalesCount): ?>
-                                <div class="product-sales">
-                                    <w:icon name="pin" size="sm"></w:icon>
-                                    <?= number_format((int)$product['sales_count']) ?> <?= __('已售') ?>
+                            <div class="product-meta">
+                                <div class="product-rating">
+                                    <div class="stars" aria-label="<?= number_format((float)$product['rating'], 1) ?>">
+                                        <?php for ($s = 1; $s <= 5; $s++): ?>
+                                            <span class="w-rating-star" data-state="<?= $s <= floor((float)$product['rating']) ? 'filled' : 'empty' ?>"><w:icon name="star" size="sm"></w:icon></span>
+                                        <?php endfor; ?>
+                                    </div>
+                                    <span class="review-count">(<?= (int)$product['review_count'] ?>)</span>
                                 </div>
-                            <?php endif; ?>
-                            <div class="product-rating">
-                                <div class="stars" aria-label="<?= number_format((float)$product['rating'], 1) ?>">
-                                    <?php for ($s = 1; $s <= 5; $s++): ?>
-                                        <span class="w-rating-star" data-state="<?= $s <= floor((float)$product['rating']) ? 'filled' : 'empty' ?>"><w:icon name="star" size="sm"></w:icon></span>
-                                    <?php endfor; ?>
-                                </div>
-                                <span class="review-count">(<?= (int)$product['review_count'] ?>)</span>
+                                <?php if ($showSalesCount): ?>
+                                    <div class="product-sales">
+                                        <?= number_format((int)$product['sales_count']) ?> <?= __('已售') ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <div class="product-price">
+                                <span class="price-current weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)(float)$product['price'], ENT_QUOTES, 'UTF-8') ?>">¥<?= number_format((float)$product['price'], 2) ?></span>
                                 <?php if ((float)$product['original_price'] > (float)$product['price']): ?>
                                     <span class="price-original">¥<?= number_format((float)$product['original_price'], 2) ?></span>
                                 <?php endif; ?>
-                                <span class="price-current weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)(float)$product['price'], ENT_QUOTES, 'UTF-8') ?>">¥<?= number_format((float)$product['price'], 2) ?></span>
                             </div>
                             <button class="btn-add-to-cart weline-pixel::add_to_cart" type="button" data-product-id="<?= (int)$product['id'] ?>">
-                                <w:icon name="pin" size="sm"></w:icon>
+                                <w:icon name="cart" size="sm"></w:icon>
                                 <span class="weline-pixel::add_to_cart"><?= __('加入购物车') ?></span>
                             </button>
                         </div>
@@ -153,42 +176,209 @@ if ($realProducts !== []) {
 
 <style>
 .<?= $wc ?> {
+    --bs-card-bg: var(--weline-chrome-bg-primary, #ffffff);
+    --bs-card-border: var(--weline-theme-border-subtle, #e7e7e7);
+    --bs-card-text: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    --bs-card-text-muted: var(--weline-theme-body-text-muted, #565959);
+    --bs-card-price: #b12704;
+    --bs-card-cta-bg: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+    --bs-card-cta-bg-hover: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+    --bs-card-cta-border: #fcd200;
+    --bs-card-cta-text: #0f1111;
+    --bs-card-shadow: 0 1px 2px rgba(15, 17, 17, 0.06), 0 8px 24px rgba(15, 17, 17, 0.04);
+    --bs-card-shadow-hover: 0 12px 32px rgba(15, 17, 17, 0.12);
     width: 100%;
-    max-width: var(--layout-max-width, 1600px);
+    max-width: var(--layout-max-width);
     margin: 0 auto;
-    padding: var(--weline-space-8, 2rem) var(--weline-space-6, 1.5rem);
+    padding: var(--weline-space-5, 1.25rem) var(--weline-space-6, 1.5rem);
     box-sizing: border-box;
+    color: var(--bs-card-text);
 }
 
-.<?= $wc ?> .widget-header { margin-bottom: var(--weline-space-5, 1.5rem); }
-.<?= $wc ?> .widget-title {
+.<?= $wc ?> .widget-header {
+    margin-bottom: var(--weline-space-5);
+    padding: var(--weline-space-4) var(--weline-space-5);
+    border: 1px solid color-mix(in srgb, var(--weline-theme-primary) 12%, var(--bs-card-border));
+    border-radius: var(--weline-radius-lg);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--weline-theme-warning, #f59e0b) 7%, #fff) 0%, color-mix(in srgb, var(--weline-theme-primary) 5%, #fff) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+.<?= $wc ?> .widget-header__inner {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
-    margin: 0;
-    color: var(--weline-theme-text);
-    font-size: clamp(1.5rem, 2vw, 2rem);
-    font-weight: var(--weline-font-weight-bold, 700);
-    line-height: 1.2;
+    gap: var(--weline-space-4);
+    min-width: 0;
 }
-.<?= $wc ?> .widget-title :is(i, svg) { color: var(--weline-theme-primary); }
-.<?= $wc ?> .widget-subtitle { margin: var(--weline-space-2, 0.5rem) 0 0; color: var(--weline-theme-text-muted); }
+.<?= $wc ?> .widget-header__badge {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 999px;
+    background: linear-gradient(145deg, #fff7ed 0%, #ffedd5 100%);
+    color: #ea580c;
+    box-shadow:
+        0 1px 2px rgba(234, 88, 12, 0.12),
+        inset 0 0 0 1px rgba(234, 88, 12, 0.14);
+}
+.<?= $wc ?> .widget-header__badge :is(i, svg) {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.<?= $wc ?> .widget-header__copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--weline-space-1);
+}
+.<?= $wc ?> .widget-title {
+    margin: 0;
+    color: var(--bs-card-text);
+    font-size: clamp(1.125rem, 1.5vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+}
+.<?= $wc ?> .widget-subtitle {
+    margin: 0;
+    color: var(--bs-card-text-muted);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
 .<?= $wc ?> .products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: var(--weline-space-4, 1rem);
+    gap: var(--weline-space-5);
     width: 100%;
     box-sizing: border-box;
 }
+.<?= $wc ?> .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.<?= $wc ?> .products-grid.layout-masonry {
+    display: block;
+    column-gap: var(--weline-space-5);
+}
+.<?= $wc ?> .products-grid.layout-masonry.columns-2 { column-count: 2; }
+.<?= $wc ?> .products-grid.layout-masonry.columns-3 { column-count: 3; }
+.<?= $wc ?> .products-grid.layout-masonry.columns-4 { column-count: 4; }
+.<?= $wc ?> .products-grid.layout-masonry.columns-5 { column-count: 5; }
+.<?= $wc ?> .products-grid.layout-masonry.columns-6 { column-count: 6; }
+.<?= $wc ?> .products-grid.layout-masonry .product-card {
+    display: inline-block;
+    width: 100%;
+    margin: 0 0 var(--weline-space-5);
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+.<?= $wc ?> .products-grid.layout-masonry .product-image-link {
+    aspect-ratio: var(--product-aspect, 1 / 1);
+}
+.<?= $wc ?> .products-wrapper { width: 100%; overflow: hidden; }
 .<?= $wc ?> .product-card {
     display: flex;
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg, 12px);
-    background: var(--weline-theme-surface-raised);
-    box-shadow: var(--weline-theme-shadow-sm);
+    border: 1px solid var(--bs-card-border);
+    border-radius: var(--weline-radius-xl, 1rem);
+    background: var(--bs-card-bg);
+    color: var(--bs-card-text);
+    box-shadow: var(--bs-card-shadow);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.<?= $wc ?> .product-card:hover {
+    transform: translateY(-4px);
+    border-color: color-mix(in srgb, var(--weline-theme-primary) 28%, var(--bs-card-border));
+    box-shadow: var(--bs-card-shadow-hover);
+}
+.<?= $wc ?> .product-image-wrapper {
+    position: relative;
+    padding-top: 100%;
+    overflow: hidden;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+.<?= $wc ?> .product-image-link {
+    position: absolute;
+    inset: 0;
+    display: block;
+}
+.<?= $wc ?> .product-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.45s ease;
+}
+.<?= $wc ?> .product-card:hover .product-image {
+    transform: scale(1.06);
+}
+.<?= $wc ?> .rank-badge {
+    position: absolute;
+    top: var(--weline-space-3);
+    left: var(--weline-space-3);
+    z-index: 3;
+    display: inline-flex;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ffd86f, #ffb347);
+    color: #5c3b00;
+    font-size: var(--font-size-xs);
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+.<?= $wc ?> .rank-badge.rank-2 {
+    background: linear-gradient(135deg, #e8edf3, #c7d0dc);
+    color: #334155;
+}
+.<?= $wc ?> .rank-badge.rank-3 {
+    background: linear-gradient(135deg, #f2c094, #d97706);
+    color: #fff;
+}
+.<?= $wc ?> .product-actions {
+    position: absolute;
+    top: var(--weline-space-3);
+    right: var(--weline-space-3);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-2);
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.<?= $wc ?> .product-card:hover .product-actions,
+.<?= $wc ?> .product-card:focus-within .product-actions {
+    opacity: 1;
+    transform: translateX(0);
+}
+.<?= $wc ?> .action-btn {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    color: var(--bs-card-text);
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(15, 17, 17, 0.12);
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.<?= $wc ?> .action-btn:hover {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary, #fff);
+    transform: scale(1.05);
 }
 .<?= $wc ?> .product-info {
     display: flex;
@@ -196,49 +386,174 @@ if ($realProducts !== []) {
     min-width: 0;
     flex: 1;
     flex-direction: column;
-    gap: var(--weline-space-2, 0.6rem);
-    padding: var(--weline-space-4, 1rem);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-4);
     box-sizing: border-box;
+    background: var(--bs-card-bg);
+    color: var(--bs-card-text);
 }
-.<?= $wc ?> .products-wrapper { width: 100%; overflow: hidden; }
-.<?= $wc ?> .product-image-wrapper { position: relative; overflow: hidden; background: var(--weline-theme-surface-muted); }
-.<?= $wc ?> .product-image-link { display: block; aspect-ratio: 1 / 1; }
-.<?= $wc ?> .product-image { display: block; width: 100%; height: 100%; object-fit: cover; }
-.<?= $wc ?> .rank-badge { position: absolute; top: 10px; left: 10px; z-index: 3; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 999px; background: linear-gradient(135deg, var(--weline-theme-warning), var(--weline-theme-warning-surface)); color: var(--weline-theme-text); font-size: 14px; font-weight: 700; }
-.<?= $wc ?> .rank-2 { background: linear-gradient(135deg, var(--weline-theme-surface-muted), var(--weline-theme-border)); color: var(--weline-theme-text-muted); }
-.<?= $wc ?> .rank-3 { background: linear-gradient(135deg, var(--weline-theme-warning), var(--weline-theme-warning)); color: var(--weline-theme-on-primary); }
-.<?= $wc ?> .product-badges { position: absolute; left: 10px; bottom: 10px; }
-.<?= $wc ?> .badge-hot { display: inline-flex; align-items: center; border-radius: 999px; background: linear-gradient(135deg, var(--weline-theme-danger), var(--weline-theme-danger)); color: var(--weline-theme-on-primary); padding: .25rem .55rem; font-size: .75rem; font-weight: 700; }
-.<?= $wc ?> .product-actions { position: absolute; top: .75rem; right: .75rem; display: flex; gap: .5rem; }
-.<?= $wc ?> .action-btn { display: inline-flex; width: 2.25rem; height: 2.25rem; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: rgba(255,255,255,.92); color: var(--weline-theme-text); cursor: pointer; box-shadow: 0 8px 20px rgba(15,23,42,.12); }
-.<?= $wc ?> .product-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
-.<?= $wc ?> .product-card:hover { transform: translateY(-2px); border-color: var(--weline-theme-primary); box-shadow: var(--shadow-md, 0 12px 30px rgba(15,23,42,.10)); }
-.<?= $wc ?> .product-name { margin: 0; font-size: var(--font-size-base, 1rem); line-height: 1.35; }
-.<?= $wc ?> .product-name a { color: var(--weline-theme-text); text-decoration: none; }
-.<?= $wc ?> .product-name a:hover { color: var(--weline-theme-primary); }
-.<?= $wc ?> .product-rating, .<?= $wc ?> .product-sales { display: flex; align-items: center; gap: .45rem; color: var(--weline-theme-text-muted); font-size: .875rem; }
-.<?= $wc ?> .stars { display: flex; align-items: center; gap: 2px; }
-.<?= $wc ?> .stars i { color: var(--weline-theme-warning); }
-.<?= $wc ?> .product-price { display: flex; align-items: baseline; gap: .5rem; margin-top: auto; }
-.<?= $wc ?> .price-original { color: var(--weline-theme-text-muted); text-decoration: line-through; }
-.<?= $wc ?> .price-current { color: var(--weline-theme-primary); font-weight: 800; }
+.<?= $wc ?> .product-name {
+    margin: 0;
+    min-height: calc(2 * 1.45em);
+    max-height: calc(2 * 1.45em);
+    overflow: hidden;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.45;
+}
+.<?= $wc ?> .product-name,
+.<?= $wc ?> .product-name a {
+    display: -webkit-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    word-break: break-word;
+}
+.<?= $wc ?> .product-name a {
+    color: var(--bs-card-text);
+    text-decoration: none;
+}
+.<?= $wc ?> .product-name a:hover {
+    color: var(--weline-theme-primary);
+}
+.<?= $wc ?> .product-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-2);
+}
+.<?= $wc ?> .product-rating,
+.<?= $wc ?> .product-sales {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    color: var(--bs-card-text-muted);
+    font-size: var(--font-size-xs);
+}
+.<?= $wc ?> .stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+}
+.<?= $wc ?> .stars :is(i, svg, .w-rating-star[data-state="filled"]) {
+    color: var(--weline-theme-warning, #f59e0b);
+}
+.<?= $wc ?> .product-sales {
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--weline-theme-primary) 8%, #fff);
+}
+.<?= $wc ?> .product-price {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--weline-space-2);
+    margin-top: auto;
+}
+.<?= $wc ?> .price-current {
+    color: var(--bs-card-price);
+    font-size: var(--font-size-lg);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+.<?= $wc ?> .price-original {
+    color: var(--bs-card-text-muted);
+    font-size: var(--font-size-xs);
+    text-decoration: line-through;
+}
 .<?= $wc ?> .btn-add-to-cart {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: .5rem;
+    gap: var(--weline-space-2);
     width: 100%;
-    min-height: 2.75rem;
-    border: 0;
-    border-radius: var(--radius-md, 10px);
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
+    min-height: 2.5rem;
+    margin-top: var(--weline-space-1);
+    border: 1px solid var(--bs-card-cta-border);
+    border-radius: var(--weline-radius-lg);
+    background: var(--bs-card-cta-bg);
+    color: var(--bs-card-cta-text);
     cursor: pointer;
+    font-size: var(--font-size-sm);
     font-weight: 700;
-    transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease;
-    box-shadow: var(--shadow-sm, 0 1px 2px rgba(15,23,42,.06));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
-.<?= $wc ?> .btn-add-to-cart:hover { opacity: .92; box-shadow: var(--shadow-md, 0 10px 24px rgba(37,99,235,.22)); }
-.<?= $wc ?> .btn-add-to-cart:active { transform: translateY(1px); }
-.<?= $wc ?> .btn-add-to-cart i { font-size: 1.05rem; }
+.<?= $wc ?> .btn-add-to-cart:hover {
+    background: var(--bs-card-cta-bg-hover);
+    border-color: #e7b92e;
+    color: var(--bs-card-cta-text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(15, 17, 17, 0.12);
+}
+.<?= $wc ?> .btn-add-to-cart:active {
+    transform: translateY(1px);
+}
+
+@media (max-width: 1200px) {
+    .<?= $wc ?> .products-grid.columns-5,
+    .<?= $wc ?> .products-grid.columns-6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .<?= $wc ?> .products-grid.layout-masonry.columns-5,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-6 {
+        column-count: 4;
+    }
+}
+
+@media (max-width: 992px) {
+    .<?= $wc ?> .products-grid.columns-4,
+    .<?= $wc ?> .products-grid.columns-5,
+    .<?= $wc ?> .products-grid.columns-6 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .<?= $wc ?> .products-grid.layout-masonry.columns-4,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-5,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-6 {
+        column-count: 3;
+    }
+}
+
+@media (max-width: 768px) {
+    .<?= $wc ?> .products-grid,
+    .<?= $wc ?> .products-grid.columns-2,
+    .<?= $wc ?> .products-grid.columns-3,
+    .<?= $wc ?> .products-grid.columns-4,
+    .<?= $wc ?> .products-grid.columns-5,
+    .<?= $wc ?> .products-grid.columns-6 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .<?= $wc ?> .products-grid.layout-masonry,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-2,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-3,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-4,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-5,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-6 {
+        column-count: 2;
+    }
+    .<?= $wc ?> .product-actions {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .<?= $wc ?> .products-grid,
+    .<?= $wc ?> .products-grid.columns-2,
+    .<?= $wc ?> .products-grid.columns-3,
+    .<?= $wc ?> .products-grid.columns-4,
+    .<?= $wc ?> .products-grid.columns-5,
+    .<?= $wc ?> .products-grid.columns-6 {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .<?= $wc ?> .products-grid.layout-masonry,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-2,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-3,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-4,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-5,
+    .<?= $wc ?> .products-grid.layout-masonry.columns-6 {
+        column-count: 1;
+    }
+}
 </style>

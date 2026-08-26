@@ -47,9 +47,13 @@ final class PriceRepository extends AbstractWebsiteShardRepository
         string $currency,
         int $amountMinor,
     ): void {
+        if ($amountMinor < 0) {
+            throw new \InvalidArgumentException('product_price_amount_negative');
+        }
         $this->upsert($websiteId, $storeId, $offerId, $currency, [
             Price::schema_fields_AMOUNT_MINOR => $amountMinor,
             Price::schema_fields_CLEARED => 0,
+            'scope_state' => 'explicit',
         ]);
     }
 
@@ -58,6 +62,7 @@ final class PriceRepository extends AbstractWebsiteShardRepository
         $this->upsert($websiteId, $storeId, $offerId, $currency, [
             Price::schema_fields_AMOUNT_MINOR => 0,
             Price::schema_fields_CLEARED => 1,
+            'scope_state' => 'cleared',
         ]);
     }
 
@@ -133,12 +138,18 @@ final class PriceRepository extends AbstractWebsiteShardRepository
             ->fetchArray();
         $rows = [];
         foreach ($raw as $item) {
+            $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
+                || (int)($item[Price::schema_fields_CLEARED] ?? 0) === 1;
             $rows[] = [
                 'store_id' => (int)($item[Price::schema_fields_STORE_ID] ?? 0),
                 'offer_id' => (int)($item[Price::schema_fields_OFFER_ID] ?? 0),
                 'currency' => (string)($item[Price::schema_fields_CURRENCY] ?? ''),
-                'amount_minor' => (int)($item[Price::schema_fields_AMOUNT_MINOR] ?? 0),
-                'cleared' => (int)($item[Price::schema_fields_CLEARED] ?? 0) === 1,
+                'amount_minor' => $cleared
+                    ? null
+                    : (int)($item[Price::schema_fields_AMOUNT_MINOR] ?? 0),
+                'scope_state' => $cleared ? 'cleared' : (string)($item['scope_state'] ?? 'explicit'),
+                'cleared' => $cleared,
+                'version' => (int)($item['version'] ?? 1),
             ];
         }
         usort(
@@ -174,6 +185,7 @@ final class PriceRepository extends AbstractWebsiteShardRepository
             foreach ($fields as $k => $v) {
                 $existing->setData($k, $v);
             }
+            $existing->setData('version', (int)$existing->getData('version') + 1);
             $existing->save();
             return;
         }
@@ -182,6 +194,7 @@ final class PriceRepository extends AbstractWebsiteShardRepository
             Price::schema_fields_STORE_ID => $storeId,
             Price::schema_fields_OFFER_ID => $offerId,
             Price::schema_fields_CURRENCY => $currency,
+            'version' => 1,
         ], $fields))->save();
     }
 
@@ -210,12 +223,17 @@ final class PriceRepository extends AbstractWebsiteShardRepository
             ->fetchArray();
         $rows = [];
         foreach ($raw as $item) {
+            $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
+                || (int)($item[Price::schema_fields_CLEARED] ?? 0) === 1;
             $rows[] = [
                 'store_id' => (int)($item[Price::schema_fields_STORE_ID] ?? 0),
-                'cleared' => (int)($item[Price::schema_fields_CLEARED] ?? 0) === 1,
-                'value' => isset($item[Price::schema_fields_AMOUNT_MINOR])
-                    ? (int)$item[Price::schema_fields_AMOUNT_MINOR]
-                    : null,
+                'cleared' => $cleared,
+                'scope_state' => $cleared ? 'cleared' : (string)($item['scope_state'] ?? 'explicit'),
+                'value' => $cleared
+                    ? null
+                    : (isset($item[Price::schema_fields_AMOUNT_MINOR])
+                        ? (int)$item[Price::schema_fields_AMOUNT_MINOR]
+                        : null),
             ];
         }
         return $rows;

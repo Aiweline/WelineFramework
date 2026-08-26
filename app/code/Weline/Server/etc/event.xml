@@ -98,6 +98,14 @@
     
     <!-- ========== Fiber 调度器事件 ========== -->
     
+    <event name="Weline_Framework::controller_annotation_rules_collected">
+        <observer name="Weline_Server::controller_annotation_rules"
+                  instance="Weline\Server\Observer\ControllerAnnotationRulesHandler"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <!-- SchedulerSystem::sleep/usleep 在 WLS 模式下 dispatch，由调度器注册定时器 -->
     <event name="Weline_Framework::scheduler::wait">
         <observer name="Weline_Server::scheduler_wait"

@@ -77,7 +77,7 @@
                 </tr>
                 <tr>
                     <th><?= __('适配器名称') ?></th>
-                    <td><?= $adapter->getData('name') ?></td>
+                    <td><?= __((string)$adapter->getData('name')) ?></td>
                 </tr>
                 <tr>
                     <th><?= __('版本') ?></th>
@@ -85,7 +85,7 @@
                 </tr>
                 <tr>
                     <th><?= __('描述') ?></th>
-                    <td><?= $adapter->getData('description') ?></td>
+                    <td><?= __((string)$adapter->getData('description')) ?></td>
                 </tr>
                 <tr>
                     <th><?= __('状态') ?></th>

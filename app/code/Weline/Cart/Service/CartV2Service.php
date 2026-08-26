@@ -470,7 +470,7 @@ final class CartV2Service
         string $selectionHash,
         int $qty,
     ): array {
-        return [
+        $line = [
             'item_id' => 'v2-' . substr($selectionHash, 0, 16),
             'selection_hash' => $selectionHash,
             'selection' => $selection,
@@ -495,6 +495,10 @@ final class CartV2Service
             'tax_class_code' => trim($snapshot->taxClassCode) ?: 'standard',
             'row_total_minor' => $qty * $snapshot->unitPriceMinor,
         ];
+        if ($snapshot->fulfillmentMetadata !== []) {
+            $line['fulfillment_metadata'] = $snapshot->fulfillmentMetadata;
+        }
+        return $line;
     }
 
     /**

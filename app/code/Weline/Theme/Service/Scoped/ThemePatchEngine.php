@@ -65,7 +65,7 @@ final class ThemePatchEngine
             }
         }
 
-        return $payload;
+        return $this->normalizeNodeIdentities($payload);
     }
 
     /**
@@ -300,6 +300,7 @@ final class ThemePatchEngine
             $cursor =& $cursor[$segment];
         }
         $cursor[$last] = $value;
+        $this->ensureNodeIdentity($payload, $path);
     }
 
     private function removePath(array &$payload, string $path): void
@@ -354,5 +355,40 @@ final class ThemePatchEngine
             'node_uid' => $command->nodeUid ?? $this->nodeUidFromPath($command->path),
             'anchor_uid' => $command->anchorUid,
         ];
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function ensureNodeIdentity(array &$payload, string $path): void
+    {
+        if (\preg_match('#^/nodes/([a-f0-9]{32})(?:/|$)#D', $path, $matches) !== 1) {
+            return;
+        }
+        $uid = $matches[1];
+        if (!isset($payload['nodes'][$uid]) || !\is_array($payload['nodes'][$uid])) {
+            return;
+        }
+        if ((string)($payload['nodes'][$uid]['node_uid'] ?? '') === '') {
+            $payload['nodes'][$uid]['node_uid'] = $uid;
+        }
+    }
+
+    /** @param array<string,mixed> $payload @return array<string,mixed> */
+    private function normalizeNodeIdentities(array $payload): array
+    {
+        if (!isset($payload['nodes']) || !\is_array($payload['nodes'])) {
+            return $payload;
+        }
+        foreach ($payload['nodes'] as $uid => &$node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $key = \strtolower((string)$uid);
+            if (\preg_match('/^[a-f0-9]{32}$/D', $key) === 1) {
+                $node['node_uid'] = $key;
+            }
+        }
+        unset($node);
+
+        return $payload;
     }
 }

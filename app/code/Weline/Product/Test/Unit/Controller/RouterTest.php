@@ -47,6 +47,19 @@ final class RouterTest extends TestCase
         self::assertSame(17, Context::current()->query('id'));
     }
 
+    public function testCategoryPathRoutesToCategoryController(): void
+    {
+        Context::enter(new Context());
+        $path = '/category/home/kitchen/dining/';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('weline_product/frontend/category', $path);
+        self::assertSame('Weline_Product', $rule['module'] ?? null);
+        self::assertSame('home/kitchen/dining', Context::current()->query('path'));
+    }
+
     public function testSlugProductPathRoutesToNativeDetailController(): void
     {
         Context::enter(new Context());

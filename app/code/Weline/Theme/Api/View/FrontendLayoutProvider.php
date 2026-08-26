@@ -10,6 +10,7 @@ final class FrontendLayoutProvider implements FrontendLayoutProviderInterface
 {
     private const LAYOUTS = [
         'auth' => 'Weline_Theme::theme/frontend/layouts/account/auth.phtml',
+        'homepage' => 'Weline_Theme::theme/frontend/layouts/homepage/default.phtml',
         'default' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
         'full' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
     ];

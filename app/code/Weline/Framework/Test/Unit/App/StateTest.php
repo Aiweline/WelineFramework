@@ -50,6 +50,43 @@ class StateTest extends TestCore
         }
     }
 
+    public function testRequestLanguageOverrideBeatsCookieWithoutWritingPreference(): void
+    {
+        $hadContext = Context::getCurrent() !== null;
+        $snapshot = WelineEnv::getInstance()->capture();
+        $previousCookie = $_COOKIE['WELINE_USER_LANG'] ?? null;
+
+        try {
+            State::resetRequestPathLocalizationCache();
+            $_COOKIE['WELINE_USER_LANG'] = 'zh_Hans_CN';
+            WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/catalog/category/home',
+                'HTTP_HOST' => 'example.test',
+            ]);
+
+            self::assertSame('zh_Hans_CN', State::getLang());
+            State::setRequestLanguageOverride('en_US');
+            self::assertSame('en_US', State::getLang());
+            self::assertSame('zh_Hans_CN', $_COOKIE['WELINE_USER_LANG']);
+            State::setRequestLanguageOverride('');
+            self::assertSame('zh_Hans_CN', State::getLang());
+        } finally {
+            State::setRequestLanguageOverride('');
+            State::resetRequestPathLocalizationCache();
+            if ($previousCookie === null) {
+                unset($_COOKIE['WELINE_USER_LANG']);
+            } else {
+                $_COOKIE['WELINE_USER_LANG'] = $previousCookie;
+            }
+            if ($hadContext) {
+                WelineEnv::getInstance()->restore($snapshot);
+            } else {
+                WelineEnv::getInstance()->reset();
+            }
+        }
+    }
+
     public function testIsAllowedLanguageCodeRejectsNonLocaleSegments(): void
     {
         self::assertFalse(State::isAllowedLanguageCode('api'));

@@ -5,6 +5,7 @@
  * @hook-solo false
  */
 
+use Weline\CustomerService\Service\BindCaptchaGuard;
 use Weline\CustomerService\Service\WidgetTranslationService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
@@ -84,8 +85,14 @@ $normalizeDefaultLocaleUrl = static function (string $url): string {
 };
 $chatUrl = $normalizeDefaultLocaleUrl($urlBuilder->getFrontendUrl('customerservice/frontend/chat'));
 $bindUrl = $normalizeDefaultLocaleUrl($urlBuilder->getFrontendUrl('customerservice/frontend/bind'));
+$bindCaptchaChallengeUrl = $normalizeDefaultLocaleUrl($urlBuilder->getFrontendUrl('customerservice/frontend/bind/captcha-challenge'));
 
 $showGuestBindPrompt = !$isLoggedIn;
+
+/** @var BindCaptchaGuard $bindCaptchaGuard */
+$bindCaptchaGuard = ObjectManager::getInstance(BindCaptchaGuard::class);
+$bindCaptchaHtml = $bindCaptchaGuard->renderChallenge();
+$bindCaptchaEnabled = $bindCaptchaGuard->isEnabled() && trim($bindCaptchaHtml) !== '';
 
 /** @var WidgetTranslationService $widgetTranslationService */
 $widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
@@ -207,20 +214,23 @@ $bindModalHtml = <<<'BIND_MODAL_HTML'
                 </button>
             </div>
             <div class="cs-modal-body w-modal-body">
-                <p class="cs-modal-copy">{{copy}}</p>
-                <p class="cs-modal-note">{{note}}</p>
-                <div class="cs-w-field">
-                    <label>{{email_label}}</label>
-                    <input type="email" id="cs-bind-email" class="w-input cs-form-input" placeholder="{{email_placeholder}}">
-                </div>
-            </div>
-            <div class="cs-modal-footer w-modal-footer">
-                <button type="button" class="w-button cs-btn cs-btn-secondary" data-tone="neutral" data-variant="outline" data-cs-bind-close>
-                    {{later}}
-                </button>
-                <button type="button" class="w-button cs-btn cs-btn-primary" data-cs-bind-send>
-                    {{send}}
-                </button>
+                <form id="cs-bind-form" method="post" class="cs-bind-form w-form" data-weline-form="1" data-weline-form-intent="customerservice.bind_email" novalidate>
+                    <p class="cs-modal-copy">{{copy}}</p>
+                    <p class="cs-modal-note">{{note}}</p>
+                    <div class="cs-w-field">
+                        <label for="cs-bind-email">{{email_label}}</label>
+                        <input type="email" id="cs-bind-email" name="email" class="w-input cs-form-input" placeholder="{{email_placeholder}}" required autocomplete="email">
+                    </div>
+                    <div data-weline-form-captcha-slot>{{captcha_slot}}</div>
+                    <div class="cs-modal-footer w-modal-footer">
+                        <button type="button" class="w-button cs-btn cs-btn-secondary" data-tone="neutral" data-variant="outline" data-cs-bind-close>
+                            {{later}}
+                        </button>
+                        <button type="submit" class="w-button cs-btn cs-btn-primary" data-cs-bind-send>
+                            {{send}}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -234,6 +244,7 @@ $bindModalHtml = strtr($bindModalHtml, [
     '{{email_placeholder}}' => __('请输入用于接收客服通知的邮箱'),
     '{{later}}' => __('稍后再说'),
     '{{send}}' => __('发送验证邮件'),
+    '{{captcha_slot}}' => $bindCaptchaHtml,
 ]);
 ?>
 <script type="application/json" id="cs-bind-modal-template">
@@ -244,6 +255,8 @@ $bindModalHtml = strtr($bindModalHtml, [
 var customerServiceConfig = {
     chatUrl: '<?= htmlspecialchars($chatUrl) ?>',
     bindUrl: '<?= htmlspecialchars($bindUrl) ?>',
+    bindCaptchaEnabled: <?= $bindCaptchaEnabled ? 'true' : 'false' ?>,
+    bindCaptchaChallengeUrl: '<?= htmlspecialchars($bindCaptchaChallengeUrl) ?>',
     customerId: <?= $customerId ? (int)$customerId : 'null' ?>,
     isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>,
     showGuestBindPrompt: <?= $showGuestBindPrompt ? 'true' : 'false' ?>,

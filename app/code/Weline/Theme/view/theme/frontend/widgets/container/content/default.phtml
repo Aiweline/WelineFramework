@@ -213,68 +213,68 @@ $rootStyle = '--wc-sidebar-width:' . $sidebarWidth . '%;';
 <style>
 .<?= $wc ?> {
     width: 100%;
-    padding: var(--weline-space-5, 20px) 0;
+    padding: var(--weline-space-5) 0;
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .content-shell.container,
 .<?= $wc ?> .content-shell.container-lg {
-    max-width: var(--weline-theme-container-max, 1400px);
+    max-width: var(--weline-theme-container-max);
     margin: 0 auto;
-    padding: 0 var(--weline-space-5, 20px);
+    padding: 0 var(--weline-space-5);
 }
 
 .<?= $wc ?> .content-shell.container-fluid {
     max-width: 100%;
-    padding: 0 var(--weline-space-5, 20px);
+    padding: 0 var(--weline-space-5);
 }
 
 .<?= $wc ?> .slot-hero {
-    margin-bottom: var(--weline-space-8, 30px);
+    margin-bottom: var(--weline-space-8);
 }
 
 .<?= $wc ?> .slot-featured {
-    margin-bottom: var(--weline-space-8, 30px);
+    margin-bottom: var(--weline-space-8);
 }
 
 .<?= $wc ?> .content-body {
     display: flex;
-    gap: var(--weline-space-8, 30px);
-    margin-bottom: var(--weline-space-8, 30px);
+    gap: var(--weline-space-8);
+    margin-bottom: var(--weline-space-8);
 }
 
 .<?= $wc ?> .slot-sidebar-left,
 .<?= $wc ?> .slot-sidebar-right {
-    flex: 0 0 var(--wc-sidebar-width, 25%);
+    flex: 0 0 var(--wc-sidebar-width);
 }
 
 .<?= $wc ?> .slot-main {
     flex: 1;
-    min-height: 400px;
+    min-height: var(--size-panel-400);
 }
 
 .<?= $wc ?> .slot-bottom {
-    margin-top: var(--weline-space-8, 30px);
-    padding-top: var(--weline-space-8, 30px);
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    margin-top: var(--weline-space-8);
+    padding-top: var(--weline-space-8);
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .content-slot {
     position: relative;
-    min-height: 50px;
+    min-height: var(--size-control-50);
 }
 
 .<?= $wc ?> .content-slot.slot-selected,
 .<?= $wc ?> [data-slot].slot-selected,
 .<?= $wc ?> [data-wslot].slot-selected {
-    outline: 3px solid var(--weline-theme-primary) !important;
-    outline-offset: 2px;
+    outline: var(--spacing-1_5) solid var(--weline-theme-primary) !important;
+    outline-offset: var(--spacing-0_5);
     background: color-mix(in srgb, var(--weline-theme-primary) 5%, transparent) !important;
 }
 
 .<?= $wc ?> .slot-widget {
     position: relative;
-    margin-bottom: var(--weline-space-5, 20px);
+    margin-bottom: var(--weline-space-5);
 }
 
 .<?= $wc ?> .slot-widget:last-child {
@@ -283,7 +283,7 @@ $rootStyle = '--wc-sidebar-width:' . $sidebarWidth . '%;';
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 120px;
+    min-height: var(--size-panel-120);
 }
 
 @media (max-width: 992px) {

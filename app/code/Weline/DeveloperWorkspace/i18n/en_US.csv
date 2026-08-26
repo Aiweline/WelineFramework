@@ -4,6 +4,8 @@
 "执行异步资源变更 WebUI 验收步骤","Execute asynchronous resource changes WebUI acceptance step"
 "异步资源变更 WebUI 验收台","Asynchronous resource change WebUI acceptance platform"
 "通过 w_changed() 实测 Outbox、Delivery、Queue 与异步 Observer。","Use w_changed() to measure Outbox, Delivery, Queue and asynchronous Observer."
+开发者工作区文档翻译,"DeveloperWorkspace Document Translation"
+"翻译开发者工作区的 Markdown/API 文档，同时保留格式、代码、URL、标识符和受保护令牌。","Translates DeveloperWorkspace Markdown/API docs while preserving format, code, URLs, identifiers, and protected tokens."
 开发工具面板,"Developer Tools Panel"
 在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,"Show the developer tools panel on the page, including route inspection and API docs. Displayed only in developer mode."
 开发工具面板-扩展标签,"Developer Tools Panel - Extension Tabs"
@@ -274,6 +276,27 @@ Outbox,Outbox
 Debug配置功能正在开发中，敬请期待。,"Debug config is under development. Stay tuned."
 返回欢迎页,"Back to Welcome Page"
 返回上一页,"Back to Previous Page"
+"搜索 ...","Search ..."
+头部语言,"Header Language"
+中国,China
+头像,Avatar
+资料,Profile
+我的钱包,MyWallet
+设置,Settings
+锁定屏幕,LockScreen
+退出,Exit
+菜单布局,"Menu Layout"
+菜单明亮,"Light Menu"
+图标菜单,"Icon Menu"
+图文菜单,"Icon and Text Menu"
+主题布局,"Theme Layout"
+水平布局,"Horizontal Layout"
+水平顶黑,"Horizontal Dark Header"
+水平盒子,"Horizontal Boxed"
+主题颜色,"Theme Color"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
+RTL模式,"RTL Mode"
 仅开发模式可用,"Available in developer mode only"
 "参数 sql 不能为空","The sql parameter cannot be empty"
 "仅支持对 SELECT 语句执行 EXPLAIN","EXPLAIN only supports SELECT statements"
@@ -405,27 +428,6 @@ API文档,"API Docs"
 好的,OK
 删除提示！,"Delete Notice!"
 文章删除失败，请重试！,"Failed to delete article. Retry!"
-"搜索 ...","Search ..."
-头部语言,"Header Language"
-中国,China
-头像,Avatar
-资料,Profile
-我的钱包,MyWallet
-设置,Settings
-锁定屏幕,LockScreen
-退出,Exit
-菜单布局,"Menu Layout"
-菜单明亮,"Light Menu"
-图标菜单,"Icon Menu"
-图文菜单,"Icon and Text Menu"
-主题布局,"Theme Layout"
-水平布局,"Horizontal Layout"
-水平顶黑,"Horizontal Dark Header"
-水平盒子,"Horizontal Boxed"
-主题颜色,"Theme Color"
-明亮模式,"Light Mode"
-暗黑模式,"Dark Mode"
-RTL模式,"RTL Mode"
 "fa fa-book-o","fa fa-book-o"
 "fa fa-list-alt","fa fa-list-alt"
 "fa fa-delete","fa fa-delete"
@@ -600,3 +602,4 @@ RTL模式,"RTL Mode"
 文档管理,"Document management"
 测试沙盒,"Test sandbox"
 面板配置,"Panel configuration"
+全屏,Fullscreen

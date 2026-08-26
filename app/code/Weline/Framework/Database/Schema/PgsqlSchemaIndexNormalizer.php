@@ -45,10 +45,10 @@ final class PgsqlSchemaIndexNormalizer
                     ));
                 }
                 if (!$this->definitionEquals($declaredIndex, $actualIndex)) {
-                    throw new \RuntimeException(__(
-                        'PostgreSQL 表 %{1} 的索引 %{2} 与逻辑声明 %{3} 定义不一致',
-                        [$formattedTable, $actualIndex->name, $declaredIndex->name],
-                    ));
+                    // Same logical/physical name with a different definition is
+                    // not a rename target: leave the physical index unmatched so
+                    // SchemaDiff can DROP it and ADD the declared index.
+                    continue;
                 }
                 $matches[$position] = $actualIndex;
                 if ($actualIndex->name === $rawPhysical) {

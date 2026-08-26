@@ -1380,6 +1380,14 @@ CDEF,
                     SchedulerSystem::usleep(10_000);
                     continue;
                 }
+                // libproc null after the retry streak usually means the PID is
+                // gone. posix_kill(0) is microsecond-scale on Darwin and avoids
+                // the 2s bounded ps probe that made startup credential retirement
+                // exhaust its budget while clearing a handful of dead workers.
+                $exists = $this->probePosixProcessExistence($pid);
+                if ($exists === false) {
+                    return ['exists' => false];
+                }
                 // ps can still provide bounded liveness/diagnostic evidence, but
                 // processBirth() deliberately refuses its second-resolution time.
                 return $this->inspectPosixProcessWithPs($pid);
@@ -1401,6 +1409,11 @@ CDEF,
             }
         }
         if ($stable === null) {
+            $exists = $this->probePosixProcessExistence($pid);
+            if ($exists === false) {
+                return ['exists' => false];
+            }
+
             return [];
         }
         $second = $stable;

@@ -2644,6 +2644,7 @@ class ServiceOrchestrator
             $instanceName,
             (int)$context->masterPid,
             (int)$context->epoch,
+            timeoutSeconds: 12.0,
         );
         $killed = 0;
         $unreleased = [];
@@ -11421,15 +11422,15 @@ class ServiceOrchestrator
      * @param array<string, mixed> $readiness
      */
     /**
-     * Local emergency bypass for homepage process-FPC READY admission.
-     * Must stay aligned with wls.worker.ready_gate_homepage_fail_open on Worker.
-     * Default remains closed; do not enable in production.
+     * Homepage Process-FPC READY admission fail-open (aligned with Worker).
+     * Default true: warmup failure is normal and must not reject READY.
+     * Set wls.worker.ready_gate_homepage_fail_open=0 for strict admission.
      */
     private function shouldFailOpenHomepageReadyGate(): bool
     {
         $failOpenRaw = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
         if ($failOpenRaw === false || \trim((string)$failOpenRaw) === '') {
-            $failOpenRaw = Env::get('wls.worker.ready_gate_homepage_fail_open', '0');
+            $failOpenRaw = Env::get('wls.worker.ready_gate_homepage_fail_open', '1');
         }
 
         return \in_array(
@@ -17186,11 +17187,12 @@ class ServiceOrchestrator
                 && ($warmupState !== 'hot' || !$homepageProcessFpcReady)
                 && $this->shouldFailOpenHomepageReadyGate()
             ) {
-                WlsLogger::error_(
-                    '[Orchestrator] Worker READY admitted via homepage fail-open: warmup='
+                WlsLogger::warning_(
+                    '[Orchestrator] Worker READY admitted with homepage warmup not hot (fail-open): warmup='
                     . $warmupState
                     . ', homepage_fpc=' . $homepageFpcStatus . '/' . $homepageFpcSource
                     . ', http_status=' . $homepageFpcHttpStatus
+                    . ', reason=' . \trim((string)($homepageFpc['reason'] ?? ''))
                 );
             }
             if ($readyRejection !== '') {

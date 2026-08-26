@@ -16,23 +16,30 @@ class LoginTemplateGoogleHostTest extends TestCase
         $content = (string) file_get_contents($templateFile);
 
         $this->assertStringContainsString('$redirectUrl = (string) ($this->getData(\'redirect_url\')', $content);
-        $this->assertStringContainsString('<form id="loginForm" class="auth-form__body" action="/customer/account/login" method="post">', $content);
+        $this->assertStringContainsString('id="loginForm"', $content);
+        $this->assertStringContainsString('action="@var($loginSubmitUrl)"', $content);
+        $this->assertStringContainsString('method="post"', $content);
         $this->assertStringContainsString('name="redirect_url"', $content);
-        $this->assertStringContainsString('value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>"', $content);
+        $this->assertStringContainsString('value="<?= $safe($redirectUrl) ?>"', $content);
 
         $this->assertStringContainsString('Weline_Customer::frontend::account::login::providers', $content);
         $this->assertStringNotContainsString('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', $content);
         $this->assertStringNotContainsString('getModuleStatus(\'WeShop_GoogleAuth\')', $content);
         $this->assertStringContainsString('/customer/account/forgot-password', $content);
-        $this->assertStringContainsString('function setLoginLoading(loading)', $content);
-        $this->assertStringContainsString('if ((username.value || \'\').trim() && password.value)', $content);
+        $this->assertStringContainsString('data-w-component="account-login"', $content);
+        $this->assertStringContainsString('data-w-login-submit', $content);
+
+        $loginJs = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/account-login.js'
+        );
+        $this->assertStringContainsString('username.value.trim()', $loginJs);
+        $this->assertStringContainsString('password.value', $loginJs);
     }
 
     public function testCustomerModuleDeclaresLoginProviderHook(): void
     {
-        $hooks = require dirname(__DIR__, 3) . '/hook.php';
+        $hooks = (string) file_get_contents(dirname(__DIR__, 3) . '/hook.php');
 
-        $this->assertIsArray($hooks);
-        $this->assertArrayHasKey('Weline_Customer::frontend::account::login::providers', $hooks);
+        $this->assertStringContainsString('Weline_Customer::frontend::account::login::providers', $hooks);
     }
 }

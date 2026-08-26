@@ -353,8 +353,30 @@
                                 </select>
                             </div>
                         </div>
+                        <div class='col-lg-4'>
+                            <div class='mb-3'>
+                                <label class='form-label' for='validationCompareMode'>
+                                    <lang>可比模式</lang>
+                                </label>
+                                <select class='form-control' id='validationCompareMode'
+                                        scope="attribute"
+                                        v-model="params.compare_mode" name='compare_mode'>
+                                    <option value='none' @if{attribute.compare_mode==none=>'selected'}>
+                                        <lang>不参与对比</lang>
+                                    </option>
+                                    <option value='diff' @if{attribute.compare_mode==diff=>'selected'}>
+                                        <lang>仅标差异</lang>
+                                    </option>
+                                    <option value='higher_better' @if{attribute.compare_mode==higher_better=>'selected'}>
+                                        <lang>越大越好</lang>
+                                    </option>
+                                    <option value='lower_better' @if{attribute.compare_mode==lower_better=>'selected'}>
+                                        <lang>越小越好</lang>
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
                         <div class='col-lg-12'>
-                            <!--高级信息-->
                             <div class='accordion mb-3' id='accordionAdvanced'>
                                 <div class='accordion-item'>
                                     <h2 class='accordion-header' id='headingOne'>
@@ -698,6 +720,7 @@
                 frontend_is_visible: '{{attribute.frontend_is_visible|0}}',
                 frontend_is_filterable: '{{attribute.frontend_is_filterable|0}}',
                 frontend_is_searchable: '{{attribute.frontend_is_searchable|0}}',
+                compare_mode: '{{attribute.compare_mode|none}}',
                 data_has_option: '{{attribute.data_has_option|0}}',
                 is_system: '{{attribute.is_system|0}}',
                 data_is_multiple: '{{attribute.data_is_multiple|0}}'

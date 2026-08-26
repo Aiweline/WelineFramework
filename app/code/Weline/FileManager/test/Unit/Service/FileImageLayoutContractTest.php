@@ -122,6 +122,38 @@ final class FileImageLayoutContractTest extends TestCase
         ]);
     }
 
+    public function testPreviewHydrationFallsBackToUsageLocaleOnMismatch(): void
+    {
+        $scope = ScopeIdentity::store(1, 'shop', 'main', ScopeIdentity::MODE_NORMAL);
+        $assets = $this->createMock(FileAssetManagerInterface::class);
+        $assets->expects(self::once())
+            ->method('resolveImage')
+            ->willReturnCallback(static function (
+                ImageUsage $usage,
+                FileAccessContext $access,
+            ) use ($scope): ResolvedFileImage {
+                self::assertSame(self::ASSET_ID, $usage->assetId);
+                self::assertTrue($scope->equals($access->scope));
+                self::assertSame('en_US', $access->localeCode);
+                return new ResolvedFileImage(
+                    'https://cdn.example.test/media/image.jpg',
+                    '<img src="https://cdn.example.test/media/image.jpg" alt="Product">',
+                );
+            });
+        $hydrator = new FileImageLayoutValueHydrator($assets);
+
+        $result = $hydrator->hydrate([
+            'type' => 'file-image',
+            'usage' => $this->usage(),
+        ], [
+            'scope_identity' => $scope,
+            'locale_code' => 'fr_FR',
+            'purpose' => 'preview',
+        ]);
+
+        self::assertSame('https://cdn.example.test/media/image.jpg', $result->value);
+    }
+
     /** @return array<string,mixed> */
     private function usage(): array
     {

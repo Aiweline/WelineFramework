@@ -1,0 +1,203 @@
+<?php
+/**
+ * Review-owned product reviews widget for the PDP reviews slot.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {product-reviews}
+ * @widget.name {商品评论}
+ * @widget.description {万能评论大部件：列表、星级表单与图文视频提交}
+ * @widget.type {comment}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * @widget.supports {["layout-product-reviews","product-reviews","review","reviews"]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-reviews", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认评论容器", "config":{"title":"商品评论","intro":"支持文字、图片与视频，内容审核后公开。","page_size":10} }]}
+ *
+ * @param title {default="商品评论",type="string",label="标题"}
+ * @param intro {default="支持文字、图片与视频，内容审核后公开。",type="string",label="简介"}
+ * @param page_size {default=10,type="number",label="列表每页条数"}
+ */
+
+use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('product-reviews');
+$wc = $scope->cssClass;
+$esc = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$json = static fn(mixed $value): string => (string)json_encode(
+    $value,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false)
+    || (string)($this->getData('editor_mode') ?? '') === '1';
+try {
+    $request = $this->getRequest();
+    if ((string)$request->getParam('editor_mode', '') === '1'
+        || (string)$request->getParam('preview_mode', '') === 'live'
+        || (string)$request->getParam('interaction_mode', '') === 'edit'
+    ) {
+        $isPreviewMode = true;
+    }
+} catch (\Throwable) {
+    // Template may not expose Request in all render paths.
+}
+
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '商品评论';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
+    $titleSource = '商品评论';
+}
+$widgetTitle = WidgetI18n::label($titleSource, '商品评论');
+
+$introSource = trim((string)($this->getData('intro') ?? '')) ?: '支持文字、图片与视频，内容审核后公开。';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $introSource)) {
+    $introSource = '支持文字、图片与视频，内容审核后公开。';
+}
+$widgetIntro = WidgetI18n::label($introSource, '支持文字、图片与视频，内容审核后公开。');
+$pageSize = max(1, min(50, (int)($this->getData('page_size') ?? 10)));
+
+$offer = $this->getData('storefront_offer');
+$offer = is_array($offer) ? $offer : [];
+$offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+
+// Slot widgets render on a cleared Template; resolve current PDP offer from the request when needed.
+if ($offerUuid === '' && class_exists(\Weline\Product\Service\StorefrontCatalogViewService::class)) {
+    try {
+        /** @var \Weline\Product\Service\StorefrontCatalogViewService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Product\Service\StorefrontCatalogViewService::class);
+        $slug = '';
+        $productId = 0;
+        try {
+            $request = $this->getRequest();
+            $slug = strtolower(trim((string)$request->getParam('slug', '')));
+            $productId = (int)$request->getParam('id', 0);
+        } catch (\Throwable) {
+            $slug = '';
+            $productId = 0;
+        }
+        if ($slug === '' && $productId <= 0) {
+            $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+            $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
+            $pathParts = array_values(array_filter(
+                explode('/', trim($requestPath, '/')),
+                static fn(string $part): bool => $part !== '',
+            ));
+            $productPartIndex = array_search('product', $pathParts, true);
+            if ($productPartIndex !== false && isset($pathParts[$productPartIndex + 1])) {
+                $handle = strtolower(rawurldecode((string)$pathParts[$productPartIndex + 1]));
+                if (ctype_digit($handle)) {
+                    $productId = (int)$handle;
+                } else {
+                    $slug = $handle;
+                }
+            }
+        }
+        $resolved = null;
+        if ($slug !== '') {
+            $resolved = $catalog->publishedOfferBySlug($slug);
+        } elseif ($productId > 0) {
+            $resolved = $catalog->publishedOffer($productId);
+        }
+        if (is_array($resolved)) {
+            $offer = $resolved;
+            $offerUuid = trim((string)($resolved['global_offer_uuid'] ?? ''));
+        }
+    } catch (\Throwable) {
+        // Optional Product dependency; keep empty when catalog is unavailable.
+    }
+}
+
+if ($offerUuid === '' && !$isPreviewMode) {
+    return;
+}
+
+$previewSchema = [];
+if ($offerUuid === '' || $isPreviewMode) {
+    try {
+        /** @var \Weline\Review\Service\ReviewTypeRegistry $types */
+        $types = ObjectManager::getInstance(\Weline\Review\Service\ReviewTypeRegistry::class);
+        $fields = $types->get('product')->fields();
+        $previewSchema = is_array($fields) ? $fields : [];
+    } catch (\Throwable) {
+        $previewSchema = [];
+    }
+}
+
+$messages = [
+    'loading' => __('正在加载评论...'),
+    'loadFailed' => __('评论加载失败，请稍后重试。'),
+    'empty' => __('暂时还没有已审核的评论，欢迎分享第一条真实体验。'),
+    'countSuffix' => __('条评论'),
+    'submitting' => __('正在上传媒体并提交评论...'),
+    'submitFailed' => __('评论暂时无法提交，请稍后再试。'),
+    'schemaFailed' => __('评论表单加载失败，请刷新页面重试。'),
+    'previewOnly' => __('预览模式：表单仅供排版查看，请到真实商品页提交。'),
+    'imageLimit' => __('最多选择 6 张图片，单张不超过 10 MB。'),
+    'videoLimit' => __('最多选择 2 个视频，单个不超过 50 MB。'),
+    'mediaInvalid' => __('所选媒体文件数量或大小超过限制。'),
+    'photo' => __('图片'),
+    'video' => __('视频'),
+    'remove' => __('移除'),
+    'submit' => __('提交评论'),
+    'ratingRequired' => __('请选择所有必填评分。'),
+];
+?>
+<link rel="stylesheet"
+      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260825-review3"
+      data-no-extract="true">
+
+<section class="<?= $esc($wc) ?> weline-review<?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-testid="storefront-product-reviews"
+         data-review-root
+         data-type-code="product"
+         data-entity-uuid="<?= $esc($offerUuid) ?>"
+         data-page-size="<?= $esc((string)$pageSize) ?>"
+         data-preview-schema="<?= $esc($json($previewSchema)) ?>"
+         data-review-messages="<?= $esc($json($messages)) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <div class="weline-review__heading">
+        <div>
+            <p class="weline-review__kicker"><?= __('商品评论') ?></p>
+            <h2><?= $esc($widgetTitle) ?></h2>
+            <p class="weline-review__intro"><?= $esc($widgetIntro) ?></p>
+        </div>
+        <div class="weline-review__summary" aria-live="polite">
+            <strong data-review-average>—</strong>
+            <span data-review-count><?= __('正在加载评论...') ?></span>
+        </div>
+    </div>
+
+    <div class="weline-review__media-capabilities" aria-label="<?= $esc(__('支持的评论媒体')) ?>">
+        <span><b>IMG</b><?= __('最多 6 张图片') ?></span>
+        <span><b>VID</b><?= __('最多 2 个视频') ?></span>
+        <span><b>TXT</b><?= __('文字与五星评分') ?></span>
+    </div>
+
+    <div class="weline-review__layout">
+        <div class="weline-review__listing">
+            <div class="weline-review__items" data-review-items aria-live="polite">
+                <p class="weline-review__empty"><?= __('正在加载评论...') ?></p>
+            </div>
+        </div>
+        <form class="weline-review__form" data-review-form novalidate>
+            <p class="weline-review__form-kicker"><?= __('分享真实体验') ?></p>
+            <h3><?= __('撰写图文 / 视频评论') ?></h3>
+            <div class="weline-review__dynamic-fields" data-review-fields aria-live="polite">
+                <p class="weline-review__form-loading"><?= __('正在加载评论表单...') ?></p>
+            </div>
+            <div class="weline-review__preview" data-review-preview aria-live="polite"></div>
+            <button type="submit" disabled data-review-submit><?= __('提交评论') ?></button>
+            <p class="weline-review__notice"><?= __('支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。') ?></p>
+            <p class="weline-review__message" data-review-message aria-live="polite"></p>
+        </form>
+    </div>
+</section>
+
+<script src="@static(Weline_Review::js/widgets/product-reviews.js)&v=20260825-review3"
+        defer
+        data-no-extract="true"></script>

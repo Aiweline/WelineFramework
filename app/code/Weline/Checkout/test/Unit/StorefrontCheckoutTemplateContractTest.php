@@ -62,6 +62,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
 
         self::assertStringContainsString('let customerAddressPrefilled = false;', $template);
         self::assertStringContainsString('function applyDefaultShippingAddress(address)', $template);
+        self::assertStringContainsString('const deliveryAddress = data && data.delivery && typeof data.delivery === \'object\'', $template);
         self::assertStringContainsString("form.querySelector('[name=\"' + field + '\"]')", $template);
         self::assertStringContainsString('applyDefaultShippingAddress(data.default_shipping_address);', $template);
     }

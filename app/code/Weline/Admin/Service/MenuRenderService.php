@@ -511,7 +511,7 @@ class MenuRenderService
 
         $active = $route !== '' && $this->isMenuActive($this->formatMenuUrlCached($menu));
         $hasActiveChild = $hasNodes && $this->hasActiveChild($nodes);
-        $current = $active ? ' aria-current="page"' : '';
+        $current = $active ? ' aria-current="page" data-state="active"' : '';
 
         if (!$hasNodes) {
             if ($route === '') {

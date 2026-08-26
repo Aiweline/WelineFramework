@@ -174,7 +174,7 @@ switch,switch
 默认按结账组汇总；部分退款或状态分叉时展开明细,"Orders are grouped by checkout by default; details expand for partial refunds or split statuses"
 订单详情,"Order Details"
 订单商品,"Order items"
-商品,commodity
+商品,Products
 SKU,SKU
 数量,Quantity
 单价,Price
@@ -189,7 +189,7 @@ SKU,SKU
 查看详情,"View Details"
 订单明细,"Order details"
 退货,Return
-与我的订单,"and My Orders"
+与我的订单,"And My Orders"
 订单列表,"Order List"
 新建订单,"Create Order"
 搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
@@ -344,6 +344,10 @@ Outbox,Outbox
 "行 %{1} 名称、数量或单价非法","Row %{1} illegal name, quantity or unit price"
 "行 %{1} SKU 非法","Row %{1} SKU is illegal"
 "行 %{1} split_key 非法","Row %{1} split_key is illegal"
+"行 %{1} provider_code 非法","行 %{1} provider_code 非法"
+"行 %{1} global_offer_uuid 非法","行 %{1} global_offer_uuid 非法"
+"行 %{1} fulfillment_metadata 必须为数组","行 %{1} fulfillment_metadata 必须为数组"
+"行 %{1} fulfillment_metadata 非法","行 %{1} fulfillment_metadata 非法"
 税额不能为负数,"Tax amount cannot be negative"
 "Tax 快照总额与订单命令不一致","The Tax snapshot total does not match the order command"
 "Tax 引擎快照的规则或 Scope 元数据无效","The Tax engine snapshot has invalid rule or Scope metadata"

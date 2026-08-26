@@ -253,6 +253,38 @@ final class ProductCopyServiceTest extends TestCase
         self::assertSame(1, $preview->linkCount);
     }
 
+    public function testMultiStoreCommitSelectsAndInitializesEveryTargetStore(): void
+    {
+        $inventory = InventoryService::forTesting();
+        $service = ProductCopyService::forTesting(new InventoryCatalogCopyCapability($inventory));
+        $this->seedCatalog($service);
+
+        $draft = new CopyDraft();
+        $draft->entry = CopyDraft::ENTRY_SITE_PULL;
+        $draft->sourceWebsiteId = 0;
+        $draft->targetWebsiteId = 0;
+        $draft->targetStoreId = 30;
+        $draft->targetStoreIds = [30, 31, 30];
+        $draft->categoryIds = [10];
+        $draft->fieldPackages = [CopyDraft::PKG_IDENTITY, CopyDraft::PKG_INVENTORY];
+
+        $created = $service->createDraft($draft);
+        self::assertSame([30, 31], $created->selectedTargetStoreIds());
+        self::assertSame(30, $created->targetStoreId);
+
+        $result = $service->commit(
+            $created->draftId,
+            hash('sha256', 'memory-multi-store'),
+        );
+        self::assertTrue($result->success);
+        self::assertSame(2, $result->counts['inventory_zeroed']);
+        foreach ([30, 31] as $storeId) {
+            self::assertSame([100], $service->listExplicitStoreProducts(0, $storeId));
+            self::assertSame([200], $service->listExplicitStoreOffers(0, $storeId));
+            self::assertSame(0, $inventory->getAvailability(0, $storeId, 200)->onHandMinor);
+        }
+    }
+
     public function testStoreInheritFiltersOffersAndCopiesSameWebsitePrice(): void
     {
         $svc = ProductCopyService::forTesting();
@@ -326,7 +358,7 @@ final class ProductCopyServiceTest extends TestCase
         $draft->categoryIds = [10];
         $draft->fieldPackages = [CopyDraft::PKG_IDENTITY, CopyDraft::PKG_INVENTORY];
         $created = $svc->createDraft($draft);
-        $conflictKey = 'copy:' . $created->draftId . ':offer:201';
+        $conflictKey = 'copy:' . $created->draftId . ':store:24:offer:201';
         $inventory->setOnHand(
             0,
             24,
@@ -371,6 +403,43 @@ final class ProductCopyServiceTest extends TestCase
         $svc->commit($c->draftId, hash('sha256', 'c'));
         $this->expectException(\RuntimeException::class);
         $svc->cancel($c->draftId);
+    }
+
+    public function testCrossWebsitePreviewAndCommitRequireShareAuthorization(): void
+    {
+        $checked = [];
+        $svc = ProductCopyService::forTesting(
+            copyAuthorization: static function (
+                string $productUuid,
+                int $sourceWebsiteId,
+                int $targetWebsiteId,
+            ) use (&$checked): bool {
+                $checked[] = [$productUuid, $sourceWebsiteId, $targetWebsiteId];
+                return false;
+            },
+        );
+        $this->seedCatalog($svc);
+
+        $draft = new CopyDraft();
+        $draft->entry = CopyDraft::ENTRY_SITE_PULL;
+        $draft->sourceWebsiteId = 0;
+        $draft->targetWebsiteId = 7;
+        $draft->targetStoreId = 70;
+        $draft->categoryIds = [10];
+        $created = $svc->createDraft($draft);
+
+        try {
+            $svc->preview($created->draftId);
+            self::fail('Expected product_copy_not_authorized');
+        } catch (\Weline\Product\Service\ProductV2ConflictException $exception) {
+            self::assertSame('product_copy_not_authorized', $exception->errorCode);
+        }
+
+        $result = $svc->commit($created->draftId, hash('sha256', 'copy-auth-denied'));
+        self::assertFalse($result->success);
+        self::assertSame('product_copy_not_authorized', $result->errorCode);
+        self::assertSame(0, $svc->countProducts(7));
+        self::assertContains(['product-0-100', 0, 7], $checked);
     }
 
     private function seedCatalog(ProductCopyService $svc): void

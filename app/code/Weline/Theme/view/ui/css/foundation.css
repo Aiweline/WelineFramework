@@ -3,22 +3,36 @@
 @layer tokens {
     :root {
         color-scheme: light;
-        --weline-theme-canvas: #f4f6fa;
-        --weline-theme-surface: #ffffff;
+        /* Body canvas follows palette --color-bg-canvas; menus/panels use surface (bg-primary). */
+        --weline-theme-canvas: var(--color-bg-canvas, #ffffff);
+        --weline-chrome-body-bg: var(--color-bg-canvas, #ffffff);
+        --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--weline-theme-canvas));
+        --weline-theme-surface: var(--color-bg-primary, #ffffff);
         --weline-theme-surface-raised: #ffffff;
         --weline-theme-surface-muted: #eef1f6;
-        --weline-theme-surface-hover: #e8edf5;
+        --weline-theme-surface-hover: var(--color-surface-hover, #f3f3f3);
         --weline-theme-text: #182230;
         --weline-theme-text-muted: #637083;
         --weline-theme-text-subtle: #8490a2;
         --weline-theme-border: #d7dde7;
         --weline-theme-border-strong: #aeb8c7;
-        --weline-theme-primary: #315ee7;
-        --weline-theme-primary-hover: #244bc4;
-        --weline-theme-primary-surface: color-mix(in srgb, var(--weline-theme-primary) 14%, transparent);
-        --weline-theme-primary-emphasis: var(--weline-theme-primary-hover);
-        --weline-theme-primary-border: color-mix(in srgb, var(--weline-theme-primary) 34%, transparent);
-        --weline-theme-on-primary: #ffffff;
+        --weline-theme-primary: var(--color-primary, #315ee7);
+        --weline-theme-primary-hover: var(--color-primary-hover, var(--color-primary-dark, #244bc4));
+        --weline-theme-primary-surface: var(--color-primary-bg-subtle, color-mix(in srgb, var(--weline-theme-primary) 14%, transparent));
+        --weline-theme-primary-emphasis: var(--color-primary-text-emphasis, var(--weline-theme-primary-hover));
+        --weline-theme-primary-border: var(--color-primary-border-subtle, color-mix(in srgb, var(--weline-theme-primary) 34%, transparent));
+        --weline-theme-on-primary: var(--color-on-primary, #ffffff);
+        --weline-theme-menu-panel-text-hover: var(--weline-chrome-menu-panel-text-hover, var(--color-primary, #ff9900));
+        --weline-theme-menu-panel-surface-hover: color-mix(in srgb, var(--weline-theme-menu-panel-text-hover) 14%, #ffffff);
+        --weline-chrome-mega-menu-top-hover-color: #ffffff;
+        --weline-chrome-mega-menu-top-hover-bg: rgba(255, 255, 255, 0.15);
+        --weline-theme-mega-menu-top-hover-color: var(--weline-chrome-mega-menu-top-hover-color, #ffffff);
+        --weline-theme-mega-menu-top-hover-bg: var(--weline-chrome-mega-menu-top-hover-bg, rgba(255, 255, 255, 0.15));
+        /* Stable light-on-dark surface text (Amazon footer etc). Never flip in dark mode. */
+        --weline-theme-text-on-dark: #f8fafc;
+        --weline-theme-text-on-dark-muted: #cbd5e1;
+        --weline-theme-bg-dark: #131921;
+        --weline-theme-bg-dark-secondary: #232f3e;
         --weline-theme-success: #167a4d;
         --weline-theme-success-hover: #11633e;
         --weline-theme-success-surface: #e8f7ef;
@@ -65,9 +79,23 @@
         --weline-control-height-lg: 3rem;
         --weline-motion-fast: 120ms;
         --weline-motion-normal: 180ms;
+        --weline-z-sticky-header: 100;
         --weline-z-menu: 700;
         --weline-z-overlay: 900;
         --weline-z-toast: 1100;
+        /* Amazon / storefront body copy (overridden by theme variables/_colors.css when loaded) */
+        --weline-chrome-body-text: #0f1111;
+        --weline-chrome-body-text-secondary: #565959;
+        --weline-chrome-body-text-muted: #666666;
+        --weline-chrome-body-text-heading: #0f1111;
+        --weline-chrome-body-link: #007185;
+        --weline-chrome-body-link-hover: #c45500;
+        --weline-theme-body-text: var(--weline-chrome-body-text);
+        --weline-theme-body-text-secondary: var(--weline-chrome-body-text-secondary);
+        --weline-theme-body-text-muted: var(--weline-chrome-body-text-muted);
+        --weline-theme-body-text-heading: var(--weline-chrome-body-text-heading);
+        --weline-theme-body-link: var(--weline-chrome-body-link);
+        --weline-theme-body-link-hover: var(--weline-chrome-body-link-hover);
         --weline-safe-area-top: env(safe-area-inset-top, 0px);
         --weline-safe-area-right: env(safe-area-inset-right, 0px);
         --weline-safe-area-bottom: env(safe-area-inset-bottom, 0px);
@@ -76,8 +104,10 @@
 
     [data-theme="dark"] {
         color-scheme: dark;
-        --weline-theme-canvas: #101722;
-        --weline-theme-surface: #182230;
+        --weline-theme-canvas: var(--color-bg-canvas, #101722);
+        --weline-chrome-body-bg: var(--color-bg-canvas, #101722);
+        --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--weline-theme-canvas));
+        --weline-theme-surface: var(--color-bg-primary, #182230);
         --weline-theme-surface-raised: #202c3c;
         --weline-theme-surface-muted: #253244;
         --weline-theme-surface-hover: #2d3b4f;
@@ -92,6 +122,10 @@
         --weline-theme-primary-emphasis: var(--weline-theme-primary-hover);
         --weline-theme-primary-border: color-mix(in srgb, var(--weline-theme-primary) 42%, transparent);
         --weline-theme-on-primary: #101b3f;
+        --weline-theme-text-on-dark: #f8fafc;
+        --weline-theme-text-on-dark-muted: #cbd5e1;
+        --weline-theme-bg-dark: #131921;
+        --weline-theme-bg-dark-secondary: #232f3e;
         --weline-theme-success: #67d6a4;
         --weline-theme-success-hover: #8be3bd;
         --weline-theme-success-surface: #173c2d;
@@ -115,10 +149,12 @@
     }
 
     @media (prefers-color-scheme: dark) {
-        [data-theme-preference="system"] {
+        [data-theme-preference="system"]:not([data-theme="light"]) {
             color-scheme: dark;
-            --weline-theme-canvas: #101722;
-            --weline-theme-surface: #182230;
+            --weline-theme-canvas: var(--color-bg-canvas, #101722);
+            --weline-chrome-body-bg: var(--color-bg-canvas, #101722);
+            --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--weline-theme-canvas));
+            --weline-theme-surface: var(--color-bg-primary, #182230);
             --weline-theme-surface-raised: #202c3c;
             --weline-theme-surface-muted: #253244;
             --weline-theme-surface-hover: #2d3b4f;
@@ -133,6 +169,10 @@
             --weline-theme-primary-emphasis: var(--weline-theme-primary-hover);
             --weline-theme-primary-border: color-mix(in srgb, var(--weline-theme-primary) 42%, transparent);
             --weline-theme-on-primary: #101b3f;
+            --weline-theme-text-on-dark: #f8fafc;
+            --weline-theme-text-on-dark-muted: #cbd5e1;
+            --weline-theme-bg-dark: #131921;
+            --weline-theme-bg-dark-secondary: #232f3e;
             --weline-theme-success: #67d6a4;
             --weline-theme-success-hover: #8be3bd;
             --weline-theme-success-surface: #173c2d;
@@ -194,8 +234,8 @@
 
 @layer base {
     body {
-        background: var(--weline-theme-canvas);
-        color: var(--weline-theme-text);
+        background: var(--weline-theme-body-bg, var(--weline-theme-canvas));
+        color: var(--weline-theme-body-text, #0f1111);
         font-family: var(--weline-font-sans);
         font-size: var(--weline-font-size-md);
         line-height: var(--weline-line-height);
@@ -457,8 +497,8 @@
     .w-button:hover { background: var(--weline-theme-primary-hover); border-color: var(--weline-theme-primary-hover); color: var(--weline-theme-on-primary); }
     .w-button[data-tone="neutral"] { background: var(--weline-theme-surface); border-color: var(--weline-theme-border-strong); color: var(--weline-theme-text); }
     .w-button[data-tone="neutral"]:hover { background: var(--weline-theme-surface-hover); }
-    .w-button[data-tone="quiet"] { background: transparent; border-color: transparent; color: var(--weline-theme-text); }
-    .w-button[data-tone="quiet"]:hover { background: var(--weline-theme-surface-hover); }
+    .w-button[data-tone="quiet"] { background: transparent; border-color: transparent; color: var(--w-surface-fg, var(--weline-theme-text)); }
+    .w-button[data-tone="quiet"]:hover { background: var(--weline-theme-surface-hover); color: var(--w-surface-fg, var(--weline-theme-text)); }
     .w-button[data-tone="danger"] { background: var(--weline-theme-danger); border-color: var(--weline-theme-danger); color: var(--weline-theme-surface); }
     .w-button[data-tone="success"] { background: var(--weline-theme-success); border-color: var(--weline-theme-success); color: var(--weline-theme-surface); }
     .w-button[data-tone="warning"] { background: var(--weline-theme-warning); border-color: var(--weline-theme-warning); color: var(--weline-theme-surface); }
@@ -709,9 +749,11 @@
     .w-alert__title { font-weight: var(--weline-font-weight-semibold); }
 
     .w-pagination, .w-breadcrumb, .w-list-group { display: flex; align-items: center; gap: var(--weline-space-1); margin: 0; padding: 0; list-style: none; }
+    .w-pagination { flex-wrap: wrap; }
     .w-pagination__link { display: grid; min-inline-size: var(--weline-control-height-sm); min-block-size: var(--weline-control-height-sm); place-items: center; padding-inline: var(--weline-space-2); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-sm); background: var(--weline-theme-surface); color: var(--weline-theme-text); text-decoration: none; }
     .w-pagination__link[aria-current="page"] { background: var(--weline-theme-primary); border-color: var(--weline-theme-primary); color: var(--weline-theme-on-primary); }
     .w-pagination__item[data-state="active"] > .w-pagination__link { background: var(--weline-theme-primary); border-color: var(--weline-theme-primary); color: var(--weline-theme-on-primary); }
+    .w-pagination__link[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
     .w-breadcrumb { flex-wrap: wrap; color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
     .w-breadcrumb > li + li::before { content: "/"; margin-inline-end: var(--weline-space-1); color: var(--weline-theme-text-subtle); }
     .w-list-group { flex-direction: column; align-items: stretch; gap: 0; border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); overflow: clip; }
@@ -801,6 +843,28 @@
     .w-remote-drawer__frame { width: 100%; height: 100%; min-height: 20rem; border: 0; background: var(--weline-theme-surface); }
     .w-overlay { position: fixed; inset: 0; z-index: calc(var(--weline-z-overlay) - 1); background: var(--weline-theme-overlay); }
 
+    /*
+     * In-place elevate layers (megamenu / overflow dropdown / custom flyout).
+     * Markup: [data-wf-scope] > [data-wf-host] > [data-wf-layer]
+     * JS (Weline.UI.stack.elevate) sets data-wf-raised + z-index = sibling peak + 1.
+     */
+    [data-wf-scope],
+    [data-wf-host] {
+        position: relative;
+    }
+    [data-wf-scope][data-wf-raised],
+    [data-wf-host][data-wf-raised] {
+        z-index: var(--wf-stack-z, var(--weline-z-menu));
+        overflow: visible !important;
+    }
+    [data-wf-layer][data-wf-raised] {
+        z-index: var(--wf-stack-z, calc(var(--weline-z-menu) + 1));
+    }
+    /* Ancestors between scope and layer must not clip the flyout */
+    [data-wf-unclip] {
+        overflow: visible !important;
+    }
+
     .w-menu-root { position: relative; }
     .w-menu, .w-popover, .w-combobox__panel, .w-icon-picker__panel { box-sizing: border-box; position: absolute; z-index: var(--weline-z-menu); inline-size: var(--w-floating-inline-size, max-content); min-inline-size: min(12rem, var(--w-floating-max-inline-size, calc(100dvw - 1rem))); max-inline-size: min(24rem, var(--w-floating-max-inline-size, calc(100dvw - 1rem))); max-block-size: var(--w-floating-max-block-size, calc(100dvh - 1rem)); padding: var(--weline-space-2); overflow: auto; overflow-wrap: anywhere; overscroll-behavior: contain; scrollbar-width: thin; border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); background: var(--weline-theme-surface-raised); color: var(--weline-theme-text); box-shadow: var(--weline-theme-shadow-md); }
     :where(.w-menu, .w-popover, .w-combobox__panel, .w-icon-picker__panel) > * { min-inline-size: 0; max-inline-size: 100%; }
@@ -811,6 +875,7 @@
     .w-icon-picker__panel[data-w-floating-positioned],
     .w-language-select__popover[data-w-floating-positioned],
     .w-tooltip[data-w-floating-positioned],
+    [data-w-component~="anchored-float"][data-w-floating-positioned],
     [data-w-floating-portal][data-w-floating-positioned] {
         position: fixed;
         inset: auto;

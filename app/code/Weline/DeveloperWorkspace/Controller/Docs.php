@@ -24,6 +24,7 @@ use Weline\Websites\Api\Localization\WebsiteCurrencyCatalogInterface;
  */
 class Docs extends FrontendController
 {
+    /** Frontend theme blank.full expects a content fragment (not a standalone HTML document). */
     protected ?string $layoutType = 'blank.full';
 
     private Document $documentModel;

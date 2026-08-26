@@ -284,9 +284,20 @@ final class ProjectRetriever
             600,
             (int) floor($searchBudget / max(1, $perResultDivisor)),
         ));
+        $includeDocs = (bool) ($options['include_docs'] ?? true);
         $expectedContextRoles = $this->stringList($options['expected_roles'] ?? []);
         if ($expectedContextRoles === []) {
-            $expectedContextRoles = $this->expectedContextRoles($task);
+            $expectedContextRoles = $this->expectedContextRoles(
+                $task,
+                true,
+                true,
+                $includeDocs,
+            );
+        } elseif (!$includeDocs) {
+            $expectedContextRoles = array_values(array_diff(
+                $expectedContextRoles,
+                ['documentation'],
+            ));
         }
         $requiredSymbols = $this->requiredSymbolTargets($symbols);
         $retrievalQuery = $this->expandRetrievalQuery($task)
@@ -1163,6 +1174,18 @@ final class ProjectRetriever
             ['needles' => ['分页', 'pagination'], 'paths' => ['pagination', 'page', '分页']],
             ['needles' => ['后台', 'backend', 'admin'], 'paths' => ['backend', 'admin', '后台']],
             ['needles' => ['界面', '交互', ' ui', 'view'], 'paths' => ['view', 'template', '.phtml', 'ui', '界面']],
+            ['needles' => [
+                '前端开发', '前端规范', '部件', 'widget', '主题开发', 'theme',
+                'section', 'phtml', '模板', 'layout', '布局',
+            ], 'paths' => [
+                'Theme开发总指南',
+                '部件开发指南',
+                'frontend-section-weline-code',
+                'theme-css-variables-only',
+                'widgets/',
+                '.phtml',
+                '/theme/doc/',
+            ]],
             ['needles' => ['统一配置中心', 'systemconfig', 'weline_systemconfig'], 'paths' => ['/weline/systemconfig/', 'systemconfig', 'weline_systemconfig']],
             ['needles' => ['站点', 'website'], 'paths' => ['/weline/websites/', 'website', 'scope']],
             ['needles' => ['主题', '暗色', 'theme', 'dark'], 'paths' => ['/weline/theme/', 'theme', 'dark', '.css']],
@@ -1564,6 +1587,7 @@ final class ProjectRetriever
             $task,
             (bool) ($options['include_mcp_infrastructure'] ?? true),
             (bool) ($options['include_validation_role'] ?? true),
+            (bool) ($options['include_docs'] ?? true),
         );
     }
 
@@ -1572,6 +1596,7 @@ final class ProjectRetriever
         string $task,
         bool $includeMcpInfrastructure = true,
         bool $includeValidationRole = true,
+        bool $includeDocumentationRole = true,
     ): array {
         $lowerTask = mb_strtolower($task, 'UTF-8');
         $roles = [];
@@ -1584,7 +1609,10 @@ final class ProjectRetriever
 
             return false;
         };
-        $add = static function (array $items) use (&$roles): void {
+        $add = static function (array $items) use (&$roles, $includeDocumentationRole): void {
+            if (!$includeDocumentationRole) {
+                $items = array_values(array_diff($items, ['documentation']));
+            }
             $roles = array_values(array_unique(array_merge($roles, $items)));
         };
 
@@ -1596,8 +1624,9 @@ final class ProjectRetriever
             '界面', '主题', '暗色', '亮色', '白色', '交互', '选择', '下拉', '按钮',
             '图片', '缩略图', '列表', ' ui', 'theme', 'dark', 'light', 'select',
             'dropdown', 'image', 'thumbnail', 'listing',
+            '前端开发', '前端规范', '部件', 'widget', 'phtml', 'section', '模板', '布局', 'layout',
         ])) {
-            $add(['entrypoint', 'view_template', 'service']);
+            $add(['entrypoint', 'view_template', 'service', 'documentation']);
         }
         if ($containsAny($lowerTask, [
             '配置', 'scope', '站点', 'website', 'locale', 'provider',

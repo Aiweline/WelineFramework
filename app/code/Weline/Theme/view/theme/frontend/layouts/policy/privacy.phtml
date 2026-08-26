@@ -203,87 +203,87 @@ $meta = $this->getData('meta') ?? [];
     .privacy-policy.policy-main {
         width: 100%;
         flex: 1;
-        padding: var(--weline-layout-spacing-xl, 2rem) 0;
+        padding: var(--weline-layout-spacing-xl) 0;
     }
 
     .policy-default-content {
         width: 100%;
-        padding: var(--weline-layout-spacing-xl, 2rem) 0 var(--weline-layout-spacing-2xl, 3rem);
+        padding: var(--weline-layout-spacing-xl) 0 var(--weline-layout-spacing-2xl);
     }
 
     .policy-header {
         text-align: left;
-        margin-bottom: var(--weline-layout-spacing-xl, 2rem);
+        margin-bottom: var(--weline-layout-spacing-xl);
     }
 
     .policy-title {
-        font-size: var(--weline-layout-font-size-3xl, 1.75rem);
-        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        font-size: var(--weline-layout-font-size-3xl);
+        font-weight: var(--weline-layout-font-weight-semibold);
         color: var(--weline-layout-text-primary);
-        margin: 0 0 0.75rem 0;
+        margin: 0 0 var(--weline-space-3) 0;
     }
 
     .policy-description {
-        font-size: var(--weline-layout-font-size-base, 1rem);
-        line-height: var(--weline-layout-line-height-relaxed, 1.75);
+        font-size: var(--weline-layout-font-size-base);
+        line-height: var(--weline-layout-line-height-relaxed);
         color: var(--weline-layout-text-secondary);
         margin: 0;
     }
 
     .policy-section {
-        margin-top: 1.75rem;
+        margin-top: var(--spacing-7);
     }
 
     .policy-section .section-title {
-        font-size: var(--weline-layout-font-size-xl, 1.25rem);
-        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        font-size: var(--weline-layout-font-size-xl);
+        font-weight: var(--weline-layout-font-weight-semibold);
         color: var(--weline-layout-text-primary);
-        margin: 0 0 0.75rem 0;
+        margin: 0 0 var(--weline-space-3) 0;
     }
 
     .policy-section .section-text {
-        font-size: var(--weline-layout-font-size-base, 1rem);
+        font-size: var(--weline-layout-font-size-base);
         color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed, 1.75);
-        margin: 0 0 0.75rem 0;
+        line-height: var(--weline-layout-line-height-relaxed);
+        margin: 0 0 var(--weline-space-3) 0;
     }
 
     .policy-list {
-        margin: 0.75rem 0;
-        padding-left: 1.5rem;
+        margin: var(--weline-space-3) 0;
+        padding-left: var(--spacing-lg);
         list-style-type: decimal;
     }
 
     .policy-list li {
-        font-size: var(--weline-layout-font-size-base, 1rem);
+        font-size: var(--weline-layout-font-size-base);
         color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed, 1.75);
-        margin-bottom: 0.5rem;
+        line-height: var(--weline-layout-line-height-relaxed);
+        margin-bottom: var(--spacing-sm);
     }
 
     @media (max-width: 768px) {
         .privacy-policy.policy-main {
-            padding: var(--weline-layout-spacing-lg, 1.5rem) 0;
+            padding: var(--weline-layout-spacing-lg) 0;
         }
 
         .policy-default-content {
-            padding: var(--weline-layout-spacing-lg, 1.5rem) 0 var(--weline-layout-spacing-xl, 2rem);
+            padding: var(--weline-layout-spacing-lg) 0 var(--weline-layout-spacing-xl);
         }
 
         .policy-title {
-            font-size: var(--weline-layout-font-size-2xl, 1.5rem);
+            font-size: var(--weline-layout-font-size-2xl);
         }
 
         .policy-section .section-title {
-            font-size: var(--weline-layout-font-size-lg, 1.125rem);
+            font-size: var(--weline-layout-font-size-lg);
         }
 
         .policy-list {
-            padding-left: 1.25rem;
+            padding-left: var(--weline-space-5);
         }
 
         .policy-list li {
-            font-size: var(--weline-layout-font-size-sm, 0.875rem);
+            font-size: var(--weline-layout-font-size-sm);
         }
     }
     </style>

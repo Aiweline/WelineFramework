@@ -61,6 +61,12 @@ return [
         'doc' => 'frontend/layouts/checkout/identity-before.md',
     ],
 
+    'Weline_Checkout::frontend::widgets::checkout-delivery-context::quick-add' => [
+        'name' => __('配送弹窗快速添加地址'),
+        'description' => __('Header 配送地址弹窗中的快速添加地址表单；由地址/配送模块实现。未实现时不显示添加能力。'),
+        'doc' => 'frontend/widgets/checkout-delivery-context/quick-add.md',
+    ],
+
     'Weline_Checkout::frontend::layouts::checkout::identity-options-before' => [
         'name' => __('结账身份选项之前'),
         'description' => __('在账户结账与匿名结账选项列表之前触发，允许模块增加说明或调整选择体验。'),

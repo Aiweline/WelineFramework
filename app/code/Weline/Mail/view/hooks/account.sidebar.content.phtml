@@ -9,11 +9,20 @@
  * @hook-solo false
  */
 use Weline\Customer\Service\AccountSidebarContentGate;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Mail\Service\MailCustomerAccountService;
 
 if (!AccountSidebarContentGate::accepts('mail')) {
     return;
 }
+
+/** @var MailCustomerAccountService $mailService */
+$mailService = ObjectManager::getInstance(MailCustomerAccountService::class);
+$customerId = $mailService->resolveFrontendCustomerId($user ?? $this->getData('user'));
+if (!$mailService->hasActiveAccountForCustomer($customerId)) {
+    return;
+}
 ?>
 <section class="account-hook-section account-index__section motor-account-section" id="mail-section" data-account-section="mail" hidden weline-code="mail.account_sidebar_content.mail_section">
-    <?= $this->fetch('Weline_Mail::templates/frontend/account/mail.phtml') ?>
+    <?= $this->fetch('Weline_Mail::templates/frontend/account/mail-client.phtml') ?>
 </section>

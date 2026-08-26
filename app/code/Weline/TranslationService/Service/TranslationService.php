@@ -121,7 +121,7 @@ class TranslationService implements TranslationServiceInterface
         }
 
         // 获取渠道适配器
-        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
+        $adapter = $this->providerFactory->createProvider($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
         if (!$adapter) {
             throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)]));
         }
@@ -265,7 +265,7 @@ class TranslationService implements TranslationServiceInterface
         }
 
         // 获取渠道适配器
-        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
+        $adapter = $this->providerFactory->createProvider($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
         if (!$adapter) {
             throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)]));
         }
@@ -383,7 +383,7 @@ class TranslationService implements TranslationServiceInterface
         }
 
         // 获取渠道适配器
-        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
+        $adapter = $this->providerFactory->createProvider($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
         if (!$adapter) {
             throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)]));
         }

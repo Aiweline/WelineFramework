@@ -67,14 +67,14 @@ $layout = $this->getData('layout') ?? 'horizontal';
 
 <style>
 .<?= $wc ?> {
-    padding: var(--weline-space-8, 30px) 0;
+    padding: var(--weline-space-8) 0;
 }
 
 .<?= $wc ?>.layout-horizontal {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--weline-space-10, 40px);
+    gap: var(--weline-space-10);
 }
 
 .<?= $wc ?>.layout-horizontal .newsletter-content {
@@ -82,35 +82,35 @@ $layout = $this->getData('layout') ?? 'horizontal';
 }
 
 .<?= $wc ?>.layout-horizontal .newsletter-form {
-    flex: 0 0 450px;
+    flex: 0 0 var(--token-size-450px);
 }
 
 .<?= $wc ?>.layout-vertical {
     text-align: center;
-    max-width: 500px;
+    max-width: var(--token-size-500px);
     margin: 0 auto;
 }
 
 .<?= $wc ?>.layout-vertical .newsletter-content {
-    margin-bottom: var(--weline-space-5, 20px);
+    margin-bottom: var(--weline-space-5);
 }
 
 .<?= $wc ?> .newsletter-title {
-    font-size: var(--weline-font-size-xl, 20px);
+    font-size: var(--weline-font-size-xl);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-2, 10px);
+    margin: 0 0 var(--weline-space-2);
     color: var(--weline-theme-on-primary);
 }
 
 .<?= $wc ?> .newsletter-description {
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     color: color-mix(in srgb, var(--weline-theme-on-primary) 70%, transparent);
     margin: 0;
 }
 
 .<?= $wc ?> .w-form-group {
     display: flex;
-    gap: var(--weline-space-2, 10px);
+    gap: var(--weline-space-2);
 }
 
 .<?= $wc ?>.layout-vertical .w-form-group {
@@ -119,24 +119,24 @@ $layout = $this->getData('layout') ?? 'horizontal';
 
 .<?= $wc ?> .newsletter-input {
     flex: 1;
-    padding: var(--weline-space-3, 14px) var(--weline-space-5, 20px);
+    padding: var(--weline-space-3) var(--weline-space-5);
     border: none;
-    border-radius: var(--weline-radius-md, 8px);
-    font-size: var(--weline-font-size-sm, 14px);
+    border-radius: var(--weline-radius-md);
+    font-size: var(--weline-font-size-sm);
     outline: none;
     background: var(--weline-theme-surface-raised);
     color: var(--weline-theme-text);
 }
 
 .<?= $wc ?> .newsletter-button {
-    padding: var(--weline-space-3, 14px) var(--weline-space-8, 30px);
+    padding: var(--weline-space-3) var(--weline-space-8);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     border: none;
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--weline-theme-transition-base, 0.3s);
+    transition: all var(--weline-theme-transition-base);
     white-space: nowrap;
 }
 
@@ -146,7 +146,7 @@ $layout = $this->getData('layout') ?? 'horizontal';
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    padding: var(--weline-space-4, 16px) 0;
+    padding: var(--weline-space-4) 0;
 }
 
 @media (max-width: 768px) {

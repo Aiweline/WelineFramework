@@ -39,7 +39,7 @@ $examples = $adapter->getExamples();
                     </tr>
                     <tr data-w-border="bottom">
                         <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('适配器名称') ?></th>
-                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><strong><?= $adapter->getData('name') ?></strong></td>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><strong><?= __((string)$adapter->getData('name')) ?></strong></td>
                     </tr>
                     <tr data-w-border="bottom">
                         <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('版本') ?></th>
@@ -49,7 +49,7 @@ $examples = $adapter->getExamples();
                     </tr>
                     <tr data-w-border="bottom">
                         <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('描述') ?></th>
-                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= $adapter->getData('description') ?></td>
+                        <td style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __((string)$adapter->getData('description')) ?></td>
                     </tr>
                     <tr data-w-border="bottom">
                         <th class="w-text" data-align="end" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);"><?= __('类名') ?></th>

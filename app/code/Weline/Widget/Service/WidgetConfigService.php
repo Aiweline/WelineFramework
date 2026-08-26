@@ -61,11 +61,18 @@ class WidgetConfigService
 
     public function renderForm(int|string $layoutId, array $params, array $config = []): string
     {
-        return $this->paramTypeRenderer->renderForm($layoutId, $this->authorizedParams($params), $config);
+        return $this->paramTypeRenderer->renderForm(
+            $layoutId,
+            $this->authorizedParams($this->paramSchemaRegistry->expandParams($params)),
+            $config
+        );
     }
 
     public function renderField(string $key, array $param, mixed $value, int|string $layoutId = '', array $attrs = []): string
     {
+        $expanded = $this->paramSchemaRegistry->expandParams([$key => $param]);
+        $param = is_array($expanded[$key] ?? null) ? $expanded[$key] : $param;
+
         return $this->paramTypeRenderer->renderField($key, $param, $value, $layoutId, $attrs);
     }
 
@@ -74,12 +81,18 @@ class WidgetConfigService
      */
     public function validateConfig(array $params, array $values): array
     {
-        return $this->paramTypeRenderer->validateConfig($this->authorizedParams($params), $values);
+        return $this->paramTypeRenderer->validateConfig(
+            $this->authorizedParams($this->paramSchemaRegistry->expandParams($params)),
+            $values
+        );
     }
 
     public function processConfig(array $params, array $values): array
     {
-        return $this->paramTypeRenderer->processConfig($this->authorizedParams($params), $values);
+        return $this->paramTypeRenderer->processConfig(
+            $this->authorizedParams($this->paramSchemaRegistry->expandParams($params)),
+            $values
+        );
     }
 
     public function getRegisteredTypes(): array

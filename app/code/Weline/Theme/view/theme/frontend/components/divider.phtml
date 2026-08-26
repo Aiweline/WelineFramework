@@ -89,10 +89,10 @@ $rootClass = trim($wc . ' w-builder-divider w-builder-divider--' . $style . ' w-
 .<?= $wc ?> {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-3, 12px);
+    gap: var(--weline-space-3);
     width: 100%;
-    max-width: var(--wc-divider-max, 100%);
-    margin-block: var(--wc-divider-spacing, var(--weline-space-6, 24px));
+    max-width: var(--wc-divider-max);
+    margin-block: var(--wc-divider-spacing);
     color: var(--weline-theme-text-muted);
 }
 
@@ -100,7 +100,7 @@ $rootClass = trim($wc . ' w-builder-divider w-builder-divider--' . $style . ' w-
 .<?= $wc ?>::after {
     content: '';
     flex: 1;
-    border-block-start: var(--wc-divider-thickness, 1px) <?= $esc($style) ?> var(--wc-divider-color, var(--weline-theme-border));
+    border-block-start: var(--wc-divider-thickness) <?= $esc($style) ?> var(--wc-divider-color);
 }
 
 .<?= $wc ?>:not(:has(.divider-label))::after {
@@ -117,7 +117,7 @@ $rootClass = trim($wc . ' w-builder-divider w-builder-divider--' . $style . ' w-
 
 .<?= $wc ?> .divider-label {
     flex-shrink: 0;
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     white-space: nowrap;
 }
 </style>

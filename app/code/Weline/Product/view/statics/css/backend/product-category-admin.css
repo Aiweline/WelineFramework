@@ -1,0 +1,55 @@
+/* Weline Product category admin drag-and-drop extensions */
+@layer page {
+    .w-product-category-admin .w-product-admin__website-select {
+        min-inline-size: 12rem;
+    }
+
+    .w-catalog-tree__row--draggable {
+        cursor: grab;
+        gap: var(--weline-space-1);
+    }
+
+    .w-catalog-tree__row--draggable.is-dragging {
+        opacity: 0.45;
+        cursor: grabbing;
+    }
+
+    .w-catalog-tree__row--draggable.is-drop-target {
+        outline: 2px solid var(--weline-theme-primary);
+        outline-offset: 1px;
+    }
+
+    .w-catalog-tree__handle {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        padding: var(--weline-space-1);
+        border: 0;
+        background: transparent;
+        color: var(--weline-theme-text-muted);
+        cursor: grab;
+    }
+
+    .w-drop-indicator {
+        block-size: 3px;
+        margin-inline: var(--weline-space-5);
+        border-radius: var(--weline-radius-pill);
+        background: var(--weline-theme-primary);
+    }
+
+    .w-drop-indicator--inside {
+        block-size: auto;
+        margin: var(--weline-space-1) 0 var(--weline-space-1) var(--weline-space-5);
+        padding: var(--weline-space-1) var(--weline-space-2);
+        border: 1px dashed var(--weline-theme-primary);
+        background: color-mix(in srgb, var(--weline-theme-primary) 12%, transparent);
+        color: var(--weline-theme-primary);
+        font-size: var(--weline-font-size-xs);
+    }
+
+    .w-product-category-dnd-tree.is-dnd-busy {
+        pointer-events: none;
+        opacity: 0.72;
+    }
+}

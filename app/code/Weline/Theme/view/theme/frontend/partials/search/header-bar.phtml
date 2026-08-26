@@ -1,0 +1,133 @@
+<?php
+/**
+ * Amazon 风格页头搜索栏（partial / header-search widget 共用，不依赖 w:search 标签注册）。
+ *
+ * @var string $placeholder
+ * @var string $query
+ * @var bool   $show_hot_words
+ * @var string $panel_id
+ */
+use Weline\Theme\Helper\HeaderCommerceData;
+
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$placeholder = (string)($placeholder ?? __('搜索商品...'));
+$query = trim((string)($query ?? ''));
+$showHotWords = (bool)($show_hot_words ?? true);
+$panelId = trim((string)($panel_id ?? 'header-search-panel'));
+$configuredType = trim((string)($search_type ?? 'all'));
+$showTypeSelect = $configuredType === '' || $configuredType === 'all';
+
+$requestType = '';
+$requestCategoryId = 0;
+try {
+    if (isset($this) && isset($this->request) && is_object($this->request)) {
+        $requestType = trim((string)($this->request->getParam('type') ?? ''));
+        $requestCategoryId = (int)($this->request->getParam('category_id') ?? 0);
+    }
+} catch (\Throwable) {
+    // fall through to $_GET
+}
+if ($requestType === '' && isset($_GET['type'])) {
+    $requestType = trim((string)$_GET['type']);
+}
+if ($requestCategoryId <= 0 && isset($_GET['category_id'])) {
+    $requestCategoryId = (int)$_GET['category_id'];
+}
+
+// Live request / $_GET wins. Stale Template assigns must not pin the facade.
+$assignedCategoryId = (int)($search_category_id ?? 0);
+$searchCategoryId = $requestCategoryId > 0 ? $requestCategoryId : $assignedCategoryId;
+
+if ($showTypeSelect) {
+    $explicitSelected = trim((string)($selected_type ?? ''));
+    if ($requestType !== '') {
+        $searchType = $requestType;
+    } elseif ($explicitSelected !== '') {
+        $searchType = $explicitSelected;
+    } else {
+        $searchType = 'all';
+    }
+} else {
+    $searchType = $configuredType !== '' ? $configuredType : 'all';
+}
+if ($searchType === '') {
+    $searchType = 'all';
+}
+if ($panelId === '') {
+    $panelId = 'header-search-panel';
+}
+
+$hot = HeaderCommerceData::resolveHotWords(8);
+$hotWords = is_array($hot['words'] ?? null) ? $hot['words'] : [];
+$hotIsDemo = (bool)($hot['is_demo'] ?? false);
+$searchTypes = HeaderCommerceData::resolveSearchTypes();
+if ($showTypeSelect && $searchType === 'all' && $searchCategoryId > 0) {
+    $findOwner = static function (array $nodes, int $categoryId) use (&$findOwner): bool {
+        foreach ($nodes as $node) {
+            if (!is_array($node)) {
+                continue;
+            }
+            $params = is_array($node['params'] ?? null) ? $node['params'] : [];
+            if ((int)($params['category_id'] ?? 0) === $categoryId) {
+                return true;
+            }
+            $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+            if ($children !== [] && $findOwner($children, $categoryId)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+    foreach ($searchTypes as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $code = (string)($row['code'] ?? '');
+        if ($code === '' || $code === 'all') {
+            continue;
+        }
+        $children = is_array($row['children'] ?? null) ? $row['children'] : [];
+        if ($children !== [] && $findOwner($children, $searchCategoryId)) {
+            $searchType = $code;
+            break;
+        }
+    }
+}
+?>
+<div id="<?= $esc($panelId) ?>" class="header-search-panel w-search-root" data-w-search data-autocomplete="true">
+    <w:form action="/search" method="get" class="header-search-form w-search-form">
+        <?php if (!$showTypeSelect): ?>
+            <input type="hidden" name="type" value="<?= $esc($searchType) ?>">
+        <?php else: ?>
+            <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/type-dropdown.phtml', [
+                'search_types' => $searchTypes,
+                'selected_type' => $searchType !== '' ? $searchType : 'all',
+                'selected_category_id' => $searchCategoryId,
+                'menu_id' => $panelId . '-type-menu',
+            ]) ?>
+        <?php endif; ?>
+        <div class="search-input-wrapper w-search-input-wrap">
+            <input type="search"
+                   name="q"
+                   value="<?= $esc($query) ?>"
+                   maxlength="255"
+                   placeholder="<?= $esc($placeholder) ?>"
+                   autocomplete="off"
+                   class="search-input w-search-input">
+        </div>
+        <button type="submit"
+                class="search-submit-btn w-search-submit"
+                title="<?= $esc((string)__('搜索')) ?>"
+                aria-label="<?= $esc((string)__('搜索')) ?>"></button>
+    </w:form>
+    <?php if ($showHotWords && $hotWords !== []): ?>
+        <div class="header-search-hot-words w-search-hot-words<?= $hotIsDemo ? ' is-hot-demo' : '' ?>" data-hot-words>
+            <span class="header-search-hot-label w-search-hot-label"><?= $esc((string)__('热搜')) ?>:</span>
+            <?php foreach ($hotWords as $word): ?>
+                <a href="/search?q=<?= rawurlencode((string)$word) ?>"
+                   class="header-search-hot-word w-search-hot-word"><?= $esc((string)$word) ?></a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>

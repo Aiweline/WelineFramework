@@ -130,14 +130,10 @@ $this->assign('meta', $meta);
                                         multiple="true"
                                         position="sidebar">
                                     <w:hook>Weline_Theme::frontend::layouts::product-list::filters-before</w:hook>
-                                    <div class="product-list-layout__placeholder" data-placeholder="list-filters">
-                                        <div class="product-list-layout__placeholder-icon">
-                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
-                                        </div>
-                                        <span class="product-list-layout__placeholder-text"><lang>筛选器区域 - 拖拽筛选部件到此处</lang></span>
-                                    </div>
+                                    <?php
+                                    // 必须运行时 getHook：禁止 w:widget 在布局编译期把 filters-sidebar 输出写死。
+                                    echo $this->getHook('Weline_Theme::frontend::layouts::product-list::filters-sidebar', true);
+                                    ?>
                                     <w:hook>Weline_Theme::frontend::layouts::product-list::filters-after</w:hook>
                                 </w:slot>
                             </div>
@@ -229,33 +225,21 @@ $this->assign('meta', $meta);
                             <w:hook>Weline_Theme::frontend::layouts::product-list::pagination-after</w:hook>
                         </w:slot>
                     </div>
+
+                    <!-- ========== 推荐产品区域（与列表同容器宽度对齐） ========== -->
+                    <w:slot id="list-recommendations"
+                            name="推荐产品区域"
+                            accept="layout-product-list-recommendations,recommended-products,featured-products,bestsellers,new-arrivals,recently-viewed,you-may-like,product-carousel"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="product-list-layout__recommendations" weline-code="theme.product_list.list_recommendations">
+                        <w:hook>Weline_Theme::frontend::layouts::product-list::recommendations-before</w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::product-list::recommendations-after</w:hook>
+                    </w:slot>
                 </div>
                 <?php endif; ?>
             </main>
-
-            <!-- ========== 推荐产品区域 ========== -->
-            <?php if (!$isSearchLayout): ?>
-            <w:slot id="list-recommendations"
-                    name="推荐产品区域"
-                    accept="layout-product-list-recommendations,featured-products,bestsellers,new-arrivals,recently-viewed,you-may-like,product-carousel"
-                    multiple="true"
-                    position="content"
-                    wrapper="section"
-                    class="product-list-layout__recommendations" weline-code="theme.product_list.list_recommendations">
-                <w:hook>Weline_Theme::frontend::layouts::product-list::recommendations-before</w:hook>
-                <div class="product-list-layout__recommendations-container">
-                    <div class="product-list-layout__placeholder" data-placeholder="list-recommendations">
-                        <div class="product-list-layout__placeholder-icon">
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </div>
-                        <span class="product-list-layout__placeholder-text"><lang>推荐产品区域 - 拖拽推荐部件到此处</lang></span>
-                    </div>
-                </div>
-                <w:hook>Weline_Theme::frontend::layouts::product-list::recommendations-after</w:hook>
-            </w:slot>
-            <?php endif; ?>
 
             <!-- 移动端遮罩层 -->
             <div class="product-list-layout__overlay" id="product-list-overlay" data-overlay hidden></div>
@@ -292,21 +276,22 @@ $this->assign('meta', $meta);
        BEM 命名规范，使用主题 CSS 变量
        ======================================== */
 
-    /* ---- 页面主体 ---- */
+    /* ---- 页面主体（本页未必加载完整 spacing token；间距给 rem/字面兜底） ---- */
     .product-list-layout__main {
-        padding: var(--spacing-4, 2rem) 0;
+        width: 100%;
+        padding: var(--spacing-3, 0.75rem) 0 var(--spacing-5, 1.25rem);
     }
 
     .product-list-layout__container {
         width: 100%;
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+        max-width: var(--weline-layout-content-max-width, 1400px);
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        padding: 0 var(--weline-layout-content-padding-inline, 1.5rem);
         box-sizing: border-box;
         display: grid;
-        grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
-        gap: var(--spacing-6, 1.5rem);
-        align-items: flex-start;
+        grid-template-columns: 240px minmax(0, 1fr);
+        gap: var(--spacing-4, 1rem);
+        align-items: start;
     }
 
     .product-list-layout__container--search {
@@ -317,15 +302,15 @@ $this->assign('meta', $meta);
         width: 100%;
     }
 
-    /* ---- 筛选侧边栏 ---- */
+    /* ---- 筛选侧边栏（Amazon 密度：轻边框、少阴影） ---- */
     .product-list-layout__sidebar {
-        background-color: var(--color-bg-primary);
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-        border-radius: var(--radius-lg, 12px);
-        box-shadow: var(--weline-theme-shadow-sm);
+        background-color: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
         position: sticky;
-        top: calc(var(--header-height, 70px) + var(--spacing-4, 1rem));
-        max-height: calc(100vh - var(--header-height, 70px) - var(--spacing-8, 4rem));
+        top: calc(var(--header-height, 64px) + var(--spacing-3, 0.75rem));
+        max-height: calc(100vh - var(--header-height, 64px) - var(--spacing-6, 1.5rem));
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -335,8 +320,8 @@ $this->assign('meta', $meta);
         align-items: center;
         justify-content: space-between;
         padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
-        border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-        background-color: var(--color-bg-primary);
+        border-bottom: 1px solid var(--color-border-light, #e7e7e7);
+        background-color: var(--color-bg-primary, #fff);
         position: sticky;
         top: 0;
         z-index: 10;
@@ -344,20 +329,20 @@ $this->assign('meta', $meta);
 
     .product-list-layout__sidebar-title {
         font-size: var(--font-size-lg, 1.125rem);
-        font-weight: var(--font-weight-semibold, 600);
+        font-weight: 600;
         margin: 0;
-        color: var(--color-text-primary);
+        color: var(--color-text-primary, #0f1111);
     }
 
     .product-list-layout__sidebar-close {
-        width: 36px;
-        height: 36px;
+        width: var(--size-control-sm, 35px);
+        height: var(--size-control-sm, 35px);
         padding: 0;
         background: none;
         border: none;
-        border-radius: var(--radius-md, 8px);
+        border-radius: var(--radius-md, 0.5rem);
         cursor: pointer;
-        color: var(--color-text-secondary);
+        color: var(--color-text-secondary, #565959);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -365,12 +350,12 @@ $this->assign('meta', $meta);
     }
 
     .product-list-layout__sidebar-close:hover {
-        background-color: var(--color-bg-secondary);
-        color: var(--color-text-primary);
+        background-color: var(--color-bg-secondary, #f0f2f2);
+        color: var(--color-text-primary, #0f1111);
     }
 
     .product-list-layout__sidebar-content {
-        padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
+        padding: var(--spacing-2, 0.5rem) 0 var(--spacing-4, 1rem);
     }
 
     /* ---- 主内容区域 ---- */
@@ -384,47 +369,46 @@ $this->assign('meta', $meta);
         align-items: center;
         gap: var(--spacing-2, 0.5rem);
         padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
-        background-color: var(--color-bg-primary);
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-        border-radius: var(--radius-full, 9999px);
+        background-color: var(--color-bg-primary, #fff);
+        border: 1px solid var(--color-border-light, #d5d9d9);
+        border-radius: 999px;
         cursor: pointer;
-        color: var(--color-text-primary);
+        color: var(--color-text-primary, #0f1111);
         font-size: var(--font-size-sm, 0.875rem);
-        font-weight: var(--font-weight-medium, 500);
-        box-shadow: var(--weline-theme-shadow-md);
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
         transition: all 0.2s ease;
         margin-bottom: var(--spacing-4, 1rem);
     }
 
     .product-list-layout__filter-toggle:hover {
-        background-color: var(--color-bg-secondary);
-        box-shadow: var(--weline-theme-shadow-lg);
+        background-color: var(--color-bg-secondary, #f0f2f2);
     }
 
     .product-list-layout__filter-toggle[aria-expanded="true"] {
-        background-color: var(--color-accent);
-        border-color: var(--color-accent);
-        color: var(--color-text-light);
+        background-color: var(--color-accent, #232f3e);
+        border-color: var(--color-accent, #232f3e);
+        color: #fff;
     }
 
     .product-list-layout__filter-icon {
-        width: 18px;
-        height: 18px;
+        width: 1.125rem;
+        height: 1.125rem;
         flex-shrink: 0;
     }
 
     /* ---- 工具栏 ---- */
     .product-list-layout__toolbar {
-        margin-bottom: var(--spacing-5, 1.25rem);
-        padding: var(--spacing-4, 1rem);
-        background-color: var(--color-bg-secondary);
-        border-radius: var(--radius-lg, 12px);
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
+        margin-bottom: var(--spacing-4, 1rem);
+        padding: 0;
+        background-color: transparent;
+        border-radius: 0;
+        border: 0;
     }
 
     /* ---- 产品网格 ---- */
     .product-list-layout__grid {
-        margin-bottom: var(--spacing-6, 2rem);
+        margin-bottom: var(--spacing-6, 1.5rem);
     }
 
     /* ---- 分页 ---- */
@@ -434,24 +418,75 @@ $this->assign('meta', $meta);
         padding: var(--spacing-4, 1rem) 0;
     }
 
-    /* ---- 推荐产品区域 ---- */
-    .product-list-layout__recommendations {
-        padding: var(--spacing-6, 2rem) 0;
-        background-color: var(--color-bg-secondary);
+    .product-list-layout__pagination:has(.product-list-layout__placeholder) {
+        display: none;
     }
 
-    .product-list-layout__recommendations-container {
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
-        margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+    /* ---- 推荐产品区域（Amazon：仅占主内容列，不与 sticky 侧栏重叠） ---- */
+    .product-list-layout__recommendations {
+        grid-column: 2 / -1;
+        width: 100%;
+        min-width: 0;
+        margin-top: var(--spacing-6, 1.5rem);
+        padding: var(--spacing-5, 1.25rem) 0 0;
+        background: transparent;
+        border-top: 1px solid var(--color-border-light, #e7e7e7);
         box-sizing: border-box;
+    }
+
+    .product-list-layout__container:not(:has(.product-list-layout__sidebar)) .product-list-layout__recommendations {
+        grid-column: 1 / -1;
+    }
+
+    .product-list-layout__recommendations > :where(.weline-template-widget, .widget-wrapper, section[weline-code]) {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .product-list-layout__recommendations .weline-product-recommended {
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .product-list-layout__recommendations .weline-product-recommended .wpc-viewport {
+        border: none;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .product-list-layout__recommendations .weline-product-recommended .wpc-header,
+    .product-list-layout__recommendations .weline-product-recommended[data-layout="grid"] .wpc-header {
+        padding-inline: 0;
+        margin-bottom: 0.75rem;
+    }
+
+    .product-list-layout__recommendations .weline-product-recommended .wpc-track {
+        padding: 0;
+        gap: var(--spacing-4, 1rem);
+    }
+
+    .product-list-layout__recommendations .weline-product-recommended[data-layout="grid"] .wpc-card {
+        border-color: #e7e7e7;
+        box-shadow: none;
+    }
+
+    .product-list-layout__recommendations .weline-product-recommended[data-layout="grid"] .wpc-card:hover {
+        border-color: #c8cccc;
+        box-shadow: 0 1px 4px rgba(15, 17, 17, 0.06);
+        transform: none;
     }
 
     /* ---- 遮罩层 ---- */
     .product-list-layout__overlay {
         position: fixed;
         inset: 0;
-        background-color: color-mix(in srgb, var(--weline-theme-text) 50%, transparent);
+        background-color: color-mix(in srgb, #0f1111 50%, transparent);
         z-index: var(--z-index-overlay, 998);
         opacity: 0;
         visibility: hidden;
@@ -470,13 +505,13 @@ $this->assign('meta', $meta);
         align-items: center;
         justify-content: center;
         gap: var(--spacing-4, 1rem);
-        padding: var(--spacing-8, 4rem) var(--spacing-4, 1.5rem);
+        padding: var(--spacing-8, 2rem) var(--spacing-4, 1rem);
         text-align: center;
-        color: var(--color-text-tertiary);
+        color: var(--color-text-tertiary, #879596);
     }
 
     .product-list-layout__placeholder-icon {
-        color: var(--color-text-disabled);
+        color: var(--color-text-disabled, #bbb);
     }
 
     .product-list-layout__placeholder-text {
@@ -492,6 +527,12 @@ $this->assign('meta', $meta);
             padding: 0 var(--spacing-4, 1rem);
         }
 
+        .product-list-layout__recommendations {
+            grid-column: 1 / -1;
+            margin-top: var(--spacing-5, 1.25rem);
+            padding-top: var(--spacing-4, 1rem);
+        }
+
         .product-list-layout__filter-toggle {
             display: inline-flex;
         }
@@ -503,14 +544,16 @@ $this->assign('meta', $meta);
             width: min(85%, 360px);
             height: 100vh;
             max-height: 100vh;
-            border-radius: var(--border-radius-none);
+            border-radius: 0;
             border: none;
-            border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
-            z-index: var(--z-index-drawer, 999);
+            border-right: 1px solid var(--color-border-light, #e7e7e7);
+            background-color: #fff;
+            z-index: var(--z-index-drawer, 1045);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
             display: flex;
             flex-direction: column;
+            padding: 0;
         }
 
         .product-list-layout__sidebar.is-open {
@@ -525,6 +568,7 @@ $this->assign('meta', $meta);
             flex: 1;
             overflow-y: auto;
             overscroll-behavior: contain;
+            padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
         }
 
         .product-list-layout__overlay {
@@ -534,7 +578,7 @@ $this->assign('meta', $meta);
 
     @media (max-width: 768px) {
         .product-list-layout__main {
-            padding: var(--spacing-3, 1rem) 0;
+            padding: var(--spacing-3, 0.75rem) 0;
         }
 
         .product-list-layout__container {
@@ -542,15 +586,12 @@ $this->assign('meta', $meta);
         }
 
         .product-list-layout__toolbar {
-            padding: var(--spacing-3, 0.75rem);
+            padding: 0;
         }
 
         .product-list-layout__recommendations {
-            padding: var(--spacing-5, 1.5rem) 0;
-        }
-
-        .product-list-layout__recommendations-container {
-            padding: 0 var(--spacing-3, 0.75rem);
+            margin-top: var(--spacing-4, 1rem);
+            padding-top: var(--spacing-3, 0.75rem);
         }
     }
     </style>

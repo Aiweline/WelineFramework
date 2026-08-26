@@ -337,6 +337,19 @@ final class ThemePatchEngineTest extends TestCase
         self::assertNull($payload['nodes'][$uid]['position']);
     }
 
+    public function testSetUnderMissingNodeStampsNodeIdentityFromPath(): void
+    {
+        $uid = 'b9a7dc154bb8a5fffb7b0c5a804ffba1';
+        $payload = $this->engine->apply(['nodes' => []], [
+            $this->set('/nodes/' . $uid . '/config/_theme_scope_draft_projection', true),
+            $this->set('/nodes/' . $uid . '/config/slides', [['title' => 'Hero']]),
+        ]);
+
+        self::assertSame($uid, $payload['nodes'][$uid]['node_uid']);
+        self::assertTrue($payload['nodes'][$uid]['config']['_theme_scope_draft_projection']);
+        self::assertSame('Hero', $payload['nodes'][$uid]['config']['slides'][0]['title']);
+    }
+
     private function set(string $path, mixed $value): ThemePatchCommand
     {
         return ThemePatchCommand::fromArray(['op' => 'set', 'path' => $path, 'value' => $value]);

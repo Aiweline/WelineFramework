@@ -71,12 +71,12 @@ if (empty($ads)) {
 .<?= $wc ?> {
     display: flex;
     flex-direction: column;
-    gap: var(--weline-space-4, 15px);
+    gap: var(--weline-space-4);
 }
 
 .<?= $wc ?> .ad-item {
     position: relative;
-    border-radius: var(--weline-radius-lg, 10px);
+    border-radius: var(--weline-radius-lg);
     overflow: hidden;
 }
 
@@ -89,7 +89,7 @@ if (empty($ads)) {
     width: 100%;
     height: auto;
     display: block;
-    transition: transform var(--weline-theme-transition-base, 0.3s ease);
+    transition: transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .ad-item:hover .ad-image,
@@ -99,18 +99,18 @@ if (empty($ads)) {
 
 .<?= $wc ?> .ad-label {
     position: absolute;
-    top: var(--weline-space-2, 8px);
-    right: var(--weline-space-2, 8px);
-    padding: 2px var(--weline-space-2, 8px);
+    top: var(--weline-space-2);
+    right: var(--weline-space-2);
+    padding: var(--spacing-0_5) var(--weline-space-2);
     background: color-mix(in srgb, var(--weline-theme-overlay) 60%, transparent);
     color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-xs, 10px);
-    border-radius: var(--weline-radius-sm, 3px);
+    font-size: var(--weline-font-size-xs);
+    border-radius: var(--weline-radius-sm);
     text-transform: uppercase;
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
 }
 </style>

@@ -39,6 +39,9 @@ final class ProductCopyDurableCatalogAdapter
     private ?InventoryCatalogCopyCapabilityInterface $resolvedInventory = null;
     private bool $inventoryResolved = false;
 
+    /** @var (\Closure(string, int, int): bool)|null */
+    private readonly ?\Closure $copyAuthorization;
+
     public function __construct(
         private readonly ConnectionFactory $connectionFactory,
         private readonly DatabaseTransactionRunnerInterface $transactions,
@@ -47,14 +50,20 @@ final class ProductCopyDurableCatalogAdapter
         private readonly OfferRepository $offers,
         private readonly CategoryLinkRepository $categoryLinks,
         private readonly AttributeValueRepository $attributes,
+        private readonly ProductCategoryAttributeService $categoryAttributes,
         private readonly PriceRepository $prices,
         private readonly MediaRepository $media,
         private readonly StoreProductRepository $storeProducts,
         private readonly StoreOfferRepository $storeOffers,
         ?InventoryCatalogCopyCapabilityInterface $inventory = null,
+        private readonly ?ProductGovernanceService $governance = null,
+        ?callable $copyAuthorization = null,
     ) {
         $this->resolvedInventory = $inventory;
         $this->inventoryResolved = $inventory !== null;
+        $this->copyAuthorization = $copyAuthorization === null
+            ? null
+            : \Closure::fromCallable($copyAuthorization);
     }
 
     public function preview(CopyDraft $draft): CopyPreview
@@ -95,6 +104,7 @@ final class ProductCopyDurableCatalogAdapter
             ) && $draft->inventoryCopyQty,
             items: $plan['products'],
             warnings: array_values(array_unique($warnings)),
+            targetStoreIds: $draft->selectedTargetStoreIds(),
         );
     }
 
@@ -114,6 +124,12 @@ final class ProductCopyDurableCatalogAdapter
                 errorCode: 'copy_inventory_capability_unavailable',
                 message: (string)__('库存复制能力不可用'),
             );
+        }
+
+        try {
+            $this->buildPlan($draft);
+        } catch (ProductV2ConflictException $exception) {
+            return $this->failure($draft->draftId, $exception->errorCode);
         }
 
         try {
@@ -163,12 +179,15 @@ final class ProductCopyDurableCatalogAdapter
             return $inventory !== null
                 ? $inventory->transactional($execute)
                 : $execute();
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $errorCode = $exception instanceof ProductV2ConflictException
+                ? $exception->errorCode
+                : 'copy_commit_failed';
             try {
-                $operations->fail($draft->draftId, $claimToken, 'copy_commit_failed');
+                $operations->fail($draft->draftId, $claimToken, $errorCode);
             } catch (Throwable) {
             }
-            return $this->failure($draft->draftId, 'copy_commit_failed');
+            return $this->failure($draft->draftId, $errorCode);
         }
     }
 
@@ -292,6 +311,7 @@ final class ProductCopyDurableCatalogAdapter
                 continue;
             }
             $uuid = trim((string)($source[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? ''));
+            $this->assertCopyAuthorized($uuid, $sourceWebsiteId, $draft->targetWebsiteId);
             $target = $sourceWebsiteId === $draft->targetWebsiteId
                 ? $source
                 : ($targetByUuid[$uuid] ?? null);
@@ -381,7 +401,7 @@ final class ProductCopyDurableCatalogAdapter
         ];
         $audit = [];
         if ($draft->entry === CopyDraft::ENTRY_BLANK) {
-            $audit[] = ['op' => 'blank', 'target_store_id' => $draft->targetStoreId];
+            $audit[] = ['op' => 'blank', 'target_store_ids' => $draft->selectedTargetStoreIds()];
             return new CopyCommitResult($draft->draftId, true, $counts, $audit);
         }
 
@@ -426,12 +446,14 @@ final class ProductCopyDurableCatalogAdapter
                 throw new \RuntimeException(__('Product copy 映射失败'));
             }
             $productMap[$sourceProductId] = $targetProductId;
-            $this->storeProducts->select(
-                $draft->targetWebsiteId,
-                $draft->targetStoreId,
-                $targetProductId,
-                true,
-            );
+            foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                $this->storeProducts->select(
+                    $draft->targetWebsiteId,
+                    $targetStoreId,
+                    $targetProductId,
+                    true,
+                );
+            }
 
             if ($action === 'skip') {
                 $counts['products_skipped']++;
@@ -469,12 +491,14 @@ final class ProductCopyDurableCatalogAdapter
                 }
                 $targetOfferId = (int)$targetOffer->getId();
                 $offerMap[$sourceOfferId] = $targetOfferId;
-                $this->storeOffers->select(
-                    $draft->targetWebsiteId,
-                    $draft->targetStoreId,
-                    $targetOfferId,
-                    true,
-                );
+                foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+                    $this->storeOffers->select(
+                        $draft->targetWebsiteId,
+                        $targetStoreId,
+                        $targetOfferId,
+                        true,
+                    );
+                }
                 if ($action !== 'skip' || $createdOffer) {
                     $offerAttributeMap[$sourceOfferId] = $targetOfferId;
                     $priceOfferMap[$sourceOfferId] = $targetOfferId;
@@ -531,6 +555,18 @@ final class ProductCopyDurableCatalogAdapter
                 'source_overlay_lifted' => false,
             ];
         }
+        if ($counts['categories_created'] > 0
+            || $counts['links_created'] > 0
+            || $counts['products_created'] > 0
+            || $counts['products_updated'] > 0
+            || $counts['offers_created'] > 0
+        ) {
+            ObjectManager::getInstance(StorefrontCatalogCacheCoordinator::class)
+                ->notifyCatalogChanged($draft->targetWebsiteId, 'copy_commit', [
+                    'counts' => $counts,
+                ]);
+        }
+
         return new CopyCommitResult($draft->draftId, true, $counts, $audit);
     }
 
@@ -612,6 +648,17 @@ final class ProductCopyDurableCatalogAdapter
         if ($entityMap === []) {
             return;
         }
+        if ($entityType === ProductCategoryAttributeService::ENTITY_TYPE) {
+            $this->categoryAttributes->copyExplicitAttributes(
+                (int)$draft->sourceWebsiteId,
+                $draft->targetWebsiteId,
+                $entityMap,
+                $this->sourceStoreIds($draft),
+                fn(int $sourceStoreId): array => $this->targetStoreIdsForSourceRow($draft, $sourceStoreId),
+            );
+
+            return;
+        }
         $rows = $this->attributes->listExplicitRows(
             (int)$draft->sourceWebsiteId,
             $entityType,
@@ -619,35 +666,33 @@ final class ProductCopyDurableCatalogAdapter
             $this->sourceStoreIds($draft),
         );
         foreach ($rows as $row) {
-            $targetStoreId = $this->targetStoreIdForSourceRow($draft, (int)$row['store_id']);
-            if ($targetStoreId === null) {
-                continue;
-            }
             $targetEntityId = $entityMap[(int)$row['entity_id']] ?? null;
             if ($targetEntityId === null) {
                 continue;
             }
-            if ($row['cleared']) {
-                $this->attributes->writeCleared(
-                    $draft->targetWebsiteId,
-                    $targetStoreId,
-                    $entityType,
-                    $targetEntityId,
-                    (string)$row['attribute_code'],
-                    (string)$row['locale'],
-                    (bool)$row['is_required'],
-                );
-            } else {
-                $this->attributes->writeExplicit(
-                    $draft->targetWebsiteId,
-                    $targetStoreId,
-                    $entityType,
-                    $targetEntityId,
-                    (string)$row['attribute_code'],
-                    (string)$row['locale'],
-                    $row['value'],
-                    (bool)$row['is_required'],
-                );
+            foreach ($this->targetStoreIdsForSourceRow($draft, (int)$row['store_id']) as $targetStoreId) {
+                if ($row['cleared']) {
+                    $this->attributes->writeCleared(
+                        $draft->targetWebsiteId,
+                        $targetStoreId,
+                        $entityType,
+                        $targetEntityId,
+                        (string)$row['attribute_code'],
+                        (string)$row['locale'],
+                        (bool)$row['is_required'],
+                    );
+                } else {
+                    $this->attributes->writeExplicit(
+                        $draft->targetWebsiteId,
+                        $targetStoreId,
+                        $entityType,
+                        $targetEntityId,
+                        (string)$row['attribute_code'],
+                        (string)$row['locale'],
+                        $row['value'],
+                        (bool)$row['is_required'],
+                    );
+                }
             }
         }
     }
@@ -664,29 +709,27 @@ final class ProductCopyDurableCatalogAdapter
             $this->sourceStoreIds($draft),
         );
         foreach ($rows as $row) {
-            $targetStoreId = $this->targetStoreIdForSourceRow($draft, (int)$row['store_id']);
-            if ($targetStoreId === null) {
-                continue;
-            }
             $targetOfferId = $offerMap[(int)$row['offer_id']] ?? null;
             if ($targetOfferId === null) {
                 continue;
             }
-            if ($row['cleared']) {
-                $this->prices->writeCleared(
-                    $draft->targetWebsiteId,
-                    $targetStoreId,
-                    $targetOfferId,
-                    (string)$row['currency'],
-                );
-            } else {
-                $this->prices->writeExplicit(
-                    $draft->targetWebsiteId,
-                    $targetStoreId,
-                    $targetOfferId,
-                    (string)$row['currency'],
-                    (int)$row['amount_minor'],
-                );
+            foreach ($this->targetStoreIdsForSourceRow($draft, (int)$row['store_id']) as $targetStoreId) {
+                if ($row['cleared']) {
+                    $this->prices->writeCleared(
+                        $draft->targetWebsiteId,
+                        $targetStoreId,
+                        $targetOfferId,
+                        (string)$row['currency'],
+                    );
+                } else {
+                    $this->prices->writeExplicit(
+                        $draft->targetWebsiteId,
+                        $targetStoreId,
+                        $targetOfferId,
+                        (string)$row['currency'],
+                        (int)$row['amount_minor'],
+                    );
+                }
             }
         }
     }
@@ -775,30 +818,37 @@ final class ProductCopyDurableCatalogAdapter
                 $sourceStoreId,
                 $sourceOfferId,
             )->onHandMinor;
-            $counts['inventory_copied']++;
-        } else {
-            $counts['inventory_zeroed']++;
         }
-        $idempotencyKey = 'copy:' . $draft->draftId . ':offer:' . $targetOfferId;
-        $inventory->ensureStock(
-            $draft->targetWebsiteId,
-            $draft->targetStoreId,
-            $targetOfferId,
-        );
-        $inventory->setOnHand(
-            $draft->targetWebsiteId,
-            $draft->targetStoreId,
-            $targetOfferId,
-            $quantity,
-            $idempotencyKey,
-            hash('sha256', $requestHash . ':' . $idempotencyKey),
-        );
-        $audit[] = [
-            'op' => 'inventory',
-            'offer_id' => $targetOfferId,
-            'on_hand_minor' => $quantity,
-            'copied' => $draft->inventoryCopyQty,
-        ];
+        foreach ($draft->selectedTargetStoreIds() as $targetStoreId) {
+            if ($draft->inventoryCopyQty) {
+                $counts['inventory_copied']++;
+            } else {
+                $counts['inventory_zeroed']++;
+            }
+            $idempotencyKey = 'copy:' . $draft->draftId
+                . ':store:' . $targetStoreId
+                . ':offer:' . $targetOfferId;
+            $inventory->ensureStock(
+                $draft->targetWebsiteId,
+                $targetStoreId,
+                $targetOfferId,
+            );
+            $inventory->setOnHand(
+                $draft->targetWebsiteId,
+                $targetStoreId,
+                $targetOfferId,
+                $quantity,
+                $idempotencyKey,
+                hash('sha256', $requestHash . ':' . $idempotencyKey),
+            );
+            $audit[] = [
+                'op' => 'inventory',
+                'store_id' => $targetStoreId,
+                'offer_id' => $targetOfferId,
+                'on_hand_minor' => $quantity,
+                'copied' => $draft->inventoryCopyQty,
+            ];
+        }
     }
 
     /**
@@ -859,19 +909,52 @@ final class ProductCopyDurableCatalogAdapter
         return [0, (int)$draft->sourceStoreId];
     }
 
-    private function targetStoreIdForSourceRow(CopyDraft $draft, int $sourceStoreId): ?int
+    /** @return list<int> */
+    private function assertCopyAuthorized(
+        string $productUuid,
+        int $sourceWebsiteId,
+        int $targetWebsiteId,
+    ): void {
+        if ($sourceWebsiteId === $targetWebsiteId) {
+            return;
+        }
+        if ($productUuid === '') {
+            throw new ProductV2ConflictException(
+                'product_copy_identity_missing',
+                (string)__('待复制商品缺少全局身份'),
+            );
+        }
+
+        $allowed = $this->copyAuthorization !== null
+            ? (bool)($this->copyAuthorization)($productUuid, $sourceWebsiteId, $targetWebsiteId)
+            : ($this->governance ?? ObjectManager::getInstance(ProductGovernanceService::class))
+                ->canCopy($productUuid, $targetWebsiteId);
+        if (!$allowed) {
+            throw new ProductV2ConflictException(
+                'product_copy_not_authorized',
+                (string)__('目标 Website 未获得该商品的复制授权'),
+                [
+                    'global_product_uuid' => $productUuid,
+                    'source_website_id' => $sourceWebsiteId,
+                    'target_website_id' => $targetWebsiteId,
+                ],
+            );
+        }
+    }
+
+    private function targetStoreIdsForSourceRow(CopyDraft $draft, int $sourceStoreId): array
     {
         if ($sourceStoreId === 0) {
             return (int)$draft->sourceWebsiteId === $draft->targetWebsiteId
-                ? null
-                : 0;
+                ? []
+                : [0];
         }
         if ($draft->entry !== CopyDraft::ENTRY_STORE_INHERIT
             || $sourceStoreId !== (int)$draft->sourceStoreId
         ) {
-            return null;
+            return [];
         }
-        return $draft->targetStoreId;
+        return $draft->selectedTargetStoreIds();
     }
 
     private function categoryCopyUuid(
@@ -928,6 +1011,8 @@ final class ProductCopyDurableCatalogAdapter
             'copy_idempotency_conflict' => (string)__('同一 draft 的 request_hash 不一致'),
             'copy_commit_in_progress' => (string)__('复制提交正在处理中'),
             'copy_draft_not_open' => (string)__('draft 不可提交'),
+            'product_copy_not_authorized' => (string)__('目标 Website 未获得该商品的复制授权'),
+            'product_copy_identity_missing' => (string)__('待复制商品缺少全局身份'),
             default => (string)__('复制提交失败'),
         };
         return new CopyCommitResult(

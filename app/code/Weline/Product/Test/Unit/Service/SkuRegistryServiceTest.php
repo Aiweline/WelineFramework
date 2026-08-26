@@ -9,6 +9,7 @@ use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
 use Weline\Product\Api\ProductIdentity;
+use Weline\Product\Api\ProductIdentityCutoverPolicyInterface;
 use Weline\Product\Model\SkuAlias;
 use Weline\Product\Model\SkuRegistry;
 use Weline\Product\Service\SkuIdentityConflictException;
@@ -306,9 +307,14 @@ final class SkuRegistryServiceTest extends TestCase
             }
         );
 
+        $policy = $this->createStub(ProductIdentityCutoverPolicyInterface::class);
+        $policy->method('mode')->willReturn(ProductIdentityCutoverPolicyInterface::MODE_LEGACY);
+        $policy->method('legacyWritesAllowed')->willReturn(true);
+
         return new SkuRegistryService(
             $connection,
             $tx,
+            $policy,
             $registryFactory,
             $aliasFactory,
             $casTokenFactory,

@@ -244,15 +244,15 @@ if ($videoType === 'youtube' && $videoUrl) {
 
 <style>
 .<?= $wc ?> {
-    margin: var(--weline-space-5, 20px) 0;
+    margin: var(--weline-space-5) 0;
 }
 
 .<?= $wc ?> .video-container {
     position: relative;
     width: 100%;
-    padding-top: var(--wc-aspect-padding, 56.25%);
+    padding-top: var(--wc-aspect-padding);
     background: var(--weline-theme-overlay);
-    border-radius: var(--weline-radius-lg, 12px);
+    border-radius: var(--weline-radius-lg);
     overflow: hidden;
 }
 
@@ -279,17 +279,17 @@ if ($videoType === 'youtube' && $videoUrl) {
 }
 
 .<?= $wc ?> .video-placeholder i {
-    font-size: 60px;
+    font-size: var(--spacing-15);
     opacity: 0.8;
 }
 
 .<?= $wc ?> .video-placeholder p {
-    margin: var(--weline-space-2, 10px) 0 0;
+    margin: var(--weline-space-2) 0 0;
     opacity: 0.6;
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    margin: var(--weline-space-3, 12px) 0;
+    margin: var(--weline-space-3) 0;
 }
 </style>

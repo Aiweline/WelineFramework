@@ -75,15 +75,18 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                 <span class="topbar-text"><?= __('欢迎光临！免费配送满') ?> ¥299</span>
             </div>
             <div class="topbar-right">
-                <a href="<?= $block->getUrl('customer/account') ?>" class="topbar-link"><?= __('帮助中心') ?></a>
+                <a href="<?= $block->getUrl('help') ?>" class="topbar-link"><?= __('帮助中心') ?></a>
                 <span class="topbar-divider">|</span>
-                <a href="<?= $block->getUrl('order/tracking') ?>" class="topbar-link"><?= __('订单跟踪') ?></a>
+                <a href="<?= $block->getUrl('orders/track') ?>" class="topbar-link"><?= __('订单跟踪') ?></a>
             </div>
         </div>
     </div>
 
     <div class="header-main">
         <div class="w-container">
+            <button class="mobile-menu-toggle" type="button" aria-label="<?= __('打开菜单') ?>" aria-expanded="false">
+                <w:icon name="menu" size="sm"></w:icon>
+            </button>
             <div class="header-logo">
                 <a href="<?= $block->getUrl('/') ?>" class="logo-link" title="<?= $esc((string)$logoText) ?>">
                     <?php if ($logoImageFileHtml !== ''): ?>
@@ -136,9 +139,6 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                     </a>
                 </div>
                 <?php endif; ?>
-                <button class="mobile-menu-toggle" type="button" aria-label="<?= __('菜单') ?>" aria-expanded="false">
-                    <w:icon name="menu" size="sm"></w:icon>
-                </button>
             </div>
         </div>
     </div>
@@ -195,12 +195,12 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 
 <style>
 .<?= $wc ?> {
-    background: var(--wc-header-bg, var(--weline-theme-surface));
-    color: var(--wc-header-text, var(--weline-theme-text));
-    box-shadow: var(--wc-header-shadow, var(--weline-theme-shadow-sm));
+    background: var(--wc-header-bg);
+    color: var(--wc-header-text);
+    box-shadow: var(--wc-header-shadow);
     width: 100%;
     z-index: 1000;
-    transition: all var(--weline-theme-transition-base, 0.3s ease);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?>.is-sticky {
@@ -215,10 +215,10 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 }
 
 .<?= $wc ?> .header-topbar {
-    background: var(--wc-header-text, var(--weline-theme-text));
-    color: var(--wc-header-bg, var(--weline-theme-surface));
-    font-size: var(--weline-font-size-xs, 12px);
-    padding: var(--weline-space-2, 8px) 0;
+    background: var(--wc-header-text);
+    color: var(--wc-header-bg);
+    font-size: var(--weline-font-size-xs);
+    padding: var(--weline-space-2) 0;
 }
 
 .<?= $wc ?> .header-topbar .w-container {
@@ -234,74 +234,74 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 }
 
 .<?= $wc ?> .topbar-divider {
-    margin: 0 var(--weline-space-3, 10px);
+    margin: 0 var(--weline-space-3);
     opacity: 0.5;
 }
 
 .<?= $wc ?> .header-main {
-    padding: var(--weline-space-4, 15px) 0;
+    padding: var(--weline-space-4) 0;
 }
 
 .<?= $wc ?> .header-main .w-container {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--weline-space-8, 30px);
+    gap: var(--weline-space-8);
 }
 
 .<?= $wc ?> .logo-text {
-    font-size: var(--weline-font-size-2xl, 28px);
+    font-size: var(--weline-font-size-2xl);
     font-weight: 700;
-    color: var(--wc-header-accent, var(--weline-theme-primary));
-    letter-spacing: 2px;
+    color: var(--wc-header-accent);
+    letter-spacing: var(--spacing-0_5);
 }
 
 .<?= $wc ?> .logo-image,
 .<?= $wc ?> .logo-image--asset img {
-    max-height: 50px;
+    max-height: var(--size-control-50);
     width: auto;
 }
 
 .<?= $wc ?> .header-search {
     flex: 1;
-    max-width: 550px;
+    max-width: var(--token-size-550px);
 }
 
 .<?= $wc ?> .search-input-wrapper {
     display: flex;
     align-items: center;
-    border: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-round, 999px);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-round);
     overflow: hidden;
-    transition: border-color var(--weline-theme-transition-base, 0.2s ease);
+    transition: border-color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .search-input-wrapper:focus-within {
-    border-color: var(--wc-header-accent, var(--weline-theme-primary));
+    border-color: var(--wc-header-accent);
 }
 
 .<?= $wc ?> .search-input {
     flex: 1;
     border: none;
-    padding: var(--weline-space-3, 12px) var(--weline-space-5, 20px);
-    font-size: var(--weline-font-size-sm, 14px);
+    padding: var(--weline-space-3) var(--weline-space-5);
+    font-size: var(--weline-font-size-sm);
     background: transparent;
     outline: none;
-    color: var(--wc-header-text, var(--weline-theme-text));
+    color: var(--wc-header-text);
 }
 
 .<?= $wc ?> .search-btn {
-    background: var(--wc-header-accent, var(--weline-theme-primary));
+    background: var(--wc-header-accent);
     color: var(--weline-theme-on-primary);
     border: none;
-    padding: var(--weline-space-3, 12px) var(--weline-space-5, 20px);
+    padding: var(--weline-space-3) var(--weline-space-5);
     cursor: pointer;
 }
 
 .<?= $wc ?> .header-tools {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-5, 20px);
+    gap: var(--weline-space-5);
 }
 
 .<?= $wc ?> .tool-link {
@@ -309,31 +309,31 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
     flex-direction: column;
     align-items: center;
     text-decoration: none;
-    color: var(--wc-header-text, var(--weline-theme-text));
-    transition: color var(--weline-theme-transition-base, 0.2s ease);
+    color: var(--wc-header-text);
+    transition: color var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .tool-link:hover {
-    color: var(--wc-header-accent, var(--weline-theme-primary));
+    color: var(--wc-header-accent);
 }
 
 .<?= $wc ?> .tool-label {
-    font-size: var(--weline-font-size-xs, 12px);
+    font-size: var(--weline-font-size-xs);
 }
 
 .<?= $wc ?> .tool-badge {
     position: absolute;
-    top: -5px;
+    top: var(--token-size-5px);
     right: 0;
-    background: var(--wc-header-accent, var(--weline-theme-primary));
+    background: var(--wc-header-accent);
     color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-xs, 10px);
-    min-width: 18px;
-    height: 18px;
-    line-height: 18px;
+    font-size: var(--weline-font-size-xs);
+    min-width: var(--font-size-lg);
+    height: var(--font-size-lg);
+    line-height: var(--spacing-4_5);
     text-align: center;
-    border-radius: var(--weline-radius-round, 999px);
-    padding: 0 var(--weline-space-1, 5px);
+    border-radius: var(--weline-radius-round);
+    padding: 0 var(--weline-space-1);
 }
 
 .<?= $wc ?> .tool-item {
@@ -345,12 +345,12 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
     background: none;
     border: none;
     cursor: pointer;
-    color: var(--wc-header-text, var(--weline-theme-text));
+    color: var(--wc-header-text);
 }
 
 .<?= $wc ?> .header-nav {
     background: var(--weline-theme-surface-muted);
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .nav-list {
@@ -358,7 +358,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
     list-style: none;
     margin: 0;
     padding: 0;
-    gap: var(--weline-space-1, 5px);
+    gap: var(--weline-space-1);
 }
 
 .<?= $wc ?> .nav-item {
@@ -368,24 +368,24 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 .<?= $wc ?> .nav-link {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 6px);
-    padding: var(--weline-space-3, 12px) var(--weline-space-5, 18px);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-3) var(--weline-space-5);
     text-decoration: none;
-    color: var(--wc-header-text, var(--weline-theme-text));
-    font-size: var(--weline-font-size-sm, 14px);
+    color: var(--wc-header-text);
+    font-size: var(--weline-font-size-sm);
     font-weight: 500;
-    border-radius: var(--weline-radius-sm, 4px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    border-radius: var(--weline-radius-sm);
+    transition: all var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .nav-link:hover,
 .<?= $wc ?> .nav-link[data-state="active"] {
-    color: var(--wc-header-accent, var(--weline-theme-primary));
+    color: var(--wc-header-accent);
     background: var(--weline-theme-primary-surface);
 }
 
 .<?= $wc ?> .nav-link.highlight {
-    color: var(--wc-header-accent, var(--weline-theme-primary));
+    color: var(--wc-header-accent);
     font-weight: 600;
 }
 
@@ -393,14 +393,14 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
     position: absolute;
     top: 100%;
     left: 0;
-    min-width: 400px;
+    min-width: var(--size-panel-400);
     background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
     box-shadow: var(--weline-theme-shadow-lg);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(10px);
-    transition: all var(--weline-theme-transition-base, 0.2s ease);
+    transform: translateY(var(--spacing-2_5));
+    transition: all var(--weline-theme-transition-base);
     z-index: 100;
 }
 
@@ -412,16 +412,16 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 
 .<?= $wc ?> .dropdown-inner {
     display: flex;
-    padding: var(--weline-space-5, 20px);
-    gap: var(--weline-space-8, 30px);
+    padding: var(--weline-space-5);
+    gap: var(--weline-space-8);
 }
 
 .<?= $wc ?> .dropdown-title {
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     font-weight: 600;
-    margin: 0 0 var(--weline-space-3, 12px);
-    padding-bottom: var(--weline-space-2, 8px);
-    border-bottom: var(--weline-theme-border-width, 2px) var(--weline-theme-border-style, solid) var(--wc-header-accent, var(--weline-theme-primary));
+    margin: 0 0 var(--weline-space-3);
+    padding-bottom: var(--weline-space-2);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--wc-header-accent);
 }
 
 .<?= $wc ?> .dropdown-list {
@@ -433,16 +433,16 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 .<?= $wc ?> .dropdown-list a {
     color: var(--weline-theme-text-muted);
     text-decoration: none;
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
 }
 
 .<?= $wc ?> .dropdown-list a:hover {
-    color: var(--wc-header-accent, var(--weline-theme-primary));
+    color: var(--wc-header-accent);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    font-size: var(--weline-font-size-xs, 12px);
+    font-size: var(--weline-font-size-xs);
 }
 
 .widget-preview-canvas .<?= $wc ?> .header-topbar,
@@ -458,33 +458,81 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 @media (max-width: 992px) {
     .<?= $wc ?> .header-main .w-container {
         flex-wrap: wrap;
+        gap: var(--weline-space-3);
+    }
+
+    .<?= $wc ?> .mobile-menu-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--size-control-lg);
+        height: var(--size-control-lg);
+        order: 0;
+        flex-shrink: 0;
+    }
+
+    .<?= $wc ?> .header-logo {
+        order: 1;
+    }
+
+    .<?= $wc ?> .header-tools {
+        order: 2;
+        margin-left: auto;
+        gap: var(--weline-space-3);
     }
 
     .<?= $wc ?> .header-search {
+        display: block;
         order: 3;
         max-width: none;
         width: 100%;
-        margin-top: var(--weline-space-4, 15px);
+        margin-top: 0;
+    }
+
+    .<?= $wc ?> .search-input-wrapper {
+        border-radius: var(--border-radius-lg);
+        height: var(--size-control-lg);
     }
 
     .<?= $wc ?> .tool-label {
         display: none;
     }
 
-    .<?= $wc ?> .mobile-menu-toggle {
-        display: block;
+    .<?= $wc ?> .header-nav {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
     }
 
-    .<?= $wc ?> .header-nav {
+    .<?= $wc ?> .header-nav::-webkit-scrollbar {
         display: none;
     }
 
-    .<?= $wc ?> .header-nav.is-open {
-        display: block;
+    .<?= $wc ?> .nav-list {
+        flex-wrap: nowrap;
+        width: max-content;
     }
 
-    .<?= $wc ?> .nav-list {
+    .<?= $wc ?> .nav-dropdown {
+        display: none;
+    }
+
+    .<?= $wc ?>.is-drawer-open .header-nav {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(80vw, var(--token-size-22-5rem));
+        overflow-y: auto;
+        background: var(--weline-theme-surface);
+        color: var(--weline-theme-text);
+        z-index: 1000;
+    }
+
+    .<?= $wc ?>.is-drawer-open .nav-list {
         flex-direction: column;
+        width: 100%;
     }
 }
 </style>
@@ -518,8 +566,10 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 
     if (menuToggle && nav) {
         menuToggle.addEventListener('click', function () {
-            var open = nav.classList.toggle('is-open');
+            var open = root.classList.toggle('is-drawer-open');
+            nav.classList.toggle('is-open', open);
             menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            document.body.style.overflow = open ? 'hidden' : '';
         });
     }
 })();

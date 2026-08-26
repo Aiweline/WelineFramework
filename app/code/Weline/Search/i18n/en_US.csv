@@ -1,12 +1,18 @@
 ﻿"Search shard 重复声明表 %{1}","Search shard 重复声明表 %{1}"
 搜索接口不支持该操作：%{1},"The Search API does not support this operation: %{1}"
-"Search storefront 不接受客户端 Scope 参数","The Search storefront API does not accept client-supplied Scope parameters"
-"当前 storefront 请求没有冻结完整商城 Scope","The current storefront request has no frozen complete commerce Scope"
+热搜词已加载,热搜词已加载
+输入关键词…,输入关键词…
+搜索,Search
+热搜,热搜
 "Search 只接受 ResourceChange v1","Search only accepts ResourceChange v1"
 "Product Search 投影事件负载无效","Product Search projection event payload is invalid"
 "Search Product 投影事件 %{1}","Search Product Projection Event %{1}"
 "Product Search 投影 Scope kind 无效","Product Search projection Scope kind is invalid"
 "Product Search 投影 Store Scope 无效","Product Search projection Store Scope is invalid"
+搜索：%{1},"Search: %{1}"
+性能慢日志,性能慢日志
+clock,clock
+查看搜索性能慢日志,查看搜索性能慢日志
 搜索运行模式已保存。,"Search run mode saved."
 搜索运行模式保存失败：%{1},"Search run mode save failed: %{1}"
 搜索管理,"Search management"
@@ -27,6 +33,9 @@ warning,warning
 迁移状态,"Migration status"
 eye,eye
 只读查看搜索迁移状态,"Read-only view search migration status"
+搜索报告,搜索报告
+chart,chart
+查看搜索报告,查看搜索报告
 "Search shard registry 创建后无法读取：website_id=%{1}","Search shard registry cannot be read after it is created: website_id=%{1}"
 "Search shard ready 指纹与 schema version 不能为空","Search shard ready fingerprint and schema version cannot be empty"
 "Search shard ready 指纹写入冲突：website_id=%{1}","Search shard ready fingerprint writing conflict: website_id=%{1}"
@@ -37,6 +46,15 @@ eye,eye
 "website_id 不能为负数：%{1}","website_id cannot be negative: %{1}"
 "非法 search shard key：%{1}","Illegal search shard key: %{1}"
 "非法 search shard 实体名：%{1}","Illegal search shard entity name: %{1}"
+全部,All
+商品,Products
+"共 %{1} 条","Total %{1} items"
+分类面包屑,"Category breadcrumb"
+请输入关键词开始搜索,"Enter a keyword to start searching"
+未找到相关结果,"No matching results found"
+查看更多%{1}结果,"View more %{1} results"
+展开/收起,"Expand / collapse"
+搜索类型,"Search type"
 是,yes
 否,no
 只读诊断,"Read-only diagnostics"
@@ -50,6 +68,29 @@ eye,eye
 影子比对,"shadow comparison"
 保存安全模式,"Save safe mode"
 当前没有记录。,"There are currently no records."
+"搜索管理 · 性能慢日志","搜索管理 · 性能慢日志"
+阈值,阈值
+时间,时间
+"近 24h","近 24h"
+"近 7 天","近 7 天"
+"近 30 天","近 30 天"
+刷新,刷新
+慢请求数,慢请求数
+"最慢 ms","最慢 ms"
+耗时分布,耗时分布
+慢请求列表,慢请求列表
+"该 Scope 近期无慢请求","该 Scope 近期无慢请求"
+"搜索管理 · 搜索报告","搜索管理 · 搜索报告"
+"近 24 小时","近 24 小时"
+引擎只读,引擎只读
+请求量,请求量
+零结果率,零结果率
+"Top 类型","Top 类型"
+趋势（按日）,趋势（按日）
+"Top 关键词","Top 关键词"
+次数,次数
+类型,类型
+零结果词,零结果词
 "Search 增量索引","Search incremental index"
 "从 Product current source 刷新 Website/Store Search 投影","Refresh Website/Store Search projection from Product current source"
 "Search 增量消费者只接受完整 Website 或 Store Scope，当前为 %{1}","Search incremental consumers only accept full Website or Store Scope, currently %{1}"
@@ -59,9 +100,23 @@ eye,eye
 "Search 降级标记写入冲突","The Search degradation marker write conflicted"
 "Search 恢复标记 CAS 冲突","The Search recovery marker CAS conflicted"
 "Search 恢复水位未与 Product current 追平","The Search recovery watermark has not caught up with Product current"
+搜索暂时不可用,搜索暂时不可用
+未知搜索类型：%{1},未知搜索类型：%{1}
 "Search shard 无法进入 provisioning：status=%{1}","Search shard cannot enter provisioning: status=%{1}"
 "Search shard provision 返回身份不匹配","Search shard provision returns identity mismatch"
 "Search shard provision 失败","Search shard provision failed"
+搜索不接受未知参数,搜索不接受未知参数
+搜索关键词过长,搜索关键词过长
+搜索页码超出范围,搜索页码超出范围
+搜索每页数量超出范围,搜索每页数量超出范围
+缺少搜索参数：%{1},缺少搜索参数：%{1}
+"当前 storefront 请求没有冻结完整商城 Scope","The current storefront request has no frozen complete commerce Scope"
+热搜接口不接受未知参数,热搜接口不接受未知参数
+热搜数量超出范围,热搜数量超出范围
+搜索类型列表不接受参数,搜索类型列表不接受参数
+搜索参数类型无效：%{1},搜索参数类型无效：%{1}
+搜索参数过小：%{1},搜索参数过小：%{1}
+搜索参数过大：%{1},搜索参数过大：%{1}
 "Search Product 直读要求完整 Store/Channel/locale/currency Scope","The Search Product direct reader requires a complete Store/Channel/locale/currency Scope"
 "Product 目录直读不可用","The Product catalog direct reader is unavailable"
 "Product 目录直读返回了无效快照","The Product catalog direct reader returned an invalid snapshot"
@@ -94,4 +149,9 @@ eye,eye
 "shadow 观察窗 currency（preflight/apply 必需）","shadow observation window currency (required for preflight/apply)"
 显示本帮助,"Show this help"
 """Search shard 重复声明表 %{1}""","""Search shard duplicate declaration table %{1}"""
+当前类型,"Current type"
+全部%{1},"All %{1}"
+"Search storefront 不接受客户端 Scope 参数","The Search storefront API does not accept client-supplied Scope parameters"
+"找到 %{1} 件相关商品","Found %{1} matching products"
+未找到与“%{1}”匹配的商品,"No products matched “%{1}”"
 "MIG-P3C：Search shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P3C: Search shadow to allowlist (apply must --database=mig_clone_*)"

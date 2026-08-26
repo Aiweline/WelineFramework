@@ -15,5 +15,9 @@
               action="search/backend/controlcenter/degraded" icon="warning" order="40"/>
         <menu source="Weline_Search::commerce:tax-search:migration" name="search_migration" title="迁移状态"
               action="search/backend/controlcenter/migration" icon="eye" order="50"/>
+        <menu source="Weline_Search::commerce:tax-search:report" name="search_report" title="搜索报告"
+              action="search/backend/report/index" icon="chart" order="60"/>
+        <menu source="Weline_Search::commerce:tax-search:slow-log" name="search_slow_log" title="性能慢日志"
+              action="search/backend/slowlog/index" icon="clock" order="70"/>
     </menu>
 </menus>

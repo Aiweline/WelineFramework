@@ -1,0 +1,204 @@
+<?php
+/**
+ * Product-owned frequently bought together (cross-sell).
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {cross-sell}
+ * @widget.name {经常一起购买}
+ * @widget.description {展示经常一起购买的产品组合（真实目录报价）}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product","cart"]}
+ * @widget.supports {["layout-product-cross-sell","layout-cart-recommendations","cross-sell"]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-cross-sell", "area":"content", "sort_order":3, "required":true, "reason":"商品详情默认搭配推荐槽", "config":{"title":"经常一起购买","limit":3,"show_add_all_button":true,"show_total_price":true} }]}
+ *
+ * @param title {default="经常一起购买",type="string",label="标题"}
+ * @param limit {default=3,type="number",label="搭配商品数量"}
+ * @param show_add_all_button {default=true,type="bool",label="显示一键添加按钮"}
+ * @param show_total_price {default=true,type="bool",label="显示组合总价"}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ */
+
+use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\StorefrontProductWidgetCatalog;
+use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('cross-sell');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
+$wc = $scope->cssClass;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '经常一起购买';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
+    $titleSource = '经常一起购买';
+}
+$widgetTitle = WidgetI18n::label($titleSource, '经常一起购买');
+$companionLimit = max(1, min(8, (int)($this->getData('limit') ?? 3)));
+$showAddAllButton = (bool)($this->getData('show_add_all_button') ?? true);
+$showTotalPrice = (bool)($this->getData('show_total_price') ?? true);
+
+$seedProductId = (int)($this->getData('product_id') ?? 0);
+$offer = $this->getData('storefront_offer');
+if ($seedProductId <= 0 && is_array($offer)) {
+    $seedProductId = (int)($offer['product_id'] ?? 0);
+}
+if ($seedProductId <= 0) {
+    $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+    $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
+    $pathParts = array_values(array_filter(
+        explode('/', trim($requestPath, '/')),
+        static fn(string $part): bool => $part !== '',
+    ));
+    $productPartIndex = array_search('product', $pathParts, true);
+    if ($productPartIndex !== false && isset($pathParts[$productPartIndex + 1])) {
+        $handle = strtolower(rawurldecode((string)$pathParts[$productPartIndex + 1]));
+        if (ctype_digit($handle)) {
+            $seedProductId = (int)$handle;
+        } else {
+            try {
+                foreach (ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards(48) as $candidate) {
+                    $route = strtolower(trim((string)($candidate['url'] ?? '')));
+                    if ($route === 'product/' . $handle) {
+                        $seedProductId = (int)($candidate['product_id'] ?? $candidate['id'] ?? 0);
+                        break;
+                    }
+                }
+            } catch (\Throwable) {
+                $seedProductId = 0;
+            }
+        }
+    }
+}
+
+$products = [];
+try {
+    $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+        ->bundleCards($seedProductId, $companionLimit);
+} catch (\Throwable) {
+    $products = [];
+}
+
+foreach ($products as &$product) {
+    $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+    $product['id'] = $productId;
+    $route = trim((string)($product['url'] ?? ''));
+    $product['url'] = str_starts_with($route, 'http://') || str_starts_with($route, 'https://')
+        ? $route
+        : $this->getUrl(ltrim($route, '/'));
+    $product['selected'] = array_key_exists('selected', $product) ? (bool)$product['selected'] : true;
+}
+unset($product);
+
+if (count($products) < 2) {
+    return;
+}
+
+$totalPrice = 0.0;
+foreach ($products as $product) {
+    if (!empty($product['selected'])) {
+        $totalPrice += (float)($product['price'] ?? 0);
+    }
+}
+?>
+<link rel="stylesheet"
+      href="@static(Weline_Product::css/widgets/cross-sell.css)?v=20260826-shopper1"
+      data-no-extract="true">
+
+<section class="<?= $esc($wc) ?> weline-product-fbt<?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-testid="storefront-cross-sell"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-msg-select-one="<?= $esc((string)__('请至少选择一个商品')) ?>"
+         data-msg-added="<?= $esc((string)__('已添加')) ?>"
+         data-msg-add-all="<?= $esc((string)__('全部加入购物车')) ?>">
+    <header class="wpf-header">
+        <h2 class="wpf-title"><?= $esc($widgetTitle) ?></h2>
+        <p class="wpf-subtitle"><?= $esc((string)__('Buy these items together')) ?></p>
+    </header>
+
+    <div class="wpf-body">
+        <div class="wpf-products" data-wpf-products>
+            <?php foreach ($products as $index => $product): ?>
+                <?php
+                $productId = (int)($product['id'] ?? 0);
+                $productUrl = (string)($product['url'] ?? '#');
+                $productName = (string)($product['name'] ?? '');
+                $productImage = (string)($product['image'] ?? '');
+                $imageFallback = (string)($product['image_fallback'] ?? $productImage);
+                $price = (float)($product['price'] ?? 0);
+                $isSeed = !empty($product['is_seed']);
+                $selected = !empty($product['selected']);
+                $offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
+                ?>
+                <?php if ($index > 0): ?>
+                    <span class="wpf-plus" aria-hidden="true">+</span>
+                <?php endif; ?>
+                <article class="wpf-item product-card<?= $isSeed ? ' is-seed' : '' ?>"
+                         data-product-id="<?= $productId ?>"
+                         data-global-offer-uuid="<?= $esc($offerUuid) ?>">
+                    <div class="wpf-stage">
+                        <label class="wpf-check">
+                            <input type="checkbox"
+                                   class="wpf-checkbox"
+                                   data-price="<?= $esc(number_format($price, 2, '.', '')) ?>"
+                                   <?= $selected ? 'checked' : '' ?>
+                                   <?= $isSeed ? 'disabled' : '' ?>>
+                            <span class="wpf-check-ui" aria-hidden="true"></span>
+                            <span class="wpf-sr"><?= $esc($productName) ?></span>
+                        </label>
+                        <a class="wpf-media" href="<?= $esc($productUrl) ?>" aria-label="<?= $esc($productName) ?>">
+                            <img src="<?= $esc($imageFallback !== '' ? $imageFallback : $productImage) ?>"
+                                 alt=""
+                                 data-storefront-img="1"
+                                 data-fallback="<?= $esc($imageFallback !== '' ? $imageFallback : $productImage) ?>"
+                                 loading="lazy"
+                                 decoding="async">
+                        </a>
+                        <?= $this->fetch(
+                            'Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml',
+                            ProductCardShopperActionParams::fetchDictionary($productId, $shopperActions, false)
+                        ) ?>
+                    </div>
+                    <div class="wpf-meta">
+                        <h3 class="wpf-name">
+                            <a href="<?= $esc($productUrl) ?>"><?= $esc($productName) ?></a>
+                        </h3>
+                        <div class="wpf-price-row">
+                            <div class="wpf-price">¥<?= number_format($price, 2) ?></div>
+                            <?php if ($isSeed): ?>
+                                <div class="wpf-badge"><?= $esc((string)__('当前商品')) ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+
+        <aside class="wpf-summary">
+            <?php if ($showTotalPrice): ?>
+                <div class="wpf-total">
+                    <span class="wpf-total-label"><?= $esc((string)__('总价')) ?></span>
+                    <span class="wpf-total-value" data-wpf-total>¥<?= number_format($totalPrice, 2) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if ($showAddAllButton): ?>
+                <button type="button" class="wpf-cta" data-wpf-add-all>
+                    <span data-wpf-cta-label><?= $esc((string)__('全部加入购物车')) ?></span>
+                </button>
+            <?php endif; ?>
+            <div class="wpf-status" data-wpf-status role="status" aria-live="polite"></div>
+        </aside>
+    </div>
+</section>
+
+<script src="@static(Weline_Product::js/widgets/cross-sell.js)?v=20260825-fbt5"
+        defer
+        data-no-extract="true"></script>

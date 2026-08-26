@@ -100,12 +100,12 @@ $rootClass = trim($wc . ' w-builder-grid ' . $class);
 <style>
 .<?= $wc ?> {
     display: grid;
-    grid-template-columns: repeat(var(--wc-grid-columns, 2), minmax(var(--wc-grid-min, 220px), 1fr));
-    gap: var(--wc-grid-gap, var(--weline-space-4, 16px));
-    align-items: var(--wc-grid-align, stretch);
-    justify-items: var(--wc-grid-justify, stretch);
-    padding: var(--wc-grid-padding, 0);
-    background: var(--wc-grid-bg, transparent);
+    grid-template-columns: repeat(var(--wc-grid-columns), minmax(var(--wc-grid-min), 1fr));
+    gap: var(--wc-grid-gap);
+    align-items: var(--wc-grid-align);
+    justify-items: var(--wc-grid-justify);
+    padding: var(--wc-grid-padding);
+    background: var(--wc-grid-bg);
     color: var(--weline-theme-text);
 }
 

@@ -30,17 +30,34 @@
         <li><a href="/gift-cards"><lang>礼品卡</lang></a></li>
         <li><a href="/help"><lang>客户服务</lang></a></li>
     </ul>
-    <!-- “更多”按钮（由 JS 根据宽度控制显示/隐藏） -->
-    <div class="nav-more-wrapper" id="nav-more-wrapper" style="display: none;">
-        <button class="nav-more-btn" id="nav-more-btn" aria-label="更多" aria-expanded="false">
+    <!-- “更多”：通用 Weline.UI menu（hover 展开），溢出项由 adjustNavLinks 写入 w-menu__item -->
+    <div class="nav-more-wrapper"
+         id="nav-more-wrapper"
+         data-w-component="menu"
+         data-w-open-on="hover"
+         data-w-placement="bottom-end"
+         style="display: none;">
+        <button class="nav-more-btn w-button"
+                id="nav-more-btn"
+                type="button"
+                data-w-menu-trigger
+                data-tone="quiet"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-label="更多">
             <span><lang>更多</lang></span>
-            <i class="fas fa-chevron-down"></i>
+            <i class="fas fa-chevron-down" aria-hidden="true"></i>
         </button>
-        <ul class="nav-more-dropdown" id="nav-more-dropdown" role="menu" aria-hidden="true">
-            <!-- 动态添加的菜单项 -->
-        </ul>
+        <div class="w-menu nav-more-menu w-surface-body"
+             data-surface="body"
+             id="nav-more-dropdown"
+             data-w-menu-panel
+             role="menu"
+             data-state="closed"
+             aria-hidden="true"
+             hidden></div>
     </div>
-    </nav>
+</nav>
 ```
 
 ## 示例代码
@@ -70,13 +87,13 @@ $links = [
 </nav>
 ```
 
-> 如需支持“更多”下拉菜单，可复用主题默认结构中的 `.nav-more-wrapper`、`.nav-more-dropdown` 等元素和现有 JS 逻辑。
+> 如需支持“更多”下拉：复用 `data-w-component="menu"` + `data-w-open-on="hover"` 与 `#nav-more-wrapper` / `#nav-more-dropdown`；溢出项必须是 `a.w-menu__item[role=menuitem]`，由主题 `adjustNavLinks` 写入并 `Weline.UI.mount`。禁止手写 `li>a` 列表或第二套溢出脚本覆盖面板。
 
 ## CSS 类说明
 
 - `.header-nav-links`：导航容器
 - `.nav-links-list`：链接列表 `<ul>` 元素
-- `.nav-more-wrapper` / `.nav-more-btn` / `.nav-more-dropdown`：收纳超出宽度的链接（由主题 JS 控制）
+- `.nav-more-wrapper` / `.nav-more-btn` / `.nav-more-menu`（`#nav-more-dropdown`）：通用 menu 悬浮收纳超出宽度的链接
 
 ## 注意事项
 

@@ -53,6 +53,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public const schema_fields_frontend_is_visible = 'frontend_is_visible';
     public const schema_fields_frontend_is_filterable = 'frontend_is_filterable';
     public const schema_fields_frontend_is_searchable = 'frontend_is_searchable';
+    public const schema_fields_compare_mode = 'compare_mode';
     public const schema_fields_data_is_multiple = 'data_is_multiple';
     public const schema_fields_data_has_option = 'data_has_option';
 

@@ -12,7 +12,7 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  *
- * @param image {default="",type="image",label="广告图片"}
+ * @param image {default="",type="media_image",label="广告图片",description="从媒体库选择广告图片"}
  * @param link {default="",type="string",label="链接地址"}
  * @param alt_text {default="广告",type="string",label="替代文字"}
  * @param open_new_tab {default=false,type="bool",label="新窗口打开"}
@@ -96,7 +96,7 @@ if ($isPreviewMode && $image === '') {
     width: 100%;
     height: auto;
     display: block;
-    transition: transform var(--weline-theme-transition-base, 0.3s ease);
+    transition: transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .ad-image--asset img {
@@ -111,38 +111,38 @@ if ($isPreviewMode && $image === '') {
 
 .<?= $wc ?> .ad-label {
     position: absolute;
-    top: var(--weline-space-2, 10px);
-    right: var(--weline-space-2, 10px);
-    padding: 2px var(--weline-space-2, 8px);
+    top: var(--weline-space-2);
+    right: var(--weline-space-2);
+    padding: var(--spacing-0_5) var(--weline-space-2);
     background: color-mix(in srgb, var(--weline-theme-overlay) 60%, transparent);
     color: var(--weline-theme-on-primary);
-    font-size: var(--weline-font-size-xs, 10px);
-    border-radius: var(--weline-radius-sm, 3px);
+    font-size: var(--weline-font-size-xs);
+    border-radius: var(--weline-radius-sm);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--token-size-0-5px);
 }
 
 .widget-preview-canvas .<?= $wc ?>,
 .<?= $wc ?>.is-preview {
-    min-height: 56px;
+    min-height: var(--size-control-2xl);
 }
 
 .widget-preview-canvas .<?= $wc ?> .ad-image,
 .<?= $wc ?>.is-preview .ad-image {
-    min-height: 56px;
+    min-height: var(--size-control-2xl);
 }
 
 .widget-preview-canvas .<?= $wc ?> .ad-image--preview,
 .<?= $wc ?>.is-preview .ad-image--preview {
     width: 100%;
-    min-height: 56px;
+    min-height: var(--size-control-2xl);
     background: linear-gradient(135deg, color-mix(in srgb, var(--weline-theme-on-primary) 15%, transparent) 0%, color-mix(in srgb, var(--weline-theme-on-primary) 5%, transparent) 100%);
 }
 
 .widget-preview-canvas .<?= $wc ?> .ad-label,
 .<?= $wc ?>.is-preview .ad-label {
-    top: 6px;
-    right: 6px;
-    font-size: 9px;
+    top: var(--spacing-1_5);
+    right: var(--spacing-1_5);
+    font-size: var(--token-size-9px);
 }
 </style>

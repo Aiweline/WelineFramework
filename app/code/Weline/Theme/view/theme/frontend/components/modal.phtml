@@ -67,40 +67,40 @@ $footerSlotId = 'modal-footer:' . ($layoutId !== '' ? $layoutId : 'preview');
 .<?= $wc ?> {
     display: flex;
     flex-direction: column;
-    width: min(100%, 640px);
-    max-height: min(90vh, 720px);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg, 12px);
+    width: min(100%, var(--size-content-640));
+    max-height: min(90vh, var(--size-content-720));
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
     background: var(--weline-theme-surface-raised);
     color: var(--weline-theme-text);
-    box-shadow: var(--weline-shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.16));
+    box-shadow: var(--weline-shadow-lg);
     overflow: hidden;
 }
 
 .<?= $wc ?> .modal-header {
-    padding: var(--weline-space-4, 16px) var(--weline-space-5, 20px);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    padding: var(--weline-space-4) var(--weline-space-5);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
 }
 
 .<?= $wc ?> .modal-title {
     margin: 0;
-    font-size: var(--weline-font-size-lg, 17px);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-size: var(--weline-font-size-lg);
+    font-weight: var(--weline-font-weight-semibold);
 }
 
 .<?= $wc ?> .modal-body {
     flex: 1;
     overflow: auto;
-    padding: var(--weline-space-4, 16px) var(--weline-space-5, 20px);
+    padding: var(--weline-space-4) var(--weline-space-5);
 }
 
 .<?= $wc ?> .modal-footer {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
     justify-content: flex-end;
-    padding: var(--weline-space-4, 16px) var(--weline-space-5, 20px);
-    border-top: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    padding: var(--weline-space-4) var(--weline-space-5);
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     background: var(--weline-theme-surface-muted);
 }
 </style>

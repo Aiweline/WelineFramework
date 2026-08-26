@@ -104,8 +104,8 @@ $rootClass = trim($wc . ' w-builder-text w-builder-text--' . $size . ' w-builder
 <style>
 .<?= $wc ?> {
     display: block;
-    max-width: var(--wc-text-max, 100%);
-    color: var(--wc-text-color, var(--weline-theme-text));
+    max-width: var(--wc-text-max);
+    color: var(--wc-text-color);
 }
 
 .<?= $wc ?>.w-builder-align-center {
@@ -119,35 +119,35 @@ $rootClass = trim($wc . ' w-builder-text w-builder-text--' . $size . ' w-builder
 }
 
 .<?= $wc ?> .text-eyebrow {
-    margin: 0 0 var(--weline-space-2, 8px);
+    margin: 0 0 var(--weline-space-2);
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-sm, 13px);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-size: var(--weline-font-size-sm);
+    font-weight: var(--weline-font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--token-size-0-04em);
 }
 
 .<?= $wc ?> .text-title {
     margin: 0;
-    font-weight: var(--wc-text-title-weight, 700);
+    font-weight: var(--wc-text-title-weight);
 }
 
 .<?= $wc ?>[data-size="sm"] .text-title {
-    font-size: var(--weline-font-size-lg, 17px);
+    font-size: var(--weline-font-size-lg);
 }
 
 .<?= $wc ?>[data-size="md"] .text-title {
-    font-size: clamp(1.25rem, 2vw, 1.75rem);
+    font-size: clamp(var(--font-size-xl), 2vw, var(--font-size-3xl));
 }
 
 .<?= $wc ?>[data-size="lg"] .text-title {
-    font-size: clamp(1.5rem, 3vw, 2.5rem);
+    font-size: clamp(var(--font-size-2xl), 3vw, var(--token-size-2-5rem));
 }
 
 .<?= $wc ?> .text-body {
-    margin: var(--weline-space-3, 12px) 0 0;
+    margin: var(--weline-space-3) 0 0;
     color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-base, 15px);
-    line-height: var(--wc-text-line-height, 1.6);
+    font-size: var(--weline-font-size-base);
+    line-height: var(--wc-text-line-height);
 }
 </style>

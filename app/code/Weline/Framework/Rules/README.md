@@ -12,7 +12,9 @@ app/code/Weline/Framework/Rules/
 ├── RulesManager.php            # 规则管理器
 ├── Frontend/                   # 前台相关规则
 │   ├── SectionWelineCodeScanner.php
-│   └── FrontendSectionWelineCodeRule.php
+│   ├── FrontendSectionWelineCodeRule.php
+│   ├── ThemeLayoutWidgetOwnerScanner.php
+│   └── FrontendThemeLayoutWidgetOwnerRule.php
 ├── Test/                       # 测试相关规则
 │   └── TestClassPlacementRule.php
 └── README.md                   # 本文档
@@ -98,6 +100,25 @@ php bin/w frontend:check-section-code
 ```
 
 **文档**：`app/code/Weline/Theme/doc/frontend-section-weline-code.md`
+
+### 3. Theme 布局部件归属规则 (frontend-theme-layout-widget-owner)
+
+**分类**：frontend
+
+**优先级**：16
+
+**简述**：Theme 布局/partial 仅允许内嵌 Weline_Theme 部件
+
+**详细描述**：
+`Weline/Theme/view/theme/**/{layouts,partials}/**/*.phtml` 中禁止内嵌非 `Weline_Theme` 在 `widget.php` 注册的 `<w:widget>` 或 `fetch(...Module::.../widgets/...)`。其他模块须空 slot + `default_injections`。
+
+**本地自检**：
+
+```bash
+php bin/w frontend:check-theme-layout-widgets
+```
+
+**文档**：`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`（§ Slot / Widget）
 
 ## 如何添加新规则
 

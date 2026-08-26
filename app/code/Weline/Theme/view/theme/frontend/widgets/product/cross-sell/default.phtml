@@ -12,20 +12,24 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product", "cart"]}
  * @widget.supports {["layout-cart-recommendations","layout-product-cross-sell","layout-product-sidebar"]}
- * @widget.default_injections {[{"layout_type":"cart","layout_option":"default","slot":"cart-recommendations","area":"content","sort_order":0},{"layout_type":"product","layout_option":"default","slot":"product-cross-sell","area":"content","sort_order":0}]}
  * 
  * @param title {default="经常一起购买",type="string",label="标题"}
  * @param limit {default=4,type="number",label="显示数量"}
  * @param show_add_all_button {default=true,type="bool",label="显示一键添加按钮"}
  * @param show_total_price {default=true,type="bool",label="显示组合总价"}
+ * @param show_wishlist {default=true,type="bool",label="显示收藏"}
+ * @param show_compare {default=true,type="bool",label="显示对比"}
+ * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
 
+use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('cross-sell');
+$shopperActions = ProductCardShopperActionParams::fromTemplate($this);
 $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
@@ -62,6 +66,7 @@ unset($product);
         <div class="cross-sell-products">
             <?php foreach ($products as $index => $product): ?>
                 <?php
+                $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0);
                 // 确保所有产品字段都是字符串，避免null值
                 $productUrl = (string)($product['url'] ?? '');
                 $productImage = (string)($product['image'] ?? '');
@@ -71,7 +76,7 @@ unset($product);
                     <span class="plus-sign">+</span>
                 <?php endif; ?>
                 
-                <div class="cross-product" data-product-id="<?= $product['id'] ?>">
+                <div class="cross-product product-card" data-product-id="<?= $actionProductId ?>">
                     <div class="product-checkbox">
                         <input type="checkbox" 
                                id="cross-product-<?= $product['id'] ?>" 
@@ -81,11 +86,19 @@ unset($product);
                         <label for="cross-product-<?= $product['id'] ?>"></label>
                     </div>
                     
-                    <a href="<?= htmlspecialchars($productUrl) ?>" class="product-link">
-                        <img src="<?= htmlspecialchars($productImage) ?>" 
-                             alt="<?= htmlspecialchars($productName) ?>"
-                             class="product-image">
-                    </a>
+                    <div class="product-link-wrap">
+                        <a href="<?= htmlspecialchars($productUrl) ?>" class="product-link">
+                            <img src="<?= htmlspecialchars($productImage) ?>" 
+                                 alt="<?= htmlspecialchars($productName) ?>"
+                                 class="product-image">
+                        </a>
+                        <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                            'product_id' => $actionProductId,
+                            'show_wishlist' => $shopperActions['show_wishlist'],
+                            'show_compare' => $shopperActions['show_compare'],
+                            'show_quickview' => $shopperActions['show_quickview'],
+                        ]) ?>
+                    </div>
                     
                     <div class="product-info">
                         <h4 class="product-name">
@@ -121,18 +134,18 @@ unset($product);
 <style>
 .<?= $wc ?> {
     background: var(--weline-theme-surface-muted);
-    border-radius: 12px;
-    padding: 25px;
-    margin: 20px 0;
+    border-radius: var(--border-radius-xl);
+    padding: var(--token-size-25px);
+    margin: var(--weline-space-5) 0;
 }
 
 .<?= $wc ?> .widget-title {
-    font-size: 18px;
+    font-size: var(--font-size-lg);
     font-weight: 600;
-    margin: 0 0 20px;
+    margin: 0 0 var(--weline-space-5);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--spacing-sm);
 }
 
 .<?= $wc ?> .widget-title :is(i, svg) {
@@ -142,20 +155,20 @@ unset($product);
 .<?= $wc ?> .cross-sell-container {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: var(--weline-space-8);
     flex-wrap: wrap;
 }
 
 .<?= $wc ?> .cross-sell-products {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: var(--spacing-3_5);
     flex: 1;
     flex-wrap: wrap;
 }
 
 .<?= $wc ?> .plus-sign {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     font-weight: 300;
     color: var(--weline-theme-text-muted);
 }
@@ -163,11 +176,11 @@ unset($product);
 .<?= $wc ?> .cross-product {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--spacing-2_5);
     background: var(--weline-theme-surface-raised);
-    border-radius: 10px;
-    padding: 15px;
-    border: 2px solid transparent;
+    border-radius: var(--token-size-10px);
+    padding: var(--spacing-3_5);
+    border: var(--border-width-medium) solid transparent;
     transition: all 0.3s;
 }
 
@@ -180,18 +193,49 @@ unset($product);
 }
 
 .<?= $wc ?> .cross-checkbox {
-    width: 20px;
-    height: 20px;
+    width: var(--font-size-xl);
+    height: var(--font-size-xl);
     cursor: pointer;
     accent-color: var(--weline-theme-primary);
 }
 
+.<?= $wc ?> .product-link-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
 .<?= $wc ?> .product-link {
     display: block;
-    width: 80px;
-    height: 80px;
-    border-radius: 8px;
+    width: var(--sidebar-collapsed-width);
+    height: var(--sidebar-collapsed-width);
+    border-radius: var(--border-radius-lg);
     overflow: hidden;
+}
+.<?= $wc ?> .product-link-wrap .product-actions {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.<?= $wc ?> .cross-product:hover .product-actions,
+.<?= $wc ?> .cross-product:focus-within .product-actions {
+    opacity: 1;
+}
+.<?= $wc ?> .product-link-wrap .action-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(15, 17, 17, 0.12);
 }
 
 .<?= $wc ?> .product-image {
@@ -202,12 +246,12 @@ unset($product);
 
 .<?= $wc ?> .product-info {
     flex: 1;
-    min-width: 100px;
+    min-width: var(--token-size-100px);
 }
 
 .<?= $wc ?> .product-name {
-    margin: 0 0 5px;
-    font-size: 13px;
+    margin: 0 0 var(--spacing-1_5);
+    font-size: var(--weline-font-size-sm);
     font-weight: 500;
     line-height: 1.3;
 }
@@ -226,7 +270,7 @@ unset($product);
 }
 
 .<?= $wc ?> .product-price {
-    font-size: 15px;
+    font-size: var(--spacing-3_5);
     font-weight: 600;
     color: var(--weline-theme-danger);
 }
@@ -236,11 +280,11 @@ unset($product);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 15px;
-    padding: 20px;
+    gap: var(--spacing-3_5);
+    padding: var(--weline-space-5);
     background: var(--weline-theme-surface-raised);
-    border-radius: 10px;
-    min-width: 200px;
+    border-radius: var(--token-size-10px);
+    min-width: var(--size-panel-200);
 }
 
 .<?= $wc ?> .total-price {
@@ -249,30 +293,30 @@ unset($product);
 
 .<?= $wc ?> .total-price .label {
     display: block;
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
-    margin-bottom: 5px;
+    margin-bottom: var(--spacing-1_5);
 }
 
 .<?= $wc ?> .total-price .value {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     font-weight: 700;
     color: var(--weline-theme-danger);
 }
 
 .<?= $wc ?> .btn-add-all {
     width: 100%;
-    padding: 12px 24px;
+    padding: var(--weline-space-3) var(--spacing-lg);
     background: var(--weline-theme-primary);
     color: var(--weline-theme-on-primary);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--border-radius-lg);
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--spacing-sm);
     transition: all 0.3s;
 }
 
@@ -281,8 +325,8 @@ unset($product);
 }
 
 .<?= $wc ?> .cross-sell-status {
-    min-height: 20px;
-    font-size: 13px;
+    min-height: var(--font-size-xl);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
     text-align: center;
 }

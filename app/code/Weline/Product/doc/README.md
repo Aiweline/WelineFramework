@@ -2,6 +2,8 @@
 
 商品目录 Website 物理分片与 Provider SPI（万能商城内核 P2A）。
 
+总体完善路线与待确认产品决策见：[万能产品完善计划](万能产品完善计划.md)。
+
 ## P2A-002：Product shard schema/state
 
 - Family code：`product.website`
@@ -40,16 +42,25 @@
   身份保留字，禁止被另一 Product/Offer 身份复用
 - 公开 DTO：`Api/ProductIdentity`
 - 公开只读解析契约：`Api/ProductIdentityResolverInterface`；
-  `SkuRegistryService` 实现按 SKU / Product UUID / Offer UUID 解析 canonical
-  identity。Vendor 等跨模块消费者必须使用此契约，不得读取 Product 私有
-  Model/Repository。
+  provider 为 `CompatibleProductIdentityResolver`。`legacy` 模式读取旧表，
+  `dual_read` / `v2_authoritative` 模式 V2 优先，并对未迁移冲突行和历史
+  alias 保留旧表只读回退。Vendor 等跨模块消费者必须使用此契约，不得读取
+  Product 私有 Model/Repository。
+- 切换状态持久化在 `weline_product_identity_cutover_state`：
+  `legacy → dual_read → v2_authoritative`。只有 active legacy 源摘要与最近
+  成功验证摘要完全一致且开放冲突为零时才可切换；rollback 只回退模式，
+  不删除 V2 Product/Offer/alias/audit。
+- `v2_authoritative` 后 `SkuRegistryService` 的 claim/rename/ref_count/cleanup
+  全部以 `legacy_identity_writes_disabled` 拒绝，resolver 读取仍兼容。
 
 ## P2A-004：Website 分片 Model + Store overlay Repository
 
-- Schema version：`3.1.1`（`store_id` / `cleared` / `publish_version` /
-  media COW + writer-owned `cas_token` + cross-Website
-  `global_category_uuid`；亦为 `shard:product.website`
-  checkpoint 版本）
+- Schema version：`4.0.0`（`category_link` Store overlay：`store_id` /
+  `scope_state` / `selected` / `position`；唯一索引逻辑名
+  `uk_store_category_product(store_id,category_id,product_id)`，避免与旧
+  `uk_category_product(category_id,product_id)` 同名改列导致 SchemaDiff 拒迁；
+  另含 `cleared` / `publish_version` / media COW + writer-owned `cas_token` +
+  cross-Website `global_category_uuid`；亦为 `shard:product.website` checkpoint）
 - Shard Models（`Model/Shard/*`，SchemaDiff 排除，DDL 归 Provider）：
   Product / Offer / Category / CategoryLink / AttributeValue / Price / Media / StoreProduct / StoreOffer
 - Repositories（同 Website 内 Store→Website fallback，禁止跨站）：
@@ -139,16 +150,21 @@
 - `ProductSearchProjectionStream` 保存每个 Website 的 durable、单调
   `event_seq`；`website_id=0` 合法。
 - `ProductSearchProjectionMutationCoordinator` 使用 Framework transaction
-  coordinator，把 Product publish/SKU 或 StoreProduct selection 事实变更与
-  source sequence 递增放在同一事务；提交后发布不可变 `ResourceChange`。
+  coordinator，把 Product publish/SKU/versioned/lifecycle、Offer
+  create/publish/versioned/lifecycle，以及 StoreProduct/StoreOffer selection
+  事实变更与 source sequence 递增放在同一 Website 事务；提交后发布不可变
+  `ResourceChange`。Offer 统一映射到父 Product，StoreOffer 映射到父 Product
+  与目标 Store，不扩展 Search target type。
 - `ProductSearchProjectionService` 从 Product shard 与公开 Store/Channel
-  catalog 生成 current projection。已发布 Product 默认继承到活动 Store，
-  StoreProduct 显式 deselect 生成精确 Scope delete identity。
+  catalog 生成 Offer 级 current projection。已发布 Product/Offer 默认继承到
+  活动 Store，StoreProduct 或 StoreOffer 显式 deselect 生成精确 Scope delete
+  identity。
 - internal Query provider `product_search_projection` 只开放给服务端模块，
   提供 `currentWatermark`、`snapshotWebsite` 和 `projectChange`；Search
   不直接依赖 Product 私有 Model。
 - `ProductSearchProjectionServiceIntegrationTest` 使用真实 SQLite Product
-  九表验证 durable stream、双 Store/Channel projection、deselect 和事务回滚。
+  九表验证 durable stream、双 Store/Channel Offer projection、两级 deselect、
+  四个 Repository 的父 Product 事件映射和事务回滚。
 - 当时验收版本：`1.0.15`；当前模块版本见文末。
 
 ## P3C-002：Search degraded direct read 边界
@@ -201,6 +217,12 @@ Website ID，也不在请求路径执行 DDL。
 `SkuRegistryServiceIntegrationTest` 使用一次性 SQLite 文件，验证 128 位
 request hash、64 位 CAS token、claim/replay/conflict、rename/alias、ref_count CAS、underflow、
 tombstone、alias 永久保留、SKU 禁止复用与临时文件清理。
+`ProductIdentityCutoverIntegrationTest` 使用同一一次性 SQLite 数据库贯通
+legacy claim、幂等迁移、dual read、逐行验证、源摘要失效、V2 权威、旧写
+门禁、兼容 resolver 与 dual/legacy rollback；它是开发证据。登记的 full
+clone 已另行完成 26 Product / 26 Offer 的 apply/verify/cutover/rollback/
+final cutover，最终为 `v2_authoritative` version 6、0 missing、0 conflict；
+独立 WLS 与 Browser 仍是 M6 未完成门禁。
 MIG-P2-ORDER 还必须在登记的 PostgreSQL 隔离 clone 上以两个独立进程同时
 claim 同一新 SKU、不同 hash，验收恰好一个成功、另一个稳定返回
 `sku_request_hash_conflict`，且 registry 仅一行、无孤儿。
@@ -222,6 +244,19 @@ shard 做隔离开发回归；正式矩阵必须注入任务独占、验收后�
 媒体、库存默认 0、receipt 重放/冲突、目录与库存共同失败回滚，以及
 Cart V2 Product durable 快照解析。
 
-当前模块版本：`1.0.16`。本版本新增
-`ProductIdentityResolverInterface` provider，供 `TASK-P4A-001` 以公开契约
-校验并持久化 Vendor Product 绑定。
+当前模块版本：`1.0.23`。V1 `ProductIdentityResolverInterface` 继续兼容读取，
+新 Product/Offer 身份、后台命令/读模型、五类 Provider 与 Search/Cart 等消费链
+统一使用 V2 契约。
+
+
+## 万能产品 v1.0（权威实施入口）
+
+- 权威计划：[`万能产品完善计划.md`](./万能产品完善计划.md)。
+- 全局身份：Product 与 Offer/SKU 使用独立 V2 注册表；旧 `SkuRegistry` 仅承担兼容读取与幂等迁移输入。
+- 标准类型：`simple`、`configurable`、`virtual`、`downloadable`、`bundle`。
+- Website 是产品经营事实边界，Store 默认继承并可覆盖；跨 Website 复制同一身份但业务数据独立，不自动同步。
+- 发布通过 `ProductProviderV2Interface` 统一诊断；显式零价有效，零库存可发布但不可购买。
+- 非生产迁移入口：`php bin/w commerce:migrate-product-v2 inventory|dry-run|apply|verify|cutover|rollback`。写状态操作仅允许当前数据库为明确的 `mig_clone_*`；`cutover` / `rollback` 必须提供 `--expected-version`。
+- 2026-08-26 数据库证据：完整 `setup:upgrade` 退出 0；V2 身份切换最终 26/26、0 冲突；Product 创建原子回滚 1/10、跨站复制 PostgreSQL 4/88；Product 全量 205/1485（1 skip、1 PHPUnit deprecation）。用于复制矩阵的临时 full clone 和随机测试 schema 均已清理。
+- 当前运行阻断：独立 WLS Worker 因 managed-child Master lease owner evidence 不可观察而退出，HTTP/TLS reset/timeout；因此后台 ACL/CSRF、五类真实前后台路径和 375/768/1024 Browser 仍未验收。
+- 完成状态以计划 M6 的 PostgreSQL、真实 HTTP/ACL/CSRF、独立 WLS Browser 和数据库断言为准；未全过不得标记 ACCEPTED。

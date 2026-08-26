@@ -125,6 +125,17 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertFalse($class->hasMethod('acquirePartialRefreshLock'));
     }
 
+    public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
+    {
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
+        self::assertStringContainsString("'schema' => 'chrome-partial-v4'", $source);
+        self::assertStringContainsString("'lang' => (string)State::getLang()", $source);
+        self::assertStringContainsString(
+            'Theme-preview request language override must win over storefront',
+            $source,
+        );
+    }
+
     public function testRememberPartialOutputEvictsOldestWhenFull(): void
     {
         $partials = (new \ReflectionClass(Partials::class))->newInstanceWithoutConstructor();

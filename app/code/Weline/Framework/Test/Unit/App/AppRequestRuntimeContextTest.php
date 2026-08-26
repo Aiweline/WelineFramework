@@ -233,6 +233,80 @@ final class AppRequestRuntimeContextTest extends TestCase
         }
     }
 
+    public function testUnprefixedPathUsesStateLangInsteadOfStaleParserLocale(): void
+    {
+        $currencyMap = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap');
+        $currencyScope = new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope');
+        $languageMap = new \ReflectionProperty(State::class, 'allowedLanguageCodeMap');
+        $languageScope = new \ReflectionProperty(State::class, 'allowedLanguageCodeScope');
+        $original = [
+            $currencyMap->getValue(),
+            $currencyScope->getValue(),
+            $languageMap->getValue(),
+            $languageScope->getValue(),
+        ];
+
+        try {
+            $method = new ReflectionMethod(App::class, 'synchronizeParsedLocalization');
+            $method->setAccessible(true);
+
+            RequestContext::cleanup();
+            Context::leave();
+            Context::enter(new Context([
+                'meta' => ['type' => 'request', 'mode' => 'wls'],
+                'input' => [
+                    'uri' => '/USD/help',
+                    'origin_request_uri' => '/USD/help',
+                    'server' => [
+                        'REQUEST_URI' => '/USD/help',
+                        'WELINE_ORIGIN_REQUEST_URI' => '/USD/help',
+                        'WELINE_WEBSITE_ID' => '0',
+                        'WELINE_WEBSITE_CODE' => 'default',
+                    ],
+                ],
+                'route' => [
+                    'website_id' => 0,
+                    'website_code' => 'default',
+                    'language' => 'zh_Hans_CN',
+                    'currency' => 'CNY',
+                ],
+            ]));
+            RequestContext::init();
+
+            $scope = (string)WelineEnv::get('website_id', '')
+                . '|' . (string)WelineEnv::get('website.code', '')
+                . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', '');
+            $currencyMap->setValue(null, ['CNY' => true, 'USD' => true]);
+            $currencyScope->setValue(null, $scope);
+            $languageMap->setValue(null, ['zh_hans_cn' => true, 'en_us' => true]);
+            $languageScope->setValue(null, $scope);
+
+            WelineEnv::set('user.lang', 'en_US', 'unit test stale worker locale');
+            $_COOKIE['WELINE_USER_LANG_w0'] = 'zh_Hans_CN';
+            WelineEnv::set('cookie.WELINE_USER_LANG_w0', 'zh_Hans_CN', 'unit test');
+
+            $parse = [
+                'currency' => 'USD',
+                'language' => 'en_US',
+                'server' => [
+                    'WELINE_USER_CURRENCY' => 'USD',
+                    'WELINE_USER_LANG' => 'en_US',
+                ],
+            ];
+            $method->invokeArgs(new App(), [&$parse, '/USD/help']);
+
+            self::assertSame('zh_Hans_CN', $parse['language']);
+            self::assertSame('zh_Hans_CN', $parse['server']['WELINE_USER_LANG']);
+        } finally {
+            unset($_COOKIE['WELINE_USER_LANG_w0']);
+            WelineEnv::set('cookie.WELINE_USER_LANG_w0', null, 'unit test cleanup');
+            $currencyMap->setValue(null, $original[0]);
+            $currencyScope->setValue(null, $original[1]);
+            $languageMap->setValue(null, $original[2]);
+            $languageScope->setValue(null, $original[3]);
+        }
+    }
+
     private function createAppForRequest(string $uri, array $server = []): App
     {
         $server = ['REQUEST_URI' => $uri] + $server;

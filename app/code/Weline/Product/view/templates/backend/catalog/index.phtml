@@ -7,151 +7,307 @@
  * @var list<array<string,mixed>> $rows
  * @var list<string> $columns
  * @var string $error
+ * @var array<string,mixed> $filters
+ * @var array<string,mixed> $creation_context
+ * @var string $product_admin_state_json
  */
 $escape = static fn(mixed $value): string => htmlspecialchars(
-    is_scalar($value) || $value === null ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE),
+    is_scalar($value) || $value === null
+        ? (string)$value
+        : (json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
     ENT_QUOTES | ENT_SUBSTITUTE,
     'UTF-8',
 );
+$productTypes = is_array($creation_context['product_types'] ?? null)
+    ? $creation_context['product_types']
+    : [];
+$stores = is_array($creation_context['stores'] ?? null) ? $creation_context['stores'] : [];
 ?>
-<div class="w-container" data-testid="product-management-<?= $escape($section) ?>" data-management-section="<?= $escape($section) ?>">
-    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260825-v1">
+<div class="w-container w-product-admin"
+     data-product-admin="<?= $section === 'products' ? 'catalog' : 'legacy' ?>"
+     data-testid="product-management-<?= $escape($section) ?>">
+    <header class="w-product-admin__header">
         <div>
-            <h4 style="--w-mb:var(--weline-space-1);"><?= $escape($title) ?></h4>
-            <div class="w-text" data-tone="muted"><lang>商品内核管理工作台</lang> · 网站=<?= $escape($website_id) ?></div>
+            <p class="w-product-admin__eyebrow"><lang>Catalog workspace</lang></p>
+            <h1 class="w-product-admin__title"><?= $escape($title) ?></h1>
+            <p class="w-product-admin__subtitle">
+                <?php if ($section === 'products'): ?>
+                    <lang>商品主体、销售规格、价格、Store 与发布诊断集中管理</lang>
+                <?php else: ?>
+                    <lang>高级维护入口；日常运营请从「万能产品」进入</lang>
+                <?php endif; ?>
+            </p>
         </div>
-        <form method="get" class="w-cluster" data-testid="product-website-filter-form" style="--w-gap:var(--weline-space-2);">
-            <label class="w-visually-hidden" for="product-website-id"><lang>网站</lang></label>
-            <w:websites:website:select
-                id="product-website-id"
-                name="website_id"
-                value="productWebsiteSelectValue"
-                display="productWebsiteSelectDisplay"
-                options="websiteOptionsJson"
-                multiple="false"
-                allow-empty="true"
-                clearable="true"
-                empty-label="@lang(全部站点)"
-                placeholder="@lang(搜索站点或编码)"
-                class="product-website-filter-select"
-            />
-            <button class="w-button" type="submit" data-self="end" data-tone="primary"><lang>切换网站</lang></button>
+        <form method="get" class="w-product-admin__website-form" data-testid="product-website-filter-form">
+            <label class="w-visually-hidden" for="product-website-id"><lang>Website</lang></label>
+            <div class="w-product-admin__website-select">
+                <w:websites:website:select
+                    id="product-website-id"
+                    name="website_id"
+                    value="productWebsiteSelectValue"
+                    display="productWebsiteSelectDisplay"
+                    options="websiteOptionsJson"
+                    multiple="false"
+                    allow-empty="false"
+                    clearable="false"
+                    placeholder="@lang(选择 Website)"
+                />
+            </div>
+            <button class="w-button" type="submit" data-tone="neutral"><lang>切换</lang></button>
         </form>
-    </div>
-
-    <?php if ($section === 'sku-registry'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/register-sku')" csrf="auto" class="w-grid" data-testid="product-sku-register-form" style="--w-gap:var(--weline-space-4);">
-                <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div style="--w-span-md:4;"><label class="w-field__label"><lang>SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
-                <div style="--w-span-md:6;"><label class="w-field__label"><lang>请求哈希</lang></label><input class="w-input" name="request_hash" minlength="32" maxlength="128" required></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>注册 SKU</lang></button></div>
-            </w:form>
-        </div></div>
-    <?php elseif ($section === 'products'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-product')" csrf="auto" class="w-grid" data-testid="product-create-form" style="--w-gap:var(--weline-space-4);">
-                <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div style="--w-span-md:7;"><label class="w-field__label"><lang>已注册 SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建商品</lang></button></div>
-            </w:form>
-        </div></div>
-    <?php elseif ($section === 'offers'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-offer')" csrf="auto" class="w-grid" data-testid="product-offer-create-form" style="--w-gap:var(--weline-space-4);">
-                <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div style="--w-span-md:7;"><label class="w-field__label"><lang>商品 SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建报价</lang></button></div>
-            </w:form>
-        </div></div>
-    <?php elseif ($section === 'categories'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-category')" csrf="auto" class="w-grid" data-testid="product-category-create-form" style="--w-gap:var(--weline-space-4);">
-                <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>父分类 ID</lang></label><input class="w-input" type="number" min="0" name="parent_id" value="0"></div>
-                <div style="--w-span-md:6;"><label class="w-field__label"><lang>分类路径</lang></label><input class="w-input" name="path" placeholder="/r43/category" maxlength="255" required></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建分类</lang></button></div>
-            </w:form>
-        </div></div>
-    <?php elseif ($section === 'media'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/create-media')" csrf="auto" class="w-grid" data-testid="product-media-create-form" style="--w-gap:var(--weline-space-4);">
-                <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>商品 SKU</lang></label><input class="w-input" name="sku" maxlength="128" required></div>
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>媒体路径</lang></label><input class="w-input" name="path" maxlength="255" required></div>
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>Blob Key</lang></label><input class="w-input" name="blob_key" maxlength="255" required></div>
-                <div style="--w-span-md:1;"><label class="w-field__label"><lang>排序</lang></label><input class="w-input" type="number" min="0" name="position" value="0"></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:1;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>创建</lang></button></div>
-            </w:form>
-        </div></div>
-    <?php elseif ($section === 'site-content'): ?>
-        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
-            <w:form method="post" action="@backend-url('*/backend/catalog/save-site-content')" csrf="auto" class="w-grid" data-testid="product-site-content-form" style="--w-gap:var(--weline-space-4);">
-                <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="0" name="store_id" value="<?= $escape($store_id ?? 0) ?>" required></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>商品 ID</lang></label><input class="w-input" type="number" min="1" name="entity_id" value="<?= $escape($entity_id ?? 0) ?>" required></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>属性代码</lang></label><input class="w-input" name="attribute_code" value="name" maxlength="64" pattern="[a-z][a-z0-9_]{0,63}" required></div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>语言</lang></label><input class="w-input" name="locale" value="zh_Hans_CN" maxlength="32" required></div>
-                <div style="--w-span-md:8;"><label class="w-field__label"><lang>站点文案</lang></label><textarea class="w-textarea" name="value_text" maxlength="65535" rows="3" required></textarea></div>
-                <div class="w-check w-cluster" data-align="center" style="--w-span-md:2;"><input class="me-2" type="checkbox" name="is_required" value="1" id="product-site-content-required"><label for="product-site-content-required"><lang>必填文案</lang></label></div>
-                <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>保存文案</lang></button></div>
-            </w:form>
-        </div></div>
-    <?php endif; ?>
+    </header>
 
     <?php if ($error !== ''): ?>
-        <div class="w-alert" role="alert" data-tone="danger">
-            <strong><lang>数据读取失败</lang></strong>
-            <div><?= $escape($error) ?></div>
-        </div>
-    <?php elseif ($rows === []): ?>
-        <div class="w-card">
-            <div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
-                <w:icon name="database" size="sm"></w:icon>
-                <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><lang>暂无数据</lang></p>
+        <div class="w-alert" data-tone="danger" role="alert"><?= $escape($error) ?></div>
+    <?php endif; ?>
+
+    <?php if ($section === 'products'): ?>
+        <script type="application/json" id="product-admin-state" data-no-extract="true"><?= $product_admin_state_json ?></script>
+
+        <div class="w-product-admin__stats" aria-label="@lang(商品概览)">
+            <div class="w-product-stat">
+                <span class="w-product-stat__value"><?= count($rows) ?></span>
+                <span class="w-product-stat__label"><lang>当前筛选商品</lang></span>
+            </div>
+            <div class="w-product-stat">
+                <span class="w-product-stat__value"><?= count($productTypes) ?></span>
+                <span class="w-product-stat__label"><lang>可用产品类型</lang></span>
+            </div>
+            <div class="w-product-stat">
+                <span class="w-product-stat__value"><?= count($stores) ?></span>
+                <span class="w-product-stat__label"><lang>活动 Store</lang></span>
             </div>
         </div>
-    <?php else: ?>
-        <div class="w-card">
-            <div class="w-card__header w-cluster" data-justify="between">
-                <span><?= $escape($title) ?></span>
-                <span class="w-badge" data-w-background="muted"><?= count($rows) ?> / 100</span>
-            </div>
-            <div class="w-table-wrap">
-                <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
-                    <thead>
-                        <tr>
-                            <?php foreach ($columns as $column): ?>
-                                <th scope="col"><?= $escape($column) ?></th>
-                            <?php endforeach; ?>
-                            <?php if ($section === 'products'): ?>
-                                <th scope="col"><lang>操作</lang></th>
-                            <?php endif; ?>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($rows as $row): ?>
-                            <tr>
-                                <?php foreach ($columns as $column): ?>
-                                    <td><?= $escape($row[$column] ?? '') ?></td>
+
+        <div class="w-product-admin__grid">
+            <aside class="w-card w-product-create" aria-labelledby="product-create-title">
+                <div class="w-card__header">
+                    <div>
+                        <span class="w-product-admin__step">01</span>
+                        <h2 id="product-create-title"><lang>新建商品草稿</lang></h2>
+                    </div>
+                </div>
+                <div class="w-card__body">
+                    <form id="product-create-form" data-testid="product-create-form" novalidate>
+                        <div class="w-field">
+                            <label class="w-field__label" for="product-create-type"><lang>产品类型</lang></label>
+                            <select class="w-select" id="product-create-type" name="product_type" required>
+                                <?php foreach ($productTypes as $type): ?>
+                                    <option value="<?= $escape($type['code'] ?? '') ?>"
+                                            data-supports-variants="<?= !empty($type['capabilities']['variants']) ? '1' : '0' ?>">
+                                        <?= $escape($type['label'] ?? $type['code'] ?? '') ?>
+                                    </option>
                                 <?php endforeach; ?>
-                                <?php if ($section === 'products'): ?>
-                                    <td>
-                                        <?php $productId = (int)($row['product_id'] ?? $row['id'] ?? 0); ?>
-                                        <?php if ($productId > 0): ?>
-                                            <a href="@backend-url('*/backend/catalog/edit-product')?website_id=<?= $escape($website_id) ?>&product_id=<?= $escape($productId) ?>" class="w-button" data-testid="product-edit-button" data-product-id="<?= $escape($productId) ?>" data-tone="primary" data-variant="outline" data-size="sm">
-                                                <w:icon name="edit" size="sm"></w:icon> <lang>编辑</lang>
-                                            </a>
+                            </select>
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="product-create-name"><lang>名称</lang></label>
+                            <input class="w-input" id="product-create-name" name="name" maxlength="255" required
+                                   placeholder="@lang(例如：轻量防水冲锋衣)">
+                        </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="product-create-sku"><lang>首个 SKU / SKU 前缀</lang></label>
+                            <input class="w-input" id="product-create-sku" name="sku" maxlength="128" required
+                                   placeholder="JACKET-001">
+                            <p class="w-field__help"><lang>普通商品会自动创建默认 Offer；多规格商品用作矩阵 SKU 前缀。</lang></p>
+                        </div>
+                        <div class="w-field" id="product-create-axes-field" hidden>
+                            <label class="w-field__label" for="product-create-axes"><lang>规格轴 JSON</lang></label>
+                            <textarea class="w-textarea w-code-input" id="product-create-axes" name="axes_json" rows="6">[
+  {"code":"color","label":"颜色","options":["red","blue"]},
+  {"code":"size","label":"尺码","options":["S","M"]}
+]</textarea>
+                        </div>
+                        <fieldset class="w-product-store-picker">
+                            <legend><lang>发布到 Store</lang></legend>
+                            <p><lang>默认选中当前 Website 下全部活动 Store，可取消个别 Store。</lang></p>
+                            <?php if ($stores === []): ?>
+                                <div class="w-alert" data-tone="warning"><lang>当前 Website 没有活动 Store。</lang></div>
+                            <?php else: ?>
+                                <div class="w-product-store-picker__items">
+                                    <?php foreach ($stores as $store): ?>
+                                        <label class="w-product-check">
+                                            <input type="checkbox" name="store_ids[]" value="<?= $escape($store['store_id'] ?? '') ?>" checked>
+                                            <span>
+                                                <strong><?= $escape($store['name'] ?? '') ?></strong>
+                                                <small><?= $escape($store['code'] ?? '') ?> · ID <?= $escape($store['store_id'] ?? '') ?></small>
+                                            </span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </fieldset>
+                        <button class="w-button w-product-create__submit" type="submit" data-tone="primary">
+                            <lang>创建草稿并继续编辑</lang>
+                        </button>
+                    </form>
+                </div>
+            </aside>
+
+            <main class="w-card w-product-list" aria-labelledby="product-list-title">
+                <div class="w-card__header w-product-list__header">
+                    <div>
+                        <span class="w-product-admin__step">02</span>
+                        <h2 id="product-list-title"><lang>商品目录</lang></h2>
+                    </div>
+                    <button class="w-button" type="button" data-tone="neutral" data-product-action="refresh">
+                        <lang>刷新</lang>
+                    </button>
+                </div>
+                <div class="w-card__body">
+                    <form method="get" class="w-product-filters" data-testid="product-filter-form">
+                        <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                        <input class="w-input" name="name" value="<?= $escape($filters['name'] ?? '') ?>" placeholder="@lang(名称)">
+                        <input class="w-input" name="sku" value="<?= $escape($filters['sku'] ?? '') ?>" placeholder="SKU">
+                        <input class="w-input" name="product_code" value="<?= $escape($filters['product_code'] ?? '') ?>" placeholder="@lang(总货号)">
+                        <select class="w-select" name="product_type">
+                            <option value=""><lang>全部类型</lang></option>
+                            <?php foreach ($productTypes as $type): ?>
+                                <?php $typeCode = (string)($type['code'] ?? ''); ?>
+                                <option value="<?= $escape($typeCode) ?>" <?= ($filters['product_type'] ?? '') === $typeCode ? 'selected' : '' ?>>
+                                    <?= $escape($type['label'] ?? $typeCode) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <select class="w-select" name="status">
+                            <option value=""><lang>全部状态</lang></option>
+                            <?php foreach (['draft' => '草稿', 'published' => '已发布', 'disabled' => '已下架', 'archived' => '已归档'] as $value => $label): ?>
+                                <option value="<?= $value ?>" <?= ($filters['status'] ?? '') === $value ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <select class="w-select" name="store_id">
+                            <option value=""><lang>全部 Store</lang></option>
+                            <?php foreach ($stores as $store): ?>
+                                <?php $storeId = (int)($store['store_id'] ?? 0); ?>
+                                <option value="<?= $storeId ?>" <?= (int)($filters['store_id'] ?? 0) === $storeId ? 'selected' : '' ?>>
+                                    <?= $escape($store['name'] ?? $store['code'] ?? '') ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button class="w-button" type="submit" data-tone="primary"><lang>筛选</lang></button>
+                    </form>
+                </div>
+                <div class="w-table-wrap">
+                    <table class="w-table w-product-table" data-testid="product-catalog-table">
+                        <thead>
+                        <tr>
+                            <th><lang>商品</lang></th>
+                            <th><lang>类型 / 状态</lang></th>
+                            <th><lang>SKU / Offer</lang></th>
+                            <th><lang>价格</lang></th>
+                            <th><lang>Store</lang></th>
+                            <th><lang>更新时间</lang></th>
+                            <th><span class="w-visually-hidden"><lang>操作</lang></span></th>
+                        </tr>
+                        </thead>
+                        <tbody id="product-admin-table-body">
+                        <?php if ($rows === []): ?>
+                            <tr><td colspan="7" class="w-product-empty"><lang>没有符合条件的商品。可从左侧创建第一件商品。</lang></td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($rows as $row): ?>
+                            <?php
+                            $prices = is_array($row['prices'] ?? null) ? $row['prices'] : [];
+                            $price = $prices[0] ?? null;
+                            $skus = is_array($row['skus'] ?? null) ? $row['skus'] : [];
+                            $uuid = (string)($row['global_product_uuid'] ?? '');
+                            ?>
+                            <tr data-product-uuid="<?= $escape($uuid) ?>">
+                                <td>
+                                    <div class="w-product-cell">
+                                        <?php if (!empty($row['main_media']['display_url'])): ?>
+                                            <img src="<?= $escape($row['main_media']['display_url']) ?>" alt="" width="48" height="48">
                                         <?php else: ?>
-                                            <span class="w-text" data-tone="muted"><lang>无效</lang></span>
+                                            <span class="w-product-cell__placeholder" aria-hidden="true">P</span>
                                         <?php endif; ?>
-                                    </td>
-                                <?php endif; ?>
+                                        <div>
+                                            <strong><?= $escape($row['name'] ?? __('未命名草稿')) ?></strong>
+                                            <small><?= $escape($row['product_code'] ?? '') ?></small>
+                                            <small><lang>归属站</lang> #<?= $escape($row['owner_website_id'] ?? '') ?></small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="w-badge"><?= $escape($row['product_type'] ?? '') ?></span>
+                                    <span class="w-status" data-status="<?= $escape($row['status'] ?? '') ?>"><?= $escape($row['status'] ?? '') ?></span>
+                                </td>
+                                <td>
+                                    <strong><?= $escape($skus[0] ?? '-') ?></strong>
+                                    <small><?= $escape($row['offer_count'] ?? 0) ?> Offer</small>
+                                </td>
+                                <td>
+                                    <?php if (is_array($price) && !($price['cleared'] ?? false)): ?>
+                                        <strong><?= $escape($price['currency'] ?? '') ?> <?= $escape(number_format(((int)($price['amount_minor'] ?? 0)) / 100, 2)) ?></strong>
+                                    <?php else: ?>
+                                        <span class="w-text" data-tone="muted"><lang>未配置</lang></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><span class="w-badge"><?= count($row['selected_store_ids'] ?? []) ?></span></td>
+                                <td><?= $escape($row['updated_at'] ?? '-') ?></td>
+                                <td>
+                                    <a class="w-button" data-tone="neutral" data-testid="product-edit-button"
+                                       href="@backend-url('*/backend/catalog/edit-product')?website_id=<?= $escape($website_id) ?>&global_product_uuid=<?= rawurlencode($uuid) ?>">
+                                        <lang>编辑</lang>
+                                    </a>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    <?php else: ?>
+        <div class="w-alert" data-tone="info">
+            <strong><lang>高级维护</lang></strong>
+            <span><lang>普通运营无需在这里单独创建 Offer 或维护 SKU 身份；请返回万能产品编辑器。</lang></span>
+        </div>
+        <div class="w-card">
+            <div class="w-card__body">
+                <?php if ($section === 'sku-registry'): ?>
+                    <w:form method="post" action="@backend-url('*/backend/catalog/register-sku')" csrf="auto" class="w-product-legacy-form">
+                        <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                        <input class="w-input" name="sku" placeholder="SKU" maxlength="128" required>
+                        <input class="w-input" name="request_hash" placeholder="@lang(请求哈希)" maxlength="128" required>
+                        <button class="w-button" type="submit" data-tone="primary"><lang>注册</lang></button>
+                    </w:form>
+                <?php elseif ($section === 'offers'): ?>
+                    <w:form method="post" action="@backend-url('*/backend/catalog/create-offer')" csrf="auto" class="w-product-legacy-form">
+                        <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                        <input class="w-input" name="sku" placeholder="SKU" maxlength="128" required>
+                        <button class="w-button" type="submit" data-tone="primary"><lang>创建底层 Offer</lang></button>
+                    </w:form>
+                <?php elseif ($section === 'media'): ?>
+                    <w:form method="post" action="@backend-url('*/backend/catalog/create-media')" csrf="auto" class="w-product-legacy-form">
+                        <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                        <input class="w-input" name="sku" placeholder="SKU" required>
+                        <input class="w-input" name="path" placeholder="@lang(媒体路径)" required>
+                        <input class="w-input" name="blob_key" placeholder="Blob key" required>
+                        <input class="w-input" type="number" min="0" name="position" value="0">
+                        <button class="w-button" type="submit" data-tone="primary"><lang>创建媒体</lang></button>
+                    </w:form>
+                <?php elseif ($section === 'site-content'): ?>
+                    <w:form method="post" action="@backend-url('*/backend/catalog/save-site-content')" csrf="auto" class="w-product-legacy-form">
+                        <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                        <input class="w-input" type="number" min="0" name="store_id" value="<?= $escape($store_id ?? 0) ?>">
+                        <input class="w-input" type="number" min="1" name="entity_id" value="<?= $escape($entity_id ?? 0) ?>">
+                        <input class="w-input" name="attribute_code" value="name" required>
+                        <input class="w-input" name="locale" placeholder="zh_Hans_CN">
+                        <textarea class="w-textarea" name="value_text" required></textarea>
+                        <button class="w-button" type="submit" data-tone="primary"><lang>保存</lang></button>
+                    </w:form>
+                <?php endif; ?>
+            </div>
+            <div class="w-table-wrap">
+                <table class="w-table">
+                    <thead><tr><?php foreach ($columns as $column): ?><th><?= $escape($column) ?></th><?php endforeach; ?></tr></thead>
+                    <tbody>
+                    <?php foreach ($rows as $row): ?><tr><?php foreach ($columns as $column): ?><td><?= $escape($row[$column] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?>
+                    <?php if ($rows === []): ?><tr><td colspan="<?= max(1, count($columns)) ?>"><lang>暂无数据</lang></td></tr><?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     <?php endif; ?>
 </div>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260825-v1" defer data-no-extract="true"></script>

@@ -19,6 +19,11 @@ final class ThemeUiColor
         'var(--weline-theme-surface-raised)',
         'var(--weline-theme-text)',
         'var(--weline-theme-text-muted)',
+        'var(--weline-theme-text-inverse)',
+        'var(--weline-theme-text-on-dark)',
+        'var(--weline-theme-text-on-dark-muted)',
+        'var(--weline-theme-bg-dark)',
+        'var(--weline-theme-bg-dark-secondary)',
         'var(--weline-theme-border)',
         'var(--weline-theme-success)',
         'var(--weline-theme-success-surface)',
@@ -29,6 +34,7 @@ final class ThemeUiColor
         'var(--weline-theme-info)',
         'var(--weline-theme-info-surface)',
         'var(--weline-theme-canvas)',
+        'var(--weline-theme-body-bg)',
     ];
 
     public static function sanitize(mixed $value, string $fallback): string

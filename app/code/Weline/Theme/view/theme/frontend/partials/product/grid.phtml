@@ -15,6 +15,8 @@
  * @param showRating {default=true,type=bool,name="显示评分",description="是否显示产品评分"}
  * @param showAddToCart {default=true,type=bool,name="显示加购按钮",description="是否显示加购按钮"}
  * @param showWishlist {default=true,type=bool,name="显示收藏按钮",description="是否显示收藏按钮"}
+ * @param showCompare {default=true,type=bool,name="显示对比按钮",description="是否显示对比按钮"}
+ * @param showQuickview {default=true,type=bool,name="显示快速查看",description="是否显示快速查看按钮"}
  * @param class {default="",name="额外CSS类",description="额外的CSS类名"}
  */
 
@@ -32,6 +34,8 @@ $showPrice = (bool)($this->getData('meta.showPrice') ?? true);
 $showRating = (bool)($this->getData('meta.showRating') ?? true);
 $showAddToCart = (bool)($this->getData('meta.showAddToCart') ?? true);
 $showWishlist = (bool)($this->getData('meta.showWishlist') ?? true);
+$showCompare = (bool)($this->getData('meta.showCompare') ?? true);
+$showQuickview = (bool)($this->getData('meta.showQuickview') ?? true);
 $class = $this->getData('meta.class') ?? '';
 
 $uniqueId = 'product-grid-' . uniqid();
@@ -60,10 +64,11 @@ $uniqueId = 'product-grid-' . uniqid();
             $productSku = htmlspecialchars((string)($product['sku'] ?? ''));
             $shortDescription = htmlspecialchars((string)($product['short_description'] ?? ''));
             ?>
-            <article class="product-grid-partial__item">
+            <article class="product-grid-partial__item product-card" data-product-id="<?= $productId ?>">
                 <div class="product-grid-partial__card">
-                    <a href="<?= $productUrl ?>" class="product-grid-partial__image-link">
-                        <div class="product-grid-partial__image-wrapper">
+                    <div class="product-grid-partial__media">
+                        <a href="<?= $productUrl ?>" class="product-grid-partial__image-link">
+                            <div class="product-grid-partial__image-wrapper">
                             <?php if ($productImage): ?>
                                 <img src="<?= $productImage ?>"
                                      alt="<?= $productName ?>"
@@ -92,15 +97,14 @@ $uniqueId = 'product-grid-' . uniqid();
                                 <div class="product-grid-partial__out-of-stock">@lang{缺货}</div>
                             <?php endif; ?>
                         </div>
-                    </a>
-
-                    <?php if ($showWishlist): ?>
-                        <button type="button" class="product-grid-partial__wishlist" aria-label="@lang{加入收藏}" data-product-id="<?= $productId ?>">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
-                    <?php endif; ?>
+                        </a>
+                        <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
+                            'product_id' => $productId,
+                            'show_wishlist' => $showWishlist,
+                            'show_compare' => $showCompare,
+                            'show_quickview' => $showQuickview,
+                        ]) ?>
+                    </div>
 
                     <div class="product-grid-partial__content">
                         <h3 class="product-grid-partial__title">
@@ -156,7 +160,7 @@ $uniqueId = 'product-grid-' . uniqid();
 .product-grid-partial__grid {
     display: grid;
     grid-template-columns: repeat(<?= $columns ?>, 1fr);
-    gap: var(--spacing-5, 1.25rem);
+    gap: var(--spacing-5);
 }
 
 .product-grid-partial__item {
@@ -166,17 +170,50 @@ $uniqueId = 'product-grid-' . uniqid();
 .product-grid-partial__card {
     width: 100%;
     background-color: var(--color-bg-primary);
-    border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-lg, 12px);
+    border: var(--border-width-thin) solid var(--color-border-light);
+    border-radius: var(--radius-lg);
     overflow: hidden;
-    box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+    box-shadow: var(--shadow-sm);
     transition: box-shadow 0.3s ease, transform 0.2s ease, border-color 0.2s ease;
+    position: relative;
+}
+.product-grid-partial__media {
+    position: relative;
+}
+.product-grid-partial__media .product-actions {
+    position: absolute;
+    top: var(--spacing-3);
+    right: var(--spacing-3);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+    opacity: 0;
+    transform: translateX(var(--spacing-sm));
+    transition: all 0.3s ease;
+}
+.product-grid-partial__card:hover .product-actions,
+.product-grid-partial__card:focus-within .product-actions {
+    opacity: 1;
+    transform: translateX(0);
+}
+.product-grid-partial__media .action-btn {
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
+    border: 0;
+    border-radius: 50%;
+    background: var(--color-bg-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
 }
 
 .product-grid-partial__card:hover {
     border-color: var(--color-border-focus);
-    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
-    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(var(--spacing-neg-0_5));
 }
 
 .product-grid-partial__image-link {
@@ -220,21 +257,21 @@ $uniqueId = 'product-grid-' . uniqid();
 
 .product-grid-partial__badges {
     position: absolute;
-    top: var(--spacing-3, 0.75rem);
-    left: var(--spacing-3, 0.75rem);
+    top: var(--spacing-3);
+    left: var(--spacing-3);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-1, 0.25rem);
+    gap: var(--spacing-1);
     z-index: 1;
 }
 
 .product-grid-partial__badge {
-    padding: 2px var(--spacing-2, 0.5rem);
-    font-size: var(--font-size-xs, 0.7rem);
-    font-weight: var(--font-weight-semibold, 600);
+    padding: var(--spacing-0_5) var(--spacing-2);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
-    border-radius: var(--radius-sm, 4px);
-    letter-spacing: 0.5px;
+    border-radius: var(--radius-sm);
+    letter-spacing: var(--token-size-0-5px);
 }
 
 .product-grid-partial__badge--new {
@@ -249,58 +286,29 @@ $uniqueId = 'product-grid-' . uniqid();
 
 .product-grid-partial__out-of-stock {
     position: absolute;
-    top: var(--spacing-3, 0.75rem);
-    right: var(--spacing-3, 0.75rem);
-    padding: 4px var(--spacing-2, 0.5rem);
+    top: var(--spacing-3);
+    right: var(--spacing-3);
+    padding: var(--spacing-xs) var(--spacing-2);
     background-color: var(--color-text-secondary);
     color: var(--color-text-light);
-    font-size: var(--font-size-xs, 0.7rem);
-    font-weight: var(--font-weight-semibold, 600);
-    border-radius: var(--radius-sm, 4px);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-sm);
     z-index: 1;
 }
 
-.product-grid-partial__wishlist {
-    position: absolute;
-    top: var(--spacing-3, 0.75rem);
-    right: var(--spacing-3, 0.75rem);
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--color-bg-primary);
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    color: var(--color-text-secondary);
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
-    opacity: 0;
-    transform: translateX(8px);
-    transition: all 0.3s ease;
-    z-index: 2;
-}
-
-.product-grid-partial__card:hover .product-grid-partial__wishlist {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.product-grid-partial__wishlist:hover {
-    background-color: var(--color-error);
-    color: var(--color-text-light);
-}
+.product-grid-partial__wishlist { display: none; }
 
 .product-grid-partial__content {
-    padding: var(--spacing-4, 1rem);
+    padding: var(--spacing-4);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-2, 0.5rem);
+    gap: var(--spacing-2);
 }
 
 .product-grid-partial__title {
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: var(--font-weight-medium, 500);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     line-height: 1.4;
     margin: 0;
     display: -webkit-box;
@@ -323,7 +331,7 @@ $uniqueId = 'product-grid-' . uniqid();
 .product-grid-partial__rating {
     display: flex;
     align-items: center;
-    gap: var(--spacing-2, 0.5rem);
+    gap: var(--spacing-2);
 }
 
 .product-grid-partial__stars {
@@ -338,43 +346,43 @@ $uniqueId = 'product-grid-' . uniqid();
     top: 0;
     left: 0;
     height: 100%;
-    width: calc(var(--rating, 0) / 5 * 100%);
+    width: calc(var(--rating) / 5 * 100%);
     background: linear-gradient(90deg, var(--color-warning), var(--color-warning));
     -webkit-background-clip: text;
     background-clip: text;
 }
 
 .product-grid-partial__star {
-    width: 14px;
-    height: 14px;
+    width: var(--font-size-sm);
+    height: var(--font-size-sm);
 }
 
 .product-grid-partial__review-count {
-    font-size: var(--font-size-xs, 0.75rem);
+    font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
 }
 
 .product-grid-partial__price {
     display: flex;
     align-items: baseline;
-    gap: var(--spacing-2, 0.5rem);
-    margin-top: var(--spacing-1, 0.25rem);
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-1);
 }
 
 .product-grid-partial__price-original {
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
     text-decoration: line-through;
 }
 
 .product-grid-partial__price-current {
-    font-size: var(--font-size-lg, 1.125rem);
-    font-weight: var(--font-weight-bold, 700);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
     color: var(--color-error);
 }
 
 .product-grid-partial__actions {
-    margin-top: var(--spacing-2, 0.5rem);
+    margin-top: var(--spacing-2);
 }
 
 .product-grid-partial__add-to-cart {
@@ -382,14 +390,14 @@ $uniqueId = 'product-grid-' . uniqid();
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-2, 0.5rem);
-    padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
     background-color: var(--color-accent);
     color: var(--color-text-light);
     border: none;
-    border-radius: var(--radius-md, 8px);
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: var(--font-weight-medium, 500);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
@@ -400,13 +408,13 @@ $uniqueId = 'product-grid-' . uniqid();
 
 .product-grid-partial__out-of-stock-btn {
     width: 100%;
-    padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+    padding: var(--spacing-2) var(--spacing-3);
     background-color: var(--color-bg-tertiary);
     color: var(--color-text-secondary);
     border: none;
-    border-radius: var(--radius-md, 8px);
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: var(--font-weight-medium, 500);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     cursor: not-allowed;
 }
 
@@ -426,14 +434,14 @@ $uniqueId = 'product-grid-' . uniqid();
 @media (max-width: 768px) {
     .product-grid-partial__grid {
         grid-template-columns: repeat(<?= $columnsMobile ?>, 1fr);
-        gap: var(--spacing-3, 0.75rem);
+        gap: var(--spacing-3);
     }
 
     .product-grid-partial__content {
-        padding: var(--spacing-3, 0.75rem);
+        padding: var(--spacing-3);
     }
 
-    .product-grid-partial__wishlist {
+    .product-grid-partial__media .product-actions {
         opacity: 1;
         transform: translateX(0);
     }
@@ -442,7 +450,7 @@ $uniqueId = 'product-grid-' . uniqid();
 @media (max-width: 480px) {
     .product-grid-partial__grid {
         grid-template-columns: repeat(<?= min($columnsMobile, 2) ?>, 1fr);
-        gap: var(--spacing-2, 0.5rem);
+        gap: var(--spacing-2);
     }
 }
 </style>
@@ -464,20 +472,6 @@ $uniqueId = 'product-grid-' . uniqid();
                 btn.innerHTML = originalHtml;
                 btn.style.backgroundColor = '';
             }, 2000);
-        });
-    });
-
-    grid.querySelectorAll('.product-grid-partial__wishlist').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            var svg = btn.querySelector('svg');
-            if (svg.getAttribute('fill') === 'none') {
-                svg.setAttribute('fill', 'currentColor');
-                btn.style.color = 'var(--color-error)';
-            } else {
-                svg.setAttribute('fill', 'none');
-                btn.style.color = '';
-            }
         });
     });
 })();

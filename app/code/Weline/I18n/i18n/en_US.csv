@@ -47,6 +47,13 @@ id属性不能为空,"The id attribute cannot be empty"
 翻译窗口,"Translation Window"
 刷新,Refresh
 提交,Submit
+"参数错误：words 必须是非空数组","参数错误：words 必须是非空数组"
+"参数错误：target_locale 不能为空","参数错误：target_locale 不能为空"
+AI翻译调用失败,AI翻译调用失败
+"目标语言：%{locale}\n词数：%{count}\n错误信息：%{error}","目标语言：%{locale}\n词数：%{count}\n错误信息：%{error}"
+AI翻译异常,AI翻译异常
+"目标语言：%{locale}\n词数：%{count}\n异常信息：%{error}\n异常位置：%{file}:%{line}","目标语言：%{locale}\n词数：%{count}\n异常信息：%{error}\n异常位置：%{file}:%{line}"
+"事件处理异常: %{1}","事件处理异常: %{1}"
 "语言申请就绪同步只接受 resource_change.v1 契约","Language application ready sync only accepts resource_change.v1 contract"
 "I18n ResourceChange Observer 只接受 v1 契约","I18n ResourceChange Observer only accepts v1 contracts"
 没有开启实时翻译，不能访问！,"Real-time translation is not enabled"
@@ -274,6 +281,18 @@ circle,circle
 "警告：无法创建翻译文件 %{file}","Warning: Unable to create translation file %{file}"
 "警告：无法写入翻译文件 %{file}","Warning: Unable to write translation file %{file}"
 "警告：无法写入语言文件 %{file}","Warning: Unable to write language file %{file}"
+保存,Save
+编辑,Edit
+"Weline.Api 不可用","Weline.Api is not available"
+保存失败,"Save failed"
+提示,Tip
+确定恢复该词典么？,"Are you sure you want to restore this dictionary?"
+确认后，翻译部分将恢复至翻译前！,"After confirmation"
+取消,Cancel
+确定,OK
+恢复失败,"Recovery failed"
+恢复结果通知!,"Restore Result Notification!"
+知道了,"Got it"
 成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
 推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
 用户申请语言,"User application language"
@@ -412,18 +431,14 @@ i18n国际化,"i18n Internationalization"
 缓存模式,"Cache Mode"
 译文,"Translated Text"
 更新时间,"Update time"
-编辑,Edit
 翻译已删除，当前位置已保留。,"The translation has been removed and the current position has been retained."
 "确定删除 %{1} 的译文吗？","Delete the translation for %{1}?"
 删除,Delete
 "请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
 请输入原文,"Please enter the original text"
 请输入译文,"Please enter translation"
-取消,Cancel
-保存,Save
 激活,Activate
 加载失败,"Failed to load"
-保存失败,"Save failed"
 清理完成,"Cleanup completed"
 清理失败,"Cleanup failed"
 "确定清理当前目标语言 %{1} 的所有译文吗？基础词条会保留。","Are you sure you want to clear all translations for the current target language %{1}? The basic entries will be retained."
@@ -448,7 +463,6 @@ i18n国际化,"i18n Internationalization"
 收集时间,"Collection Time"
 翻译时间,"Translation Time"
 恢复,Restore
-确定恢复该词典么？,"Are you sure you want to restore this dictionary?"
 发布失败,"Publishing failed"
 发布成功,"Posted successfully"
 操作失败,"Operation failed"
@@ -474,7 +488,6 @@ i18n国际化,"i18n Internationalization"
 已卸载,Uninstalled
 "确定卸载 %{1} 吗？语言包和缓存会同步清理。","Uninstall %{1}? Language packs and cache will be cleaned up as well."
 卸载,Uninstall
-确定,OK
 已安装未激活,"Installed but not activated"
 全部,All
 搜索国家,"Search country"
@@ -574,6 +587,12 @@ CSV文件不存在：%{1},"CSV file does not exist: %{1}"
 翻译为空，已跳过：%{1},"Translation is empty, skipped: %{1}"
 翻译结果与原文相同，已跳过：%{1},"Translation result is identical to the original, skipped: %{1}"
 翻译丢失结构化占位符，已跳过：%{1},"Translation lost structured placeholder, skipped: %{1}"
+没有启用的语言需要翻译,没有启用的语言需要翻译
+"%{1}: 成功翻译 %{2} 个词","%{1}: 成功翻译 %{2} 个词"
+"%{1}: 翻译失败 - %{2}","%{1}: 翻译失败 - %{2}"
+"AI批量翻译完成 - 总计翻译: %{1}, 失败: %{2}, 耗时: %{3}秒\n%{4}","AI批量翻译完成 - 总计翻译: %{1}, 失败: %{2}, 耗时: %{3}秒\n%{4}"
+所有语言的词典都已完成翻译，无需翻译新词,所有语言的词典都已完成翻译，无需翻译新词
+"AI批量翻译异常: %{1}","AI批量翻译异常: %{1}"
 开始AI翻译...,"Starting AI translation..."
 "目标语言: %{1}","Target language: %{1}"
 "源语言: %{1}","Source language: %{1}"
@@ -657,12 +676,6 @@ i18n国际化>国家,"i18n Internationalization > Countries"
 申请表加载失败,"Application form loading failed"
 重新加载,Reload
 加载失败，请稍后重试,"Loading failed, please try again later"
-"Weline.Api 不可用","Weline.Api is not available"
-提示,Tip
-确认后，翻译部分将恢复至翻译前！,"After confirmation"
-恢复失败,"Recovery failed"
-恢复结果通知!,"Restore Result Notification!"
-知道了,"Got it"
 申请编号,"Application number"
 提交时间,"Submission time"
 "网站 ID","Website ID"
