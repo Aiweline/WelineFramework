@@ -80,8 +80,7 @@ class Index extends BackendController
         if ($selectedAccount && $mailView === 'mailbox') {
             $domainId = (int)$selectedAccount->getData(MailAccount::schema_fields_DOMAIN_ID);
             $selectedDomain = $domainLookup[$domainId] ?? null;
-            $isFake = $selectedDomain
-                && (string)$selectedDomain->getData(MailDomain::schema_fields_ENGINE) === 'fake';
+            $isFake = self::isFakeDomainLookupEntry($selectedDomain);
 
             try {
                 if ($isFake) {
@@ -266,6 +265,14 @@ class Index extends BackendController
             ];
         }
         return $lookup;
+    }
+
+    /**
+     * @param array<string, mixed>|null $domain
+     */
+    private static function isFakeDomainLookupEntry(?array $domain): bool
+    {
+        return (string)($domain[MailDomain::schema_fields_ENGINE] ?? '') === 'fake';
     }
 
     /**
