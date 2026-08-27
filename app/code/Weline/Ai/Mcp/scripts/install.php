@@ -188,16 +188,15 @@ function welineMcpWriteMarketplace(string $root, string $config, string $marketp
     $manifest = [
         'name' => WELINE_MCP_PLUGIN,
         'version' => WELINE_MCP_VERSION,
-        'description' => 'Architecture-first batch code intelligence, durable execution runs, transactional edits, and a live MCP App for Codex.',
+        'description' => 'Bootstrap hooks and guardrails for the single shared Weline Project Intelligence MCP registration.',
         'author' => ['name' => 'Weline'],
-        'mcpServers' => './.mcp.json',
         'interface' => [
             'displayName' => 'Weline Project Intelligence',
-            'shortDescription' => 'Batch project context, safe edits, and visible change reports.',
-            'longDescription' => 'Automatically starts the local PHP MCP, isolates every canonical project directory even inside one Git repository, supports non-Git directories, guides Codex to retrieve related files in broad batches, applies one guarded edit transaction, and then reviews every changed file from per-file diffs and hunk line numbers inside the task.',
+            'shortDescription' => 'Single-generation project context, safe edits, and visible change reports.',
+            'longDescription' => 'Uses the one shared host STDIO registration maintained by project bootstrap, while the plugin contributes lifecycle hooks and task guardrails without declaring a duplicate MCP server.',
             'developerName' => 'Weline',
             'category' => 'Productivity',
-            'capabilities' => ['MCP', 'MCP App', 'Hooks', 'Code Intelligence', 'Local Learning'],
+            'capabilities' => ['Hooks', 'Code Intelligence', 'Local Learning'],
             'defaultPrompt' => [
                 'Call prepare_project first; only dev is allowed. Continue when ready and pass readiness_id to every later Weline tool.',
                 'Use resolve_task_context for bounded framework guidance; static development Skills are not authoritative.',
@@ -301,7 +300,56 @@ function welineMcpWriteMarketplace(string $root, string $config, string $marketp
     welineMcpWriteJson($marketplaceRoot . '/.agents/plugins/marketplace.json', $marketplace);
     welineMcpWriteJson($pluginRoot . '/.codex-plugin/plugin.json', $manifest);
     welineMcpWriteJson($pluginRoot . '/.mcp.json', $mcp);
+    welineMcpWriteJson($pluginRoot . '/.weline-generation.json', [
+        'schema_version' => 'weline-mcp-source-generation.v1',
+        'source_generation' => welineMcpSourceGeneration($root),
+        'generated_at' => gmdate(DATE_ATOM),
+    ]);
     welineMcpWriteJson($pluginRoot . '/hooks/hooks.json', $hooks);
+}
+
+function welineMcpSourceGeneration(string $root): string
+{
+    $files = [];
+    foreach (['bin', 'src', 'scripts'] as $directory) {
+        $sourceRoot = $root . DIRECTORY_SEPARATOR . $directory;
+        if (!is_dir($sourceRoot)) {
+            continue;
+        }
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($sourceRoot, FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $file) {
+            if (!$file instanceof SplFileInfo || !$file->isFile()) {
+                continue;
+            }
+            $path = $file->getPathname();
+            $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($path, strlen($root) + 1));
+            $extension = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
+            if (!str_starts_with($relative, 'bin/')
+                && !in_array($extension, ['php', 'sh', 'ps1', 'json', 'yaml', 'yml'], true)) {
+                continue;
+            }
+            $files[$relative] = $path;
+        }
+    }
+    foreach (['install.sh', 'install.ps1', 'config.example.yaml', 'composer.json'] as $relative) {
+        $path = $root . DIRECTORY_SEPARATOR . $relative;
+        if (is_file($path)) {
+            $files[$relative] = $path;
+        }
+    }
+    ksort($files, SORT_STRING);
+
+    $hash = hash_init('sha256');
+    foreach ($files as $relative => $path) {
+        hash_update($hash, $relative . "\0");
+        if (!@hash_update_file($hash, $path)) {
+            hash_update($hash, 'unreadable');
+        }
+    }
+
+    return hash_final($hash);
 }
 
 function welineMcpFindCodex(): ?string
@@ -355,7 +403,7 @@ function welineMcpInstalledPluginIds(string $codex): array
 
 function welineMcpRemoveExplicitRegistrations(string $codex): void
 {
-    foreach (['weline', 'weline-project-intelligence'] as $serverName) {
+    foreach (['weline', 'weline-project-intelligence', 'weline_project_intelligence'] as $serverName) {
         welineMcpRunVisible([$codex, 'mcp', 'remove', $serverName], true);
     }
 }

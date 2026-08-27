@@ -2241,7 +2241,7 @@ try {
         isset($getEditStatusDefinition['inputSchema']['properties']['review_cursor']),
         'get_edit_status exposes the sealed review cursor at the MCP boundary',
     );
-    check(ToolService::VERSION === '0.13.0', 'tool service version is 0.13.0');
+    check(ToolService::VERSION === '0.13.2', 'tool service version is 0.13.2');
     check(str_contains(substr(ToolService::INSTRUCTIONS, 0, 512), 'prepare_project'), 'first 512 instruction characters contain mandatory preparation');
     check(str_contains(substr(ToolService::INSTRUCTIONS, 0, 512), 'readiness_id'), 'first 512 instruction characters require readiness binding');
     check(str_contains(ToolService::INSTRUCTIONS, 'get_edit_bundle once'), 'instructions preserve one-bundle editing');
@@ -2390,6 +2390,14 @@ PHP);
         $marketplace . '/plugins/weline-project-intelligence/.codex-plugin/plugin.json'
     ), true, 512, JSON_THROW_ON_ERROR);
     check(($manifest['version'] ?? '') === '0.13.0', 'generated plugin advertises version 0.13.0');
+    check(!array_key_exists('mcpServers', $manifest), 'generated plugin does not declare a duplicate MCP server');
+    $generation = json_decode((string) file_get_contents(
+        $marketplace . '/plugins/weline-project-intelligence/.weline-generation.json'
+    ), true, 512, JSON_THROW_ON_ERROR);
+    check(
+        preg_match('/^[a-f0-9]{64}$/', (string) ($generation['source_generation'] ?? '')) === 1,
+        'generated plugin records the exact MCP source generation',
+    );
     $prompts = $manifest['interface']['defaultPrompt'] ?? [];
     check(count($prompts) <= 3, 'plugin defaultPrompt has at most three entries');
     check(array_reduce($prompts, static fn (bool $ok, string $prompt): bool => $ok && mb_strlen($prompt) <= 128, true), 'every defaultPrompt entry is at most 128 characters');
@@ -2441,8 +2449,9 @@ SH);
     $codexCommands = explode("\n", trim((string) file_get_contents($fakeCodexLog)));
     check(
         in_array('mcp remove weline', $codexCommands, true)
-            && in_array('mcp remove weline-project-intelligence', $codexCommands, true),
-        'installer removes both legacy explicit MCP registration names',
+            && in_array('mcp remove weline-project-intelligence', $codexCommands, true)
+            && in_array('mcp remove weline_project_intelligence', $codexCommands, true),
+        'installer removes every legacy explicit MCP registration name',
     );
 
     $protocolInput = implode("
