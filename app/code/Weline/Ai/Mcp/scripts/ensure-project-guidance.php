@@ -15,6 +15,7 @@ if (($argv[1] ?? '') === '--restart-codex-host') {
         (int) ($argv[3] ?? 0),
         (int) ($argv[4] ?? 0),
         (string) ($argv[5] ?? ''),
+        (string) ($argv[6] ?? ''),
     ));
 }
 
@@ -593,12 +594,24 @@ function welineGuidanceScheduleCodexHostRestart(array $hostRuntime): array
     if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
         return ['scheduled' => false, 'reason' => 'receipt_directory_failed'];
     }
+    $label = 'com.weline.codex-appserver-restart.' . $pid;
     $pending = $directory . '/pending-' . $pid . '.json';
-    if (is_file($pending) && (time() - (int) (@filemtime($pending) ?: 0)) < 120) {
-        return ['scheduled' => true, 'reason' => 'already_scheduled', 'pending' => $pending];
+    $plist = $directory . '/' . $label . '.plist';
+    if (is_file($pending)
+        && (time() - (int) (@filemtime($pending) ?: 0)) < 120
+        && welineGuidanceLaunchdJobLoaded($label)) {
+        return [
+            'scheduled' => true,
+            'reason' => 'already_scheduled',
+            'pending' => $pending,
+            'launchd_label' => $label,
+        ];
     }
     if (is_file($pending)) {
         @unlink($pending);
+    }
+    if (is_file($plist)) {
+        @unlink($plist);
     }
     $handle = @fopen($pending, 'x');
     if (!is_resource($handle)) {
@@ -614,17 +627,29 @@ function welineGuidanceScheduleCodexHostRestart(array $hostRuntime): array
     fclose($handle);
 
     $php = PHP_BINARY !== '' && is_file(PHP_BINARY) ? PHP_BINARY : 'php';
-    $command = 'nohup ' . escapeshellarg($php)
-        . ' ' . escapeshellarg(__FILE__)
-        . ' --restart-codex-host ' . $pid
-        . ' ' . $parentPid
-        . ' ' . $startedEpoch
-        . ' ' . escapeshellarg($pending)
-        . ' >/dev/null 2>&1 &';
-    $launch = welineGuidanceExec(['/bin/sh', '-c', $command], dirname(__DIR__));
+    $log = $directory . '/helper-' . $pid . '.log';
+    $plistPayload = welineGuidanceRestartPlist(
+        $label,
+        [$php, __FILE__, '--restart-codex-host', (string) $pid, (string) $parentPid, (string) $startedEpoch, $pending, $label],
+        $log,
+    );
+    if (@file_put_contents($plist, $plistPayload, LOCK_EX) === false) {
+        @unlink($pending);
+        return ['scheduled' => false, 'reason' => 'launchd_plist_write_failed'];
+    }
+    @chmod($plist, 0600);
+    $domain = welineGuidanceLaunchdDomain();
+    if ($domain === null) {
+        @unlink($pending);
+        @unlink($plist);
+        return ['scheduled' => false, 'reason' => 'launchd_domain_unavailable'];
+    }
+    welineGuidanceExec(['/bin/launchctl', 'bootout', $domain . '/' . $label], $directory);
+    $launch = welineGuidanceExec(['/bin/launchctl', 'bootstrap', $domain, $plist], $directory);
     if (($launch['exit_code'] ?? 1) !== 0) {
         @unlink($pending);
-        return ['scheduled' => false, 'reason' => 'detached_launch_failed', 'stderr' => trim($launch['stderr'] ?? '')];
+        @unlink($plist);
+        return ['scheduled' => false, 'reason' => 'launchd_bootstrap_failed', 'stderr' => trim($launch['stderr'] ?? '')];
     }
 
     return [
@@ -633,55 +658,132 @@ function welineGuidanceScheduleCodexHostRestart(array $hostRuntime): array
         'old_pid' => $pid,
         'pending' => $pending,
         'receipt' => $directory . '/receipt-' . $pid . '.json',
+        'launchd_label' => $label,
+        'helper_log' => $log,
     ];
 }
 
-function welineGuidanceRestartCodexHost(int $pid, int $parentPid, int $startedEpoch, string $pending): int
+function welineGuidanceRestartCodexHost(
+    int $pid,
+    int $parentPid,
+    int $startedEpoch,
+    string $pending,
+    string $label,
+): int
 {
     usleep(2_000_000);
     $directory = dirname($pending);
     $receipt = $directory . '/receipt-' . $pid . '.json';
-    $process = welineGuidanceProcessInfo($pid);
-    if ($process === null) {
-        welineGuidanceWriteRestartReceipt($receipt, 'superseded', $pid, 0, 'old_process_already_gone');
-        @unlink($pending);
-        return 0;
-    }
-    $identityMatches = $process['parent_pid'] === $parentPid
-        && $process['started_epoch'] === $startedEpoch
-        && str_contains($process['command'], ' app-server');
-    if (!$identityMatches) {
-        welineGuidanceWriteRestartReceipt($receipt, 'aborted', $pid, 0, 'process_identity_changed');
-        @unlink($pending);
-        return 2;
-    }
-
-    $kill = welineGuidanceExec(['/bin/kill', '-TERM', (string) $pid], $directory);
-    if (($kill['exit_code'] ?? 1) !== 0) {
-        welineGuidanceWriteRestartReceipt($receipt, 'failed', $pid, 0, trim($kill['stderr'] ?? 'kill_failed'));
-        @unlink($pending);
-        return 3;
-    }
-
-    $newPid = 0;
-    $deadline = microtime(true) + 30.0;
-    while (microtime(true) < $deadline) {
-        $newPid = welineGuidanceFindCodexAppServerChild($parentPid, $pid);
-        if ($newPid > 1) {
-            break;
+    try {
+        $process = welineGuidanceProcessInfo($pid);
+        if ($process === null) {
+            welineGuidanceWriteRestartReceipt($receipt, 'superseded', $pid, 0, 'old_process_already_gone');
+            return 0;
         }
-        usleep(200_000);
-    }
-    welineGuidanceWriteRestartReceipt(
-        $receipt,
-        $newPid > 1 ? 'restarted' : 'terminated_waiting_for_respawn',
-        $pid,
-        $newPid,
-        $newPid > 1 ? 'new_app_server_observed' : 'parent_app_has_not_respawned_yet',
-    );
-    @unlink($pending);
+        $identityMatches = $process['parent_pid'] === $parentPid
+            && $process['started_epoch'] === $startedEpoch
+            && str_contains($process['command'], ' app-server');
+        if (!$identityMatches) {
+            welineGuidanceWriteRestartReceipt($receipt, 'aborted', $pid, 0, 'process_identity_changed');
+            return 2;
+        }
 
-    return 0;
+        $kill = welineGuidanceExec(['/bin/kill', '-TERM', (string) $pid], $directory);
+        if (($kill['exit_code'] ?? 1) !== 0) {
+            welineGuidanceWriteRestartReceipt($receipt, 'failed', $pid, 0, trim($kill['stderr'] ?? 'kill_failed'));
+            return 3;
+        }
+
+        $newPid = 0;
+        $deadline = microtime(true) + 30.0;
+        while (microtime(true) < $deadline) {
+            $newPid = welineGuidanceFindCodexAppServerChild($parentPid, $pid);
+            if ($newPid > 1) {
+                break;
+            }
+            usleep(200_000);
+        }
+        welineGuidanceWriteRestartReceipt(
+            $receipt,
+            $newPid > 1 ? 'restarted' : 'terminated_waiting_for_respawn',
+            $pid,
+            $newPid,
+            $newPid > 1 ? 'new_app_server_observed' : 'parent_app_has_not_respawned_yet',
+        );
+
+        return 0;
+    } finally {
+        @unlink($pending);
+        welineGuidanceUnloadRestartJob($label, $directory);
+    }
+}
+
+/** @param list<string> $arguments */
+function welineGuidanceRestartPlist(string $label, array $arguments, string $log): string
+{
+    $escape = static fn (string $value): string => htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+    $argumentXml = implode("\n", array_map(
+        static fn (string $argument): string => '        <string>' . $escape($argument) . '</string>',
+        $arguments,
+    ));
+
+    return '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+        . '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' . "\n"
+        . '<plist version="1.0">' . "\n"
+        . '<dict>' . "\n"
+        . '    <key>Label</key>' . "\n"
+        . '    <string>' . $escape($label) . '</string>' . "\n"
+        . '    <key>ProgramArguments</key>' . "\n"
+        . '    <array>' . "\n"
+        . $argumentXml . "\n"
+        . '    </array>' . "\n"
+        . '    <key>RunAtLoad</key>' . "\n"
+        . '    <true/>' . "\n"
+        . '    <key>KeepAlive</key>' . "\n"
+        . '    <false/>' . "\n"
+        . '    <key>ProcessType</key>' . "\n"
+        . '    <string>Background</string>' . "\n"
+        . '    <key>StandardOutPath</key>' . "\n"
+        . '    <string>' . $escape($log) . '</string>' . "\n"
+        . '    <key>StandardErrorPath</key>' . "\n"
+        . '    <string>' . $escape($log) . '</string>' . "\n"
+        . '</dict>' . "\n"
+        . '</plist>' . "\n";
+}
+
+function welineGuidanceLaunchdDomain(): ?string
+{
+    if (function_exists('posix_getuid')) {
+        $uid = posix_getuid();
+        return is_int($uid) && $uid >= 0 ? 'gui/' . $uid : null;
+    }
+    $result = welineGuidanceExec(['/usr/bin/id', '-u'], dirname(__DIR__));
+    $uid = (int) trim($result['stdout'] ?? '');
+
+    return ($result['exit_code'] ?? 1) === 0 && $uid >= 0 ? 'gui/' . $uid : null;
+}
+
+function welineGuidanceLaunchdJobLoaded(string $label): bool
+{
+    $domain = welineGuidanceLaunchdDomain();
+    if ($domain === null || !is_executable('/bin/launchctl')) {
+        return false;
+    }
+    $result = welineGuidanceExec(['/bin/launchctl', 'print', $domain . '/' . $label], dirname(__DIR__));
+
+    return ($result['exit_code'] ?? 1) === 0;
+}
+
+function welineGuidanceUnloadRestartJob(string $label, string $directory): void
+{
+    if ($label === '') {
+        return;
+    }
+    @unlink($directory . '/' . $label . '.plist');
+    $domain = welineGuidanceLaunchdDomain();
+    if ($domain !== null && is_executable('/bin/launchctl')) {
+        welineGuidanceExec(['/bin/launchctl', 'bootout', $domain . '/' . $label], $directory);
+    }
 }
 
 function welineGuidanceFindCodexAppServerChild(int $parentPid, int $oldPid): int
