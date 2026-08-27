@@ -16,6 +16,9 @@ final class ToolService
         . 'After an actual tool call, begin every later user-visible update and final report in that turn with "Weline："; content[0].text and _weline_mcp.usage_line are runtime proof.';
 
     private readonly IntelligenceService $intelligence;
+    private readonly string $runtimeGeneration;
+    private readonly string $runtimeStartedAt;
+    private readonly int $runtimePid;
 
     public function __construct(
         private readonly Store $store,
@@ -24,6 +27,9 @@ final class ToolService
         ?IntelligenceService $intelligence = null,
     ) {
         $this->intelligence = $intelligence ?? new IntelligenceService($store, $config);
+        $this->runtimeGeneration = self::sourceGeneration();
+        $this->runtimeStartedAt = Clock::now();
+        $this->runtimePid = (int) getmypid();
     }
 
     /** @return list<array<string, mixed>> */
@@ -542,6 +548,23 @@ final class ToolService
      */
     public function call(string $name, array $arguments): array
     {
+        $currentGeneration = self::sourceGeneration();
+        $sourceCurrent = hash_equals($this->runtimeGeneration, $currentGeneration);
+        if ($name !== 'health' && !$sourceCurrent) {
+            throw new ToolException(
+                'MCP_RUNTIME_STALE',
+                'MCP source changed after this process started. Restart the host MCP process before continuing.',
+                true,
+                [
+                    'pid' => $this->runtimePid,
+                    'started_at' => $this->runtimeStartedAt,
+                    'loaded_generation' => $this->runtimeGeneration,
+                    'current_generation' => $currentGeneration,
+                    'next_action' => 'Run ensure-project-guidance and continue only after host_runtime.current is true.',
+                ],
+            );
+        }
+
         $readiness = null;
         if (!in_array($name, ['health', 'project_index_status', 'prepare_project', 'repair_project_docs', 'set_session_directives'], true)) {
             $readiness = $this->intelligence->assertProjectReadiness($arguments);
@@ -582,6 +605,14 @@ final class ToolService
             'health' => $this->health(),
             default => throw new ToolException('NOT_FOUND', 'Unknown tool: ' . $name, false, ['tool' => $name]),
         };
+        $result['_weline_mcp_runtime'] = [
+            'schema_version' => 'mcp-runtime-generation.v1',
+            'pid' => $this->runtimePid,
+            'started_at' => $this->runtimeStartedAt,
+            'loaded_generation' => $this->runtimeGeneration,
+            'current_generation' => $currentGeneration,
+            'source_current' => $sourceCurrent,
+        ];
         if ($readiness !== null) {
             $result['_project_readiness'] = [
                 'status' => 'ready',
@@ -900,6 +931,51 @@ final class ToolService
             ],
             'checked_at' => Clock::now(),
         ];
+    }
+
+    private static function sourceGeneration(): string
+    {
+        $root = dirname(__DIR__);
+        $files = [];
+        foreach (['bin', 'src', 'scripts'] as $directory) {
+            $sourceRoot = $root . DIRECTORY_SEPARATOR . $directory;
+            if (!is_dir($sourceRoot)) {
+                continue;
+            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($sourceRoot, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($iterator as $file) {
+                if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                    continue;
+                }
+                $path = $file->getPathname();
+                $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($path, strlen($root) + 1));
+                $extension = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
+                if (!str_starts_with($relative, 'bin/')
+                    && !in_array($extension, ['php', 'sh', 'ps1', 'json', 'yaml', 'yml'], true)) {
+                    continue;
+                }
+                $files[$relative] = $path;
+            }
+        }
+        foreach (['install.sh', 'install.ps1', 'config.example.yaml', 'composer.json'] as $relative) {
+            $path = $root . DIRECTORY_SEPARATOR . $relative;
+            if (is_file($path)) {
+                $files[$relative] = $path;
+            }
+        }
+        ksort($files, SORT_STRING);
+
+        $hash = hash_init('sha256');
+        foreach ($files as $relative => $path) {
+            hash_update($hash, $relative . "\0");
+            if (!@hash_update_file($hash, $path)) {
+                hash_update($hash, 'unreadable');
+            }
+        }
+
+        return hash_final($hash);
     }
 
     /** @param array<string, mixed> $input */
