@@ -30,6 +30,9 @@ Store 逻辑库存：不可变 ledger、四策略可售、预占租约/CAS/Cron�
 - strategy、on-hand、reserved、allowance 全部使用非负整数 minor；
   overlength command identity 和 signed integer overflow 在写入前拒绝。
 - `website_id=0`、`store_id=0` 都是合法 Scope，不得当作空值。
+- 后台库存调整/仓库授权表单与控制器解析 `store_id` 为非负整数（允许 0）；e2e fixture cleanup 不得因 `store_id=0` 跳过 stock 删除。
+- 仓迁移 `targetWarehouse` 对 `store_id=0` 与其它 Store 一样要求该店的默认授权绑定，禁止再把 0 解释为「网站级默认仓哨兵」。
+- `setOnHand` 在真正推进投影（非纯 ledger 重放）后派发 `Weline_Inventory::stock_projection_changed`（`website_id`/`store_id`/`offer_id`/`reason`），供 `Weline_Product` 失效店面 `publishedOffers` 热缓存；默认站 `website_id=0` 同样生效。
 
 ## 策略
 
