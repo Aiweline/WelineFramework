@@ -17,8 +17,8 @@ $websites = $this->getData('websites') ?: [];
                             </h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><lang>首页</lang></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('cdn/backend/domain/index') ?>"><lang>CDN管理</lang></a></li>
+                                    <li class="breadcrumb-item"><a href="@backend-url{'admin'}"><lang>首页</lang></a></li>
+                                    <li class="breadcrumb-item"><a href="@backend-url{'cdn/backend/domain/index'}"><lang>CDN管理</lang></a></li>
                                     <li class="breadcrumb-item active"><lang>批量绑定</lang></li>
                                 </ol>
                             </div>
