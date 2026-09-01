@@ -7,7 +7,7 @@
 <div class="content-header">
     <h1><?= __('平台管理') ?></h1>
     <div class="action-bar">
-        <a href="<?= $this->getUrl('geo/backend/platform/edit') ?>" class="w-button" data-tone="primary">
+        <a href="@url{'geo/backend/platform/edit'}" class="w-button" data-tone="primary">
             <w:icon name="plus" size="sm"></w:icon> <?= __('添加平台') ?>
         </a>
     </div>
@@ -47,10 +47,10 @@
                             <?php endif; ?>
                         </td>
                         <td>
-                            <a href="<?= $this->getUrl('geo/backend/platform/edit', ['id' => $platform['id']]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                            <a href="@url{'geo/backend/platform/edit'|['id' => $platform['id']]}" class="w-button" data-tone="primary" data-size="sm">
                                 <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                             </a>
-                            <a href="<?= $this->getUrl('geo/backend/platform/account', ['platform_id' => $platform['id']]) ?>" class="w-button" data-tone="info" data-size="sm">
+                            <a href="@url{'geo/backend/platform/account'|['platform_id' => $platform['id']]}" class="w-button" data-tone="info" data-size="sm">
                                 <w:icon name="user" size="sm"></w:icon> <?= __('账户') ?>
                             </a>
                         </td>

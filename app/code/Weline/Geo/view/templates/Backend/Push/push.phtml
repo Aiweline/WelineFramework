@@ -78,7 +78,7 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
     
     formData.set('platform_ids', JSON.stringify(platformIds));
     
-    var geoPushUrl = '<?= $this->getUrl('geo/backend/push/execute') ?>';
+    var geoPushUrl = '@url{'geo/backend/push/execute'}';
     var geoPushOpts = { method: 'POST', body: formData };
     Weline.adminRequest('geo', geoPushUrl, geoPushOpts)
     .then(function(res) {

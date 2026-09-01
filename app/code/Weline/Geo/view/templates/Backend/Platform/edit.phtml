@@ -71,7 +71,7 @@ $isEdit = $platform->getId() > 0;
             <button type="submit" class="w-button" data-tone="primary">
                 <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
             </button>
-            <a href="<?= $this->getUrl('geo/backend/platform') ?>" class="w-button" data-tone="neutral">
+            <a href="@url{'geo/backend/platform'}" class="w-button" data-tone="neutral">
                 <?= __('取消') ?>
             </a>
         </div>
@@ -86,7 +86,7 @@ document.getElementById('platform-form').addEventListener('submit', function(e) 
     
     const formData = new FormData(this);
     
-    var url = '<?= $this->getUrl('geo/backend/platform/save') ?>';
+    var url = '@url{'geo/backend/platform/save'}';
     var opts = { method: 'POST', body: formData };
     Weline.adminRequest('geo', url, opts)
     .then(function(res) {
@@ -99,7 +99,7 @@ document.getElementById('platform-form').addEventListener('submit', function(e) 
                 duration: 2000,
                 confirmable: false
             }).then(() => {
-                window.location.href = '<?= $this->getUrl('geo/backend/platform') ?>';
+                window.location.href = '@url{'geo/backend/platform'}';
             });
         } else {
             Weline.UI.dialog.request({
