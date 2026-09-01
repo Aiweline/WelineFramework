@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Weline\Compare\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Compare\Service\ComparePagePresenter;
 use Weline\Compare\Service\CompareService;
 
 final class CompareQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly CompareService $compare,
+        private readonly ComparePagePresenter $pagePresenter,
     ) {
     }
 
@@ -22,7 +24,8 @@ final class CompareQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'list' => $this->compare->list(),
+            'list' => $this->pageViewPayload(),
+            'pageView' => $this->pageViewPayload(),
             'add' => $this->compare->add($this->productId($params)),
             'remove' => $this->compare->remove($this->productId($params)),
             'clear' => $this->compare->clear(),
@@ -47,6 +50,7 @@ final class CompareQueryProvider implements QueryProviderInterface
             'module' => 'Weline_Compare',
             'operations' => [
                 ['name' => 'list', 'frontend' => true, 'mode' => 'read', 'params' => []],
+                ['name' => 'pageView', 'frontend' => true, 'mode' => 'read', 'params' => []],
                 ['name' => 'add', 'frontend' => true, 'mode' => 'write', 'params' => $writeParams],
                 ['name' => 'remove', 'frontend' => true, 'mode' => 'write', 'params' => $writeParams],
                 ['name' => 'clear', 'frontend' => true, 'mode' => 'write', 'params' => []],
@@ -59,6 +63,25 @@ final class CompareQueryProvider implements QueryProviderInterface
                     ]),
                 ],
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function pageViewPayload(): array
+    {
+        $view = $this->pagePresenter->resolveViewModel();
+
+        return [
+            'success' => true,
+            'compare_count' => $view['count'],
+            'max' => $view['max'],
+            'items' => $view['items'],
+            'specRows' => $view['specRows'],
+            'ratingLabelClass' => $view['ratingLabelClass'],
+            'ratingCellClasses' => $view['ratingCellClasses'],
+            'priceCellClasses' => $view['priceCellClasses'],
         ];
     }
 

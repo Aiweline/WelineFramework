@@ -9,7 +9,7 @@ use Weline\Framework\Http\Cookie;
 class CompareSessionStore
 {
     public const COOKIE_NAME = 'weline_compare';
-    public const MAX_ITEMS = 4;
+    public const MAX_ITEMS = 8;
 
     /**
      * @return list<int>

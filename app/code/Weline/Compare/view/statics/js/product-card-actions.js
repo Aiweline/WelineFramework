@@ -1,6 +1,7 @@
 (function () {
     'use strict';
 
+    var COMPARE_MAX_ITEMS = 8;
     var booted = false;
 
   function texts() {
@@ -16,9 +17,22 @@
     }
 
     function toast(message, tone) {
+        var mappedTone = tone === 'error' ? 'danger' : (tone || 'info');
         if (window.Weline && window.Weline.UI && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
-            window.Weline.UI.toast.show(message, { tone: tone || 'info' });
+            window.Weline.UI.toast.show(message, { tone: mappedTone });
         }
+    }
+
+    function showCompareAddedNotice(message, count, max) {
+        var notice = window.Weline && window.Weline.ShopperNotice;
+        if (notice && typeof notice.showCompareAdded === 'function') {
+            notice.showCompareAdded(message, {
+                count: count,
+                max: max || COMPARE_MAX_ITEMS,
+            });
+            return;
+        }
+        toast(message, 'success');
     }
 
     function normalizePayload(payload) {
@@ -81,6 +95,11 @@
         });
     }
 
+    function compareBarRemoveLabel() {
+        var bar = document.querySelector('[data-compare-bar]');
+        return (bar && bar.getAttribute('data-compare-bar-remove-label')) || '移除';
+    }
+
     function renderCompareBar(items, max) {
         var bar = document.querySelector('[data-compare-bar]');
         if (!bar) {
@@ -90,31 +109,71 @@
         var countNode = bar.querySelector('[data-compare-bar-count]');
         var thumbs = bar.querySelector('[data-compare-bar-thumbs]');
         if (countNode) {
-            countNode.textContent = count + '/' + (max || 4);
+            countNode.textContent = count + '/' + (max || COMPARE_MAX_ITEMS);
         }
         if (thumbs) {
             thumbs.innerHTML = '';
             (items || []).forEach(function (item) {
-                if (!item || !item.image) {
+                var productId = Number(item && item.product_id || 0);
+                if (productId <= 0) {
                     return;
                 }
-                var img = document.createElement('img');
-                img.src = item.image;
-                img.alt = item.name || '';
-                img.className = 'w-compare-bar__thumb';
-                thumbs.appendChild(img);
+                var wrap = document.createElement('div');
+                wrap.className = 'w-compare-bar__thumb-item';
+                if (item.image) {
+                    var img = document.createElement('img');
+                    img.src = item.image;
+                    img.alt = item.name || '';
+                    img.className = 'w-compare-bar__thumb';
+                    wrap.appendChild(img);
+                } else {
+                    var placeholder = document.createElement('span');
+                    placeholder.className = 'w-compare-bar__thumb w-compare-bar__thumb--empty';
+                    placeholder.textContent = String(item.name || '?').trim().slice(0, 1) || '?';
+                    wrap.appendChild(placeholder);
+                }
+                var removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'w-compare-bar__thumb-remove';
+                removeBtn.setAttribute('data-compare-remove', '');
+                removeBtn.setAttribute('data-product-id', String(productId));
+                removeBtn.setAttribute('aria-label', compareBarRemoveLabel());
+                removeBtn.textContent = '×';
+                wrap.appendChild(removeBtn);
+                thumbs.appendChild(wrap);
             });
         }
         bar.hidden = count <= 0;
     }
 
-    function refreshCompareBar() {
+    window.WelineCompareShopper = {
+        renderCompareBar: renderCompareBar
+    };
+
+    function refreshCompareState() {
         return apiResource('compare').then(function (api) {
-            return api.list();
+            return api.list({}, { silent: true });
         }).then(function (payload) {
             var data = normalizePayload(payload);
-            renderCompareBar(data.items || [], data.max || 4);
-        }).catch(function () {});
+            if (data.success === false) {
+                throw new Error(data.message || texts().compareFailed);
+            }
+            renderCompareBar(data.items || [], data.max || COMPARE_MAX_ITEMS);
+            if (window.WelineComparePage && typeof window.WelineComparePage.renderFromPayload === 'function') {
+                window.WelineComparePage.renderFromPayload(data);
+            }
+            return data;
+        }).catch(function () {
+            if (window.WelineComparePage && typeof window.WelineComparePage.handleLoadError === 'function') {
+                window.WelineComparePage.handleLoadError();
+            }
+        });
+    }
+
+    window.WelineCompareShopper.refreshCompareState = refreshCompareState;
+
+    function refreshCompareBar() {
+        return refreshCompareState();
     }
 
     function openQuickViewDialog() {
@@ -212,10 +271,33 @@
             if (data.success === false) {
                 toast(data.message || texts().compareFull, 'warning');
             } else {
-                toast(data.message || texts().compareAdded, 'success');
+                showCompareAddedNotice(
+                    data.message || texts().compareAdded,
+                    Number(data.compare_count) || 0,
+                    Number(data.max) || COMPARE_MAX_ITEMS,
+                );
             }
             return refreshCompareBar();
         }).catch(function () {
+            toast(texts().compareFailed, 'error');
+        });
+    }
+
+    function handleCompareRemove(button) {
+        var productId = Number(button.getAttribute('data-product-id') || 0);
+        if (productId <= 0 || button.disabled) {
+            return;
+        }
+        button.disabled = true;
+        apiResource('compare').then(function (api) {
+            return api.remove({ product_id: productId });
+        }).then(function () {
+            if (window.WelineComparePage && typeof window.WelineComparePage.refresh === 'function' && window.WelineComparePage.isActive()) {
+                return window.WelineComparePage.refresh();
+            }
+            return refreshCompareBar();
+        }).catch(function () {
+            button.disabled = false;
             toast(texts().compareFailed, 'error');
         });
     }
@@ -311,11 +393,20 @@
                 handleCompare(target.closest('[data-quickview-compare]'));
                 return;
             }
+            if (target && target.closest && target.closest('[data-compare-remove]')) {
+                event.preventDefault();
+                event.stopPropagation();
+                handleCompareRemove(target.closest('[data-compare-remove]'));
+                return;
+            }
             if (target && target.closest && target.closest('[data-compare-clear]')) {
                 event.preventDefault();
                 apiResource('compare').then(function (api) {
                     return api.clear();
                 }).then(function () {
+                    if (window.WelineComparePage && typeof window.WelineComparePage.refresh === 'function' && window.WelineComparePage.isActive()) {
+                        return window.WelineComparePage.refresh();
+                    }
                     return refreshCompareBar();
                 });
             }
