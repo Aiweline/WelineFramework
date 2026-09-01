@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\App\State;
+use Weline\Product\Model\Category\LocalDescription;
 use Weline\Product\Model\CategoryAttributeEntity;
 use Weline\Product\Model\Shard\AttributeValue;
 use Weline\Product\Repository\AttributeValueRepository;
@@ -36,6 +38,10 @@ final class ProductCategoryAttributeService
             $name,
             true,
         );
+        // Keep <local> LocalModel in sync with EAV (skip when Local drawer is already writing).
+        if (!LocalDescription::isSyncing()) {
+            LocalDescription::upsertQuiet($categoryId, $locale, $name);
+        }
     }
 
     public function writeCode(
@@ -56,12 +62,160 @@ final class ProductCategoryAttributeService
         );
     }
 
+    public function writeGoogleTaxonomyId(
+        int $websiteId,
+        int $categoryId,
+        string $googleTaxonomyId,
+        string $locale = '',
+    ): void {
+        $this->attributes->writeExplicit(
+            $websiteId,
+            AttributeValue::WEBSITE_STORE_ID,
+            self::ENTITY_TYPE,
+            $categoryId,
+            'google_taxonomy_id',
+            $locale,
+            trim($googleTaxonomyId),
+            false,
+        );
+    }
+
+    public function writeImage(
+        int $websiteId,
+        int $categoryId,
+        string $image,
+        string $locale = '',
+    ): void {
+        $this->attributes->writeExplicit(
+            $websiteId,
+            AttributeValue::WEBSITE_STORE_ID,
+            self::ENTITY_TYPE,
+            $categoryId,
+            'image',
+            $locale,
+            \Weline\Catalog\Service\CategoryMediaConstraints::assertImageUrl($image),
+            false,
+        );
+    }
+
+    public function writeBanner(
+        int $websiteId,
+        int $categoryId,
+        string $banner,
+        string $locale = '',
+    ): void {
+        $this->attributes->writeExplicit(
+            $websiteId,
+            AttributeValue::WEBSITE_STORE_ID,
+            self::ENTITY_TYPE,
+            $categoryId,
+            'banner',
+            $locale,
+            \Weline\Catalog\Service\CategoryMediaConstraints::assertBannerUrl($banner),
+            false,
+        );
+    }
+
+    public function writeSummary(
+        int $websiteId,
+        int $categoryId,
+        string $summary,
+        string $locale = '',
+    ): void {
+        $this->attributes->writeExplicit(
+            $websiteId,
+            AttributeValue::WEBSITE_STORE_ID,
+            self::ENTITY_TYPE,
+            $categoryId,
+            'summary',
+            $locale,
+            \Weline\Catalog\Service\CategoryMediaConstraints::assertSummary($summary),
+            false,
+        );
+    }
+
+    public function writeDescription(
+        int $websiteId,
+        int $categoryId,
+        string $description,
+        string $locale = '',
+    ): void {
+        $this->attributes->writeExplicit(
+            $websiteId,
+            AttributeValue::WEBSITE_STORE_ID,
+            self::ENTITY_TYPE,
+            $categoryId,
+            'description',
+            $locale,
+            \Weline\Catalog\Service\CategoryMediaConstraints::assertDescription($description),
+            false,
+        );
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    public function readGoogleTaxonomyIdMap(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'google_taxonomy_id', $locale);
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    public function readImageMap(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'image', $locale);
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    public function readBannerMap(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'banner', $locale);
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    public function readSummaryMap(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'summary', $locale);
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    public function readDescriptionMap(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'description', $locale);
+    }
+
     /**
      * @param list<int> $categoryIds
      * @return array<int, string>
      */
     public function readNameMap(int $websiteId, array $categoryIds, string $locale = ''): array
     {
+        return $this->readAttributeMap($websiteId, $categoryIds, 'name', $locale);
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @return array<int, string>
+     */
+    private function readAttributeMap(
+        int $websiteId,
+        array $categoryIds,
+        string $attributeCode,
+        string $locale = '',
+    ): array {
         $categoryIds = array_values(array_filter(
             array_map('intval', $categoryIds),
             static fn(int $id): bool => $id > 0,
@@ -70,24 +224,92 @@ final class ProductCategoryAttributeService
             return [];
         }
 
-        $names = [];
+        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        $byEntity = [];
         foreach ($this->attributes->listExplicitRows(
             $websiteId,
             self::ENTITY_TYPE,
             $categoryIds,
             [AttributeValue::WEBSITE_STORE_ID],
         ) as $attribute) {
-            if ((string)($attribute['attribute_code'] ?? '') !== 'name' || !empty($attribute['cleared'])) {
+            if ((string)($attribute['attribute_code'] ?? '') !== $attributeCode || !empty($attribute['cleared'])) {
                 continue;
             }
-            $attributeLocale = (string)($attribute['locale'] ?? '');
             $entityId = (int)($attribute['entity_id'] ?? 0);
-            if ($attributeLocale === $locale || ($attributeLocale === '' && !isset($names[$entityId]))) {
-                $names[$entityId] = trim((string)($attribute['value'] ?? ''));
+            if ($entityId <= 0) {
+                continue;
+            }
+            $attributeLocale = self::normalizeLocaleKey((string)($attribute['locale'] ?? ''));
+            $value = trim((string)($attribute['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $byEntity[$entityId][$attributeLocale] = $value;
+        }
+
+        $values = [];
+        foreach ($categoryIds as $entityId) {
+            if (!isset($byEntity[$entityId])) {
+                continue;
+            }
+            $picked = self::pickLocalizedAttributeValue($byEntity[$entityId], $locale);
+            if ($picked !== '') {
+                $values[$entityId] = $picked;
             }
         }
 
-        return $names;
+        return $values;
+    }
+
+    /**
+     * @param array<string, string> $localeValues normalized locale => value
+     */
+    public static function pickLocalizedAttributeValue(array $localeValues, string $locale): string
+    {
+        if ($localeValues === []) {
+            return '';
+        }
+        $locale = self::normalizeLocaleKey($locale);
+        if ($locale !== '' && isset($localeValues[$locale]) && $localeValues[$locale] !== '') {
+            return $localeValues[$locale];
+        }
+        foreach (self::localeAliases($locale) as $alias) {
+            if ($alias === $locale) {
+                continue;
+            }
+            if (isset($localeValues[$alias]) && $localeValues[$alias] !== '') {
+                return $localeValues[$alias];
+            }
+        }
+        if (isset($localeValues['']) && $localeValues[''] !== '') {
+            return $localeValues[''];
+        }
+
+        return '';
+    }
+
+    public static function normalizeLocaleKey(string $locale): string
+    {
+        return trim(str_replace('-', '_', $locale));
+    }
+
+    /** @return list<string> */
+    private static function localeAliases(string $locale): array
+    {
+        $locale = self::normalizeLocaleKey($locale);
+        if ($locale === '') {
+            return [];
+        }
+        $aliases = [$locale];
+        if (preg_match('/^([a-z]{2,3})_([A-Za-z]+)_([A-Z]{2})$/', $locale, $matches) === 1) {
+            $aliases[] = $matches[1] . '_' . $matches[3];
+            $aliases[] = $matches[1] . '_' . $matches[2];
+            $aliases[] = $matches[1];
+        } elseif (preg_match('/^([a-z]{2,3})_([A-Z]{2})$/', $locale, $matches) === 1) {
+            $aliases[] = $matches[1];
+        }
+
+        return array_values(array_unique($aliases));
     }
 
     /**

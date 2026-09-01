@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Http\Url;
 use Weline\Theme\Service\AllMenu\MenuTreeNormalizer;
 
 /**
@@ -20,12 +22,14 @@ final class StorefrontAllMenuCategoryTreeService
         private readonly ProductCatalogQueryConsumer $catalog,
         private readonly StorefrontScopeHotCache $hotCache,
         private readonly MenuTreeNormalizer $normalizer,
+        private readonly Url $url,
     ) {
     }
 
     public static function logicalCacheKey(int $websiteId): string
     {
-        return 'product.all_menu_category_tree.' . max(0, $websiteId);
+        // v2: nav tree carries image/banner/summary/description for mega-menu intro.
+        return 'product.all_menu_category_tree.v2.' . max(0, $websiteId);
     }
 
     public static function cachePool(): string
@@ -46,7 +50,7 @@ final class StorefrontAllMenuCategoryTreeService
             self::logicalCacheKey($websiteId),
             self::FRESH_TTL_SECONDS,
             fn(): array => $this->build($websiteId),
-            ['website' => true],
+            ['website' => true, 'lang' => true, 'currency' => true],
             self::STALE_TTL_SECONDS,
         );
 
@@ -60,7 +64,7 @@ final class StorefrontAllMenuCategoryTreeService
         $this->hotCache->forget(
             self::CACHE_POOL,
             self::logicalCacheKey($websiteId),
-            ['website' => true],
+            ['website' => true, 'lang' => true, 'currency' => true],
         );
     }
 
@@ -69,7 +73,7 @@ final class StorefrontAllMenuCategoryTreeService
      */
     private function build(int $websiteId): array
     {
-        $rows = $this->catalog->flatRows($websiteId);
+        $rows = $this->catalog->flatRows($websiteId, (string)State::getLangLocal());
         if ($rows === []) {
             return [];
         }
@@ -97,11 +101,11 @@ final class StorefrontAllMenuCategoryTreeService
             if ($name === '') {
                 $name = $this->displayNameFromPath($path);
             }
-            $nodes[$categoryId] = [
+            $node = [
                 'id' => 'category_' . ($uuid !== '' ? \preg_replace('/[^a-zA-Z0-9_-]+/', '_', $uuid) : (string)$categoryId),
                 'tag' => MenuTreeNormalizer::TAG_CATEGORY,
                 'name' => $name,
-                'url' => $path !== '' ? '/category/' . $path : '/categories',
+                'url' => $this->url->getFrontendUrl($path !== '' ? 'category/' . $path : 'categories'),
                 'ref' => $uuid !== '' ? 'category:' . $uuid : 'category:' . $categoryId,
                 'meta' => [
                     'category_id' => $categoryId,
@@ -111,6 +115,23 @@ final class StorefrontAllMenuCategoryTreeService
                 'children' => [],
                 '_parent_id' => max(0, (int)($row['parent_id'] ?? $row['pid'] ?? 0)),
             ];
+            $image = \trim((string)($row['image'] ?? ''));
+            $banner = \trim((string)($row['banner'] ?? ''));
+            $summary = \trim((string)($row['summary'] ?? ''));
+            $description = \trim((string)($row['description'] ?? ''));
+            if ($image !== '' && !\str_starts_with($image, 'data:image/')) {
+                $node['image'] = $image;
+            }
+            if ($banner !== '' && !\str_starts_with($banner, 'data:image/')) {
+                $node['banner'] = $banner;
+            }
+            if ($summary !== '') {
+                $node['summary'] = $summary;
+            }
+            if ($description !== '') {
+                $node['description'] = $description;
+            }
+            $nodes[$categoryId] = $node;
         }
 
         $roots = [];

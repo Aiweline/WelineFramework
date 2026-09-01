@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Product',
-    'version' => '1.0.23',
+    'version' => '1.0.53',
     'requires' => [
         'Weline_Catalog' => '*',
+        'Weline_DataTable' => '*',
         'Weline_Framework' => '*',
         'Weline_Websites' => '*',
         'Weline_Eav' => '*',

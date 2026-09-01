@@ -24,6 +24,19 @@ final class WebsiteShardModelTest extends TestCase
         self::assertSame('product', Product::entityCode());
         $logical = ProductShardKey::tableName(ProductShardKey::fromWebsiteId(0), 'product');
         self::assertSame('product_ws_0_product', $logical);
+        $constants = (new \ReflectionClass(Product::class))->getConstants();
+        self::assertSame('product_type', $constants['schema_fields_PRODUCT_TYPE'] ?? null);
+        self::assertSame('provider_code', $constants['schema_fields_PROVIDER_CODE'] ?? null);
+        self::assertSame('product_code', $constants['schema_fields_PRODUCT_CODE'] ?? null);
+    }
+
+    public function testAttributeValueModelFieldsIncludeTypedColumns(): void
+    {
+        $constants = (new \ReflectionClass(AttributeValue::class))->getConstants();
+        self::assertSame('value_type', $constants['schema_fields_VALUE_TYPE'] ?? null);
+        self::assertSame('value_json', $constants['schema_fields_VALUE_JSON'] ?? null);
+        self::assertSame('value_string', $constants['schema_fields_VALUE_STRING'] ?? null);
+        self::assertSame('scope_state', $constants['schema_fields_SCOPE_STATE'] ?? null);
     }
 
     public function testNegativeWebsiteRejected(): void
@@ -34,7 +47,7 @@ final class WebsiteShardModelTest extends TestCase
 
     public function testSchemaVersionFourEntities(): void
     {
-        self::assertSame('4.1.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
+        self::assertSame('4.5.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
         self::assertContains('attribute_value', ProductShardSchemaCatalog::ENTITIES);
         self::assertContains('store_offer', ProductShardSchemaCatalog::ENTITIES);
         $catalog = new ProductShardSchemaCatalog();

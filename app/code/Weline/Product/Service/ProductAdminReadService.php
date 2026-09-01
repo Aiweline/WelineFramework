@@ -13,6 +13,7 @@ use Weline\Product\Api\Data\ProductValidationContext;
 use Weline\Product\Api\Data\ProductValidationResult;
 use Weline\Product\Api\ProductAdminReadInterface;
 use Weline\Product\Api\ProductProviderV2Interface;
+use Weline\Product\Model\Shard\Product;
 use Weline\Product\Repository\AttributeValueRepository;
 use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Repository\MediaRepository;
@@ -43,6 +44,9 @@ final class ProductAdminReadService implements ProductAdminReadInterface
         private readonly StoreProductRepository $storeProducts,
         private readonly StoreOfferRepository $storeOffers,
         private readonly StoreCatalogInterface $storeCatalog,
+        private readonly ProductAdminMediaPresenter $mediaPresenter,
+        private readonly ProductBrandAdminService $brandAdmin,
+        private readonly ProductSupplierAdminService $supplierAdmin,
         ?InventoryCatalogCopyCapabilityInterface $inventory = null,
     ) {
         $this->resolvedInventory = $inventory;
@@ -141,7 +145,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface
                 'skus' => $skus,
                 'offer_count' => count($offers),
                 'prices' => $priceRows,
-                'main_media' => $mediaRows[0] ?? null,
+                'main_media' => $this->mediaPresenter->presentMainMedia($mediaRows[0] ?? null),
                 'selected_store_ids' => $selectedStores,
                 'updated_at' => (string)($product['updated_at'] ?? ''),
                 'identity_version' => $identity?->version ?? 0,
@@ -176,8 +180,18 @@ final class ProductAdminReadService implements ProductAdminReadInterface
         }
         usort(
             $types,
-            static fn(array $left, array $right): int => (string)$left['code']
-                <=> (string)$right['code'],
+            static function (array $left, array $right): int {
+                $rank = static function (array $row): int {
+                    return (string)($row['code'] ?? '') === 'configurable' ? 0 : 1;
+                };
+                $leftRank = $rank($left);
+                $rightRank = $rank($right);
+                if ($leftRank !== $rightRank) {
+                    return $leftRank <=> $rightRank;
+                }
+
+                return (string)($left['code'] ?? '') <=> (string)($right['code'] ?? '');
+            },
         );
         $stores = $this->activeStores($websiteId);
         foreach ($stores as &$store) {
@@ -190,6 +204,9 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             'product_types' => $types,
             'attribute_catalog' => $this->attributeMetadata->editorCatalog(),
             'stores' => $stores,
+            'categories' => $this->categoryCatalog($websiteId, ''),
+            'brands' => $this->brandAdmin->catalogOptions($websiteId),
+            'suppliers' => $this->supplierAdmin->catalogOptions($websiteId),
             'default_store_ids' => array_values(array_map(
                 static fn(array $store): int => (int)$store['store_id'],
                 $stores,
@@ -230,6 +247,117 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             storeMediaOverrides: $data['store_media_overrides'],
             inventory: $data['inventory'],
         );
+    }
+
+    public function attributeCatalog(int $websiteId, string $globalProductUuid): array
+    {
+        $data = $this->collect($websiteId, $globalProductUuid, null, '', 'CNY');
+        $productId = (int)($data['product']['id'] ?? $data['product']['product_id'] ?? 0);
+        $catalog = is_array($data['attribute_catalog'] ?? null) ? $data['attribute_catalog'] : [];
+        $attributes = is_array($data['attributes'] ?? null) ? $data['attributes'] : [];
+
+        return [
+            'attribute_catalog' => $catalog,
+            'attributes' => $attributes,
+            'selected_attribute_set_id' => $this->resolveSelectedAttributeSetId($catalog, $attributes),
+            'lock_attribute_set' => $productId > 0,
+            'product_id' => $productId,
+        ];
+    }
+
+    public function slugAvailability(int $websiteId, string $slug, int $excludeProductId = 0): array
+    {
+        $websiteId = $this->websiteId($websiteId);
+        $slug = strtolower(trim($slug));
+        $excludeProductId = max(0, $excludeProductId);
+        if ($slug === '') {
+            return [
+                'slug' => '',
+                'available' => true,
+                'reason' => 'empty',
+                'conflict_product_id' => 0,
+            ];
+        }
+        if (preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return [
+                'slug' => $slug,
+                'available' => false,
+                'reason' => 'invalid',
+                'conflict_product_id' => 0,
+            ];
+        }
+
+        $conflictIds = $this->attributes->findEntityIdsByAttributeValue(
+            $websiteId,
+            'product',
+            'slug',
+            $slug,
+            0,
+        );
+        $conflictIds = array_values(array_filter(
+            $conflictIds,
+            static fn(int $id): bool => $id > 0 && $id !== $excludeProductId,
+        ));
+        $conflictId = $conflictIds[0] ?? 0;
+
+        return [
+            'slug' => $slug,
+            'available' => $conflictId <= 0,
+            'reason' => $conflictId > 0 ? 'taken' : 'ok',
+            'conflict_product_id' => $conflictId,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed>|list<array<string, mixed>> $catalog
+     * @param list<array<string, mixed>> $attributes
+     */
+    private function resolveSelectedAttributeSetId(array $catalog, array $attributes): string
+    {
+        $sets = array_is_list($catalog)
+            ? $catalog
+            : ($catalog['sets'] ?? $catalog['attribute_sets'] ?? []);
+        if (!is_array($sets) || $sets === []) {
+            return '0';
+        }
+        $currentSetCode = '';
+        foreach ($attributes as $attributeRow) {
+            if (!is_array($attributeRow)
+                || (string)($attributeRow['entity_type'] ?? 'product') !== 'product'
+                || (int)($attributeRow['store_id'] ?? 0) !== 0
+                || (string)($attributeRow['locale'] ?? '') !== ''
+                || (string)($attributeRow['attribute_code'] ?? '') !== 'attribute_set'
+            ) {
+                continue;
+            }
+            $currentSetCode = trim((string)($attributeRow['value'] ?? ''));
+            break;
+        }
+        if ($currentSetCode !== '') {
+            foreach ($sets as $attributeSet) {
+                if (!is_array($attributeSet)) {
+                    continue;
+                }
+                $candidateId = (string)(
+                    $attributeSet['attribute_set_id'] ?? $attributeSet['set_id'] ?? $attributeSet['id'] ?? ''
+                );
+                $candidateCode = (string)($attributeSet['code'] ?? '');
+                if ($candidateCode === $currentSetCode || $candidateId === $currentSetCode) {
+                    return $candidateId !== '' ? $candidateId : $candidateCode;
+                }
+            }
+        }
+        $firstSet = reset($sets);
+
+        return is_array($firstSet)
+            ? (string)(
+                $firstSet['attribute_set_id']
+                ?? $firstSet['set_id']
+                ?? $firstSet['id']
+                ?? $firstSet['code']
+                ?? '0'
+            )
+            : '0';
     }
 
     public function validationContext(
@@ -277,6 +405,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface
                 $offer['identity_version'] = $offerIdentity->version;
                 $offer['identity_status'] = $offerIdentity->status;
             }
+            $offer['combination'] = $this->offerCombination($offer);
         }
         unset($offer);
 
@@ -378,9 +507,20 @@ final class ProductAdminReadService implements ProductAdminReadInterface
                 && (int)($attribute['entity_id'] ?? 0) === $productId
                 && (int)($attribute['store_id'] ?? 0) === 0
                 && (string)($attribute['attribute_code'] ?? '') === 'type_configuration'
-                && is_array($attribute['value'] ?? null)
             ) {
-                $typeConfiguration = $attribute['value'];
+                $raw = $attribute['value'] ?? null;
+                if (is_array($raw)) {
+                    $typeConfiguration = $raw;
+                } elseif (is_string($raw) && trim($raw) !== '') {
+                    try {
+                        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+                        if (is_array($decoded)) {
+                            $typeConfiguration = $decoded;
+                        }
+                    } catch (\JsonException) {
+                        $typeConfiguration = [];
+                    }
+                }
                 break;
             }
         }
@@ -427,7 +567,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             'product' => $product,
             'offers' => $offers,
             'attributes' => $attributes,
-            'attribute_catalog' => $this->attributeMetadata->editorCatalog(),
+            'attribute_catalog' => $this->attributeMetadata->editorCatalog($productId),
             'prices' => $prices,
             'categories' => $this->categoryCatalog($websiteId, $locale),
             'category_assignments' => $categoryAssignments,
@@ -498,6 +638,50 @@ final class ProductAdminReadService implements ProductAdminReadInterface
     }
 
     /**
+     * Decode Offer type_config_json / type_config into an array.
+     *
+     * @param array<string,mixed> $offer
+     * @return array<string,mixed>
+     */
+    private function offerTypeConfiguration(array $offer): array
+    {
+        $raw = $offer['type_config_json'] ?? $offer['type_config'] ?? null;
+        if (is_array($raw)) {
+            return $raw;
+        }
+        if (!is_string($raw)) {
+            return [];
+        }
+        $raw = trim($raw);
+        if ($raw === '') {
+            return [];
+        }
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            return is_array($decoded) ? $decoded : [];
+        } catch (\JsonException) {
+            return [];
+        }
+    }
+
+    /**
+     * Resolve Offer combination for validation and matrix rows.
+     *
+     * @param array<string,mixed> $offer
+     * @return array<string,mixed>
+     */
+    private function offerCombination(array $offer): array
+    {
+        if (is_array($offer['combination'] ?? null)) {
+            return $offer['combination'];
+        }
+        $configuration = $this->offerTypeConfiguration($offer);
+        return is_array($configuration['combination'] ?? null)
+            ? $configuration['combination']
+            : [];
+    }
+
+    /**
      * @param list<array<string,mixed>> $offers
      * @param list<array<string,mixed>> $prices
      * @param array<string,mixed> $typeConfiguration
@@ -536,19 +720,10 @@ final class ProductAdminReadService implements ProductAdminReadInterface
 
         $rows = [];
         foreach ($offers as $offer) {
-            $configuration = [];
-            $rawConfiguration = trim((string)($offer['type_config_json'] ?? ''));
-            if ($rawConfiguration !== '') {
-                try {
-                    $decoded = json_decode($rawConfiguration, true, 512, JSON_THROW_ON_ERROR);
-                    $configuration = is_array($decoded) ? $decoded : [];
-                } catch (\JsonException) {
-                    $configuration = [];
-                }
-            }
+            $configuration = $this->offerTypeConfiguration($offer);
             $combination = is_array($configuration['combination'] ?? null)
                 ? $configuration['combination']
-                : [];
+                : $this->offerCombination($offer);
             $price = $priceByOfferId[(int)($offer['offer_id'] ?? 0)] ?? null;
             $scopeState = $price === null
                 ? 'cleared'
@@ -773,7 +948,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             );
             foreach ($offers as $offer) {
                 $offerId = (int)($offer['offer_id'] ?? 0);
-                if ($storeId <= 0 || $offerId <= 0 || !isset($selectedOffers[$offerId])) {
+                if ($storeId < 0 || $offerId <= 0 || !isset($selectedOffers[$offerId])) {
                     continue;
                 }
                 try {

@@ -180,12 +180,10 @@ final class BuiltInProductValidation
                 sort($axes);
                 foreach ($context->offers as $offerIndex => $offer) {
                     $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
-                    $combination = $offer['combination'] ?? null;
+                    $combination = self::resolveCombination($offer);
                     $normalizedCombination = [];
-                    if (is_array($combination)) {
-                        foreach ($combination as $axisCode => $value) {
-                            $normalizedCombination[strtolower(trim((string)$axisCode))] = $value;
-                        }
+                    foreach ($combination as $axisCode => $value) {
+                        $normalizedCombination[strtolower(trim((string)$axisCode))] = $value;
                     }
                     $combinationAxes = array_keys($normalizedCombination);
                     sort($combinationAxes);
@@ -576,12 +574,40 @@ final class BuiltInProductValidation
 
     private static function combinationKey(array $offer): string
     {
-        $raw = $offer['combination_key'] ?? $offer['combination'] ?? '';
-        if (is_array($raw)) {
-            ksort($raw);
-            return json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+        $raw = $offer['combination_key'] ?? null;
+        if (is_string($raw) && trim($raw) !== '') {
+            return trim($raw);
         }
-        return trim((string)$raw);
+        $combination = self::resolveCombination($offer);
+        if ($combination === []) {
+            return '';
+        }
+        ksort($combination);
+        return json_encode($combination, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    private static function resolveCombination(array $offer): array
+    {
+        if (is_array($offer['combination'] ?? null)) {
+            return $offer['combination'];
+        }
+        $raw = $offer['type_config_json'] ?? $offer['type_config'] ?? null;
+        if (is_array($raw) && is_array($raw['combination'] ?? null)) {
+            return $raw['combination'];
+        }
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            return is_array($decoded['combination'] ?? null) ? $decoded['combination'] : [];
+        } catch (\JsonException) {
+            return [];
+        }
     }
 
     /** @return array<string, mixed> */

@@ -160,12 +160,12 @@ final class StorefrontThemeCatalogSeeder
     {
         $storeIds = [];
         foreach ($this->storeCatalog->byWebsite($websiteId) as $store) {
-            if ($store->id > 0) {
+            if ($store->id >= 0) {
                 $storeIds[] = $store->id;
             }
         }
 
-        return $storeIds !== [] ? array_values(array_unique($storeIds)) : [1];
+        return $storeIds !== [] ? array_values(array_unique($storeIds)) : [0];
     }
 
     private function ensureMedia(int $websiteId, string $sku, int $productId, int $index): void

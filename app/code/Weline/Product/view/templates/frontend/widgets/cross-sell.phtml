@@ -24,6 +24,7 @@
  */
 
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
@@ -89,9 +90,13 @@ foreach ($products as &$product) {
     $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
     $product['id'] = $productId;
     $route = trim((string)($product['url'] ?? ''));
-    $product['url'] = str_starts_with($route, 'http://') || str_starts_with($route, 'https://')
-        ? $route
-        : $this->getUrl(ltrim($route, '/'));
+    if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://') || str_starts_with($route, '//')) {
+        $product['url'] = $route;
+    } else {
+        $path = '/' . ltrim($route, '/');
+        $prefix = rtrim(Url::getPrefix(), '/');
+        $product['url'] = ($prefix !== '' ? $prefix : '') . $path;
+    }
     $product['selected'] = array_key_exists('selected', $product) ? (bool)$product['selected'] : true;
 }
 unset($product);
@@ -108,17 +113,22 @@ foreach ($products as $product) {
 }
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Product::css/widgets/cross-sell.css)?v=20260826-shopper1"
+      href="@static(Weline_Product::css/widgets/cross-sell.css)&v=20260827-orange-wave1"
       data-no-extract="true">
 
 <section class="<?= $esc($wc) ?> weline-product-fbt<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-cross-sell"
+         data-weline-load="crossSell"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-msg-select-one="<?= $esc((string)__('请至少选择一个商品')) ?>"
          data-msg-added="<?= $esc((string)__('已添加')) ?>"
-         data-msg-add-all="<?= $esc((string)__('全部加入购物车')) ?>">
+         data-msg-success="<?= $esc((string)__('已加入购物车')) ?>"
+         data-msg-add-all="<?= $esc((string)__('全部加入购物车')) ?>"
+         data-msg-loading="<?= $esc((string)__('正在加入购物车...')) ?>"
+         data-msg-error="<?= $esc((string)__('加入购物车失败')) ?>"
+         data-cart-url="@url{'cart'}">
     <header class="wpf-header">
         <h2 class="wpf-title"><?= $esc($widgetTitle) ?></h2>
         <p class="wpf-subtitle"><?= $esc((string)__('Buy these items together')) ?></p>
@@ -143,7 +153,8 @@ foreach ($products as $product) {
                 <?php endif; ?>
                 <article class="wpf-item product-card<?= $isSeed ? ' is-seed' : '' ?>"
                          data-product-id="<?= $productId ?>"
-                         data-global-offer-uuid="<?= $esc($offerUuid) ?>">
+                         data-global-offer-uuid="<?= $esc($offerUuid) ?>"
+                         data-qty="1">
                     <div class="wpf-stage">
                         <label class="wpf-check">
                             <input type="checkbox"
@@ -191,7 +202,13 @@ foreach ($products as $product) {
             <?php endif; ?>
             <?php if ($showAddAllButton): ?>
                 <button type="button" class="wpf-cta" data-wpf-add-all>
-                    <span data-wpf-cta-label><?= $esc((string)__('全部加入购物车')) ?></span>
+                    <span class="wpf-cta__ripples" aria-hidden="true">
+                        <i class="wpf-cta__ripple"></i>
+                        <i class="wpf-cta__ripple"></i>
+                        <i class="wpf-cta__ripple"></i>
+                    </span>
+                    <span class="wpf-cta__waves" aria-hidden="true"></span>
+                    <span class="wpf-cta__label" data-wpf-cta-label><?= $esc((string)__('全部加入购物车')) ?></span>
                 </button>
             <?php endif; ?>
             <div class="wpf-status" data-wpf-status role="status" aria-live="polite"></div>
@@ -199,6 +216,4 @@ foreach ($products as $product) {
     </div>
 </section>
 
-<script src="@static(Weline_Product::js/widgets/cross-sell.js)?v=20260825-fbt5"
-        defer
-        data-no-extract="true"></script>
+<?php // crossSell：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

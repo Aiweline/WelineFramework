@@ -37,6 +37,28 @@ foreach ($attributes as $attributeRow) {
         $attributeRowsByCode[$attributeCode] = $attributeRow;
     }
 }
+$lockAttributeSet = $productEntityId > 0;
+$selectedAttributeSetId = '0';
+if ($catalogSets !== []) {
+    foreach ($catalogSets as $attributeSet) {
+        if (!is_array($attributeSet)) {
+            continue;
+        }
+        $candidateId = (string)($attributeSet['attribute_set_id'] ?? $attributeSet['set_id'] ?? $attributeSet['id'] ?? '');
+        $candidateCode = (string)($attributeSet['code'] ?? '');
+        $currentSetCode = trim((string)($attributeRowsByCode['attribute_set']['value'] ?? ''));
+        if ($currentSetCode !== '' && ($candidateCode === $currentSetCode || $candidateId === $currentSetCode)) {
+            $selectedAttributeSetId = $candidateId !== '' ? $candidateId : $candidateCode;
+            break;
+        }
+    }
+    if ($selectedAttributeSetId === '0') {
+        $firstSet = reset($catalogSets);
+        if (is_array($firstSet)) {
+            $selectedAttributeSetId = (string)($firstSet['attribute_set_id'] ?? $firstSet['set_id'] ?? $firstSet['id'] ?? $firstSet['code'] ?? '0');
+        }
+    }
+}
 $prices = is_array($snapshot['prices'] ?? null) ? $snapshot['prices'] : [];
 $stores = is_array($snapshot['stores'] ?? null) ? $snapshot['stores'] : [];
 $categories = is_array($snapshot['categories'] ?? null) ? $snapshot['categories'] : [];
@@ -162,49 +184,81 @@ $providerUnknownFieldsJson = json_encode(
     $providerUnknownFields,
     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
 ) ?: '{}';
+$editorTitle = $name !== '' ? $name : (string)__('未命名商品草稿');
+$statusLabelMap = [
+    'draft' => (string)__('草稿'),
+    'published' => (string)__('已发布'),
+    'disabled' => (string)__('已下架'),
+    'archived' => (string)__('已归档'),
+];
+$statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
 ?>
-<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260825-v7">
-<div class="w-container w-product-admin w-product-editor"
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260901-editor-crumb1">
+<div class="w-backend-page w-product-admin w-product-editor"
      data-product-admin="editor"
      data-edit-business="<?= $canEditBusiness ? '1' : '0' ?>"
      data-testid="product-edit-workbench">
     <script type="application/json" id="product-admin-state" data-no-extract="true"><?= $product_admin_state_json ?></script>
 
-    <header class="w-product-editor__header">
-        <div>
-            <a class="w-product-editor__back" href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>">
-                ← <lang>返回商品列表</lang>
-            </a>
-            <div class="w-product-editor__title-row">
-                <h1><?= $escape($name !== '' ? $name : __('未命名商品草稿')) ?></h1>
-                <span class="w-status" data-status="<?= $escape($product['status'] ?? 'draft') ?>">
-                    <?= $escape($product['status'] ?? 'draft') ?>
-                </span>
-            </div>
-            <p>
-                <strong><?= $escape($identity['product_code'] ?? '') ?></strong>
-                · <?= $escape($identity['product_type'] ?? '') ?>
-                · <lang>归属 Website</lang> #<?= $escape($identity['owner_website_id'] ?? '') ?>
-            </p>
-        </div>
-        <div class="w-product-editor__actions">
-            <button class="w-button" type="button" data-product-command="validate"><lang>校验</lang></button>
-            <?php if ($canPublish): ?>
-                <button class="w-button" type="button" data-tone="primary" data-product-command="publish"><lang>发布</lang></button>
-            <?php elseif ($canDisable): ?>
-                <button class="w-button" type="button" data-tone="warning" data-product-command="disable"><lang>下架</lang></button>
-            <?php endif; ?>
-            <?php if ($canArchive): ?>
-                <button class="w-button" type="button" data-tone="danger" data-product-command="archive"><lang>归档</lang></button>
-            <?php endif; ?>
-        </div>
-    </header>
+    <div class="w-backend-page__heading w-product-editor__heading w-cluster"
+         data-align="center"
+         data-justify="between"
+         data-wrap="true">
+        <nav aria-label="@lang(面包屑)">
+            <ol class="w-breadcrumb"
+                style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;"
+                data-testid="product-edit-breadcrumb">
+                <li class="w-breadcrumb__item">
+                    <a href="@backend-url('/')"><lang>首页</lang></a>
+                </li>
+                <li class="w-breadcrumb__item">
+                    <a href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>">
+                        <lang>商品</lang>
+                    </a>
+                </li>
+                <li class="w-breadcrumb__item" data-state="active" aria-current="page">
+                    <?= $escape($editorTitle) ?>
+                </li>
+            </ol>
+        </nav>
+    </div>
 
-    <div class="w-product-editor__meta">
-        <span><lang>全局 UUID</lang> <code><?= $escape($global_product_uuid) ?></code></span>
-        <span><lang>身份版本</lang> <?= $escape($identity['version'] ?? 0) ?></span>
-        <span><lang>本地版本</lang> <?= $escape($product['publish_version'] ?? 0) ?></span>
-        <span><?= !empty($permissions['is_owner']) ? __('归属站可编辑结构') : __('复制站仅编辑经营数据') ?></span>
+    <div class="w-card w-product-editor__header">
+        <div class="w-card__body w-product-editor__header-body">
+            <div class="w-cluster" data-align="start" data-justify="between" data-wrap="true">
+                <div class="w-stack" data-gap="sm">
+                    <p class="w-product-admin__eyebrow"><lang>商品编辑</lang></p>
+                    <div class="w-product-editor__title-row">
+                        <h1 class="w-card__title"><?= $escape($editorTitle) ?></h1>
+                        <span class="w-status" data-status="<?= $escape($productStatus) ?>">
+                            <?= $escape($statusLabel) ?>
+                        </span>
+                    </div>
+                    <p class="w-text" data-tone="muted">
+                        <strong><?= $escape($identity['product_code'] ?? '') ?></strong>
+                        · <?= $escape($identity['product_type'] ?? '') ?>
+                        · <lang>归属 Website</lang> #<?= $escape($identity['owner_website_id'] ?? '') ?>
+                    </p>
+                </div>
+                <div class="w-product-editor__actions w-cluster" data-justify="end">
+                    <button class="w-button" type="button" data-product-command="validate"><lang>校验</lang></button>
+                    <?php if ($canPublish): ?>
+                        <button class="w-button" type="button" data-tone="primary" data-product-command="publish"><lang>发布</lang></button>
+                    <?php elseif ($canDisable): ?>
+                        <button class="w-button" type="button" data-tone="warning" data-product-command="disable"><lang>下架</lang></button>
+                    <?php endif; ?>
+                    <?php if ($canArchive): ?>
+                        <button class="w-button" type="button" data-tone="danger" data-product-command="archive"><lang>归档</lang></button>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="w-product-editor__meta" aria-label="@lang(商品身份摘要)">
+                <span><lang>全局 UUID</lang> <code><?= $escape($global_product_uuid) ?></code></span>
+                <span><lang>身份版本</lang> <?= $escape($identity['version'] ?? 0) ?></span>
+                <span><lang>本地版本</lang> <?= $escape($product['publish_version'] ?? 0) ?></span>
+                <span><?= !empty($permissions['is_owner']) ? __('归属站可编辑结构') : __('复制站仅编辑经营数据') ?></span>
+            </div>
+        </div>
     </div>
 
     <?php if (!$canEditBusiness): ?>
@@ -277,8 +331,27 @@ $providerUnknownFieldsJson = json_encode(
         </div>
 
         <div class="w-product-editor__panel" data-product-panel="attributes" hidden>
-            <div class="w-card"><div class="w-card__header">
+            <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
+            <div class="w-card"><div class="w-card__header w-cluster" data-align="center" data-justify="between">
                 <div><h2><lang>商品属性值</lang></h2><p><lang>EAV 管理属性定义；这里填写本商品的实际值和继承方式。</lang></p></div>
+                <div class="w-cluster w-product-eav__structure-actions" data-align="center" data-gap="sm">
+                    <?php if (!$lockAttributeSet): ?>
+                        <button class="w-button" type="button" data-variant="outline" data-size="sm" data-product-eav-drawer-open="select-set">
+                            <w:icon name="folder" size="sm" /> <?= $escape(__('选择属性集')) ?>
+                        </button>
+                    <?php endif; ?>
+                    <button class="w-button" type="button" data-variant="outline" data-size="sm" data-product-eav-drawer-open="manage-set">
+                        <w:icon name="settings" size="sm" /> <?= $escape(__('管理属性结构')) ?>
+                    </button>
+                    <button class="w-button" type="button" data-variant="outline" data-size="sm" data-product-eav-drawer-open="select-attribute">
+                        <w:icon name="plus" size="sm" /> <?= $escape(__('选择属性')) ?>
+                    </button>
+                    <?php if ($productEntityId > 0): ?>
+                        <button class="w-button" type="button" data-variant="outline" data-size="sm" data-product-eav-drawer-open="manage-free">
+                            <w:icon name="tag" size="sm" /> <?= $escape(__('自由属性')) ?>
+                        </button>
+                    <?php endif; ?>
+                </div>
             </div><div class="w-card__body">
                 <div class="w-product-eav" id="product-eav-editor" data-testid="product-eav-editor" data-product-id="<?= $escape($productEntityId) ?>">
                     <?php if ($catalogSets !== []): ?>
@@ -291,7 +364,7 @@ $providerUnknownFieldsJson = json_encode(
                         <div class="w-product-eav__toolbar">
                             <div class="w-field">
                                 <label class="w-field__label" for="product-attribute-set"><lang>属性集</lang></label>
-                                <select class="w-select" id="product-attribute-set" data-eav-set-selector>
+                                <select class="w-select" id="product-attribute-set" data-eav-set-selector<?= $lockAttributeSet ? ' disabled' : '' ?>>
                                     <?php foreach ($catalogSets as $setIndex => $attributeSet): ?>
                                         <?php
                                         if (!is_array($attributeSet)) {
@@ -304,7 +377,9 @@ $providerUnknownFieldsJson = json_encode(
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <p class="w-field__help"><lang>切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。</lang></p>
+                            <p class="w-field__help"><?= $lockAttributeSet
+                                ? $escape(__('编辑中的商品不可更换属性集，仍可在当前集下添加属性组/属性，或使用自由属性。'))
+                                : $escape(__('切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。')) ?></p>
                         </div>
 
                         <?php foreach ($catalogSets as $setIndex => $attributeSet): ?>
@@ -815,7 +890,7 @@ $providerUnknownFieldsJson = json_encode(
                 </div>
             </div>
 
-            <dialog class="w-product-media-picker" data-product-media-picker-dialog aria-labelledby="product-media-picker-title">
+            <dialog class="w-product-media-picker" data-w-component="dialog" data-product-media-picker-dialog aria-labelledby="product-media-picker-title">
                 <div class="w-product-media-picker__surface">
                     <header>
                         <div>
@@ -858,9 +933,9 @@ $providerUnknownFieldsJson = json_encode(
                 </div>
                 <div class="w-card__body">
                     <dl class="w-product-definition-list">
-                        <div><dt><lang>跟踪库存</lang></dt><dd><?= !empty($provider['capabilities']['inventory']) ? __('是') : __('否') ?></dd></div>
-                        <div><dt><lang>需要配送</lang></dt><dd><?= !empty($provider['capabilities']['shipping']) ? __('是') : __('否') ?></dd></div>
-                        <div><dt><lang>数字交付</lang></dt><dd><?= !empty($provider['capabilities']['digital_delivery']) ? __('是') : __('否') ?></dd></div>
+                        <div><dt><lang>跟踪库存</lang></dt><span class="w-product-definition-list__value"><?= !empty($provider['capabilities']['inventory']) ? __('是') : __('否') ?></span></div>
+                        <div><dt><lang>需要配送</lang></dt><span class="w-product-definition-list__value"><?= !empty($provider['capabilities']['shipping']) ? __('是') : __('否') ?></span></div>
+                        <div><dt><lang>数字交付</lang></dt><span class="w-product-definition-list__value"><?= !empty($provider['capabilities']['digital_delivery']) ? __('是') : __('否') ?></span></div>
                     </dl>
 
                     <?php if (!empty($inventory['enabled'])): ?>
@@ -1289,10 +1364,10 @@ $providerUnknownFieldsJson = json_encode(
                                             <time datetime="<?= $escape($event['created_at'] ?? '') ?>"><?= $escape($event['created_at'] ?? '') ?></time>
                                         </header>
                                         <dl>
-                                            <div><dt><lang>Website</lang></dt><dd>#<?= $escape($event['website_id'] ?? '') ?></dd></div>
-                                            <div><dt><lang>版本</lang></dt><dd>v<?= $escape($event['before_version'] ?? 0) ?> → v<?= $escape($event['after_version'] ?? 0) ?></dd></div>
+                                            <div><dt><lang>Website</lang></dt><span class="w-product-definition-list__value">#<?= $escape($event['website_id'] ?? '') ?></span></div>
+                                            <div><dt><lang>版本</lang></dt><span class="w-product-definition-list__value">v<?= $escape($event['before_version'] ?? 0) ?> → v<?= $escape($event['after_version'] ?? 0) ?></span></div>
                                             <?php if (!empty($event['global_offer_uuid'])): ?>
-                                                <div><dt>Offer UUID</dt><dd><code><?= $escape($event['global_offer_uuid']) ?></code></dd></div>
+                                                <div><dt>Offer UUID</dt><span class="w-product-definition-list__value"><code><?= $escape($event['global_offer_uuid']) ?></code></span></div>
                                             <?php endif; ?>
                                         </dl>
                                         <?php if (!empty($event['payload']) || !empty($event['payload_corrupt'])): ?>
@@ -1314,6 +1389,52 @@ $providerUnknownFieldsJson = json_encode(
             </div>
         </div>
 
+        <div class="w-product-eav-drawer" data-product-eav-drawer hidden>
+            <div class="w-product-eav-drawer__backdrop" data-product-eav-drawer-close></div>
+            <aside class="w-product-eav-drawer__panel" role="dialog" aria-modal="true" aria-labelledby="product-eav-drawer-title">
+                <header class="w-product-eav-drawer__header w-cluster" data-align="center" data-justify="between">
+                    <h2 id="product-eav-drawer-title" data-product-eav-drawer-title><?= $escape(__('属性结构')) ?></h2>
+                    <button class="w-button" type="button" data-variant="ghost" data-size="sm" data-product-eav-drawer-close aria-label="<?= $escape(__('关闭')) ?>">
+                        <w:icon name="x" size="sm" />
+                    </button>
+                </header>
+                <div class="w-product-eav-drawer__body">
+                    <div data-product-eav-drawer-panel="select-set" hidden>
+                        <eav:manager entity-code="product" mode="select-set" compact="true" />
+                    </div>
+                    <div data-product-eav-drawer-panel="select-attribute" hidden>
+                        <eav:manager
+                            entity-code="product"
+                            mode="select-attribute"
+                            compact="true"
+                            selected-set-id="<?= $escape($selectedAttributeSetId) ?>"
+                            structure-scope="catalog" />
+                    </div>
+                    <div data-product-eav-drawer-panel="manage-set" hidden>
+                        <eav:manager
+                            entity-code="product"
+                            mode="manage"
+                            compact="true"
+                            product-id="<?= $escape((string)$productEntityId) ?>"
+                            lock-set="<?= $lockAttributeSet ? 'true' : 'false' ?>"
+                            selected-set-id="<?= $escape($selectedAttributeSetId) ?>"
+                            structure-scope="catalog" />
+                    </div>
+                    <?php if ($productEntityId > 0): ?>
+                        <div data-product-eav-drawer-panel="manage-free" hidden>
+                            <eav:manager
+                                entity-code="product"
+                                mode="manage"
+                                compact="true"
+                                product-id="<?= $escape((string)$productEntityId) ?>"
+                                lock-set="true"
+                                structure-scope="free" />
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </aside>
+        </div>
+
         <div class="w-product-editor__savebar">
             <div id="product-editor-status" role="status" aria-live="polite"></div>
             <?php if ($canEditBusiness): ?>
@@ -1324,4 +1445,5 @@ $providerUnknownFieldsJson = json_encode(
         </div>
     </form>
 </div>
-<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260825-v6" defer data-no-extract="true"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260826-eav" defer data-no-extract="true"></script>

@@ -68,7 +68,7 @@ final class StorefrontCatalogCacheCoordinator
         $this->hotCache->forget(
             StorefrontAllMenuCategoryTreeService::cachePool(),
             StorefrontAllMenuCategoryTreeService::logicalCacheKey($websiteId),
-            ['website' => true],
+            ['website' => true, 'lang' => true, 'currency' => true],
         );
         $this->hotCache->forget(
             StorefrontCatalogViewService::cachePool(),

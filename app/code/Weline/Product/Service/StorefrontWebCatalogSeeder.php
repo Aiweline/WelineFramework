@@ -242,6 +242,40 @@ final class StorefrontWebCatalogSeeder
     }
 
     /**
+     * Write en_US storefront copy for already-seeded web catalog SKUs.
+     *
+     * @return array{updated:int, skipped:int, items:list<string>}
+     */
+    public function refreshLocaleCopy(int $websiteId = 0): array
+    {
+        $websiteId = max(0, $websiteId);
+        $updated = 0;
+        $skipped = 0;
+        $items = [];
+
+        foreach (self::ITEMS as $item) {
+            $sku = (string)$item['sku'];
+            $product = $this->products->findBySku($websiteId, $sku);
+            if ($product === null) {
+                ++$skipped;
+                continue;
+            }
+
+            $productId = (int)$product->getId();
+            $enrichment = StorefrontProductCatalogEnrichment::forSku($sku);
+            $this->writeLocalizedCopy($websiteId, $productId, $item, $enrichment);
+            $items[] = $sku;
+            ++$updated;
+        }
+
+        return [
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'items' => $items,
+        ];
+    }
+
+    /**
      * @param array{sku:string,name:string,slug:string,price_minor:int,short_description:string,image_url:string} $item
      * @param array{attribute_set:string,description:string,attributes:array<string,string>,gallery:list<string>}|null $enrichment
      */
@@ -279,6 +313,52 @@ final class StorefrontWebCatalogSeeder
                 true,
             );
         }
+
+        $this->writeLocalizedCopy($websiteId, $productId, $item, $enrichment);
+    }
+
+    /**
+     * @param array{sku:string,name:string,slug:string,price_minor:int,short_description:string,image_url:string} $item
+     * @param array{attribute_set:string,description:string,attributes:array<string,string>,gallery:list<string>}|null $enrichment
+     */
+    private function writeLocalizedCopy(int $websiteId, int $productId, array $item, ?array $enrichment): void
+    {
+        unset($enrichment);
+        $localized = StorefrontProductCatalogEnrichment::localeCopy($item['sku'], 'en_US');
+        if ($localized === null) {
+            return;
+        }
+
+        $localizedAttributes = [];
+        if (isset($localized['name']) && trim((string)$localized['name']) !== '') {
+            $localizedAttributes[] = ['name', 'en_US', (string)$localized['name']];
+        }
+        if (isset($localized['short_description']) && trim((string)$localized['short_description']) !== '') {
+            $localizedAttributes[] = ['short_description', 'en_US', (string)$localized['short_description']];
+        }
+        if (isset($localized['description']) && trim((string)$localized['description']) !== '') {
+            $localizedAttributes[] = ['description', 'en_US', (string)$localized['description']];
+        }
+        foreach ($localized['attributes'] ?? [] as $code => $value) {
+            $value = trim((string)$value);
+            if ($value === '') {
+                continue;
+            }
+            $localizedAttributes[] = [(string)$code, 'en_US', $value];
+        }
+
+        foreach ($localizedAttributes as [$code, $locale, $value]) {
+            $this->attributes->writeExplicit(
+                $websiteId,
+                0,
+                'product',
+                $productId,
+                $code,
+                $locale,
+                $value,
+                true,
+            );
+        }
     }
 
     /** @return list<int> */
@@ -286,12 +366,12 @@ final class StorefrontWebCatalogSeeder
     {
         $storeIds = [];
         foreach ($this->storeCatalog->byWebsite($websiteId) as $store) {
-            if ($store->id > 0) {
+            if ($store->id >= 0) {
                 $storeIds[] = $store->id;
             }
         }
 
-        return $storeIds !== [] ? array_values(array_unique($storeIds)) : [1];
+        return $storeIds !== [] ? array_values(array_unique($storeIds)) : [0];
     }
 
     /**

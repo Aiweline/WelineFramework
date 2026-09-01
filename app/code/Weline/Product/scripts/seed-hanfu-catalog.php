@@ -27,6 +27,7 @@ use Weline\Product\Repository\StoreProductRepository;
 use Weline\Product\Service\ProductAdminMutationService;
 use Weline\Product\Service\ProductCatalogEavBootstrap;
 use Weline\Product\Service\ProductCategoryAdminService;
+use Weline\Product\Service\ProductConfigurableMatrixSeedService;
 use Weline\Product\Service\ProductShardProvisioner;
 use Weline\Product\Service\StorefrontCategoryTreeIndex;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
@@ -67,22 +68,64 @@ $storeOffers = ObjectManager::getInstance(StoreOfferRepository::class);
 $storeCatalog = ObjectManager::getInstance(StoreCatalogInterface::class);
 /** @var StorefrontCategoryTreeIndex $treeIndex */
 $treeIndex = ObjectManager::getInstance(StorefrontCategoryTreeIndex::class);
+/** @var ProductConfigurableMatrixSeedService $matrixSeed */
+$matrixSeed = ObjectManager::getInstance(ProductConfigurableMatrixSeedService::class);
 
-$ensureCategory = static function (int $websiteId, int $parentId, string $name) use ($categoryAdmin, $categories): int {
-    foreach ($categories->listAll($websiteId) as $row) {
-        if (max(0, (int)($row['parent_id'] ?? 0)) === $parentId
-            && trim((string)($row['name'] ?? '')) === $name
-        ) {
-            return (int)($row['category_id'] ?? 0);
-        }
+$hanfuLocale = 'zh_Hans_CN';
+$hanfuCodes = [
+    '汉服' => 'hanfu',
+    '形制分类' => 'style',
+    '明制' => 'ming',
+    '唐制' => 'tang',
+    '宋制' => 'song',
+    '马面裙' => 'mamian',
+    '对襟袄' => 'duijin-ao',
+    '云肩' => 'yunjian',
+    '齐胸襦裙' => 'qixiong-ruqun',
+    '诃子裙' => 'hezi-qun',
+    '褙子' => 'beizi',
+    '百迭裙' => 'baidie-qun',
+    '用途分类' => 'occasion',
+    '日常通勤' => 'daily',
+    '婚礼婚服' => 'wedding',
+    '节日出游' => 'festival',
+    '复原款' => 'restoration',
+    '材质分类' => 'material',
+    '涤纶混纺' => 'polyester',
+    '真丝桑蚕' => 'silk',
+    '织金妆花' => 'zhijin',
+    '纱雪纺' => 'chiffon',
+    '规格商品专区' => 'spec-products',
+];
+
+$removedHanfuDuplicates = $categoryAdmin->dedupeSiblingsByLocalizedName($websiteId, 0, '汉服', $hanfuLocale);
+
+$ensureCategory = static function (
+    int $websiteId,
+    int $parentId,
+    string $name,
+) use ($categoryAdmin, $hanfuCodes, $hanfuLocale): int {
+    $existingId = $categoryAdmin->findSiblingIdByLocalizedName($websiteId, $parentId, $name, $hanfuLocale);
+    if ($existingId > 0) {
+        return $existingId;
     }
-    return (int)$categoryAdmin->save($websiteId, 0, $parentId, $name, 'active')['category_id'];
+    $code = $hanfuCodes[$name] ?? '';
+
+    return (int)$categoryAdmin->save(
+        $websiteId,
+        0,
+        $parentId,
+        $name,
+        'active',
+        $code,
+        $hanfuLocale,
+    )['category_id'];
 };
 
 $resolveStoreIds = static function (int $websiteId) use ($storeCatalog): array {
     $storeIds = [];
     foreach ($storeCatalog->byWebsite($websiteId) as $store) {
-        if ($store->id > 0) {
+        if ($store->id >= 0) {
             $storeIds[] = $store->id;
         }
     }
@@ -123,6 +166,32 @@ $writeTypeConfiguration = static function (
     array $axes,
     string $skuPrefix,
 ) use ($attributes): void {
+    $axisRefs = [];
+    foreach ($axes as $axis) {
+        if (!is_array($axis)) {
+            continue;
+        }
+        $code = strtolower(trim((string)($axis['code'] ?? '')));
+        if ($code === '') {
+            continue;
+        }
+        $entry = ['code' => $code];
+        $options = [];
+        foreach ((array)($axis['options'] ?? []) as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $value = trim((string)($option['value'] ?? $option['code'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $options[] = ['value' => $value];
+        }
+        if ($options !== []) {
+            $entry['options'] = $options;
+        }
+        $axisRefs[] = $entry;
+    }
     $attributes->writeTyped(
         $websiteId,
         0,
@@ -132,7 +201,7 @@ $writeTypeConfiguration = static function (
         '',
         'json',
         [
-            'axes' => $axes,
+            'axes' => $axisRefs,
             'sku_prefix' => $skuPrefix,
         ],
         false,
@@ -183,6 +252,7 @@ $createHanfuProduct = static function (
     $products,
     $offers,
     $prices,
+    $attributes,
     $writeAttr,
     $writeOfferAttr,
     $clearLegacySpecAttrs,
@@ -192,6 +262,7 @@ $createHanfuProduct = static function (
     $storeProducts,
     $storeOffers,
     $categoryLinks,
+    $matrixSeed,
 ): array {
     $sku = (string)$item['sku'];
     $requestHash = hash('sha256', 'hanfu-catalog:v2:' . $sku);
@@ -219,8 +290,8 @@ $createHanfuProduct = static function (
     foreach (['color', 'size', 'style_type'] as $axisCode) {
         $value = trim((string)($defaults[$axisCode] ?? ''));
         if ($value !== '') {
-            $writeAttr($websiteId, $productId, $axisCode, $value);
-            $writeOfferAttr($websiteId, $offerId, $axisCode, $value);
+            $attributes->writeTyped($websiteId, 0, 'product', $productId, $axisCode, '', 'select', $value, false);
+            $attributes->writeTyped($websiteId, 0, 'offer', $offerId, $axisCode, '', 'select', $value, false);
         }
     }
 
@@ -262,12 +333,25 @@ $createHanfuProduct = static function (
         );
     }
 
+    $matrix = $matrixSeed->expand(
+        $websiteId,
+        $productId,
+        $offerId,
+        $sku,
+        $item['axes'],
+        is_array($item['defaults'] ?? null) ? $item['defaults'] : [],
+        (int)$item['price_minor'],
+        $storeIds,
+    );
+
     return [
         'sku' => $sku,
         'product_id' => $productId,
         'offer_id' => $offerId,
         'name' => $item['name'],
-        'variant_count' => count($item['axes'][0]['options'] ?? []) * count($item['axes'][1]['options'] ?? []) * count($item['axes'][2]['options'] ?? []),
+        'variant_count' => $matrix['total'],
+        'matrix_created' => $matrix['created'],
+        'matrix_updated' => $matrix['updated'],
     ];
 };
 
@@ -313,24 +397,52 @@ $items = [
         'reference' => '淘宝：明制马面裙套装汉服女2026 桃园清梦，参考价约138元',
         'short_description' => '明制琵琶袖上衣+马面裙套装，聚酯纤维100%，参考电商到手价约138元。',
         'description' => '货号 260303桃园清梦。2026春季上市，米白/粉色，S-XL。参考醉欢楼淘宝公开参数。',
-        'image_url' => 'https://images.unsplash.com/photo-1610030469668-9a1f0f0a6b7a?w=800&h=1000&fit=crop',
+        'image_url' => '/pub/media/catalog/hanfu/taoyuan-qingmeng/01.jpg',
+        'gallery_urls' => [
+            '/pub/media/catalog/hanfu/taoyuan-qingmeng/01.jpg',
+            '/pub/media/catalog/hanfu/taoyuan-qingmeng/pink-set-01.jpg',
+        ],
         'defaults' => ['style_type' => 'set', 'color' => 'm-white', 'size' => 'm'],
         'axes' => [
             [
                 'code' => 'style_type',
                 'label' => '类型',
                 'options' => [
-                    ['value' => 'set', 'label' => '套装（上衣+马面裙）'],
-                    ['value' => 'skirt', 'label' => '马面裙单件'],
-                    ['value' => 'top', 'label' => '琵琶袖上衣单件'],
+                    [
+                        'value' => 'set',
+                        'label' => '套装（上衣+马面裙）',
+                        'swatch_image' => '/pub/media/catalog/hanfu/taoyuan-qingmeng/01.jpg',
+                        'gallery_by_color' => [
+                            'm-white' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/01.jpg'],
+                            'pink' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/pink-set-01.jpg'],
+                        ],
+                    ],
+                    [
+                        'value' => 'skirt',
+                        'label' => '马面裙单件',
+                        'swatch_image' => '/pub/media/catalog/hanfu/taoyuan-qingmeng/type-skirt-mwhite.jpg',
+                        'gallery_by_color' => [
+                            'm-white' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/type-skirt-mwhite.jpg'],
+                            'pink' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/type-skirt-pink.jpg'],
+                        ],
+                    ],
+                    [
+                        'value' => 'top',
+                        'label' => '琵琶袖上衣单件',
+                        'swatch_image' => '/pub/media/catalog/hanfu/taoyuan-qingmeng/type-top-mwhite.jpg',
+                        'gallery_by_color' => [
+                            'm-white' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/type-top-mwhite.jpg'],
+                            'pink' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/type-top-pink.jpg'],
+                        ],
+                    ],
                 ],
             ],
             [
                 'code' => 'color',
                 'label' => '颜色',
                 'options' => [
-                    ['value' => 'm-white', 'label' => '米白色'],
-                    ['value' => 'pink', 'label' => '粉色'],
+                    ['value' => 'm-white', 'label' => '米白色', 'swatch' => '#f5f0e6', 'swatch_image' => '/pub/media/catalog/hanfu/taoyuan-qingmeng/01.jpg', 'gallery_images' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/01.jpg']],
+                    ['value' => 'pink', 'label' => '粉色', 'swatch' => '#f4b4c4', 'swatch_image' => '/pub/media/catalog/hanfu/taoyuan-qingmeng/pink-set-01.jpg', 'gallery_images' => ['/pub/media/catalog/hanfu/taoyuan-qingmeng/pink-set-01.jpg']],
                 ],
             ],
             [
@@ -356,7 +468,7 @@ $items = [
         'reference' => '淘宝：神龙吟-原创马面裙套装，参考价约97.5元',
         'short_description' => '妆花明制马面裙/飞机袖，黑/红/白多色，参考价约97.5元。',
         'description' => '货号 Z23-0903 神龙吟。复合面料，可选妆花马面裙或白色飞机袖。',
-        'image_url' => 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=800&h=1000&fit=crop',
+        'image_url' => '/pub/media/catalog/hanfu/shenlong-yin-zhuanghua-mamian/01.jpg',
         'defaults' => ['style_type' => 'skirt-black', 'color' => 'black', 'size' => 'm'],
         'axes' => [
             [
@@ -400,7 +512,7 @@ $items = [
         'reference' => '淘宝：醉梦夕风新中式马面裙2026 仙鹤黑色，参考价约49元',
         'short_description' => '织金妆花日常通勤马面裙，仙鹤黑/红/卿竹白，参考价约49元。',
         'description' => '货号 ZJZH-20250905。螺钿幻彩织金，聚酯95%+其他5%，S-L。',
-        'image_url' => 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=800&h=1000&fit=crop',
+        'image_url' => '/pub/media/catalog/hanfu/zuimeng-xifeng-xianhe-mamian/01.jpg',
         'defaults' => ['style_type' => 'skirt', 'color' => 'xianhe-black', 'size' => 'm'],
         'axes' => [
             [
@@ -447,6 +559,7 @@ foreach ($items as $item) {
 echo json_encode([
     'ok' => true,
     'website_id' => $websiteId,
+    'removed_hanfu_duplicates' => $removedHanfuDuplicates,
     'eav' => $hanfuEav,
     'categories' => [
         'hanfu' => $hanfu,

@@ -21,21 +21,45 @@ const MODULE = 'Weline_Product';
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE = path.join(__dirname, 'Weline_Product-write-fixture.php');
 const PARENT = 'Weline_Backend::commerce:catalog:group';
+const SUBGROUPS = {
+  product: 'Weline_Backend::commerce:catalog:product-group',
+  taxonomy: 'Weline_Backend::commerce:catalog:taxonomy-group',
+  advanced: 'Weline_Backend::commerce:catalog:advanced-group',
+};
 const CAPABILITIES = [
-  ['products', 'products'],
-  ['offers', 'offers'],
-  ['sku-registry', 'skuregistry'],
-  ['categories', 'categories'],
-  ['media', 'media'],
-  ['site-content', 'sitecontent'],
-  ['store-copy', 'storecopy'],
-  ['shards', 'shards'],
-].map(([code, action]) => ({
+  ['products', 'products', SUBGROUPS.product],
+  ['offers', 'offers', SUBGROUPS.advanced],
+  ['sku-registry', 'skuregistry', SUBGROUPS.advanced],
+  ['media', 'media', SUBGROUPS.product],
+  ['site-content', 'sitecontent', SUBGROUPS.product],
+  ['store-copy', 'storecopy', SUBGROUPS.advanced],
+  ['shards', 'shards', SUBGROUPS.advanced],
+].map(([code, action, parentSource]) => ({
   sourceId: 'Weline_Product::commerce:catalog:' + code,
-  parentSource: PARENT,
+  parentSource,
+  parentSources: [PARENT, parentSource],
   urlIncludes: '/weline_product/backend/catalog/' + action,
   pageAnchor: '[data-testid="product-management-' + code + '"]',
 }));
+
+const CATALOG_CAPABILITIES = [
+  {
+    sourceId: 'Weline_Catalog::commerce:universal-catalog:categories',
+    parentSource: SUBGROUPS.taxonomy,
+    parentSources: [PARENT, SUBGROUPS.taxonomy],
+    urlIncludes: '/weline_catalog/backend/category/index',
+    pageAnchor: '[data-testid="catalog-category-admin"]',
+  },
+  {
+    sourceId: 'Weline_Catalog::commerce:universal-catalog:google-taxonomy',
+    parentSource: SUBGROUPS.taxonomy,
+    parentSources: [PARENT, SUBGROUPS.taxonomy],
+    urlIncludes: '/weline_catalog/backend/google-taxonomy/index',
+    pageAnchor: '[data-testid="catalog-google-taxonomy"]',
+  },
+];
+
+const ALL_CAPABILITIES = [...CAPABILITIES, ...CATALOG_CAPABILITIES];
 
 function fixture(action, payload = {}) {
   if (process.env.WELINE_E2E_ISOLATED_DB !== '1') {
@@ -62,11 +86,11 @@ async function submit(page, testId) {
 moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => {
   test.setTimeout(240000);
 
-  moduleCase(test, { module: MODULE, id: 'CK-R43-PRODUCT-MENU-001' }, '商品中心八个管理工作台各出现一次', async ({ page }) => {
+  moduleCase(test, { module: MODULE, id: 'CK-R43-PRODUCT-MENU-001' }, '商品中心管理工作台各出现一次', async ({ page }) => {
     await loginAsAdmin(page, { timeout: 90000, settleMs: 800 });
     await waitForBackendShellReady(page);
     const snapshot = await collectBackendMenuSnapshot(page);
-    for (const capability of CAPABILITIES) {
+    for (const capability of ALL_CAPABILITIES) {
       const rows = snapshot.filter((row) => row.sourceId === capability.sourceId);
       expect(rows, capability.sourceId).toHaveLength(1);
       expect(rows[0].parentSource, capability.sourceId).toBe(capability.parentSource);
@@ -78,7 +102,7 @@ moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => 
   moduleCase(test, { module: MODULE, id: 'CK-R43-PRODUCT-MENU-002' }, '逐项点击商品管理菜单并验证工作台锚点', async ({ page }) => {
     await loginAsAdmin(page, { timeout: 90000, settleMs: 800 });
     const guards = installBackendBrowserGuards(page);
-    for (const capability of CAPABILITIES) {
+    for (const capability of ALL_CAPABILITIES) {
       await openBackendMenuBySource(page, capability.sourceId, capability);
     }
     guards.assertClean();
@@ -102,13 +126,13 @@ moduleDescribe(test, MODULE, 'R4.3 商品中心菜单与真实写操作', () => 
       await page.locator('[data-testid="product-offer-create-form"] [name="sku"]').fill(data.sku);
       await submit(page, 'product-offer-create-form');
 
-      await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:categories', CAPABILITIES[3]);
+      await openBackendMenuBySource(page, 'Weline_Catalog::commerce:universal-catalog:categories', CATALOG_CAPABILITIES[0]);
       await page.locator('[data-catalog-admin] a[data-tone="primary"]').first().click();
-      await page.locator('[data-catalog-form] [name="name"]').fill(data.category_name || data.category_path.replace(/^\//, '').split('/').pop());
-      await page.locator('[data-catalog-form] button[type="submit"]').click();
+      await page.locator('[data-testid="catalog-category-form"] [name="name"]').fill(data.category_name || data.category_path.replace(/^\//, '').split('/').pop());
+      await page.locator('[data-testid="catalog-category-form"] button[type="submit"]').click();
       await page.waitForLoadState('networkidle');
 
-      await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:media', CAPABILITIES[4]);
+      await openBackendMenuBySource(page, 'Weline_Product::commerce:catalog:media', CAPABILITIES[3]);
       await page.locator('[data-testid="product-media-create-form"] [name="sku"]').fill(data.sku);
       await page.locator('[data-testid="product-media-create-form"] [name="path"]').fill(data.media_path);
       await page.locator('[data-testid="product-media-create-form"] [name="blob_key"]').fill(data.blob_key);

@@ -15,8 +15,8 @@ use Weline\Product\Model\ProductShardKey;
  */
 final class ProductShardSchemaCatalog
 {
-    /** Schema generation for overlay/cleared/COW and owned publish/media CAS. */
-    public const SCHEMA_VERSION = '4.1.0';
+    /** Schema generation for overlay/cleared/COW, media CAS, brand/supplier images. */
+    public const SCHEMA_VERSION = '4.5.0';
 
     /** @var list<string> */
     public const ENTITIES = ProductShardKey::ENTITY_CODES;
@@ -124,6 +124,122 @@ final class ProductShardSchemaCatalog
                 ],
                 indexes: [
                     new IndexDefinition('uk_store_category_product', ['store_id', 'category_id', 'product_id'], 'UNIQUE'),
+                ],
+            ),
+            'category_display_selection' => new TableSchema(
+                tableName: $table,
+                comment: 'Product website shard store/channel category display selection',
+                columns: [
+                    new ColumnDefinition('selection_id', 'bigint', 20, false, true, true, null, 'Selection ID'),
+                    new ColumnDefinition('store_id', 'int', 11, false, false, false, 0, 'Store ID (0 when channel scope)'),
+                    new ColumnDefinition('channel_id', 'int', 11, false, false, false, 0, 'Channel ID (0 when store scope)'),
+                    new ColumnDefinition('category_id', 'bigint', 20, false, false, false, null, 'Category ID'),
+                    new ColumnDefinition('enabled', 'tinyint', 1, false, false, false, 1, 'Displayed at scope'),
+                    new ColumnDefinition('position', 'int', 11, false, false, false, 0, 'Display sort position'),
+                ],
+                indexes: [
+                    new IndexDefinition(
+                        'uk_store_channel_category',
+                        ['store_id', 'channel_id', 'category_id'],
+                        'UNIQUE',
+                    ),
+                    new IndexDefinition('idx_scope_position', ['store_id', 'channel_id', 'position']),
+                ],
+            ),
+            'brand' => new TableSchema(
+                tableName: $table,
+                comment: 'Product website shard brand catalog',
+                columns: [
+                    new ColumnDefinition('brand_id', 'bigint', 20, false, true, true, null, 'Brand ID'),
+                    new ColumnDefinition('global_brand_uuid', 'varchar', 36, false, false, false, null, 'Cross-website brand identity'),
+                    new ColumnDefinition('code', 'varchar', 64, false, false, false, null, 'URL-safe brand code'),
+                    new ColumnDefinition('name', 'varchar', 255, false, false, false, null, 'Display name'),
+                    new ColumnDefinition('logo_url', 'varchar', 512, true, false, false, null, 'Logo / brand main image URL or path'),
+                    new ColumnDefinition('logo_asset_id', 'varchar', 128, true, false, false, null, 'FileManager asset id for brand main image'),
+                    new ColumnDefinition('description', 'text', null, true, false, false, null, 'Brand story / description'),
+                    new ColumnDefinition('status', 'varchar', 32, false, false, false, 'active', 'active/disabled'),
+                    new ColumnDefinition('position', 'int', 11, false, false, false, 0, 'Sort position'),
+                    new ColumnDefinition('created_at', 'datetime', null, false, false, false, 'CURRENT_TIMESTAMP', 'Created'),
+                    new ColumnDefinition('updated_at', 'datetime', null, false, false, false, 'CURRENT_TIMESTAMP', 'Updated'),
+                ],
+                indexes: [
+                    new IndexDefinition('uk_global_brand_uuid', ['global_brand_uuid'], 'UNIQUE'),
+                    new IndexDefinition('uk_brand_code', ['code'], 'UNIQUE'),
+                    new IndexDefinition('idx_brand_status_position', ['status', 'position']),
+                ],
+            ),
+            'supplier' => new TableSchema(
+                tableName: $table,
+                comment: 'Product website shard supplier catalog',
+                columns: [
+                    new ColumnDefinition('supplier_id', 'bigint', 20, false, true, true, null, 'Supplier ID'),
+                    new ColumnDefinition('global_supplier_uuid', 'varchar', 36, false, false, false, null, 'Cross-website supplier identity'),
+                    new ColumnDefinition('code', 'varchar', 64, false, false, false, null, 'URL-safe supplier code'),
+                    new ColumnDefinition('name', 'varchar', 255, false, false, false, null, 'Display name'),
+                    new ColumnDefinition('store_url', 'varchar', 512, true, false, false, null, 'Supplier storefront URL'),
+                    new ColumnDefinition('image_url', 'varchar', 512, true, false, false, null, 'Supplier image URL or path'),
+                    new ColumnDefinition('image_asset_id', 'varchar', 128, true, false, false, null, 'FileManager asset id for supplier image'),
+                    new ColumnDefinition('contact_name', 'varchar', 128, true, false, false, null, 'Primary contact name'),
+                    new ColumnDefinition('contact_phone', 'varchar', 64, true, false, false, null, 'Primary contact phone'),
+                    new ColumnDefinition('contact_email', 'varchar', 255, true, false, false, null, 'Primary contact email'),
+                    new ColumnDefinition('default_currency', 'varchar', 8, true, false, false, null, 'Default quote currency'),
+                    new ColumnDefinition('default_payment_terms', 'varchar', 128, true, false, false, null, 'Default payment terms'),
+                    new ColumnDefinition('default_lead_time_days', 'int', 11, true, false, false, null, 'Default lead time days'),
+                    new ColumnDefinition('default_moq', 'int', 11, true, false, false, null, 'Default minimum order quantity'),
+                    new ColumnDefinition('description', 'text', null, true, false, false, null, 'Notes / description'),
+                    new ColumnDefinition('status', 'varchar', 32, false, false, false, 'active', 'active/disabled'),
+                    new ColumnDefinition('position', 'int', 11, false, false, false, 0, 'Sort position'),
+                    new ColumnDefinition('created_at', 'datetime', null, false, false, false, 'CURRENT_TIMESTAMP', 'Created'),
+                    new ColumnDefinition('updated_at', 'datetime', null, false, false, false, 'CURRENT_TIMESTAMP', 'Updated'),
+                ],
+                indexes: [
+                    new IndexDefinition('uk_global_supplier_uuid', ['global_supplier_uuid'], 'UNIQUE'),
+                    new IndexDefinition('uk_supplier_code', ['code'], 'UNIQUE'),
+                    new IndexDefinition('idx_supplier_status_position', ['status', 'position']),
+                ],
+            ),
+            'product_supplier' => new TableSchema(
+                tableName: $table,
+                comment: 'Product website shard product-supplier offer link',
+                columns: [
+                    new ColumnDefinition('link_id', 'bigint', 20, false, true, true, null, 'Link ID'),
+                    new ColumnDefinition('product_id', 'bigint', 20, false, false, false, null, 'Product ID'),
+                    new ColumnDefinition('supplier_id', 'bigint', 20, false, false, false, null, 'Supplier ID'),
+                    new ColumnDefinition('is_primary', 'tinyint', 1, false, false, false, 1, 'Primary supplier for product'),
+                    new ColumnDefinition('supplier_product_url', 'varchar', 512, true, false, false, null, 'Supplier product page URL'),
+                    new ColumnDefinition('supplier_sku', 'varchar', 128, true, false, false, null, 'Supplier SKU / item code'),
+                    new ColumnDefinition('supplier_product_name', 'varchar', 255, true, false, false, null, 'Supplier product title'),
+                    new ColumnDefinition('currency', 'varchar', 8, true, false, false, null, 'Quote currency'),
+                    new ColumnDefinition('unit_price_minor', 'bigint', 20, true, false, false, null, 'Supply unit price minor units'),
+                    new ColumnDefinition('list_price_minor', 'bigint', 20, true, false, false, null, 'Supplier list price minor units'),
+                    new ColumnDefinition('moq', 'int', 11, true, false, false, null, 'Minimum order quantity'),
+                    new ColumnDefinition('lead_time_days', 'int', 11, true, false, false, null, 'Lead time days'),
+                    new ColumnDefinition('pack_qty', 'int', 11, true, false, false, null, 'Pack / carton quantity'),
+                    new ColumnDefinition('last_quoted_at', 'datetime', null, true, false, false, null, 'Last quote timestamp'),
+                    new ColumnDefinition('notes', 'text', null, true, false, false, null, 'Sourcing notes'),
+                    new ColumnDefinition('status', 'varchar', 32, false, false, false, 'active', 'active/disabled'),
+                    new ColumnDefinition('created_at', 'datetime', null, false, false, false, 'CURRENT_TIMESTAMP', 'Created'),
+                    new ColumnDefinition('updated_at', 'datetime', null, false, false, false, 'CURRENT_TIMESTAMP', 'Updated'),
+                ],
+                indexes: [
+                    new IndexDefinition('uk_product_supplier', ['product_id', 'supplier_id'], 'UNIQUE'),
+                    new IndexDefinition('idx_product_primary', ['product_id', 'is_primary']),
+                    new IndexDefinition('idx_supplier_id', ['supplier_id']),
+                ],
+            ),
+            'supplier_brand' => new TableSchema(
+                tableName: $table,
+                comment: 'Product website shard supplier↔brand N:N link',
+                columns: [
+                    new ColumnDefinition('link_id', 'bigint', 20, false, true, true, null, 'Link ID'),
+                    new ColumnDefinition('supplier_id', 'bigint', 20, false, false, false, null, 'Supplier ID'),
+                    new ColumnDefinition('brand_id', 'bigint', 20, false, false, false, null, 'Brand ID'),
+                    new ColumnDefinition('position', 'int', 11, false, false, false, 0, 'Sort position'),
+                    new ColumnDefinition('created_at', 'datetime', null, false, false, false, 'CURRENT_TIMESTAMP', 'Created'),
+                ],
+                indexes: [
+                    new IndexDefinition('uk_supplier_brand', ['supplier_id', 'brand_id'], 'UNIQUE'),
+                    new IndexDefinition('idx_brand_id', ['brand_id']),
                 ],
             ),
             'attribute_value' => new TableSchema(

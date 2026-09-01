@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Product\Model\Shard\Product;
+use Weline\Product\Repository\ProductRepository;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 
 /**
@@ -14,6 +18,7 @@ final class StorefrontProductWidgetCatalog
 
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
+        private readonly ProductRepository $products,
     ) {
     }
 
@@ -52,6 +57,83 @@ final class StorefrontProductWidgetCatalog
 
         return $cards;
     }
+
+    /**
+     * New-arrival cards ordered by product created_at within the given day window.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function newArrivalCards(int $limit = 8, int $days = 30): array
+    {
+        $limit = max(1, min(24, $limit));
+        $days = max(1, min(365, $days));
+        $cutoffTs = (new \DateTimeImmutable('today'))
+            ->modify('-' . $days . ' days')
+            ->getTimestamp();
+        $websiteId = max(0, (int)$this->currentScope()->websiteId);
+
+        $createdAtByProductId = [];
+        foreach ($this->products->listAll($websiteId) as $product) {
+            if (\strtolower(\trim((string)($product[Product::schema_fields_STATUS] ?? '')))
+                !== Product::STATUS_PUBLISHED
+            ) {
+                continue;
+            }
+            $productId = (int)($product[Product::schema_fields_ID] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+            $createdRaw = \trim((string)($product[Product::schema_fields_CREATED_AT] ?? ''));
+            if ($createdRaw === '') {
+                continue;
+            }
+            $createdTs = \strtotime($createdRaw);
+            if ($createdTs === false || $createdTs < $cutoffTs) {
+                continue;
+            }
+            $createdAtByProductId[$productId] = $createdRaw;
+        }
+
+        if ($createdAtByProductId === []) {
+            return [];
+        }
+
+        \uasort(
+            $createdAtByProductId,
+            static fn(string $left, string $right): int => (\strtotime($right) ?: 0) <=> (\strtotime($left) ?: 0),
+        );
+
+        $offers = $this->catalog->publishedOffersForProductIds(
+            \array_keys($createdAtByProductId),
+            \max($limit * 3, 48),
+        );
+        $offerByProductId = [];
+        foreach ($offers as $offer) {
+            $productId = (int)($offer['product_id'] ?? 0);
+            if ($productId > 0 && !isset($offerByProductId[$productId])) {
+                $offerByProductId[$productId] = $offer;
+            }
+        }
+
+        $cards = [];
+        $index = 0;
+        foreach (\array_keys($createdAtByProductId) as $productId) {
+            if (!isset($offerByProductId[$productId])) {
+                continue;
+            }
+            $card = $this->mapOffer($offerByProductId[$productId], $index);
+            $card['created_at'] = $createdAtByProductId[$productId];
+            $card['is_new'] = 1;
+            $cards[] = $card;
+            $index++;
+            if (\count($cards) >= $limit) {
+                break;
+            }
+        }
+
+        return $cards;
+    }
+
     /**
      * Related-product cards for PDP, excluding the current product.
      *
@@ -179,7 +261,8 @@ final class StorefrontProductWidgetCatalog
         $image = $resolved['src'];
         $fallback = $resolved['fallback'];
 
-        $route = $slug !== '' ? 'product/' . $slug : 'product/' . $productId;
+        // Root-relative so static 404 snapshots and nested paths stay host-agnostic.
+        $route = $slug !== '' ? '/product/' . $slug : '/product/' . $productId;
         $reviewCount = max(12, (($productId * 23) + (($index + 1) * 17)) % 320);
 
         return [
@@ -196,6 +279,19 @@ final class StorefrontProductWidgetCatalog
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
             'sellable' => !empty($offer['sellable']),
         ];
+    }
+
+    private function currentScope(): ScopeIdentity
+    {
+        $scope = RequestContext::scopeIdentity();
+        if ($scope instanceof ScopeIdentity && !$scope->isGlobal() && $scope->websiteId !== null) {
+            return $scope;
+        }
+
+        $websiteId = max(0, RequestContext::getWelineWebsiteId());
+        $websiteCode = \trim(RequestContext::getWelineWebsiteCode());
+
+        return ScopeIdentity::website($websiteId, $websiteCode !== '' ? $websiteCode : 'default');
     }
 
 }

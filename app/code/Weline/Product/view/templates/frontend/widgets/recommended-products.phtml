@@ -23,6 +23,7 @@
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
@@ -61,9 +62,14 @@ foreach ($products as &$product) {
     $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
     $product['id'] = $productId;
     $route = trim((string)($product['url'] ?? ''));
-    $product['url'] = str_starts_with($route, 'http://') || str_starts_with($route, 'https://')
-        ? $route
-        : $this->getUrl(ltrim($route, '/'));
+    if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://') || str_starts_with($route, '//')) {
+        $product['url'] = $route;
+    } else {
+        // Root-relative (+ locale/currency prefix): safe for static 404 HTML on any host.
+        $path = '/' . ltrim($route, '/');
+        $prefix = rtrim(Url::getPrefix(), '/');
+        $product['url'] = ($prefix !== '' ? $prefix : '') . $path;
+    }
 }
 unset($product);
 
@@ -78,6 +84,7 @@ if ($products === []) {
 <section class="<?= $esc($wc) ?> weline-product-recommended<?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-recommended-products"
+         data-weline-load="recommendedProducts"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-layout="<?= $esc($layout) ?>"
@@ -141,12 +148,28 @@ if ($products === []) {
                                 <span class="wpc-price-now">¥<?= number_format($price, 2) ?></span>
                             </div>
                             <?php if ($sellable && $offerUuid !== ''): ?>
-                                <button type="button"
-                                        class="wpc-cta weline-pixel::add_to_cart"
-                                        data-product-id="<?= $productId ?>"
-                                        data-global-offer-uuid="<?= $esc($offerUuid) ?>">
-                                    <?= $esc((string)__('加入购物车')) ?>
-                                </button>
+                                <?php $addLabel = (string)__('加入购物车'); ?>
+                                <div class="weline-cart-product-card-add-to-cart"
+                                     data-widget-module="Weline_Cart"
+                                     data-widget-code="product-card-add-to-cart"
+                                     data-purchase-loading="<?= $esc((string)__('正在加入购物车...')) ?>"
+                                     data-purchase-success="<?= $esc((string)__('已加入购物车')) ?>"
+                                     data-purchase-error="<?= $esc((string)__('加入购物车失败')) ?>"
+                                     data-purchase-mark-added="<?= $esc((string)__('已加入')) ?>"
+                                     data-cart-url="@url{'cart'}"
+                                     data-cart-link-text="<?= $esc((string)__('前往购物车')) ?>">
+                                    <button type="button"
+                                            class="wpc-cta weline-pixel::add_to_cart"
+                                            data-action="add-v2"
+                                            data-testid="product-card-add-to-cart"
+                                            data-default-label="<?= $esc($addLabel) ?>"
+                                            data-provider-code="product"
+                                            data-product-id="<?= $productId ?>"
+                                            data-global-offer-uuid="<?= $esc($offerUuid) ?>"
+                                            data-qty="1">
+                                        <span class="weline-pixel::add_to_cart" data-card-add-label="1"><?= $esc($addLabel) ?></span>
+                                    </button>
+                                </div>
                             <?php else: ?>
                                 <a class="wpc-cta wpc-cta--link" href="<?= $esc($productUrl) ?>"><?= $esc((string)__('查看详情')) ?></a>
                             <?php endif; ?>
@@ -164,6 +187,4 @@ if ($products === []) {
     </div>
 </section>
 
-<script src="@static(Weline_Product::js/widgets/recommended-products.js)?v=20260825-rec2"
-        defer
-        data-no-extract="true"></script>
+<?php // recommendedProducts：由部件根 data-weline-load 声明，禁止 @static 直引 ?>
