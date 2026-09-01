@@ -12,6 +12,21 @@ require_once BP . 'app/code/Weline/Taglib/Taglib/Scope.php';
 
 final class ScopeTagContractTest extends TestCase
 {
+    public function testScopePersistenceScriptDoesNotStormRetryOnLoadFailure(): void
+    {
+        $source = \file_get_contents(BP . 'app/code/Weline/Taglib/view/statics/js/scope-persistence.js');
+        self::assertIsString($source);
+        self::assertStringContainsString('loadFailedScopes', $source);
+        self::assertStringContainsString('scheduleDiscover', $source);
+        self::assertStringContainsString('toastedScopes', $source);
+        self::assertStringContainsString('失败后不再因 MutationObserver', $source);
+        self::assertStringContainsString('data-catalog-category-select-value', $source);
+        self::assertStringContainsString('setValue(normalized, { silent: true })', $source);
+        self::assertStringContainsString('applyCategory', $source);
+        self::assertStringContainsString('pendingCategoryById', $source);
+        self::assertStringContainsString('weline:catalog-category-select-ready', $source);
+    }
+
     public function testLegacyPersistenceModeRemainsCompatible(): void
     {
         $html = (Scope::callback())('scope', [], [], [

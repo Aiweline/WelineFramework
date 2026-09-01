@@ -21,8 +21,9 @@ Taglib 是模板语义扩展层，不是“所有前端能力都往里塞”的�
 ## 当前推荐阅读顺序
 
 1. 调用 `resolve_task_context` 获取当前任务命中的最小文档集合
-2. **场景映射（强制）**：本 README 的“场景映射”章节
-3. 新增/变更标签：`app/code/Weline/Taglib/doc/如何自定义Tag.md`
+2. **场景映射（强制）**：[场景映射表.md](./场景映射表.md)
+3. 标签全量目录：[标签全量索引.md](./标签全量索引.md)（`php bin/w taglib:catalog:generate` 生成）
+4. 新增/变更标签：`app/code/Weline/Taglib/doc/如何自定义Tag.md`
 4. `app/code/Weline/Framework/View/doc/README.md`
 5. `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
 6. 如果是主题标签，再读取 MCP 命中的 Theme 专题文档
@@ -97,16 +98,13 @@ ID 与 data-only metadata。Taglib Model/Controller 不得引用 ModuleManager M
 
 ## 场景映射（选择器用官方标签）
 
-模板需要站点、店铺、语言、文件、编辑器、ACL、DataTable 等能力时，先查：
+完整对照表见 **[场景映射表.md](./场景映射表.md)**（写 HTML / 控件前必读）。
 
-- 本 README 的场景映射与示例
-- `resolve_task_context` 返回的当前 Taglib 源码、接口和专题文档
-
-例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:switcher .../>`（旧名 `language:switcher` 为别名）。禁止手写裸 select 拼领域选项。
+例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:switcher .../>`。禁止手写裸 select 拼领域选项。
 
 浮层定位与 hover 保活用 `FloatingDropdownEmitter` / `WelineTaglibFloatingDropdown` 在标签输出内自洽，禁止往 Theme.js 塞标签交互。
 
-新增标签后必须在同一任务内更新本 README 的场景映射与 `如何自定义Tag.md`；MCP 自动刷新索引。
+新增标签后必须在同一任务内更新 [场景映射表.md](./场景映射表.md) 与 `如何自定义Tag.md`，并运行 `php bin/w taglib:catalog:generate`。
 
 ## 快速示例
 
@@ -118,9 +116,10 @@ ID 与 data-only metadata。Taglib Model/Controller 不得引用 ModuleManager M
 
 ## 相关文档
 
-- `app/code/Weline/Taglib/doc/README.md`
-- `app/code/Weline/Taglib/doc/如何自定义Tag.md`
-- `app/code/Weline/Framework/View/doc/README.md`
+- [场景映射表.md](./场景映射表.md)
+- [标签全量索引.md](./标签全量索引.md)
+- [如何自定义Tag.md](./如何自定义Tag.md)
+- [AI硬规则索引.md](../../Ai/doc/AI硬规则索引.md)
 - `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
 - `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
 - `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`

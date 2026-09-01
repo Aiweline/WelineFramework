@@ -10,9 +10,11 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Taglib/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Taglib/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-8. 只读取本次任务相关源码、配置和验证入口
+6. **场景映射（强制）**：`app/code/Weline/Taglib/doc/场景映射表.md`
+7. **标签全量索引**：`app/code/Weline/Taglib/doc/标签全量索引.md`
+8. `app/code/Weline/Theme/doc/AI-INDEX.md`
+9. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+10. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
