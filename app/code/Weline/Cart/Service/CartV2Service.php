@@ -51,6 +51,20 @@ final class CartV2Service
     }
 
     /**
+     * Extend guest cart TTL (+ cookie) without rotating the token.
+     */
+    public function touchGuestCart(ScopeIdentity $scope, string $guestToken): bool
+    {
+        $guestToken = \trim($guestToken);
+        if ($guestToken === '') {
+            return false;
+        }
+        $key = $this->cartKey($scope, $guestToken, null);
+
+        return $this->store->touch($key);
+    }
+
+    /**
      * @param array<string, scalar|null> $selection
      * @return array<string, mixed>
      */
@@ -81,9 +95,19 @@ final class CartV2Service
             );
         }
         if (!$snapshot->sellable) {
+            $stockName = $snapshot->name !== '' ? $snapshot->name : (string)__('该商品');
+            $message = trim($snapshot->message);
+            $genericCandidates = [
+                (string)__('商品库存不足'),
+                '商品库存不足',
+                'Out of stock',
+            ];
+            if ($message === '' || in_array($message, $genericCandidates, true)) {
+                $message = (string)__('「%{1}」库存不足', [$stockName]);
+            }
             throw new CartV2ConflictException(
                 self::ERROR_NOT_SELLABLE,
-                $snapshot->message !== '' ? $snapshot->message : __('该商品暂不可售'),
+                $message !== '' ? $message : (string)__('该商品暂不可售'),
             );
         }
 
@@ -112,7 +136,7 @@ final class CartV2Service
             if ($room <= 0) {
                 throw new CartV2ConflictException(
                     self::ERROR_NOT_SELLABLE,
-                    __('库存不足，购物车中该商品数量已达到当前可售库存。'),
+                    __('「%{1}」库存不足，购物车中该商品数量已达到当前可售库存。', [$snapshot->name !== '' ? $snapshot->name : (string)__('该商品')]),
                 );
             }
             if ($qty > $room) {
@@ -141,7 +165,7 @@ final class CartV2Service
 
         $this->store->set($cartKey, $cart);
         return $this->summary($cart, true, $adjusted
-            ? (string)__('库存不足，已按当前可售数量加入购物车。')
+            ? (string)__('「%{1}」库存不足，已按当前可售数量加入购物车。', [$snapshot->name !== '' ? $snapshot->name : (string)__('该商品')])
             : (string)__('已加入购物车。'), [
             'quantity_adjusted' => $adjusted,
             'requested_quantity' => $requested,
@@ -295,6 +319,10 @@ final class CartV2Service
     /** @return array<string, mixed> */
     public function getCart(ScopeIdentity $scope, ?string $guestToken = null, ?int $customerId = null): array
     {
+        // Read-only: mini-cart / storefront may poll before issueGuestToken.
+        if (($customerId === null || $customerId <= 0) && trim((string)$guestToken) === '') {
+            return $this->summary($this->newCart($scope, null, null, ''));
+        }
         $key = $this->cartKey($scope, $guestToken, $customerId);
         $cart = $this->store->get($key) ?? $this->newCart($scope, $guestToken, $customerId, '');
         return $this->summary($cart);
@@ -345,12 +373,19 @@ final class CartV2Service
         }
 
         $this->store->set($key, $cart);
+        $updatedName = '';
+        foreach ($cart['items'] as $row) {
+            if ((string)($row['item_id'] ?? '') === $itemId) {
+                $updatedName = trim((string)($row['name'] ?? ''));
+                break;
+            }
+        }
         return $this->summary(
             $cart,
             true,
             $adjustedQty === $requestedQty
                 ? (string)__('购物车已更新。')
-                : (string)__('库存不足，已按当前可售数量更新购物车。'),
+                : (string)__('「%{1}」库存不足，已按当前可售数量更新购物车。', [$updatedName !== '' ? $updatedName : (string)__('该商品')]),
             [
                 'quantity_adjusted' => $adjustedQty !== $requestedQty,
                 'requested_quantity' => $requestedQty,

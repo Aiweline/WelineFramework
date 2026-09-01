@@ -40,6 +40,7 @@
 
 - Store：`CartV2CacheStore`（`w_cache('cart_v2')` Custom 全逃逸，跨 Worker）；单测用 `CartV2MemoryStore`
 - Cookie：`weline_cart_guest_token`（`issueGuestToken` 写入）
+- 只读 `getV2Cart`/`getCart`：游客尚未持有 `guest_token`（无 Cookie/参数）时返回空车成功摘要，不抛 `cart_guest_token_required`；加购/改删/合车仍必须有 token
 - Observer：`Weline_Customer_Account_Login::login_after` → `LoginMergeGuestCart`
 - Query：`w_query('cart','addV2'|'mergeGuest'|'getV2Cart'|'issueGuestToken'|…)`
 - Query 的 `mergeGuest` 仅允许当前已登录客户；浏览器传入的

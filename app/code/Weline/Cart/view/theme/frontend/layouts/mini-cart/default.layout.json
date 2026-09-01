@@ -1,0 +1,30 @@
+{
+  "page_type": "mini-cart",
+  "source": "module",
+  "widgets": [
+    {
+      "area": "footer",
+      "slot_id": "footer-extras",
+      "widget_code": "mini-cart-coupon",
+      "widget_module": "Weline_Marketing",
+      "widget_type": "content",
+      "config": {
+        "title": "优惠券",
+        "compact": true
+      },
+      "sort_order": 10
+    },
+    {
+      "area": "footer",
+      "slot_id": "footer-extras",
+      "widget_code": "order-notice",
+      "widget_module": "Weline_Order",
+      "widget_type": "form",
+      "config": {
+        "title": "订单留言",
+        "placeholder": "如有特殊要求请留言"
+      },
+      "sort_order": 20
+    }
+  ]
+}

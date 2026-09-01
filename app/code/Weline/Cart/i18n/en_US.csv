@@ -1,39 +1,59 @@
 ﻿"Cart 查询器不支持的 operation：%{1}","Cart 查询器不支持的 operation：%{1}"
 "Cart V2 未启用","Cart V2 未启用"
 登录后才能合并游客购物车。,登录后才能合并游客购物车。
+缺少游客购物车凭证,缺少游客购物车凭证
+预计优惠暂不可用,预计优惠暂不可用
+预计优惠已计算,预计优惠已计算
+优惠,优惠
+预计优惠,预计优惠
 "Frontend cart API","Frontend cart API"
 "Storefront cart session operations exposed through Weline.Api.","Storefront cart session operations exposed through Weline.Api."
+"迷你购物车 footer-extras 默认部件迁移失败：%{1}","迷你购物车 footer-extras 默认部件迁移失败：%{1}"
 请求方式不允许。,请求方式不允许。
-已加入购物车。,已加入购物车。
-加入购物车失败。,加入购物车失败。
-加入购物车失败：%{1},加入购物车失败：%{1}
+已加入购物车。,"Added to cart."
+加入购物车失败。,"Failed to add to cart."
+加入购物车失败：%{1},"Failed to add to cart: %{1}"
 "Direct browser cart API is deprecated. Use the frontend worker API.","Direct browser cart API is deprecated. Use the frontend worker API."
-购物车,购物车
-您的购物车是空的,您的购物车是空的
+购物车,"Shopping cart"
+您的购物车是空的,"Your cart is empty"
 购物车检查,"Cart inspection"
 购物车工作台,"Cart workspace"
 search,search
 "按 Scope 检查真实 Cart V2 持久缓存","Check the real Cart V2 persistent cache by scope"
-正在加载购物车...,正在加载购物车...
-购物车是空的,购物车是空的
-浏览车型并选择适合您市场的产品。,浏览车型并选择适合您市场的产品。
-购物车加载失败，请重试。,购物车加载失败，请重试。
-商品,商品
-单价,单价
-数量,数量
-小计,小计
-更新,更新
-移除,移除
-购物车更新失败，请重试。,购物车更新失败，请重试。
-检查商品数量，确认无误后进入结账。,检查商品数量，确认无误后进入结账。
-继续购物,继续购物
-浏览车型,浏览车型
-暂时无法加载购物车,暂时无法加载购物车
-重试,重试
-订单摘要,订单摘要
-商品数量,商品数量
-合计,合计
-去结算,去结算
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,Subtotal
+税费与运费将在结算时计算,税费与运费将在结算时计算
+去结算,"Proceed to checkout"
+查看购物车,"Go to Cart"
+正在加载购物车...,"Loading cart..."
+购物车是空的,"Your cart is empty"
+浏览商品，把喜欢的加入购物车吧。,"Browse products and add your favorites to the cart."
+购物车加载失败，请重试。,"Failed to load cart. Please try again."
+商品,Product
+价格,Price
+数量,Quantity
+更新,Update
+删除,Delete
+减少数量,"Decrease quantity"
+增加数量,"Increase quantity"
+购物车更新失败，请重试。,"Failed to update cart. Please try again."
+无法创建游客购物车会话,"Unable to create a guest cart session"
+"小计（%1 件商品）","Subtotal (%1 items)"
+单价,"Unit price"
+浏览商品,"Browse products"
+暂时无法加载购物车,"Unable to load cart right now"
+重试,Retry
+订单摘要,"Order summary"
+继续购物,"Continue shopping"
+仅询价,"Quote only"
+加入购物车,"Add to Cart"
+暂不可售,"Currently unavailable"
+正在加入购物车...,"Adding to cart..."
+已加入购物车,"Added to cart"
+加入购物车失败,"Failed to add to cart"
+已加入,"Added to cart"
+前往购物车,"Go to Cart"
 "Cart V2 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart V2 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
 "输入完整 scope key","输入完整 scope key"
 检查,检查
@@ -49,10 +69,13 @@ Scope,Scope
 "global_offer_uuid 不能为空","global_offer_uuid 不能为空"
 "legacy_product_id 须 >=0","legacy_product_id 须 >=0"
 商品不存在或已下架,商品不存在或已下架
+该商品,该商品
+商品库存不足,"Out of stock"
+「%{1}」库存不足,"%{1} is out of stock"
 该商品暂不可售,该商品暂不可售
 跨币种购物车不可合并,跨币种购物车不可合并
-库存不足，购物车中该商品数量已达到当前可售库存。,库存不足，购物车中该商品数量已达到当前可售库存。
-库存不足，已按当前可售数量加入购物车。,库存不足，已按当前可售数量加入购物车。
+「%{1}」库存不足，购物车中该商品数量已达到当前可售库存。,"%{1} is out of stock; the cart already has the maximum available quantity."
+「%{1}」库存不足，已按当前可售数量加入购物车。,"%{1} is out of stock; added the maximum available quantity to the cart."
 "guest_token 不能为空","guest_token 不能为空"
 "customer_id 须 >0","customer_id 须 >0"
 "游客车 Scope 不匹配","游客车 Scope 不匹配"
@@ -63,7 +86,7 @@ Scope,Scope
 请选择要更新的购物车商品。,请选择要更新的购物车商品。
 未找到要更新的购物车商品。,未找到要更新的购物车商品。
 购物车已更新。,购物车已更新。
-库存不足，已按当前可售数量更新购物车。,库存不足，已按当前可售数量更新购物车。
+「%{1}」库存不足，已按当前可售数量更新购物车。,"%{1} is out of stock; the cart was updated to the maximum available quantity."
 请选择要移除的购物车商品。,请选择要移除的购物车商品。
 未找到要移除的购物车商品。,未找到要移除的购物车商品。
 商品已从购物车移除。,商品已从购物车移除。
@@ -95,3 +118,8 @@ Scope,Scope
 "重复的 Cart V2 Provider code：%{1}","重复的 Cart V2 Provider code：%{1}"
 "未找到 Cart V2 Provider：%{1}","未找到 Cart V2 Provider：%{1}"
 """Cart 查询器不支持的 operation：%{1}""","Cart 查询器不支持的 operation：%{1}"
+移除,Remove
+检查商品数量，确认无误后进入结账。,"Review your items and proceed to checkout when ready."
+商品数量,Items
+合计,Total
+商品已加入购物车。,"Added to cart."

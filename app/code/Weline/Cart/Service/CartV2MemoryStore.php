@@ -31,6 +31,11 @@ final class CartV2MemoryStore implements CartV2CartStoreInterface
         unset($this->carts[$cartKey]);
     }
 
+    public function touch(string $cartKey): bool
+    {
+        return isset($this->carts[$cartKey]);
+    }
+
     public function listByScopeKey(string $scopeKey): array
     {
         $out = [];
