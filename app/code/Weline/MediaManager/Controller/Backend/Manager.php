@@ -27,6 +27,8 @@ class Manager extends BackendController
      */
     public function index()
     {
+        // 独立页必须套 blank 布局，才能注入后台 Worker / Weline.Api；否则 loadStorages 报「尚未就绪」。
+        $this->layoutType = 'default.blank';
         $startPath = $this->request->getParam('startPath') ?? $this->request->getParam('path') ?? '';
         $connectorUrl = $this->_url->getBackendUrl('media/backend/connector');
         $this->assign('connector_url', $connectorUrl);
@@ -84,6 +86,8 @@ class Manager extends BackendController
         $this->assign('ext', $params['ext'] ?? '*');
         $this->assign('size', $params['size'] ?? (string)MediaAssetUploadService::MAX_ASSET_UPLOAD_BYTES);
         $this->assign('lock_path', $params['lockPath'] ?? '0');
+        $lockRoot = trim(str_replace('\\', '/', (string)($params['lockRoot'] ?? $params['lock_root'] ?? '')), '/');
+        $this->assign('lock_root', $lockRoot);
         $themeState = $this->resolveIframeThemeState();
         $this->assign('theme_preference', $themeState['preference']);
         $this->assign('theme_mode', $themeState['resolved']);
@@ -92,6 +96,13 @@ class Manager extends BackendController
             $params['usage'] ?? $params['requireImageUsage'] ?? false,
             FILTER_VALIDATE_BOOL,
         ) ? '1' : '0');
+        $this->assign('aspect_ratio', trim((string)($params['aspect_ratio'] ?? $params['aspectRatio'] ?? '')));
+        $this->assign(
+            'aspect_ratio_tolerance',
+            trim((string)($params['aspect_ratio_tolerance'] ?? $params['aspectRatioTolerance'] ?? '')),
+        );
+        $this->assign('recommend_width', trim((string)($params['recommend_width'] ?? $params['recommendWidth'] ?? '')));
+        $this->assign('recommend_height', trim((string)($params['recommend_height'] ?? $params['recommendHeight'] ?? '')));
         $this->assignConnectorSecurity();
         return $this->fetch('manager.phtml');
     }

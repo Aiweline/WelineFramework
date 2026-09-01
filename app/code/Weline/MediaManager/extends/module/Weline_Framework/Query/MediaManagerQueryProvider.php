@@ -136,6 +136,8 @@ final class MediaManagerQueryProvider implements QueryProviderInterface
                         ['name' => 'visibility', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'upload_base64', 'type' => 'array', 'required' => false, 'max_items' => MediaAssetUploadService::MAX_UPLOAD_FILES],
                         ['name' => 'upload_metadata', 'type' => 'array', 'required' => false, 'max_items' => MediaAssetUploadService::MAX_UPLOAD_FILES],
+                        ['name' => 'query', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 100],
                     ],
                 ],
                 [

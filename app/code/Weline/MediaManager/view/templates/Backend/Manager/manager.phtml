@@ -1,6 +1,6 @@
 <css>Weline_MediaManager::css/backend-theme-vars.css</css>
 <notempty name="is_iframe">
-<script>(function(){var d=document.documentElement,b=document.body,p='{{$theme_preference|default:"system"}}';d.classList.add('mmf-iframe-host');if(['system','light','dark'].indexOf(p)<0)p='system';var q=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var applyFallback=function(){var m=p==='dark'||(p==='system'&&q&&q.matches)?'dark':'light';d.setAttribute('data-w-area','backend');d.setAttribute('data-theme-preference',p);d.setAttribute('data-theme',m);d.style.colorScheme=m;};applyFallback();function fitIframeViewport(){var h=window.innerHeight||d.clientHeight||0;if(h<=0)return;d.style.height=h+'px';d.style.maxHeight=h+'px';d.style.overflow='hidden';if(b){b.classList.add('mmf-iframe-host');b.style.height=h+'px';b.style.maxHeight=h+'px';b.style.overflow='hidden';b.style.margin='0';}var m=document.querySelector('main.w-backend-page,#main-content');if(m){m.style.height=h+'px';m.style.maxHeight=h+'px';m.style.minHeight='0';m.style.flex='1 1 auto';m.style.display='flex';m.style.flexDirection='column';m.style.overflow='hidden';m.style.padding='0';m.style.margin='0';}var w=document.querySelector('.mmf-wrap.mmf-iframe-mode');if(w){w.style.height=h+'px';w.style.maxHeight=h+'px';w.style.minHeight='0';}}fitIframeViewport();window.addEventListener('resize',fitIframeViewport,{passive:true});document.addEventListener('DOMContentLoaded',function(){if(b)b.classList.add('mmf-iframe-host');fitIframeViewport();var runtime=window.__WelineBackendThemeRuntime;if(runtime&&typeof runtime.apply==='function'){runtime.apply(p);return;}if(p==='system'&&q){if(q.addEventListener)q.addEventListener('change',applyFallback);else if(q.addListener)q.addListener(applyFallback);}fitIframeViewport();},{once:true});window.addEventListener('load',fitIframeViewport,{once:true});})();</script>
+<script>(function(){var d=document.documentElement,b=document.body,p='{{$theme_preference|default:"system"}}';d.classList.add('mmf-iframe-host');if(['system','light','dark'].indexOf(p)<0)p='system';var q=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var applyFallback=function(){var m=p==='dark'||(p==='system'&&q&&q.matches)?'dark':'light';d.setAttribute('data-w-area','backend');d.setAttribute('data-theme-preference',p);d.setAttribute('data-theme',m);d.style.colorScheme=m;};applyFallback();function fitIframeViewport(){d.style.removeProperty('height');d.style.removeProperty('max-height');d.style.minHeight='0';d.style.overflow='hidden';if(b){b.classList.add('mmf-iframe-host');b.style.removeProperty('height');b.style.removeProperty('max-height');b.style.minHeight='0';b.style.overflow='hidden';b.style.margin='0';}var m=document.querySelector('main.w-backend-page,#main-content');if(m){m.style.removeProperty('height');m.style.removeProperty('max-height');m.style.minHeight='0';m.style.flex='1 1 auto';m.style.display='flex';m.style.flexDirection='column';m.style.overflow='hidden';m.style.padding='0';m.style.margin='0';}var w=document.querySelector('.mmf-wrap.mmf-iframe-mode');if(w){w.style.removeProperty('height');w.style.removeProperty('max-height');w.style.minHeight='0';}}fitIframeViewport();window.addEventListener('resize',fitIframeViewport,{passive:true});document.addEventListener('DOMContentLoaded',function(){if(b)b.classList.add('mmf-iframe-host');fitIframeViewport();var runtime=window.__WelineBackendThemeRuntime;if(runtime&&typeof runtime.apply==='function'){runtime.apply(p);return;}if(p==='system'&&q){if(q.addEventListener)q.addEventListener('change',applyFallback);else if(q.addListener)q.addListener(applyFallback);}fitIframeViewport();},{once:true});window.addEventListener('load',fitIframeViewport,{once:true});})();</script>
 <style id="mmf-iframe-layout-critical">
 html.mmf-iframe-host,
 html.mmf-iframe-host body,
@@ -51,6 +51,24 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
     max-block-size: 100% !important;
     block-size: 100% !important;
 }
+.mmf-wrap.mmf-iframe-mode .mmf-sidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-sidebar .mmf-sidebar-head,
+.mmf-wrap.mmf-iframe-mode .mmf-sidebar .mmf-sidebar-title {
+    flex: 0 0 auto !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-sidebar .mmf-sidebar-search {
+    flex: 0 0 auto !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-sidebar .mmf-tree {
+    flex: 1 1 auto !important;
+    min-block-size: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+}
 .mmf-wrap.mmf-iframe-mode .mmf-main {
     display: flex !important;
     flex-direction: column !important;
@@ -64,6 +82,11 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
 .mmf-wrap.mmf-iframe-mode .mmf-preview {
     display: grid !important;
     grid-template-rows: auto minmax(0, 1fr) !important;
+    overflow: hidden !important;
+}
+.mmf-wrap.mmf-iframe-mode .mmf-preview-content,
+.mmf-wrap.mmf-iframe-mode .mmf-preview-info {
+    min-block-size: 0 !important;
     overflow: hidden !important;
 }
 .mmf-wrap.mmf-iframe-mode .mmf-select-bar {
@@ -109,6 +132,19 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
             <button type="button" class="mmf-chrome-close" data-mmf-close-sidebar aria-label="@lang{关闭}">&times;</button>
         </div>
         <div class="mmf-sidebar-title"><lang>Folders</lang></div>
+        <div class="mmf-sidebar-search">
+            <label class="mmf-search-label" for="mmf-search-input"><lang>Search</lang></label>
+            <input type="search"
+                   class="mmf-search-input"
+                   id="mmf-search-input"
+                   placeholder="@lang{搜索文件或文件夹…}"
+                   autocomplete="off"
+                   role="combobox"
+                   aria-expanded="false"
+                   aria-controls="mmf-search-results"
+                   aria-autocomplete="list">
+            <div class="mmf-search-results" id="mmf-search-results" role="listbox" hidden></div>
+        </div>
         <ul class="mmf-tree" role="tree"></ul>
     </div>
 
@@ -142,11 +178,23 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
             <button type="button" class="mmf-btn mmf-btn-ai" id="mmf-btn-ai-draw" title="@lang{AI 作图}">
                 &#x2728; <lang>AI 作图</lang>
             </button>
+            <label class="mmf-ai-auto-translate" title="@lang{开启后由 cron 自动补缺未翻译语言；已有文案不覆盖。上传一键翻译不受此开关影响。}">
+                <input type="checkbox" id="mmf-ai-auto-translate" data-mmf-ai-auto-translate>
+                <span><lang>AI 自动翻译</lang></span>
+            </label>
+            <span class="mmf-toolbar-spacer" aria-hidden="true"></span>
             <button type="button" class="mmf-btn mmf-btn-primary mmf-iframe-confirm" id="mmf-btn-select" title="@lang{Select}">
                 &#x2714; <lang>Select</lang>
             </button>
         </div>
-        <div class="mmf-path"></div>
+        <div class="mmf-path-row">
+            <div class="mmf-path" aria-label="@lang{当前目录}"></div>
+            <button type="button" class="mmf-btn mmf-path-lock" id="mmf-btn-path-lock" hidden title="@lang{解锁目录}" aria-pressed="true">
+                <span class="mmf-path-lock-icon" aria-hidden="true">&#x1F512;</span>
+                <span class="mmf-path-lock-label"><lang>解锁目录</lang></span>
+            </button>
+        </div>
+        <div class="mmf-aspect-hint" id="mmf-aspect-hint" hidden role="status" aria-live="polite"></div>
 
         <!-- 上传进度与无障碍状态 -->
         <div class="mmf-upload-progress" role="progressbar" aria-label="@lang{文件上传进度}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-hidden="true">
@@ -198,6 +246,33 @@ html:has(.mmf-wrap.mmf-iframe-mode) #main-content {
             <div class="mmf-preview-info" style="display:none;">
                 <div class="mmf-preview-info-scroll">
                     <div class="mmf-preview-name"></div>
+                    <div class="mmf-locale-workbench" data-mmf-locale-workbench hidden>
+                        <div class="mmf-locale-workbench-title"><lang>多语言翻译</lang></div>
+                        <div class="mmf-locale-tabs" data-mmf-locale-tabs role="tablist"></div>
+                        <div class="mmf-locale-editor" data-mmf-locale-editor>
+                            <label class="mmf-locale-field">
+                                <span><lang>显示名称</lang></span>
+                                <input type="text" data-mmf-locale-display-name maxlength="255">
+                            </label>
+                            <label class="mmf-locale-field">
+                                <span><lang>默认 Alt</lang></span>
+                                <input type="text" data-mmf-locale-default-alt maxlength="512">
+                            </label>
+                            <label class="mmf-locale-field">
+                                <span><lang>资源描述</lang></span>
+                                <textarea data-mmf-locale-description rows="3"></textarea>
+                            </label>
+                            <label class="mmf-locale-field">
+                                <span><lang>默认说明文字</lang></span>
+                                <textarea data-mmf-locale-caption rows="2"></textarea>
+                            </label>
+                            <div class="mmf-locale-editor-actions">
+                                <button type="button" class="mmf-btn mmf-btn-primary" data-mmf-locale-save><lang>保存当前语言</lang></button>
+                                <button type="button" class="mmf-btn" data-mmf-locale-translate><lang>一键补缺翻译</lang></button>
+                            </div>
+                            <div class="mmf-locale-status" data-mmf-locale-status></div>
+                        </div>
+                    </div>
                     <dl class="mmf-preview-meta" data-mmf-preview-meta></dl>
                 </div>
                 <div class="mmf-preview-actions">
@@ -455,12 +530,17 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
             ext: <?= $mmfJson($this->getData('ext') ?: '*') ?>,
             size: <?= (int)$mmfSize ?>,
             lockPath: <?= $mmfBool($this->getData('lock_path')) ? 'true' : 'false' ?>,
+            lockRoot: <?= $mmfJson($this->getData('lock_root')) ?>,
             initialValue: <?= $mmfJson($this->getData('initial_value')) ?>,
             themePreference: <?= $mmfJson($this->getData('theme_preference') ?: 'system') ?>,
             themeMode: <?= $mmfJson($this->getData('theme_mode') ?: 'light') ?>,
             localeCode: <?= $mmfJson($this->getData('locale_code') ?: 'zh_Hans_CN') ?>,
             connectorFormKey: <?= $mmfJson($this->getData('connector_form_key')) ?>,
             requireImageUsage: <?= $mmfBool($this->getData('require_image_usage')) ? 'true' : 'false' ?>,
+            aspectRatio: <?= $mmfJson($this->getData('aspect_ratio')) ?>,
+            aspectRatioTolerance: <?= $mmfJson($this->getData('aspect_ratio_tolerance')) ?>,
+            recommendWidth: <?= $mmfJson($this->getData('recommend_width')) ?>,
+            recommendHeight: <?= $mmfJson($this->getData('recommend_height')) ?>,
             i18n: {
                 connectorNotConfigured: <?= $mmfJson(__('连接器URL未配置，请刷新页面')) ?>,
                 requestTimeout: <?= $mmfJson(__('请求超时，服务器可能繁忙')) ?>,
@@ -514,8 +594,16 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
                 fileSizeExceeded: <?= $mmfJson(__('文件 "%{name}" 超过大小限制（最大：%{size}）')) ?>,
                 fileCountExceeded: <?= $mmfJson(__('一次最多上传 %{count} 个文件')) ?>,
                 fileTypeNotAllowed: <?= $mmfJson(__('文件类型 "%{ext}" 不允许。允许的类型：%{allowed}')) ?>,
+                aspectRatioRequired: <?= $mmfJson(__('仅可选比例 %{ratio} 的图片')) ?>,
+                aspectRatioRecommendHint: <?= $mmfJson(__('建议约 %{width} × %{height}')) ?>,
+                aspectRatioMismatch: <?= $mmfJson(__('比例不符：需要 %{ratio}，当前 %{actual}')) ?>,
+                aspectRatioDimensionsMissing: <?= $mmfJson(__('缺少图片尺寸，无法按比例选择')) ?>,
                 fileReadFailed: <?= $mmfJson(__('无法读取文件“%{name}”')) ?>,
                 cannotAccessOutsidePath: <?= $mmfJson(__('不能访问指定路径以外的目录')) ?>,
+                unlockDirectory: <?= $mmfJson(__('解锁目录')) ?>,
+                lockDirectory: <?= $mmfJson(__('锁定目录')) ?>,
+                directoryUnlocked: <?= $mmfJson(__('已解锁目录，可浏览全部媒体库')) ?>,
+                directoryRelocked: <?= $mmfJson(__('已重新锁定到指定目录')) ?>,
                 folder: <?= $mmfJson(__('文件夹')) ?>,
                 unknown: <?= $mmfJson(__('未知')) ?>,
                 newFolder: <?= $mmfJson(__('新建文件夹')) ?>,
@@ -533,6 +621,10 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
                 viewDetails: <?= $mmfJson(__('查看详情')) ?>,
                 fileDetails: <?= $mmfJson(__('文件详情')) ?>,
                 folders: <?= $mmfJson(__('目录')) ?>,
+                searchNoResults: <?= $mmfJson(__('未找到匹配的文件或文件夹')) ?>,
+                searchFailed: <?= $mmfJson(__('搜索失败，请稍后重试')) ?>,
+                searching: <?= $mmfJson(__('正在搜索…')) ?>,
+                searchTargetMissing: <?= $mmfJson(__('无法定位到目标位置')) ?>,
                 close: <?= $mmfJson(__('关闭')) ?>,
                 editAssetMetadata: <?= $mmfJson(__('编辑资源翻译信息')) ?>,
                 urlCopied: <?= $mmfJson(__('链接已复制到剪贴板')) ?>,
@@ -555,6 +647,25 @@ $mmfSize = $mmfSize === false ? 512 * 1024 * 1024 : $mmfSize;
                 uploadDescriptionPromptForFile: <?= $mmfJson(__('请填写“%{name}”的资源描述，用于检索和编辑提示。')) ?>,
                 uploadDescriptionLabel: <?= $mmfJson(__('资源描述（必填）')) ?>,
                 uploadMetadataRequired: <?= $mmfJson(__('上传前必须填写默认 alt 和资源描述')) ?>,
+                uploadModeTitle: <?= $mmfJson(__('上传确认')) ?>,
+                uploadModePrompt: <?= $mmfJson(__('当前语言信息已填写。请选择仅确认上传，或一键补缺其它语言翻译。')) ?>,
+                confirmUploadOnly: <?= $mmfJson(__('确认上传')) ?>,
+                uploadWithOneClickTranslate: <?= $mmfJson(__('一键翻译并上传')) ?>,
+                oneClickTranslateDone: <?= $mmfJson(__('补缺完成：新增 %{filled}，跳过 %{skipped}')) ?>,
+                oneClickTranslateFailed: <?= $mmfJson(__('一键翻译失败')) ?>,
+                localeSaveSuccess: <?= $mmfJson(__('当前语言翻译已保存')) ?>,
+                localeSaveFailed: <?= $mmfJson(__('当前语言翻译保存失败')) ?>,
+                localeSaving: <?= $mmfJson(__('正在保存…')) ?>,
+                localeTranslating: <?= $mmfJson(__('正在补缺翻译…')) ?>,
+                localeTranslatingHint: <?= $mmfJson(__('正在调用 AI 补缺其它语言，请稍候…')) ?>,
+                localeMissing: <?= $mmfJson(__('未翻译')) ?>,
+                aiAutoTranslationOn: <?= $mmfJson(__('已开启 AI 自动翻译（每小时定时补缺）')) ?>,
+                aiAutoTranslationQueued: <?= $mmfJson(__('已开启并立即入队补缺 #%{id}，请到任务队列查看进度')) ?>,
+                aiAutoTranslationOff: <?= $mmfJson(__('已关闭 AI 自动翻译')) ?>,
+                aiAutoTranslationSaveFailed: <?= $mmfJson(__('AI 自动翻译配置保存失败')) ?>,
+                uploadNameConflictTitle: <?= $mmfJson(__('文件名已存在')) ?>,
+                uploadNameConflictMessage: <?= $mmfJson(__('当前文件夹已有「%{name}」。系统已生成不重复的文件名，请确认或修改后上传：')) ?>,
+                uploadNameStillExists: <?= $mmfJson(__('「%{name}」仍与现有文件重名，请换一个名称')) ?>,
                 assetMetadataMissing: <?= $mmfJson(__('当前文件尚未建立可编辑的资源实体')) ?>,
                 assetMetadataEditorUnavailable: <?= $mmfJson(__('资源信息编辑器尚未就绪')) ?>,
                 assetDisplayNamePrompt: <?= $mmfJson(__('请填写当前语言下的资源名称。')) ?>,

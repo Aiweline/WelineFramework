@@ -48,7 +48,9 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString("t('uploadRequestTooLarge')", $source);
         self::assertStringContainsString('!response || !Array.isArray(response.added) || response.added.length !== files.length', $source);
         self::assertStringContainsString("t('uploadResponseMismatch')", $source);
-        self::assertSame(2, substr_count($source, 'new XMLHttpRequest()'));
+        self::assertStringContainsString('function connectorNativeRequest(params)', $source);
+        self::assertStringContainsString('IFRAME_MODE && op === \'connector\'', $source);
+        self::assertSame(3, substr_count($source, 'new XMLHttpRequest()'));
         self::assertStringNotContainsString('upload_base64', $source);
         self::assertStringNotContainsString('formDataToConnectorPayload', $source);
         self::assertStringContainsString('var API_MAX_UPLOAD_FILE_BYTES = 14 * 1024 * 1024', $source);
@@ -77,7 +79,11 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('function isExternalFileDrag(dataTransfer)', $js);
         self::assertStringContainsString('if (!INTERNAL_DRAG_TARGETS.length) return false;', $js);
         self::assertStringContainsString('activeTargets.indexOf(hash) >= 0', $js);
-        self::assertStringContainsString('function bindClipboardPaste()', $js);
+        self::assertStringContainsString('function bindMediaSearch()', $js);
+        self::assertStringContainsString("cmd: 'search'", $js);
+        self::assertStringContainsString('function navigateToSearchResult(entry)', $js);
+        self::assertStringContainsString('mmf-search-input', $template);
+        self::assertStringContainsString('mmf-sidebar-search', $style);
         self::assertStringContainsString('clipboard.items', $js);
         self::assertStringContainsString('API_MAX_UPLOAD_FILE_BYTES', $js);
         self::assertStringContainsString('function findOversizedUploadFile(fileList)', $js);
@@ -86,9 +92,21 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('SAFE_UPLOAD_EXTENSIONS', $js);
         self::assertStringContainsString("t('fileSizeExceeded'", $js);
         self::assertMatchesRegularExpression(
-            '/findOversizedUploadFile\(fileList\)[\s\S]*requestUploadMetadata\(fileList\)/',
+            '/findOversizedUploadFile\(fileList\)[\s\S]*resolveUploadNameConflicts\(files, targetHash\)[\s\S]*requestUploadMetadata\(resolvedFiles\)/',
             $js
         );
+        self::assertStringContainsString("t('uploadModePrompt')", $js);
+        self::assertStringContainsString("upload: t('confirmUploadOnly')", $js);
+        self::assertStringContainsString("translate: t('uploadWithOneClickTranslate')", $js);
+        self::assertStringNotContainsString("label: t('confirmUploadOnly')", $js);
+        self::assertStringContainsString('function setLocaleWorkbenchBusy(busy, mode)', $js);
+        self::assertStringContainsString('function setLocaleActionButtonBusy(btn, busy, loadingText)', $js);
+        self::assertStringContainsString('data-mmf-locale-loading-overlay', $js);
+        self::assertStringContainsString("setLocaleWorkbenchBusy(true, 'translate')", $js);
+        self::assertStringContainsString("t('localeTranslatingHint')", $js);
+        self::assertStringContainsString('function suggestUniqueUploadFileName(name, reservedNames)', $js);
+        self::assertStringContainsString('function resolveUploadNameConflicts(fileList, targetHash)', $js);
+        self::assertStringContainsString("t('uploadNameConflictMessage'", $js);
         self::assertStringContainsString('function bindDirectoryDropTarget(el)', $js);
         self::assertStringContainsString("api({cmd: 'move', targets: eligible, target: destinationHash}", $js);
         self::assertStringContainsString('draggable="true"', $js);
@@ -147,8 +165,33 @@ final class ManagerJsBinQueryContractTest extends TestCase
 
         self::assertStringContainsString('function canOpenDirectoryHash(hash)', $source);
         self::assertStringContainsString('function isPathWithinLockedRoot(path)', $source);
+        self::assertStringContainsString('function isTreeItemOutsideLock(path)', $source);
+        self::assertStringContainsString('mmf-tree-item--outside-lock', $source);
         self::assertStringContainsString('if (CONFIG.lockPath && !isInit && !canOpenDirectoryHash(target))', $source);
         self::assertStringContainsString('if (CONFIG.lockPath) lastHash = null;', $source);
+        self::assertStringContainsString('function resolveHashForPath(path)', $source);
+        self::assertStringContainsString('function updatePathLockButton()', $source);
+        self::assertStringContainsString('function setPathLockEnabled(enabled)', $source);
+        self::assertStringContainsString("payload.lockRoot = CONFIG.lockRoot", $source);
+        self::assertStringContainsString("body.append('lockPath', CONFIG.lockPath ? '1' : '0')", $source);
+        self::assertStringContainsString('CONFIG.lockRoot = normalizeBoundaryPath(CONFIG.lockRoot || \'\')', $source);
+        self::assertStringContainsString('mmf-btn-path-lock', (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+        ));
+        self::assertStringContainsString('mmf-path-row', (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+        ));
+        self::assertStringContainsString('FILES[cur] || TREE[cur]', $source);
+        self::assertStringContainsString('mmf-path-row--locked', $source);
+        self::assertStringContainsString('lockRoot:', (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+        ));
+        self::assertStringContainsString('assertLockedRelativePath', (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/Service/ConnectorService.php'
+        ));
+        self::assertStringContainsString("assign('lock_root'", (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/Controller/Backend/Manager.php'
+        ));
         self::assertStringContainsString('function fileSelectionIssue(file)', $source);
         self::assertStringContainsString('function configuredSelectionExtensions()', $source);
         self::assertStringContainsString('ALLOWED_MIMES.some(function(allowedMime)', $source);
@@ -159,6 +202,27 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString("el.setAttribute('aria-pressed', selected ? 'true' : 'false')", $source);
         self::assertStringContainsString('var issue = fileSelectionIssue(f);', $source);
         self::assertStringNotContainsString("tree.addEventListener('click'", $source);
+        self::assertStringContainsString('function configuredAspectRatio()', $source);
+        self::assertStringContainsString("kind: 'aspect_ratio'", $source);
+        self::assertStringContainsString('function updateAspectRatioHint()', $source);
+        self::assertStringContainsString("['aspect_ratio', 'aspectRatio']", $source);
+        self::assertStringContainsString('aspectRatio:', (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+        ));
+        self::assertStringContainsString('var hasSelectionError = !!(selectionError && FILES[hash] && FILES[hash].mime !== \'directory\');', $source);
+        self::assertStringContainsString('if (hasSelectionError) showError(selectionError);', $source);
+        self::assertStringContainsString('function updatePreviewPanel()', $source);
+        self::assertStringContainsString('updatePreviewPanel();', $source);
+        self::assertStringContainsString("previewRoot.classList.add('mmf-preview--active')", $source);
+        self::assertStringContainsString('emptyEl.hidden = true;', $source);
+        self::assertStringContainsString('mmf-preview--active', (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css'
+        ));
+        self::assertStringContainsString('.mmf-item.selected.mmf-item-disabled', (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css'
+        ));
+        self::assertStringContainsString('function pickerSelectionIsEligible()', $source);
+        self::assertStringNotContainsString("showError(selectionError);\n                    return;\n                }\n                \n                if (SELECTION_MODE)", $source);
     }
 
     public function testStandalonePageTitleAndIframeHidesPageHeader(): void
@@ -204,6 +268,45 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('height: 100dvh;', $style);
         self::assertStringContainsString('body:has(.mmf-wrap:not(.mmf-iframe-mode)) .w-backend-footer', $style);
         self::assertStringNotContainsString('height: calc(100vh - 120px)', $style);
+    }
+
+    public function testEmbeddedPickerKeepsBottomContentReachableWithoutPixelHeightLocks(): void
+    {
+        $pickerStyle = (string)file_get_contents(
+            BP . '/app/code/Weline/FileManager/view/statics/css/file-picker.css'
+        );
+        $pickerScript = (string)file_get_contents(
+            BP . '/app/code/Weline/FileManager/view/statics/js/file-picker.js'
+        );
+        $managerStyle = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css'
+        );
+        $managerScript = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/statics/js/manager.js'
+        );
+        $template = (string)file_get_contents(
+            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+        );
+
+        self::assertStringContainsString('block-size: min(90dvh, 52rem);', $pickerStyle);
+        self::assertStringContainsString('.w-file-picker__dialog.w-dialog:not([open])', $pickerStyle);
+        self::assertStringContainsString('.w-file-picker__dialog.w-dialog[open]', $pickerStyle);
+        self::assertMatchesRegularExpression(
+            '/\.w-file-picker__dialog \.w-dialog__body\.w-file-picker__body \{[\s\S]*?flex: 1 1 0;[\s\S]*?min-block-size: 0;[\s\S]*?overflow: hidden !important;/',
+            $pickerStyle,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.w-file-picker__frame \{[\s\S]*?flex: 1 1 0;[\s\S]*?block-size: auto;/',
+            $pickerStyle,
+        );
+        self::assertStringNotContainsString('frame.style.height = heightPx', $pickerScript);
+        self::assertStringNotContainsString('frame.style.minHeight = heightPx', $pickerScript);
+        self::assertStringContainsString('.mmf-wrap.mmf-iframe-mode .mmf-content {', $managerStyle);
+        self::assertStringContainsString('-webkit-overflow-scrolling: touch;', $managerStyle);
+        self::assertStringContainsString("document.documentElement.style.removeProperty('height')", $managerScript);
+        self::assertStringNotContainsString('document.documentElement.style.height = heightPx', $managerScript);
+        self::assertStringContainsString("d.style.removeProperty('height')", $template);
+        self::assertStringNotContainsString("var heightPx=Math.floor(h)+'px'", $template);
     }
 
     public function testDirectoryContextMenuIsProviderAwareAccessibleAndViewportBounded(): void
@@ -389,6 +492,10 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringNotContainsString('COMPACT_MQ && COMPACT_MQ.matches && !IFRAME_MODE', $script);
         self::assertStringContainsString('.mmf-preview-title { display: none; }', $style);
         self::assertStringContainsString('if (IFRAME_MODE && MULTI_SELECT) {', $script);
+        self::assertStringContainsString('enterSelectionMode();', $script);
+        self::assertStringContainsString('// 多选嵌入选择器：默认进入选择模式，单击切换勾选（无需 Ctrl/右键）', $script);
+        self::assertStringContainsString('// iframe 多选选择器必须保持选择模式，否则单击会变成单选覆盖', $script);
+        self::assertStringContainsString('if (SELECTED.length === 0 && !(IFRAME_MODE && MULTI_SELECT)) {', $script);
         self::assertStringContainsString('.mmf-preview-actions { flex: 0 0 auto;', $style);
         self::assertStringContainsString('data-mmf-details-list', $template);
         self::assertStringContainsString('role="dialog" aria-modal="true" aria-labelledby="mmf-details-title"', $template);

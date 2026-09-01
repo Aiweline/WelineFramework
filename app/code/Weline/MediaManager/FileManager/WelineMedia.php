@@ -18,7 +18,8 @@ class WelineMedia extends FileManager
         if (!$params) {
             $params = $this->getData();
         }
-        return $this->request->getUrlBuilder()->getBackendUrl('media/backend/connector', $params, true);
+        // Taglib/Block picker iframe must open the manager UI (not the JSON connector).
+        return $this->request->getUrlBuilder()->getBackendUrl('media/backend/manager/iframe', $params, true);
     }
 
     public function render(): string
