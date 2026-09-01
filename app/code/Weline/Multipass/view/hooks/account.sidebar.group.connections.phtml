@@ -1,0 +1,20 @@
+<?php
+/**
+ * Weline_Multipass — connections group entry.
+ *
+ * Hook: account.sidebar.group.connections
+ *
+ * @hook-priority 40
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#identity-bridge" data-section="identity-bridge" data-account-nav-link="true" data-account-nav-parent="connections">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="shield" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><?= __('授权应用') ?></strong>
+            <span><?= __('管理通信登录与账号绑定') ?></span>
+        </span>
+    </span>
+</a>

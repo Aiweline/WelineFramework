@@ -117,12 +117,11 @@ Token验证失败：%{1},"Token verification failed: %{1}"
 启用,enable
 删除态,"Delete state"
 禁用,Disable
-开发者,Developer
-授权应用,"Authorized apps"
-管理通信登录与账号绑定,"Manage communication login and account bindings"
 "Multipass 管理申请","Multipass management application"
 申请接入网站授权登录,"Apply for website authorized login"
 使用官网登录,"Sign in with official account"
+授权应用,"Authorized apps"
+管理通信登录与账号绑定,"Manage communication login and account bindings"
 未知应用,"Unknown application"
 "Weline 账号授权","Weline account authorization"
 "请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。","Please confirm the source of the application and request permissions. After authorization, the app can use your Weline account to complete login and account association."
@@ -138,6 +137,7 @@ Token验证失败：%{1},"Token verification failed: %{1}"
 同意并继续,"Allow and continue"
 登录后继续,"Log in to continue"
 如果你不认识这个应用或域名，请取消授权。,"If you do not recognize this application or domain name, please cancel the authorization."
+开发者,Developer
 "提交你的网站回调地址后会自动生成并启用客户端，可立即把你的网站登录与 Weline 账号授权登录挂钩。","Submit your website callback URL to automatically generate and enable a client, then connect your site's login with Weline account authorization immediately."
 "提交你的网站回调地址，审核通过后即可把你的网站登录与 Weline 账号授权登录挂钩。","Submit your website callback URL. After approval, you can connect your site's login with Weline account authorization."
 自动通过,Auto-approved
