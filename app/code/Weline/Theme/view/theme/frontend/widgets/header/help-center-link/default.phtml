@@ -29,9 +29,13 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $label = WidgetI18n::label(trim((string)($this->getData('label') ?? '')), '帮助中心');
-$url = LegacyMediaUrl::sanitize((string)($this->getData('url') ?? '/help'));
-if ($url === '') {
-    $url = '/help';
+$url = LegacyMediaUrl::sanitize((string)($this->getData('url') ?? ''));
+$urlPath = 'help';
+if ($url !== '' && (str_starts_with($url, 'http://') || str_starts_with($url, 'https://') || str_starts_with($url, '#'))) {
+    $urlPath = '';
+} elseif ($url !== '') {
+    $urlPath = ltrim($url, '/');
+    $url = '';
 }
 ?>
 
@@ -40,7 +44,7 @@ if ($url === '') {
    data-uid="<?= $esc($scope->uid) ?>"
    data-js-ns="<?= $esc($scope->jsNs) ?>"
    data-widget-type="notice-rights"
-   href="<?= $esc($url) ?>"><?= $esc($label) ?></a>
+   href="<?php if ($url !== ''): ?><?= $esc($url) ?><?php else: ?>@url{$urlPath}<?php endif; ?>"><?= $esc($label) ?></a>
 
 <style>
 .<?= $wc ?> {

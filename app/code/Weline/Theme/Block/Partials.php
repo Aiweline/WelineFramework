@@ -202,6 +202,34 @@ class Partials extends Block
             }
         }
 
+        // Frontend header/footer: L1 miss → scope hot cache (cross-worker SWR).
+        // Backend chrome stays process-local; historical theme_runtime IPC was too
+        // expensive under pool pressure, so shared writes stay on the storefront path only.
+        if ($this->shouldUseSharedStorefrontChromeCache($area, $type)) {
+            try {
+                /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
+                $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+                $html = $hotCache->remember(
+                    'weline_theme_storefront_chrome',
+                    'theme.chrome.' . \strtolower($type) . '.' . $cacheKey,
+                    \max(60, (int)$policy['ttl']),
+                    fn(): string => $this->renderCompiledPartial($fileName, $dictionary),
+                    ['website' => true, 'lang' => true],
+                    $this->partialOutputStaleTtl(),
+                );
+                if (\is_string($html) && !$this->isEmptyPartialHtml($html)) {
+                    $this->rememberPartialOutput($cacheKey, $html, 'fresh', $policy['ttl']);
+                    return $html;
+                }
+            } catch (\Throwable $e) {
+                $this->logPartialCacheDiagnostic('shared_chrome_fallback', [
+                    'file' => $fileName,
+                    'type' => $type,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $html = $this->renderCompiledPartial($fileName, $dictionary);
         if ($this->isEmptyPartialHtml($html)) {
             $this->logPartialCacheDiagnostic('skip_empty_partial_output_store', [
@@ -214,6 +242,12 @@ class Partials extends Block
         $this->rememberPartialOutput($cacheKey, $html, 'fresh', $policy['ttl']);
 
         return $html;
+    }
+
+    private function shouldUseSharedStorefrontChromeCache(string $area, string $type): bool
+    {
+        return \strtolower($area) === 'frontend'
+            && \in_array(\strtolower($type), ['header', 'footer'], true);
     }
 
     /**
@@ -624,7 +658,13 @@ class Partials extends Block
                 if ($userId === '' && $username === '') {
                     return null;
                 }
-                $context = 'backend-auth:1:user:' . \sha1($userId . '|' . $username);
+                // Inbox revision is bumped after mark-as-read so chrome topbar
+                // (which embeds the unread badge) misses across WLS workers.
+                $inboxRev = '';
+                if (\method_exists($session, 'getData')) {
+                    $inboxRev = (string)($session->getData('backend_notification_inbox_rev') ?? '');
+                }
+                $context = 'backend-auth:1:user:' . \sha1($userId . '|' . $username . '|n:' . $inboxRev);
             }
         } catch (\Throwable) {
             return null;

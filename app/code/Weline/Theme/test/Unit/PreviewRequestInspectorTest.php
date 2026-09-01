@@ -7,16 +7,30 @@ namespace Weline\Theme\Test\Unit;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Request;
 use Weline\Theme\Service\PreviewRequestInspector;
+use Weline\Theme\Service\PreviewTokenService;
 
 class PreviewRequestInspectorTest extends TestCase
 {
-    public function testLiveRouteDoesNotAllowStoredPreviewContext(): void
+    private const SAMPLE_TOKEN = 'pv_' . 'abcdefghijklmnopqrstuvwxyz0123456789ABCDE';
+
+    public function testLiveRouteDoesNotAllowStoredPreviewContextWithoutToken(): void
     {
         $inspector = new PreviewRequestInspector($this->createRequest('/', []));
 
         $this->assertFalse($inspector->shouldUseStoredPreviewContext());
         $this->assertFalse($inspector->shouldAllowPreviewTokenCookie());
         $this->assertFalse($inspector->isEditorMode());
+    }
+
+    public function testLiveRouteWithPreviewTokenAllowsStoredContextAndCookie(): void
+    {
+        $inspector = new PreviewRequestInspector($this->createRequest('/', [
+            PreviewTokenService::TOKEN_KEY => self::SAMPLE_TOKEN,
+        ]));
+
+        $this->assertTrue($inspector->hasExplicitPreviewTokenCarrier());
+        $this->assertTrue($inspector->shouldUseStoredPreviewContext());
+        $this->assertTrue($inspector->hasExplicitPreviewCarrier());
     }
 
     public function testIsEditorModeDetectsQueryFlag(): void
@@ -76,6 +90,10 @@ class PreviewRequestInspectorTest extends TestCase
      */
     private function createRequest(string $path, array $params): Request
     {
+        $query = \http_build_query($params);
+        $requestUri = $path . ($query !== '' ? '?' . $query : '');
+        $_SERVER['REQUEST_URI'] = $requestUri;
+
         $request = $this->createMock(Request::class);
         $request->method('getUrlPath')->willReturn($path);
         $request->method('getParam')
@@ -83,6 +101,17 @@ class PreviewRequestInspectorTest extends TestCase
                 return $params[$key] ?? $default;
             });
         $request->method('getHeader')->willReturn(null);
+        $request->method('getServer')
+            ->willReturnCallback(static function (string $key, mixed $default = null) use ($requestUri, $path) {
+                if ($key === 'REQUEST_URI') {
+                    return $requestUri;
+                }
+                if ($key === 'WELINE_ORIGIN_REQUEST_URI') {
+                    return $requestUri;
+                }
+
+                return $default;
+            });
 
         return $request;
     }

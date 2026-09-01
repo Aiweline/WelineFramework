@@ -34,6 +34,15 @@
                   shared="true"
                   sort="900"/>
     </event>
+
+    <!-- Register before Framework warm_on_server_start (sort=100) -->
+    <event name="Weline_Server::start_after">
+        <observer name="Weline_Theme::register_storefront_fpc_warmer"
+                  instance="Weline\Theme\Observer\RegisterStorefrontFpcWarmer"
+                  disabled="false"
+                  shared="true"
+                  sort="50"/>
+    </event>
     
     <!-- 
         模板文件获取事件 - 解析主题文件路径
@@ -164,6 +173,11 @@
                   disabled="false"
                   shared="true"
                   sort="130"/>
+        <observer name="Weline_Theme::setup_upgrade_publish_not_found_static"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfterPublishNotFoundStatic"
+                  disabled="false"
+                  shared="true"
+                  sort="250"/>
     </event>
 
     <event name="Weline_Widget::widget_install_after">

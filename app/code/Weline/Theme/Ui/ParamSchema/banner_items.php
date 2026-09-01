@@ -14,6 +14,7 @@ return [
             'label' => '图片',
             'media_options' => [
                 'default_directory' => 'banner',
+                'aspect_ratio' => '16:5',
                 'recommend_width' => '1920',
                 'recommend_height' => '600',
             ],

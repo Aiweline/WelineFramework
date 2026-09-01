@@ -1,0 +1,294 @@
+/* Theme editor chrome collapse + brand basics drawer */
+
+.theme-editor-container.theme-editor-chrome-collapsed > .editor-toolbar,
+.theme-editor-container.theme-editor-chrome-collapsed > .editor-preview-toolbar {
+    display: none !important;
+}
+
+.editor-chrome-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    background: var(--w-color-surface-raised, #111827);
+    border-bottom: 1px solid var(--w-color-border, rgba(255, 255, 255, 0.08));
+    min-height: 2.5rem;
+}
+
+.theme-editor-container:not(.theme-editor-chrome-collapsed) > .editor-chrome-strip {
+    display: none !important;
+}
+
+.theme-editor-container.theme-editor-chrome-collapsed > .editor-chrome-strip[hidden] {
+    display: none !important;
+}
+
+.theme-editor-container.theme-editor-chrome-collapsed > .editor-chrome-strip:not([hidden]) {
+    display: flex !important;
+}
+
+.editor-chrome-strip__title {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--w-color-text, #f8fafc);
+}
+
+.editor-chrome-strip__scope {
+    font-size: 0.8125rem;
+    color: var(--w-color-text-muted, #94a3b8);
+    max-inline-size: 18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.editor-chrome-strip__spacer {
+    flex: 1 1 auto;
+}
+
+/* Match Scope / language control height in the compact toolbar row. */
+.theme-editor-container .toolbar-left > .toolbar-brand-basics-btn {
+    flex: 0 0 auto;
+    align-self: stretch;
+    margin-inline-end: 0.25rem;
+    box-sizing: border-box;
+    min-height: 1.75rem;
+    height: auto;
+    padding-block: 0;
+    padding-inline: 0.75rem;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    border-radius: var(--w-theme-editor-radius-sm, 4px);
+}
+
+.theme-editor-container .toolbar-left > .toolbar-brand-basics-btn .w-icon {
+    font-size: 0.875rem;
+}
+
+/* Scope / language: size to the selected label instead of reserving a long empty slot. */
+.theme-editor-container .toolbar-left > .toolbar-selects {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+}
+
+.theme-editor-container .toolbar-select-field-scope {
+    flex: 0 0 auto !important;
+    inline-size: auto !important;
+    width: auto !important;
+    max-inline-size: min(26.25rem, 48vw) !important;
+}
+
+.theme-editor-container .toolbar-select-field-scope .w-tree-select,
+.theme-editor-container .toolbar-select-field-scope .w-scope-select {
+    inline-size: auto !important;
+    width: auto !important;
+    max-inline-size: 100%;
+}
+
+.theme-editor-container .toolbar-select-field-scope .w-tree-select-trigger,
+.theme-editor-container .toolbar-select-field-scope .w-scope-select-trigger {
+    inline-size: auto;
+    width: auto;
+    max-inline-size: 100%;
+    justify-content: flex-start;
+}
+
+.theme-editor-container .toolbar-select-field-scope .w-tree-select-display {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+.theme-editor-container .toolbar-selects .toolbar-select-field-language .w-select,
+.theme-editor-container .toolbar-selects select.w-select[data-w-fit-width="1"] {
+    width: auto;
+    max-width: min(20rem, 42vw);
+    field-sizing: content;
+}
+
+@media (max-width: 1280px) {
+    .theme-editor-container .toolbar-select-field-scope {
+        max-inline-size: min(22rem, 52vw) !important;
+    }
+}
+
+@media (max-width: 760px) {
+    .theme-editor-container .toolbar-select-field-scope {
+        max-inline-size: min(16rem, 78vw) !important;
+    }
+
+    .theme-editor-container .toolbar-select-field-scope .w-tree-select-display {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+.w-theme-brand-basics-drawer .w-drawer__body,
+.w-theme-brand-basics-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-block: 0.15rem 0.75rem;
+}
+
+.w-theme-brand-meta {
+    margin: 0;
+    padding: 0.55rem 0.7rem;
+    border-radius: 0.45rem;
+    background: color-mix(in srgb, var(--w-theme-editor-bg-hover, #1e293b) 90%, transparent);
+    border: 1px solid color-mix(in srgb, var(--w-theme-editor-border, #334155) 70%, transparent);
+    color: var(--w-theme-editor-text-secondary, #94a3b8);
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+.w-theme-brand-field {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.w-theme-brand-field__title {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 650;
+    color: var(--w-theme-editor-text-primary, #f8fafc);
+}
+
+.w-theme-brand-field__title label {
+    cursor: default;
+}
+
+.w-theme-brand-field__row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.w-theme-brand-field__side {
+    display: grid;
+    gap: 0.2rem;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+}
+
+.w-theme-brand-field__size,
+.w-theme-brand-field__ext {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: var(--w-theme-editor-text-secondary, #94a3b8);
+}
+
+.w-theme-brand-field__size {
+    color: var(--w-theme-editor-text-primary, #cbd5e1);
+    font-weight: 550;
+}
+
+.w-theme-brand-upload {
+    position: relative;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    inline-size: 5.5rem;
+    block-size: 5.5rem;
+    margin: 0;
+    padding: 0.4rem;
+    border: 1.5px dashed color-mix(in srgb, var(--w-theme-editor-border, #475569) 90%, transparent);
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--w-theme-editor-bg-card, #0f172a) 88%, #020617);
+    color: var(--w-theme-editor-text-secondary, #94a3b8);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.w-theme-brand-upload:hover,
+.w-theme-brand-upload:focus-visible {
+    border-color: var(--w-theme-editor-accent, #38bdf8);
+    color: var(--w-theme-editor-text-primary, #f8fafc);
+    outline: none;
+}
+
+.w-theme-brand-upload__empty {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+}
+
+.w-theme-brand-upload__empty .w-icon {
+    font-size: 1.05rem;
+    opacity: 0.92;
+}
+
+.w-theme-brand-upload__preview {
+    display: none;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+}
+
+.w-theme-brand-upload__preview img {
+    max-inline-size: 100%;
+    max-block-size: 100%;
+    object-fit: contain;
+}
+
+.w-theme-brand-upload[data-has-image="1"] {
+    border-style: solid;
+    background: color-mix(in srgb, var(--w-theme-editor-bg-card, #0f172a) 75%, #020617);
+}
+
+.w-theme-brand-upload[data-has-image="1"] .w-theme-brand-upload__empty {
+    display: none;
+}
+
+.w-theme-brand-upload[data-has-image="1"] .w-theme-brand-upload__preview {
+    display: grid;
+}
+
+.w-theme-brand-basics-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.w-theme-brand-basics-footer .w-button {
+    flex: 1 1 auto;
+}
+
+.w-theme-brand-preview {
+    display: none;
+}
+
+/* Reuse widget media dialog chrome when widget-param CSS is not on this route yet. */
+.w-theme-brand-media-dialog[open],
+.w-param-media-dialog.w-theme-brand-media-dialog[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+.w-theme-brand-media-dialog {
+    height: min(48rem, calc(100dvh - 2rem));
+    max-height: calc(100dvh - 2rem);
+}
+
+.w-theme-brand-media-dialog .w-param-media-dialog__body {
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.w-theme-brand-media-dialog .w-param-media-dialog__frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}

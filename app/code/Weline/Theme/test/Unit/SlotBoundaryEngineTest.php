@@ -1,0 +1,140 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Theme\Test\Unit;
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Test\TestCore;
+use Weline\Framework\View\Taglib;
+use Weline\Framework\View\Template;
+use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
+use Weline\Theme\Service\SlotBoundaryMarkers;
+use Weline\Theme\Service\SlotBoundaryScanner;
+use Weline\Theme\Service\SlotHtmlOpaqueParker;
+use Weline\Theme\Service\ThemePreviewContentRenderer;
+use Weline\Theme\Taglib\Slot;
+
+final class SlotBoundaryEngineTest extends TestCore
+{
+    public function testSlotCompileEmitsBoundaryComments(): void
+    {
+        Slot::clearRegisteredSlots();
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $content = '<w:slot id="category-grid" name="Categories"><section>Default</section></w:slot>';
+
+        $result = $taglib->compile(
+            $template,
+            $content,
+            'slot-boundary-' . uniqid('', true) . '.phtml',
+        );
+
+        $this->assertStringContainsString('<!--@weline-slot:category-grid-->', $result);
+        $this->assertStringContainsString('<!--@/weline-slot:category-grid-->', $result);
+        $this->assertStringContainsString('data-wslot="category-grid"', $result);
+    }
+
+    public function testNestedBoundaryRegionsSortDeepestFirst(): void
+    {
+        $html = <<<'HTML'
+<!--@weline-slot:header-->
+<section data-wslot="header">
+<!--@weline-slot:logo-->
+<div data-wslot="logo">L</div>
+<!--@/weline-slot:logo-->
+</section>
+<!--@/weline-slot:header-->
+HTML;
+
+        $scanner = new SlotBoundaryScanner();
+        $regions = $scanner->enumerateRegions($html);
+
+        $this->assertCount(2, $regions);
+        $this->assertSame('logo', $regions[0]['id']);
+        $this->assertSame('header', $regions[1]['id']);
+        $this->assertGreaterThan($regions[1]['depth'], $regions[0]['depth']);
+    }
+
+    public function testProdStripRemovesBoundaryCommentsOnly(): void
+    {
+        $html = <<<'HTML'
+<!--@weline-slot:content-->
+<div data-wslot="content"><style>.x{}</style><span>ok</span></div>
+<!--@/weline-slot:content-->
+HTML;
+
+        $stripped = SlotBoundaryMarkers::strip($html);
+
+        $this->assertStringNotContainsString('@weline-slot', $stripped);
+        $this->assertStringContainsString('data-wslot="content"', $stripped);
+        $this->assertStringContainsString('<style>.x{}</style>', $stripped);
+    }
+
+    public function testOpaqueParkerPreservesScriptLessThan(): void
+    {
+        $parker = new SlotHtmlOpaqueParker();
+        $widget = <<<'HTML'
+<section><script>if (1 < 2) { window.__ok = true; }</script></section>
+HTML;
+
+        $parked = $parker->park($widget);
+        $this->assertStringNotContainsString('if (1 < 2)', $parked);
+        $restored = $parker->restore($parked);
+        $this->assertStringContainsString('if (1 < 2)', $restored);
+    }
+
+    public function testExtractSlotInnerPreservesFollowingSlotStyleAfterScriptLt(): void
+    {
+        $renderer = new ThemePreviewContentRenderer(
+            $this->createMock(\Weline\Theme\Service\ThemeLayoutService::class),
+            $this->createMock(\Weline\Theme\Service\SlotRendererService::class),
+            new \Weline\Theme\Service\ThemePageTypeResolver(),
+            ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class),
+        );
+
+        $promo = '<section class="wc-theme_widget_promo_banner"><script>'
+            . '(function () { var hoursSinceClosed = 1; if (hoursSinceClosed < 24) {} })();'
+            . '</script></section>';
+        $featured = '<div class="widget-wrapper">'
+            . '<section class="wc-theme_widget_featured_products">'
+            . '<style>.wc-theme_widget_featured_products{display:grid}</style>'
+            . '<div class="products-grid columns-4"><article>ok</article></div>'
+            . '</section></div>';
+
+        $html = SlotBoundaryMarkers::open('homepage-promo')
+            . '<div data-preview-slot="homepage-promo" data-wslot="homepage-promo">' . $promo . '</div>'
+            . SlotBoundaryMarkers::close('homepage-promo')
+            . SlotBoundaryMarkers::open('homepage-featured')
+            . '<div data-preview-slot="homepage-featured" data-wslot="homepage-featured">' . $featured . '</div>'
+            . SlotBoundaryMarkers::close('homepage-featured');
+
+        $method = new \ReflectionMethod(ThemePreviewContentRenderer::class, 'extractSlotHtml');
+        $method->setAccessible(true);
+        /** @var array<string,string> $slotHtml */
+        $slotHtml = $method->invoke($renderer, $html, ['homepage-promo', 'homepage-featured']);
+
+        $featuredHtml = (string) ($slotHtml['homepage-featured'] ?? '');
+        $this->assertStringContainsString('wc-theme_widget_featured_products', $featuredHtml);
+        $this->assertStringContainsString('display:grid', $featuredHtml);
+        $this->assertStringContainsString('products-grid', $featuredHtml);
+    }
+
+    public function testMissingBoundaryMarkersDoNotRequireHardThrow(): void
+    {
+        $service = ObjectManager::getInstance(\Weline\Theme\Service\SlotRendererService::class);
+        $method = new \ReflectionMethod(\Weline\Theme\Service\SlotRendererService::class, 'shouldRequireSlotBoundaryMarkers');
+        $method->setAccessible(true);
+
+        $requires = $method->invoke(
+            $service,
+            '<div data-wslot="content">Default</div>',
+            ['content' => [['widget_code' => 'hero']]],
+        );
+        $this->assertTrue($requires);
+        $this->assertFalse(SlotBoundaryMarkers::hasMarkers('<div data-wslot="content">Default</div>'));
+    }
+}

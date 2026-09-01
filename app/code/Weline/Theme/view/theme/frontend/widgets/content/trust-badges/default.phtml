@@ -42,10 +42,10 @@ if (!in_array($style, ['icon-text', 'icon-only', 'card'], true)) {
 }
 
 $presetConfig = [
-    'secure-payment' => ['icon' => 'check', 'title' => __('安全支付'), 'description' => __('SSL加密保护')],
-    'money-back'     => ['icon' => 'circle', 'title' => __('无忧退款'), 'description' => __('30天无理由退货')],
+    'secure-payment' => ['icon' => 'credit-card', 'title' => __('安全支付'), 'description' => __('SSL加密保护')],
+    'money-back'     => ['icon' => 'shield', 'title' => __('无忧退款'), 'description' => __('30天无理由退货')],
     'free-shipping'  => ['icon' => 'truck', 'title' => __('免费配送'), 'description' => __('满额包邮')],
-    '24-7-support'   => ['icon' => 'circle', 'title' => __('全天候客服'), 'description' => __('7×24小时在线')],
+    '24-7-support'   => ['icon' => 'message', 'title' => __('全天候客服'), 'description' => __('7×24小时在线')],
     'ssl-secure'     => ['icon' => 'lock', 'title' => __('SSL安全'), 'description' => __('数据加密传输')],
     'verified-seller'=> ['icon' => 'circle', 'title' => __('认证商家'), 'description' => __('正品保证')],
 ];
@@ -68,36 +68,56 @@ if (is_array($badges)) {
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>">
 
-    <?php if ($title !== ''): ?>
-        <h3 class="badges-heading"><?= $esc($title) ?></h3>
-    <?php endif; ?>
+    <div class="badges-inner">
+        <?php if ($title !== ''): ?>
+            <h3 class="badges-heading"><?= $esc($title) ?></h3>
+        <?php endif; ?>
 
-    <div class="badges-grid columns-<?= $esc($columns) ?>">
-        <?php foreach ($allBadges as $badge): ?>
-            <div class="badge-item">
-                <div class="badge-icon" aria-hidden="true">
-                    <w:icon name="badge.icon|check" size="md"></w:icon>
-                </div>
-
-                <?php if ($style !== 'icon-only'): ?>
-                    <div class="badge-content">
-                        <h4 class="badge-title"><?= $esc((string)($badge['title'] ?? '')) ?></h4>
-                        <?php if ($style === 'card' && !empty($badge['description'])): ?>
-                            <p class="badge-description"><?= $esc((string)$badge['description']) ?></p>
-                        <?php endif; ?>
+        <div class="badges-grid columns-<?= $esc($columns) ?>">
+            <?php foreach ($allBadges as $badge): ?>
+                <div class="badge-item">
+                        <div class="badge-icon" aria-hidden="true">
+                        <?php
+                        $badgeIcon = trim((string)($badge['icon'] ?? 'check'));
+                        if ($badgeIcon === '' || preg_match('/^[a-z0-9][a-z0-9_-]*$/i', $badgeIcon) !== 1) {
+                            $badgeIcon = 'check';
+                        }
+                        ?>
+                        <w:icon name="<?= $esc($badgeIcon) ?>" size="md"></w:icon>
                     </div>
-                <?php else: ?>
-                    <span class="w-visually-hidden"><?= $esc((string)($badge['title'] ?? '')) ?></span>
-                <?php endif; ?>
-            </div>
-        <?php endforeach; ?>
+
+                    <?php if ($style !== 'icon-only'): ?>
+                        <div class="badge-content">
+                            <h4 class="badge-title"><?= $esc((string)($badge['title'] ?? '')) ?></h4>
+                            <?php if ($style === 'card' && !empty($badge['description'])): ?>
+                                <p class="badge-description"><?= $esc((string)$badge['description']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <span class="w-visually-hidden"><?= $esc((string)($badge['title'] ?? '')) ?></span>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
     </div>
 </section>
 
 <style>
 .<?= $wc ?> {
-    padding: var(--weline-space-8) 0;
+    width: 100%;
+    padding: var(--weline-space-6) 0;
     color: var(--weline-theme-text);
+    background: var(--weline-theme-surface);
+    border-block: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    box-sizing: border-box;
+}
+
+.<?= $wc ?> .badges-inner {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+    padding-inline: 0;
+    box-sizing: border-box;
 }
 
 .<?= $wc ?> .badges-heading {
@@ -110,7 +130,8 @@ if (is_array($badges)) {
 
 .<?= $wc ?> .badges-grid {
     display: grid;
-    gap: var(--weline-space-5);
+    gap: clamp(var(--weline-space-4), 3vw, var(--weline-space-6));
+    align-items: center;
 }
 
 .<?= $wc ?> .badges-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
@@ -136,25 +157,40 @@ if (is_array($badges)) {
 .<?= $wc ?>.style-icon-text .badge-item {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--weline-space-3);
+    min-height: var(--size-control-50);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border-radius: var(--weline-radius-lg);
+    transition: background-color var(--weline-theme-transition-base);
+}
+
+.<?= $wc ?>.style-icon-text .badge-item:hover {
+    background: var(--weline-theme-surface-muted);
 }
 
 .<?= $wc ?>.style-icon-text .badge-icon {
     width: var(--size-control-50);
     height: var(--size-control-50);
-    background: var(--weline-theme-primary);
-    border-radius: var(--weline-radius-lg);
+    background: color-mix(in srgb, var(--weline-theme-primary) 14%, transparent);
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: var(--weline-theme-on-primary);
+    color: var(--weline-theme-primary);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary) 18%, transparent);
+}
+
+.<?= $wc ?>.style-icon-text .badge-content {
+    min-width: 0;
 }
 
 .<?= $wc ?>.style-icon-text .badge-title {
     margin: 0;
     font-size: var(--weline-font-size-sm);
     font-weight: 600;
+    line-height: 1.4;
     color: var(--weline-theme-text);
 }
 
@@ -205,10 +241,19 @@ if (is_array($badges)) {
 @media (max-width: 768px) {
     .<?= $wc ?> .badges-grid {
         grid-template-columns: repeat(2, 1fr) !important;
+        gap: var(--weline-space-4);
+    }
+
+    .<?= $wc ?>.style-icon-text .badge-item {
+        justify-content: flex-start;
     }
 }
 
 @media (max-width: 480px) {
+    .<?= $wc ?> .badges-inner {
+        padding-inline: var(--weline-space-4);
+    }
+
     .<?= $wc ?> .badges-grid {
         grid-template-columns: 1fr !important;
     }

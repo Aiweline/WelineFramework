@@ -20,8 +20,10 @@
  * @param show_icons {default=true,type="bool",label="显示图标"}
  * @param show_count {default=false,type="bool",label="显示产品数量"}
  * @param expand_on_hover {default=true,type="bool",label="悬停展开"}
+ * @param show_banner_with_children {default=true,type="bool",label="有子分类时展示 Banner/描述",description="Mega Menu：有子分类时是否在子分类上方展示分类 Banner 与描述；无子分类时始终展示（有内容则显示）"}
  */
 
+use Weline\Theme\Helper\HeaderCommerceData;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('category-menu');
@@ -34,12 +36,46 @@ $maxDepth = (int)($this->getData('max_depth') ?? 3);
 $showIcons = (bool)($this->getData('show_icons') ?? true);
 $showCount = (bool)($this->getData('show_count') ?? false);
 $expandOnHover = (bool)($this->getData('expand_on_hover') ?? true);
+$showBannerWithChildren = $this->getData('show_banner_with_children') ?? true;
+if (is_string($showBannerWithChildren)) {
+    $normalizedBannerFlag = strtolower(trim($showBannerWithChildren));
+    $showBannerWithChildren = !in_array($normalizedBannerFlag, ['0', 'false', 'no', 'off', ''], true);
+} else {
+    $showBannerWithChildren = (bool)$showBannerWithChildren;
+}
 $style = $this->getData('style') ?? 'flyout';
 if (!in_array($style, ['flyout', 'accordion'], true)) {
     $style = 'flyout';
 }
 
-// 未配置分类数据时：Amazon 风格可用默认树（与 header partial 顶部分类对齐）
+$navToCategory = static function (array $item) use (&$navToCategory): array {
+    $children = [];
+    foreach ((array)($item['children'] ?? []) as $child) {
+        if (is_array($child)) {
+            $children[] = $navToCategory($child);
+        }
+    }
+
+    return [
+        'name' => (string)($item['text'] ?? $item['name'] ?? ''),
+        'url' => (string)($item['url'] ?? '#'),
+        'icon' => (string)($item['icon'] ?? 'circle'),
+        'children' => $children,
+    ];
+};
+
+// 优先万能分类 catalog；仅预览且无树时回落演示占位。
+$categories = [];
+$catalogNav = HeaderCommerceData::resolveCategoryNavItems();
+if (!empty($catalogNav['items']) && is_array($catalogNav['items'])) {
+    foreach ($catalogNav['items'] as $item) {
+        if (is_array($item)) {
+            $categories[] = $navToCategory($item);
+        }
+    }
+}
+
+if ($categories === [] && $isPreviewMode) {
 $categories = [
     [
         'id' => 1,
@@ -95,7 +131,7 @@ $categories = [
     ['id' => 7, 'name' => __('图书文具'), 'url' => '/category/books', 'icon' => 'book', 'count' => 76],
     ['id' => 8, 'name' => __('母婴用品'), 'url' => '/category/baby', 'icon' => 'heart', 'count' => 98],
 ];
-
+}
 $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false) use (&$renderSubmenu, $esc) {
     if ($depth >= $maxDepth || empty($items)) {
         return;
@@ -127,7 +163,8 @@ $renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-expand-on-hover="<?= $expandOnHover ? 'true' : 'false' ?>">
+         data-expand-on-hover="<?= $expandOnHover ? 'true' : 'false' ?>"
+         data-show-banner-with-children="<?= $showBannerWithChildren ? '1' : '0' ?>">
     <button class="menu-trigger" type="button" aria-expanded="false">
         <w:icon name="menu" size="sm"></w:icon>
         <span><?= $esc((string)$title) ?></span>

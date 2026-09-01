@@ -353,6 +353,108 @@
         return String(locale).replace(/-/g, '_');
     }
 
+    function sanitizeMediaScopeSegment(value) {
+        var raw = String(value == null ? '' : value).trim();
+        if (!raw || raw.indexOf('..') !== -1 || raw.indexOf('/') !== -1 || raw.indexOf('\\') !== -1) {
+            return 'default';
+        }
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(raw)) {
+            return 'default';
+        }
+        return raw;
+    }
+
+    function sanitizeMediaRelativeSubdir(value, fallback) {
+        var raw = String(value == null ? '' : value).trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        var fallbackSeg = sanitizeMediaScopeSegment(fallback || 'banner');
+        if (!raw || raw.indexOf('..') !== -1) {
+            return fallbackSeg;
+        }
+        var parts = raw.split('/').filter(Boolean).map(function (part) {
+            if (!part || part.indexOf('..') !== -1) return '';
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(part)) return '';
+            return part;
+        }).filter(Boolean);
+        return parts.length ? parts.join('/') : fallbackSeg;
+    }
+
+    function readThemeMediaScopeField(source, key) {
+        if (!source || typeof source !== 'object') return '';
+        var value = source[key];
+        if (value == null || value === '') {
+            value = source[key.replace(/_code$/, '')];
+        }
+        return value == null ? '' : String(value);
+    }
+
+    function resolveThemeMediaScope(themeEl) {
+        var website = 'default';
+        var store = 'default';
+        var channel = '';
+        function applySource(source) {
+            if (!source || typeof source !== 'object') return;
+            var nextWebsite = readThemeMediaScopeField(source, 'website_code');
+            var nextStore = readThemeMediaScopeField(source, 'store_code');
+            var nextChannel = readThemeMediaScopeField(source, 'channel_code');
+            if (nextWebsite) website = nextWebsite;
+            if (nextStore) store = nextStore;
+            if (nextChannel !== '') channel = nextChannel;
+        }
+        try {
+            var params = new URLSearchParams(window.location.search);
+            applySource({
+                website_code: params.get('website_code') || '',
+                store_code: params.get('store_code') || '',
+                channel_code: params.get('channel_code') || ''
+            });
+        } catch (_e) {}
+        if (themeEl) {
+            try {
+                applySource(JSON.parse(themeEl.getAttribute('data-scope-identity') || '{}'));
+            } catch (_e2) {}
+            try {
+                applySource(JSON.parse(themeEl.getAttribute('data-layout-lock') || '{}'));
+            } catch (_e3) {}
+        }
+        website = sanitizeMediaScopeSegment(website);
+        store = sanitizeMediaScopeSegment(store);
+        channel = String(channel || '').trim();
+        if (channel !== '' && channel.toLowerCase() !== 'default') {
+            channel = sanitizeMediaScopeSegment(channel);
+        } else {
+            channel = '';
+        }
+        return {
+            website_code: website,
+            store_code: store,
+            channel_code: channel
+        };
+    }
+
+    function buildThemeMediaLockRoot(themeEl) {
+        var scope = resolveThemeMediaScope(themeEl);
+        var parts = ['websites', scope.website_code, scope.store_code];
+        if (scope.channel_code) {
+            parts.push(scope.channel_code);
+        }
+        return parts.join('/');
+    }
+
+    function buildThemeMediaStartPath(themeEl, defaultDir) {
+        var lockRoot = buildThemeMediaLockRoot(themeEl);
+        var subdir = sanitizeMediaRelativeSubdir(defaultDir, 'banner');
+        return subdir ? (lockRoot + '/' + subdir) : lockRoot;
+    }
+
+    function appendThemeMediaScopeLockParams(params, themeEl, defaultDir) {
+        var lockRoot = buildThemeMediaLockRoot(themeEl);
+        var startPath = buildThemeMediaStartPath(themeEl, defaultDir);
+        params.push('path=' + encodeURIComponent(startPath));
+        params.push('lockPath=1');
+        params.push('lockRoot=' + encodeURIComponent(lockRoot));
+        return { lockRoot: lockRoot, startPath: startPath };
+    }
+
     function getSelectedMediaValue(files) {
         if (!files || !files.length) return '';
         var file = files[0] || {};
@@ -485,13 +587,24 @@
                 var defaultDir = btn.getAttribute('data-default-dir') || 'banner';
                 var recommendW = btn.getAttribute('data-recommend-w') || '';
                 var recommendH = btn.getAttribute('data-recommend-h') || '';
+                var aspectRatio = btn.getAttribute('data-aspect-ratio') || '';
                 var themeEl = doc.getElementById('themeEditor');
                 var baseUrl = (themeEl && themeEl.getAttribute('data-file-manager-connector-base')) || '';
                 if (!baseUrl || !targetId) return;
                 var closeId = 'w-param-media-close-' + (targetId.replace(/[^a-z0-9_-]/gi, '_')) + '-' + Date.now();
-                var params = ['path=' + encodeURIComponent(defaultDir), 'target=' + encodeURIComponent(targetId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
+                var params = ['target=' + encodeURIComponent(targetId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
+                appendThemeMediaScopeLockParams(params, themeEl, defaultDir);
                 if (recommendW) params.push('recommend_width=' + encodeURIComponent(recommendW));
                 if (recommendH) params.push('recommend_height=' + encodeURIComponent(recommendH));
+                if (aspectRatio) params.push('aspect_ratio=' + encodeURIComponent(aspectRatio));
+                if (aspectRatio) {
+                    try {
+                        var ui = window.Weline && window.Weline.UI;
+                        if (ui && ui.toast && typeof ui.toast.info === 'function') {
+                            ui.toast.info('\u8bf7\u9009\u62e9\u6bd4\u4f8b\u4e3a ' + aspectRatio + ' \u7684\u56fe\u7247');
+                        }
+                    } catch (_e) {}
+                }
                 var url = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
                 var mediaSelectionChanged = false;
                 openMediaManagerDialog({
@@ -1544,6 +1657,7 @@
                     var defaultDir = addWithMediaBtn.getAttribute('data-default-dir') || 'banner';
                     var recommendW = addWithMediaBtn.getAttribute('data-recommend-w') || '';
                     var recommendH = addWithMediaBtn.getAttribute('data-recommend-h') || '';
+                    var aspectRatio = addWithMediaBtn.getAttribute('data-aspect-ratio') || '';
                     var themeEl = doc.getElementById('themeEditor');
                     var baseUrl = (themeEl && themeEl.getAttribute('data-file-manager-connector-base')) || '';
                     if (!baseUrl) return;
@@ -1555,9 +1669,19 @@
                     tempInput.className = 'w-visually-hidden';
                     doc.body.appendChild(tempInput);
                     var closeId = 'w-param-media-close-' + tempId.replace(/[^a-z0-9_-]/gi, '_');
-                    var params = ['path=' + encodeURIComponent(defaultDir), 'target=' + encodeURIComponent(tempId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'multi=1', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
+                    var params = ['target=' + encodeURIComponent(tempId), 'close=' + encodeURIComponent(closeId), 'ext=jpg,png,gif,webp', 'multi=1', 'usage=1', 'locale_code=' + encodeURIComponent(resolvePickerLocale(themeEl))];
+                    appendThemeMediaScopeLockParams(params, themeEl, defaultDir);
                     if (recommendW) params.push('recommend_width=' + encodeURIComponent(recommendW));
                     if (recommendH) params.push('recommend_height=' + encodeURIComponent(recommendH));
+                    if (aspectRatio) params.push('aspect_ratio=' + encodeURIComponent(aspectRatio));
+                    if (aspectRatio) {
+                        try {
+                            var uiToast = window.Weline && window.Weline.UI;
+                            if (uiToast && uiToast.toast && typeof uiToast.toast.info === 'function') {
+                                uiToast.toast.info('\u8bf7\u9009\u62e9\u6bd4\u4f8b\u4e3a ' + aspectRatio + ' \u7684\u56fe\u7247');
+                            }
+                        } catch (_e) {}
+                    }
                     var url = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
                     var opened = openMediaManagerDialog({
                         targetId: tempId,
@@ -1947,6 +2071,92 @@
         return window.Weline && window.Weline.Theme ? window.Weline.Theme.Editor || null : null;
     }
 
+    function formatAiWidgetErrorMessage(err) {
+        var raw = '';
+        if (err && typeof err === 'object') {
+            raw = err.message || err.error || String(err);
+        } else {
+            raw = String(err || '');
+        }
+        if (!raw) {
+            return '生成失败';
+        }
+        var tmp = doc.createElement('div');
+        tmp.innerHTML = raw;
+        raw = (tmp.textContent || tmp.innerText || raw).replace(/\s+/g, ' ').trim();
+        var firstLine = raw.split(/[\n\r]/)[0] || raw;
+        if (firstLine.length > 240) {
+            firstLine = firstLine.slice(0, 237) + '...';
+        }
+        return firstLine || '生成失败';
+    }
+
+    function setAiPreviewGenerating(panel, generating) {
+        if (!panel) return;
+        var root = panel.querySelector('[data-ai-preview]');
+        var overlay = panel.querySelector('[data-ai-preview-overlay]');
+        if (!root || !overlay) return;
+        if (generating) {
+            root.dataset.state = 'generating';
+            overlay.hidden = false;
+            return;
+        }
+        delete root.dataset.state;
+        overlay.hidden = true;
+    }
+
+    function renderAiPreviewHtml(panel, html) {
+        if (!panel) return;
+        var canvas = panel.querySelector('[data-ai-preview-canvas]');
+        if (!canvas) return;
+        var content = String(html || '').trim();
+        if (!content) {
+            canvas.innerHTML = '<div class="w-ai-widget-preview__empty" data-ai-preview-empty>暂无预览内容</div>';
+            return;
+        }
+        canvas.innerHTML = content;
+    }
+
+    function renderAiPreviewError(panel, message) {
+        if (!panel) return;
+        var canvas = panel.querySelector('[data-ai-preview-canvas]');
+        if (!canvas) return;
+        canvas.innerHTML = '<div class="w-ai-widget-preview__empty w-ai-widget-preview__empty--error" data-ai-preview-empty>' + escapeHtml(message || '预览加载失败') + '</div>';
+    }
+
+    async function loadAiWidgetPreview(panel, widget, widgetApi) {
+        if (!panel || !widget) return;
+        var moduleName = widget.module || 'Weline_Widget';
+        var code = widget.code || '';
+        var config = widget.config || widget.default_config || {};
+        var area = (state.context && state.context.editor_area) || 'frontend';
+        var html = '';
+        var adapter = getThemeAdapter();
+        if (adapter && adapter.config && adapter.config.apiWidgetPreview && typeof adapter.apiJson === 'function') {
+            var url = new URL(adapter.config.apiWidgetPreview, window.location.origin);
+            url.searchParams.set('widget_module', moduleName);
+            url.searchParams.set('widget_code', code);
+            url.searchParams.set('editor_area', area);
+            if (adapter.state && adapter.state.themeId) {
+                url.searchParams.set('theme_id', String(adapter.state.themeId));
+            }
+            url.searchParams.set('_t', String(Date.now()));
+            var data = await adapter.apiJson(url.toString());
+            html = data && data.html ? String(data.html) : '';
+        } else if (widgetApi && typeof widgetApi.preview === 'function') {
+            var previewResult = await widgetApi.preview({
+                widget_module: moduleName,
+                widget_code: code,
+                config: config,
+                area: area
+            });
+            html = typeof previewResult === 'string'
+                ? previewResult
+                : String((previewResult && (previewResult.data || previewResult.html)) || '');
+        }
+        renderAiPreviewHtml(panel, html);
+    }
+
     function getPlacementContext() {
         var adapter = getThemeAdapter();
         if (!adapter || typeof adapter.getWidgetPlacementContext !== 'function') {
@@ -1974,19 +2184,39 @@
     }
 
     function installButton() {
-        if (doc.getElementById('wAiWidgetButton')) return;
         var panel = doc.getElementById('widgetPanel');
         if (!panel) return;
-        var header = panel.querySelector('.panel-header, .widget-panel-header') || panel;
-        var button = doc.createElement('button');
-        button.type = 'button';
-        button.id = 'wAiWidgetButton';
-        button.className = 'w-button w-ai-widget-btn';
-        button.dataset.variant = 'soft';
-        button.dataset.tone = 'primary';
-        button.innerHTML = aiIconHtml('sparkles') + '<span>AI 生成</span>';
+        var actions = panel.querySelector('.widget-library-panel-header__actions');
+        if (!actions) return;
+        var closeBtn = actions.querySelector('.panel-close-widget, .panel-close');
+        var button = doc.getElementById('wAiWidgetButton');
+        if (!button) {
+            button = doc.createElement('button');
+            button.type = 'button';
+            button.id = 'wAiWidgetButton';
+            button.className = 'w-button w-ai-widget-btn';
+            button.dataset.variant = 'soft';
+            button.dataset.tone = 'primary';
+            button.innerHTML = aiIconHtml('sparkles') + '<span>AI 生成</span>';
+            if (closeBtn) {
+                actions.insertBefore(button, closeBtn);
+            } else {
+                actions.appendChild(button);
+            }
+        } else if (button.parentElement !== actions) {
+            if (closeBtn) {
+                actions.insertBefore(button, closeBtn);
+            } else {
+                actions.appendChild(button);
+            }
+        } else if (closeBtn && button.nextElementSibling !== closeBtn) {
+            actions.insertBefore(button, closeBtn);
+        }
+        if (button.dataset.aiWidgetBound === '1') {
+            return;
+        }
+        button.dataset.aiWidgetBound = '1';
         button.addEventListener('click', openPanel);
-        header.appendChild(button);
     }
 
     function refreshContext() {
@@ -2055,8 +2285,15 @@
         return !!(target && (target.slot_id || target.parent_slot_id || target.anchor_layout_id));
     }
 
-    function renderTreeNode(node, level, parentAnchor) {
+    function renderTreeNode(node, level, parentAnchor, pathSeen) {
         if (!node || !state.nodeMap) return '';
+        pathSeen = pathSeen || new Set();
+        var visitKey = String(node.type || '') + ':' + String(node.id || '');
+        if (pathSeen.has(visitKey)) {
+            return '';
+        }
+        pathSeen = new Set(pathSeen);
+        pathSeen.add(visitKey);
         var safeLevel = Math.max(0, Math.min(20, parseInt(level, 10) || 0));
         var id = 'n' + state.nodeMap.size;
         var target = null;
@@ -2089,7 +2326,7 @@
         var html = '<button type="button" class="w-ai-tree-row ' + (active ? 'active' : '') + '" data-node-id="' + id + '" style="--w-ai-tree-level:' + safeLevel + '">';
         html += '<span class="w-ai-tree-indent"></span><span class="w-ai-tree-type">' + escapeHtml(node.type || '') + '</span><span>' + escapeHtml(node.label || node.id || '') + '</span></button>';
         (node.children || []).forEach(function (child) {
-            html += renderTreeNode(child, level + 1, nextParentAnchor);
+            html += renderTreeNode(child, level + 1, nextParentAnchor, pathSeen);
         });
         return html;
     }
@@ -2107,8 +2344,10 @@
             return [
                 '<label class="w-ai-context-option">',
                 '<input type="checkbox" data-ai-context-provider="' + escapeHtml(provider.id) + '"' + (checked ? ' checked' : '') + '>',
-                '<span><strong>' + escapeHtml(provider.label || provider.name || provider.id) + '</strong>',
-                '<span>' + escapeHtml(provider.description || 'Optional AI reference context') + '</span></span>',
+                '<span class="w-ai-context-option__content">',
+                '<span class="w-ai-context-option__title">' + escapeHtml(provider.label || provider.name || provider.id) + '</span>',
+                '<span class="w-ai-context-option__desc">' + escapeHtml(provider.description || '可选 AI 参考上下文') + '</span>',
+                '</span>',
                 '</label>'
             ].join('');
         }).join('');
@@ -2191,6 +2430,21 @@
         if (!ui) return;
         var existing = doc.getElementById('wAiWidgetPanel');
         if (existing) {
+            state.open = true;
+            try {
+                refreshContext();
+                renderPanel();
+            } catch (err) {
+                console.warn('[Widget AI] render panel failed:', err);
+            }
+            if (!existing.open && existing.dataset.state !== 'open') {
+                if (!ui.dialog.open(existing)) {
+                    state.open = false;
+                    ui.unmount(existing);
+                    existing.remove();
+                    return;
+                }
+            }
             existing.focus({ preventScroll: true });
             return;
         }
@@ -2215,6 +2469,7 @@
             '<div class="w-ai-widget-field"><label>部件类型</label><select data-ai-widget-type></select></div>',
             '<div class="w-ai-widget-field full"><label>参考上下文</label><div class="w-ai-context-options" data-ai-context-options></div></div>',
             '<div class="w-ai-widget-field full"><label>生成要求</label><textarea data-ai-prompt placeholder="例如：在页脚生成一个品牌社交链接区，包含微信、抖音、YouTube 和邮箱订阅入口"></textarea></div>',
+            '<div class="w-ai-widget-field full"><label>预览</label><div class="w-ai-widget-preview" data-ai-preview><div class="w-ai-widget-preview__canvas" data-ai-preview-canvas><div class="w-ai-widget-preview__empty" data-ai-preview-empty>填写生成要求并点击「生成并放入」后在此预览</div></div><div class="w-ai-widget-preview__overlay" data-ai-preview-overlay hidden><div class="w-ai-widget-preview__overlay-inner"><span class="w-ai-widget-preview__spinner" aria-hidden="true"></span><span>生成中...</span></div></div></div></div>',
             '</div><div class="w-ai-widget-actions"><span class="w-ai-widget-muted" data-ai-status>生成后会保存为普通 Widget 并自动放入目标位置</span><button type="button" class="w-button w-ai-widget-generate" data-tone="primary" data-ai-generate>生成并放入</button></div></div>',
             '</div>'
         ].join('');
@@ -2228,7 +2483,11 @@
             panel.remove();
         }, { once: true });
         bindVisualSelectionRefresh();
-        renderPanel();
+        try {
+            renderPanel();
+        } catch (err) {
+            console.warn('[Widget AI] render panel failed:', err);
+        }
         if (!ui.dialog.open(panel)) {
             state.open = false;
             ui.unmount(panel);
@@ -2287,6 +2546,7 @@
         var desiredType = panel.querySelector('[data-ai-widget-type]').value || '';
         button.disabled = true;
         status.textContent = '正在生成 Widget...';
+        setAiPreviewGenerating(panel, true);
         try {
             var WidgetApi = await window.Weline.Api.resource('widget');
             var response = await WidgetApi.generateAiWidget({
@@ -2298,6 +2558,14 @@
             var data = response && response.data && response.data.widget ? response.data : response;
             if (!data || data.success === false || !data.widget) {
                 throw new Error((data && (data.message || data.error)) || 'AI Widget 生成失败');
+            }
+            try {
+                await loadAiWidgetPreview(panel, data.widget, WidgetApi);
+            } catch (previewErr) {
+                console.warn('[Widget AI] preview failed:', previewErr);
+                renderAiPreviewError(panel, formatAiWidgetErrorMessage(previewErr));
+            } finally {
+                setAiPreviewGenerating(panel, false);
             }
             addWidgetToLibrary(data.widget);
             if (!placementTarget) {
@@ -2320,7 +2588,9 @@
             window.setTimeout(closePanel, 900);
         } catch (err) {
             console.error('[Widget AI] generate failed:', err);
-            status.textContent = err.message || '生成失败';
+            setAiPreviewGenerating(panel, false);
+            renderAiPreviewError(panel, formatAiWidgetErrorMessage(err));
+            status.textContent = formatAiWidgetErrorMessage(err);
         } finally {
             button.disabled = false;
             markAiWidgets();
@@ -2400,6 +2670,7 @@
     }
 
     ensureAiContextProviderApi();
+    window.dispatchEvent(new CustomEvent('weline-widget-ai-context-api-ready'));
     window.addEventListener('weline-widget-ai-context-provider-change', function () {
         refreshContextProviders();
         if (state.open) renderPanel();

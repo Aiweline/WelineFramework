@@ -1,0 +1,686 @@
+<?php
+/**
+ * 关于我们默认布局（Amazon 风格）
+ *
+ * Theme 提供页面骨架、slot 协议与默认品牌故事内容；真实文案/团队可通过 hook/slot 接入。
+ * 视觉对齐主题色板：深蓝 chrome、橙色 CTA、浅灰底板。
+ *
+ * @meta.name {default="关于我们页面布局",name="关于我们页面布局",description="Theme 自有的关于我们页面布局样本"}
+ * @meta.description {default="包含 header、面包屑、使命主视觉、故事、价值观、里程碑与 footer",name="描述",description="带布局级 slot 的关于我们默认页面"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="关于我们页面通常允许访客访问"}
+ * @param.title {default="关于我们",name="页面标题",description="关于我们页面标题"}
+ * @param.subtitle {default="",name="页面副标题",description="留空时使用站点描述"}
+ * @param.mission {default="",name="使命文案",description="主视觉使命说明，留空使用默认文案"}
+ * @param.showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
+ * @param.showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
+ * @param.showBreadcrumb {default=true,name="显示面包屑",description="是否显示面包屑导航"}
+ * @param.class {default="",name="额外 CSS 类",description="关于我们主内容区域的额外 CSS 类"}
+ */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteContactInfo;
+
+$meta = $this->getData('meta') ?? [];
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+
+$contact = [
+    'site_name' => 'Weline',
+    'site_description' => (string)__('为全球购物者提供可靠、便捷的在线购物体验。'),
+    'contact_email' => 'support@example.com',
+    'contact_phone' => '',
+    'service_hours' => (string)__('周一至周五 9:00 - 18:00（法定节假日除外）'),
+    'contact_address' => '',
+];
+try {
+    $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+    if ($resolver instanceof SiteContactInfo) {
+        $contact = array_merge($contact, $resolver->resolve());
+    }
+} catch (\Throwable) {
+}
+
+$siteName = (string)$contact['site_name'];
+$title = (string)($meta['title'] ?? __('关于我们'));
+$subtitle = trim((string)($meta['subtitle'] ?? ''));
+if ($subtitle === '') {
+    $subtitle = (string)$contact['site_description'];
+}
+$mission = trim((string)($meta['mission'] ?? ''));
+if ($mission === '') {
+    $mission = (string)__('我们致力于把选品、履约与售后做得更简单可靠，让每一次下单都安心。');
+}
+
+$stats = [
+    ['value' => __('百万+'), 'label' => __('服务顾客')],
+    ['value' => __('100+'), 'label' => __('品类覆盖')],
+    ['value' => __('7×24'), 'label' => __('客户支持')],
+    ['value' => __('全球'), 'label' => __('配送网络')],
+];
+
+$values = [
+    [
+        'title' => __('以顾客为中心'),
+        'desc' => __('从浏览到售后，优先解决真实购买痛点，而不是堆砌功能。'),
+    ],
+    [
+        'title' => __('发明并简化'),
+        'desc' => __('持续打磨选品、履约与支付流程，让复杂的购物决策变得清晰。'),
+    ],
+    [
+        'title' => __('可靠履约'),
+        'desc' => __('把发货时效、物流透明与售后响应当作品牌承诺来运营。'),
+    ],
+    [
+        'title' => __('长期主义'),
+        'desc' => __('用可持续的供应链与合规运营，服务更长远的客户关系。'),
+    ],
+];
+
+$milestones = [
+    ['year' => '2019', 'text' => __('启动在线零售业务，确立顾客优先的服务标准。')],
+    ['year' => '2021', 'text' => __('扩展品类与履约网络，覆盖更多地区的当日/次日达能力。')],
+    ['year' => '2023', 'text' => __('完善售后与退换货体验，建立统一的客户支持中心。')],
+    ['year' => '2026', 'text' => __('持续升级商城主题与购物体验，让全球站点保持一致体验。')],
+];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::about::head-after</w:hook>
+    <style>
+        body.about-layout {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--color-text-primary, #0f1111);
+            background: var(--color-bg-canvas, #ffffff);
+            font-family: "Amazon Ember", Arial, sans-serif;
+        }
+
+        .amazon-about {
+            width: 100%;
+        }
+
+        .amazon-about__breadcrumb {
+            border-bottom: 1px solid var(--color-border-default, #ddd);
+            background: var(--color-bg-secondary, #eaeded);
+        }
+
+        .amazon-about__inner {
+            width: min(var(--weline-layout-content-max-width, 1440px), calc(100% - 2rem));
+            margin: 0 auto;
+        }
+
+        .amazon-about__hero {
+            background:
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, 0.18), transparent 48%),
+                linear-gradient(135deg, var(--color-bg-dark-secondary, #131921) 0%, var(--color-bg-dark, #232f3e) 58%, var(--color-bg-dark-tertiary, #37475a) 100%);
+            color: var(--color-text-light, #ffffff);
+        }
+
+        .amazon-about__hero-inner {
+            width: min(var(--weline-layout-content-max-width, 1440px), calc(100% - 2rem));
+            margin: 0 auto;
+            padding: clamp(2.25rem, 5vw, 3.75rem) 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.75fr);
+            gap: clamp(1.25rem, 3vw, 2.5rem);
+            align-items: center;
+        }
+
+        .amazon-about__eyebrow {
+            margin: 0 0 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--color-primary-light, #febd69);
+        }
+
+        .amazon-about__hero h1 {
+            margin: 0;
+            font-size: clamp(1.75rem, 4vw, 2.65rem);
+            line-height: 1.15;
+            font-weight: 700;
+            color: var(--color-text-light, #ffffff);
+        }
+
+        .amazon-about__hero-lead,
+        .amazon-about__hero-mission {
+            margin: 0.85rem 0 0;
+            max-width: 40rem;
+            line-height: 1.65;
+            color: var(--color-text-light-secondary, #dddddd);
+        }
+
+        .amazon-about__hero-actions {
+            margin-top: 1.35rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1rem;
+        }
+
+        .amazon-about__btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 2.35rem;
+            padding: 0.35rem 1.1rem;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: inherit;
+        }
+
+        .amazon-about__btn--primary {
+            border-color: var(--color-primary-border, #cc7700);
+            background: linear-gradient(180deg, #ffe08a 0%, var(--color-primary, #ff9900) 100%);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+            color: var(--color-on-primary, #111);
+        }
+
+        .amazon-about__btn--primary:hover {
+            background: linear-gradient(180deg, #ffd56b 0%, var(--color-primary-hover, #e68900) 100%);
+            color: var(--color-on-primary, #111);
+            text-decoration: none;
+        }
+
+        .amazon-about__btn--ghost {
+            border-color: rgba(255, 255, 255, 0.35);
+            background: transparent;
+            color: var(--color-text-light, #fff);
+        }
+
+        .amazon-about__btn--ghost:hover {
+            border-color: var(--color-primary-light, #febd69);
+            color: var(--color-primary-light, #febd69);
+            text-decoration: none;
+        }
+
+        .amazon-about__hero-card {
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 10px;
+            background: rgba(15, 17, 17, 0.28);
+            padding: 1.25rem 1.35rem;
+            backdrop-filter: blur(4px);
+        }
+
+        .amazon-about__hero-card h2 {
+            margin: 0 0 0.65rem;
+            font-size: 1.05rem;
+            color: var(--color-text-light, #fff);
+        }
+
+        .amazon-about__hero-card p {
+            margin: 0;
+            line-height: 1.6;
+            color: var(--color-text-light-secondary, #ddd);
+            font-size: 0.95rem;
+        }
+
+        .amazon-about__stats {
+            background: var(--color-bg-secondary, #eaeded);
+            border-bottom: 1px solid var(--color-border-default, #ddd);
+        }
+
+        .amazon-about__stats-grid {
+            width: min(var(--weline-layout-content-max-width, 1440px), calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 1.15rem 0;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .amazon-about__stat {
+            text-align: center;
+            padding: 0.65rem 0.5rem;
+        }
+
+        .amazon-about__stat strong {
+            display: block;
+            font-size: clamp(1.2rem, 2.4vw, 1.55rem);
+            color: var(--color-text-primary, #0f1111);
+        }
+
+        .amazon-about__stat span {
+            display: block;
+            margin-top: 0.25rem;
+            color: var(--color-text-secondary, #565959);
+            font-size: 0.9rem;
+        }
+
+        .amazon-about__section {
+            padding: clamp(2rem, 4vw, 3rem) 0;
+        }
+
+        .amazon-about__section--muted {
+            background: var(--color-bg-secondary, #eaeded);
+        }
+
+        .amazon-about__section-head {
+            margin-bottom: 1.25rem;
+        }
+
+        .amazon-about__section-head h2 {
+            margin: 0;
+            font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+            color: var(--color-text-primary, #0f1111);
+        }
+
+        .amazon-about__section-head p {
+            margin: 0.55rem 0 0;
+            max-width: 42rem;
+            color: var(--color-text-secondary, #565959);
+            line-height: 1.65;
+        }
+
+        .amazon-about__story-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+            gap: 1.25rem;
+            align-items: stretch;
+        }
+
+        .amazon-about__panel {
+            border: 1px solid var(--color-border-default, #d5d9d9);
+            border-radius: 8px;
+            background: var(--color-bg-primary, #fff);
+            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.06);
+            padding: 1.25rem 1.35rem;
+        }
+
+        .amazon-about__panel h3 {
+            margin: 0 0 0.65rem;
+            font-size: 1.05rem;
+        }
+
+        .amazon-about__panel p {
+            margin: 0;
+            color: var(--color-text-secondary, #565959);
+            line-height: 1.65;
+        }
+
+        .amazon-about__panel p + p {
+            margin-top: 0.75rem;
+        }
+
+        .amazon-about__values {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.85rem;
+        }
+
+        .amazon-about__value {
+            border: 1px solid var(--color-border-default, #d5d9d9);
+            border-radius: 8px;
+            background: var(--color-bg-primary, #fff);
+            padding: 1.1rem 1.15rem;
+            min-height: 100%;
+        }
+
+        .amazon-about__value h3 {
+            margin: 0 0 0.5rem;
+            font-size: 1rem;
+            color: var(--color-text-primary, #0f1111);
+        }
+
+        .amazon-about__value p {
+            margin: 0;
+            color: var(--color-text-secondary, #565959);
+            line-height: 1.55;
+            font-size: 0.93rem;
+        }
+
+        .amazon-about__timeline {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .amazon-about__milestone {
+            display: grid;
+            grid-template-columns: 5.5rem minmax(0, 1fr);
+            gap: 0.85rem;
+            align-items: start;
+            border: 1px solid var(--color-border-default, #d5d9d9);
+            border-radius: 8px;
+            background: var(--color-bg-primary, #fff);
+            padding: 0.95rem 1.1rem;
+        }
+
+        .amazon-about__milestone strong {
+            color: var(--color-primary-text-emphasis, #c45500);
+            font-size: 1rem;
+        }
+
+        .amazon-about__milestone p {
+            margin: 0;
+            color: var(--color-text-secondary, #565959);
+            line-height: 1.55;
+        }
+
+        .amazon-about__cta {
+            background: var(--color-bg-dark, #232f3e);
+            color: var(--color-text-light, #fff);
+            padding: clamp(1.75rem, 3.5vw, 2.5rem) 0;
+        }
+
+        .amazon-about__cta-inner {
+            width: min(var(--weline-layout-content-max-width, 1440px), calc(100% - 2rem));
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem 1.5rem;
+        }
+
+        .amazon-about__cta h2 {
+            margin: 0;
+            font-size: clamp(1.2rem, 2.2vw, 1.55rem);
+            color: var(--color-text-light, #fff);
+        }
+
+        .amazon-about__cta p {
+            margin: 0.4rem 0 0;
+            color: var(--color-text-light-secondary, #ddd);
+            line-height: 1.55;
+        }
+
+        .amazon-about__cta-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .amazon-about__extras {
+            margin-top: 1.25rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        @media (max-width: 960px) {
+            .amazon-about__hero-inner,
+            .amazon-about__story-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .amazon-about__stats-grid,
+            .amazon-about__values {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 560px) {
+            .amazon-about__stats-grid,
+            .amazon-about__values {
+                grid-template-columns: 1fr;
+            }
+
+            .amazon-about__milestone {
+                grid-template-columns: 1fr;
+            }
+
+            .amazon-about__hero-actions,
+            .amazon-about__cta-actions {
+                width: 100%;
+            }
+
+            .amazon-about__btn {
+                width: 100%;
+            }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="about-layout amazon-about-layout <?= $escape($meta['class'] ?? '') ?>">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::about::body-start</w:hook>
+
+    <div class="weline-page-wrapper amazon-about" data-testid="storefront-about-page">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <if condition="meta.showBreadcrumb">
+            <div class="amazon-about__breadcrumb">
+                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+            </div>
+        </if>
+
+        <main class="amazon-about__main" id="main-content" data-layout="about">
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-about-content,layout-default-content,content,banner,cta,trust,faq,team"
+                    reject="header,footer,navigation,cart,checkout"
+                    multiple="true"
+                    position="content"
+                    class="amazon-about__content-root-slot">
+
+                <w:slot id="about-hero"
+                        name="关于页主视觉"
+                        accept="layout-about-hero,layout-about-content,banner,content,cta"
+                        reject="header,footer,navigation,cart,checkout"
+                        multiple="false"
+                        position="content"
+                        class="amazon-about__hero-slot">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::about::hero
+                        <else/>
+                        <section class="amazon-about__hero" aria-labelledby="about-layout-title" weline-code="theme.about.hero">
+                            <div class="amazon-about__hero-inner">
+                                <div>
+                                    <p class="amazon-about__eyebrow"><?= $escape($siteName) ?></p>
+                                    <h1 id="about-layout-title"><?= $escape($title) ?></h1>
+                                    <p class="amazon-about__hero-lead"><?= $escape($subtitle) ?></p>
+                                    <p class="amazon-about__hero-mission"><?= $escape($mission) ?></p>
+                                    <div class="amazon-about__hero-actions">
+                                        <a class="amazon-about__btn amazon-about__btn--primary amazon-about__shop-link" href="@url{'products'}">
+                                            <?= $escape(__('开始购物')) ?>
+                                        </a>
+                                        <a class="amazon-about__btn amazon-about__btn--ghost" href="@url{'contact'}">
+                                            <?= $escape(__('联系我们')) ?>
+                                        </a>
+                                    </div>
+                                </div>
+                                <aside class="amazon-about__hero-card">
+                                    <h2><?= $escape(__('我们的承诺')) ?></h2>
+                                    <p><?= $escape(__('透明选品、可靠配送、可预期的售后——让购物像在熟悉的大店一样省心。')) ?></p>
+                                </aside>
+                            </div>
+                        </section>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="about-stats"
+                        name="关于页数据条"
+                        accept="layout-about-stats,layout-about-content,content,trust"
+                        reject="header,footer,navigation,cart,checkout"
+                        multiple="false"
+                        position="content"
+                        class="amazon-about__stats-slot">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::about::stats
+                        <else/>
+                        <section class="amazon-about__stats" aria-label="<?= $escape(__('品牌概览')) ?>" weline-code="theme.about.stats">
+                            <div class="amazon-about__stats-grid">
+                                <?php foreach ($stats as $stat): ?>
+                                    <div class="amazon-about__stat">
+                                        <strong><?= $escape($stat['value']) ?></strong>
+                                        <span><?= $escape($stat['label']) ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </section>
+                    </w:hook>
+                </w:slot>
+
+                <section class="amazon-about__section" weline-code="theme.about.story">
+                    <div class="amazon-about__inner">
+                        <div class="amazon-about__section-head">
+                            <h2><?= $escape(__('我们的故事')) ?></h2>
+                            <p><?= $escape(__('从一家线上商店起步，我们不断把顾客反馈转化为更清晰的浏览、更稳定的履约与更友好的售后。')) ?></p>
+                        </div>
+                        <div class="amazon-about__story-grid">
+                            <w:slot id="about-story"
+                                    name="品牌故事"
+                                    accept="layout-about-story,layout-about-content,content"
+                                    reject="header,footer,navigation,cart,checkout"
+                                    multiple="true"
+                                    position="content"
+                                    class="amazon-about__story-slot">
+                                <w:hook>
+                                    Weline_Theme::frontend::layouts::about::story
+                                    <else/>
+                                    <article class="amazon-about__panel">
+                                        <h3><?= $escape(__('为什么选择我们')) ?></h3>
+                                        <p><?= $escape(__('我们相信好的购物体验不该依赖运气：价格清晰、库存可信、物流可追踪、问题有回音。')) ?></p>
+                                        <p><?= $escape($siteName) ?> <?= $escape(__('团队围绕「顾客成功」打磨每一个关键路径——从首页发现到订单完成。')) ?></p>
+                                    </article>
+                                </w:hook>
+                            </w:slot>
+
+                            <w:slot id="about-sidebar"
+                                    name="关于页侧栏"
+                                    accept="layout-about-sidebar,layout-about-content,content,cta,trust"
+                                    reject="header,footer,navigation,cart,checkout"
+                                    multiple="true"
+                                    position="sidebar"
+                                    class="amazon-about__sidebar-slot">
+                                <w:hook>
+                                    Weline_Theme::frontend::layouts::about::sidebar
+                                    <else/>
+                                    <aside class="amazon-about__panel">
+                                        <h3><?= $escape(__('快捷入口')) ?></h3>
+                                        <p><a href="@url{'help'}"><?= $escape(__('帮助中心')) ?></a></p>
+                                        <p><a href="@url{'customer/account/index'}#orders"><?= $escape(__('订单跟踪')) ?></a></p>
+                                        <p><a href="@url{'careers'}"><?= $escape(__('加入我们')) ?></a></p>
+                                        <p><a href="@url{'privacy'}"><?= $escape(__('隐私政策')) ?></a></p>
+                                    </aside>
+                                </w:hook>
+                            </w:slot>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="amazon-about__section amazon-about__section--muted" weline-code="theme.about.values">
+                    <div class="amazon-about__inner">
+                        <div class="amazon-about__section-head">
+                            <h2><?= $escape(__('我们的价值观')) ?></h2>
+                            <p><?= $escape(__('这些原则指导我们如何做产品决策、如何对待顾客，以及如何持续改进。')) ?></p>
+                        </div>
+                        <w:slot id="about-values"
+                                name="价值观"
+                                accept="layout-about-values,layout-about-content,content,trust"
+                                reject="header,footer,navigation,cart,checkout"
+                                multiple="true"
+                                position="content"
+                                class="amazon-about__values-slot">
+                            <w:hook>
+                                Weline_Theme::frontend::layouts::about::values
+                                <else/>
+                                <div class="amazon-about__values">
+                                    <?php foreach ($values as $value): ?>
+                                        <article class="amazon-about__value">
+                                            <h3><?= $escape($value['title']) ?></h3>
+                                            <p><?= $escape($value['desc']) ?></p>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </w:hook>
+                        </w:slot>
+                    </div>
+                </section>
+
+                <section class="amazon-about__section" weline-code="theme.about.timeline">
+                    <div class="amazon-about__inner">
+                        <div class="amazon-about__section-head">
+                            <h2><?= $escape(__('发展历程')) ?></h2>
+                            <p><?= $escape(__('关键节点记录我们如何一步步把商店做成顾客信赖的购物目的地。')) ?></p>
+                        </div>
+                        <w:slot id="about-timeline"
+                                name="发展历程"
+                                accept="layout-about-timeline,layout-about-content,content"
+                                reject="header,footer,navigation,cart,checkout"
+                                multiple="true"
+                                position="content"
+                                class="amazon-about__timeline-slot">
+                            <w:hook>
+                                Weline_Theme::frontend::layouts::about::timeline
+                                <else/>
+                                <div class="amazon-about__timeline">
+                                    <?php foreach ($milestones as $milestone): ?>
+                                        <article class="amazon-about__milestone">
+                                            <strong><?= $escape($milestone['year']) ?></strong>
+                                            <p><?= $escape($milestone['text']) ?></p>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </w:hook>
+                        </w:slot>
+
+                        <w:slot id="about-extras"
+                                name="关于页扩展区"
+                                accept="layout-about-extras,content,banner,promo-banner,trust-badges,team,faq"
+                                reject="header,footer,navigation,cart,checkout"
+                                multiple="true"
+                                append="true"
+                                max="16"
+                                position="content"
+                                class="amazon-about__extras">
+                            <w:hook>Weline_Theme::frontend::layouts::about::extras</w:hook>
+                        </w:slot>
+                    </div>
+                </section>
+
+                <w:slot id="about-cta"
+                        name="关于页行动号召"
+                        accept="layout-about-cta,layout-about-content,cta,content"
+                        reject="header,footer,navigation,cart,checkout"
+                        multiple="false"
+                        position="content"
+                        class="amazon-about__cta-slot">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::about::cta
+                        <else/>
+                        <section class="amazon-about__cta" aria-labelledby="about-cta-title" weline-code="theme.about.cta">
+                            <div class="amazon-about__cta-inner">
+                                <div>
+                                    <h2 id="about-cta-title"><?= $escape(__('准备好体验更好的购物了吗？')) ?></h2>
+                                    <p><?= $escape(__('浏览精选商品，或联系支持团队了解更多合作与服务。')) ?></p>
+                                </div>
+                                <div class="amazon-about__cta-actions">
+                                    <a class="amazon-about__btn amazon-about__btn--primary" href="@url{'products'}">
+                                        <?= $escape(__('浏览商品')) ?>
+                                    </a>
+                                    <a class="amazon-about__btn amazon-about__btn--ghost" href="@url{'help'}">
+                                        <?= $escape(__('前往帮助中心')) ?>
+                                    </a>
+                                </div>
+                            </div>
+                        </section>
+                    </w:hook>
+                </w:slot>
+            </w:slot>
+        </main>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::about::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

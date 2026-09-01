@@ -51,7 +51,8 @@ class SetupUpgradeAfter implements ObserverInterface
             [
                 'type' => 'bypass',
                 'name' => 'Theme Preview Cookie Bypass',
-                'expression' => 'http.cookie contains "' . PreviewTokenService::TOKEN_KEY . '="',
+                // Website isolation may wire Cookie as weline_preview_token_wN=…
+                'expression' => 'http.cookie contains "' . PreviewTokenService::TOKEN_KEY . '"',
                 'action' => 'bypass_cache',
             ],
             // Header 绕过规则

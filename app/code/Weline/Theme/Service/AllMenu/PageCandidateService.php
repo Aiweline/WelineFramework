@@ -26,7 +26,7 @@ final class PageCandidateService
             'docs' => '文档',
             'privacy' => '隐私政策',
             'terms' => '服务条款',
-            'orders/track' => '订单跟踪',
+            'customer/account/index' => '我的订单',
         ];
     }
 

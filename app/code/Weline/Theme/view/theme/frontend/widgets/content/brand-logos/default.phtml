@@ -21,6 +21,7 @@
  * @param grayscale {default=true,type="bool",label="灰度效果"}
  */
 
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('brand-logos');
@@ -30,11 +31,19 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = (string)($this->getData('title') ?? __('合作品牌'));
 $brands = $this->getData('brands') ?? [];
+if (is_string($brands)) {
+    $decoded = json_decode($brands, true);
+    $brands = is_array($decoded) ? $decoded : [];
+}
+if (!is_array($brands)) {
+    $brands = [];
+}
 $columns = (string)($this->getData('columns') ?? '6');
 $layout = (string)($this->getData('layout') ?? 'grid');
 $grayscale = (bool)($this->getData('grayscale') ?? true);
 $hoverColor = (bool)($this->getData('hover_color') ?? true);
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
+// Template::getStaticUrl() 会走 DataObject::__call → getData('static_url')，得不到真实静态地址。
+$placeholder = StorefrontImagePlaceholder::url();
 
 if (!in_array($columns, ['4', '5', '6', '8'], true)) {
     $columns = '6';
@@ -99,6 +108,8 @@ if (empty($brands)) {
                                  alt="<?= $esc($brandName) ?>"
                                  class="brand-logo"
                                  loading="lazy">
+                        <?php elseif ($brandName !== ''): ?>
+                            <span class="brand-name"><?= $esc($brandName) ?></span>
                         <?php endif; ?>
                     <?= $brandLink !== '' ? '</a>' : '</div>' ?>
                 <?php endforeach; ?>
@@ -170,6 +181,18 @@ if (empty($brands)) {
     object-fit: contain;
     transition: filter var(--weline-theme-transition-base),
                 transform var(--weline-theme-transition-base);
+}
+
+.<?= $wc ?> .brand-name {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--spacing-10);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    font-size: var(--weline-font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--weline-theme-text-muted);
 }
 
 .<?= $wc ?>.is-grayscale .brand-logo,

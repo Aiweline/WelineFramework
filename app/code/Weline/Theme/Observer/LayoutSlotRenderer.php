@@ -9,12 +9,20 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Model\ThemeVirtualLayout;
+use Weline\Theme\Service\ThemeTargetIdentityResolver;
+use Weline\Theme\Service\PreviewBootstrapAssetInjector;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewRequestInspector;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\SlotRendererService;
+use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
@@ -106,6 +114,8 @@ class LayoutSlotRenderer implements ObserverInterface
         // 棰勮妯″紡涓嬫敞鍏ラ€€鍑洪瑙堟诞绐楀拰 AJAX 鎷︽埅鍣紙闈炵紪杈戝櫒 iframe 妯″紡锛?
         // 杩欎釜閫昏緫蹇呴』鍦ㄦ彃妲芥鏌ヤ箣鍓嶆墽琛岋紝鍥犱负鍗充娇椤甸潰娌℃湁鎻掓Ы锛屼篃闇€瑕佹樉绀洪€€鍑烘寜閽?
         if ($this->previewTokenService->isPreviewMode()) {
+            // Preview HTML must never be published into the anonymous storefront FPC.
+            \Weline\Framework\Cache\SharedResponseCachePolicy::forbid('theme_preview_mode');
             $editorMode = $this->request->getParam('editor_mode');
             // frontend: editor_mode=1 的编辑器 iframe 不注入
             // backend: 预览环境即使 editor_mode=1 也要提供退出浮窗
@@ -121,7 +131,7 @@ class LayoutSlotRenderer implements ObserverInterface
 
         // 普通后台页面保持原有行为；Dashboard 是后台 Theme 的特殊布局，需要进入 slot 渲染链。
         if ($area !== 'frontend' && !$allowBackendSlots) {
-            $event->setData('content', $html);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
             return;
         }
 
@@ -134,7 +144,7 @@ class LayoutSlotRenderer implements ObserverInterface
         // Fast path: normal frontend HTML without slot markers needs no theme or DOM pass.
         $isEditorOrPreview = $this->isEditorOrPreviewMode();
         if (!$hasSlotMarkers && !$isEditorOrPreview) {
-            $event->setData('content', $html);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
             return;
         }
 
@@ -143,7 +153,7 @@ class LayoutSlotRenderer implements ObserverInterface
         // 濡傛灉娌℃湁涓婚 ID锛屾棤娉曞鐞嗘彃妲?
         if (!$themeId) {
             // 鏇存柊浜嬩欢鏁版嵁锛堝彲鑳藉凡娉ㄥ叆棰勮閫€鍑烘寜閽級
-            $event->setData('content', $html);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
             return;
         }
 
@@ -157,7 +167,7 @@ class LayoutSlotRenderer implements ObserverInterface
         $shouldReportSlotContractWarnings = $this->isLayoutTemplate($template) || stripos($html, '</body>') !== false;
 
         $slotContractWarnings = [];
-        if ($isEditorOrPreview && $shouldReportSlotContractWarnings) {
+        if ($this->shouldShowEditorSlotDiagnostics() && $shouldReportSlotContractWarnings) {
             $slotContractWarnings = $this->collectMissingSlotWarnings($area, $pageType, $this->detectLayoutOption());
             if (!empty($slotContractWarnings)) {
                 $html = $this->getThemeSlotContractService()->injectMissingSlotWarningHtml($html, $slotContractWarnings);
@@ -166,12 +176,19 @@ class LayoutSlotRenderer implements ObserverInterface
         }
 
         if (!$hasSlotMarkers) {
-            $event->setData('content', $html);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
             return;
         }
 
-        if ($this->isThemePreviewContentRequest($template) && $this->htmlHasRenderedWidgetWrappers($html)) {
-            $event->setData('content', $html);
+        // Non-editor preview: content renderer already filled wrappers — skip re-process
+        // to avoid duplicates. Editor preview must still processSlots so CoW can drop
+        // empty/shredded template shells and park wrapper inners through DOM safely.
+        if ($this->isThemePreviewContentRequest($template)
+            && $this->htmlHasRenderedWidgetWrappers($html)
+            && !$this->shouldShowEditorSlotDiagnostics()
+        ) {
+            $html = $this->slotRenderer->finalizePreviewWidgetHealth($html);
+            $event->setData('content', $this->finalizeFrontendHtml($html, $area));
             return;
         }
 
@@ -223,9 +240,9 @@ class LayoutSlotRenderer implements ObserverInterface
         if ($this->slotRenderer->hasOrphanWidgets()) {
             $orphans = $this->slotRenderer->getOrphanWidgets();
             
-            // 鍦ㄧ紪杈戝櫒鎴栭瑙堟ā寮忎笅锛屽皢璀﹀憡淇℃伅娣诲姞鍒?HTML 涓樉绀虹粰缂栬緫鑰?
-            if ($isEditorOrPreview) {
-                $processedHtml = $this->injectOrphanWarnings($processedHtml, $orphans);
+            // 仅在主题编辑器可视化预览（iframe / 预览壳）下展示；真实前台预览不打扰访客。
+            if ($this->shouldShowEditorSlotDiagnostics()) {
+                $processedHtml = $this->injectOrphanWarnings($processedHtml, $orphans, $themeId, $pageType);
             }
             
             // 璁板綍璀﹀憡鏃ュ織锛堝彲閫夛級
@@ -238,7 +255,40 @@ class LayoutSlotRenderer implements ObserverInterface
         }
 
         // 鏇存柊浜嬩欢鏁版嵁锛坒etch_file_after 浜嬩欢浣跨敤 content锛?
-        $event->setData('content', $processedHtml);
+        $processedHtml = $this->slotRenderer->finalizePreviewWidgetHealth($processedHtml);
+        $event->setData('content', $this->finalizeFrontendHtml($processedHtml, $area));
+    }
+
+    private function finalizeFrontendHtml(string $html, string $area): string
+    {
+        if ($area !== 'frontend' || $html === '' || $this->isEditorIframePreviewRequest()) {
+            return $html;
+        }
+
+        if (\defined('PROD') && PROD) {
+            $html = SlotBoundaryMarkers::strip($html);
+        }
+
+        try {
+            /** @var PreviewBootstrapAssetInjector $injector */
+            $injector = ObjectManager::getInstance(PreviewBootstrapAssetInjector::class);
+
+            return $injector->inject($html);
+        } catch (\Throwable) {
+            return $html;
+        }
+    }
+
+    private function isEditorIframePreviewRequest(): bool
+    {
+        $editorMode = \trim((string)$this->request->getParam('editor_mode', ''));
+        if ($editorMode !== '1' && \strtolower($editorMode) !== 'true') {
+            return false;
+        }
+
+        $uri = \strtolower((string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''));
+
+        return \str_contains($uri, 'theme/frontend/theme-preview/content');
     }
 
     private function shouldDebugAccountSidebar(): bool
@@ -350,14 +400,15 @@ class LayoutSlotRenderer implements ObserverInterface
      * 
      * 鍦ㄩ〉闈㈠簳閮ㄦ坊鍔犱竴涓鍛婇潰鏉匡紝鎻愮ず缂栬緫鑰呮湁浜涢儴浠舵棤娉曞湪褰撳墠甯冨眬涓樉绀?
      */
-    private function injectOrphanWarnings(string $html, array $orphans): string
+    private function injectOrphanWarnings(string $html, array $orphans, int $themeId, string $pageType): string
     {
         if (empty($orphans)) {
             return $html;
         }
         
         $warningItems = [];
-        $orphanSlotIds = []; // 鏀堕泦鎵€鏈夊鍎块儴浠剁殑 slot_id
+        $orphanSlotIds = [];
+        $orphanLayoutIds = [];
         foreach ($orphans as $orphan) {
             $widgetName = htmlspecialchars((string)($orphan['widget_name'] ?? '未知组件'));
             $slotId = htmlspecialchars((string)($orphan['slot_id'] ?? '未知插槽'));
@@ -365,10 +416,20 @@ class LayoutSlotRenderer implements ObserverInterface
             if (!empty($orphan['slot_id'])) {
                 $orphanSlotIds[] = $orphan['slot_id'];
             }
+            $layoutId = (int)($orphan['layout_id'] ?? 0);
+            if ($layoutId > 0) {
+                $orphanLayoutIds[] = $layoutId;
+            }
         }
         
-        // 鍘婚噸骞剁紪鐮佷负 JSON
         $orphanSlotIdsJson = htmlspecialchars(json_encode(array_values(array_unique($orphanSlotIds))));
+        $orphanLayoutIdsJson = htmlspecialchars(json_encode(array_values(array_unique($orphanLayoutIds))));
+        $editorContext = $this->resolveOrphanDeleteEditorContext($themeId, $pageType);
+        $editorContextJson = htmlspecialchars(
+            json_encode($editorContext ?? new \stdClass(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8',
+        );
         
         // 鐢熸垚姝ｇ‘鐨勫悗鍙癠RL锛堥伒寰?weline-routing 鎶€鑳借鑼冿級
         $removeOrphanWidgetsUrl = htmlspecialchars($this->url->getBackendUrl('theme/backend/theme-editor/remove-orphan-widgets'));
@@ -408,7 +469,7 @@ HTML;
         提示：这些组件可能需要重新配置到新的插槽位置。
     </p>
     <div id="orphan-actions" style="display: flex; gap: 8px; margin-top: 10px;">
-        <button id="btnConfirmDelete" data-orphan-slots='{$orphanSlotIdsJson}' style="
+        <button id="btnConfirmDelete" data-orphan-slots='{$orphanSlotIdsJson}' data-orphan-layout-ids='{$orphanLayoutIdsJson}' data-editor-context='{$editorContextJson}' style="
             flex: 1;
             background: #dc3545;
             color: white;
@@ -514,10 +575,45 @@ HTML;
             if (!btn) return;
             
             const orphanSlots = JSON.parse(btn.getAttribute('data-orphan-slots') || '[]');
+            const orphanLayoutIds = JSON.parse(btn.getAttribute('data-orphan-layout-ids') || '[]');
             const urlParams = new URLSearchParams(window.location.search);
-            const themeId = urlParams.get('theme_id') || '';
+            const themeId = urlParams.get('theme_id')
+                || urlParams.get('frontend_theme_id')
+                || urlParams.get('weline_theme_id')
+                || '';
             const pageType = urlParams.get('page_type') || urlParams.get('layout_type') || 'homepage';
             const status = urlParams.get('status') || 'draft';
+            const editorContext = (function resolveEditorContext() {
+                const fromAttr = btn.getAttribute('data-editor-context') || '';
+                if (fromAttr && fromAttr !== '{}' && fromAttr !== 'null') {
+                    try {
+                        const parsed = JSON.parse(fromAttr);
+                        if (parsed && typeof parsed === 'object' && parsed.scope) {
+                            return parsed;
+                        }
+                    } catch (error) {}
+                }
+                const raw = urlParams.get('editor_context') || '';
+                if (!raw) {
+                    return null;
+                }
+                try {
+                    const parsed = JSON.parse(raw);
+                    return parsed && typeof parsed === 'object' ? parsed : null;
+                } catch (error) {
+                    return null;
+                }
+            })();
+            const payload = {
+                theme_id: themeId,
+                slot_ids: orphanSlots,
+                layout_ids: orphanLayoutIds,
+                page_type: pageType,
+                status: status,
+            };
+            if (editorContext) {
+                payload.editor_context = editorContext;
+            }
             
             // 鏄剧ず澶勭悊涓?
             confirmMessage.style.display = 'none';
@@ -529,18 +625,14 @@ HTML;
             // 闃叉閲嶅鐐瑰嚮
             btnConfirmYes.disabled = true;
             
-            // 鍙戣捣鍒犻櫎璇锋眰锛堜娇鐢ㄦ纭殑鍚庡彴URL锛?
+            // 鍙戣发起删除请求（携带 typed editor_context，避免 theme_editor_typed_scope_required）
             fetch('{$removeOrphanWidgetsUrl}', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    theme_id: themeId,
-                    slot_ids: orphanSlots,
-                    page_type: pageType,
-                    status: status
-                })
+                body: JSON.stringify(payload)
             })
             .then(response => response.json())
             .then(data => {
@@ -554,7 +646,9 @@ HTML;
                         setTimeout(() => panel.remove(), 800);
                     }
                     setTimeout(() => {
-                        window.location.reload();
+                        const reloadUrl = new URL(window.location.href);
+                        reloadUrl.searchParams.set('_t', String(Date.now()));
+                        window.location.replace(reloadUrl.toString());
                     }, 1000);
                 } else {
                     deleteStatus.style.background = '#f8d7da';
@@ -585,6 +679,176 @@ HTML;
         }
         
         return $html;
+    }
+
+    /** @return array<string,mixed>|null */
+    private function resolveOrphanDeleteEditorContext(int $themeId, string $pageType): ?array
+    {
+        $fromRequest = $this->decodeEditorContextValue($this->request->getParam('editor_context', null));
+        if ($fromRequest !== null) {
+            return $fromRequest;
+        }
+
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        $previewContext = $this->authoritativePreviewContext() ?? [];
+        $fromPreview = $this->decodeEditorContextValue($previewContext['editor_context'] ?? null);
+        if ($fromPreview !== null) {
+            return $fromPreview;
+        }
+
+        $layoutIdentity = RequestContext::get(LayoutIdentity::REQUEST_CONTEXT_KEY);
+        if ($layoutIdentity instanceof LayoutIdentity) {
+            $scopeIdentity = $this->resolveOrphanDeleteScopeIdentity($previewContext);
+            if ($scopeIdentity instanceof ScopeIdentity) {
+                return $this->buildOrphanDeleteEditorContext(
+                    $themeId,
+                    $pageType,
+                    $previewContext,
+                    $layoutIdentity->layoutOption,
+                    $layoutIdentity->localeCode !== '' ? $layoutIdentity->localeCode : 'default',
+                    $layoutIdentity->targetType,
+                    $layoutIdentity->targetId,
+                    $scopeIdentity,
+                );
+            }
+        }
+
+        /** @var ThemeTargetIdentityResolver $targetResolver */
+        $targetResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+        [$targetType, $targetId] = $targetResolver->resolveFirst([
+            [
+                'target_type' => $previewContext['theme_layout_source_target_type'] ?? null,
+                'target_id' => $previewContext['theme_layout_source_target_id'] ?? null,
+            ],
+            [
+                'target_type' => $previewContext['theme_layout_target_type'] ?? null,
+                'target_id' => $previewContext['theme_layout_target_id'] ?? null,
+            ],
+            [
+                'target_type' => $this->request->getParam('theme_layout_source_target_type'),
+                'target_id' => $this->request->getParam('theme_layout_source_target_id'),
+            ],
+            [
+                'target_type' => $this->request->getParam('theme_layout_target_type'),
+                'target_id' => $this->request->getParam('theme_layout_target_id'),
+            ],
+        ], true);
+        if ($targetType === '') {
+            $targetType = ThemeVirtualLayout::TARGET_GLOBAL;
+            $targetId = 0;
+        }
+
+        $scopeIdentity = $this->resolveOrphanDeleteScopeIdentity($previewContext);
+        if (!$scopeIdentity instanceof ScopeIdentity) {
+            return null;
+        }
+
+        $locale = \trim((string)($previewContext['locale'] ?? $this->request->getParam('locale', '')));
+
+        return $this->buildOrphanDeleteEditorContext(
+            $themeId,
+            $pageType,
+            $previewContext,
+            $this->detectLayoutOption(),
+            $locale !== '' ? $locale : 'default',
+            $targetType,
+            $targetId,
+            $scopeIdentity,
+        );
+    }
+
+    /** @return array<string,mixed>|null */
+    private function decodeEditorContextValue(mixed $raw): ?array
+    {
+        if (\is_string($raw) && $raw !== '') {
+            try {
+                $decoded = \json_decode($raw, true, flags: JSON_THROW_ON_ERROR);
+                if (\is_array($decoded) && $this->isTypedEditorContext($decoded)) {
+                    return $decoded;
+                }
+            } catch (\Throwable) {
+            }
+
+            return null;
+        }
+
+        if (\is_array($raw) && $this->isTypedEditorContext($raw)) {
+            return $raw;
+        }
+
+        return null;
+    }
+
+    /** @param array<string,mixed> $context */
+    private function isTypedEditorContext(array $context): bool
+    {
+        $scope = $context['scope'] ?? null;
+        if (\is_string($scope) && $scope !== '') {
+            try {
+                $scope = \json_decode($scope, true, flags: JSON_THROW_ON_ERROR);
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
+        return \is_array($scope)
+            && (\is_array($scope['identity'] ?? null) || isset($scope['scope_kind']));
+    }
+
+    /** @param array<string,mixed> $previewContext */
+    private function resolveOrphanDeleteScopeIdentity(array $previewContext): ?ScopeIdentity
+    {
+        $scopeIdentity = RequestContext::scopeIdentity();
+        if ($scopeIdentity instanceof ScopeIdentity) {
+            return $scopeIdentity;
+        }
+
+        $storageScope = \trim((string)($previewContext['scope'] ?? $this->request->getParam('scope', '')));
+        if ($storageScope === '') {
+            return ScopeIdentity::global();
+        }
+
+        try {
+            /** @var ScopeHierarchyInterface $scopes */
+            $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+            return $scopes->fromStorageScope($storageScope, true) ?? ScopeIdentity::global();
+        } catch (\Throwable) {
+            return ScopeIdentity::global();
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $previewContext
+     * @return array<string,mixed>
+     */
+    private function buildOrphanDeleteEditorContext(
+        int $themeId,
+        string $pageType,
+        array $previewContext,
+        string $layoutOption,
+        string $locale,
+        string $targetType,
+        int $targetId,
+        ScopeIdentity $scopeIdentity,
+    ): array {
+        /** @var PreviewContextService $previewService */
+        $previewService = ObjectManager::getInstance(PreviewContextService::class);
+        $area = $previewService->normalizeArea((string)($previewContext['editor_area'] ?? PreviewContextService::AREA_FRONTEND));
+
+        return [
+            'scope' => ['identity' => $scopeIdentity->toArray()],
+            'area' => $area,
+            'resource_type' => 'layout',
+            'theme_id' => $themeId,
+            'layout_type' => $pageType !== '' ? $pageType : 'homepage',
+            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
+            'locale' => $locale !== '' ? $locale : 'default',
+            'target_type' => $targetType !== '' ? $targetType : ThemeVirtualLayout::TARGET_GLOBAL,
+            'target_id' => \max(0, $targetId),
+        ];
     }
 
     /**
@@ -622,6 +886,22 @@ HTML;
     private function isEditorOrPreviewMode(): bool
     {
         return $this->authoritativePreviewContext() !== null;
+    }
+
+    /**
+     * 组件/插槽诊断仅面向主题编辑器可视化预览，真实前台预览不注入。
+     */
+    private function shouldShowEditorSlotDiagnostics(): bool
+    {
+        if (!$this->isEditorOrPreviewMode()) {
+            return false;
+        }
+
+        if ($this->previewRequestInspector->isEditorMode()) {
+            return true;
+        }
+
+        return $this->previewRequestInspector->isPreviewShellPath();
     }
 
     /** @return array<string,mixed>|null */
@@ -711,6 +991,7 @@ HTML;
     {
         return \str_contains($html, 'class="widget-wrapper"')
             || \str_contains($html, "class='widget-wrapper'")
+            || \str_contains($html, 'data-node-uid=')
             || \str_contains($html, 'data-layout-id=');
     }
 
@@ -798,21 +1079,10 @@ HTML;
      */
     private function injectPreviewExitButton(string $html): string
     {
-        // 鑾峰彇棰勮 Token 鏁版嵁
-        $tokenData = $this->previewTokenService->getCurrentPreviewData();
         $token = $this->previewTokenService->getTokenFromRequest() ?? '';
         
-        // 鏋勫缓缂栬緫鍣ㄨ繑鍥?URL锛堜笌鍚庡彴鑿滃崟璺敱涓€鑷达細theme/backend/theme-editor锛?
-        $editorUrl = $this->url->getBackendUrl('theme/backend/theme-editor/index');
-        if ($tokenData && isset($tokenData['theme_id'])) {
-            $editorUrl = $this->url->getBackendUrl('theme/backend/theme-editor/index', [
-                'theme_id' => $tokenData['theme_id'],
-                'page_type' => $tokenData['page_type'] ?? 'homepage'
-            ]);
-        }
-        
-        // API URL锛堜笌 index.phtml 涓?data-api-* 涓€鑷达級
-        $exitPreviewUrl = $this->url->getBackendUrl('theme/backend/theme-editor/exit-preview');
+        // 前台预览网关退出（Token 鉴权，已注册路由，无需后台登录）
+        $exitPreviewUrl = $this->url->getFrontendUrl('theme/frontend/theme-preview/gateway', ['exit' => '1']);
         $publishAndExitUrl = $this->url->getBackendUrl('theme/backend/theme-editor/publish-and-exit');
         $previewMessageJsonFlags = \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT;
         $previewExitFailedJson = \json_encode((string)__('退出预览失败'), $previewMessageJsonFlags) ?: '"退出预览失败"';
@@ -823,7 +1093,6 @@ HTML;
         $previewConfirmCancelJson = \json_encode((string)__('取消'), $previewMessageJsonFlags) ?: '"取消"';
         $previewConfirmTitleJson = \json_encode((string)__('发布预览'), $previewMessageJsonFlags) ?: '"发布预览"';
         $tokenJson = \json_encode((string)$token, $previewMessageJsonFlags) ?: '""';
-        $editorUrlJson = \json_encode((string)$editorUrl, $previewMessageJsonFlags) ?: '""';
         $exitPreviewUrlJson = \json_encode((string)$exitPreviewUrl, $previewMessageJsonFlags) ?: '""';
         $publishAndExitUrlJson = \json_encode((string)$publishAndExitUrl, $previewMessageJsonFlags) ?: '""';
         
@@ -906,7 +1175,6 @@ HTML;
     var exitBtn = document.getElementById('weline-preview-exit-btn');
     var publishBtn = document.getElementById('weline-preview-publish-btn');
     var token = {$tokenJson};
-    var editorUrl = {$editorUrlJson};
     var exitUrl = {$exitPreviewUrlJson};
     var publishUrl = {$publishAndExitUrlJson};
     var previewMessages = {
@@ -1031,11 +1299,87 @@ HTML;
     function clearPreviewClientState() {
         document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         try { localStorage.removeItem('weline_preview_float_pos'); } catch (e) {}
+        try { sessionStorage.removeItem('weline_live_preview_token'); } catch (e) {}
+        try {
+            if (window.WelineThemePreviewBootstrap && typeof window.WelineThemePreviewBootstrap.clearClientToken === 'function') {
+                window.WelineThemePreviewBootstrap.clearClientToken();
+            }
+        } catch (e) {}
     }
 
-    function finishExit(redirectUrl) {
+    function stripPreviewTokenFromUrl() {
+        try {
+            var url = new URL(window.location.href);
+            var changed = false;
+            if (url.searchParams.has('weline_preview_token')) {
+                url.searchParams.delete('weline_preview_token');
+                changed = true;
+            }
+            return changed ? url.toString() : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function buildExitRedirectTarget() {
+        var cleanUrl = stripPreviewTokenFromUrl();
+        if (cleanUrl) {
+            try {
+                var parsed = new URL(cleanUrl, window.location.origin);
+                return parsed.pathname + parsed.search + parsed.hash;
+            } catch (e) {
+                return cleanUrl;
+            }
+        }
+        try {
+            var current = new URL(window.location.href);
+            current.searchParams.delete('weline_preview_token');
+            return current.pathname + current.search + current.hash;
+        } catch (e) {
+            return window.location.pathname + window.location.search + window.location.hash;
+        }
+    }
+
+    function buildExitNavigateUrl() {
+        var target = buildExitRedirectTarget();
+        try {
+            var gateway = new URL(exitUrl, window.location.origin);
+            gateway.searchParams.set('exit', '1');
+            gateway.searchParams.set('redirect', target);
+            if (token) {
+                gateway.searchParams.set('token', token);
+            }
+            return gateway.toString();
+        } catch (e) {
+            var joinChar = exitUrl.indexOf('?') >= 0 ? '&' : '?';
+            return exitUrl + joinChar + 'exit=1&redirect=' + encodeURIComponent(target)
+                + (token ? '&token=' + encodeURIComponent(token) : '');
+        }
+    }
+
+    function notifyParentPreviewExit() {
+        try {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    source: 'weline-theme-preview',
+                    type: 'preview-exit'
+                }, window.location.origin);
+            }
+        } catch (e) {}
+    }
+
+    /**
+     * 退出预览：清客户端 token 态，再 GET gateway?exit=1 让服务端清 HttpOnly Cookie。
+     * 不因 parent!==window 提前 return（内嵌壳会卡死）；也不做 POST/form 多重跳转。
+     */
+    function navigateExitPreview() {
         clearPreviewClientState();
-        window.location.href = redirectUrl || editorUrl || '/';
+        try { notifyParentPreviewExit(); } catch (e) {}
+        window.location.replace(buildExitNavigateUrl());
+    }
+
+    function finishExit() {
+        navigateExitPreview();
     }
 
     function unwrapPreviewPayload(payload) {
@@ -1070,19 +1414,6 @@ HTML;
 
     function requestExitPreview() {
         var body = JSON.stringify({ token: token });
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
-            return Promise.resolve(window.Weline.Api.resource('theme')).then(function(api) {
-                if (!api || typeof api.editorRequest !== 'function') {
-                    throw new Error('no-editor-request');
-                }
-                return api.editorRequest({
-                    url: exitUrl,
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    body: body
-                });
-            });
-        }
         return fetch(exitUrl, {
             method: 'POST',
             headers: {
@@ -1095,6 +1426,9 @@ HTML;
         }).then(parsePreviewJson);
     }
     
+    if (!floatEl || !exitBtn || !publishBtn) {
+        return;
+    }
     // 鎷栧姩鍔熻兘
     var isDragging = false;
     var startX, startY, startLeft, startBottom;
@@ -1148,27 +1482,15 @@ HTML;
         }
     });
     
-    // 閫€鍑洪瑙堟寜閽?
-    exitBtn.addEventListener('click', function() {
+    // 退出预览：清 token 客户端态后跳 gateway?exit=1
+    exitBtn.addEventListener('click', function(event) {
+        try { event.preventDefault(); event.stopPropagation(); } catch (e) {}
+        if (exitBtn.disabled) {
+            return;
+        }
         exitBtn.disabled = true;
         exitBtn.textContent = '处理中...';
-
-        requestExitPreview()
-        .then(function(payload) {
-            var data = unwrapPreviewPayload(payload);
-            if (data && data.success) {
-                var redirectUrl = (data.data && data.data.editor_url) ? data.data.editor_url : editorUrl;
-                finishExit(redirectUrl);
-                return;
-            }
-            // 服务端失败时仍清本地预览态并离开，避免卡死在预览浮窗
-            finishExit(editorUrl);
-        })
-        .catch(function(err) {
-            console.error('[WelinePreview] exit failed:', err);
-            // 网络/鉴权失败也优先离开预览；编辑器页会自行要求登录
-            finishExit(editorUrl);
-        });
+        navigateExitPreview();
     });
     
     // 鍙戝竷骞堕€€鍑烘寜閽?

@@ -29,6 +29,40 @@ class ThemeVirtualLayoutService
     ) {
     }
 
+    /**
+     * Greenfield: theme_virtual_layout* was DROP'd in 2.2.0 (SchemaDiffExcluded).
+     * Selection APIs use SystemConfig and stay available; asset/version APIs fail-closed.
+     */
+    public function isVirtualLayoutAssetAvailable(): bool
+    {
+        return $this->virtualLayoutAssetTableExists();
+    }
+
+    private function virtualLayoutAssetTableExists(): bool
+    {
+        try {
+            return (bool)$this->virtualLayout
+                ->getConnection()
+                ->getConnector()
+                ->tableExist(ThemeVirtualLayout::schema_table);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @return array{success:false,status:string,message:string,operation:string}
+     */
+    private function virtualLayoutAssetMissingPayload(string $operation = ''): array
+    {
+        return [
+            'success' => false,
+            'status' => 'theme_virtual_layout_missing',
+            'message' => (string)__('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'),
+            'operation' => $operation,
+        ];
+    }
+
     public function normalizeLayoutOption(string $layoutOption): string
     {
         $layoutOption = strtolower(trim($layoutOption));
@@ -428,6 +462,9 @@ class ThemeVirtualLayoutService
      */
     public function saveSourceVersion(array $identity, string $sourceCode, array $versionData = [], bool $publish = true): array
     {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            return $this->virtualLayoutAssetMissingPayload('save_source_version');
+        }
         $rawTargetType = strtolower(trim((string)($identity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)));
         $rawTargetId = (int)($identity['target_id'] ?? 0);
         $identity = $this->normalizeIdentity($identity);
@@ -518,6 +555,14 @@ class ThemeVirtualLayoutService
         bool $publishCopiedVersions = true,
     ): array
     {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            return array_merge($this->virtualLayoutAssetMissingPayload('copy_virtual_layout_identity'), [
+                'copied' => 0,
+                'source_identity' => $this->normalizeIdentity($sourceIdentity),
+                'target_identity' => $this->normalizeIdentity($targetIdentity),
+                'results' => [],
+            ]);
+        }
         $sourceTargetType = strtolower(trim((string)($sourceIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)));
         $sourceTargetId = (int)($sourceIdentity['target_id'] ?? 0);
         $targetTargetType = strtolower(trim((string)($targetIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)));
@@ -652,6 +697,9 @@ class ThemeVirtualLayoutService
 
     public function publishVersion(int $versionId): bool
     {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            return false;
+        }
         $version = $this->loadVersion($versionId);
         if (!$version || !$version->getId()) {
             return false;
@@ -709,6 +757,9 @@ class ThemeVirtualLayoutService
      */
     public function rollbackPublishedVersion(int $assetId, int $targetVersionId, array $options = []): array
     {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            return $this->virtualLayoutAssetMissingPayload('rollback_published_version');
+        }
         $asset = $this->loadAssetById($assetId);
         $targetVersion = $this->loadVersion($targetVersionId);
         if (!$asset || !$asset->getId() || !$targetVersion || !$targetVersion->getId()
@@ -753,6 +804,9 @@ class ThemeVirtualLayoutService
         array $targetChain = [],
         ?string $localeCode = null,
     ): ?array {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            return null;
+        }
         $layoutType = $this->normalizeLayoutType($layoutType);
         $layoutOption = $this->normalizeLayoutOption($layoutOption);
         $area = $this->normalizeArea($area);
@@ -902,6 +956,9 @@ class ThemeVirtualLayoutService
         ?string $localeCode = null,
     ): array
     {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            return [];
+        }
         $layoutType = $this->normalizeLayoutType($layoutType);
         $area = $this->normalizeArea($area);
         $themeId = $themeId > 0 ? $themeId : $this->getActiveThemeId($area);
@@ -1261,12 +1318,16 @@ class ThemeVirtualLayoutService
 
     private function loadOrCreateAsset(array $identity): ThemeVirtualLayout
     {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            throw new \RuntimeException('theme_virtual_layout_missing');
+        }
+
         return $this->loadAssetByIdentity($identity) ?? (clone $this->virtualLayout)->clearData()->clearQuery();
     }
 
     private function loadAssetById(int $assetId): ?ThemeVirtualLayout
     {
-        if ($assetId <= 0) {
+        if ($assetId <= 0 || !$this->virtualLayoutAssetTableExists()) {
             return null;
         }
         $asset = clone $this->virtualLayout;
@@ -1276,6 +1337,9 @@ class ThemeVirtualLayoutService
 
     private function loadAssetByIdentity(array $identity): ?ThemeVirtualLayout
     {
+        if (!$this->virtualLayoutAssetTableExists()) {
+            return null;
+        }
         $rows = $this->virtualLayout->clear()->reset()
             ->where(ThemeVirtualLayout::schema_fields_THEME_ID, (int)$identity['theme_id'])
             ->where(ThemeVirtualLayout::schema_fields_AREA, (string)$identity['area'])
@@ -1332,7 +1396,7 @@ class ThemeVirtualLayoutService
 
     private function loadVersion(int $versionId): ?ThemeVirtualLayoutVersion
     {
-        if ($versionId <= 0) {
+        if ($versionId <= 0 || !$this->virtualLayoutAssetTableExists()) {
             return null;
         }
         $version = clone $this->virtualLayoutVersion;
@@ -1342,6 +1406,9 @@ class ThemeVirtualLayoutService
 
     private function loadLatestVersion(int $assetId): ?ThemeVirtualLayoutVersion
     {
+        if ($assetId <= 0 || !$this->virtualLayoutAssetTableExists()) {
+            return null;
+        }
         $rows = $this->virtualLayoutVersion->clear()->reset()
             ->where(ThemeVirtualLayoutVersion::schema_fields_VIRTUAL_LAYOUT_ID, $assetId)
             ->order(ThemeVirtualLayoutVersion::schema_fields_VERSION_NO, 'DESC')
@@ -1363,6 +1430,9 @@ class ThemeVirtualLayoutService
      */
     private function getVersionsByAsset(int $assetId): array
     {
+        if ($assetId <= 0 || !$this->virtualLayoutAssetTableExists()) {
+            return [];
+        }
         $rows = $this->virtualLayoutVersion->clear()->reset()
             ->where(ThemeVirtualLayoutVersion::schema_fields_VIRTUAL_LAYOUT_ID, $assetId)
             ->order(ThemeVirtualLayoutVersion::schema_fields_VERSION_NO, 'DESC')

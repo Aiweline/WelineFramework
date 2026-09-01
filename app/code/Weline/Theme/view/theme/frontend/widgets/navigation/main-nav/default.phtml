@@ -38,10 +38,7 @@ $showIcons = (bool)($this->getData('show_icons') ?? false);
 $maxDepth = (int)($this->getData('max_depth') ?? 3);
 
 $defaultShortcuts = [
-    ['label' => __('今日特价'), 'url' => '/deals'],
-    ['label' => __('会员视频'), 'url' => '/video'],
-    ['label' => __('礼品心愿单'), 'url' => '/registry'],
-    ['label' => __('礼品卡'), 'url' => '/gift-cards'],
+    ['label' => __('今日特价'), 'url' => '/promotion/deals'],
     ['label' => __('客户服务'), 'url' => '/help'],
 ];
 $defaultCategories = [

@@ -95,8 +95,235 @@ return [
     'Weline_Theme::theme/frontend/widgets/content/countdown/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/brand-logos/default.phtml',
 
+    // --- 表单 (form)：账号认证布局内嵌，全宽背景 + 悬浮登录/注册 ---
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/form/account-login/default.phtml',
+        'params' => [
+            'background_image' => [
+                'type' => 'media_image',
+                'label' => '背景图',
+                'media_options' => [
+                    'default_directory' => 'account/login',
+                ],
+            ],
+            'background_color' => [
+                'type' => 'color',
+                'label' => '背景主色',
+                'default' => '#1b2430',
+            ],
+            'accent_color' => [
+                'type' => 'color',
+                'label' => '背景点缀色',
+                'default' => '#e08a2a',
+            ],
+            'overlay_opacity' => [
+                'type' => 'select',
+                'label' => '背景遮罩',
+                'default' => '0.35',
+                'options' => [
+                    '0' => '无遮罩',
+                    '0.2' => '20%',
+                    '0.35' => '35%',
+                    '0.5' => '50%',
+                    '0.65' => '65%',
+                ],
+            ],
+            'promo_eyebrow' => [
+                'type' => 'string',
+                'label' => '舞台眉题',
+                'default' => 'Weline Account',
+            ],
+            'promo_title' => [
+                'type' => 'string',
+                'label' => '舞台标题',
+                'default' => '欢迎回来',
+            ],
+            'promo_subtitle' => [
+                'type' => 'string',
+                'label' => '舞台副文案',
+                'default' => '登录后继续浏览优惠与订单',
+            ],
+            'promo_trust' => [
+                'type' => 'string',
+                'label' => '舞台信任文案',
+                'default' => '安全登录 · 订单与优惠同步',
+            ],
+            'title' => [
+                'type' => 'string',
+                'label' => '表单标题',
+                'default' => '登录',
+            ],
+            'subtitle' => [
+                'type' => 'string',
+                'label' => '表单副标题',
+                'default' => '使用您的账户继续购物',
+            ],
+        ],
+    ],
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/form/account-register/default.phtml',
+        'params' => [
+            'background_image' => [
+                'type' => 'media_image',
+                'label' => '背景图',
+                'media_options' => [
+                    'default_directory' => 'account/register',
+                ],
+            ],
+            'background_color' => [
+                'type' => 'color',
+                'label' => '背景主色',
+                'default' => '#1b2430',
+            ],
+            'accent_color' => [
+                'type' => 'color',
+                'label' => '背景点缀色',
+                'default' => '#e08a2a',
+            ],
+            'overlay_opacity' => [
+                'type' => 'select',
+                'label' => '背景遮罩',
+                'default' => '0.35',
+                'options' => [
+                    '0' => '无遮罩',
+                    '0.2' => '20%',
+                    '0.35' => '35%',
+                    '0.5' => '50%',
+                    '0.65' => '65%',
+                ],
+            ],
+            'promo_eyebrow' => [
+                'type' => 'string',
+                'label' => '舞台眉题',
+                'default' => 'Weline Account',
+            ],
+            'promo_title' => [
+                'type' => 'string',
+                'label' => '舞台标题',
+                'default' => '加入我们',
+            ],
+            'promo_subtitle' => [
+                'type' => 'string',
+                'label' => '舞台副文案',
+                'default' => '创建账户，同步订单与优惠',
+            ],
+            'promo_trust' => [
+                'type' => 'string',
+                'label' => '舞台信任文案',
+                'default' => '安全注册 · 隐私受保护',
+            ],
+            'title' => [
+                'type' => 'string',
+                'label' => '表单标题',
+                'default' => '创建账户',
+            ],
+            'subtitle' => [
+                'type' => 'string',
+                'label' => '表单副标题',
+                'default' => '使用邮箱注册您的账户',
+            ],
+        ],
+    ],
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/form/account-challenge/default.phtml',
+        'params' => [
+            'background_image' => [
+                'type' => 'media_image',
+                'label' => '背景图',
+                'media_options' => [
+                    'default_directory' => 'account/challenge',
+                ],
+            ],
+            'background_color' => [
+                'type' => 'color',
+                'label' => '背景主色',
+                'default' => '#1b2430',
+            ],
+            'accent_color' => [
+                'type' => 'color',
+                'label' => '背景点缀色',
+                'default' => '#e08a2a',
+            ],
+            'overlay_opacity' => [
+                'type' => 'select',
+                'label' => '背景遮罩',
+                'default' => '0.35',
+                'options' => [
+                    '0' => '无遮罩',
+                    '0.2' => '20%',
+                    '0.35' => '35%',
+                    '0.5' => '50%',
+                    '0.65' => '65%',
+                ],
+            ],
+            'promo_eyebrow' => [
+                'type' => 'string',
+                'label' => '舞台眉题',
+                'default' => 'Weline Account',
+            ],
+            'promo_title' => [
+                'type' => 'string',
+                'label' => '舞台标题',
+                'default' => '安全验证',
+            ],
+            'promo_subtitle' => [
+                'type' => 'string',
+                'label' => '舞台副文案',
+                'default' => '完成两步验证后继续购物与订单',
+            ],
+            'promo_trust' => [
+                'type' => 'string',
+                'label' => '舞台信任文案',
+                'default' => '验证码仅本次登录有效 · 隐私受保护',
+            ],
+            'title' => [
+                'type' => 'string',
+                'label' => '表单标题',
+                'default' => '两步验证',
+            ],
+            'subtitle' => [
+                'type' => 'string',
+                'label' => '表单副标题',
+                'default' => '请输入身份验证器应用生成的验证码或备用恢复码',
+            ],
+        ],
+    ],
+
     // --- 页脚与订阅 (footer / newsletter / social) ---
     'Weline_Theme::theme/frontend/widgets/footer/footer-links/default.phtml',
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/footer/footer-help-center-link/default.phtml',
+        'name' => '页脚帮助中心链接',
+        'description' => '页脚帮助中心扩展槽：跳转 Theme /help 帮助中心布局；默认注入 footer-help-links。',
+        'type' => 'footer',
+        'code' => 'footer-help-center-link',
+        'area' => 'frontend',
+        'page_layouts' => ['*'],
+        'position' => ['footer'],
+        'slot' => 'footer-help-links',
+        'supports' => [
+            'footer-help-center-link',
+            'layout-footer-help-links',
+        ],
+        'default_injections' => [[
+            'layout_type' => '*',
+            'slot' => 'footer-help-links',
+            'area' => 'footer',
+            'sort_order' => 40,
+            'required' => true,
+            'reason' => '页脚帮助中心默认展示 Theme /help 入口',
+            'config' => [
+                'label' => '帮助中心',
+            ],
+        ]],
+        'params' => [
+            'label' => [
+                'default' => '帮助中心',
+                'type' => 'string',
+                'label' => '链接文字',
+            ],
+        ],
+    ],
     'Weline_Theme::theme/frontend/widgets/newsletter/footer-newsletter/default.phtml',
     'Weline_Theme::theme/frontend/widgets/social/footer-social/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-payment/default.phtml',

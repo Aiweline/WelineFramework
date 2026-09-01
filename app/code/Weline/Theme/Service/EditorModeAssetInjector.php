@@ -9,6 +9,9 @@ use Weline\Theme\Service\Ui\IconRegistry;
 
 final class EditorModeAssetInjector
 {
+    /** Cache-bust for preview CSS/JS; bump when health/report behavior changes. */
+    private const ASSET_VERSION = '20260901-theme-editor-virtual-gate-v1';
+
     public function __construct(
         private readonly Template $template,
         private readonly IconRegistry $icons,
@@ -28,24 +31,34 @@ final class EditorModeAssetInjector
 <link rel="stylesheet" href="{$cssUrl}" data-w-editor-preview-asset="style">
 HTML;
 
+        // Module scripts defer by default; keep them in <head> so reportWidgetHtmlHealth
+        // still runs when body HTML is broken and </body> never materializes cleanly.
         $editorJs = <<<HTML
 <script type="module" src="{$jsUrl}" data-w-editor-preview-asset="script"></script>
 HTML;
 
+        $headBits = [];
         if (!str_contains($html, 'data-w-editor-preview-asset="style"')) {
+            $headBits[] = $editorCss;
+        }
+        if (!str_contains($html, 'data-w-editor-preview-asset="script"')) {
+            $headBits[] = $editorJs;
+        }
+        if ($headBits !== []) {
+            $headInject = implode("\n", $headBits);
             if (stripos($html, '</head>') !== false) {
-                $html = str_ireplace('</head>', $editorCss . "\n</head>", $html);
+                $html = str_ireplace('</head>', $headInject . "\n</head>", $html);
             } else {
-                $html = $editorCss . "\n" . $html;
+                $html = $headInject . "\n" . $html;
             }
         }
 
         $notice = $this->previewNotice($previewExitUrl);
-        if (!str_contains($html, 'data-w-editor-preview-asset="script"')) {
+        if ($notice !== '') {
             if (stripos($html, '</body>') !== false) {
-                $html = str_ireplace('</body>', $notice . "\n" . $editorJs . "\n</body>", $html);
+                $html = str_ireplace('</body>', $notice . "\n</body>", $html);
             } else {
-                $html .= "\n" . $notice . "\n" . $editorJs;
+                $html .= "\n" . $notice;
             }
         }
 
@@ -58,9 +71,12 @@ HTML;
             throw new \InvalidArgumentException(__('Weline UI 预览资源路径无效'));
         }
 
+        $url = (string)$this->template->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative);
+        // fetchTagSource may already append ?v=preview_* — never produce ?v=a?v=b.
+        $sep = str_contains($url, '?') ? '&' : '?';
+
         return htmlspecialchars(
-            $this->template->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative)
-                . '?v=20260826-slot-toolbar-resolve-v1',
+            $url . $sep . 'v=' . self::ASSET_VERSION,
             ENT_QUOTES,
             'UTF-8',
         );
@@ -91,9 +107,9 @@ HTML;
         <strong>{$label}</strong>
         <small>{$hint}</small>
     </span>
-    <a class="w-button w-theme-preview-notice__exit" data-tone="neutral" data-size="sm" href="{$url}" target="_top">
+    <button type="button" class="w-button w-theme-preview-notice__exit" data-tone="neutral" data-size="sm" data-w-preview-exit data-w-preview-exit-url="{$url}">
         <span>{$exit}</span>{$arrow}
-    </a>
+    </button>
 </aside>
 HTML;
     }

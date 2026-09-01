@@ -5,10 +5,19 @@
 
 ## 失效范围
 
+- **主题发布（编辑器 / Scoped Release）必须按当前发布主题所属 Scope 调用 `clearScopedCaches(scope, themeId)`**，使 storefront Theme 命名空间世代仅对该 Scope（及其后代向量）失效；禁止在已知 typed Scope 时用 `clearNonGlobalCaches(null)`（会跳过 `generated_theme_cache`）。
+- Scoped workspace `publish` 成功后由 `ThemeScopedWorkspaceRequestService` 执行 `clearScopedCaches`；`blocked`（结构冲突）不得清缓存，且 HTTP 必须 `success=false`。
+- ThemeEditor 兼容发布路径（`postPublish` / `publish-version` / `publish-and-exit`）在重建 generated theme cache 前后，通过 `flushFullPageCache($context, $themeId)` 走同一 Scope 定向失效。
+- `clearScopedCaches` / `clearNonGlobalCaches` 必须清理 `Partials` 进程缓存与 `StorefrontScopeHotCache` 的 `theme.chrome.*`（header/footer），否则页脚槽位发布后仍可能继续吐旧 chrome HTML。
+- 遗留 `ThemeLayoutService::getLayout` 按 **slot 近优先** 合并 Scope 祖先链：Channel 只覆盖 `delivery` 时不得截断 Website 的 `footer-about-links` 等其它槽。
 - FPM/CLI 没有 `WLS_INSTANCE` / `WLS_INSTANCE_NAME` 时，先清理当前进程和本地缓存，再由控制面在一个总 deadline 内并发通知正在运行的 WLS 实例。
 - WLS Worker 存在当前实例名时，只清理该实例的 Shared State，并向该实例发送 cache epoch。
 - 全实例广播只能读取持久化 endpoint 并并发尝试；禁止在请求内对每个历史实例串行执行端口/进程探测。
 - Router 持久池通过 `Framework\Cache\CacheManager::pool('router')->clear()` 失效，不得实例化不存在的 RouterCache Factory。
+
+## 前台发布回执
+
+- `ThemePublishedVersionRuntimeResolver` 按请求 `ScopeIdentity` 祖先链解析 `theme_layout_version.is_published`；链上未命中时回退该 theme+pageType 任意已发布版本，保证 Website 已发布时 HTML `themePublishedVersion*` 非空。
 
 ## Chrome partial 输出缓存
 

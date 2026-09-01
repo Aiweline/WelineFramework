@@ -42,6 +42,8 @@ class ThemePreviewContentRenderer
         ThemeLayout::PAGE_TYPE_CATEGORY => ['category-related', 'content'],
         ThemeLayout::PAGE_TYPE_CART => ['cart-recommendations', 'content'],
         ThemeLayout::PAGE_TYPE_SEARCH => ['search-main', 'search-recommendations', 'content'],
+        ThemeLayout::PAGE_TYPE_BLOG => ['blog-article', 'content'],
+        ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => ['blog-results', 'blog-filters', 'content'],
         ThemeLayout::PAGE_TYPE_CMS => ['cms-main', 'cms-page-main', 'content'],
         ThemeLayout::PAGE_TYPE_CHECKOUT => ['checkout-main', 'content'],
         ThemeLayout::PAGE_TYPE_ACCOUNT => ['account-main', 'content'],
@@ -50,7 +52,6 @@ class ThemePreviewContentRenderer
         'promotion' => ['promotion-main', 'content'],
         'customer_service' => ['customer-service-main', 'content'],
         'help' => ['help-topics', 'help-faq', 'help-extras', 'help-sidebar', 'content'],
-        'order_tracking' => ['order-tracking-form', 'order-tracking-content', 'order-tracking-sidebar', 'order-tracking-extras', 'content'],
         'review' => ['review-main', 'content'],
         'qa' => ['qa-main', 'content'],
         'rma' => ['rma-main', 'content'],
@@ -88,6 +89,7 @@ class ThemePreviewContentRenderer
         private readonly ThemeLayoutService $layoutService,
         private readonly SlotRendererService $slotRendererService,
         private readonly ThemePageTypeResolver $pageTypeResolver,
+        private readonly ThemeRuntimeLayoutResolver $runtimeLayoutResolver,
         ?ThemeLayoutVersionService $versionService = null,
         ?ThemeScopedPreviewResolver $scopedPreviewResolver = null,
     ) {
@@ -169,25 +171,53 @@ class ThemePreviewContentRenderer
         $requestedStatus = $requestedStatus === ThemeLayout::STATUS_PUBLISHED
             ? ThemeLayout::STATUS_PUBLISHED
             : ThemeLayout::STATUS_DRAFT;
+        $identity = $this->normalizeLayoutIdentity($identity);
 
         if ($requestedStatus === ThemeLayout::STATUS_DRAFT) {
-            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
+            $draftLayout = $this->runtimeLayoutResolver->resolveLayout(
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_DRAFT,
+                PreviewContextService::AREA_FRONTEND,
+                $identity,
+            );
             if ($this->hasWidgets($draftLayout)) {
                 return [$draftLayout, $pageType, ThemeLayout::STATUS_DRAFT, false];
             }
 
-            if ($this->layoutService->hasDraft($themeId, $pageType, $identity)
-                || $this->hasEmptyCurrentRestoreVersion($themeId, $pageType, $identity)) {
+            if ($this->hasEmptyCurrentRestoreVersion($themeId, $pageType, $identity)) {
                 return [$draftLayout, $pageType, ThemeLayout::STATUS_DRAFT, false];
             }
         }
 
-        if ($this->layoutService->hasNoWidgetPlacements($themeId, $pageType, $requestedStatus, $identity)) {
-            return [$this->layoutService->getFullLayout($themeId, $pageType, $requestedStatus, $identity), $pageType, $requestedStatus, false];
+        if ($this->runtimeLayoutResolver->hasNoWidgetPlacements(
+            $themeId,
+            $pageType,
+            $requestedStatus,
+            $identity,
+        )) {
+            return [
+                $this->runtimeLayoutResolver->resolveLayout(
+                    $themeId,
+                    $pageType,
+                    $requestedStatus,
+                    PreviewContextService::AREA_FRONTEND,
+                    $identity,
+                ),
+                $pageType,
+                $requestedStatus,
+                false,
+            ];
         }
 
         foreach ($this->buildLookupCandidates($pageType, $requestedStatus) as [$candidatePageType, $candidateStatus]) {
-            $layout = $this->layoutService->getFullLayout($themeId, $candidatePageType, $candidateStatus, $identity);
+            $layout = $this->runtimeLayoutResolver->resolveLayout(
+                $themeId,
+                $candidatePageType,
+                $candidateStatus,
+                PreviewContextService::AREA_FRONTEND,
+                $identity,
+            );
             if ($this->hasWidgets($layout)) {
                 return [$layout, $candidatePageType, $candidateStatus, false];
             }
@@ -329,7 +359,9 @@ class ThemePreviewContentRenderer
         $html = '';
         foreach ($orderedSlotIds as $slotId) {
             $slotIdEscaped = htmlspecialchars($slotId, ENT_QUOTES, 'UTF-8');
+            $html .= SlotBoundaryMarkers::open($slotId);
             $html .= '<div data-preview-slot="' . $slotIdEscaped . '" data-wslot="' . $slotIdEscaped . '"></div>';
+            $html .= SlotBoundaryMarkers::close($slotId);
         }
 
         $processedHtml = $layoutData !== null
@@ -365,28 +397,17 @@ class ThemePreviewContentRenderer
             return $slotHtml;
         }
 
-        libxml_use_internal_errors(true);
-        $dom = new \DOMDocument();
-        $dom->loadHTML('<?xml encoding="UTF-8"><div data-preview-root="1">' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        libxml_clear_errors();
-
-        $xpath = new \DOMXPath($dom);
+        $scanner = new SlotBoundaryScanner();
         foreach ($orderedSlotIds as $slotId) {
-            $query = sprintf('//*[@data-preview-slot=%s]', $this->buildXpathStringLiteral($slotId));
-            $node = $xpath->query($query)->item(0);
-            if (!$node instanceof \DOMElement) {
-                continue;
+            $inner = $scanner->extractSlotInner($html, $slotId);
+            if ($inner !== null) {
+                $slotHtml[$slotId] = $inner;
             }
-            $slotHtml[$slotId] = $this->extractInnerHtml($node);
         }
 
         return $slotHtml;
     }
 
-    /**
-     * @param array<string,string> $slotHtml
-     * @return array{0:array,1:string[]}
-     */
     private function buildMetaFragments(string $layoutType, array $slotHtml): array
     {
         $meta = [];
@@ -489,34 +510,5 @@ class ThemePreviewContentRenderer
         $html .= '</div></section>';
 
         return $html;
-    }
-
-    private function extractInnerHtml(\DOMElement $node): string
-    {
-        $html = '';
-        foreach ($node->childNodes as $childNode) {
-            $html .= $node->ownerDocument->saveHTML($childNode);
-        }
-
-        return $html;
-    }
-
-    private function buildXpathStringLiteral(string $value): string
-    {
-        if (!str_contains($value, "'")) {
-            return "'" . $value . "'";
-        }
-
-        if (!str_contains($value, '"')) {
-            return '"' . $value . '"';
-        }
-
-        $parts = explode("'", $value);
-        $escapedParts = array_map(
-            static fn(string $part): string => "'" . $part . "'",
-            $parts
-        );
-
-        return 'concat(' . implode(', "\'", ', $escapedParts) . ')';
     }
 }

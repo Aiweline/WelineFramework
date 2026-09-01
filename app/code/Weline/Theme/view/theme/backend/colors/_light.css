@@ -43,11 +43,11 @@
     /* ========================================
        边框色
        ======================================== */
-    --backend-color-border-default: #64748b;
-    --backend-color-border-emphasis: #adb5bd;
+    --backend-color-border-default: #e2e8f0;
+    --backend-color-border-emphasis: #94a3b8;
     --backend-color-border-focus: var(--backend-color-primary);
-    --backend-color-border-light: #64748b;
-    --backend-color-border-dark: #6c757d;
+    --backend-color-border-light: #e2e8f0;
+    --backend-color-border-dark: #64748b;
 
     /* ========================================
        组件特定颜色
@@ -83,6 +83,10 @@
 
     /* Semantic status/interaction contract shared by Bootstrap and Weline. */
     --backend-color-bg-canvas: #f1f5f9;
+    --color-bg-canvas: var(--backend-color-bg-canvas);
+    --color-bg-primary: var(--backend-color-bg-primary);
+    --color-bg-secondary: var(--backend-color-bg-secondary);
+    --color-bg-tertiary: var(--backend-color-bg-tertiary);
     --backend-color-link: #4338ca;
     --backend-color-link-hover: #3730a3;
     --backend-color-primary: #4f46e5;

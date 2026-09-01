@@ -17,7 +17,10 @@
 | 类型标识 | 布局目录 | 描述 | 示例路由 |
 |---------|---------|------|---------|
 | `homepage` | `layouts/homepage/` | 首页 | `/`, `/home` |
-| `cms_page` | `layouts/cms_page/` | CMS 静态页面 | `/about`, `/contact` |
+| `cms_page` | `layouts/cms_page/` | CMS 静态页面 | `/page/...` |
+| `about` | `layouts/about/` | 关于我们 | `/about` |
+| `terms` | `layouts/terms/` | 服务条款 | `/terms` |
+| `contact` | `layouts/contact/` | 联系我们 | `/contact`, `/support` |
 | `category` | `layouts/category/` | 分类/目录页 | `/category/electronics` |
 | `product` | `layouts/product/` | 产品详情页 | `/product/iphone-15` |
 | `product_list` | `layouts/product_list/` | 产品列表页 | `/products` |
@@ -42,7 +45,7 @@
 | 部件代码 | 适用页面 | 说明 |
 |---------|---------|------|
 | `header-container` | `*` | 头部容器，包含 Logo、搜索、导航等插槽 |
-| `footer-container` | `*` | 底部容器，包含链接、社交、版权等插槽 |
+| `footer-container` | `*` | 整页脚主部件（分组链接+法律/社交/版权；标准四扩展槽） |
 | `content-container` | `*` | 主内容容器，包含 Hero、侧栏、主内容等插槽 |
 
 ### Header 子部件

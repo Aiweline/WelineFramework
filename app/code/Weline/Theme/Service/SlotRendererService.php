@@ -16,12 +16,16 @@ use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
-use Weline\Theme\Dto\ThemeComponentDefinition;
+use Weline\Theme\Exception\SlotBoundaryRequiredException;
 use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Dto\ThemeComponentDefinition;
+use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Taglib\Slot;
 use Weline\Widget\Api\WidgetRegistryInterface;
 use Weline\Widget\Api\Rendering\RuntimeTemplateRendererInterface;
 
@@ -49,7 +53,12 @@ class SlotRendererService
     private WidgetRegistryInterface $widgetRegistry;
     private ThemePlaceableRegistryInterface $placeableRegistry;
 
-    /** @var array<string, string> Opaque script/style blocks parked during DOMDocument parse. */
+    /**
+     * Opaque blocks parked during DOMDocument parse (script/style + widget-wrapper inners).
+     * Parking wrapper inners prevents libxml from reparenting <section>/<article> out of the shell.
+     *
+     * @var array<string, string>
+     */
     private array $domOpaqueTokens = [];
     private ThemeComponentRenderer $componentRenderer;
     private Template $template;
@@ -75,11 +84,24 @@ class SlotRendererService
     /** 当前渲染周期内已填充的 slot_id，同一 slot_id 只填充文档中第一处出现，避免容器部件内层同名插槽被重复填充导致泄露 */
     private array $filledSlotIdsThisRun = [];
 
+    /**
+     * 页面级数据快照（如 storefront_offer）。
+     * ThemeComponentRenderer / RuntimeTemplateMaterializer 会 unsetData()，
+     * 必须在首个部件渲染前捕获并回注到部件 config。
+     *
+     * @var array<string, mixed>
+     */
+    private array $pageRenderContext = [];
+
     /** 当前渲染周期使用的主题（用于部件模板覆盖解析，确保预览显示所选主题而非全局激活主题） */
     private ?WelineTheme $renderTheme = null;
 
     /** 当前渲染区域：frontend/backend。 */
     private string $renderArea = 'frontend';
+
+    private ?SlotBoundaryScanner $boundaryScanner = null;
+
+    private ?SlotHtmlOpaqueParker $boundaryParker = null;
 
     /** 已加载主题缓存：theme_id => WelineTheme|null */
     private array $renderThemeCache = [];
@@ -153,12 +175,27 @@ class SlotRendererService
                     return $html;
                 }
 
+                $pageType = trim((string)($layoutData['page_type'] ?? $layoutData['layout_type'] ?? ''));
+
                 $this->filledSlotIdsThisRun = [];
-                return $this->withRenderTheme(
-                    $themeId,
-                    $area,
-                    fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $filterToHtmlSlots)
-                );
+                $this->capturePageRenderContext();
+                try {
+                    $processed = $this->withRenderTheme(
+                        $themeId,
+                        $area,
+                        fn(): string => $this->processSlotsWithBoundaries($html, $slotWidgets, $filterToHtmlSlots, $pageType)
+                    );
+                    $processed = $this->stripEmptyTemplateWidgetShells($processed);
+                    if ($this->shouldInspectWidgetHtml()) {
+                        $processed = $this->repairUnhealthyWidgetWrappers($processed);
+                    }
+
+                    return $this->appendWidgetHealthToastBridge(
+                        $this->stampFinalWidgetHtmlHealth($processed)
+                    );
+                } finally {
+                    $this->pageRenderContext = [];
+                }
             }
         );
     }
@@ -188,6 +225,17 @@ class SlotRendererService
             fn() => $this->organizeWidgetsBySlot($layoutData)
         );
 
+        $slotWidgets = $this->traceCall(
+            'slot_renderer::mergeLayoutScopedSlotWidgets',
+            fn() => $this->mergeLayoutScopedSlotWidgets($slotWidgets, $html, $themeId, $pageType, $status, $area)
+        );
+
+        // 页头/页脚是全局 chrome（一改全站）：各 pageType 缺槽时合并同一套全局 chrome 部件。
+        $slotWidgets = $this->traceCall(
+            'slot_renderer::mergeSharedChromeSlotWidgets',
+            fn() => $this->mergeSharedChromeSlotWidgets($slotWidgets, $themeId, $pageType, $status, $area)
+        );
+
         if ($status === ThemeLayout::STATUS_PUBLISHED) {
             $slotWidgets = $this->traceCall(
                 'slot_renderer::filterWidgetsForHtmlSlots',
@@ -214,22 +262,209 @@ class SlotRendererService
             }
         }
 
-        if (empty($slotWidgets)) {
+        if (empty($slotWidgets) && !$this->htmlHasLayoutScopedSlots($html)) {
+            $html = $this->stripEmptyTemplateWidgetShells($html);
+            if ($this->shouldInspectWidgetHtml()) {
+                $html = $this->repairUnhealthyWidgetWrappers($html);
+            }
+
+            return $this->appendWidgetHealthToastBridge(
+                $this->stampFinalWidgetHtmlHealth($html)
+            );
+        }
+
+        // Boundaries-only slot fill (legacy DOM engine removed).
+        $this->filledSlotIdsThisRun = [];
+        $this->capturePageRenderContext();
+        try {
+            $html = $this->traceCall(
+                'slot_renderer::processSlotsWithBoundaries',
+                fn() => $this->withRenderTheme(
+                    $themeId,
+                    $area,
+                    fn(): string => $this->processSlotsWithBoundaries(
+                        $html,
+                        $slotWidgets,
+                        $status === ThemeLayout::STATUS_PUBLISHED,
+                        $pageType
+                    )
+                )
+            );
+
+            $html = $this->stripEmptyTemplateWidgetShells($html);
+            if ($this->shouldInspectWidgetHtml()) {
+                $html = $this->repairUnhealthyWidgetWrappers($html);
+            }
+
+            return $this->appendWidgetHealthToastBridge(
+                $this->stampFinalWidgetHtmlHealth($html)
+            );
+        } finally {
+            $this->pageRenderContext = [];
+        }
+    }
+
+    /**
+     * Theme-preview content path may skip processSlots (wrappers already present).
+     * Always drop empty template shells; re-stamp health only in DEV/preview inspect mode.
+     */
+    public function finalizePreviewWidgetHealth(string $html): string
+    {
+        if ($html === '') {
             return $html;
         }
 
-        // Use DOM only when there are widgets that can change slot output.
-        $this->filledSlotIdsThisRun = [];
-        $html = $this->traceCall(
-            'slot_renderer::processSlotsWithDom',
-            fn() => $this->withRenderTheme(
-                $themeId,
-                $area,
-                fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $status === ThemeLayout::STATUS_PUBLISHED)
-            )
-        );
+        $html = $this->stripEmptyTemplateWidgetShells($html);
+        if (!$this->shouldInspectWidgetHtml()) {
+            return $html;
+        }
 
-        return $html;
+        // Re-render empty/shredded wrappers from data-config before stamping health toasts.
+        // Repair resets purchase-actions emit flag so the component re-brings its own CSS.
+        $html = $this->repairUnhealthyWidgetWrappers($html);
+
+        return $this->appendWidgetHealthToastBridge($this->stampFinalWidgetHtmlHealth($html));
+    }
+
+    /**
+     * Remove empty data-weline-template-widget shells only when a non-empty sibling
+     * wrapper with the same data-widget-code already exists (layout fill).
+     * Never delete the sole instance of a widget code (would blank the slot).
+     */
+    private function stripEmptyTemplateWidgetShells(string $html): string
+    {
+        if ($html === '' || !str_contains($html, 'data-weline-template-widget')) {
+            return $html;
+        }
+
+        $length = \strlen($html);
+        $offset = 0;
+        $out = '';
+
+        while ($offset < $length) {
+            if (\preg_match(
+                '/<div\b[^>]*\bdata-weline-template-widget\s*=\s*(["\']?)1\1[^>]*>/i',
+                $html,
+                $match,
+                \PREG_OFFSET_CAPTURE,
+                $offset
+            ) !== 1) {
+                $out .= \substr($html, $offset);
+                break;
+            }
+
+            $openStart = (int)$match[0][1];
+            $openTag = (string)$match[0][0];
+            $openEnd = $openStart + \strlen($openTag);
+            $out .= \substr($html, $offset, $openStart - $offset);
+
+            $depth = 1;
+            $cursor = $openEnd;
+            $innerEnd = null;
+            while ($cursor < $length && $depth > 0) {
+                $nextOpen = \stripos($html, '<div', $cursor);
+                $nextClose = \stripos($html, '</div>', $cursor);
+                if ($nextClose === false) {
+                    break;
+                }
+                if ($nextOpen !== false && $nextOpen < $nextClose && \preg_match('/<div\b/i', \substr($html, $nextOpen, 10)) === 1) {
+                    $depth++;
+                    $cursor = $nextOpen + 4;
+                    continue;
+                }
+                $depth--;
+                if ($depth === 0) {
+                    $innerEnd = $nextClose;
+                    break;
+                }
+                $cursor = $nextClose + 6;
+            }
+
+            if ($innerEnd === null) {
+                $out .= \substr($html, $openStart);
+                break;
+            }
+
+            $inner = \substr($html, $openEnd, $innerEnd - $openEnd);
+            $fullEnd = $innerEnd + 6;
+            $withoutComments = \trim(\preg_replace('/<!--.*?-->/s', '', $inner) ?? $inner);
+            $meaningful = \trim(\strip_tags($withoutComments));
+            $code = '';
+            if (\preg_match('/\bdata-widget-code\s*=\s*(["\'])([^"\']*)\1/i', $openTag, $codeMatch) === 1) {
+                $code = \trim((string)$codeMatch[2]);
+            }
+            $hasHealthySibling = $code !== '' && $this->htmlHasHealthyWidgetSibling($html, $code, $openStart, $fullEnd);
+            if ($meaningful === '' && $hasHealthySibling) {
+                $offset = $fullEnd;
+                continue;
+            }
+
+            $out .= \substr($html, $openStart, $fullEnd - $openStart);
+            $offset = $fullEnd;
+        }
+
+        return $out;
+    }
+
+    /**
+     * True when another .widget-wrapper with the same code has meaningful HTML body.
+     */
+    private function htmlHasHealthyWidgetSibling(string $html, string $code, int $skipStart, int $skipEnd): bool
+    {
+        if ($code === '' || !\preg_match_all(
+            '/<div\b[^>]*\bwidget-wrapper\b[^>]*\bdata-widget-code\s*=\s*(["\'])'
+            . \preg_quote($code, '/')
+            . '\1[^>]*>/i',
+            $html,
+            $matches,
+            \PREG_OFFSET_CAPTURE
+        )) {
+            return false;
+        }
+
+        foreach ($matches[0] as $match) {
+            $openStart = (int)$match[1];
+            $openTag = (string)$match[0];
+            $openEnd = $openStart + \strlen($openTag);
+            if ($openStart >= $skipStart && $openStart < $skipEnd) {
+                continue;
+            }
+            if (\stripos($openTag, 'data-weline-template-widget') !== false) {
+                // Prefer a layout sibling; template-to-template is not "healthy fill".
+                continue;
+            }
+            $depth = 1;
+            $cursor = $openEnd;
+            $length = \strlen($html);
+            $innerEnd = null;
+            while ($cursor < $length && $depth > 0) {
+                $nextOpen = \stripos($html, '<div', $cursor);
+                $nextClose = \stripos($html, '</div>', $cursor);
+                if ($nextClose === false) {
+                    break;
+                }
+                if ($nextOpen !== false && $nextOpen < $nextClose && \preg_match('/<div\b/i', \substr($html, $nextOpen, 10)) === 1) {
+                    $depth++;
+                    $cursor = $nextOpen + 4;
+                    continue;
+                }
+                $depth--;
+                if ($depth === 0) {
+                    $innerEnd = $nextClose;
+                    break;
+                }
+                $cursor = $nextClose + 6;
+            }
+            if ($innerEnd === null) {
+                continue;
+            }
+            $inner = \substr($html, $openEnd, $innerEnd - $openEnd);
+            if (\stripos($inner, 'wc-theme_widget_') !== false || \strlen(\trim(\strip_tags($inner))) > 32) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -321,11 +556,52 @@ class SlotRendererService
         }
 
         $slotIds = $this->extractSlotIdsFromHtml($html);
+        $slotIds = $this->expandSlotIdsWithContainerChildSlots($slotWidgets, $slotIds);
         if ($slotIds === []) {
             return [];
         }
 
         return \array_intersect_key($slotWidgets, $slotIds);
+    }
+
+    /**
+     * 容器部件的子槽在首轮 HTML 中尚不存在（需等父部件渲染后才输出 data-wslot），
+     * 但仍应保留其布局部件，供嵌套插槽迭代填充。
+     *
+     * @param array<string, true> $slotIds
+     * @return array<string, true>
+     */
+    private function expandSlotIdsWithContainerChildSlots(array $slotWidgets, array $slotIds): array
+    {
+        $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+
+        foreach ($slotWidgets as $widgets) {
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+
+                $definition = $this->placeableRegistry->find(
+                    (string)($widget['widget_module'] ?? ''),
+                    (string)($widget['widget_type'] ?? ''),
+                    (string)($widget['widget_code'] ?? ''),
+                    $this->renderTheme,
+                    $renderArea,
+                );
+                if ($definition === null || !$definition->isContainer || $definition->slots === []) {
+                    continue;
+                }
+
+                foreach (\array_keys($definition->slots) as $childSlotId) {
+                    $childSlotId = \trim((string)$childSlotId);
+                    if ($childSlotId !== '') {
+                        $slotIds[$childSlotId] = true;
+                    }
+                }
+            }
+        }
+
+        return $slotIds;
     }
 
     /**
@@ -356,6 +632,114 @@ class SlotRendererService
         return $slotIds;
     }
 
+    /**
+     * @param array<string, list<array<string, mixed>>> $slotWidgets
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function mergeLayoutScopedSlotWidgets(
+        array $slotWidgets,
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $status,
+        string $area
+    ): array {
+        $bindings = $this->extractSlotLayoutBindingsFromHtml($html);
+        if ($bindings === []) {
+            return $slotWidgets;
+        }
+
+        foreach ($bindings as $slotId => $layoutType) {
+            $layoutType = trim($layoutType);
+            if ($slotId === '' || $layoutType === '' || $layoutType === $pageType) {
+                continue;
+            }
+
+            $externalLayout = $this->getLayoutData($themeId, $layoutType, $status, $area);
+            $externalSlotWidgets = $this->organizeWidgetsBySlot($externalLayout);
+            if (!empty($externalSlotWidgets[$slotId])) {
+                $slotWidgets[$slotId] = $externalSlotWidgets[$slotId];
+            }
+        }
+
+        return $slotWidgets;
+    }
+
+    /**
+     * 页头/页脚是全局 chrome：不属于 blog/product 等任一业务布局，编辑一次全站生效。
+     *
+     * 可视化当前把全局 chrome 持久化在 homepage workspace（存储载体，不是归属）。
+     * 其它 pageType 若本页未放置同名独占槽，则合并该套全局 chrome；本页已有部件不覆盖，
+     * 且不得整页回退 homepage，以免混入首页内容区部件。
+     *
+     * @param array<string, list<array<string, mixed>>> $slotWidgets
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function mergeSharedChromeSlotWidgets(
+        array $slotWidgets,
+        int $themeId,
+        string $pageType,
+        string $status,
+        string $area
+    ): array {
+        if ($pageType === ThemeLayout::PAGE_TYPE_HOME) {
+            return $slotWidgets;
+        }
+
+        // 独占全局 chrome 槽；与 partials header/footer 的 layout-global-* accept 对齐。
+        $chromeSlots = ['header', 'footer'];
+        $missing = [];
+        foreach ($chromeSlots as $slotId) {
+            if (empty($slotWidgets[$slotId])) {
+                $missing[] = $slotId;
+            }
+        }
+        if ($missing === []) {
+            return $slotWidgets;
+        }
+
+        // 读取全局 chrome 持久化载体（homepage workspace），非「homepage 专属布局」。
+        $globalChromeLayout = $this->getLayoutData($themeId, ThemeLayout::PAGE_TYPE_HOME, $status, $area);
+        $globalChromeSlotWidgets = $this->organizeWidgetsBySlot($globalChromeLayout);
+        foreach ($missing as $slotId) {
+            if (!empty($globalChromeSlotWidgets[$slotId])) {
+                $slotWidgets[$slotId] = $globalChromeSlotWidgets[$slotId];
+            }
+        }
+
+        return $slotWidgets;
+    }
+
+    private function htmlHasLayoutScopedSlots(string $html): bool
+    {
+        return $this->extractSlotLayoutBindingsFromHtml($html) !== [];
+    }
+
+    /**
+     * @return array<string, string> slotId => layoutType
+     */
+    private function extractSlotLayoutBindingsFromHtml(string $html): array
+    {
+        $bindings = [];
+        if (!preg_match_all('/<[^>]*\bdata-wslot\s*=\s*(["\'])([^"\']+)\1[^>]*>/is', $html, $matches, PREG_SET_ORDER)) {
+            return $bindings;
+        }
+
+        foreach ($matches as $match) {
+            $tag = (string)($match[0] ?? '');
+            $slotId = trim((string)($match[2] ?? ''));
+            if ($slotId === '' || !preg_match('/\bdata-wslot-layout\s*=\s*(["\'])([^"\']+)\1/i', $tag, $layoutMatch)) {
+                continue;
+            }
+            $layoutType = trim((string)($layoutMatch[2] ?? ''));
+            if ($layoutType !== '') {
+                $bindings[$slotId] = $layoutType;
+            }
+        }
+
+        return $bindings;
+    }
+
     public function processDraftSlots(string $html, int $themeId, string $pageType): string
     {
         return $this->processSlots($html, $themeId, $pageType, ThemeLayout::STATUS_DRAFT);
@@ -370,22 +754,545 @@ class SlotRendererService
     }
 
     /**
-     * 使用 DOM 解析处理插槽（支持嵌套：部件输出的 HTML 可包含子插槽，会被迭代填充）
+     * 使用 compile-time 边界注释处理插槽（字符串引擎，支持嵌套与动态子槽）。
      */
-    private function processSlotsWithDom(string $html, array $slotWidgets, bool $allowNarrowFragment = false): string
-    {
+    private function processSlotsWithBoundaries(
+        string $html,
+        array $slotWidgets,
+        bool $allowNarrowFragment = false,
+        string $pageType = ''
+    ): string {
         $bodyParts = $this->splitHtmlBody($html);
         if ($bodyParts !== null) {
-            $bodyParts['body'] = $this->processSlotFragmentWithDom($bodyParts['body'], $slotWidgets, $allowNarrowFragment);
+            $bodyParts['body'] = $this->processSlotFragmentWithBoundaries(
+                $bodyParts['body'],
+                $slotWidgets,
+                $allowNarrowFragment,
+                $pageType
+            );
+
             return $bodyParts['before'] . $bodyParts['body'] . $bodyParts['after'];
         }
 
-        return $this->processSlotFragmentWithDom($html, $slotWidgets, $allowNarrowFragment);
+        return $this->processSlotFragmentWithBoundaries($html, $slotWidgets, $allowNarrowFragment, $pageType);
+    }
+
+    private function processSlotFragmentWithBoundaries(
+        string $html,
+        array $slotWidgets,
+        bool $allowNarrowFragment = false,
+        string $pageType = ''
+    ): string {
+        if ($allowNarrowFragment) {
+            $narrowed = $this->narrowHtmlToSlotFragment($html, \array_keys($slotWidgets));
+            if ($narrowed !== null) {
+                $narrowed['fragment'] = $this->processSlotFragmentWithBoundaries(
+                    $narrowed['fragment'],
+                    $slotWidgets,
+                    false,
+                    $pageType
+                );
+
+                return $narrowed['before'] . $narrowed['fragment'] . $narrowed['after'];
+            }
+        }
+
+        if ($this->shouldRequireSlotBoundaryMarkers($html, $slotWidgets)) {
+            $this->assertSlotBoundaryMarkersPresent($html);
+        }
+
+        $parker = $this->boundaryParker();
+        $scanner = $this->boundaryScanner();
+        $html = $parker->park($html);
+
+        $existingSlotIds = [];
+        $maxIterations = 50;
+        for ($iteration = 0; $iteration < $maxIterations; $iteration++) {
+            $regions = $scanner->enumerateRegions($html);
+            if ($regions === []) {
+                break;
+            }
+
+            foreach ($regions as $region) {
+                $existingSlotIds[$region['id']] = true;
+            }
+
+            $filled = false;
+            foreach ($regions as $region) {
+                $slotId = $region['id'];
+                if (isset($this->filledSlotIdsThisRun[$slotId])) {
+                    continue;
+                }
+                if (!isset($slotWidgets[$slotId]) || $slotWidgets[$slotId] === []) {
+                    continue;
+                }
+
+                $nextHtml = $this->fillSlotRegionString($html, $region, $slotWidgets[$slotId]);
+                if ($nextHtml === $html) {
+                    continue;
+                }
+
+                $html = $nextHtml;
+                $this->filledSlotIdsThisRun[$slotId] = true;
+                $filled = true;
+                break;
+            }
+
+            if (!$filled) {
+                break;
+            }
+        }
+
+        // Template widget-wrappers (e.g. mini-cart-icon) are opaque-parked for the
+        // boundary pass, which also hides nested layout-scoped slots such as
+        // footer-extras. Restore first so fillRemaining can see those markers.
+        $html = $parker->restore($html);
+        $html = $this->fillRemainingUnmarkedSlotWidgets($html, $slotWidgets);
+
+        $this->detectOrphanWidgets(
+            $slotWidgets,
+            $this->expandSlotIdsWithContainerChildSlots(
+                $slotWidgets,
+                $existingSlotIds + $this->extractSlotIdsFromHtml($html)
+            ),
+            $pageType
+        );
+
+        return $html;
     }
 
     /**
-     * Keep document-level SEO/head markup out of the slot DOM pass.
+     * Widget-embedded slots may ship as bare data-wslot nodes without compile-time
+     * boundary comments, or as nested markers inside template widget-wrappers that
+     * were opaque-parked during the boundary pass. After restore, fill any remaining
+     * slots by wrapper bounds so layout-scoped widgets (e.g. mini-cart footer-extras)
+     * still render on non-mini-cart storefront pages.
+     *
+     * @param array<string, list<array<string, mixed>>> $slotWidgets
      */
+    private function fillRemainingUnmarkedSlotWidgets(string $html, array $slotWidgets): string
+    {
+        if ($slotWidgets === []) {
+            return $html;
+        }
+
+        $scanner = $this->boundaryScanner();
+        foreach ($slotWidgets as $slotId => $widgets) {
+            $slotId = trim((string)$slotId);
+            if ($slotId === '' || $widgets === [] || isset($this->filledSlotIdsThisRun[$slotId])) {
+                continue;
+            }
+
+            $bounds = $scanner->findSlotElementBounds($html, $slotId);
+            if ($bounds === null) {
+                continue;
+            }
+
+            [$innerStart, $innerEnd] = $bounds;
+            $quotedSlotId = preg_quote($slotId, '/');
+            $pattern = '/<([a-z][a-z0-9:-]*)(?=[^>]*\bdata-wslot\s*=\s*(["\'])'
+                . $quotedSlotId . '\2)[^>]*>/i';
+            if (!preg_match($pattern, $html, $matches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            $wrapperOpenStart = (int)$matches[0][1];
+            $wrapperOpenEnd = $wrapperOpenStart + \strlen($matches[0][0]);
+            $region = [
+                'id' => $slotId,
+                'inner_start' => $innerStart,
+                'inner_end' => $innerEnd,
+                'wrapper_open_start' => $wrapperOpenStart,
+                'wrapper_open_end' => $wrapperOpenEnd,
+            ];
+
+            $nextHtml = $this->fillSlotRegionString($html, $region, $widgets);
+            if ($nextHtml === $html) {
+                continue;
+            }
+
+            $html = $nextHtml;
+            $this->filledSlotIdsThisRun[$slotId] = true;
+        }
+
+        return $html;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $layoutWidgets
+     */
+    private function fillSlotRegionString(string $html, array $region, array $layoutWidgets): string
+    {
+        $slotId = (string) ($region['id'] ?? '');
+        if ($slotId === '') {
+            return $html;
+        }
+
+        $wrapperOpenTag = \substr(
+            $html,
+            (int) $region['wrapper_open_start'],
+            (int) $region['wrapper_open_end'] - (int) $region['wrapper_open_start'],
+        );
+        $inner = \substr(
+            $html,
+            (int) $region['inner_start'],
+            (int) $region['inner_end'] - (int) $region['inner_start'],
+        );
+
+        $isExclusive = \str_contains($wrapperOpenTag, 'data-wslot-exclusive="true"');
+        $isAppend = \str_contains($wrapperOpenTag, 'data-wslot-append="true"');
+        $isPrepend = \str_contains($wrapperOpenTag, 'data-wslot-prepend="true"');
+
+        $merger = ObjectManager::getInstance(TemplateInlineWidgetMerger::class);
+        $templateWidgets = $merger->extractTemplateWidgetsFromHtml($inner);
+        if ($templateWidgets !== []) {
+            $plan = $merger->plan($templateWidgets, $layoutWidgets);
+            if ($this->isMultipleSlotWrapperTag($wrapperOpenTag)) {
+                $newInner = $this->spliceCowMergedMultipleSlotInner($inner, $templateWidgets, $plan, $layoutWidgets);
+                if ($newInner === $inner) {
+                    return $html;
+                }
+
+                return $this->boundaryScanner()->replaceWrapperInner($html, $region, $newInner);
+            }
+
+            $widgetsHtml = $this->traceCall(
+                'slot_renderer::renderCowMergedSlot::' . \substr($slotId, 0, 80),
+                fn() => $this->renderCowMergedSlotHtml($plan),
+                [
+                    'slot_id' => $slotId,
+                    'templates' => \count($templateWidgets),
+                    'widgets' => \count($layoutWidgets),
+                ]
+            );
+            if ($widgetsHtml === '') {
+                return $html;
+            }
+            $isExclusive = true;
+            $isAppend = false;
+            $isPrepend = false;
+        } else {
+            $widgetsHtml = $this->traceCall(
+                'slot_renderer::renderSlotWidgets::' . \substr($slotId, 0, 80),
+                fn() => $this->renderSlotWidgets($layoutWidgets),
+                [
+                    'slot_id' => $slotId,
+                    'widgets' => \count($layoutWidgets),
+                ]
+            );
+            if ($widgetsHtml === '') {
+                return $html;
+            }
+        }
+
+        $isAreaContainerSlot = ($slotId === 'footer' || $slotId === 'header') && !$isExclusive;
+        $innerWithoutPlaceholders = $this->stripPlaceholderContentFromInner($inner);
+
+        if ($isPrepend) {
+            $newInner = $widgetsHtml . $innerWithoutPlaceholders;
+        } elseif ($isAppend || $isAreaContainerSlot) {
+            $newInner = $innerWithoutPlaceholders . $widgetsHtml;
+        } else {
+            $newInner = $widgetsHtml;
+        }
+
+        return $this->boundaryScanner()->replaceWrapperInner($html, $region, $newInner);
+    }
+
+    private function stripPlaceholderContentFromInner(string $inner): string
+    {
+        if ($inner === '' || !\str_contains($inner, 'slot-placeholder')) {
+            return $inner;
+        }
+
+        return (string) \preg_replace(
+            '/<[^>]*\bslot-placeholder\b[^>]*>.*?<\/[^>]+>/is',
+            '',
+            $inner,
+        );
+    }
+
+    private function isMultipleSlotWrapperTag(string $wrapperOpenTag): bool
+    {
+        return \str_contains($wrapperOpenTag, 'data-wslot-multiple="true"');
+    }
+
+    private function spliceCowMergedMultipleSlotInner(
+        string $inner,
+        array $templateWidgets,
+        array $plan,
+        array $layoutWidgets,
+    ): string {
+        if ($inner === '' || $templateWidgets === []) {
+            return $inner;
+        }
+
+        $working = $inner;
+        $tombstonedRefs = $this->collectCowTombstoneRefs($layoutWidgets);
+
+        foreach ($plan as $item) {
+            $kind = (string)($item['kind'] ?? '');
+            if ($kind !== 'layout' || !isset($item['widget']) || !\is_array($item['widget'])) {
+                continue;
+            }
+
+            $widget = $item['widget'];
+            $config = $this->cowWidgetConfig($widget);
+            $ref = \trim((string)($config[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_REF] ?? ''));
+            $rendered = $this->renderWidget($widget) ?: '';
+            if ($ref !== '') {
+                foreach ($templateWidgets as $templateWidget) {
+                    if ((string)($templateWidget['ref'] ?? '') !== $ref) {
+                        continue;
+                    }
+                    $block = (string)($templateWidget['html'] ?? '');
+                    if ($block !== '' && \str_contains($working, $block)) {
+                        $working = \str_replace($block, $rendered, $working);
+                    }
+                }
+                continue;
+            }
+            if ($rendered !== '') {
+                $working = $this->insertCowLayoutAdditionIntoMultipleSlotInner(
+                    $working,
+                    $templateWidgets,
+                    $widget,
+                    $rendered,
+                );
+            }
+        }
+
+        foreach ($templateWidgets as $templateWidget) {
+            $ref = (string)($templateWidget['ref'] ?? '');
+            $block = (string)($templateWidget['html'] ?? '');
+            if ($block === '' || !\str_contains($working, $block)) {
+                continue;
+            }
+            if (!($tombstonedRefs[$ref] ?? false)) {
+                continue;
+            }
+            $working = \str_replace($block, '', $working);
+        }
+
+        return $this->hydrateEmptyTemplateWidgetBlocks($working, $templateWidgets);
+    }
+
+    /**
+     * @param list<array<string,mixed>> $layoutWidgets
+     * @return array<string, true>
+     */
+    private function collectCowTombstoneRefs(array $layoutWidgets): array
+    {
+        $refs = [];
+        foreach ($layoutWidgets as $widget) {
+            if (!\is_array($widget)) {
+                continue;
+            }
+            $config = $this->cowWidgetConfig($widget);
+            $ref = \trim((string)($config[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_REF] ?? ''));
+            if ($ref !== '' && !empty($config[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_DELETED])) {
+                $refs[$ref] = true;
+            }
+        }
+
+        return $refs;
+    }
+
+    /**
+     * @param list<array{ref:string,html:string,element?:\DOMElement}> $templateWidgets
+     */
+    private function hydrateEmptyTemplateWidgetBlocks(string $inner, array $templateWidgets): string
+    {
+        $working = $inner;
+        foreach ($templateWidgets as $templateWidget) {
+            $block = (string)($templateWidget['html'] ?? '');
+            if ($block === '' || !\str_contains($working, $block)) {
+                continue;
+            }
+            if ($this->templateWidgetBlockHasMeaningfulBody($block)) {
+                continue;
+            }
+            $rendered = $this->renderWidget($this->resolveWidgetFromTemplateBlock($block));
+            if ($rendered === '') {
+                continue;
+            }
+            $working = \str_replace($block, $rendered, $working);
+        }
+
+        return $working;
+    }
+
+    private function templateWidgetBlockHasMeaningfulBody(string $block): bool
+    {
+        $withoutComments = \trim(\preg_replace('/<!--.*?-->/s', '', $block) ?? $block);
+        $meaningful = \trim(\strip_tags($withoutComments));
+
+        return $meaningful !== '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveWidgetFromTemplateBlock(string $block): array
+    {
+        $pick = static function (string $attr) use ($block): string {
+            if (\preg_match('/\b' . \preg_quote($attr, '/') . '\s*=\s*(["\'])([^"\']*)\1/i', $block, $match) !== 1) {
+                return '';
+            }
+
+            return \trim((string)($match[2] ?? ''));
+        };
+
+        $configRaw = $pick('data-config');
+        $config = [];
+        if ($configRaw !== '') {
+            $decoded = \json_decode($configRaw, true);
+            $config = \is_array($decoded) ? $decoded : [];
+        }
+
+        return [
+            'widget_module' => $pick('data-widget-module') ?: 'Weline_Theme',
+            'widget_type' => $pick('data-widget-type') ?: 'header',
+            'widget_code' => $pick('data-widget-code'),
+            'config' => $config,
+        ];
+    }
+
+    /**
+     * @param list<array{ref:string,html:string,element?:\DOMElement}> $templateWidgets
+     * @param array<string,mixed> $widget
+     */
+    private function insertCowLayoutAdditionIntoMultipleSlotInner(
+        string $inner,
+        array $templateWidgets,
+        array $widget,
+        string $renderedHtml,
+    ): string {
+        if ($renderedHtml === '') {
+            return $inner;
+        }
+
+        $widgetCode = \trim((string)($widget['widget_code'] ?? ''));
+        if ($widgetCode !== '') {
+            $replaced = $this->replaceExistingSlotWidgetMarkupByCode($inner, $widgetCode, $renderedHtml);
+            if ($replaced !== null) {
+                return $replaced;
+            }
+        }
+
+        return $this->insertCowLayoutAdditionsIntoMultipleSlotInner($inner, $templateWidgets, $renderedHtml);
+    }
+
+    private function replaceExistingSlotWidgetMarkupByCode(
+        string $inner,
+        string $widgetCode,
+        string $renderedHtml,
+    ): ?string {
+        $widgetCode = \trim($widgetCode);
+        if ($widgetCode === '') {
+            return null;
+        }
+
+        if ($widgetCode === 'wishlist-icon') {
+            $replaced = \preg_replace(
+                '/<section\b[^>]*\bheader-wishlist\b[^>]*>.*?<\/section>/is',
+                $renderedHtml,
+                $inner,
+                1,
+            );
+            if (\is_string($replaced) && $replaced !== $inner) {
+                return $replaced;
+            }
+        }
+
+        $pattern = '/<div\b[^>]*\bwidget-wrapper\b[^>]*\bdata-widget-code\s*=\s*(["\'])'
+            . \preg_quote($widgetCode, '/')
+            . '\1[^>]*>.*?<\/div>/is';
+        $replaced = \preg_replace($pattern, $renderedHtml, $inner, 1);
+        if (\is_string($replaced) && $replaced !== $inner) {
+            return $replaced;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<array{ref:string,html:string,element?:\DOMElement}> $templateWidgets
+     */
+    private function insertCowLayoutAdditionsIntoMultipleSlotInner(
+        string $inner,
+        array $templateWidgets,
+        string $additionsHtml,
+    ): string {
+        if ($additionsHtml === '') {
+            return $inner;
+        }
+
+        foreach ($templateWidgets as $templateWidget) {
+            $block = (string)($templateWidget['html'] ?? '');
+            if ($block === '' || !\str_contains($inner, $block)) {
+                continue;
+            }
+            $insertAt = \strpos($inner, $block);
+            if ($insertAt === false) {
+                continue;
+            }
+            $insertAt += \strlen($block);
+
+            return \substr($inner, 0, $insertAt) . $additionsHtml . \substr($inner, $insertAt);
+        }
+
+        return $inner . $additionsHtml;
+    }
+
+    /**
+     * @param array<string,mixed> $widget
+     * @return array<string,mixed>
+     */
+    private function cowWidgetConfig(array $widget): array
+    {
+        $config = $widget['config'] ?? ($widget['widget_config'] ?? []);
+        if (\is_string($config)) {
+            $decoded = \json_decode($config, true);
+            $config = \is_array($decoded) ? $decoded : [];
+        }
+
+        return \is_array($config) ? $config : [];
+    }
+
+    /**
+     * @param array<string, list<array<string, mixed>>> $slotWidgets
+     */
+    private function shouldRequireSlotBoundaryMarkers(string $html, array $slotWidgets): bool
+    {
+        if ($slotWidgets === []) {
+            return false;
+        }
+
+        return \str_contains($html, 'data-wslot') || \str_contains($html, 'widget-slot-area');
+    }
+
+    private function assertSlotBoundaryMarkersPresent(string $html): void
+    {
+        if (SlotBoundaryMarkers::hasMarkers($html)) {
+            return;
+        }
+
+        throw new SlotBoundaryRequiredException(
+            'Layout HTML is missing @weline-slot boundary markers. Recompile templates with setup:upgrade.',
+        );
+    }
+
+    private function boundaryScanner(): SlotBoundaryScanner
+    {
+        return $this->boundaryScanner ??= new SlotBoundaryScanner();
+    }
+
+    private function boundaryParker(): SlotHtmlOpaqueParker
+    {
+        return $this->boundaryParker ??= new SlotHtmlOpaqueParker();
+    }
+
     private function splitHtmlBody(string $html): ?array
     {
         if (!preg_match('/^(.*?<body\b[^>]*>)(.*)(<\/body\s*>.*)$/is', $html, $matches)) {
@@ -400,118 +1307,8 @@ class SlotRendererService
     }
 
     /**
-     * Process only the slot-bearing HTML fragment so DOMDocument cannot move
-     * invalid head children into body and break SEO output.
-     */
-    private function processSlotFragmentWithDom(string $html, array $slotWidgets, bool $allowNarrowFragment = false): string
-    {
-        // 避免 DOM 解析器的警告
-        if ($allowNarrowFragment) {
-            $narrowed = $this->narrowHtmlToSlotFragment($html, \array_keys($slotWidgets));
-            if ($narrowed !== null) {
-                $narrowed['fragment'] = $this->processSlotFragmentWithDom($narrowed['fragment'], $slotWidgets, false);
-                return $narrowed['before'] . $narrowed['fragment'] . $narrowed['after'];
-            }
-        }
-
-        libxml_use_internal_errors(true);
-
-        $this->domOpaqueTokens = [];
-        $doc = new \DOMDocument();
-        // Protect script/style before libxml parse: raw "<" inside JS/CSS otherwise
-        // truncates tags and leaks source text into the visible DOM (preview content area).
-        $htmlForDom = $this->parkDomOpaqueBlocks($html);
-        // 添加 UTF-8 声明避免编码问题
-        $wrappedHtml = '<?xml encoding="UTF-8"><div data-weline-slot-root="1">' . $htmlForDom . '</div>';
-        $doc->loadHTML($wrappedHtml, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        $this->reparentPromotedSlotRootSiblings($doc);
-
-        // 收集模板中存在的所有 slot ID
-        $existingSlotIds = [];
-
-        // ── 迭代处理嵌套插槽 ──
-        // 父部件渲染后可能产生新的 [data-wslot] 子插槽，需要多轮处理
-        $maxDepth = 10; // 最大嵌套深度，防止死循环
-        for ($depth = 0; $depth < $maxDepth; $depth++) {
-            $xpath = new \DOMXPath($doc); // 每轮重建 XPath（DOM 已被修改）
-
-            // 查找所有 未处理 的 [data-wslot] 元素
-            $slots = $xpath->query("//*[@data-wslot and not(@data-wslot-processed)]");
-            
-            // 兼容旧方式：查找 widget-slot-area 类（仅第一轮）
-            if ($depth === 0) {
-                $oldSlots = $xpath->query("//*[contains(@class, 'widget-slot-area') and not(@data-wslot)]");
-                foreach ($oldSlots as $slot) {
-                    if ($slot instanceof \DOMElement) {
-                        $slotId = $slot->getAttribute('data-slot-id');
-                        if ($slotId) {
-                            $existingSlotIds[$slotId] = true;
-                            $slot->setAttribute('data-wslot', $slotId);
-                            // 不标记 processed，让下面的循环处理
-                        }
-                    }
-                }
-                // 重新查询（包含刚转换的旧插槽）
-                $xpath = new \DOMXPath($doc);
-                $slots = $xpath->query("//*[@data-wslot and not(@data-wslot-processed)]");
-            }
-
-            if ($slots->length === 0) {
-                break; // 没有未处理的插槽了
-            }
-
-            foreach ($slots as $slot) {
-                if ($slot instanceof \DOMElement) {
-                    $slotId = $slot->getAttribute('data-wslot');
-                    if ($slotId) {
-                        $existingSlotIds[$slotId] = true;
-                    }
-                    // 标记为已处理，避免下一轮重复处理
-                    $slot->setAttribute('data-wslot-processed', 'true');
-                    $this->processSlotElement($slot, $slotWidgets, $doc);
-                }
-            }
-        }
-
-        // 检测孤儿部件（配置了但找不到对应slot的部件）
-        $this->detectOrphanWidgets($slotWidgets, $existingSlotIds);
-        
-        // 清理辅助属性 data-wslot-processed（不输出到最终 HTML）
-        $xpath = new \DOMXPath($doc);
-        $processedSlots = $xpath->query("//*[@data-wslot-processed]");
-        foreach ($processedSlots as $slot) {
-            if ($slot instanceof \DOMElement) {
-                $slot->removeAttribute('data-wslot-processed');
-            }
-        }
-
-        // 获取处理后的 HTML
-        $result = '';
-        $root = $doc->documentElement;
-        if ($root instanceof \DOMElement && $root->getAttribute('data-weline-slot-root') === '1') {
-            foreach ($root->childNodes as $child) {
-                $result .= $doc->saveHTML($child);
-            }
-        } else {
-            $result = $doc->saveHTML();
-        }
-
-        libxml_clear_errors();
-
-        // 移除 XML 声明
-        $result = preg_replace('/<\?xml encoding="UTF-8"\?>/', '', (string)$result);
-        $result = $this->restoreDomOpaqueBlocks((string)$result);
-        $this->domOpaqueTokens = [];
-
-        return (string)$result;
-    }
-
-    /**
-     * Park <script>/<style> bodies so DOMDocument cannot truncate on raw "<".
-     *
-     * Frontend widgets still ship inline assets with <?= and JS comparisons; until
-     * they are externalized (frontend_development.widget_external_js), slot DOM
-     * injection must not turn those sources into visible text nodes.
+     * Park script/style before DOMDocument round-trips used by stampFinal health inspect.
+     * Slot fill itself is boundaries-only; this helper is not a Dom slot engine.
      */
     private function parkDomOpaqueBlocks(string $html): string
     {
@@ -537,12 +1334,343 @@ class SlotRendererService
             return $html;
         }
 
-        return strtr($html, $this->domOpaqueTokens);
+        // Wrapper-inner tokens may embed script/style tokens; expand until stable.
+        for ($i = 0; $i < 8; $i++) {
+            $next = \strtr($html, $this->domOpaqueTokens);
+            if ($next === $html) {
+                break;
+            }
+            $html = $next;
+        }
+
+        return $html;
     }
 
     /**
-     * @param list<string> $slotIds
-     * @return array{before: string, fragment: string, after: string}|null
+     * Locate next .widget-wrapper opening tag (quote-aware) for repair / health stamp.
+     */
+    private function findNextWidgetWrapperOpen(string $html, int $offset): ?array
+    {
+        $length = \strlen($html);
+        $pos = \max(0, $offset);
+        while ($pos < $length) {
+            if (\preg_match('/<div\b/i', $html, $match, \PREG_OFFSET_CAPTURE, $pos) !== 1) {
+                return null;
+            }
+            $start = (int)$match[0][1];
+            $end = $this->findHtmlTagClose($html, $start + 4);
+            if ($end === null) {
+                return null;
+            }
+            $tag = \substr($html, $start, $end - $start);
+            if (\preg_match('/\bwidget-wrapper\b/i', $tag) === 1) {
+                return ['start' => $start, 'end' => $end, 'tag' => $tag];
+            }
+            $pos = $end;
+        }
+
+        return null;
+    }
+
+    /**
+     * Scan forward from inside an open tag to the closing ">" while respecting quotes.
+     */
+    private function findHtmlTagClose(string $html, int $from): ?int
+    {
+        $length = \strlen($html);
+        $quote = null;
+        for ($i = \max(0, $from); $i < $length; $i++) {
+            $ch = $html[$i];
+            if ($quote !== null) {
+                if ($ch === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") {
+                $quote = $ch;
+                continue;
+            }
+            if ($ch === '>') {
+                return $i + 1;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Find the </div> that matches a div opened at $openEnd (index of first inner byte).
+     */
+    private function findMatchingDivClose(string $html, int $openEnd): ?int
+    {
+        $length = \strlen($html);
+        $depth = 1;
+        $cursor = $openEnd;
+        while ($cursor < $length && $depth > 0) {
+            $nextOpen = \stripos($html, '<div', $cursor);
+            $nextClose = \stripos($html, '</div>', $cursor);
+            if ($nextClose === false) {
+                return null;
+            }
+            if ($nextOpen !== false && $nextOpen < $nextClose && \preg_match('/<div\b/i', \substr($html, $nextOpen, 10)) === 1) {
+                $depth++;
+                $cursor = $nextOpen + 4;
+                continue;
+            }
+            $depth--;
+            if ($depth === 0) {
+                return $nextClose;
+            }
+            $cursor = $nextClose + 6;
+        }
+
+        return null;
+    }
+
+    /**
+     * DEV/preview: re-render empty or shredded .widget-wrapper bodies from data-config.
+     * Also drops product-card / product-info siblings promoted out of the wrapper by libxml.
+     */
+    private function repairUnhealthyWidgetWrappers(string $html): string
+    {
+        if ($html === '' || !\str_contains($html, 'widget-wrapper')) {
+            return $html;
+        }
+
+        try {
+            /** @var WidgetHtmlHealthInspector $inspector */
+            $inspector = ObjectManager::getInstance(WidgetHtmlHealthInspector::class);
+        } catch (\Throwable) {
+            return $html;
+        }
+
+        $length = \strlen($html);
+        $offset = 0;
+        $out = '';
+        $repaired = 0;
+
+        while ($offset < $length) {
+            $open = $this->findNextWidgetWrapperOpen($html, $offset);
+            if ($open === null) {
+                $out .= \substr($html, $offset);
+                break;
+            }
+
+            $openStart = $open['start'];
+            $openTag = $open['tag'];
+            $openEnd = $open['end'];
+            $out .= \substr($html, $offset, $openStart - $offset);
+
+            $innerEnd = $this->findMatchingDivClose($html, $openEnd);
+            if ($innerEnd === null) {
+                $out .= $openTag;
+                $offset = $openEnd;
+                continue;
+            }
+
+            $inner = \substr($html, $openEnd, $innerEnd - $openEnd);
+            $fullEnd = $innerEnd + 6;
+            $meta = [
+                'module' => $this->attrFromTag($openTag, 'data-widget-module'),
+                'code' => $this->attrFromTag($openTag, 'data-widget-code'),
+                'type' => $this->attrFromTag($openTag, 'data-widget-type'),
+                'slot_id' => $this->attrFromTag($openTag, 'data-slot-id'),
+                'layout_id' => $this->attrFromTag($openTag, 'data-layout-id')
+                    ?: $this->attrFromTag($openTag, 'data-node-uid'),
+            ];
+
+            $needsRepair = false;
+            $isBrokenShell = false;
+            try {
+                $issues = $inspector->inspect($inner, $meta);
+                foreach ($issues as $issue) {
+                    $code = (string)($issue['code'] ?? '');
+                    if ($code === 'empty_html' || $code === 'broken_widget_shell') {
+                        $needsRepair = true;
+                    }
+                    if ($code === 'broken_widget_shell') {
+                        $isBrokenShell = true;
+                    }
+                    if (\str_starts_with($code, 'php_')) {
+                        $needsRepair = true;
+                    }
+                }
+            } catch (\Throwable) {
+                $needsRepair = false;
+            }
+
+            if ($needsRepair && $repaired < 12) {
+                $freshInner = $this->renderWidgetInnerFromWrapperOpenTag($openTag);
+                if ($freshInner !== '' && $freshInner !== $inner) {
+                    $inner = $freshInner;
+                    $repaired++;
+                    // Drop open-tag health attrs; stampFinal will re-inspect.
+                    $openTag = $this->stripHtmlAttributes($openTag, [
+                        'data-w-widget-health',
+                        'data-w-widget-health-issues',
+                    ]);
+                } else {
+                    $needsRepair = false;
+                }
+            }
+
+            $out .= $openTag . $inner . '</div>';
+            $offset = $fullEnd;
+
+            if ($isBrokenShell && $needsRepair) {
+                $stripped = $this->stripPromotedWidgetDebris(\substr($html, $offset));
+                $out .= $stripped['kept_prefix'];
+                $offset += $stripped['consumed'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<string> $names
+     */
+    private function stripHtmlAttributes(string $openTag, array $names): string
+    {
+        foreach ($names as $name) {
+            $pattern = '/\s' . \preg_quote($name, '/') . '=(["\'])(?:.*?)\1/i';
+            $openTag = (string)\preg_replace($pattern, '', $openTag);
+        }
+
+        return $openTag;
+    }
+
+    /**
+     * Re-render widget body from wrapper data-* attrs (no outer widget-wrapper).
+     */
+    private function renderWidgetInnerFromWrapperOpenTag(string $openTag): string
+    {
+        $module = $this->attrFromTag($openTag, 'data-widget-module');
+        $code = $this->attrFromTag($openTag, 'data-widget-code');
+        $type = $this->attrFromTag($openTag, 'data-widget-type');
+        if ($code === '') {
+            return '';
+        }
+
+        $configRaw = $this->attrFromTag($openTag, 'data-config');
+        if ($configRaw === '') {
+            $configRaw = $this->attrFromTag($openTag, 'data-widget-params');
+        }
+        $config = [];
+        if ($configRaw !== '') {
+            $decoded = \json_decode(\html_entity_decode($configRaw, \ENT_QUOTES | \ENT_HTML5, 'UTF-8'), true);
+            if (\is_array($decoded)) {
+                $config = $decoded;
+            }
+        }
+
+        $widget = [
+            'widget_module' => $module !== '' ? $module : 'Weline_Theme',
+            'widget_code' => $code,
+            'widget_type' => $type,
+            'layout_id' => '',
+            'slot_id' => $this->attrFromTag($openTag, 'data-slot-id'),
+            'config' => $config,
+        ];
+
+        try {
+            // Repair replaces wrapper HTML; re-allow purchase-actions CSS emission so
+            // btn-buy-now does not fall back to UA default after the first emit was discarded.
+            ProductCardAddToCartParams::resetPurchaseActionsAssetsEmission();
+            $html = $this->doRenderWidget($widget);
+        } catch (\Throwable) {
+            return '';
+        }
+        if (!\is_string($html) || $html === '') {
+            return '';
+        }
+
+        // doRenderWidget may wrap when health issues exist; unwrap one outer wrapper.
+        $trimmed = \trim($html);
+        $open = $this->findNextWidgetWrapperOpen($trimmed, 0);
+        if ($open !== null && $open['start'] === 0) {
+            $innerEnd = $this->findMatchingDivClose($trimmed, $open['end']);
+            if ($innerEnd !== null) {
+                return \substr($trimmed, $open['end'], $innerEnd - $open['end']);
+            }
+        }
+
+        return $html;
+    }
+
+    /**
+     * Remove product-card / product-info style siblings libxml promoted after a wrapper.
+     *
+     * @return array{kept_prefix:string,consumed:int}
+     */
+    private function stripPromotedWidgetDebris(string $tail): array
+    {
+        $consumed = 0;
+        $length = \strlen($tail);
+        while ($consumed < $length) {
+            if (\preg_match('/^\s+/', \substr($tail, $consumed), $ws) === 1) {
+                $consumed += \strlen($ws[0]);
+            }
+            if ($consumed >= $length) {
+                break;
+            }
+            if (\preg_match(
+                '/^<(div|article|header|section)\b[^>]*\b(product-info|product-card|products-wrapper|products-grid|products-container|widget-header|rank-badge)\b[^>]*>/i',
+                \substr($tail, $consumed),
+                $match
+            ) !== 1) {
+                break;
+            }
+            $tag = \strtolower((string)$match[1]);
+            $openLen = \strlen($match[0]);
+            $closePos = $this->findMatchingNamedClose($tail, $consumed + $openLen, $tag);
+            if ($closePos === null) {
+                break;
+            }
+            $consumed = $closePos + \strlen('</' . $tag . '>');
+        }
+
+        return [
+            'kept_prefix' => '',
+            'consumed' => $consumed,
+        ];
+    }
+
+    private function findMatchingNamedClose(string $html, int $openEnd, string $tag): ?int
+    {
+        $tag = \strtolower($tag);
+        $length = \strlen($html);
+        $depth = 1;
+        $cursor = $openEnd;
+        $openNeedle = '<' . $tag;
+        $closeNeedle = '</' . $tag . '>';
+        while ($cursor < $length && $depth > 0) {
+            $nextOpen = \stripos($html, $openNeedle, $cursor);
+            $nextClose = \stripos($html, $closeNeedle, $cursor);
+            if ($nextClose === false) {
+                return null;
+            }
+            if ($nextOpen !== false && $nextOpen < $nextClose
+                && \preg_match('/<' . \preg_quote($tag, '/') . '\b/i', \substr($html, $nextOpen, \strlen($tag) + 3)) === 1
+            ) {
+                $depth++;
+                $cursor = $nextOpen + \strlen($tag) + 1;
+                continue;
+            }
+            $depth--;
+            if ($depth === 0) {
+                return $nextClose;
+            }
+            $cursor = $nextClose + \strlen($closeNeedle);
+        }
+
+        return null;
+    }
+
+    /**
+     * HTML5 optional end tags: empty <li></li> (and peers) lose </tag> under saveHTML,
+     * so the next sibling nests inside and header/account menus collapse.
      */
     private function narrowHtmlToSlotFragment(string $html, array $slotIds): ?array
     {
@@ -577,6 +1705,10 @@ class SlotRendererService
         // mid-shell; DOMDocument then "repairs" it and drops header-container/header-belt.
         [$minStart, $maxEnd] = $this->expandBoundsToEnclosingWelineHeader($html, $minStart, $maxEnd);
 
+        // Include compile-time <!--@weline-slot:...--> wrappers so narrowed fragments
+        // still satisfy assertSlotBoundaryMarkersPresent().
+        [$minStart, $maxEnd] = $this->expandBoundsToSlotBoundaryMarkers($html, $minStart, $maxEnd, $slotIds);
+
         if ($maxEnd <= $minStart) {
             return null;
         }
@@ -598,6 +1730,37 @@ class SlotRendererService
             'fragment' => \substr($html, $minStart, $maxEnd - $minStart),
             'after' => \substr($html, $maxEnd),
         ];
+    }
+
+    /**
+     * Expand [minStart, maxEnd) to cover <!--@weline-slot:id--> … <!--@/weline-slot:id-->.
+     *
+     * @param list<string> $slotIds
+     * @return array{0:int,1:int}
+     */
+    private function expandBoundsToSlotBoundaryMarkers(string $html, int $minStart, int $maxEnd, array $slotIds): array
+    {
+        foreach ($slotIds as $slotId) {
+            $slotId = \trim((string)$slotId);
+            if ($slotId === '' || !\preg_match('/^[\w.-]+$/', $slotId)) {
+                continue;
+            }
+            $open = SlotBoundaryMarkers::open($slotId);
+            $close = SlotBoundaryMarkers::close($slotId);
+            $openPos = \strrpos(\substr($html, 0, $minStart + 1), $open);
+            if ($openPos !== false) {
+                $minStart = \min($minStart, $openPos);
+            }
+            $closePos = \strpos($html, $close, \max(0, $maxEnd - \strlen($close)));
+            if ($closePos === false) {
+                $closePos = \strpos($html, $close, $minStart);
+            }
+            if ($closePos !== false) {
+                $maxEnd = \max($maxEnd, $closePos + \strlen($close));
+            }
+        }
+
+        return [$minStart, $maxEnd];
     }
 
     /**
@@ -630,39 +1793,6 @@ class SlotRendererService
      * LIBXML_HTML_NOIMPLIED may close the slot-root wrapper early and leave following
      * nodes as document siblings. Move those siblings back under the slot-root so
      * serialization does not drop main content.
-     */
-    private function reparentPromotedSlotRootSiblings(\DOMDocument $doc): void
-    {
-        $slotRoot = null;
-        foreach ($doc->childNodes as $child) {
-            if ($child instanceof \DOMElement && $child->getAttribute('data-weline-slot-root') === '1') {
-                $slotRoot = $child;
-                break;
-            }
-        }
-        if (!$slotRoot instanceof \DOMElement) {
-            return;
-        }
-
-        $sibling = $slotRoot->nextSibling;
-        while ($sibling !== null) {
-            $next = $sibling->nextSibling;
-            if (
-                $sibling instanceof \DOMElement
-                || $sibling instanceof \DOMComment
-                || ($sibling instanceof \DOMText && \trim($sibling->textContent) !== '')
-            ) {
-                $slotRoot->appendChild($sibling);
-            }
-            $sibling = $next;
-        }
-    }
-
-    /**
-     * When narrowing spans notice slots and belt slots, expand to the full weline-header
-     * shell so DOM parsing keeps header-container/header-belt intact.
-     *
-     * @return array{0: int, 1: int}
      */
     private function expandBoundsToEnclosingWelineHeader(string $html, int $minStart, int $maxEnd): array
     {
@@ -781,9 +1911,10 @@ class SlotRendererService
     /**
      * 检测孤儿部件（配置了但找不到对应slot的部件）
      *
-     * 这些部件不会被删除，只是无法在当前布局中显示
+     * 这些部件不会被删除，只是无法在当前布局中显示。
+     * page_layouts 已声明且不含当前 pageType 的部件（如 mini-cart 专有槽）跳过告警。
      */
-    private function detectOrphanWidgets(array $slotWidgets, array $existingSlotIds): void
+    private function detectOrphanWidgets(array $slotWidgets, array $existingSlotIds, string $pageType = ''): void
     {
         $this->orphanWidgets = [];
         
@@ -791,8 +1922,12 @@ class SlotRendererService
             // 如果这个 slot ID 在模板中不存在，标记其所有部件为孤儿
             if (!isset($existingSlotIds[$slotId])) {
                 foreach ($widgets as $widget) {
+                    if (!\is_array($widget) || !$this->widgetBelongsToCurrentPageType($widget, $pageType)) {
+                        continue;
+                    }
                     $this->orphanWidgets[] = [
                         'slot_id' => $slotId,
+                        'layout_id' => (int)($widget['layout_id'] ?? 0),
                         'widget_code' => $widget['widget_code'] ?? '',
                         'widget_module' => $widget['widget_module'] ?? '',
                         'widget_name' => $widget['meta']['name'] ?? $widget['widget_code'] ?? '未知部件',
@@ -805,6 +1940,68 @@ class SlotRendererService
                 }
             }
         }
+    }
+
+    /**
+     * 部件是否属于当前 pageType 作用域（与 ThemePlaceableRegistry::matchesPageType 对齐）。
+     * 未知部件或空 pageType 保守视为属于当前页，保留原孤儿告警。
+     *
+     * @param array<string, mixed> $widget
+     */
+    private function widgetBelongsToCurrentPageType(array $widget, string $pageType): bool
+    {
+        $pageType = \trim($pageType);
+        if ($pageType === '') {
+            return true;
+        }
+
+        $module = \trim((string)($widget['widget_module'] ?? ''));
+        $type = \trim((string)($widget['widget_type'] ?? ''));
+        $code = \trim((string)($widget['widget_code'] ?? ''));
+        if ($module === '' || $code === '') {
+            return true;
+        }
+        if ($type === '') {
+            $type = 'content';
+        }
+
+        try {
+            $definition = $this->placeableRegistry->find(
+                $module,
+                $type,
+                $code,
+                $this->renderTheme,
+                $this->renderArea === 'backend' ? 'backend' : 'frontend',
+            );
+        } catch (\Throwable) {
+            return true;
+        }
+
+        if ($definition === null) {
+            return true;
+        }
+
+        $layouts = $definition->pageLayouts;
+        if (
+            $layouts === []
+            || \in_array('*', $layouts, true)
+            || \in_array('default', $layouts, true)
+            || \in_array($pageType, $layouts, true)
+        ) {
+            return true;
+        }
+
+        $layout = \strtolower($pageType);
+        $layoutCode = 'layout-' . $layout;
+        $layoutPrefix = $layoutCode . '-';
+        foreach ($definition->supports as $support) {
+            $supportCode = \strtolower(\trim((string)$support));
+            if ($supportCode === $layoutCode || \str_starts_with($supportCode, $layoutPrefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**
@@ -832,120 +2029,6 @@ class SlotRendererService
      * 处理单个插槽元素
      * 同一 slot_id 在整棵 DOM 中只填充第一处出现，避免容器部件（如 content-container）
      * 放入 hero 后，其内部输出的同名 widget-hero 被再次填充导致布局泄露或重复。
-     */
-    private function processSlotElement(\DOMElement $slot, array $slotWidgets, \DOMDocument $doc): void
-    {
-        $slotId = $slot->getAttribute('data-wslot');
-        if (!$slotId) {
-            return;
-        }
-
-        // 该 slot_id 已在本轮被占用（文档中第一处），跳过后续同名插槽
-        if (isset($this->filledSlotIdsThisRun[$slotId])) {
-            return;
-        }
-        $this->filledSlotIdsThisRun[$slotId] = true;
-
-        // 获取插槽配置
-        $isExclusive = $slot->getAttribute('data-wslot-exclusive') === 'true';
-        $isAppend = $slot->getAttribute('data-wslot-append') === 'true';
-        $isPrepend = $slot->getAttribute('data-wslot-prepend') === 'true';
-
-        // 检查该插槽是否有配置的部件
-        if (!isset($slotWidgets[$slotId]) || empty($slotWidgets[$slotId])) {
-            // 没有部件配置，保留原有内容（包括占位符 / 模板内嵌 w:widget）
-            // 不再移除占位符，让用户能看到插槽区域
-            return;
-        }
-
-        $layoutWidgets = $slotWidgets[$slotId];
-        $merger = ObjectManager::getInstance(TemplateInlineWidgetMerger::class);
-        $templateWidgets = $merger->extractTemplateWidgets($slot);
-        if ($templateWidgets !== []) {
-            $widgetsHtml = $this->traceCall(
-                'slot_renderer::renderCowMergedSlot::' . substr($slotId, 0, 80),
-                fn() => $this->renderCowMergedSlotHtml($merger->plan($templateWidgets, $layoutWidgets)),
-                [
-                    'slot_id' => $slotId,
-                    'templates' => \count($templateWidgets),
-                    'widgets' => \count($layoutWidgets),
-                ]
-            );
-            if ($widgetsHtml === '') {
-                return;
-            }
-            // CoW 合并结果整体替换槽内容（未覆盖的模板实例已编入 HTML）
-            $isExclusive = true;
-            $isAppend = false;
-            $isPrepend = false;
-        } else {
-            // 渲染该插槽的所有部件（无模板内嵌时的经典路径）
-            $widgetsHtml = $this->traceCall(
-                'slot_renderer::renderSlotWidgets::' . substr($slotId, 0, 80),
-                fn() => $this->renderSlotWidgets($layoutWidgets),
-                [
-                    'slot_id' => $slotId,
-                    'widgets' => \count($layoutWidgets),
-                ]
-            );
-            if (empty($widgetsHtml)) {
-                return;
-            }
-        }
-
-        // 创建新的内容片段
-        $fragment = $doc->createDocumentFragment();
-        // 使用临时容器来解析 HTML
-        $tempDoc = new \DOMDocument();
-        libxml_use_internal_errors(true);
-        $widgetsHtmlForDom = $this->parkDomOpaqueBlocks($widgetsHtml);
-        $tempDoc->loadHTML('<?xml encoding="utf-8"?><div>' . $widgetsHtmlForDom . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        libxml_clear_errors();
-        
-        // 导入节点
-        $tempBody = $tempDoc->getElementsByTagName('div')->item(0);
-        if ($tempBody) {
-            foreach ($tempBody->childNodes as $child) {
-                $imported = $doc->importNode($child, true);
-                $fragment->appendChild($imported);
-            }
-        }
-
-        // 根据配置决定如何插入内容
-        //
-        // 策略：
-        //  - exclusive / 默认（无 append/prepend）：清空默认内容 → 替换为部件
-        //  - prepend="true"：保留默认内容，部件插到前面
-        //  - append="true"：保留默认内容，部件追加到后面
-        //  - footer/header 整块区域插槽：强制追加，避免清空导致整块变白
-        //
-        // 原则：插槽的默认 HTML 只是"没有部件时的回退内容"，
-        //       一旦有部件被分配给该插槽，默认内容就应该被替换掉。
-        //       只有显式声明 append/prepend 的插槽才会同时保留默认内容和部件。
-        $isAreaContainerSlot = ($slotId === 'footer' || $slotId === 'header') && !$isExclusive;
-        if ($isPrepend) {
-            // 前置模式：保留默认内容，部件插到前面
-            if ($slot->firstChild) {
-                $slot->insertBefore($fragment, $slot->firstChild);
-            } else {
-                $slot->appendChild($fragment);
-            }
-        } elseif ($isAppend || $isAreaContainerSlot) {
-            // 追加模式（显式声明 或 整块区域插槽）：保留默认内容，部件追加到后面
-            // footer/header 整块标记了 data-wslot 时，不能清空整块，否则整页预览会整块变白
-            $this->removePlaceholderContent($slot);
-            $slot->appendChild($fragment);
-        } else {
-            // 替换模式（exclusive 和 默认都走这里）：清空默认内容 → 插入部件
-            while ($slot->firstChild) {
-                $slot->removeChild($slot->firstChild);
-            }
-            $slot->appendChild($fragment);
-        }
-    }
-
-    /**
-     * 移除插槽内的占位符内容
      */
     private function removePlaceholderContent(\DOMElement $slot): void
     {
@@ -1020,6 +2103,13 @@ class SlotRendererService
 
     private function doRenderWidget(array $widget): string
     {
+        // Each widget render owns its own w:slot declaration scope. Container
+        // widgets (e.g. product-info → product-purchase-actions) may be
+        // re-rendered by CoW/HTML health repair; a request-wide registry would
+        // otherwise throw duplicate id on the second pass (often as unknown:0
+        // because dynamic attrs go through renderRuntimeTag without a file).
+        Slot::clearRegisteredSlots();
+
         $widgetModule = $widget['widget_module'] ?? '';
         $widgetCode = $widget['widget_code'] ?? '';
         $widgetType = $widget['widget_type'] ?? '';
@@ -1064,16 +2154,12 @@ class SlotRendererService
                     'preview_mode' => !empty($renderConfig['editor_mode']) || $this->isEditorPreviewRequest(),
                     'editor_mode' => $renderConfig['editor_mode'] ?? false,
                 ]);
-                if ($layoutId) {
-                    $wrapperAttrs = $this->buildWidgetWrapperAttrs($widget, $renderConfig);
-                    $widgetName = htmlspecialchars((string)($definition->name ?: $widgetCode));
-                    $html = sprintf(
-                        '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
-                        $wrapperAttrs,
-                        $widgetName,
-                        $html
-                    );
-                }
+                $html = $this->maybeWrapWidgetHtml(
+                    is_string($html) ? $html : '',
+                    $widget,
+                    $renderConfig,
+                    (string)($definition->name ?: $widgetCode)
+                );
 
                 return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
             } catch (\Throwable $throwable) {
@@ -1110,17 +2196,12 @@ class SlotRendererService
             try {
                 $html = $this->runtimeTemplateRenderer->renderContent($templateContent, $finalConfig);
                 $html = is_string($html) ? $html : '';
-
-                if ($layoutId) {
-                    $wrapperAttrs = $this->buildWidgetWrapperAttrs($widget, $finalConfig);
-                    $widgetName = htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode));
-                    $html = sprintf(
-                        '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
-                        $wrapperAttrs,
-                        $widgetName,
-                        $html
-                    );
-                }
+                $html = $this->maybeWrapWidgetHtml(
+                    $html,
+                    $widget,
+                    $finalConfig,
+                    (string)($widgetMeta['name'] ?? $widgetCode)
+                );
 
                 return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
             } catch (\Throwable $throwable) {
@@ -1143,19 +2224,13 @@ class SlotRendererService
             // 渲染部件模板 - 使用 fetch() 方法，它接受2个参数：fileName 和 data
             $html = $this->template->fetch($templatePath, $finalConfig);
             $html = is_string($html) ? $html : '';
-
-            // 为编辑器模式包装部件，添加识别属性
-            // 这样编辑器可以识别部件并进行配置
-            if ($layoutId) {
-                $wrapperAttrs = $this->buildWidgetWrapperAttrs($widget, $finalConfig);
-                $widgetName = htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode));
-                $html = sprintf(
-                    '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
-                    $wrapperAttrs,
-                    $widgetName,
-                    $html
-                );
-            }
+            // 为编辑器模式包装部件，添加识别属性；DEV/预览下附加 HTML 健康检测结果
+            $html = $this->maybeWrapWidgetHtml(
+                $html,
+                $widget,
+                $finalConfig,
+                (string)($widgetMeta['name'] ?? $widgetCode)
+            );
 
             return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
         } catch (\Exception $e) {
@@ -1171,11 +2246,308 @@ class SlotRendererService
         }
     }
 
-    private function buildWidgetWrapperAttrs(array $widget, array $config): string
+    /**
+     * DEV / 预览下注入轻量 Toast 桥（禁 alert）到 <head>。
+     * 坏 HTML 可能吃掉 body 尾脚本；页头注入才能保证仍能读到 data-w-widget-health*。
+     * 主题预览完整引擎也会上报；两侧共用 data-w-widget-health-reported 防重复。
+     */
+    private function appendWidgetHealthToastBridge(string $html): string
     {
+        if ($html === '' || !$this->shouldInspectWidgetHtml()) {
+            return $html;
+        }
+        if (str_contains($html, 'data-w-widget-health-bridge')) {
+            return $html;
+        }
+
+        $script = <<<'HTML'
+<script data-w-widget-health-bridge="1">
+(function () {
+    function resolveToastUi() {
+        try {
+            if (window.Weline && window.Weline.UI && window.Weline.UI.toast) return window.Weline.UI;
+        } catch (e) {}
+        try {
+            if (window.parent && window.parent !== window && window.parent.Weline && window.parent.Weline.UI && window.parent.Weline.UI.toast) {
+                return window.parent.Weline.UI;
+            }
+        } catch (e) {}
+        return null;
+    }
+    function showToast(message, type) {
+        var text = String(message || '').trim();
+        if (!text) return;
+        var tone = type === 'error' ? 'danger' : (['success', 'warning', 'info', 'danger'].indexOf(type) >= 0 ? type : 'info');
+        try {
+            var UI = resolveToastUi();
+            if (UI && UI.toast && typeof UI.toast.show === 'function') {
+                UI.toast.show(text, { tone: tone, duration: type === 'error' ? 8000 : 5000 });
+                return;
+            }
+        } catch (e) {}
+        try { console.warn('[WidgetHtmlHealth]', text); } catch (e) {}
+    }
+    function report() {
+        if (document.documentElement.dataset.wWidgetHealthReported === '1') return;
+        var nodes = document.querySelectorAll('.widget-wrapper[data-w-widget-health]');
+        if (!nodes.length) return;
+        document.documentElement.dataset.wWidgetHealthReported = '1';
+        var findings = [];
+        nodes.forEach(function (node) {
+            if (!(node instanceof HTMLElement)) return;
+            var severity = String(node.dataset.wWidgetHealth || 'warning').toLowerCase();
+            var issues = [];
+            try {
+                var parsed = JSON.parse(node.getAttribute('data-w-widget-health-issues') || '[]');
+                if (Array.isArray(parsed)) issues = parsed;
+            } catch (e) {
+                issues = [{ severity: severity, code: 'parse_error', message: '部件健康数据解析失败' }];
+            }
+            if (!issues.length) return;
+            findings.push({
+                severity: severity,
+                code: String(node.dataset.widgetCode || ''),
+                slot: String(node.dataset.slotId || ''),
+                name: String(node.getAttribute('data-widget-name') || node.dataset.widgetCode || 'widget'),
+                issues: issues
+            });
+        });
+        if (!findings.length) return;
+        var errorCount = findings.filter(function (item) { return item.severity === 'error'; }).length;
+        var warningCount = findings.filter(function (item) { return item.severity === 'warning'; }).length;
+        var summaryTone = errorCount ? 'error' : (warningCount ? 'warning' : 'info');
+        showToast(
+            '部件 HTML 健康检测：' + findings.length + ' 个部件异常'
+                + (errorCount ? '（错误 ' + errorCount + '）' : '')
+                + (warningCount ? '（警告 ' + warningCount + '）' : ''),
+            summaryTone
+        );
+        findings.slice(0, 8).forEach(function (item) {
+            var first = item.issues[0] || {};
+            showToast(
+                (item.name || item.code || 'widget') + (item.slot ? ' @' + item.slot : '') + '：' + String(first.message || first.code || 'HTML 异常'),
+                item.severity === 'error' ? 'error' : (item.severity === 'warning' ? 'warning' : 'info')
+            );
+        });
+        try {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    source: 'weline-theme-preview',
+                    type: 'widget-health',
+                    summary: '部件 HTML 健康检测：' + findings.length + ' 个部件异常',
+                    severity: summaryTone,
+                    findings: findings
+                }, window.location.origin);
+            }
+        } catch (e) {}
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', report, { once: true });
+    } else {
+        report();
+    }
+})();
+</script>
+HTML;
+
+        if (stripos($html, '</head>') !== false) {
+            return (string)str_ireplace('</head>', $script . "\n</head>", $html);
+        }
+        if (stripos($html, '</body>') !== false) {
+            return (string)str_ireplace('</body>', $script . "\n</body>", $html);
+        }
+
+        return $script . "\n" . $html;
+    }
+
+    /**
+     * DOM 序列化后再次扫描 .widget-wrapper 内 HTML，补打 data-w-widget-health*。
+     * 渲染前检测看不到 saveHTML 造成的空标签闭合丢失。
+     * 深度行走前先 park script/style，避免源码中的 </div> 造成过早闭合误报。
+     */
+    private function stampFinalWidgetHtmlHealth(string $html): string
+    {
+        if ($html === '' || !$this->shouldInspectWidgetHtml() || !str_contains($html, 'widget-wrapper')) {
+            return $html;
+        }
+
+        try {
+            /** @var WidgetHtmlHealthInspector $inspector */
+            $inspector = ObjectManager::getInstance(WidgetHtmlHealthInspector::class);
+        } catch (\Throwable) {
+            return $html;
+        }
+
+        $priorTokens = $this->domOpaqueTokens;
+        $this->domOpaqueTokens = [];
+        try {
+            $work = $this->parkDomOpaqueBlocks($html);
+            $length = \strlen($work);
+            $offset = 0;
+            $out = '';
+
+            while ($offset < $length) {
+                $open = $this->findNextWidgetWrapperOpen($work, $offset);
+                if ($open === null) {
+                    $out .= \substr($work, $offset);
+                    break;
+                }
+
+                $openStart = $open['start'];
+                $openTag = $open['tag'];
+                $openEnd = $open['end'];
+                $out .= \substr($work, $offset, $openStart - $offset);
+
+                $innerEnd = $this->findMatchingDivClose($work, $openEnd);
+                if ($innerEnd === null) {
+                    $out .= $openTag;
+                    $offset = $openEnd;
+                    continue;
+                }
+
+                $innerParked = \substr($work, $openEnd, $innerEnd - $openEnd);
+                $inner = $this->restoreDomOpaqueBlocks($innerParked);
+                $meta = [
+                    'module' => $this->attrFromTag($openTag, 'data-widget-module'),
+                    'code' => $this->attrFromTag($openTag, 'data-widget-code'),
+                    'type' => $this->attrFromTag($openTag, 'data-widget-type'),
+                    'slot_id' => $this->attrFromTag($openTag, 'data-slot-id'),
+                    'layout_id' => $this->attrFromTag($openTag, 'data-layout-id')
+                        ?: $this->attrFromTag($openTag, 'data-node-uid'),
+                ];
+                try {
+                    $issues = $inspector->inspect($inner, $meta);
+                } catch (\Throwable) {
+                    $issues = [];
+                }
+
+                if ($issues !== []) {
+                    $severity = $inspector->worstSeverity($issues);
+                    $encoded = \json_encode($issues, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+                    $openTag = $this->upsertHtmlAttribute($openTag, 'data-w-widget-health', $severity);
+                    if (\is_string($encoded) && $encoded !== '') {
+                        $openTag = $this->upsertHtmlAttribute($openTag, 'data-w-widget-health-issues', $encoded);
+                    }
+                }
+
+                $out .= $openTag . $innerParked . '</div>';
+                $offset = $innerEnd + 6;
+            }
+
+            return $this->restoreDomOpaqueBlocks($out);
+        } finally {
+            $this->domOpaqueTokens = $priorTokens;
+        }
+    }
+
+    private function attrFromTag(string $openTag, string $name): string
+    {
+        if (\preg_match('/\b' . \preg_quote($name, '/') . '=(["\'])(.*?)\1/i', $openTag, $match) === 1) {
+            return (string)$match[2];
+        }
+
+        return '';
+    }
+
+    private function upsertHtmlAttribute(string $openTag, string $name, string $value): string
+    {
+        $safe = \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $pattern = '/\s' . \preg_quote($name, '/') . '=(["\'])(?:.*?)\1/i';
+        if (\preg_match($pattern, $openTag) === 1) {
+            return (string)\preg_replace($pattern, ' ' . $name . '="' . $safe . '"', $openTag, 1);
+        }
+
+        return \rtrim(\substr($openTag, 0, -1)) . ' ' . $name . '="' . $safe . '">';
+    }
+
+    /**
+     * Wrap with .widget-wrapper when the widget has a stable identity (node_uid or
+     * numeric layout_id), or when health inspection reported issues (so preview JS
+     * can read data-w-widget-health*).
+     *
+     * @param array<string, mixed> $widget
+     * @param array<string, mixed> $config
+     */
+    private function maybeWrapWidgetHtml(string $innerHtml, array $widget, array $config, string $widgetName): string
+    {
+        $layoutId = (int)($widget['layout_id'] ?? 0);
+        $nodeUid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+        if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+            $nodeUid = '';
+        }
+        $hasIdentity = $nodeUid !== '' || $layoutId > 0;
+
+        $healthPayload = null;
+        if ($this->shouldInspectWidgetHtml()) {
+            $healthPayload = $this->inspectWidgetHtmlHealth($innerHtml, $widget);
+        }
+
+        if (!$hasIdentity && $healthPayload === null) {
+            return $innerHtml;
+        }
+
+        $wrapperAttrs = $this->buildWidgetWrapperAttrs($widget, $config, $healthPayload);
+        return \sprintf(
+            '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
+            $wrapperAttrs,
+            \htmlspecialchars($widgetName, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            $innerHtml
+        );
+    }
+
+    private function shouldInspectWidgetHtml(): bool
+    {
+        if (\defined('DEV') && DEV) {
+            return true;
+        }
+
+        return $this->isEditorPreviewRequest();
+    }
+
+    /**
+     * @param array<string, mixed> $widget
+     * @return array{severity:string,issues:list<array{severity:string,code:string,message:string,detail?:string>}}|null
+     */
+    private function inspectWidgetHtmlHealth(string $html, array $widget): ?array
+    {
+        try {
+            /** @var WidgetHtmlHealthInspector $inspector */
+            $inspector = ObjectManager::getInstance(WidgetHtmlHealthInspector::class);
+            $issues = $inspector->inspect($html, [
+                'module' => (string)($widget['widget_module'] ?? ''),
+                'code' => (string)($widget['widget_code'] ?? ''),
+                'type' => (string)($widget['widget_type'] ?? ''),
+                'slot_id' => (string)($widget['slot_id'] ?? ''),
+                'layout_id' => (string)($widget['layout_id'] ?? ''),
+            ]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($issues === []) {
+            return null;
+        }
+
+        return [
+            'severity' => $inspector->worstSeverity($issues),
+            'issues' => $issues,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $widget
+     * @param array<string, mixed> $config
+     * @param array{severity:string,issues:list<array<string,mixed>>}|null $healthPayload
+     */
+    private function buildWidgetWrapperAttrs(array $widget, array $config, ?array $healthPayload = null): string
+    {
+        $layoutId = (int)($widget['layout_id'] ?? 0);
+        $nodeUid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+        if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+            $nodeUid = '';
+        }
+        // Hex identity is node_uid only; keep data-layout-id for numeric legacy keys.
         $attrs = [
-            'data-layout-id' => (string)($widget['layout_id'] ?? ''),
-            'data-node-uid' => (string)($widget['node_uid'] ?? ''),
             'data-widget-code' => (string)($widget['widget_code'] ?? ''),
             'data-widget-module' => (string)($widget['widget_module'] ?? ''),
             'data-widget-type' => (string)($widget['widget_type'] ?? ''),
@@ -1185,6 +2557,22 @@ class SlotRendererService
             'data-target-type' => (string)($widget['target_type'] ?? ''),
             'data-target-id' => (string)($widget['target_id'] ?? ''),
         ];
+        if ($nodeUid !== '') {
+            $attrs['data-node-uid'] = $nodeUid;
+        } elseif ($layoutId > 0) {
+            $attrs['data-layout-id'] = (string)$layoutId;
+        }
+
+        if (\is_array($healthPayload) && ($healthPayload['issues'] ?? []) !== []) {
+            $attrs['data-w-widget-health'] = (string)($healthPayload['severity'] ?? 'warning');
+            $encoded = \json_encode(
+                $healthPayload['issues'],
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+            );
+            if (\is_string($encoded) && $encoded !== '') {
+                $attrs['data-w-widget-health-issues'] = $encoded;
+            }
+        }
 
         $dashboardLayout = $config['dashboard_layout'] ?? [];
         $dashboardLayout = \is_array($dashboardLayout) ? $dashboardLayout : [];
@@ -1227,20 +2615,68 @@ class SlotRendererService
     private function appendWidgetRenderContext(array $config, array $widget): array
     {
         $layoutId = (string)($widget['layout_id'] ?? '');
+        $nodeUid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
         $slotId = (string)($widget['slot_id'] ?? '');
         $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
 
         $config['layout_id'] = $layoutId;
         $config['_layout_id'] = $layoutId;
+        if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) === 1) {
+            $config['node_uid'] = $nodeUid;
+            $config['_node_uid'] = $nodeUid;
+        }
         $config['slot_id'] = $slotId;
         $config['_slot_id'] = $slotId;
         $config['_widget_module'] = (string)($widget['widget_module'] ?? '');
         $config['_widget_code'] = (string)($widget['widget_code'] ?? '');
         $config['_widget_type'] = (string)($widget['widget_type'] ?? '');
         $config['_widget_area'] = $renderArea;
-        $config['editor_mode'] = $this->isEditorPreviewRequest();
+        $isPreview = $this->isEditorPreviewRequest();
+        $config['editor_mode'] = $isPreview;
+        // ComponentRenderer unsetData() 会清掉模板上的 preview_mode；必须显式写入 config。
+        $config['preview_mode'] = $isPreview || !empty($config['preview_mode']);
+
+        foreach ($this->pageRenderContext as $key => $value) {
+            if (!\array_key_exists($key, $config)
+                || $config[$key] === null
+                || $config[$key] === ''
+                || $config[$key] === []
+            ) {
+                $config[$key] = $value;
+            }
+        }
 
         return $config;
+    }
+
+    /**
+     * 在首个部件 unsetData 前冻结页面上下文，供后续部件 config 回注。
+     */
+    private function capturePageRenderContext(): void
+    {
+        $keys = [
+            'storefront_offer',
+            'storefront_offers',
+            'selected_offer_uuid',
+            'variant_catalog',
+            'page_title',
+            'theme_public_route',
+            'preview_mode',
+            'editor_mode',
+        ];
+        $snapshot = [];
+        foreach ($keys as $key) {
+            try {
+                $value = $this->template->getData($key);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            $snapshot[$key] = $value;
+        }
+        $this->pageRenderContext = $snapshot;
     }
 
     private function isEditorPreviewRequest(): bool
@@ -1674,21 +3110,36 @@ class SlotRendererService
             }
         }
 
-        // 1. 按指定状态获取数据
-        $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
-        
+        /** @var ThemeRuntimeLayoutResolver $runtimeLayoutResolver */
+        $runtimeLayoutResolver = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
+
+        // 1. 按指定状态从 scoped release 获取数据（published 不读 legacy theme_layout）。
+        $layout = $runtimeLayoutResolver->resolveLayout($themeId, $pageType, $status, $area, $identity);
+
         // 2. 检查是否有部件配置。空 slot 必须保持为空：default_injections 不得在渲染路径回填
         // （仅主题初始化、「应用」tab / 显式初始化、草稿重置、部件首次入库、Dashboard view ready）。
         $hasWidgets = $this->hasWidgetsInLayout($layout);
-        $hasNoWidgetPlacements = $this->layoutService->hasNoWidgetPlacements($themeId, $pageType, $status, $identity);
-        
+        $hasNoWidgetPlacements = $runtimeLayoutResolver->hasNoWidgetPlacements(
+            $themeId,
+            $pageType,
+            $status,
+            $identity,
+            $area,
+        );
+
         // Published runtime must never read or auto-publish a draft. Empty
         // published layouts remain empty until an immutable Release is created.
-        
+
         // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据。
         // 已明确保存为“没有部件配置”的布局必须保持这个状态，只渲染 slot 默认内容。
         if (!$hasWidgets && !$hasNoWidgetPlacements && !$hasTargetIdentity && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
-            $defaultLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $status);
+            $defaultLayout = $runtimeLayoutResolver->resolveLayout(
+                $themeId,
+                ThemeLayout::PAGE_TYPE_DEFAULT,
+                $status,
+                $area,
+                $identity,
+            );
             if ($this->hasWidgetsInLayout($defaultLayout)) {
                 $layout = $defaultLayout;
             }
@@ -1696,6 +3147,10 @@ class SlotRendererService
 
         $layout = ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
             ->normalizeLayoutForRender($pageType, $layout);
+
+        // 扩展槽部件已配置但缺 footer-container 时补齐父容器，避免孤儿告警与空槽。
+        // 非 default_injections 空槽回填；仅修复已放置子部件与父容器不一致的布局。
+        $layout = FooterDefaultLinksHelper::ensureFooterContainerInLayout($layout);
 
         // 仅普通已发布布局写入缓存；草稿和页面级 target 不缓存，避免页面级 Meta/Layout 串页或发布后读旧值。
         if ($cacheablePublished) {

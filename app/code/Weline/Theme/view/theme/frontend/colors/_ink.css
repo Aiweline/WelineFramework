@@ -1,0 +1,126 @@
+/**
+ * 色系：水墨
+ *
+ * 中国水墨美学品牌色盘：墨分五色、宣纸留白、朱砂点缀、石青石绿赭石辅色
+ * 字段
+ * @meta.name {default="水墨",name="水墨",description="水墨，用于描述色系的名称"}
+ * @meta.description {default="中国水墨美学：宣纸底、墨色字阶、朱砂主色与石青链接，点到为止的彩墨点缀",name="中国水墨美学：宣纸底、墨色字阶、朱砂主色与石青链接，点到为止的彩墨点缀",description="中国水墨美学：宣纸底、墨色字阶、朱砂主色与石青链接，点到为止的彩墨点缀，用于描述色系的用途"}
+ * @meta.theme {default="ink",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
+ * @meta.palette_role {default="brand",name="palette_role",description="palette_role"}
+ */
+
+:root,
+[data-theme="ink"],
+[data-theme="light"] {
+    /* ========== 品牌色（朱砂 — 印章红，点缀主色） ========== */
+    --color-primary: #b84a3c;
+    --color-primary-light: #d4786a;
+    --color-primary-dark: #963b30;
+    --color-primary-border: #963b30;
+    --color-primary-rgb: 184, 74, 60;
+    --color-primary-hover: #963b30;
+    --color-primary-active: #7a3028;
+    --color-primary-bg-subtle: #f8ede9;
+    --color-primary-border-subtle: #e8c4bc;
+    --color-primary-text-emphasis: #7a3028;
+    --color-on-primary: #f7f4ef;
+
+    /* ========== 文本色（墨分五色：焦 / 浓 / 重 / 淡 / 清） ========== */
+    --color-text-primary: #1c1c1c;
+    --color-text-secondary: #4a4a48;
+    --color-text-tertiary: #7a7874;
+    --color-text-disabled: #b8b4ac;
+    --color-text-dark: #1c1c1c;
+    --color-text-muted: #5c5a56;
+    --color-text-placeholder: #9a968e;
+    --color-text-light: #f7f4ef;
+    --color-text-light-secondary: #d4cfc5;
+
+    /* ========== 背景色（宣纸留白） ========== */
+    --color-bg-canvas: #f7f4ef;
+    --color-bg-canvas-rgb: 247, 244, 239;
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-canvas: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
+    --color-bg-primary: #fffefa;
+    --color-bg-secondary: #ede9e1;
+    --color-bg-tertiary: #e0dbd2;
+    --color-bg-dark: #1f2124;
+    --color-bg-dark-secondary: #16181a;
+    --color-bg-dark-tertiary: #2c3034;
+    --color-surface-hover: #f0ebe3;
+
+    /* ========== 边框色（淡墨线） ========== */
+    --color-border-default: #d4cfc5;
+    --color-border-emphasis: #a8a299;
+    --color-border-focus: #b84a3c;
+    --color-border-light: #e8e4dc;
+
+    /* ========== 强调色（朱砂） ========== */
+    --color-accent: #b84a3c;
+    --color-accent-hover: #963b30;
+    --color-accent-light: rgba(184, 74, 60, 0.08);
+    --color-accent-medium: rgba(184, 74, 60, 0.14);
+    --color-accent-dark: rgba(184, 74, 60, 0.22);
+
+    /* ========== 功能色（石绿 / 赭石 / 胭脂 / 花青） ========== */
+    --color-success: #4a7c59;
+    --color-warning: #c4893f;
+    --color-error: #a63d3d;
+    --color-error-hover: #8b3333;
+    --color-error-light: rgba(166, 61, 61, 0.08);
+    --color-info: #4a6b8a;
+
+    /* ========== 链接色（石青 + 朱砂 hover） ========== */
+    --color-link: #3d6b78;
+    --color-link-hover: #b84a3c;
+    --color-link-visited: #5c4a6e;
+
+    /* ========== Header（玄墨） ========== */
+    --color-header-bg: #1f2124;
+    --color-header-bg-hover: #2c3034;
+    --color-header-border-hover: #3a3f44;
+    --color-header-shadow: rgba(28, 28, 28, 0.18);
+    --color-header-focus-ring: rgba(184, 74, 60, 0.35);
+    --color-header-dropdown-shadow: 0 4px 12px rgba(28, 28, 28, 0.14);
+
+    /* ========== chrome 同步 ========== */
+    --weline-chrome-primary: var(--color-primary);
+    --weline-chrome-primary-light: var(--color-primary-light);
+    --weline-chrome-primary-dark: var(--color-primary-dark);
+    --weline-chrome-border-focus: var(--color-border-focus);
+    --weline-chrome-body-link-hover: var(--color-primary);
+    --weline-chrome-menu-panel-text-hover: var(--color-primary);
+    --weline-chrome-bg-dark: var(--color-bg-dark-secondary);
+    --weline-chrome-bg-dark-secondary: var(--color-bg-dark);
+    --weline-chrome-bg-primary: var(--color-bg-primary);
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-canvas: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
+    --weline-chrome-bg-secondary: var(--color-bg-secondary);
+    --weline-chrome-bg-tertiary: var(--color-bg-tertiary);
+    --weline-chrome-border-default: var(--color-border-default);
+    --weline-chrome-text-primary: var(--color-text-primary);
+    --weline-chrome-text-secondary: var(--color-text-secondary);
+    --weline-chrome-text-muted: var(--color-text-placeholder);
+    --weline-chrome-text-light: var(--color-text-light);
+    --weline-chrome-text-light-secondary: var(--color-text-light-secondary);
+
+    /* ========== 商品标签色 ========== */
+    --color-product-label-new-bg: #e4efe7;
+    --color-product-label-new-text: #3a6448;
+    --color-product-label-sale-bg: #f8ede9;
+    --color-product-label-sale-text: #7a3028;
+    --weline-product-label-new-bg: var(--color-product-label-new-bg);
+    --weline-product-label-new-text: var(--color-product-label-new-text);
+    --weline-product-label-sale-bg: var(--color-product-label-sale-bg);
+    --weline-product-label-sale-text: var(--color-product-label-sale-text);
+
+    /* ========== 滚动条 ========== */
+    --scrollbar-width: 4px;
+    --scrollbar-thumb: #c4bfb5;
+    --scrollbar-thumb-hover: #a8a299;
+    --scrollbar-track: transparent;
+}

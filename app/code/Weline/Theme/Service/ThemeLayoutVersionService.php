@@ -86,8 +86,15 @@ readonly class ThemeLayoutVersionService
         array $identity = [],
     ): ThemeLayoutVersion {
         $identity = $this->normalizeLayoutIdentity($identity);
-        // 1. 获取当前 draft 数据
-        $draftData = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
+        /** @var ThemeRuntimeLayoutResolver $runtimeLayout */
+        $runtimeLayout = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
+        $draftData = $runtimeLayout->resolveLayout(
+            $themeId,
+            $pageType,
+            ThemeLayout::STATUS_DRAFT,
+            'frontend',
+            $identity,
+        );
         $draftData = $this->attachTranslationSnapshot($draftData);
 
         return $this->saveSnapshotVersion(
@@ -829,31 +836,12 @@ readonly class ThemeLayoutVersionService
     {
         try {
             $identity = $this->normalizeLayoutIdentity($identity);
-            $query = $this->themeLayout->reset()
-                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_DRAFT)
-                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
-                ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
-                ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
-                ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id']);
-
-            $rows = $query->select()->fetchArray();
-            foreach ((array)$rows as $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
-                if ($layoutId <= 0) {
-                    continue;
-                }
-
-                $layout = clone $this->themeLayout;
-                $layout->clearData()->clearQuery()->load($layoutId)->delete();
-            }
-
-            $this->themeLayout->clearData()->clearQuery();
+            /** @var ThemeRuntimeLayoutResolver $runtimeLayout */
+            $runtimeLayout = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
+            /** @var \Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService $layoutWriter */
+            $layoutWriter = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService::class);
+            $context = $runtimeLayout->buildContext($themeId, $pageType, 'frontend', $identity);
+            $layoutWriter->clearDraftNodes($context, 'system:theme-layout-version', '');
         } catch (\Exception $e) {
             // 静默失败
         }
@@ -865,30 +853,18 @@ readonly class ThemeLayoutVersionService
     private function restoreSnapshotToDraft(int $themeId, string $pageType, array $snapshotData, array $identity): void
     {
         $identity = $this->normalizeLayoutIdentity($identity);
-        foreach ($snapshotData as $area => $areaData) {
-            $widgets = $areaData['widgets'] ?? [];
-            foreach ($widgets as $widget) {
-                $this->layoutService->saveWidget([
-                    'theme_id' => $themeId,
-                    'page_type' => $pageType,
-                    'layout_option' => $identity['layout_option'],
-                    'scope' => $identity['scope'],
-                    'locale_code' => $identity['locale_code'],
-                    'target_type' => $identity['target_type'],
-                    'target_id' => $identity['target_id'],
-                    'area' => $area,
-                    'widget_code' => $widget['widget_code'] ?? '',
-                    'widget_module' => $widget['widget_module'] ?? '',
-                    'widget_type' => $widget['widget_type'] ?? '',
-                    'slot_id' => $widget['slot_id'] ?? null,
-                    'node_uid' => $widget['node_uid'] ?? null,
-                    'config' => $widget['config'] ?? [],
-                    'sort_order' => $widget['sort_order'] ?? 0,
-                    'is_active' => true,
-                    'status' => ThemeLayout::STATUS_DRAFT,
-                ]);
-            }
-        }
+        /** @var ThemeRuntimeLayoutResolver $runtimeLayout */
+        $runtimeLayout = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
+        /** @var \Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService $layoutWriter */
+        $layoutWriter = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService::class);
+        $context = $runtimeLayout->buildContext($themeId, $pageType, 'frontend', $identity);
+        $layoutWriter->replaceDraftFromSnapshot(
+            $context,
+            $snapshotData,
+            'system:theme-layout-version',
+            '',
+            'layout_draft_restored_from_version',
+        );
     }
 
     private function attachTranslationSnapshot(array $layoutData): array

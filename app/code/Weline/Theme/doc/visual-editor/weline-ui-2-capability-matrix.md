@@ -36,10 +36,11 @@
 | `TE-CAP-018` | 部件独立多尺寸预览 | `openComponentPreviewModal()` 与 `componentPreview*` 面板 | Weline Dialog/Tabs/Range | PC 1200、iPad 768、Mobile 375 和 320–1200 响应式拖动宽度完整 |
 | `TE-CAP-019` | 多语言配置 | `fetchInstalledLocales()`、`setActiveConfigLocale()`、`reloadWidgetConfigWithLocale()`、`saveWidgetConfigWithLocale()` | Weline Language Select + Form | 已安装 locale、国旗/标签、主配置和指定 locale 读写不丢 |
 | `TE-CAP-020` | 字段 i18n 与 AI 翻译 | `loadI18nValues()`（优先 scoped i18n 草稿，再 field-i18n/widget-config）、`saveI18nValues()`、`translateI18nValues()` | Weline Disclosure/Dialog/Progress | 打开面板自动回填已存译文；原文、各 locale 值、AI 批量翻译、保存和错误保留不丢 |
-| `TE-CAP-021` | 部件 AI 动作 | `loadVirtualThemeAiCatalog()`、`openVirtualThemeAiDialog()`、`handleWidgetAiAction()` | Weline Dialog/Checkbox/Progress | skill/style 选择、作用目标、上下文、执行反馈和预览刷新不丢 |
+| `TE-CAP-021` | 部件 AI 动作 | `openThemeComponentAiDialog()`、`handleWidgetAiAction()`、Theme Ai SSE/`postPublish`/`placeWidgetFromProvider(replace)` | Weline Dialog/Progress | 造/精修 `theme_component*` 后同槽替换；禁止 virtual_layout fork / `layout_option` 切换 |
 | `TE-CAP-022` | AI 部件供应与放置上下文 | `getThemeWidgetAiContext()`、`registerThemeWidgetAiContextProvider()`、`placeWidgetFromProvider()` | `Weline.Theme.Editor` 公开业务命名空间 | 当前 theme/layout/slot、CSS 变量、已有值和供应部件放置契约不丢 |
 | `TE-CAP-023` | 版本管理 | `load/renderVersionPanel()`、`preview/switch/deleteVersion()`、`saveLayout()`、`showPromptDialog()` | Weline Menu/Dialog/Badge/Empty State | 当前/已发布标记、列表、命名保存、预览、切换、重命名、受限删除不丢 |
 | `TE-CAP-024` | 恢复原始布局 | `handleRestoreLayout()` 与 `apiRestoreOriginal` | Weline Confirm Dialog/Alert | 恢复前自动备份、结构视图清理、版本重载和失败无破坏 |
+| `TE-CAP-025` | 清理 Theme 缓存 | `handleClearThemeCache()` 与 `apiClearThemeCache` | Weline Toast | 调用 `ThemeRuntimeCacheCleaner` + 预览缓存清理后刷新 iframe；不改布局草稿 |
 | `TE-CAP-025` | 保存、发布与嵌入式保存关闭 | `saveLayout()`、`publishTheme()`、`publishEmbeddedLayout()`、`postDashboardSaveCloseResult()` | Weline Dialog/Toast/Progress | 普通、layout-lock、dashboard embed 三条路径，draft→published、缓存刷新和父窗口结果不丢 |
 | `TE-CAP-026` | 多人编辑锁与接管 | `initializeEditorLock()`、`refreshEditorLockActivity()`、`request/force takeover` 端点、`renderEditorLockOverlay()` | Weline Dialog/Alert/Overlay | 获取、心跳、释放、离页、请求接管、轮询和强制接管状态完整 |
 | `TE-CAP-027` | 主题级外观盘 | `theme-disk-appearance.js`；`themeTokens/diskSave/diskSaveAs/diskSelect/diskDelete` | Weline Dialog/Form/Tabs/Token 表格 | panel/disk 选择、inherit token、实时预览、保存/另存/应用/删除和恢复不丢 |
@@ -62,7 +63,8 @@
 - 注入：`default-injections`、`apply-default-injection`。
 - 预览/发布：`preview`、`layout-preview`、frontend preview、`publish`、`start-preview`、`exit-preview`、`publish-and-exit`。
 - 版本：`versions`、`save-version`、`switch-version`、`restore-original`、`publish-version`、`delete-version`、`rename-version`。
-- AI/虚拟主题：`ai-translate-config`、`ai-catalog`、`create-draft`、`block-action`、`source`、`save-source`、`publish-version`。
+- AI/虚拟主题：`ai-translate-config`、Theme Ai `agents`/`component-stream`/`refine-stream`/`publish`/`prepare-refine`；VirtualTheme `ai-catalog`/`create-draft`/`block-action`/`source`/`save-source`/`publish-version`（绿field 后门禁 fail-closed，悬停 AI 不再依赖）。
+- 部件库筛选：`widgets?library_tabs=&ai_generated=`、`default-injections?install_mode=&ai_generated=`。
 - 协作：`check-lock`、`release-lock`、`update-activity`、`request-takeover`、`check-takeover-request`、`force-takeover`。
 - 外观盘：`theme-tokens`、`disk-save`、`disk-save-as`、`disk-select`、`disk-delete`。
 

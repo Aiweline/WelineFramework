@@ -37,6 +37,7 @@
 
     function collectInheritTokens(panel, disk) {
         const tokens = {};
+        const tokenMeta = {};
         const list = Array.isArray(disk && disk.tokens) ? disk.tokens : [];
         list.forEach((token) => {
             if (!token || typeof token !== 'object') return;
@@ -49,8 +50,18 @@
                 if (!lateSafe) return;
             }
             tokens[name] = String(token.default_value ?? token.value ?? '');
+            const category = String(token.category || '').trim();
+            if (!category || category === '其他') {
+                return;
+            }
+            const groupId = String(token.category_id || '').trim();
+            const label = String(token.category_label || category).trim() || category;
+            tokenMeta[name] = {
+                groupId: groupId || label,
+                label,
+            };
         });
-        return tokens;
+        return { tokens, tokenMeta };
     }
 
     async function requestJson(url, options = {}) {
@@ -113,7 +124,7 @@
 
         let appearanceState = null;
         let scopedWorkspace = null;
-        const draft = { panel: 'color', base_file: '', disk_key: '', tokens: {}, mode: '' };
+        const draft = { panel: 'color', base_file: '', disk_key: '', tokens: {}, tokenMeta: {}, mode: '' };
         let previewTokenTimer = 0;
 
         const getPreviewDocument = () => {
@@ -225,14 +236,14 @@
 
         const loadDiskTokens = async (panel, disk) => {
             if (!disk || typeof disk !== 'object') {
-                return {};
+                return { tokens: {}, tokenMeta: {} };
             }
             if (Array.isArray(disk.tokens) && disk.tokens.length > 0) {
                 return collectInheritTokens(panel, disk);
             }
             const ref = String(disk.ref || '').trim();
             if (!ref) {
-                return {};
+                return { tokens: {}, tokenMeta: {} };
             }
             const url = apiUrl('apiThemeDiskTokens', {
                 ...identity(),
@@ -259,9 +270,14 @@
         /** Meta 只存 delta：编辑时用「原生可继承基线 + 已存 delta」合成完整可编辑表。 */
         const resolveEditableTokens = async (panel, baseFile, deltaTokens) => {
             const baseDisk = findCatalogDisk(panel, baseFile);
-            const base = baseDisk ? await loadDiskTokens(panel, baseDisk) : {};
+            const base = baseDisk
+                ? await loadDiskTokens(panel, baseDisk)
+                : { tokens: {}, tokenMeta: {} };
             const delta = deltaTokens && typeof deltaTokens === 'object' ? deltaTokens : {};
-            return { ...base, ...delta };
+            return {
+                tokens: { ...base.tokens, ...delta },
+                tokenMeta: base.tokenMeta || {},
+            };
         };
 
         const makeButton = (label, tone = 'neutral', variant = 'outline') => {
@@ -299,6 +315,65 @@
                 : `${total} 个变量`;
         };
 
+        /**
+         * Comment-section groups first (category_label from API / Meta i18n),
+         * then universal prefix stem fallback (technical --stem, not translated).
+         */
+        const APPEARANCE_TOKEN_LEAF = /^(xs|sm|md|lg|xl|xxl|2xl|3xl|4xl|2_5xl|0_5|1_5|2_5|3_5|4_5|5_5|7|9|11|13|15|px|none|thin|thick|medium|full|base|normal|tight|relaxed|loose|wide|light|dark|soft|mid|strong|hot|deep|ember|amber|brown|soft-2|soft-3|soft-4|hover|active|visited|focus|disabled|placeholder|inverse|subtle|emphasis|muted|tertiary|secondary|primary|rgb|bg|text|border|on|ink|title|glow|inset)$/i;
+
+        const appearanceTokenPrefix = (name) => {
+            const bare = String(name || '').replace(/^--/, '').trim();
+            if (!bare) return 'other';
+            const parts = bare.split('-').filter(Boolean);
+            if (!parts.length) return 'other';
+            while (parts.length > 1 && APPEARANCE_TOKEN_LEAF.test(parts[parts.length - 1])) {
+                parts.pop();
+            }
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return parts.join('-');
+            // Keep semantic families like backend-color-success / color-primary together.
+            if (/^(backend-color|color|weline-theme|weline-chrome)$/i.test(parts.slice(0, 2).join('-'))) {
+                return parts.slice(0, 3).join('-');
+            }
+            return parts.slice(0, 2).join('-');
+        };
+
+        const resolveAppearanceTokenGroup = (tokenName) => {
+            const meta = draft.tokenMeta && draft.tokenMeta[tokenName];
+            const label = meta && String(meta.label || '').trim();
+            if (label && label !== '其他') {
+                const groupId = String(meta.groupId || label).trim() || label;
+                return {
+                    id: `c:${groupId}`,
+                    label,
+                };
+            }
+            const prefix = appearanceTokenPrefix(tokenName);
+            return {
+                id: `p:${prefix}`,
+                label: `--${prefix}`,
+            };
+        };
+
+        const groupAppearanceTokenEntries = (entries) => {
+            const order = [];
+            const buckets = new Map();
+            const groupMeta = new Map();
+            entries.forEach((entry) => {
+                const group = resolveAppearanceTokenGroup(entry[0]);
+                if (!buckets.has(group.id)) {
+                    buckets.set(group.id, []);
+                    groupMeta.set(group.id, group);
+                    order.push(group.id);
+                }
+                buckets.get(group.id).push(entry);
+            });
+            return order.map((id) => ({
+                group: groupMeta.get(id),
+                entries: buckets.get(id) || [],
+            }));
+        };
+
         const renderTokenEditor = () => {
             if (!(tokensEl instanceof HTMLElement)) return;
             tokensEl.replaceChildren();
@@ -327,45 +402,58 @@
                 updateTokenCount(0, entries.length, true);
                 return;
             }
-            matched.forEach(([name, value]) => {
-                const card = document.createElement('div');
-                card.className = 'w-theme-disk-token';
-                card.dataset.tokenName = name;
-                const label = document.createElement('div');
-                label.className = 'w-theme-disk-token__label';
-                label.textContent = name;
-                const controls = document.createElement('div');
-                controls.className = 'w-theme-disk-token__controls';
-                const text = String(value || '');
-                const textInput = document.createElement('input');
-                textInput.className = 'w-input w-theme-disk-token__value';
-                textInput.dataset.size = 'sm';
-                textInput.type = 'text';
-                textInput.value = text;
-                textInput.addEventListener('input', () => {
-                    draft.tokens[name] = textInput.value;
-                    if (colorInput && looksLikeColorValue(textInput.value)) {
-                        colorInput.value = toColorInputValue(textInput.value);
+            const grouped = groupAppearanceTokenEntries(matched);
+            grouped.forEach(({ group, entries: groupEntries }) => {
+                if (group) {
+                    const heading = document.createElement('h6');
+                    heading.className = 'w-theme-disk-token-group';
+                    heading.setAttribute('data-w-appearance-token-group', group.id);
+                    heading.textContent = group.label;
+                    tokensEl.append(heading);
+                }
+                groupEntries.forEach(([name, value]) => {
+                    const card = document.createElement('div');
+                    card.className = 'w-theme-disk-token';
+                    card.dataset.tokenName = name;
+                    if (group) {
+                        card.dataset.tokenGroup = group.id;
                     }
-                    scheduleAppearancePreviewTokens();
-                });
-                let colorInput = null;
-                if (looksLikeColorValue(text) || draft.panel === 'color') {
-                    colorInput = document.createElement('input');
-                    colorInput.className = 'w-theme-disk-token__color';
-                    colorInput.type = 'color';
-                    colorInput.value = toColorInputValue(text);
-                    colorInput.title = name;
-                    colorInput.addEventListener('input', () => {
-                        draft.tokens[name] = colorInput.value;
-                        textInput.value = colorInput.value;
+                    const label = document.createElement('div');
+                    label.className = 'w-theme-disk-token__label';
+                    label.textContent = name;
+                    const controls = document.createElement('div');
+                    controls.className = 'w-theme-disk-token__controls';
+                    const text = String(value || '');
+                    const textInput = document.createElement('input');
+                    textInput.className = 'w-input w-theme-disk-token__value';
+                    textInput.dataset.size = 'sm';
+                    textInput.type = 'text';
+                    textInput.value = text;
+                    textInput.addEventListener('input', () => {
+                        draft.tokens[name] = textInput.value;
+                        if (colorInput && looksLikeColorValue(textInput.value)) {
+                            colorInput.value = toColorInputValue(textInput.value);
+                        }
                         scheduleAppearancePreviewTokens();
                     });
-                    controls.append(colorInput);
-                }
-                controls.append(textInput);
-                card.append(label, controls);
-                tokensEl.append(card);
+                    let colorInput = null;
+                    if (looksLikeColorValue(text) || draft.panel === 'color') {
+                        colorInput = document.createElement('input');
+                        colorInput.className = 'w-theme-disk-token__color';
+                        colorInput.type = 'color';
+                        colorInput.value = toColorInputValue(text);
+                        colorInput.title = name;
+                        colorInput.addEventListener('input', () => {
+                            draft.tokens[name] = colorInput.value;
+                            textInput.value = colorInput.value;
+                            scheduleAppearancePreviewTokens();
+                        });
+                        controls.append(colorInput);
+                    }
+                    controls.append(textInput);
+                    card.append(label, controls);
+                    tokensEl.append(card);
+                });
             });
             updateTokenCount(matched.length, entries.length, !!query);
             scheduleAppearancePreviewTokens();
@@ -379,7 +467,9 @@
             draft.mode = 'inherit';
             draft.base_file = String(disk.key || '');
             draft.disk_key = '';
-            draft.tokens = await loadDiskTokens(panel, disk);
+            const loaded = await loadDiskTokens(panel, disk);
+            draft.tokens = loaded.tokens || {};
+            draft.tokenMeta = loaded.tokenMeta || {};
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = `${disk.name || disk.key}-自定义`;
             }
@@ -396,7 +486,9 @@
             draft.mode = 'custom';
             draft.base_file = String(disk.base_file || '');
             draft.disk_key = String(disk.disk_key || '');
-            draft.tokens = await resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
+            const loaded = await resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
+            draft.tokens = loaded.tokens || {};
+            draft.tokenMeta = loaded.tokenMeta || {};
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = String(disk.name || disk.disk_key || '');
             }
@@ -693,6 +785,7 @@
             draft.disk_key = '';
             draft.base_file = '';
             draft.tokens = {};
+            draft.tokenMeta = {};
             setEditorVisible(false);
             renderAppearance();
             await openActiveEditor();
@@ -718,7 +811,8 @@
             draft.disk_key = String(result?.data?.disk_key || draft.disk_key || '');
             const savedKey = draft.disk_key;
             const baseDisk = draft.base_file ? findCatalogDisk(draft.panel, draft.base_file) : null;
-            const baseTokens = baseDisk ? await loadDiskTokens(draft.panel, baseDisk) : {};
+            const baseLoaded = baseDisk ? await loadDiskTokens(draft.panel, baseDisk) : { tokens: {} };
+            const baseTokens = baseLoaded.tokens || {};
             const deltaTokens = Object.fromEntries(Object.entries(draft.tokens).filter(([token, value]) =>
                 !Object.prototype.hasOwnProperty.call(baseTokens, token)
                     || String(baseTokens[token]) !== String(value)));
@@ -787,6 +881,7 @@
                 draft.base_file = '';
                 draft.disk_key = '';
                 draft.tokens = {};
+                draft.tokenMeta = {};
                 draft.mode = '';
                 if (tokenSearchEl instanceof HTMLInputElement) {
                     tokenSearchEl.value = '';

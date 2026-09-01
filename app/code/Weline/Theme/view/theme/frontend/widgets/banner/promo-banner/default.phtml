@@ -258,7 +258,8 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
             var closedTime = localStorage.getItem(storageKey);
             if (closedTime) {
                 var hoursSinceClosed = (Date.now() - parseInt(closedTime, 10)) / (1000 * 60 * 60);
-                if (hoursSinceClosed < 24) {
+                // Avoid raw "<" in inline JS: Theme preview may re-parse HTML with DOMDocument.
+                if (!(hoursSinceClosed >= 24)) {
                     root.classList.add('is-hidden');
                 }
             }

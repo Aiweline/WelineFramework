@@ -51,7 +51,7 @@ $layout = $this->getData('layout') ?? 'horizontal';
         <?php endif; ?>
     </div>
 
-    <w:form class="newsletter-form" action="/newsletter/subscribe" method="post">
+    <w:form class="newsletter-form" action="@url{'newsletter/subscribe'}" method="post">
         <div class="w-form-group">
             <input type="email"
                    name="email"

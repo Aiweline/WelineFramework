@@ -14,23 +14,30 @@ const lazyComponentSources = new Map([
     ['icon-picker', './weline-ui-advanced.js'],
     ['dependent-field', './weline-ui-advanced.js'],
     ['language-select', './components/weline-language-select.js'],
-    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-21'],
+    ['currency-select', './components/weline-currency-select.js'],
+    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-22'],
     ['online-translation-collector', './components/weline-online-translation-collector.js'],
     ['scope-persistence', './components/weline-scope-persistence.js'],
     ['file-preview', './components/weline-file-picker.js'],
     ['file-picker', './components/weline-file-picker.js'],
-    ['local-translation', './components/weline-local-translation.js'],
-    ['mega-menu', './components/weline-mega-menu.js'],
+    ['local-translation', './components/weline-local-translation.js?v=20260828-base-star1'],
+    ['mega-menu', './components/weline-mega-menu.js?v=20260829-cat-click1'],
     ['account-recovery', './pages/weline-customer-account-recovery.js'],
-    ['account-login', './pages/weline-customer-account-login.js'],
+    ['account-login', './pages/weline-customer-account-login.js?v=20260829-login-docpost1'],
+    ['account-register', './pages/weline-customer-account-login.js?v=20260829-login-docpost1'],
+    ['account-challenge', './pages/weline-customer-account-challenge.js?v=20260830-challenge-btn2'],
 ]);
 const lazyComponentStyles = new Map([
     ['language-select', './components/weline-language-select.css'],
+    ['currency-select', './components/weline-currency-select.css'],
     ['file-preview', './components/weline-file-picker.css'],
     ['file-picker', './components/weline-file-picker.css'],
+    ['local-translation', '../../../../I18n/view/statics/css/local-translation.css'],
     ['mega-menu', './components/weline-mega-menu.css'],
     ['account-recovery', './pages/weline-customer-account-recovery.css'],
-    ['account-login', './pages/weline-customer-account-login.css'],
+    ['account-login', './pages/weline-customer-account-login.css?v=20260830-challenge-btn2'],
+    ['account-register', './pages/weline-customer-account-login.css?v=20260830-challenge-btn2'],
+    ['account-challenge', './pages/weline-customer-account-login.css?v=20260830-challenge-btn2'],
 ]);
 const lazyComponentLoads = new Map();
 const lazyStyleLoads = new Map();
@@ -231,6 +238,36 @@ function topOverlay() {
     return overlayStack.at(-1)?.element || null;
 }
 
+function resolveBackendThemeConfigUrl() {
+    if (typeof window.site !== 'undefined' && typeof window.site.buildUrl === 'function') {
+        return window.site.buildUrl('system/ThemeConfig/Set');
+    }
+    if (typeof window.backend_url === 'function') {
+        return window.backend_url('system/theme-config/set');
+    }
+    return `${window.location.pathname.split('/').slice(0, 4).join('/')}/system/theme-config/set`;
+}
+
+async function persistBackendThemePreference(preference) {
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+    if (window.site?.csrf_token) {
+        headers['X-CSRF-TOKEN'] = String(window.site.csrf_token);
+    }
+    const response = await fetch(resolveBackendThemeConfigUrl(), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({'theme-mode-switch': preference}),
+        credentials: 'same-origin',
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || Number(result.code) >= 400 || result.success === false) {
+        throw new Error(result.msg || result.message || 'Theme mode switch failed.');
+    }
+}
+
 function initializeThemePreference() {
     const root = document.documentElement;
     const area = root.dataset.wArea || 'frontend';
@@ -269,10 +306,7 @@ function initializeThemePreference() {
             throw new TypeError('Theme preference must be system, light or dark.');
         }
         if (area === 'backend') {
-            if (typeof Weline.Api?.call !== 'function') {
-                throw new Error('Backend theme persistence API is unavailable.');
-            }
-            await Weline.Api.call('theme', 'setBackendThemeMode', {mode: preference});
+            await persistBackendThemePreference(preference);
         } else {
             try {
                 localStorage.setItem(storageKey, preference);
@@ -978,8 +1012,13 @@ function positionFloating(anchor, floating, placement = 'bottom-start', referenc
     };
     const opposite = { top: 'bottom', right: 'left', bottom: 'top', left: 'right' };
 
+    // Keep nested scroll offsets when a live panel is remeasured (page scroll / resize).
+    const scrollMementos = snapshotFloatingScrollPositions(floating);
+    const alreadyVisible = floating.dataset.wFloatingPositioned === 'true';
     clearFloatingPosition(floating);
-    floating.dataset.wFloatingPositioned = 'pending';
+    // First open uses pending (visibility:hidden) to avoid a wrong-position flash.
+    // Live updates must stay visible — pending + size thrash fights overflow scrollTop.
+    floating.dataset.wFloatingPositioned = alreadyVisible ? 'true' : 'pending';
     floating.style.setProperty('--w-floating-max-inline-size', `${Math.floor(viewport.width)}px`);
     floating.style.setProperty('--w-floating-max-block-size', `${Math.floor(viewport.height)}px`);
     let floatingRect = floating.getBoundingClientRect();
@@ -1021,6 +1060,7 @@ function positionFloating(anchor, floating, placement = 'bottom-start', referenc
     );
     floating.dataset.wActualPlacement = actualPlacement;
     floating.dataset.wFloatingPositioned = 'true';
+    restoreFloatingScrollPositions(scrollMementos);
     return {
         anchorVisible: true,
         placement: actualPlacement,
@@ -1127,7 +1167,44 @@ function createFloatingMonitor(anchor, getFloating, getPlacement, onAnchorHidden
     return monitor;
 }
 
-function scheduleFloatingViewportUpdate() {
+function isFloatingInternalScrollTarget(target) {
+    if (!(target instanceof Element)) return false;
+    // Capture-phase document scroll hears overflow scrollers inside portaled panels.
+    // Repositioning those scrolls clears max-block-size / pending and fights scrollTop.
+    return Boolean(target.closest('[data-w-floating-positioned], [data-w-floating-portal="true"]'));
+}
+
+function snapshotFloatingScrollPositions(root) {
+    if (!(root instanceof Element)) return [];
+    const nodes = [root, ...root.querySelectorAll('*')];
+    const out = [];
+    for (const node of nodes) {
+        if (!(node instanceof HTMLElement)) continue;
+        if (node.scrollTop === 0 && node.scrollLeft === 0) continue;
+        out.push({ node, top: node.scrollTop, left: node.scrollLeft });
+    }
+    return out;
+}
+
+function restoreFloatingScrollPositions(mementos) {
+    if (!Array.isArray(mementos) || mementos.length === 0) return;
+    for (const item of mementos) {
+        const node = item?.node;
+        if (!(node instanceof HTMLElement) || !node.isConnected) continue;
+        if (node.scrollTop !== item.top) node.scrollTop = item.top;
+        if (node.scrollLeft !== item.left) node.scrollLeft = item.left;
+    }
+}
+
+function scheduleFloatingViewportUpdate(event) {
+    const target = event?.target;
+    if (target
+        && target !== document
+        && target !== document.documentElement
+        && target !== document.body
+        && isFloatingInternalScrollTarget(target)) {
+        return;
+    }
     cancelAnimationFrame(floatingViewportFrame);
     floatingViewportFrame = requestAnimationFrame(() => {
         for (const monitor of activeFloatingMonitors) monitor.viewportChanged();
@@ -1183,7 +1260,14 @@ function loadLazyComponent(name, element) {
             if (typeof module.register !== 'function') {
                 throw new TypeError(`Weline UI lazy module does not export register(): ${source}`);
             }
-            module.register(UI);
+            try {
+                module.register(UI);
+            } catch (error) {
+                // Page bundles may register the same lazy module first; treat as ready.
+                if (!(error instanceof Error) || !/already (defined|registered)/i.test(error.message)) {
+                    throw error;
+                }
+            }
         }));
     }
     const styleSource = lazyComponentStyles.get(name);
@@ -1209,11 +1293,18 @@ function loadLazyComponent(name, element) {
                 }));
             }
         }
-        styleLoad = lazyStyleLoads.get(styleUrl.href);
+        styleLoad = lazyStyleLoads.get(styleUrl.href).catch(() => null);
     }
     Promise.all([lazyComponentLoads.get(source), styleLoad])
         .then(() => {
-            if (element.isConnected) mountElement(element);
+            // Module loaded but never defined this name → remount would microtask-loop forever.
+            if (!definitions.has(name)) {
+                console.error(`Weline UI lazy module loaded but did not define component: ${name}`, source);
+                return;
+            }
+            if (element.isConnected) {
+                mountElement(element);
+            }
         })
         .catch((error) => {
             console.error(`Unable to load Weline UI component: ${name}`, error);
@@ -1223,6 +1314,7 @@ function loadLazyComponent(name, element) {
 
 function mountElement(element) {
     const map = instances.get(element) || new Map();
+    instances.set(element, map);
     const elementCleanups = cleanupByElement.get(element) || [];
     for (const name of componentNames(element)) {
         if (map.has(name)) continue;
@@ -1250,6 +1342,10 @@ function mountElement(element) {
         const instance = factory(context) || {};
         if (typeof instance.destroy === 'function') localCleanups.push(() => instance.destroy());
         map.set(name, instance);
+        element.dispatchEvent(new CustomEvent('weline:ui:component:ready', {
+            bubbles: true,
+            detail: { name },
+        }));
         elementCleanups.push(...localCleanups);
     }
     instances.set(element, map);
@@ -1303,6 +1399,49 @@ function ensureMounted(element, name) {
     if (!element) return null;
     mountElement(element);
     return get(element, name);
+}
+
+function whenReady(element, name, timeoutMs = 8000) {
+    if (!element) {
+        return Promise.reject(new Error('[Weline.UI] whenReady requires an element.'));
+    }
+    mountElement(element);
+    const existing = get(element, name);
+    if (existing) {
+        return Promise.resolve(existing);
+    }
+    return new Promise((resolve, reject) => {
+        const timer = window.setTimeout(() => {
+            element.removeEventListener('weline:ui:component:ready', onReady);
+            reject(new Error(`[Weline.UI] component not ready: ${name}`));
+        }, timeoutMs);
+        const onReady = (event) => {
+            if (event.target !== element || String(event.detail?.name || '') !== name) {
+                return;
+            }
+            window.clearTimeout(timer);
+            element.removeEventListener('weline:ui:component:ready', onReady);
+            const resolveInstance = () => {
+                const instance = get(element, name);
+                if (instance) {
+                    resolve(instance);
+                    return true;
+                }
+                return false;
+            };
+            if (resolveInstance()) {
+                return;
+            }
+            queueMicrotask(() => {
+                if (resolveInstance()) {
+                    return;
+                }
+                reject(new Error(`[Weline.UI] component missing after ready: ${name}`));
+            });
+        };
+        element.addEventListener('weline:ui:component:ready', onReady);
+        mountElement(element);
+    });
 }
 
 function closeTransientSurfaces(reason = 'pagehide') {
@@ -1414,9 +1553,25 @@ function registerDrawer() {
             element.setAttribute('aria-hidden', String(!persistent && element.dataset.state !== 'open'));
             if (persistent) element.hidden = false;
         };
+        let homeMarker = null;
+        const ensureBodyHost = () => {
+            if (element.parentElement === document.body) {
+                return;
+            }
+            // Nested drawers inside forms inherit form semantics; portal to body while used.
+            if (!(element.closest('form') instanceof HTMLFormElement)) {
+                return;
+            }
+            if (!homeMarker) {
+                homeMarker = document.createComment(`w-drawer-home:${element.id || 'anon'}`);
+                element.before(homeMarker);
+            }
+            document.body.append(element);
+        };
         const open = (options = {}) => {
             if (element.dataset.state === 'open' || !emitLocal('before-open', { options })) return false;
             lastFocus = document.activeElement;
+            ensureBodyHost();
             element.dataset.state = 'open';
             element.hidden = false;
             element.setAttribute('aria-hidden', 'false');
@@ -1424,7 +1579,10 @@ function registerDrawer() {
             backdrop.className = 'w-overlay';
             backdrop.dataset.wDrawerBackdrop = element.id || '';
             document.body.append(backdrop);
-            backdrop.addEventListener('click', () => {
+            // pointerdown avoids showModal ghost-clicks that fire click on the overlay underneath.
+            backdrop.addEventListener('pointerdown', (event) => {
+                if (event.target !== backdrop) return;
+                if (topOverlay() !== element) return;
                 if (element.dataset.wBackdrop !== 'static') close('backdrop');
             });
             pushOverlay(element, lastFocus);
@@ -1486,6 +1644,57 @@ function registerRemoteDrawer() {
         const frame = element.querySelector('[data-w-remote-frame]');
         if (!(frame instanceof HTMLIFrameElement)) return {};
 
+        const actionButtons = () => [...element.querySelectorAll('[data-w-remote-action]')];
+        const ensureFrameHost = () => {
+            const parent = frame.parentElement;
+            if (parent instanceof HTMLElement && parent.dataset.wRemoteFrameHost === 'true') {
+                return parent;
+            }
+            const host = document.createElement('div');
+            host.className = 'w-remote-drawer__frame-host';
+            host.dataset.wRemoteFrameHost = 'true';
+            frame.replaceWith(host);
+            host.append(frame);
+            const overlay = document.createElement('div');
+            overlay.className = 'w-remote-drawer__loading';
+            overlay.dataset.wRemoteLoading = 'true';
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            overlay.innerHTML = '<div class="w-remote-drawer__loading-backdrop" aria-hidden="true"></div>'
+                + '<div class="w-remote-drawer__loading-content">'
+                + '<span class="w-spinner" aria-hidden="true"></span>'
+                + '</div>';
+            host.append(overlay);
+            return host;
+        };
+        const setFrameBusy = (busy) => {
+            const host = ensureFrameHost();
+            const overlay = host.querySelector('[data-w-remote-loading]');
+            if (busy) host.setAttribute('data-busy', 'true');
+            else host.removeAttribute('data-busy');
+            host.setAttribute('aria-busy', busy ? 'true' : 'false');
+            frame.style.pointerEvents = busy ? 'none' : '';
+            if (overlay instanceof HTMLElement) {
+                overlay.hidden = !busy;
+                overlay.setAttribute('aria-hidden', String(!busy));
+            }
+        };
+        const setActionBusy = (busy, activeButton = null) => {
+            actionButtons().forEach((button) => {
+                if (!(button instanceof HTMLElement)) return;
+                const isActive = busy && activeButton === button;
+                if (isActive) button.setAttribute('aria-busy', 'true');
+                else button.removeAttribute('aria-busy');
+                if (button instanceof HTMLButtonElement || button instanceof HTMLInputElement) {
+                    button.disabled = busy;
+                } else {
+                    button.toggleAttribute('aria-disabled', busy);
+                }
+            });
+            setFrameBusy(busy);
+        };
+        const clearBusy = () => setActionBusy(false);
+
         const load = (force = false) => {
             const source = frame.dataset.src || '';
             if (source === '') return false;
@@ -1512,7 +1721,7 @@ function registerRemoteDrawer() {
             } catch (_error) {
                 form = null;
             }
-            if (!(form instanceof HTMLFormElement)) {
+            if (!form || String(form.tagName || '').toUpperCase() !== 'FORM') {
                 componentUI.toast.warning(Weline.config?.i18n?.formNotFound || 'Form not found.');
                 return false;
             }
@@ -1521,14 +1730,32 @@ function registerRemoteDrawer() {
             return true;
         };
 
-        listen(element, 'weline:ui:drawer:before-open', () => load());
+        listen(frame, 'load', () => clearBusy());
+        listen(element, 'weline:ui:drawer:before-open', () => {
+            clearBusy();
+            load();
+        });
+        listen(element, 'weline:ui:drawer:close', () => clearBusy());
         listen(element, 'click', (event) => {
-            const action = eventClosest(event, '[data-w-remote-action]')?.dataset.wRemoteAction || '';
-            if (action === 'reload') load(true);
-            if (action === 'submit' && element.dataset.wRemoteSave === 'true') submit();
+            const trigger = eventClosest(event, '[data-w-remote-action]');
+            const action = trigger?.dataset.wRemoteAction || '';
+            if (action === '') return;
+            if (trigger instanceof HTMLElement && trigger.getAttribute('aria-busy') === 'true') {
+                event.preventDefault();
+                return;
+            }
+            if (action === 'reload') {
+                setActionBusy(true, trigger);
+                if (!load(true)) clearBusy();
+                return;
+            }
+            if (action === 'submit' && element.dataset.wRemoteSave === 'true') {
+                setActionBusy(true, trigger);
+                if (!submit()) clearBusy();
+            }
         });
 
-        return { load, submit, element };
+        return { load, submit, clearBusy, element };
     });
 }
 
@@ -1811,7 +2038,6 @@ function registerNavFilter() {
         const list = element.querySelector('[data-w-nav-filter-list]');
         const empty = element.querySelector('[data-w-nav-filter-empty]');
         if (!(input instanceof HTMLInputElement) || !(list instanceof HTMLElement)) return {};
-        const entries = [...list.querySelectorAll(':scope > .w-backend-nav__entry')];
         const groups = [...list.querySelectorAll(':scope > .w-backend-nav__group')];
         const backendTokenPattern = /^[A-Za-z0-9_-]{16,}$/;
         const actionAliases = new Set([
@@ -1924,7 +2150,9 @@ function registerNavFilter() {
                 }
             }
             disclosures.forEach((disclosure) => {
-                disclosure.open = currentDisclosures.has(disclosure);
+                if (currentDisclosures.has(disclosure)) {
+                    disclosure.open = true;
+                }
             });
             return current;
         };
@@ -1959,46 +2187,398 @@ function registerNavFilter() {
             syncCurrentRoute();
             scheduleScrollCurrentIntoView();
         };
-        const apply = () => {
-            const query = input.value.trim().toLocaleLowerCase();
-            let visible = 0;
-            entries.forEach((entry) => {
-                const match = query === '' || (entry.textContent || '').toLocaleLowerCase().includes(query);
-                entry.hidden = !match;
-                if (match) {
-                    visible++;
-                    if (query !== '') entry.querySelector('details')?.setAttribute('open', '');
-                }
-            });
-            groups.forEach((group) => {
-                let sibling = group.nextElementSibling;
-                let hasVisible = false;
-                while (sibling && !sibling.classList.contains('w-backend-nav__group')) {
-                    if (sibling.classList.contains('w-backend-nav__entry') && !sibling.hidden) hasVisible = true;
-                    sibling = sibling.nextElementSibling;
-                }
-                group.hidden = !hasVisible;
-            });
-            if (empty) empty.hidden = visible !== 0;
-            emitLocal('change', { query, visible }, false);
+        const syncCurrentRouteAndScrollUnlessFiltering = () => {
+            if (input.value.trim() !== '') {
+                return;
+            }
+            syncCurrentRouteAndScroll();
         };
-        listen(input, 'input', apply);
-        listen(input, 'keydown', (event) => {
-            if (event.key === 'Escape' && input.value !== '') {
-                input.value = '';
-                apply();
+        const directEntryLabel = (entry) => {
+            const directItem = entry.querySelector(
+                ':scope > a.w-backend-nav__item, :scope > .w-backend-nav__item, :scope > details.w-backend-nav__disclosure > summary.w-backend-nav__item',
+            );
+            if (!(directItem instanceof HTMLElement)) {
+                return (entry.textContent || '').trim().toLocaleLowerCase();
+            }
+            const labelSpan = directItem.querySelector(':scope > span');
+            return (labelSpan?.textContent || directItem.textContent || '').trim().toLocaleLowerCase();
+        };
+        const childEntries = (entry) => [
+            ...entry.querySelectorAll(
+                ':scope > .w-backend-nav__list > .w-backend-nav__entry, :scope > details > .w-backend-nav__list > .w-backend-nav__entry',
+            ),
+        ];
+        const matchesSubtree = (entry, query) => {
+            if (query === '') {
+                return true;
+            }
+            if (directEntryLabel(entry).includes(query)) {
+                return true;
+            }
+            return childEntries(entry).some((child) => matchesSubtree(child, query));
+        };
+        const clearCurrentRoute = () => {
+            list.querySelectorAll('.w-backend-nav__item').forEach((item) => {
+                item.removeAttribute('aria-current');
+                item.removeAttribute('data-state');
+            });
+            list.querySelectorAll('details.w-backend-nav__disclosure').forEach((disclosure) => {
+                disclosure.open = false;
+            });
+        };
+        const setEntryExpandedForFilter = (entry) => {
+            let node = entry.parentElement;
+            while (node && node !== list) {
+                if (node instanceof HTMLDetailsElement) {
+                    node.open = true;
+                }
+                node = node.parentElement;
+            }
+            const disclosure = entry.querySelector(':scope > details.w-backend-nav__disclosure');
+            if (disclosure instanceof HTMLDetailsElement) {
+                disclosure.open = true;
+            }
+        };
+        const shell = element.closest('.w-backend-shell');
+        const searchRoot = element.querySelector('.w-backend-nav__search');
+        const isSidebarCollapsed = () => shell instanceof HTMLElement && shell.dataset.sidebarCollapsed === 'true';
+        const focusSearchInput = () => {
+            window.requestAnimationFrame(() => {
+                try {
+                    input.focus({ preventScroll: true });
+                } catch (_error) {
+                    input.focus();
+                }
+            });
+        };
+        const sidebarCollapse = () => (
+            shell instanceof HTMLElement ? ensureMounted(shell, 'backend-sidebar-collapse') : null
+        );
+        const expandSidebarOverlay = () => {
+            sidebarCollapse()?.expandOverlay?.();
+        };
+        const expandSidebarForSearch = () => {
+            expandSidebarOverlay();
+            focusSearchInput();
+        };
+        const topLevelNavEntries = () => [
+            ...list.querySelectorAll(':scope > .w-backend-nav__entry'),
+        ];
+        const topLevelNavTrigger = (entry) => entry.querySelector(
+            ':scope > .w-backend-nav__item, :scope > details.w-backend-nav__disclosure > summary.w-backend-nav__item',
+        );
+        const navScroller = () => {
+            const scroller = element.querySelector(':scope > nav')
+                || element.closest('.w-backend-sidebar')
+                || element.closest('[data-w-component~="drawer"]')
+                || element;
+            return scroller instanceof HTMLElement ? scroller : null;
+        };
+        const pinOpenedDisclosure = (disclosure) => {
+            if (!(disclosure instanceof HTMLDetailsElement) || !disclosure.open) {
+                return;
+            }
+            const summary = disclosure.querySelector(':scope > summary.w-backend-nav__item');
+            const scroller = navScroller();
+            if (!(summary instanceof HTMLElement) || !scroller) {
+                return;
+            }
+            window.requestAnimationFrame(() => {
+                const scrollerRect = scroller.getBoundingClientRect();
+                const summaryRect = summary.getBoundingClientRect();
+                if (scrollerRect.height <= 0 || summaryRect.height <= 0) {
+                    return;
+                }
+                const delta = summaryRect.top - scrollerRect.top;
+                if (Math.abs(delta) > 8) {
+                    scroller.scrollTop += delta;
+                }
+            });
+        };
+        const expandTopLevelEntry = (entry) => {
+            if (!(entry instanceof HTMLElement)) {
+                return false;
+            }
+            expandSidebarOverlay();
+            const disclosure = entry.querySelector(':scope > details.w-backend-nav__disclosure');
+            if (disclosure instanceof HTMLDetailsElement) {
+                disclosure.open = true;
+            }
+            const trigger = topLevelNavTrigger(entry);
+            if (trigger instanceof HTMLElement) {
+                window.requestAnimationFrame(() => {
+                    try {
+                        trigger.focus({ preventScroll: true });
+                    } catch (_error) {
+                        trigger.focus();
+                    }
+                });
+            }
+            if (disclosure instanceof HTMLDetailsElement) {
+                pinOpenedDisclosure(disclosure);
+            }
+            return true;
+        };
+        topLevelNavEntries().forEach((entry) => {
+            const trigger = topLevelNavTrigger(entry);
+            if (!(trigger instanceof HTMLElement)) {
+                return;
+            }
+            let suppressSummaryClick = false;
+            listen(trigger, 'mousedown', (event) => {
+                if (!isSidebarCollapsed()) {
+                    return;
+                }
+                event.preventDefault();
+                expandTopLevelEntry(entry);
+                // Collapsed rail: mousedown already forced open; the following native
+                // summary click would toggle it closed again at the click point.
+                if (trigger.tagName === 'SUMMARY') {
+                    suppressSummaryClick = true;
+                }
+            });
+            listen(trigger, 'click', (event) => {
+                if (!suppressSummaryClick) {
+                    return;
+                }
+                suppressSummaryClick = false;
+                event.preventDefault();
+            });
+        });
+        listen(list, 'toggle', (event) => {
+            if (!event.isTrusted || input.value.trim() !== '') {
+                return;
+            }
+            const disclosure = event.target;
+            if (
+                !(disclosure instanceof HTMLDetailsElement)
+                || !disclosure.open
+                || !disclosure.classList.contains('w-backend-nav__disclosure')
+            ) {
+                return;
+            }
+            pinOpenedDisclosure(disclosure);
+        });
+        const maybeDismissSearchOverlay = () => {
+            if (input.value.trim() !== '') {
+                return;
+            }
+            sidebarCollapse()?.dismissOverlay?.();
+        };
+        const applyFilter = () => {
+            const query = input.value.trim().toLocaleLowerCase();
+            const isFiltering = query !== '';
+            const allEntries = [...list.querySelectorAll('.w-backend-nav__entry')];
+            let visible = 0;
+
+            if (isFiltering) {
+                element.setAttribute('data-w-nav-filtering', 'true');
+                clearCurrentRoute();
+            } else {
+                element.removeAttribute('data-w-nav-filtering');
+                allEntries.forEach((entry) => {
+                    entry.hidden = false;
+                });
+                groups.forEach((group) => {
+                    group.hidden = false;
+                });
+            }
+
+            if (isFiltering) {
+                allEntries.forEach((entry) => {
+                    const match = matchesSubtree(entry, query);
+                    entry.hidden = !match;
+                    if (match) {
+                        visible += 1;
+                        setEntryExpandedForFilter(entry);
+                    }
+                });
+                groups.forEach((group) => {
+                    let sibling = group.nextElementSibling;
+                    let hasVisible = false;
+                    while (sibling && !sibling.classList.contains('w-backend-nav__group')) {
+                        if (sibling.classList.contains('w-backend-nav__entry') && !sibling.hidden) {
+                            hasVisible = true;
+                        }
+                        sibling = sibling.nextElementSibling;
+                    }
+                    group.hidden = !hasVisible;
+                });
+            }
+
+            if (empty instanceof HTMLElement) {
+                empty.hidden = !isFiltering || visible > 0;
+            }
+            emitLocal('change', { query, visible, filtering: isFiltering }, false);
+
+            if (!isFiltering) {
+                syncCurrentRouteAndScroll();
+                maybeDismissSearchOverlay();
+            }
+        };
+        listen(input, 'input', applyFilter);
+        listen(input, 'focus', () => {
+            if (isSidebarCollapsed()) {
+                expandSidebarForSearch();
             }
         });
-        apply();
-        syncCurrentRoute();
+        listen(input, 'blur', maybeDismissSearchOverlay);
+        if (searchRoot instanceof HTMLElement) {
+            listen(searchRoot, 'mousedown', (event) => {
+                if (!isSidebarCollapsed()) {
+                    return;
+                }
+                event.preventDefault();
+                expandSidebarForSearch();
+            });
+        }
+        listen(input, 'keydown', (event) => {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            event.preventDefault();
+            if (input.value !== '') {
+                input.value = '';
+                applyFilter();
+            } else {
+                maybeDismissSearchOverlay();
+            }
+            input.blur();
+        });
+        listen(input, 'search', () => {
+            if (input.value !== '') {
+                return;
+            }
+            applyFilter();
+        });
+        applyFilter();
+        syncCurrentRouteAndScrollUnlessFiltering();
         const drawer = element.closest('[data-w-component~="drawer"]');
         if (drawer) {
-            listen(drawer, 'weline:ui:drawer:open', syncCurrentRouteAndScroll);
+            listen(drawer, 'weline:ui:drawer:open', syncCurrentRouteAndScrollUnlessFiltering);
         }
-        listen(window, 'pageshow', syncCurrentRouteAndScroll);
-        listen(window, 'popstate', syncCurrentRouteAndScroll);
-        scheduleScrollCurrentIntoView();
-        return { apply, syncCurrentRoute, scrollCurrentIntoView, element };
+        listen(window, 'pageshow', syncCurrentRouteAndScrollUnlessFiltering);
+        listen(window, 'popstate', syncCurrentRouteAndScrollUnlessFiltering);
+        return { apply: applyFilter, syncCurrentRoute, scrollCurrentIntoView, element };
+    });
+}
+
+const BACKEND_SIDEBAR_COLLAPSED_KEY = 'weline_backend_sidebar_collapsed';
+const BACKEND_SIDEBAR_DESKTOP_MEDIA = '(min-width: 64rem)';
+
+function registerBackendSidebarCollapse() {
+    define('backend-sidebar-collapse', ({ element, listen }) => {
+        const desktopMedia = window.matchMedia(BACKEND_SIDEBAR_DESKTOP_MEDIA);
+        const collapseButtons = () => document.querySelectorAll('[data-w-action="backend-sidebar-collapse.toggle"]');
+        const sidebar = () => document.getElementById('w-backend-sidebar');
+
+        const readStored = () => {
+            try {
+                return localStorage.getItem(BACKEND_SIDEBAR_COLLAPSED_KEY) === 'true';
+            } catch (_error) {
+                return false;
+            }
+        };
+
+        const persist = (collapsed) => {
+            try {
+                localStorage.setItem(BACKEND_SIDEBAR_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+            } catch (_error) {
+            }
+        };
+
+        const syncButtons = (collapsed) => {
+            collapseButtons().forEach((button) => {
+                const expandedLabel = button.dataset.wLabelExpanded || '';
+                const collapsedLabel = button.dataset.wLabelCollapsed || '';
+                const label = collapsed ? collapsedLabel : expandedLabel;
+                if (label !== '') {
+                    button.setAttribute('aria-label', label);
+                    button.title = label;
+                }
+                button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            });
+        };
+
+        let overlayActive = false;
+
+        const apply = (collapsed) => {
+            const effective = collapsed === true && desktopMedia.matches && !overlayActive;
+            element.dataset.sidebarCollapsed = effective ? 'true' : 'false';
+            document.documentElement.dataset.backendSidebarCollapsed = effective ? 'true' : 'false';
+            syncButtons(effective);
+        };
+
+        const expandOverlay = () => {
+            if (!desktopMedia.matches || !readStored() || overlayActive) {
+                return false;
+            }
+            overlayActive = true;
+            apply(true);
+            return true;
+        };
+
+        const dismissOverlay = () => {
+            if (!overlayActive) {
+                return false;
+            }
+            overlayActive = false;
+            apply(readStored());
+            return true;
+        };
+
+        const expand = () => {
+            overlayActive = false;
+            if (!readStored() && element.dataset.sidebarCollapsed !== 'true') {
+                return false;
+            }
+            persist(false);
+            apply(false);
+            return true;
+        };
+
+        const collapse = () => {
+            overlayActive = false;
+            if (readStored() && element.dataset.sidebarCollapsed === 'true') {
+                return false;
+            }
+            persist(true);
+            apply(true);
+            return true;
+        };
+
+        const toggle = () => {
+            overlayActive = false;
+            const next = !readStored();
+            persist(next);
+            apply(next);
+            return next;
+        };
+
+        apply(readStored());
+        listen(desktopMedia, 'change', () => {
+            overlayActive = false;
+            apply(readStored());
+        });
+
+        listen(document, 'pointerdown', (event) => {
+            if (!desktopMedia.matches || !overlayActive) {
+                return;
+            }
+            const target = event.target instanceof Node ? event.target : null;
+            const railSidebarNode = sidebar();
+            if (railSidebarNode && target && railSidebarNode.contains(target)) {
+                return;
+            }
+            // Open means open: keep the temporary expand while any menu group is open.
+            // Only dismiss a search-only overlay when clicking outside.
+            if (railSidebarNode?.querySelector('details.w-backend-nav__disclosure[open]')) {
+                return;
+            }
+            dismissOverlay();
+        }, true);
+
+        return { toggle, expand, collapse, expandOverlay, dismissOverlay, apply, element };
     });
 }
 
@@ -2689,7 +3269,19 @@ function requestDialog(options = {}) {
                     ? await options.beforeConfirm(value)
                     : value;
                 if (acceptedValue === false) return;
-                UI.dialog.close(dialog, 'confirm');
+                const closed = UI.dialog.close(dialog, 'confirm');
+                // before-close 被拦截或挂载丢失时，原生 close 仍要收尾，否则按钮点了框不关、Promise 挂死。
+                if (!closed && dialog.open) {
+                    try {
+                        if (dialog instanceof HTMLDialogElement) {
+                            dialog.close('confirm');
+                        } else {
+                            finish(true);
+                        }
+                    } catch (_error) {
+                        finish(true);
+                    }
+                }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 if (fieldError) {
@@ -2738,6 +3330,10 @@ function performAction(actionElement) {
     const [component, method] = action.split('.');
     if (component === 'dialog' && ['open', 'close'].includes(method)) UI.dialog[method](target || actionElement.closest('.w-dialog'));
     if (component === 'drawer' && ['open', 'close'].includes(method)) UI.drawer[method](target || actionElement.closest('.w-drawer'));
+    if (component === 'backend-sidebar-collapse' && method === 'toggle') {
+        const shell = asElement(target) || document.querySelector('[data-w-component~="backend-sidebar-collapse"]');
+        ensureMounted(shell, 'backend-sidebar-collapse')?.toggle();
+    }
     if (component === 'disclosure' && ['open', 'close', 'toggle'].includes(method)) {
         const panel = asElement(target);
         const root = panel?.closest('[data-w-component~="disclosure"]') || actionElement.closest('[data-w-component~="disclosure"]');
@@ -2759,6 +3355,7 @@ if (!existingRuntime) {
     registerDisclosure();
     registerLoading();
     registerNavFilter();
+    registerBackendSidebarCollapse();
     registerTooltip();
     registerPopover();
     registerAnchoredFloat();
@@ -2771,6 +3368,8 @@ const createdUI = {
     mount,
     unmount,
     get,
+    ensureMounted,
+    whenReady,
     position: positionFloating,
     floating: {
         capture: captureFloatingReference,

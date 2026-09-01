@@ -3,44 +3,30 @@
 ## Hook 信息
 
 - **Hook 名称**：`account.sidebar`
-- **显示名称**：账户侧栏
-- **功能说明**：在账户页面侧栏导航中注入内容。扩展模块可以直接输出自己的父子菜单结构。
+- **显示名称**：账户侧栏（兼容期扁平位）
+- **功能说明**：历史扁平注入位。新功能请注入 `account.sidebar.group.*`；分组标题与壳由 `Weline_Customer` 侧栏宿主输出。
 
-## 使用方法
+## 推荐：按分组注入
 
-在模块的 `view/hooks/` 目录中创建文件：
+| Hook | 用途 | `data-account-nav-parent` |
+|---|---|---|
+| `account.sidebar.group.security` | 安全子项 | `security` |
+| `account.sidebar.group.commerce` | 订阅/资产/分销/订单/收藏 | `commerce` |
+| `account.sidebar.group.addresses` | 发货/收货地址 | `addresses` |
+| `account.sidebar.group.connections` | 授权应用、邮箱等 | `connections` |
+| `account.sidebar.group.developer` | 开发者入口 | `developer` |
 
-```text
-view/hooks/account.sidebar.phtml
-```
+文件命名示例：`view/hooks/account.sidebar.group.addresses.phtml`。
 
-## 父子菜单结构
-
-扩展方如果需要分组，直接在 hook 文件中输出分组容器：
-
-```html
-<div class="account-hook-nav-group">
-    <div class="account-hook-nav-title"><lang>订单与服务</lang></div>
-    <a class="account-hook-nav-link" href="/customer/account/index#orders" data-section="orders" data-account-nav-link="true">
-        <span class="account-hook-nav-link__label">
-            <i class="ri-shopping-bag-line" aria-hidden="true"></i>
-            <span class="account-hook-nav-link__text">
-                <strong><lang>我的订单</lang></strong>
-                <span><lang>查看订单进度与支付状态</lang></span>
-            </span>
-        </span>
-    </a>
-</div>
-```
-
-默认布局不会为扩展 hook 额外包分组。需要父级标题、子项、外链或内容区切换时，由注入方自己决定。
-
-## 内容区切换约定
-
-如果菜单项用于切换账户页内容区，链接需要包含：
+条目须包含：
 
 - `data-account-nav-link="true"`
 - `data-section="section-id"`
+- `data-account-nav-parent="{group}"`
+
+**不要**在业务模块内再输出 `account-hook-nav-group` / `account-hook-nav-title`。
+
+## 内容区切换约定
 
 对应内容区通过 `account.sidebar.content` 输出，并设置：
 

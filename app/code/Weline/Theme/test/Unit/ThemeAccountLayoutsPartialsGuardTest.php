@@ -45,16 +45,54 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         }
     }
 
-    public function testAccountAuthLayoutDoesNotForceHeaderAndFooterChrome(): void
+    public function testAccountChallengeLayoutEmbedsThemeChallengeWidget(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/challenge.phtml';
+
+        $this->assertFileExists($path);
+        $content = (string) file_get_contents($path);
+        $this->assertStringContainsString('body class="account-auth-layout account-challenge-layout', $content);
+        $this->assertStringContainsString('type="header"', $content);
+        $this->assertStringContainsString('type="footer"', $content);
+        $this->assertStringContainsString('Weline\\Theme\\Block\\Partials', $content);
+        $this->assertMatchesRegularExpression(
+            '/<w:widget\\s+type="form"\\s+name="account-challenge"\\s*\\/>/',
+            $content
+        );
+        $this->assertStringNotContainsString('#232f3e', $content);
+        $this->assertStringNotContainsString('Weline_Frontend::templates/public/header.phtml', $content);
+    }
+
+    public function testAccountAuthLayoutRendersThemePartialsHeaderAndFooterByDefault(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/auth.phtml';
 
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
-        $this->assertStringContainsString('body class="account-auth-layout"', $content);
+        $this->assertStringContainsString('body class="account-auth-layout', $content);
         $this->assertStringContainsString("\$this->setData('__weline_frontend_final_title', \$pageTitle);", $content);
-        $this->assertStringNotContainsString('$meta[\'showHeader\'] = true;', $content);
-        $this->assertStringNotContainsString('$meta[\'showFooter\'] = true;', $content);
+        $this->assertStringContainsString("@param.showHeader {default=true", $content);
+        $this->assertStringContainsString("@param.showFooter {default=true", $content);
+        $this->assertStringContainsString('type="header"', $content);
+        $this->assertStringContainsString('type="footer"', $content);
+        $this->assertStringContainsString('Weline\\Theme\\Block\\Partials', $content);
+        $this->assertStringContainsString('account-login', $content);
+        $this->assertStringContainsString('account-auth-stage', $content);
+        // Header chrome includes mini-cart drawer; base body-end loads its CSS/JS.
+        $this->assertStringContainsString(
+            'Weline_Theme::frontend::layouts::base::body-end',
+            $content
+        );
+        $this->assertMatchesRegularExpression(
+            '/<w:widget\\s+type="form"\\s+name="account-login"\\s*\\/>/',
+            $content
+        );
+        $this->assertMatchesRegularExpression(
+            '/<w:widget\\s+type="form"\\s+name="account-register"\\s*\\/>/',
+            $content
+        );
+        $this->assertStringNotContainsString('account-auth-layout__placeholder', $content);
+        $this->assertDoesNotMatchRegularExpression('/default_injections\\s*=>/', $content);
         $this->assertStringNotContainsString('Weline_Frontend::templates/public/header.phtml', $content);
         $this->assertStringNotContainsString('Weline_Frontend::templates/public/footer.phtml', $content);
     }
@@ -74,6 +112,42 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         $this->assertStringContainsString('margin: 0 auto;', $content);
         $this->assertStringContainsString('<main class="account-main-content', $content);
         $this->assertStringNotContainsString('.account-dashboard__body {', $content);
+    }
+
+    public function testAccountLayoutsLargeScreenSpacingUsesThemeTokenFallbacks(): void
+    {
+        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $files = [
+            $base . '/dashboard.phtml',
+            $base . '/default.phtml',
+        ];
+
+        foreach ($files as $path) {
+            $this->assertFileExists($path);
+            $content = (string) file_get_contents($path);
+            $label = basename($path);
+            // 前台不加载 theme.css 时 --weline-layout-spacing-* 未定义；无 fallback 大屏 gap/padding 会为 0。
+            $this->assertStringContainsString(
+                'gap: var(--weline-layout-spacing-xl, var(--spacing-xl, 2rem));',
+                $content,
+                $label . ' 大屏 gap 须带 spacing-xl/2rem fallback'
+            );
+            $this->assertStringContainsString(
+                'padding: var(--weline-layout-spacing-xl, var(--spacing-xl, 2rem));',
+                $content,
+                $label . ' 主内容 padding 须带 spacing-xl/2rem fallback'
+            );
+            $this->assertStringNotContainsString(
+                'gap: var(--weline-layout-spacing-xl);',
+                $content,
+                $label . ' 禁止无 fallback 的 layout-spacing-xl gap'
+            );
+            $this->assertStringNotContainsString(
+                'padding: var(--weline-layout-spacing-xl);',
+                $content,
+                $label . ' 禁止无 fallback 的 layout-spacing-xl padding'
+            );
+        }
     }
 
     public function testAccountDashboardRendersTheControllerOwnedDocumentTitle(): void

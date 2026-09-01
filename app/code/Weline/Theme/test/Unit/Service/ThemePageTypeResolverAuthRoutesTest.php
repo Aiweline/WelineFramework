@@ -13,6 +13,19 @@ use Weline\Theme\Service\ThemePageTypeResolver;
  */
 final class ThemePageTypeResolverAuthRoutesTest extends TestCase
 {
+    public function testCustomerChallengeUriResolvesToAccountDotChallenge(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        $this->assertSame(
+            'account.challenge',
+            $resolver->resolveLayoutTypeFromUri('/customer/account/challenge?challenge_token=x')
+        );
+        $this->assertSame(
+            'account.challenge',
+            $resolver->resolveLayoutTypeFromUri('/zh_CN/customer/account/challenge')
+        );
+    }
+
     public function testCustomerLoginUriResolvesToAccountDotAuth(): void
     {
         $resolver = new ThemePageTypeResolver();

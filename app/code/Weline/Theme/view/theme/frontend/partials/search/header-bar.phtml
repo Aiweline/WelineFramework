@@ -96,7 +96,7 @@ if ($showTypeSelect && $searchType === 'all' && $searchCategoryId > 0) {
 }
 ?>
 <div id="<?= $esc($panelId) ?>" class="header-search-panel w-search-root" data-w-search data-autocomplete="true">
-    <w:form action="/search" method="get" class="header-search-form w-search-form">
+    <w:form action="@url{'search'}" method="get" class="header-search-form w-search-form">
         <?php if (!$showTypeSelect): ?>
             <input type="hidden" name="type" value="<?= $esc($searchType) ?>">
         <?php else: ?>
@@ -125,7 +125,7 @@ if ($showTypeSelect && $searchType === 'all' && $searchCategoryId > 0) {
         <div class="header-search-hot-words w-search-hot-words<?= $hotIsDemo ? ' is-hot-demo' : '' ?>" data-hot-words>
             <span class="header-search-hot-label w-search-hot-label"><?= $esc((string)__('热搜')) ?>:</span>
             <?php foreach ($hotWords as $word): ?>
-                <a href="/search?q=<?= rawurlencode((string)$word) ?>"
+                <a href="@url{'search'}?q=<?= rawurlencode((string)$word) ?>"
                    class="header-search-hot-word w-search-hot-word"><?= $esc((string)$word) ?></a>
             <?php endforeach; ?>
         </div>
