@@ -1,8 +1,10 @@
-﻿"DataTable Frontend Demo Query","DataTable Frontend Demo Query"
-"Whitelist-only frontend DataTable demo operations through the worker channel.","通过工作通道进行仅限白名单的前端 DataTable 演示操作。"
+﻿"DataTable Registered Resource Query","DataTable Registered Resource Query"
+"Registered DataTable demo resources through the Weline.Api worker channel.","通过 Weline.Api 工作通道访问已注册的数据表格演示资源。"
+每页显示,每页显示
 分页,分页
 筛选,筛选
 重置,重置
+高级筛选,高级筛选
 field标签必须指定name属性！,field标签必须指定name属性！
 field标签的belong必须是t-header、t-filter或d-form。,field标签的belong必须是t-header、t-filter或d-form。
 请输入%{1},请输入%{1}
@@ -19,6 +21,10 @@ d-form标签必须指定model属性，或放在d-table内部。,d-form标签必�
 取消,取消
 保存,保存
 关闭,关闭
+当前上下文仅允许查看，不能提交数据。,当前上下文仅允许查看，不能提交数据。
+确认写入计划,确认写入计划
+请核对写入顺序、目标资源与事务范围。确认后计划只能使用一次。,请核对写入顺序、目标资源与事务范围。确认后计划只能使用一次。
+确认并执行,确认并执行
 d-table标签必须指定model属性！,d-table标签必须指定model属性！
 d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 自动生成,自动生成
@@ -29,7 +35,7 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 字段配置,字段配置
 显示字段,显示字段
 筛选字段,筛选字段
-"模型类不存在: %{1}","模型类不存在: %{1}"
+搜索表格,搜索表格
 "数据删除失败: %{1}","数据删除失败: %{1}"
 记录不存在,记录不存在
 记录已永久删除,记录已永久删除
@@ -71,18 +77,59 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 "缺少必需参数: model 或 record_id","缺少必需参数: model 或 record_id"
 获取记录成功,获取记录成功
 "获取记录失败: %{1}","获取记录失败: %{1}"
+"DataTable write plan token is invalid.",数据表格写入计划令牌无效。
+"DataTable write plan expired or was already used.",数据表格写入计划已过期或已使用。
+"DataTable write payload no longer matches the confirmed plan.",数据表格写入载荷与已确认计划不再匹配。
+"DataTable write plan cannot proceed until all required fields are complete.",请补全全部必填字段后再执行数据表格写入计划。
 "Demo form record loading only supports single-model records.",演示表单记录加载仅支持单模型记录。
 "Record does not exist.",记录不存在。
 "Joined demo tables do not support delete.",加入的演示表不支持删除。
 "Demo export only supports single-model tables.",演示导出仅支持单模型表。
 "Demo table model is required.",需要演示表模型。
 "Invalid demo join condition: %{1}",无效的演示加入条件：%{1}
-"Frontend demo access is not allowed for model %{1}","模型 %{1} 不允许前端演示访问"
+"Invalid DataTable dependency: %{1}.",无效的数据表格依赖：%{1}。
+"DataTable dependency references an unknown model alias.",数据表格依赖引用了未知模型别名。
+"Circular DataTable write dependency detected.",检测到数据表格循环写入依赖。
+"DataTable write-order must contain every model alias exactly once.",数据表格写入顺序必须且只能包含每个模型别名一次。
+"DataTable write-order violates a declared dependency.",数据表格写入顺序违反了已声明依赖。
+"DataTable dependency references an unknown or protected field.",数据表格依赖引用了未知或受保护字段。
+"DataTable resource is not registered for model %{1}.","模型 %{1} 未注册数据表格资源。"
+"DataTable write contains unknown or protected fields: %{1}.",数据表格写入包含未知或受保护字段：%{1}。
+"DataTable model is invalid: %{1}.",数据表格模型无效：%{1}。
 %{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
+未注册的数据表资源：%{1},未注册的数据表资源：%{1}
 "Weline UI 编译 bundle 不可用：%{1}","Weline UI 编译 bundle 不可用：%{1}"
 "Weline UI 编译清单不存在，请先运行 resource:compile welineUi","Weline UI 编译清单不存在，请先运行 resource:compile welineUi"
 "Weline UI 编译清单无效：%{1}","Weline UI 编译清单无效：%{1}"
+"""DataTable Registered Resource Query""",数据表格注册资源查询
+独立显示,独立显示
+"合并到 %{1}","合并到 %{1}"
+"将 %{1} 合并到","将 %{1} 合并到"
+当前上下文没有执行此写入操作的权限。,当前上下文没有执行此写入操作的权限。
+记录已更新。,记录已更新。
+记录已创建。,记录已创建。
+写入计划确认窗口未挂载。,写入计划确认窗口未挂载。
+步骤,步骤
+未填写,未填写
+事务范围,事务范围
+计划有效期,计划有效期
+"%{1} 秒","%{1} 秒"
+请先补全必填字段：%{1},请先补全必填字段：%{1}
+没有符合当前搜索或筛选条件的数据，请调整条件后重试。,没有符合当前搜索或筛选条件的数据，请调整条件后重试。
+暂无数据。可刷新表格，或在有写入权限时新增第一条记录。,暂无数据。可刷新表格，或在有写入权限时新增第一条记录。
+当前上下文没有删除权限。,当前上下文没有删除权限。
+当前上下文不允许修改字段配置。,当前上下文不允许修改字段配置。
+当前上下文不允许导出。,当前上下文不允许导出。
+本地客户端筛选,本地客户端筛选
+"此表格完全在浏览器中搜索、筛选、多列排序和分页 JSON，不开放 CRUD 或远程偏好。","此表格完全在浏览器中搜索、筛选、多列排序和分页 JSON，不开放 CRUD 或远程偏好。"
+产品名称,产品名称
+品牌,品牌
+价格,价格
+状态,状态
 """DataTable Frontend Demo Query""","“DataTable 前端演示查询”"
+"Whitelist-only frontend DataTable demo operations through the worker channel.","通过工作通道进行仅限白名单的前端 DataTable 演示操作。"
+"模型类不存在: %{1}","模型类不存在: %{1}"
+"Frontend demo access is not allowed for model %{1}","模型 %{1} 不允许前端演示访问"
 "field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。"
 "field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。"
 "field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。"

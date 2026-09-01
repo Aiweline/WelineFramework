@@ -36,8 +36,15 @@ class TaglibFrontendContractTest extends TestCore
 
         $this->assertArrayHasKey('allow-frontend', $attributes);
         $this->assertArrayHasKey('api-provider', $attributes);
+        $this->assertArrayHasKey('resource', $attributes);
         $this->assertArrayHasKey('dependencies', $attributes);
         $this->assertArrayHasKey('transaction', $attributes);
+        $this->assertArrayHasKey('write-order', $attributes);
+        $this->assertArrayHasKey('composite-write', $attributes);
+        $this->assertArrayHasKey('filter-mode', $attributes);
+        $this->assertArrayHasKey('filter-advanced', $attributes);
+        $this->assertArrayHasKey('filter-collapsible', $attributes);
+        $this->assertArrayHasKey('confirm-write', $attributes);
         $this->assertFalse($attributes['allow-frontend']);
         $this->assertFalse($attributes['api-provider']);
         $this->assertArrayNotHasKey('api-url', $attributes);
@@ -50,8 +57,12 @@ class TaglibFrontendContractTest extends TestCore
 
         $this->assertArrayHasKey('allow-frontend', $attributes);
         $this->assertArrayHasKey('api-provider', $attributes);
+        $this->assertArrayHasKey('resource', $attributes);
         $this->assertArrayHasKey('dependencies', $attributes);
         $this->assertArrayHasKey('transaction', $attributes);
+        $this->assertArrayHasKey('write-order', $attributes);
+        $this->assertArrayHasKey('composite-write', $attributes);
+        $this->assertArrayHasKey('confirm-write', $attributes);
         $this->assertArrayHasKey('auto_fields', $attributes);
         $this->assertArrayNotHasKey('api-url', $attributes);
         $this->assertArrayNotHasKey('field-api-url', $attributes);
@@ -77,11 +88,15 @@ class TaglibFrontendContractTest extends TestCore
 
         $this->assertIsString($html);
         $this->assertStringContainsString('frontend-table', $html);
+        $this->assertStringContainsString('data-w-datatable-action="config.open"', $html);
         $tableConfig = $this->configById($html, 'frontend-table');
         $formConfig = $this->configById($html, 'form-frontend-table');
         $this->assertSame('datatable', $tableConfig['apiProvider']);
         $this->assertSame('data', $tableConfig['operations']['data']);
+        $this->assertSame('previewWrite', $tableConfig['operations']['previewWrite']);
+        $this->assertSame('executeWrite', $tableConfig['operations']['executeWrite']);
         $this->assertSame('formFields', $formConfig['operations']['formFields']);
+        $this->assertSame('demo.users,demo.orders', $tableConfig['resource']);
         $this->assertSame('u.id->o.user_id', $tableConfig['dependencies']);
         $this->assertTrue($tableConfig['transaction']);
         $this->assertSame('Weline\DataTable\Model\TestUser', $tableConfig['modelConfig']['models']['u']);
@@ -111,6 +126,37 @@ HTML;
         $this->assertStringContainsString('data-field="u.name"', $html);
         $this->assertStringContainsString('data-field="o.order_no"', $html);
         $this->assertStringNotContainsString('data-field="phone"', $html);
+    }
+
+    public function testTableFooterShowsCurrentPageSizeAndAccessibleSelector(): void
+    {
+        $callback = \Weline\DataTable\Taglib\TableFooter::callback();
+        $html = $callback(
+            't-footer',
+            [],
+            ['', '', ''],
+            [
+                'model' => 'Weline\\DataTable\\Model\\TestUser',
+                'scope' => 'page-size-contract',
+                'page-size' => '6',
+            ]
+        );
+
+        $this->assertStringContainsString('data-w-datatable-page-size-value>6</output>', $html);
+        $this->assertStringContainsString('data-w-datatable-page-size aria-label="每页显示"', $html);
+        $this->assertStringContainsString('<option value="10">10</option>', $html);
+    }
+
+    public function testDisplayColumnCompositionIsClientOnlyAndReversible(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/view/statics/js/datatable-manager.js');
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('data-w-datatable-merge-field', $source);
+        $this->assertStringContainsString("translate('独立显示')", $source);
+        $this->assertStringContainsString('state.columnMerges = columnMerges', $source);
+        $this->assertSame(2, substr_count($source, 'if (isLocal || capabilities.preferences !== true)'));
+        $this->assertStringContainsString('fields: state.displayFields.map', $source);
     }
 
     public function testTableDimensionsUseValidatedScalarAttributesWithoutInlineStyle(): void
@@ -155,8 +201,8 @@ HTML;
         $this->assertIsString($html);
         $this->assertStringContainsString('weline-datatable.css', $html);
         $this->assertStringContainsString('weline-datatable-form.js', $html);
-        $this->assertMatchesRegularExpression('/weline-datatable\.css\?v=[a-f0-9]{12}/', $html);
-        $this->assertMatchesRegularExpression('/weline-datatable-form\.js\?v=[a-f0-9]{12}/', $html);
+        $this->assertMatchesRegularExpression('/weline-datatable\.css\?v=(?:dev_)?[a-f0-9]{12}(?:&amp;v=[a-f0-9]{12})?/', $html);
+        $this->assertMatchesRegularExpression('/weline-datatable-form\.js\?v=(?:dev_)?[a-f0-9]{12}(?:&amp;v=[a-f0-9]{12})?/', $html);
         $this->assertStringNotContainsString('components/weline-datatable.js', $html);
     }
 
@@ -208,6 +254,28 @@ HTML;
         $this->assertSame('Weline\DataTable\Model\TestOrder', $formConfig['modelConfig']['models']['o']);
         $this->assertSame('u', $formConfig['modelConfig']['aliases']['Weline\DataTable\Model\TestUser']);
         $this->assertSame('o', $formConfig['modelConfig']['aliases']['Weline\DataTable\Model\TestOrder']);
+    }
+
+    public function testLocalModeDisablesRemoteMutationAndExportCapabilities(): void
+    {
+        $html = Table::callback()('d-table', [], ['', '', '<w:t-header></w:t-header>'], [
+            'id' => 'local-contract',
+            'model' => 'Weline\\DataTable\\Model\\TestUser',
+            'scope' => 'local-contract',
+            'mode' => 'local',
+            'local-data-el' => '#local-contract-data',
+            'allow-frontend' => 'true',
+        ]);
+
+        $config = $this->configById((string)$html, 'local-contract');
+        $this->assertTrue($config['capabilities']['read']);
+        $this->assertTrue($config['capabilities']['preferences']);
+        $this->assertFalse($config['capabilities']['create']);
+        $this->assertFalse($config['capabilities']['update']);
+        $this->assertFalse($config['capabilities']['delete']);
+        $this->assertFalse($config['capabilities']['export']);
+        $this->assertStringContainsString('data-w-datatable-search-form', (string)$html);
+        $this->assertStringNotContainsString('data-w-datatable-action="form.open"', (string)$html);
     }
 
     public function testStandaloneFormFieldUsesRenderStackContext(): void

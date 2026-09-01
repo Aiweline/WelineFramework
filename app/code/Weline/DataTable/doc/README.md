@@ -24,7 +24,7 @@
 - `Controller/Backend`：后台控制器入口；变更前同步检查 ACL、菜单和返回路径。 文件数：4
 - `Helper`：模块内辅助能力。 文件数：10
 - `Model`：ORM 模型与字段 schema。 文件数：6
-- `Service`：业务编排与模块服务层。 文件数：2
+- `Service`：业务编排、稳定资源注册、ORM 元数据和写入计划服务层。 文件数：5
 - `Setup`：安装/升级装配。 文件数：1
 - `Taglib`：模板标签扩展。 文件数：7
 - `etc`：模块配置。 文件数：2
@@ -45,11 +45,21 @@
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
 
+## 当前测试状态
+
+- 2026-08-28：DataTable 全量模块测试 80/80 通过，共 653 assertions。
+- `Test/Integration/CompositeWriteRuntimeTest.php` 使用隔离数据库验证多模型依赖回填、计划 token 单次消费、载荷绑定和事务回滚，并清理测试行与临时表。
+- 当前配置 PostgreSQL 上已复跑同一服务链路并清理测试记录；四断点 Browser 证据位于 `doc/evidence/ch1/`。
+- 后台计划 dialog 的浏览器点击证据受现有 `Weline_Admin` 登录入口 404 阻断；公开事务页按权限显示只读态，不能用它绕过 ACL。
+
 ## 本模块文档资产
 
 - `app/code/Weline/DataTable/doc/API参考文档.md`
 - `app/code/Weline/DataTable/doc/使用指南.md`
 - `app/code/Weline/DataTable/doc/本地模式与列悬浮.md`（**AI：local / 勾选 / 悬浮操作必读**）
+- `app/code/Weline/DataTable/doc/连表管理与写入计划.md`
+- `app/code/Weline/DataTable/doc/原型设计.md`
+- `app/code/Weline/DataTable/Taglib/doc/场景映射表.md`
 - `app/code/Weline/DataTable/doc/实施总结.md`
 - `app/code/Weline/DataTable/doc/快速入门指南.md`
 - `app/code/Weline/DataTable/doc/故障排查文档.md`

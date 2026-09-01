@@ -15,13 +15,17 @@ class DemoTableService
 {
     private const CONFIG_CACHE_TTL = 86400;
 
-    private const ALLOWED_MODELS = [
-        'Weline\DataTable\Model\TestUser',
-        'Weline\DataTable\Model\TestProduct',
-        'Weline\DataTable\Model\TestOrder',
-        'Weline\DataTable\Model\TestUserProfile',
-        'Weline\DataTable\Model\TestUserAddress',
-    ];
+    private ?ModelMetadataRegistry $metadataRegistry = null;
+
+    private ?WritePlanService $writePlanService = null;
+
+    public function __construct(
+        ?ModelMetadataRegistry $metadataRegistry = null,
+        ?WritePlanService $writePlanService = null
+    ) {
+        $this->metadataRegistry = $metadataRegistry;
+        $this->writePlanService = $writePlanService;
+    }
 
     /**
      * @return array{users:int,products:int,orders:int,profiles:int,addresses:int}
@@ -118,7 +122,77 @@ class DemoTableService
             'scope' => $scope,
             'table_id' => $tableId,
             'primary_key' => 'id',
+            'resource' => DataTableResourceRegistry::resourceForModel($modelConfig['main_model']),
+            'capabilities' => DataTableResourceRegistry::capabilitiesForModels(array_values($modelConfig['models'])),
         ];
+    }
+
+    /** @return array<string,mixed> */
+    public function getModelMetadata(array $params): array
+    {
+        $modelConfig = $this->normalizeModelConfig(
+            (string)($params['model'] ?? ''),
+            $params['model_config'] ?? []
+        );
+        $models = [];
+        foreach ($modelConfig['models'] as $alias => $modelClass) {
+            $models[] = $this->metadata()->metadata(
+                (string)$modelClass,
+                count($modelConfig['models']) > 1 ? (string)$alias : null
+            );
+        }
+
+        return [
+            'schema_version' => 'datatable.model-metadata.v1',
+            'resource' => DataTableResourceRegistry::resourceForModel($modelConfig['main_model']),
+            'models' => $models,
+            'capabilities' => DataTableResourceRegistry::capabilitiesForModels(array_values($modelConfig['models'])),
+        ];
+    }
+
+    /**
+     * Build a human-readable, non-mutating composite-write plan and issue a one-time token.
+     *
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    public function previewWrite(array $params): array
+    {
+        ['payload' => $payload, 'plan' => $plan] = $this->buildWritePlan($params);
+        if (!($plan['can_proceed'] ?? false)) {
+            return $plan + ['plan_token' => null, 'expires_at' => null, 'expires_in' => 0];
+        }
+        return $this->writePlans()->issue($payload, $plan);
+    }
+
+    /**
+     * Consume a confirmed plan token and execute exactly the payload that was previewed.
+     *
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    public function executeWrite(array $params): array
+    {
+        $token = trim((string)($params['plan_token'] ?? ''));
+        ['payload' => $payload, 'plan' => $plan] = $this->buildWritePlan($params);
+        if (!($plan['can_proceed'] ?? false)) {
+            throw new Exception(__('DataTable write plan cannot proceed until all required fields are complete.'));
+        }
+        $this->writePlans()->consume($token, $payload);
+
+        $saveParams = $params;
+        $saveParams['model'] = $payload['model'];
+        $saveParams['model_config'] = $payload['model_config'];
+        $saveParams['data'] = $payload['data'];
+        $saveParams['id'] = $payload['id'];
+        $saveParams['record_id'] = $payload['record_id'];
+        $saveParams['dependencies'] = $payload['dependencies'];
+        $saveParams['transaction'] = $payload['transaction'];
+        $saveParams['write_order'] = $payload['write_order'];
+
+        return $payload['operation'] === 'update'
+            ? $this->updateRecord($saveParams)
+            : $this->createRecord($saveParams);
     }
 
     /**
@@ -388,14 +462,17 @@ class DemoTableService
         $data = is_array($params['data'] ?? null) ? $params['data'] : [];
         $modelConfig = $this->normalizeModelConfig($model, $params['model_config'] ?? []);
         $dependencies = $this->parseDependencies((string)($params['dependencies'] ?? ''));
-        $transaction = $this->toBool($params['transaction'] ?? false);
+        $this->assertDependencies($modelConfig, $dependencies);
+        $transaction = $this->toBool($params['transaction'] ?? (count($modelConfig['models']) > 1));
+        $writeOrder = trim((string)($params['write_order'] ?? ''));
 
-        $callback = function () use ($isUpdate, $modelConfig, $data, $params, $dependencies): array {
+        $callback = function () use ($isUpdate, $modelConfig, $data, $params, $dependencies, $writeOrder): array {
             if (count($modelConfig['models']) > 1) {
-                return $this->saveMultiModelRecord($modelConfig, $data, $params, $dependencies, $isUpdate);
+                return $this->saveMultiModelRecord($modelConfig, $data, $params, $dependencies, $isUpdate, $writeOrder);
             }
 
             $id = $isUpdate ? ($params['id'] ?? $data['id'] ?? null) : null;
+            $data = $this->metadata()->sanitizeWritableData($modelConfig['main_model'], $data);
             $record = $this->persistSingleRecord($modelConfig['main_model'], $data, $id);
             return [
                 'id' => $record['id'] ?? null,
@@ -421,14 +498,16 @@ class DemoTableService
         array $data,
         array $params,
         array $dependencies,
-        bool $isUpdate
+        bool $isUpdate,
+        string $writeOrder = ''
     ): array {
         $aliasData = [];
         foreach ($modelConfig['models'] as $alias => $modelClass) {
-            $aliasData[$alias] = is_array($data[$alias] ?? null) ? $data[$alias] : [];
+            $rawAliasData = is_array($data[$alias] ?? null) ? $data[$alias] : [];
+            $aliasData[$alias] = $this->metadata()->sanitizeWritableData($modelClass, $rawAliasData);
         }
 
-        $order = $this->resolveDependencyOrder(array_keys($modelConfig['models']), $dependencies);
+        $order = $this->resolveWriteOrder(array_keys($modelConfig['models']), $dependencies, $writeOrder);
         $saved = [];
 
         foreach ($dependencies as $dependency) {
@@ -960,7 +1039,7 @@ class DemoTableService
         $result = [];
         foreach (array_filter(array_map('trim', explode(',', $dependencies))) as $part) {
             if (!preg_match('/^\s*([a-zA-Z_][\w]*)\.([\w]+)\s*->\s*([a-zA-Z_][\w]*)\.([\w]+)\s*$/', $part, $matches)) {
-                continue;
+                throw new Exception(__('Invalid DataTable dependency: %{1}.', [$part]));
             }
 
             $result[] = [
@@ -987,6 +1066,9 @@ class DemoTableService
         foreach ($dependencies as $dependency) {
             $from = $dependency['source_alias'];
             $to = $dependency['target_alias'];
+            if (!array_key_exists($from, $incoming) || !array_key_exists($to, $incoming)) {
+                throw new Exception(__('DataTable dependency references an unknown model alias.'));
+            }
             $graph[$from][] = $to;
             $incoming[$to] = ($incoming[$to] ?? 0) + 1;
         }
@@ -1006,10 +1088,8 @@ class DemoTableService
             }
         }
 
-        foreach ($aliases as $alias) {
-            if (!in_array($alias, $ordered, true)) {
-                $ordered[] = $alias;
-            }
+        if (count($ordered) !== count($aliases)) {
+            throw new Exception(__('Circular DataTable write dependency detected.'));
         }
 
         return $ordered;
@@ -1021,58 +1101,7 @@ class DemoTableService
      */
     private function buildModelFields(string $modelClass, ?string $alias = null): array
     {
-        $columns = $this->loadModelInstance($modelClass)->columns();
-        $primaryKey = 'id';
-        $fields = [];
-
-        foreach ($columns as $column) {
-            if (!is_array($column)) {
-                continue;
-            }
-
-            $fieldName = (string)($column['Field'] ?? $column['field'] ?? '');
-            if ($fieldName === '') {
-                continue;
-            }
-
-            $fullFieldName = $alias ? $alias . '.' . $fieldName : $fieldName;
-            $label = (string)($column['Comment'] ?? $column['comment'] ?? $this->humanizeFieldLabel($fieldName));
-            if ($label === '') {
-                $label = $this->humanizeFieldLabel($fieldName);
-            }
-
-            $field = [
-                'name' => $fullFieldName,
-                'label' => $alias ? strtoupper($alias) . ' ' . $label : $label,
-                'type' => $this->resolveFieldType($fieldName, (string)($column['Type'] ?? '')),
-                'sortable' => true,
-                'searchable' => true,
-                'visible' => true,
-                'editable' => $fieldName !== $primaryKey,
-                'is_primary' => $fieldName === $primaryKey,
-                'primary_key' => $fieldName === $primaryKey,
-                'required' => $fieldName !== $primaryKey && strtoupper((string)($column['Null'] ?? 'YES')) !== 'YES' && ($column['Default'] ?? null) === null,
-                'placeholder' => 'Please enter ' . $label,
-                'width' => $this->resolveFieldWidth($fieldName, (string)($column['Type'] ?? '')),
-                'minWidth' => null,
-                'maxWidth' => null,
-                'resizable' => true,
-                'display_orderable' => true,
-                'template_defined' => false,
-                'field_defined' => false,
-                'from_field' => false,
-                'options' => $this->resolveFieldOptions($modelClass, $fieldName),
-            ];
-
-            if ($alias) {
-                $field['alias'] = $alias;
-                $field['original_field'] = $fieldName;
-            }
-
-            $fields[] = $field;
-        }
-
-        return $fields;
+        return $this->metadata()->fields($modelClass, $alias);
     }
 
     /**
@@ -1152,9 +1181,7 @@ class DemoTableService
 
     private function assertAllowedModel(string $modelClass): void
     {
-        if (!in_array($modelClass, self::ALLOWED_MODELS, true)) {
-            throw new Exception(__('Frontend demo access is not allowed for model %{1}', [$modelClass]));
-        }
+        DataTableResourceRegistry::assertRegisteredModel($modelClass);
     }
 
     private function loadModelInstance(string $modelClass): Model
@@ -1370,6 +1397,194 @@ class DemoTableService
     private function getConfigCacheKey(string $scope, string $tableId): string
     {
         return 'datatable_demo_fields_' . md5($scope . '|' . $tableId);
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array{payload:array<string,mixed>,plan:array<string,mixed>}
+     */
+    private function buildWritePlan(array $params): array
+    {
+        $model = trim((string)($params['model'] ?? ''));
+        $modelConfig = $this->normalizeModelConfig($model, $params['model_config'] ?? []);
+        $dependencies = $this->parseDependencies((string)($params['dependencies'] ?? ''));
+        $this->assertDependencies($modelConfig, $dependencies);
+        $writeOrder = trim((string)($params['write_order'] ?? ''));
+        $order = $this->resolveWriteOrder(array_keys($modelConfig['models']), $dependencies, $writeOrder);
+        $rawData = is_array($params['data'] ?? null) ? $params['data'] : [];
+        $isComposite = count($modelConfig['models']) > 1;
+        $requestedOperation = strtolower(trim((string)($params['write_operation'] ?? '')));
+        $recordId = $params['id'] ?? $params['record_id'] ?? null;
+        $operation = in_array($requestedOperation, ['create', 'update'], true)
+            ? $requestedOperation
+            : (($recordId === null || $recordId === '') ? 'create' : 'update');
+        $transaction = $this->toBool($params['transaction'] ?? $isComposite);
+        $sanitizedData = [];
+        $targets = [];
+        $missingRequired = [];
+        $dependencyTargets = [];
+        foreach ($dependencies as $dependency) {
+            $dependencyTargets[$dependency['target_alias'] . '.' . $dependency['target_field']] = $dependency;
+        }
+
+        foreach ($order as $alias) {
+            $modelClass = (string)$modelConfig['models'][$alias];
+            $candidate = $isComposite
+                ? (is_array($rawData[$alias] ?? null) ? $rawData[$alias] : [])
+                : $rawData;
+            $candidate = $this->metadata()->sanitizeWritableData($modelClass, $candidate);
+            if ($isComposite) {
+                $sanitizedData[$alias] = $candidate;
+            } else {
+                $sanitizedData = $candidate;
+            }
+            $fieldPlans = [];
+            foreach ($this->metadata()->fields($modelClass) as $field) {
+                if (($field['sensitive'] ?? false) === true) {
+                    continue;
+                }
+                $fieldName = (string)$field['name'];
+                $changed = array_key_exists($fieldName, $candidate);
+                $dependency = $dependencyTargets[$alias . '.' . $fieldName] ?? null;
+                $value = $changed ? $candidate[$fieldName] : ($field['default'] ?? '');
+                $missing = $operation === 'create'
+                    && ($field['required'] ?? false)
+                    && !$changed
+                    && $dependency === null
+                    && ($value === '' || $value === null);
+                if ($missing) {
+                    $missingRequired[] = [
+                        'alias' => $alias,
+                        'name' => $fieldName,
+                        'label' => (string)($field['label'] ?? $fieldName),
+                    ];
+                }
+                $fieldPlans[] = [
+                    'name' => $fieldName,
+                    'label' => (string)($field['label'] ?? $fieldName),
+                    'type' => (string)($field['type'] ?? 'text'),
+                    'required' => (bool)($field['required'] ?? false),
+                    'readonly' => (bool)($field['readonly'] ?? false),
+                    'value' => $value,
+                    'changed' => $changed,
+                    'source' => (string)($field['source'] ?? 'schema'),
+                    'dependency' => $dependency === null ? null : [
+                        'from' => $dependency['source_alias'] . '.' . $dependency['source_field'],
+                        'to' => $dependency['target_alias'] . '.' . $dependency['target_field'],
+                    ],
+                ];
+            }
+            $dependsOn = [];
+            foreach ($dependencies as $dependency) {
+                if ($dependency['target_alias'] !== $alias) {
+                    continue;
+                }
+                $dependsOn[$dependency['target_field']] = $dependency['source_alias'] . '.' . $dependency['source_field'];
+            }
+            $targets[] = [
+                'order' => count($targets) + 1,
+                'alias' => $alias,
+                'resource' => DataTableResourceRegistry::resourceForModel($modelClass),
+                'model' => $modelClass,
+                'operation' => $operation === 'update' ? 'update' : 'insert',
+                'fields' => $fieldPlans,
+                'depends_on' => $dependsOn,
+            ];
+        }
+
+        $dependencyText = implode(',', array_map(
+            static fn (array $dependency): string => $dependency['source_alias'] . '.' . $dependency['source_field']
+                . '->' . $dependency['target_alias'] . '.' . $dependency['target_field'],
+            $dependencies
+        ));
+        $payload = [
+            'operation' => $operation,
+            'model' => $model,
+            'model_config' => $modelConfig,
+            'id' => $params['id'] ?? null,
+            'record_id' => $params['record_id'] ?? null,
+            'data' => $sanitizedData,
+            'dependencies' => $dependencyText,
+            'transaction' => $transaction,
+            'write_order' => implode(',', $order),
+            'scope' => (string)($params['scope'] ?? ''),
+            'session' => session_id(),
+        ];
+        $plan = [
+            'schema_version' => 'datatable.write-plan.v1',
+            'requires_confirmation' => true,
+            'operation' => $operation,
+            'composite' => $isComposite,
+            'transaction' => $transaction,
+            'atomic_scope' => $transaction ? 'single_connection' : 'none',
+            'models' => $order,
+            'targets' => $targets,
+            'steps' => $targets,
+            'dependencies' => array_values($dependencies),
+            'missing_required' => $missingRequired,
+            'can_proceed' => $missingRequired === [],
+            'warnings' => $isComposite && !$transaction
+                ? [(string)__('Composite write is not atomic because transaction mode is disabled.')]
+                : [],
+        ];
+
+        return ['payload' => $payload, 'plan' => $plan];
+    }
+
+    /** @param list<string> $aliases @param list<array<string,string>> $dependencies @return list<string> */
+    private function resolveWriteOrder(array $aliases, array $dependencies, string $writeOrder): array
+    {
+        $automatic = $this->resolveDependencyOrder($aliases, $dependencies);
+        if ($writeOrder === '') {
+            return $automatic;
+        }
+
+        $requested = array_values(array_unique(array_filter(array_map('trim', explode(',', $writeOrder)))));
+        $expected = $aliases;
+        $actual = $requested;
+        sort($expected, SORT_STRING);
+        sort($actual, SORT_STRING);
+        if ($expected !== $actual) {
+            throw new Exception(__('DataTable write-order must contain every model alias exactly once.'));
+        }
+        $positions = array_flip($requested);
+        foreach ($dependencies as $dependency) {
+            if ($positions[$dependency['source_alias']] >= $positions[$dependency['target_alias']]) {
+                throw new Exception(__('DataTable write-order violates a declared dependency.'));
+            }
+        }
+
+        return $requested;
+    }
+
+    /** @param array<string,mixed> $modelConfig @param list<array<string,string>> $dependencies */
+    private function assertDependencies(array $modelConfig, array $dependencies): void
+    {
+        foreach ($dependencies as $dependency) {
+            $sourceAlias = (string)$dependency['source_alias'];
+            $targetAlias = (string)$dependency['target_alias'];
+            if (!isset($modelConfig['models'][$sourceAlias], $modelConfig['models'][$targetAlias])) {
+                throw new Exception(__('DataTable dependency references an unknown model alias.'));
+            }
+            $sourceFields = $this->metadata()->fieldMap((string)$modelConfig['models'][$sourceAlias]);
+            $targetFields = $this->metadata()->fieldMap((string)$modelConfig['models'][$targetAlias]);
+            $sourceField = (string)$dependency['source_field'];
+            $targetField = (string)$dependency['target_field'];
+            if (!isset($sourceFields[$sourceField], $targetFields[$targetField]) || !($targetFields[$targetField]['writable'] ?? false)) {
+                throw new Exception(__('DataTable dependency references an unknown or protected field.'));
+            }
+        }
+        $this->resolveDependencyOrder(array_keys($modelConfig['models']), $dependencies);
+    }
+
+    private function metadata(): ModelMetadataRegistry
+    {
+        return $this->metadataRegistry ??= new ModelMetadataRegistry();
+    }
+
+    private function writePlans(): WritePlanService
+    {
+        return $this->writePlanService ??= new WritePlanService();
     }
 
     /**

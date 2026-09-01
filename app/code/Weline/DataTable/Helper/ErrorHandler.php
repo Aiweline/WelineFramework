@@ -7,6 +7,7 @@
 namespace Weline\DataTable\Helper;
 
 use Weline\DataTable\Exception\DataTableException;
+use Weline\DataTable\Service\DataTableResourceRegistry;
 
 class ErrorHandler
 {
@@ -114,23 +115,36 @@ class ErrorHandler
     }
 
     /**
-     * 验证模型类是否存在
+     * Validate every model in a single- or multi-model declaration against the
+     * explicit DataTable resource registry.
      *
-     * @param string $model 模型类名
+     * @param string $model 模型类名（支持 "Model as alias, Model as alias"）
      * @throws DataTableException
      * @return void
      */
     public static function validateModel(string $model): void
     {
-        if (empty($model)) {
+        if (trim($model) === '') {
             throw new DataTableException(
                 DataTableException::CODE_MODEL_NOT_FOUND,
                 '模型类名不能为空'
             );
         }
 
-        if (!class_exists($model)) {
-            throw DataTableException::modelNotFound($model);
+        $declarations = preg_split('/\s*,\s*/', trim($model)) ?: [];
+        foreach ($declarations as $declaration) {
+            $parts = preg_split('/\s+as\s+/i', trim($declaration), 2) ?: [];
+            $modelClass = ltrim(trim((string)($parts[0] ?? '')), '\\');
+
+            if ($modelClass === '' || !class_exists($modelClass)) {
+                throw DataTableException::modelNotFound($modelClass ?: $model);
+            }
+
+            if (DataTableResourceRegistry::resourceForModel($modelClass) === null) {
+                throw DataTableException::permissionDenied(
+                    __('未注册的数据表资源：%{1}', [$modelClass])
+                );
+            }
         }
     }
 
@@ -182,4 +196,3 @@ class ErrorHandler
         return $message;
     }
 }
-

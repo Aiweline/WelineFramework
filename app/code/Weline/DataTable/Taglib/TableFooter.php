@@ -19,6 +19,7 @@ final class TableFooter implements TaglibInterface
             'scope' => false,
             'show-pagination' => false,
             'show-summary' => false,
+            'page-size' => false,
             'allow-frontend' => false,
         ];
     }
@@ -30,7 +31,7 @@ final class TableFooter implements TaglibInterface
     {
         return static function ($tagKey, $config, $tagData, $attributes): string {
             $attributes = TableContext::inheritTableAttributes($attributes, (string)($attributes['scope'] ?? ''), [
-                'model', 'scope', 'show-pagination', 'allow-frontend',
+                'model', 'scope', 'show-pagination', 'page-size', 'allow-frontend',
             ]);
             if (!FrontendAccess::isAllowed($attributes, TableContext::getCurrentTableContext() ?? [])) {
                 return FrontendAccess::deniedComment('t-footer');
@@ -39,12 +40,22 @@ final class TableFooter implements TaglibInterface
             $scope = (string)$attributes['scope'] . '-footer';
             $summaryHidden = filter_var($attributes['show-summary'] ?? true, FILTER_VALIDATE_BOOLEAN) ? '' : ' hidden';
             $paginationHidden = filter_var($attributes['show-pagination'] ?? true, FILTER_VALIDATE_BOOLEAN) ? '' : ' hidden';
+            $pageSize = max(1, min(100, (int)($attributes['page-size'] ?? 20)));
+            $pageSizeLabel = htmlspecialchars((string)__('每页显示'), ENT_QUOTES, 'UTF-8');
+            $options = '';
+            foreach ([10, 20, 50, 100] as $size) {
+                $selected = $size === $pageSize ? ' selected' : '';
+                $options .= '<option value="' . $size . '"' . $selected . '>' . $size . '</option>';
+            }
             $content = (string)($tagData[2] ?? '');
             return '<tfoot class="w-datatable__footer" data-scope="' . htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') . '"><tr><td colspan="100">'
                 . '<div class="w-datatable__footer-content"><p class="w-datatable__summary" data-w-datatable-summary'
                 . $summaryHidden . '></p><div class="w-datatable__footer-slot">' . $content . '</div>'
+                . '<div class="w-datatable__pagination-controls"' . $paginationHidden . '><label class="w-datatable__page-size">'
+                . '<span>' . $pageSizeLabel . '</span><output class="w-datatable__page-size-value" data-w-datatable-page-size-value>' . $pageSize . '</output>'
+                . '<select class="w-select" data-w-datatable-page-size aria-label="' . $pageSizeLabel . '">' . $options . '</select></label>'
                 . '<nav class="w-pagination" data-w-datatable-pagination aria-label="'
-                . htmlspecialchars((string)__('分页'), ENT_QUOTES, 'UTF-8') . '"' . $paginationHidden . '></nav></div>'
+                . htmlspecialchars((string)__('分页'), ENT_QUOTES, 'UTF-8') . '"></nav></div></div>'
                 . '</td></tr></tfoot>';
         };
     }

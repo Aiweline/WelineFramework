@@ -15,14 +15,23 @@ class FrontendAccess
             return true;
         }
 
-        /** @var Request $request */
-        $request = ObjectManager::getInstance(Request::class);
-        if ($request->isBackend() || $request->isApiBackend()) {
+        if (self::isBackendRequest()) {
             return true;
         }
 
         $allowFrontend = $attributes['allow-frontend'] ?? $fallbackAttributes['allow-frontend'] ?? false;
         return filter_var($allowFrontend, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    public static function isBackendRequest(): bool
+    {
+        if (self::isUnitTest()) {
+            return true;
+        }
+
+        /** @var Request $request */
+        $request = ObjectManager::getInstance(Request::class);
+        return $request->isBackend() || $request->isApiBackend();
     }
 
     public static function deniedComment(string $tagName): string
