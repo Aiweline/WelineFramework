@@ -568,7 +568,6 @@ body[data-theme="dark"] .cms-status-disabled,
                         ? (string)__('CMS 一级 path 已拷贝到 %{1}。', $copyTargetLabel)
                         : (string)__('CMS 页面已拷贝到 %{1}。', $copyTargetLabel);
                     $copyGoParams = is_array($copyNotice['go_params'] ?? null) ? $copyNotice['go_params'] : [];
-                    $copyGoUrl = $this->getBackendUrl('cms/backend/page/listing', $copyGoParams);
                     $copyPathGroup = (string)($copyNotice['path_group'] ?? '');
                     $copyIdentifier = (string)($copyNotice['identifier'] ?? '');
                     $copyPageTitle = (string)($copyNotice['page_title'] ?? '');
@@ -601,7 +600,7 @@ body[data-theme="dark"] .cms-status-disabled,
                             </div>
                         </div>
                         <div class="cms-copy-notice__actions">
-                            <a class="w-button" href="<?= htmlspecialchars($copyGoUrl) ?>" data-tone="primary" data-size="sm">
+                            <a class="w-button" href="@backend-url{'cms/backend/page/listing'|$copyGoParams}" data-tone="primary" data-size="sm">
                                 <w:icon name="arrow-right" size="sm"></w:icon>
                                 <?= __('前往查看') ?>
                             </a>
@@ -611,7 +610,7 @@ body[data-theme="dark"] .cms-status-disabled,
                         </div>
                     </div>
                 <?php endif; ?>
-                <w:form class="w-grid" method="get" action="@var($this->getBackendUrl('cms/backend/page/listing'))" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
+                <w:form class="w-grid" method="get" action="@backend-url{'cms/backend/page/listing'}" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
                     <div style="--w-span-md:3;">
                         <input class="w-input" type="search" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= htmlspecialchars((string)__('搜索标题或路径')) ?>">
                     </div>
@@ -649,7 +648,7 @@ body[data-theme="dark"] .cms-status-disabled,
                                 <w:icon name="search" size="sm"></w:icon>
                                 <?= __('筛选') ?>
                             </button>
-                            <a class="w-button" href="<?= $this->getBackendUrl('cms/backend/page/listing') ?>" title="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>" aria-label="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>" data-shrink="false" data-tone="neutral" data-variant="outline">
+                            <a class="w-button" href="@backend-url{'cms/backend/page/listing'}" title="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>" aria-label="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>" data-shrink="false" data-tone="neutral" data-variant="outline">
                                 <w:icon name="close" size="sm"></w:icon>
                             </a>
                         </div>
@@ -710,7 +709,7 @@ body[data-theme="dark"] .cms-status-disabled,
 
                         <div class="cms-site-group__body" id="<?= htmlspecialchars($siteBodyId) ?>" data-cms-collapse-panel<?= $siteExpanded ? '' : ' hidden' ?>>
                             <div class="cms-path-grid">
-                                <w:form class="cms-site-group__new-path" method="post" action="@var($this->getBackendUrl('cms/backend/page/save-path-group'))">
+                                <w:form class="cms-site-group__new-path" method="post" action="@backend-url{'cms/backend/page/save-path-group'}">
                                     <input type="hidden" name="website_id" value="<?= $siteId ?>">
                                     <input type="hidden" name="website_code" value="<?= htmlspecialchars($siteCode) ?>">
                                     <div class="cms-create-title">
@@ -773,7 +772,7 @@ body[data-theme="dark"] .cms-status-disabled,
                                                     <w:icon name="copy" size="sm"></w:icon>
                                                     <?= __('拷贝') ?>
                                                 </summary>
-                                                <w:form class="cms-copy-panel" method="post" action="@var($this->getBackendUrl('cms/backend/page/copy-path-group'))">
+                                                <w:form class="cms-copy-panel" method="post" action="@backend-url{'cms/backend/page/copy-path-group'}">
                                                     <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
                                                     <input type="hidden" name="source_website_id" value="<?= $siteId ?>">
                                                     <input type="hidden" name="source_path_group" value="<?= htmlspecialchars($groupPath) ?>">
@@ -793,7 +792,7 @@ body[data-theme="dark"] .cms-status-disabled,
                                                     </button>
                                                 </w:form>
                                             </details>
-                                            <w:form method="post" action="@var($this->getBackendUrl('cms/backend/page/delete-path-group'))">
+                                            <w:form method="post" action="@backend-url{'cms/backend/page/delete-path-group'}">
                                                 <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
                                                 <input type="hidden" name="website_id" value="<?= $siteId ?>">
                                                 <input type="hidden" name="path_group" value="<?= htmlspecialchars($groupPath) ?>">
@@ -807,13 +806,13 @@ body[data-theme="dark"] .cms-status-disabled,
 
                                     <div class="cms-path-group__body" id="<?= htmlspecialchars($pathBodyId) ?>" data-cms-collapse-panel<?= $pathExpanded ? '' : ' hidden' ?>>
                                         <div class="cms-page-tile-grid">
-                                            <a class="cms-path-action" href="<?= $this->getBackendUrl('cms/backend/page/new', [
+                                            <a class="cms-path-action" href="@backend-url{'cms/backend/page/new'|[
                                                 'website_id' => $siteId,
                                                 'website_code' => $siteCode,
                                                 'path_group_id' => (int)($group['group_id'] ?? 0),
                                                 'path_group' => $groupPath,
                                                 'path_group_alias' => $groupAlias,
-                                            ]) ?>" data-w-decoration="none">
+                                            ]}" data-w-decoration="none">
                                                 <div class="cms-create-title">
                                                     <w:icon name="plus" size="sm"></w:icon>
                                                     <?= __('新建页面') ?>
@@ -854,7 +853,7 @@ body[data-theme="dark"] .cms-status-disabled,
                                                             <span><?= __('更新时间') ?>: <?= htmlspecialchars((string)($page['updated_at'] ?? '')) ?></span>
                                                         </div>
                                                         <div class="cms-page-tile__actions">
-                                                            <a class="w-button" href="<?= $this->getBackendUrl('cms/backend/page/edit', ['page_id' => $pageId]) ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                                            <a class="w-button" href="@backend-url{'cms/backend/page/edit'|['page_id' => $pageId]}" data-tone="primary" data-variant="outline" data-size="sm">
                                                                 <w:icon name="edit" size="sm"></w:icon>
                                                                 <?= __('编辑') ?>
                                                             </a>
@@ -869,7 +868,7 @@ body[data-theme="dark"] .cms-status-disabled,
                                                                     <w:icon name="copy" size="sm"></w:icon>
                                                                     <?= __('拷贝') ?>
                                                                 </summary>
-                                                                <w:form class="cms-copy-panel" method="post" action="@var($this->getBackendUrl('cms/backend/page/copy'))">
+                                                                <w:form class="cms-copy-panel" method="post" action="@backend-url{'cms/backend/page/copy'}">
                                                                     <input type="hidden" name="page_id" value="<?= $pageId ?>">
                                                                     <input type="hidden" name="source_website_id" value="<?= (int)($page['website_id'] ?? $siteId) ?>">
                                                                     <input type="hidden" name="source_path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? $groupPath)) ?>">
@@ -889,7 +888,7 @@ body[data-theme="dark"] .cms-status-disabled,
                                                                     </button>
                                                                 </w:form>
                                                             </details>
-                                                            <w:form method="post" action="@var($this->getBackendUrl('cms/backend/page/delete'))">
+                                                            <w:form method="post" action="@backend-url{'cms/backend/page/delete'}">
                                                                 <input type="hidden" name="page_id" value="<?= $pageId ?>">
                                                                 <button class="w-button" type="submit" data-tone="danger" data-variant="outline" data-size="sm">
                                                                     <w:icon name="trash" size="sm"></w:icon>

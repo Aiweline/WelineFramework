@@ -6,6 +6,7 @@ namespace Weline\Cms\Extends\Module\Weline_Seo\SitemapUrlProvider;
 
 use Weline\Cms\Model\Page;
 use Weline\Cms\Service\PageService;
+use Weline\Framework\App\Env;
 use Weline\Seo\Api\Sitemap\AbstractSitemapUrlProvider;
 use Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface;
 
@@ -68,6 +69,9 @@ class CmsPageProvider extends AbstractSitemapUrlProvider
             if ($pageId <= 0 || !$page->isPublished() || $page->isDeleted()) {
                 continue;
             }
+            if ($this->shouldSkipBlogPathGroup($page)) {
+                continue;
+            }
 
             $urls[] = [
                 'url_key' => 'cms-page-' . $pageId,
@@ -95,5 +99,25 @@ class CmsPageProvider extends AbstractSitemapUrlProvider
     public function getDescription(): string
     {
         return __('CMS 已发布页面 sitemap URL 提供器');
+    }
+
+    private function shouldSkipBlogPathGroup(Page $page): bool
+    {
+        if (!$this->isBlogModuleEnabled()) {
+            return false;
+        }
+
+        return trim(strtolower($page->getPathGroup())) === 'blog';
+    }
+
+    private function isBlogModuleEnabled(): bool
+    {
+        try {
+            $env = Env::getInstance();
+
+            return (bool)$env->getModuleStatus('Weline_Blog');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
